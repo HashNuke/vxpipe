@@ -27,7 +27,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.State do
     :ready_waiters,
     :reject_received_through_ms
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [pending_policy: nil, adopted_policy_token: nil]
 
   @type t :: %__MODULE__{
           attachment: term(),

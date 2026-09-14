@@ -681,3 +681,17 @@ zero failures and 15 integrations excluded. The connection-graph adapter still q
 resources; selecting prepared resources there requires the persistent phase owner and existing
 deadline, plus candidate preparation of the other media and room enforcers. Startup/transfer waits,
 cues, final release, restoration and rendered/provider acceptance remain incomplete.
+
+Gateway room-input decoders now support candidate preparation under the phase's existing owner,
+attempt and deadline. Required replacements initialize their negotiated track before collection;
+policy commit adopts the ready decoder and preserves the normalized-frame sequence. Old-pipeline
+PCM and transport packets from the prior interval remain fenced. Unaffected policies and unrelated
+candidate refresh retain healthy decoder instances. Loss of all recipients/recording demand removes
+the decoder at commit, and renewed demand prepares one even if the permission interval is unchanged.
+Denied microphone packets are discarded without failing the transport.
+
+Twenty-four focused checks cover adoption, discard, startup failure, pending failure, expiry,
+owner loss, retention, demand and the actual WebRTC/Telnyx/Twilio normalizers. All five root gates
+pass: 1,192 tests, zero failures and 15 integrations excluded. Output/mixer/recording candidate
+preparation, selecting the prepared graph, startup/transfer waits and cues, fenced release,
+restoration, safe phase observations and rendered/provider acceptance remain unfinished.

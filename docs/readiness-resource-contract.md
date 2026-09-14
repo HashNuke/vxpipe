@@ -253,6 +253,39 @@ uses the refreshed provider interval. The provider owns cancellation and expiry,
 binding creates no second lease or deadline. Gateway connection-graph selection and coordinated
 startup/transfer invocation remain pending.
 
+### Preparing the room input decoder
+
+Gateway's `RoomAudioIngress.prepare_policy/4` accepts an authority-produced candidate, negotiated
+track, and the persistent phase owner/attempt/deadline. It validates the candidate outside the input
+actor, then checks that actor's incarnation authority and installed base policy. A matching repeated
+request reuses its lease; another attempt, owner or extended deadline cannot replace it.
+
+For a still-required input, unchanged policy returns the existing decoder resources. A future denial
+or absence of recipients/recording demand returns no input resources and defers stopping the installed
+decoder until commit. Renewed demand prepares a missing decoder even when the permission interval is
+unchanged. An affected, still-required
+input starts a separate pipeline through the existing per-connection supervisor. It prepares the
+negotiated track and collects the decoder's operational readiness outside the input receive loop.
+The original pipeline continues to serve the installed policy, and pending PCM does not enter the
+room. The input actor acknowledges the observed pipeline binding so commit can adopt that exact
+ready decoder without starting a third pipeline or querying it inside the policy barrier.
+
+Adoption preserves the normalized-frame sequence, fences transport packets received before the new
+interval and ignores old-pipeline PCM. Its prepared readiness descriptor remains observable after
+commit. A denied route discards subsequent input without classifying the connection as failed.
+Unrelated membership revisions preserve both pipelines; refreshing the authoritative candidate
+rebinds the prospective interval while retaining the decoder and input generations.
+
+Discard, phase-owner loss, deadline expiry and pending-pipeline failure clean up only the preparation.
+A failed or expired lease cannot commit. The startup-ready flag may advance during a track query;
+readiness validation distinguishes that expected transition from changed identity, generation,
+configuration or policy. Deterministic checks cover the real WebRTC, Telnyx Opus and Twilio PCMU
+normalizers under this protocol. They do not prove live-provider calls or complete transfer release.
+
+Design review rejected replacing during commit, accepting process startup alone as decoder readiness,
+and treating a policy-denied route as transport failure. Output/mixer/recording candidate preparation,
+full connection-graph selection and startup/transfer coordination remain required.
+
 ## Collection and deadlines
 
 `RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required

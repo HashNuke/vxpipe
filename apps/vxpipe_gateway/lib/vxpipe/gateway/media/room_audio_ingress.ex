@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   alias Vxpipe.Gateway.Media.RoomAudioIngress.{
     FrameProjection,
     PipelineLifecycle,
+    PolicyPreparation,
     Readiness,
     State
   }
@@ -43,12 +44,44 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   def readiness_resources(server), do: Readiness.resources(server)
   def prepare_track(server, track), do: Readiness.prepare_track(server, track)
 
+  def prepare_policy(server, candidate, track, options),
+    do: PolicyPreparation.request(server, candidate, track, options)
+
+  def discard_policy(server, token), do: safe_call(server, {:discard_policy, token})
+
+  @impl true
+  def readiness_binding(resource), do: Readiness.readiness_binding(resource)
+
   @impl true
   def init(options), do: {:ok, State.new(options)}
 
   @impl true
   def handle_call(:readiness_binding, _from, state) do
     {:reply, {:ok, Readiness.binding(state)}, state}
+  end
+
+  def handle_call({:prepare_policy, candidate, options}, _from, state) do
+    case PolicyPreparation.begin(state, candidate, options) do
+      {:ok, prepared, state} -> {:reply, {:ok, prepared}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:discard_policy, token}, _from, state) do
+    case PolicyPreparation.discard(state, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:policy_readiness_binding, token}, _from, state),
+    do: {:reply, PolicyPreparation.binding(state, token), state}
+
+  def handle_call({:confirm_policy_readiness, token, binding, status}, _from, state) do
+    case PolicyPreparation.confirm(state, token, binding, status) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
   end
 
   def handle_call(:start_pipeline, _from, %{pipeline_pid: nil} = state) do
@@ -74,6 +107,9 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
 
   def handle_call({:push, frame}, _from, state) do
     cond do
+      not PolicyPreparation.required?(state.policy, state.identity.participant_id) ->
+        {:reply, :ok, state}
+
       FrameProjection.stale_transport_frame?(frame, state) ->
         {:reply, {:error, :stale_policy_interval}, state}
 
@@ -87,17 +123,11 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, from, state) do
     case Snapshot.prepare(snapshot, state.policy) do
-      {:ok, snapshot} when is_nil(state.policy) ->
-        {:reply, :ok, %{state | policy: snapshot}}
-
       {:ok, snapshot} ->
-        participant = state.identity.participant_id
-
-        if Snapshot.interval(snapshot, :audio_input, participant) ==
-             Snapshot.interval(state.policy, :audio_input, participant) do
-          {:reply, :ok, %{state | policy: snapshot}}
-        else
-          replace_pipeline(snapshot, from, state)
+        case PolicyPreparation.install(state, snapshot) do
+          {:ok, state} -> {:reply, :ok, state}
+          {:error, reason, state} -> {:reply, {:error, reason}, state}
+          {:continue, state} -> apply_policy(snapshot, from, state)
         end
 
       {:error, reason} ->
@@ -110,6 +140,27 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_audio_pipeline_ready, pipeline_id},
+        %{pending_policy: %{pipeline: %{pipeline_id: pipeline_id}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.pipeline_ready(state)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pipeline, _reason},
+        %{pending_policy: %{pipeline: %{pipeline_monitor: monitor}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _owner, _reason},
+        %{pending_policy: %{monitor: monitor}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info({:input_policy_expired, token}, %{pending_policy: %{token: token}} = state),
+    do: {:noreply, PolicyPreparation.fail(state)}
+
   def handle_info(
         {:vxpipe_audio_pipeline, pipeline_id, %PCMFrame{} = pcm_frame},
         %{pipeline_id: pipeline_id, policy: %Snapshot{} = policy} = state
@@ -162,6 +213,18 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp apply_policy(snapshot, _from, %{policy: nil} = state),
+    do: {:reply, :ok, %{state | policy: snapshot}}
+
+  defp apply_policy(snapshot, from, state) do
+    participant = state.identity.participant_id
+
+    if Snapshot.interval(snapshot, :audio_input, participant) ==
+         Snapshot.interval(state.policy, :audio_input, participant),
+       do: {:reply, :ok, %{state | policy: snapshot}},
+       else: replace_pipeline(snapshot, from, state)
+  end
 
   defp replace_pipeline(snapshot, from, state) do
     case PipelineLifecycle.replace(state) do

@@ -815,3 +815,42 @@ unchecked; the milestone and index are still incomplete.
   query, and accepts only installed policy intervals. Its next integration needs explicit persistent
   phase ownership and the attempt's existing deadline; an ephemeral query worker must not own STT
   preparations. Other candidate media/room enforcers and the complete lifecycle sequence remain open.
+
+## Prepare input decoder policy
+
+- The prior goal turn committed prepared STT input bindings as `e9284ea`. The worktree is clean.
+  Gateway input policy application still starts the replacement decoder during commit. Move that
+  startup and negotiated-track preparation ahead of commit, retaining the installed decoder until
+  the candidate decoder has acknowledged readiness. Unrelated revisions must retain both decoders.
+- Added Gateway boundary checks using the actual policy authority and per-connection pipeline
+  supervisor. A controlled decoder fixture delays operational readiness independently of process
+  startup. The first checks require ready-instance adoption, pending-audio isolation and exact discard.
+- Fixed the new fixture's missing compiler registries, then confirmed two failures at the absent
+  `prepare_policy/4` API. The first collector check also required the controlled pipeline's readiness
+  method to accept its actual instance PID, matching the production adapter contract.
+- Prepared decoder adoption/discard passed, followed by owner loss, expiry, pending failure,
+  unchanged retention, a future denial and candidate refresh after unrelated membership. The real
+  WebRTC check exposed a startup-ready flag changing during track preparation. Comparing that flag
+  as identity incorrectly returned unavailable. Validation now compares stable pipeline bindings
+  while incorporating the current readiness flag; actual WebRTC/Telnyx/Twilio decoder checks pass.
+- Review of incoming web/phone audio found that stopping a denied decoder would surface
+  `pipeline_unavailable` and could disconnect a live leg. A red denial check reproduced that result.
+  Input forbidden by the installed policy is now discarded with the ordinary accepted/drop outcome;
+  the phone input boundary confirms it is not a connection failure. No forbidden input is decoded.
+- The adoption check also exercises the committed transport timestamp cutoff and preservation of
+  normalized-frame sequence across pipelines. Corrected the clock fixture callback's arity.
+  Twenty-two focused checks pass. Final root verification follows.
+- The first root gate run passed before a further demand review. An unchanged permission interval
+  does not imply continued input demand: without recording, departure of the last recipient makes
+  the decoder unnecessary. A new red check returned retained resources for that case. Preparation
+  now checks demand before interval retention and prepares a missing decoder when recipients return.
+  The check removes and re-adds the decoder through actual authority commits; final gates are rerun
+  for this additional runtime change below.
+- Final focused checks pass 24 tests across input policy preparation, input pipelines and web input
+  delivery. All five final root gates pass: formatting, warnings-as-errors compilation, strict Credo,
+  1,192 tests with zero failures and 15 integrations excluded, and unused dependencies. Actual decoder
+  checks cover WebRTC Opus, Telnyx Opus and Twilio PCMU; no browser or provider call was exercised.
+- Recorded the input preparation contract and rejected alternatives in the readiness contract. The
+  remaining milestone includes candidate output/mixer/recording preparation, complete graph selection,
+  persistent lifecycle ownership, startup/transfer waits and cues, final release, restoration,
+  telemetry and rendered/provider acceptance. The milestone and index remain unchecked.

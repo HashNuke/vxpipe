@@ -54,6 +54,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.PipelineLifecycle do
     %{
       state
       | pipeline_id: nil,
+        adopted_policy_token: nil,
         pipeline_monitor: nil,
         pipeline_pid: nil,
         readiness_resource: %{state.readiness_resource | generation: make_ref()},
@@ -61,9 +62,9 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.PipelineLifecycle do
     }
   end
 
-  defp stop(%State{pipeline_pid: nil}), do: :ok
+  def stop(%State{pipeline_pid: nil}), do: :ok
 
-  defp stop(%State{} = state) do
+  def stop(%State{} = state) do
     Process.demonitor(state.pipeline_monitor, [:flush])
     state.pipeline_supervisor.stop_audio_pipeline(state.connection_id, state.pipeline_pid)
   end

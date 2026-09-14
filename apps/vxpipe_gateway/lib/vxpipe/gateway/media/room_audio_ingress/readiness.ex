@@ -9,15 +9,23 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
          do: {:ok, resource, status}
   end
 
-  def resources(ingress) do
-    with {:ok, resource, _status, dependencies} <- observe(ingress),
+  def resources(ingress, token \\ nil) do
+    with {:ok, resource, _status, dependencies} <- observe(ingress, token),
          do: {:ok, [resource | dependencies]}
   end
 
-  def prepare_track(ingress, track) do
-    with {:ok, binding} <- call(ingress),
+  def readiness_binding(%Resource{instance: ingress, binding: {_id, :prepared_policy, token}}) do
+    with {:ok, resource, status, _dependencies} <- observe(ingress, token),
+         do: {:ok, resource, status}
+  end
+
+  def readiness_binding(%Resource{instance: ingress}), do: readiness(ingress)
+
+  def prepare_track(ingress, track, token \\ nil) do
+    with {:ok, binding} <- call(ingress, token),
          :ok <- prepare_pipeline(binding, track),
-         {:ok, ^binding} <- call(ingress) do
+         {:ok, current} <- call(ingress, token),
+         true <- same_binding?(binding, current) do
       :ok
     else
       {:error, _reason} = error -> error
@@ -33,6 +41,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
         do: Snapshot.interval(state.policy, :audio_input, state.identity.participant_id)
 
     %{
+      connection_id: state.connection_id,
       resource: %{state.readiness_resource | policy_interval: interval},
       pipeline: state.pipeline,
       pipeline_id: state.pipeline_id,
@@ -41,10 +50,14 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
     }
   end
 
-  defp observe(ingress) do
-    with {:ok, binding} <- call(ingress),
-         {:ok, input, input_status} <- pipeline_readiness(binding),
-         {:ok, ^binding} <- call(ingress) do
+  def same_binding?(left, right),
+    do: Map.drop(left, [:pipeline_ready?]) == Map.drop(right, [:pipeline_ready?])
+
+  defp observe(ingress, token \\ nil) do
+    with {:ok, original} <- call(ingress, token),
+         {:ok, input, input_status} <- pipeline_readiness(original),
+         {:ok, binding} <- call(ingress, token),
+         true <- same_binding?(original, binding) do
       resource = %{
         binding.resource
         | configuration: Resource.signature({binding.resource.configuration, input})
@@ -57,7 +70,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
           true -> input_status
         end
 
-      {:ok, resource, status, if(input, do: [input], else: [])}
+      with :ok <- confirm(ingress, token, binding, status),
+           do: {:ok, resource, status, if(input, do: [input], else: [])}
     else
       _unavailable_or_changed -> {:error, :unavailable}
     end
@@ -89,7 +103,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
   defp validate({:ok, %Resource{kind: :audio_input} = input, status}, binding)
        when status in [:preparing, :ready, :failed] do
     if Resource.bound?(input) and input.scope == binding.resource.scope and
-         input.binding == binding.resource.binding and input.adapter == binding.pipeline,
+         input.binding == binding.connection_id and input.adapter == binding.pipeline,
        do: {:ok, input, status},
        else: {:ok, nil, :failed}
   end
@@ -97,5 +111,13 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
   defp validate({:error, :unavailable} = error, _binding), do: error
   defp validate(_invalid, _binding), do: {:ok, nil, :failed}
 
-  defp call(ingress), do: GenServer.call(ingress, :readiness_binding, 1_000)
+  defp call(ingress, nil), do: GenServer.call(ingress, :readiness_binding, 1_000)
+
+  defp call(ingress, token),
+    do: GenServer.call(ingress, {:policy_readiness_binding, token}, 1_000)
+
+  defp confirm(_ingress, nil, _binding, _status), do: :ok
+
+  defp confirm(ingress, token, binding, status),
+    do: GenServer.call(ingress, {:confirm_policy_readiness, token, binding, status}, 1_000)
 end
