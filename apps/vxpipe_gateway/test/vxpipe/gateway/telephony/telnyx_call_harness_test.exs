@@ -100,7 +100,9 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
           wait_sounds: if(outcome in [:max_duration, :disconnected], do: nil, else: %{})
         ]
       else
-        []
+        if mode = context[:transfer_wait_mode],
+          do: Vxpipe.Gateway.PhoneHandoffAssertions.scenario_options(mode),
+          else: []
       end
 
     scenario =
@@ -303,155 +305,183 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     end
   end
 
-  test "runs one signed inbound call through private press-1 phone transfer after storage loss",
-       context do
-    incoming = post_fixture(context, "call-initiated-incoming")
-    assert incoming.status == 200
+  for {mode, loss} <- [
+        {:defaults, nil},
+        {:custom_url, nil},
+        {:silent_all, nil},
+        {:custom_url, :destination},
+        {:silent_all, :cue}
+      ] do
+    @tag transfer_wait_mode: mode, phone_loss: loss
+    test "runs one signed inbound call through private press-1 phone transfer after storage loss with #{mode} waits #{loss || :ready}",
+         context do
+      incoming = post_fixture(context, "call-initiated-incoming")
+      assert incoming.status == 200
 
-    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+      assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
-    TestTextToSpeechTransport.deliver_control(
-      source_tts,
-      ~s({"type":"Connected","request_id":"source-ready"})
-    )
-
-    assert_receive {:test_telephony_answer, answer}, 2_000
-    refute_receive {:test_telephony_answer, _duplicate}
-
-    duplicate = post_fixture(context, "call-initiated-incoming")
-    assert duplicate.status == 200
-    refute_receive {:test_telephony_answer, _duplicate}
-
-    :ok = TelephonyHarnessBackend.make_storage_unavailable(context.backend)
-
-    answered = post_fixture(context, "call-answered-incoming")
-    assert answered.status == 200
-
-    inbound_transport =
-      start_supervised!({TestTelephonySocket, observer: self()}, id: :incoming_socket)
-
-    outbound_transport =
-      start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
-
-    assert {:ok, inbound_binding, inbound_socket} =
-             TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
-               TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
-                 "call_control_id" => "inbound-call-control",
-                 "call_session_id" => "inbound-call-session",
-                 "client_state" => ClientState.encode(@incoming_leg_id),
-                 "from" => "+15550001001",
-                 "stream_id" => "inbound-stream",
-                 "to" => "+15550001000"
-               })
-             end)
-
-    assert inbound_binding.client_state_leg_id == @incoming_leg_id
-    assert {:ok, %{attachment: %{admission: :main}}} = MediaSupervisor.snapshot(@incoming_leg_id)
-    assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
-
-    begin_transfer(stt_transport, inbound_transport, context.plan)
-
-    assert_receive {:test_telephony_dial, dial}, 2_000
-    assert dial.leg_id == @outgoing_leg_id
-    assert dial.to == "+15550001002"
-
-    outgoing_client_state = ClientState.encode(@outgoing_leg_id)
-
-    assert post_fixture(context, "call-initiated-outgoing", %{
-             "client_state" => outgoing_client_state
-           }).status == 200
-
-    assert post_fixture(context, "call-initiated-outgoing", %{
-             "client_state" => outgoing_client_state
-           }).status == 200
-
-    refute_receive {:test_telephony_dial, _duplicate}
-
-    assert {:ok, _outbound_binding, _outbound_socket} =
-             TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
-               TelnyxFixture.open_media(context.endpoint, dial.media_url, %{
-                 "call_control_id" => "outbound-call-control",
-                 "call_session_id" => "outbound-call-session",
-                 "client_state" => outgoing_client_state,
-                 "from" => "+15550001000",
-                 "stream_id" => "outbound-stream",
-                 "to" => "+15550001002"
-               })
-             end)
-
-    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
-
-    assert {:ok, _outbound_socket} =
-             TestTelephonySocket.input(
-               outbound_transport,
-               {TelnyxFixture.body("media-dtmf", %{
-                  "digit" => "1",
-                  "stream_id" => "outbound-stream"
-                }), opcode: :text}
-             )
-
-    assert {:ok, %{attachment: %{admission: :transfer_preparation}}} =
-             MediaSupervisor.snapshot(@outgoing_leg_id)
-
-    reception = Map.fetch!(context.plan.participants, "reception")
-
-    [{source_agent, _value}] =
-      Registry.lookup(
-        Vxpipe.CallEngine.RoomRegistry,
-        {:participant, context.plan.tenant_id, context.plan.room_id, reception.participant_id}
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
       )
 
-    source_monitor = Process.monitor(source_agent)
-    finish_private_briefing(briefing_tts)
+      assert_receive {:test_telephony_answer, answer}, 2_000
+      refute_receive {:test_telephony_answer, _duplicate}
 
-    assert {:ok, %{transfer_acceptance_ready?: true}} = await_transfer_state(:acceptance_ready)
+      duplicate = post_fixture(context, "call-initiated-incoming")
+      assert duplicate.status == 200
+      refute_receive {:test_telephony_answer, _duplicate}
 
-    assert {:ok, _socket} =
-             TestTelephonySocket.input(
-               outbound_transport,
-               {TelnyxFixture.body("media-dtmf", %{
-                  "digit" => "1",
-                  "stream_id" => "outbound-stream",
-                  "sequence_number" => 100
-                }), opcode: :text}
-             )
+      :ok = TelephonyHarnessBackend.make_storage_unavailable(context.backend)
 
-    assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
+      answered = post_fixture(context, "call-answered-incoming")
+      assert answered.status == 200
 
-    assert_receive {:test_phone_output, ^outbound_transport, output}, 2_000
+      inbound_transport =
+        start_supervised!({TestTelephonySocket, observer: self()}, id: :incoming_socket)
 
-    assert %{"event" => "media"} = JSON.decode!(output)
+      outbound_transport =
+        start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
 
-    assert {:ok, %{attachment: %{admission: :main}}} = await_transfer_state(:main)
+      assert {:ok, inbound_binding, inbound_socket} =
+               TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
+                 TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
+                   "call_control_id" => "inbound-call-control",
+                   "call_session_id" => "inbound-call-session",
+                   "client_state" => ClientState.encode(@incoming_leg_id),
+                   "from" => "+15550001001",
+                   "stream_id" => "inbound-stream",
+                   "to" => "+15550001000"
+                 })
+               end)
 
-    caller = Map.fetch!(context.plan.participants, "caller")
-    support = Map.fetch!(context.plan.participants, "human-support")
+      assert inbound_binding.client_state_leg_id == @incoming_leg_id
 
-    assert {:ok, caller_snapshot} =
-             Vxpipe.CallEngine.participant_snapshot(
-               context.plan.tenant_id,
-               context.plan.room_id,
-               caller.participant_id
-             )
+      assert {:ok, %{attachment: %{admission: :main}}} =
+               MediaSupervisor.snapshot(@incoming_leg_id)
 
-    assert {:ok, support_snapshot} =
-             Vxpipe.CallEngine.participant_snapshot(
-               context.plan.tenant_id,
-               context.plan.room_id,
-               support.participant_id
-             )
+      assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
 
-    assert caller_snapshot.state == :joined
-    assert support_snapshot.state == :joined
+      begin_transfer(stt_transport, inbound_transport, context.plan)
 
-    claim_count =
-      Enum.count(TelephonyHarnessBackend.operations(context.backend), fn
-        {:claim_incoming, _event_id} -> true
-        _operation -> false
-      end)
+      assert_receive {:test_telephony_dial, dial}, 2_000
+      assert dial.leg_id == @outgoing_leg_id
+      assert dial.to == "+15550001002"
 
-    assert claim_count == 1
-    assert inbound_socket.stream_id == "inbound-stream"
+      outgoing_client_state = ClientState.encode(@outgoing_leg_id)
+
+      assert post_fixture(context, "call-initiated-outgoing", %{
+               "client_state" => outgoing_client_state
+             }).status == 200
+
+      assert post_fixture(context, "call-initiated-outgoing", %{
+               "client_state" => outgoing_client_state
+             }).status == 200
+
+      refute_receive {:test_telephony_dial, _duplicate}
+
+      assert {:ok, _outbound_binding, _outbound_socket} =
+               TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
+                 TelnyxFixture.open_media(context.endpoint, dial.media_url, %{
+                   "call_control_id" => "outbound-call-control",
+                   "call_session_id" => "outbound-call-session",
+                   "client_state" => outgoing_client_state,
+                   "from" => "+15550001000",
+                   "stream_id" => "outbound-stream",
+                   "to" => "+15550001002"
+                 })
+               end)
+
+      assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+      assert {:ok, _outbound_socket} =
+               TestTelephonySocket.input(
+                 outbound_transport,
+                 {TelnyxFixture.body("media-dtmf", %{
+                    "digit" => "1",
+                    "stream_id" => "outbound-stream"
+                  }), opcode: :text}
+               )
+
+      assert {:ok, %{attachment: %{admission: :transfer_preparation}}} =
+               MediaSupervisor.snapshot(@outgoing_leg_id)
+
+      reception = Map.fetch!(context.plan.participants, "reception")
+
+      [{source_agent, _value}] =
+        Registry.lookup(
+          Vxpipe.CallEngine.RoomRegistry,
+          {:participant, context.plan.tenant_id, context.plan.room_id, reception.participant_id}
+        )
+
+      source_monitor = Process.monitor(source_agent)
+      finish_private_briefing(briefing_tts)
+
+      assert {:ok, %{transfer_acceptance_ready?: true}} = await_transfer_state(:acceptance_ready)
+
+      assert {:ok, _socket} =
+               TestTelephonySocket.input(
+                 outbound_transport,
+                 {TelnyxFixture.body("media-dtmf", %{
+                    "digit" => "1",
+                    "stream_id" => "outbound-stream",
+                    "sequence_number" => 100
+                  }), opcode: :text}
+               )
+
+      assert_receive {:test_stt_transport_started, support_stt, _}, 2_000
+
+      proof =
+        Vxpipe.Gateway.PhoneHandoffAssertions.gate(
+          :telnyx,
+          context.plan,
+          {context.transfer_wait_mode, context.phone_loss},
+          inbound_transport,
+          outbound_transport,
+          stt_transport,
+          support_stt,
+          {@incoming_leg_id, @outgoing_leg_id}
+        )
+
+      if context.phone_loss do
+        Vxpipe.Gateway.PhoneHandoffAssertions.recovery(proof, source_tts)
+        refute_receive {:DOWN, ^source_monitor, :process, ^source_agent, _}, 0
+      else
+        assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
+
+        assert {:ok, %{attachment: %{admission: :main}}} = await_transfer_state(:main)
+
+        caller = Map.fetch!(context.plan.participants, "caller")
+        support = Map.fetch!(context.plan.participants, "human-support")
+
+        assert {:ok, caller_snapshot} =
+                 Vxpipe.CallEngine.participant_snapshot(
+                   context.plan.tenant_id,
+                   context.plan.room_id,
+                   caller.participant_id
+                 )
+
+        assert {:ok, support_snapshot} =
+                 Vxpipe.CallEngine.participant_snapshot(
+                   context.plan.tenant_id,
+                   context.plan.room_id,
+                   support.participant_id
+                 )
+
+        assert caller_snapshot.state == :joined
+        assert support_snapshot.state == :joined
+        Vxpipe.Gateway.PhoneHandoffAssertions.conversation(proof)
+      end
+
+      claim_count =
+        Enum.count(TelephonyHarnessBackend.operations(context.backend), fn
+          {:claim_incoming, _event_id} -> true
+          _operation -> false
+        end)
+
+      assert claim_count == 1
+      assert inbound_socket.stream_id == "inbound-stream"
+    end
   end
 
   defp post_fixture(context, name, replacements \\ %{}) do
@@ -498,6 +528,9 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
+    assert {:ok, acknowledgement} = ModelResponse.new(text: "Connecting support.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
   end
 
   defp assert_caller_audio(stt_transport, socket) do

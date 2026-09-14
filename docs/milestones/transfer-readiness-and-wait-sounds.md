@@ -5,9 +5,10 @@ waiting are accepted delivery slices. Human acceptance includes native configura
 complete readiness, policy reconciliation, private-resource cleanup, recovery and existing rendered
 sample evidence. AI acceptance includes independent model/voice/tool/MCP readiness, default/URL/nil
 waits, ordered greeting, privacy and resource retention. Initial waiting includes native audio and
-deterministic phone lifecycle acceptance. Phone parity and changing/multiple listeners remain open.
-All five root gates pass with 1,415 tests, zero failures and 16 integration exclusions (seed 235296;
-concurrency four). Fourteen checkpoint tasks remain.
+deterministic phone lifecycle acceptance. Local phone handoff acceptance passes; live carrier
+audibility and changing/multiple listeners remain open.
+All five root gates pass with 1,423 tests, zero failures and 16 integration exclusions (seed 235296;
+concurrency four). Nine checkpoint tasks remain.
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -41,7 +42,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Area | Current boundary | Next required result |
 | --- | --- | --- |
 | Human web transfer | Accepted: complete readiness, private waits/briefing/cues, policy reconciliation, resource retention, bidirectional media/transcripts and bounded recovery pass. A reproduced output-clear race no longer turns unchanged output into fatal unavailability during recovery. | Retain this acceptance while completing the remaining slices. |
-| Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
+| Phone transfer | Local Telnyx/Twilio default/URL/nil waits, delayed destination STT, withheld/replayed cue marks, bidirectional decoded audio/transcripts, privacy and spoken source recovery pass on retained media. | Verify live carrier wait/cue/clear/recovery audibility; actual adapters driven by synthetic sockets do not establish physical playout. |
 | AI transfer | Accepted: independent model, voice, MCP initialization and local-tool readiness gates, default/URL/nil waits, ordered cue/greeting, private held input and retained resources. Failure recovers spoken source conversation; fresh activations work on re-entry. | Retain this acceptance while completing phone and changing-listener slices. |
 | Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
@@ -316,7 +317,7 @@ slice demands it. There is no separate infrastructure-completion phase.
 | [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | Accepted: native flow/failure checks, existing rendered sample and root gates pass |
 | [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Accepted: native readiness/configuration/privacy, recovery and root gates pass |
 | [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Accepted: native configuration/audio and deterministic phone lifecycle checks pass |
-| [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local incoming/outbound handoff checks pass; full acceptance open |
+| [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local acceptance and root gates pass; live carrier audibility open |
 | [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Component coverage only |
 
 A checkpoint stays open until its runnable acceptance and applicable
@@ -329,8 +330,8 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after human web, AI handoff and initial waiting acceptance: **14 tasks** in this
-section—phone handoff parity 6, changing/multiple listeners 6, and final audit 2.
+Remaining work after human web, AI handoff, initial waiting and local phone acceptance: **9 tasks**
+in this section—live phone audibility 1, changing/multiple listeners 6, and final audit 2.
 The open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
 percentage. Two delivery slices still have acceptance work remaining.
@@ -602,24 +603,40 @@ introduced by earlier checkpoints or create a second provider-specific handoff c
 
 Implementation tasks:
 
-- [ ] Exercise the real common telephony session/codec/STT boundary for configured supported
+- [x] Exercise the real common telephony session/codec/STT boundary for configured supported
   formats in both providers. Reuse the same private preparation and adoption protocol as web;
   retain native timelines and unaffected providers across holding and release.
-- [ ] Complete phone acceptance-window, clear, fresh playback-mark and drain integration under
+- [x] Complete phone acceptance-window, clear, fresh playback-mark and drain integration under
   the single deadline. Duplicate/out-of-order marks must not complete a new cue or release speech.
-- [ ] Carry the same failure, disconnect, bounded recovery, privacy and diagnostic behavior through
+- [x] Carry the same failure, disconnect, bounded recovery, privacy and diagnostic behavior through
   web/phone and phone/phone calls; retain the existing signed-event and admission boundaries.
 
 Acceptance and commit tasks:
 
-- [ ] Run deterministic incoming/outgoing Telnyx/Twilio flows with selected STT, delayed readiness,
+- [x] Run deterministic incoming/outgoing Telnyx/Twilio flows with selected STT, delayed readiness,
   default/URL/nil waits, finite cue backpressure, invalid early acceptance and provider disconnect.
   Assert actual audio/transcripts after release and no private audio in recordings.
 - [ ] In the tagged, explicitly authorized provider lane, verify audible cue-before-conversation,
   clearing and recovered conversation. Record the provider/path and evidence, or the exact external
   blocker; playback marks alone do not prove physical audibility.
-- [ ] Pass relevant phone/engine checks and all five root gates, update evidence and commit the
+- [x] Pass relevant phone/engine checks and all five root gates, update evidence and commit the
   runnable slice. Keep any unavailable live-provider acceptance visibly open.
+
+Local evidence: 50 Gateway checks and three owning phone-room checks pass. Signed incoming
+Telnyx Opus (16 kHz) and Twilio PCMU (8 kHz) flows each cover default/URL/nil handoffs, delayed
+destination STT, cue backpressure, replayed marks, retained resources and opposite-recipient
+transcripts. Destination loss during preparation or cue drain restores source speech and a later
+caller turn. Existing outbound web-profile admission, early/wrong-source acceptance and actual
+attempt expiry checks remain green. All five root gates pass with 1,423 tests, zero failures and
+16 exclusions. This checkpoint adds verification fixtures, with no production or UI changes.
+The [phone checkpoint labnote](../../labnotes/20260915-0622-phone-handoff-parity.md) records the
+fixture corrections, exact codec/control boundary and regression evidence.
+
+External blocker: live provider enable flags, carrier credentials, approved test numbers and public
+callback/media URLs are absent from the test environment. Both guarded provider tests skip before
+placing a call. Those API tests establish control submission only; completing the open item also
+requires received wait/cue/clear/recovery audio evidence on the authorized carrier path. Continue
+changing-listener work independently while this item remains open.
 
 ### Checkpoint: changing and multiple listeners
 
@@ -1155,6 +1172,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Local phone handoff acceptance | Six configured handoffs and four preparation/cue disconnect recoveries pass in the 50-test Gateway regression group; three owning phone-room checks pass. All five root gates pass: 1,423 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Actual Telnyx Opus/Twilio PCMU adapters preserve waits/cue/conversation ordering, private recordings, selected STT and retained resources. Replayed marks cannot release a held cue; exact drain permits bidirectional audio and transcripts. Socket loss restores spoken source conversation and another caller turn. Provider API guards skip safely; physical carrier audibility stays open. Nine checkpoint tasks remain. |
 | AI handoff acceptance | Four new native configuration cases and 22 focused engine cases pass. All five root gates pass: 1,415 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Independently delayed MCP initialization and local tool readiness hold the caller; default/URL/nil waits end before cue/greeting. Held input and late source output remain private. Caller media/STT, room services and prepared tool resources persist; a real destination MCP invocation works after release. Combined with existing model/voice, recovery, deadline, history and re-entry evidence, the AI slice is accepted. Fourteen checkpoint tasks remain. |
 | Human web handoff acceptance and recovery-clear race | Two owning regressions fail with the old observer; all 24 output-arbiter cases pass after the fix. The native old-observer run reproduces fatal recovery unavailability; both corrected native recovery checks pass. All five root gates pass: 1,411 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Clearing status can change during a readiness query without invalidating an unchanged output binding. Native recovery preserves the caller, cue/speech and a later human transfer. Combined with the recorded configuration/privacy/resource/failure/sample evidence, the human slice is accepted. Seventeen checkpoint tasks remain. |
 | Recording demand during human handoff | Expected red writer-dependency assertion; ten owning recorder cases and both native policy variants pass. All five root gates pass: 1,408 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Denied recording retires private writers and removes writer readiness dependencies, while unrelated policy retains the writer and stream. Native handoffs preserve worker/deadline, room/source and existing media/speech bindings, and cue a readmitted listener before conversation. Human private-resource cleanup is complete; 19 checkpoint tasks remain. |

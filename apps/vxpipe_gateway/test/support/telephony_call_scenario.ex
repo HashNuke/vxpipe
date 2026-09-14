@@ -40,13 +40,14 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
          service_registry: registry
        ]}
 
-    runtime_options = [
-      media_admission: media_admission,
-      outbound_leg_connector: connector,
-      service_registry: registry,
-      telephony_leg_id: fn -> inbound_leg_id end,
-      telephony_media_supervisor: MediaSupervisor
-    ]
+    runtime_options =
+      [
+        media_admission: media_admission,
+        outbound_leg_connector: connector,
+        service_registry: registry,
+        telephony_leg_id: fn -> inbound_leg_id end,
+        telephony_media_supervisor: MediaSupervisor
+      ] ++ Keyword.take(options, [:recording])
 
     %{
       claim: claim(provider, plan, caller.participant_id),
@@ -92,6 +93,11 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
             "human-support" => %{
               type: "human",
               description: "A human support specialist",
+              capabilities:
+                if(Keyword.get(options, :support_speech_to_text?, false),
+                  do: %{speech_to_text: "test-stt"},
+                  else: %{}
+                ),
               connection: %{
                 service: "primary-phone",
                 mode: "dial",

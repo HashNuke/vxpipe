@@ -103,7 +103,9 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
           wait_sounds: if(outcome in [:max_duration, :disconnected], do: nil, else: %{})
         ]
       else
-        []
+        if mode = context[:transfer_wait_mode],
+          do: Vxpipe.Gateway.PhoneHandoffAssertions.scenario_options(mode),
+          else: []
       end
 
     scenario =
@@ -303,129 +305,159 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     end
   end
 
-  test "runs one signed incoming call through private press-1 phone transfer after storage loss",
-       context do
-    incoming = post_voice(context)
-    assert incoming.status == 200
+  for {mode, loss} <- [
+        {:defaults, nil},
+        {:custom_url, nil},
+        {:silent_all, nil},
+        {:custom_url, :destination},
+        {:silent_all, :cue}
+      ] do
+    @tag transfer_wait_mode: mode, phone_loss: loss
+    test "runs one signed incoming call through private press-1 phone transfer after storage loss with #{mode} waits #{loss || :ready}",
+         context do
+      incoming = post_voice(context)
+      assert incoming.status == 200
 
-    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+      assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
-    TestTextToSpeechTransport.deliver_control(
-      source_tts,
-      ~s({"type":"Connected","request_id":"source-ready"})
-    )
-
-    assert_receive {:test_twilio_answer, answer}, 2_000
-    refute_receive {:test_twilio_answer, _duplicate}
-
-    duplicate = post_voice(context)
-    assert duplicate.status == 200
-    refute_receive {:test_twilio_answer, _duplicate}
-
-    :ok = TelephonyHarnessBackend.make_storage_unavailable(context.backend)
-
-    inbound_transport =
-      start_supervised!({TestTelephonySocket, observer: self()}, id: :incoming_socket)
-
-    outbound_transport =
-      start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
-
-    assert {:ok, inbound_binding, inbound_socket} =
-             TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
-               TwilioFixture.open_media(
-                 context.endpoint,
-                 context.service_options,
-                 answer.media_url,
-                 @incoming_call_sid,
-                 @incoming_stream_sid
-               )
-             end)
-
-    assert inbound_binding.client_state_leg_id == @incoming_leg_id
-    assert {:ok, %{attachment: %{admission: :main}}} = MediaSupervisor.snapshot(@incoming_leg_id)
-    assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
-
-    begin_transfer(stt_transport, inbound_transport, context.plan)
-
-    assert_receive {:test_twilio_dial, dial}, 2_000
-    assert dial.leg_id == @outgoing_leg_id
-    assert dial.to == "+15550001002"
-
-    assert {:ok, _outbound_binding, _outbound_socket} =
-             TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
-               TwilioFixture.open_media(
-                 context.endpoint,
-                 context.service_options,
-                 dial.media_url,
-                 @outgoing_call_sid,
-                 @outgoing_stream_sid
-               )
-             end)
-
-    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
-
-    assert {:ok, _outbound_socket} =
-             TestTelephonySocket.input(
-               outbound_transport,
-               TwilioFixture.dtmf(@outgoing_stream_sid, 2, "1")
-             )
-
-    assert {:ok, %{attachment: %{admission: :transfer_preparation}}} =
-             MediaSupervisor.snapshot(@outgoing_leg_id)
-
-    reception = Map.fetch!(context.plan.participants, "reception")
-
-    [{source_agent, _value}] =
-      Registry.lookup(
-        Vxpipe.CallEngine.RoomRegistry,
-        {:participant, context.plan.tenant_id, context.plan.room_id, reception.participant_id}
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
       )
 
-    source_monitor = Process.monitor(source_agent)
-    finish_private_briefing(briefing_tts)
+      assert_receive {:test_twilio_answer, answer}, 2_000
+      refute_receive {:test_twilio_answer, _duplicate}
 
-    assert {:ok, %{transfer_acceptance_ready?: true}} = await_transfer_state(:acceptance_ready)
+      duplicate = post_voice(context)
+      assert duplicate.status == 200
+      refute_receive {:test_twilio_answer, _duplicate}
 
-    assert {:ok, _socket} =
-             TestTelephonySocket.input(
-               outbound_transport,
-               TwilioFixture.dtmf(@outgoing_stream_sid, 100, "1")
-             )
+      :ok = TelephonyHarnessBackend.make_storage_unavailable(context.backend)
 
-    assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
-    assert_receive {:test_phone_output, ^outbound_transport, output}, 2_000
+      inbound_transport =
+        start_supervised!({TestTelephonySocket, observer: self()}, id: :incoming_socket)
 
-    assert %{"event" => "media", "streamSid" => @outgoing_stream_sid} = JSON.decode!(output)
-    assert {:ok, %{attachment: %{admission: :main}}} = await_transfer_state(:main)
+      outbound_transport =
+        start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
 
-    caller = Map.fetch!(context.plan.participants, "caller")
-    support = Map.fetch!(context.plan.participants, "human-support")
+      assert {:ok, inbound_binding, inbound_socket} =
+               TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
+                 TwilioFixture.open_media(
+                   context.endpoint,
+                   context.service_options,
+                   answer.media_url,
+                   @incoming_call_sid,
+                   @incoming_stream_sid
+                 )
+               end)
 
-    assert {:ok, caller_snapshot} =
-             Vxpipe.CallEngine.participant_snapshot(
-               context.plan.tenant_id,
-               context.plan.room_id,
-               caller.participant_id
-             )
+      assert inbound_binding.client_state_leg_id == @incoming_leg_id
 
-    assert {:ok, support_snapshot} =
-             Vxpipe.CallEngine.participant_snapshot(
-               context.plan.tenant_id,
-               context.plan.room_id,
-               support.participant_id
-             )
+      assert {:ok, %{attachment: %{admission: :main}}} =
+               MediaSupervisor.snapshot(@incoming_leg_id)
 
-    assert caller_snapshot.state == :joined
-    assert support_snapshot.state == :joined
-    assert inbound_socket.stream_id == @incoming_stream_sid
+      assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
 
-    claim_count =
-      Enum.count(TelephonyHarnessBackend.operations(context.backend), fn
-        {:claim_incoming, _event_id} -> true
-        _operation -> false
-      end)
+      begin_transfer(stt_transport, inbound_transport, context.plan)
 
-    assert claim_count == 1
+      assert_receive {:test_twilio_dial, dial}, 2_000
+      assert dial.leg_id == @outgoing_leg_id
+      assert dial.to == "+15550001002"
+
+      assert {:ok, _outbound_binding, _outbound_socket} =
+               TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
+                 TwilioFixture.open_media(
+                   context.endpoint,
+                   context.service_options,
+                   dial.media_url,
+                   @outgoing_call_sid,
+                   @outgoing_stream_sid
+                 )
+               end)
+
+      assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+      assert {:ok, _outbound_socket} =
+               TestTelephonySocket.input(
+                 outbound_transport,
+                 TwilioFixture.dtmf(@outgoing_stream_sid, 2, "1")
+               )
+
+      assert {:ok, %{attachment: %{admission: :transfer_preparation}}} =
+               MediaSupervisor.snapshot(@outgoing_leg_id)
+
+      reception = Map.fetch!(context.plan.participants, "reception")
+
+      [{source_agent, _value}] =
+        Registry.lookup(
+          Vxpipe.CallEngine.RoomRegistry,
+          {:participant, context.plan.tenant_id, context.plan.room_id, reception.participant_id}
+        )
+
+      source_monitor = Process.monitor(source_agent)
+      finish_private_briefing(briefing_tts)
+
+      assert {:ok, %{transfer_acceptance_ready?: true}} = await_transfer_state(:acceptance_ready)
+
+      assert {:ok, _socket} =
+               TestTelephonySocket.input(
+                 outbound_transport,
+                 TwilioFixture.dtmf(@outgoing_stream_sid, 100, "1")
+               )
+
+      assert_receive {:test_stt_transport_started, support_stt, _}, 2_000
+
+      proof =
+        Vxpipe.Gateway.PhoneHandoffAssertions.gate(
+          :twilio,
+          context.plan,
+          {context.transfer_wait_mode, context.phone_loss},
+          inbound_transport,
+          outbound_transport,
+          stt_transport,
+          support_stt,
+          {@incoming_leg_id, @outgoing_leg_id}
+        )
+
+      if context.phone_loss do
+        Vxpipe.Gateway.PhoneHandoffAssertions.recovery(proof, source_tts)
+        refute_receive {:DOWN, ^source_monitor, :process, ^source_agent, _}, 0
+      else
+        assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
+        assert {:ok, %{attachment: %{admission: :main}}} = await_transfer_state(:main)
+
+        caller = Map.fetch!(context.plan.participants, "caller")
+        support = Map.fetch!(context.plan.participants, "human-support")
+
+        assert {:ok, caller_snapshot} =
+                 Vxpipe.CallEngine.participant_snapshot(
+                   context.plan.tenant_id,
+                   context.plan.room_id,
+                   caller.participant_id
+                 )
+
+        assert {:ok, support_snapshot} =
+                 Vxpipe.CallEngine.participant_snapshot(
+                   context.plan.tenant_id,
+                   context.plan.room_id,
+                   support.participant_id
+                 )
+
+        assert caller_snapshot.state == :joined
+        assert support_snapshot.state == :joined
+        Vxpipe.Gateway.PhoneHandoffAssertions.conversation(proof)
+      end
+
+      assert inbound_socket.stream_id == @incoming_stream_sid
+
+      claim_count =
+        Enum.count(TelephonyHarnessBackend.operations(context.backend), fn
+          {:claim_incoming, _event_id} -> true
+          _operation -> false
+        end)
+
+      assert claim_count == 1
+    end
   end
 
   defp post_voice(context) do
@@ -469,6 +501,9 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
+    assert {:ok, acknowledgement} = ModelResponse.new(text: "Connecting support.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
   end
 
   defp assert_caller_audio(stt_transport, socket) do

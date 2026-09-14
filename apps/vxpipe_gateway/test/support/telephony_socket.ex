@@ -19,13 +19,43 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
 
   def input(socket, packet), do: GenServer.call(socket, {:input, packet}, 5_000)
 
+  def automatic_marks(socket, enabled?), do: GenServer.call(socket, {:automatic_marks, enabled?})
+
+  def acknowledge_mark(socket, name), do: GenServer.call(socket, {:acknowledge_mark, name})
+
+  def media_timestamp(socket), do: GenServer.call(socket, :media_timestamp)
+
   @impl true
   def init(observer),
-    do: {:ok, %{observer: observer, readiness: nil, callback: nil, socket: nil, sequence: 10}}
+    do:
+      {:ok,
+       %{
+         observer: observer,
+         readiness: nil,
+         callback: nil,
+         socket: nil,
+         sequence: 10,
+         automatic_marks?: true,
+         media_started_ms: nil
+       }}
 
   @impl true
   def handle_call({:run, operation}, _from, state) do
     {:reply, operation.(), state}
+  end
+
+  def handle_call({:automatic_marks, enabled?}, _from, state) do
+    {:reply, :ok, %{state | automatic_marks?: enabled?}}
+  end
+
+  def handle_call({:acknowledge_mark, name}, _from, state) do
+    {:reply, :ok, acknowledge(%{"event" => "mark", "mark" => %{"name" => name}}, state)}
+  end
+
+  def handle_call(:media_timestamp, _from, state) do
+    now = System.monotonic_time(:millisecond)
+    started = state.media_started_ms || now
+    {:reply, now - started, %{state | media_started_ms: started}}
   end
 
   def handle_call({:open, callback, operation}, _from, state) do
@@ -49,6 +79,15 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
   end
 
   def handle_call({:input, packet}, _from, state) do
+    {message, _metadata} = packet
+
+    started =
+      if JSON.decode!(message)["event"] == "media",
+        do: state.media_started_ms || System.monotonic_time(:millisecond),
+        else: state.media_started_ms
+
+    state = %{state | media_started_ms: started}
+
     case state.callback.handle_in(packet, state.socket) do
       {:ok, socket} = result -> {:reply, result, %{state | socket: socket}}
       other -> {:reply, other, state}
@@ -127,26 +166,33 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
     send(state.observer, {:test_phone_output, self(), message})
 
     case JSON.decode!(message) do
-      %{"event" => "mark"} = mark ->
-        mark =
-          case state.socket.binding.provider do
-            :telnyx ->
-              Map.merge(mark, %{
-                "stream_id" => state.socket.stream_id,
-                "sequence_number" => state.sequence
-              })
+      %{"event" => "mark"} = mark when state.automatic_marks? ->
+        acknowledge(mark, state)
 
-            :twilio ->
-              Map.put(mark, "sequenceNumber", Integer.to_string(state.sequence))
-          end
-
-        {:ok, socket} =
-          state.callback.handle_in({JSON.encode!(mark), opcode: :text}, state.socket)
-
-        %{state | socket: socket, sequence: state.sequence + 1}
-
-      _audio_or_clear ->
+      _audio_clear_or_held_mark ->
         state
     end
+  end
+
+  defp acknowledge(mark, state) do
+    mark =
+      case state.socket.binding.provider do
+        :telnyx ->
+          Map.merge(mark, %{
+            "stream_id" => state.socket.stream_id,
+            "sequence_number" => state.sequence
+          })
+
+        :twilio ->
+          Map.merge(mark, %{
+            "streamSid" => state.socket.stream_id,
+            "sequenceNumber" => Integer.to_string(state.sequence)
+          })
+      end
+
+    {:ok, socket} =
+      state.callback.handle_in({JSON.encode!(mark), opcode: :text}, state.socket)
+
+    %{state | socket: socket, sequence: state.sequence + 1}
   end
 end

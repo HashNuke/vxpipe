@@ -180,7 +180,7 @@ The URL fetcher is controlled; these checks exercise selected bytes and native p
 CDN retrieval. Exact PCM cursor continuity and late readiness after skipped waiting are checked
 at the owning engine output boundary.
 
-For deterministic incoming phone startup and the existing phone-transfer regressions:
+For deterministic incoming phone startup and phone handoff acceptance:
 
 ```shell
 mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
@@ -189,8 +189,17 @@ mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
 
 The signed provider ingress, negotiated phone codecs, selected STT, normal and silent startup,
 original readiness/duration clocks, failure before/after media attachment and provider hangup
-submission are exercised locally. Provider adapters and playback-mark acknowledgements are
-controlled; live carrier audibility remains a separate acceptance boundary.
+submission are exercised locally. The transfer matrix selects caller and destination STT with
+default, URL and silent waits. Telnyx Opus and Twilio PCMU output is decoded to verify waiting,
+cue and bidirectional conversation. The final cue mark is withheld; replayed clear marks cannot
+release it. Exact acknowledgement admits the destination while retaining media and speech actors,
+and both phone sessions receive the opposite participant's permitted transcript.
+
+Destination socket loss during preparation or while cue drain is held restores source speech and
+another caller turn on the original connection. The configured URL fetcher, speech providers and
+carrier socket/acknowledgements are controlled; the actual provider adapters and native codecs run.
+The existing guarded live API tests only establish control submission when enabled. Live carrier
+wait/cue/clear/recovery audibility remains a separate acceptance boundary.
 
 ## Protocol boundary
 

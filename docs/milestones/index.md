@@ -65,7 +65,7 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff and initial waiting accepted; phone parity and changing-listener acceptance remain, with complete readiness, private waits/cues and acknowledged release throughout.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -91,8 +91,8 @@ ordering or lift the packaging/retention hold.
 The [transfer readiness and participant wait sounds milestone](transfer-readiness-and-wait-sounds.md)
 was authorized on 2026-09-14 for delivery through runnable vertical checkpoints. Definition/assets,
 private playback and complete resource readiness are integrated into ordinary calls. Human web
-handoff, AI handoff and initial caller waiting are accepted slices. Phone parity and
-changing/multiple listeners remain open.
+handoff, AI handoff and initial caller waiting are accepted slices. Local phone acceptance passes;
+live carrier audibility and changing/multiple listeners remain open.
 
 Human web acceptance covers default/URL/nil waits, private briefing and authenticated acceptance,
 whole-room readiness, ordered cues, bidirectional conversation and permitted support transcripts.
@@ -101,7 +101,7 @@ bindings, admission cleanup and spoken recovery. Existing rendered desktop/mobil
 the live sample. Recording denial excludes unneeded writers without replacing unaffected resources.
 The latest native regression reproduces a fatal recovery result caused by output-clearing status
 being mistaken for changed resource identity; the fixed case recovers and completes a subsequent
-transfer on the same caller peer. The latest root run passes all five gates: 1,415 tests, zero failures and
+transfer on the same caller peer. The latest root run passes all five gates: 1,423 tests, zero failures and
 16 integration exclusions (seed 235296, concurrency four). The
 [recovery checkpoint](../../labnotes/20260915-0526-recovery-failure-tracing.md) records the causal
 reproduction, fixture corrections and human cleanup acceptance audit.
@@ -119,9 +119,17 @@ existing recovery, deadline, history and re-entry checks remain green. The
 [AI acceptance labnote](../../labnotes/20260915-0602-ai-handoff-readiness.md) records the evidence
 and fixture corrections. This checkpoint adds no production behavior or UI.
 
-There are **14 checkpoint tasks remaining**: phone 6, changing/multiple listeners 6,
-and final audit 2. Phone-provider playout and the complete changing-audience matrix still need
-their own evidence. Native WebRTC results do not establish live phone audibility.
+Local phone acceptance covers configured Telnyx Opus/Twilio PCMU handoffs with default/URL/nil
+waits, delayed destination STT, withheld/replayed cue marks, decoded audio, opposite-recipient
+transcripts and retained resources. Preparation/cue socket loss recovers source speech and another
+caller turn. Fifty Gateway checks and three phone-room checks pass. The
+[phone acceptance labnote](../../labnotes/20260915-0622-phone-handoff-parity.md) records the
+evidence and fixture corrections; production behavior and UI are unchanged.
+
+There are **9 checkpoint tasks remaining**: live carrier audibility 1, changing/multiple listeners 6,
+and final audit 2. Live provider flags, credentials, approved test numbers and public callback/media
+URLs are absent from the test environment; guarded API tests skip without placing calls. Actual
+adapters and decoded synthetic-socket audio do not establish physical phone audibility.
 The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
 and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the
 implementation boundaries, exact check results and links to checkpoint labnotes. Full milestone
@@ -323,7 +331,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Versioned call-details publications](call-details-publications.md#specification-review) | Approved | milestone_review_a; Approved initial draft; clarified lifecycle/direction/route/plan digest in publication contents. |
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
-| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff and initial waiting accepted; AI, phone and changing-listener acceptance remain in their runnable checkpoints. |
+| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification
