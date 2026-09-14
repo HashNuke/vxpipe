@@ -88,7 +88,10 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     leg_id = PhoneTransferScenario.unique_id("private-phone")
     on_exit(fn -> LegSupervisor.stop_outgoing(leg_id) end)
     connector = PhoneTransferScenario.connector(provider, plan.tenant_id, self(), leg_id)
-    assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
+
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, outbound_leg_connector: connector)
+
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -213,7 +216,9 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     connector = PhoneTransferScenario.connector(provider, plan.tenant_id, self(), leg_id)
 
-    assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, outbound_leg_connector: connector)
+
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -384,7 +389,9 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
         answering_machine_detection: :detect
       )
 
-    assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, outbound_leg_connector: connector)
+
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(

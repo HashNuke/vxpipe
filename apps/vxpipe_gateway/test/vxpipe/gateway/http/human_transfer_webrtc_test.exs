@@ -199,8 +199,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :sys.get_state(caller_connection).speech_input == speech_input
     await_tone(caller_client, 1_000, 2_000)
     await_tone(support_client, 1_000, 2_000)
-    drain_morse_audio(caller_client)
-    drain_morse_audio(support_client)
+    drain_audio(caller_client)
+    drain_audio(support_client)
 
     support_client = send_morse(support_client, "SOS")
     assert_transcript(caller_client, support.participant_id, "SOS")
@@ -209,6 +209,57 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     caller_client = send_morse(caller_client, "ET")
     assert_transcript(caller_client, caller.participant_id, "ET")
     assert :ok = await_tone(support_client, 700, 2_000)
+  end
+
+  test "a new caller hears setup waiting while model and voice initialization are delayed" do
+    plan =
+      compile_plan(
+        reception_model: "test:blocked",
+        reception_first_message: %{mode: "fixed", text: "Reception is ready."}
+      )
+
+    owner = self()
+
+    start_supervised!(
+      {Task, fn -> send(owner, {:setup_call_started, CallEngine.start_call(plan)}) end},
+      id: :start_waiting_call
+    )
+
+    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
+    assert_receive {:setup_call_started, {:ok, room}}, 500
+    stop_room_on_exit(plan)
+    caller = Map.fetch!(plan.participants, "caller")
+
+    client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+
+    assert :ok = send_client_ready(client)
+    refute_receive {:ex_webrtc, _, {:data, _, _}}, 100
+    assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+    assert :ok = send_rtvi_text(client, "held-during-call-setup")
+
+    assert %{"id" => "held-during-call-setup"} =
+             await_sideband(client, "error-response", 2_000)
+
+    send(model_preparer, :release_test_agent_runtime_model)
+    assert_receive {:test_tts_transport_started, voice, _}, 2_000
+    assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+    refute_receive {:test_tts_control, ^voice, _speak}, 100
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"Connected","request_id":"initial-voice-ready"})
+    )
+
+    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+    assert_receive {:test_tts_control, ^voice, speak}, 2_000
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Reception is ready."}
+    assert_receive {:test_tts_control, ^voice, _flush}, 2_000
+
+    assert %{"data" => %{"text" => "Reception is ready."}} =
+             await_sideband(client, "bot-output", 2_000)
   end
 
   test "AI handoff waits independently for model and voice readiness before cues and greeting" do
@@ -1218,7 +1269,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     caller_client =
       plan
       |> issue_session(room, caller.participant_id)
-      |> then(&connect(&1.session_id, "chat"))
+      |> then(&connect(&1.session_id, "chat", false))
 
     authority = Vxpipe.CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
     policy = Vxpipe.CallEngine.MediaPolicy.Authority.snapshot(authority)
@@ -1274,6 +1325,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = Vxpipe.CallEngine.Readiness.Collector.refresh(readiness)
     assert_receive {:vxpipe_readiness_changed, ^readiness, %{status: :ready}}, 1_000
     stop_supervised!(:initial_room_readiness)
+    await_call_ready(caller_client)
 
     assert :ok = send_rtvi_text(caller_client)
     assert_receive {:test_agent_runtime_stream, source_provider, _request}, 2_000
@@ -1854,6 +1906,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    "reception" => %{
                      type: "agent",
                      prompt: "Route callers safely.",
+                     first_message:
+                       Keyword.get(options, :reception_first_message, %{mode: "wait_for_input"}),
                      capabilities: %{
                        model_inference: "test-model",
                        text_to_speech: "test-voice"
@@ -1926,7 +1980,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  "test-model" => %{
                    kind: :model_inference,
                    provider: :req_llm,
-                   options: %{model: "test:scripted"}
+                   options: %{model: Keyword.get(options, :reception_model, "test:scripted")}
                  },
                  "billing-model" => %{
                    kind: :model_inference,
@@ -1978,7 +2032,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     session
   end
 
-  defp connect(session_id, channel_label) do
+  defp connect(session_id, channel_label, ready? \\ true) do
     client_id = unique_id("client")
     child_spec = Supervisor.child_spec({PeerConnection, []}, id: {PeerConnection, client_id})
     client = start_supervised!(child_spec)
@@ -2032,13 +2086,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                     {:track, %MediaStreamTrack{kind: :audio} = output_track}},
                    5_000
 
-    %{
+    connection = %{
       client: client,
       channel_ref: channel_ref,
       connection_id: connection_id,
       input_track_id: input_track.id,
       output_track_id: output_track.id
     }
+
+    if ready? and channel_label == "chat", do: await_call_ready(connection), else: connection
   end
 
   defp create_channel(_client, nil), do: nil
@@ -2070,6 +2126,26 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       |> Endpoint.call(@endpoint_options)
 
     assert response.status == 200
+  end
+
+  defp send_client_ready(connection) do
+    PeerConnection.send_data(
+      connection.client,
+      connection.channel_ref,
+      JSON.encode!(%{
+        id: "setup-ready",
+        label: "rtvi-ai",
+        type: "client-ready",
+        data: %{version: "2.1.0"}
+      })
+    )
+  end
+
+  defp await_call_ready(connection) do
+    assert :ok = send_client_ready(connection)
+    assert %{"type" => "bot-ready"} = await_sideband(connection, "bot-ready", 2_000)
+    drain_audio(connection)
+    connection
   end
 
   defp send_rtvi_text(connection, id \\ unique_id("turn"), audio_response \\ false) do
@@ -2284,15 +2360,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  defp drain_morse_audio(connection) do
+  defp drain_audio(connection) do
     client = connection.client
     track = connection.output_track_id
 
     receive do
       {:ex_webrtc, ^client, {:rtp, ^track, _rid, packet}} ->
         # Consume the verified cue's queued tail while retaining the Opus decoder history.
-        _pcm = Decoder.Native.decode_packet(connection.morse_opus, packet.payload)
-        drain_morse_audio(connection)
+        if decoder = Map.get(connection, :morse_opus),
+          do: Decoder.Native.decode_packet(decoder, packet.payload)
+
+        drain_audio(connection)
     after
       0 -> :ok
     end

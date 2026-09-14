@@ -178,7 +178,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
 
   defp start_room(plan, connection_id, options) do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan, options)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan, options)
 
     assert {:ok, command} =
              AttachConnection.new(
@@ -191,7 +191,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command)
+    assert {:ok, attachment} = CallEngine.attach_connection(command)
+    Vxpipe.CallEngine.TestCallStartup.await_ready(attachment)
     {room, caller}
   end
 

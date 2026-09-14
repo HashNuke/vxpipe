@@ -69,7 +69,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
              OutboundLegRequestResolver.resolve(plan, support, "rinc-probe")
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                outbound_leg_connector: {TestOutboundLegConnector, self()}
              )
 
@@ -161,7 +161,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                outbound_leg_connector: {TestOutboundLegConnector, self()}
              )
 
@@ -215,7 +215,9 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
          owner: owner
        }}
 
-    assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, outbound_leg_connector: connector)
+
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -265,6 +267,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
              CallDefinition.new(
                %{
                  schema_version: CallDefinition.schema_version(),
+                 wait_sounds: %{call_setup: nil},
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
@@ -394,7 +397,12 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
                deadline: future_deadline()
              )
 
-    TestTransferConnection.attach(command, output_sink)
+    with {:ok, attachment} <- TestTransferConnection.attach(command, output_sink) do
+      if participant.definition_key == plan.entry_caller,
+        do: Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
+
+      {:ok, attachment}
+    end
   end
 
   defp send_command(plan, room, caller, content) do

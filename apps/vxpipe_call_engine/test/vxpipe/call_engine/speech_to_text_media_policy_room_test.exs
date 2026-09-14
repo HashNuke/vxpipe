@@ -738,7 +738,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
         restriction: Keyword.get(options, :restriction, %{save_transcripts: false})
       )
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     on_exit(fn ->
       try do
@@ -763,6 +763,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     collector = collect([resource], room.incarnation_id)
     TestSpeechToTextTransport.deliver(transport, connected_message())
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
     authority = Authority.whereis(room.incarnation_id)
     base = Authority.snapshot(authority)
 
@@ -827,7 +828,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                call_lifecycle: [
                  readiness_timeout_ms: 30_000,
                  idle_timeout_ms: 15_000,
@@ -871,7 +872,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     restrictor = Map.fetch!(plan.participants, "restrictor")
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                call_lifecycle: [
                  readiness_timeout_ms: 30_000,
                  idle_timeout_ms: 15_000,
@@ -887,6 +888,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     refute_receive {:test_stt_transport_closed, ^transport}
 
     _receiver_attachment = attach(plan, room, receiver, "conn-live-receiver")
+    TestSpeechToTextTransport.deliver(transport, connected_message())
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
 
     assert :ok =
              CallEngine.push_audio(
@@ -1028,7 +1031,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command)
+    assert {:ok, attachment} = Vxpipe.CallEngine.TestTransferConnection.attach(command, nil)
     attachment
   end
 

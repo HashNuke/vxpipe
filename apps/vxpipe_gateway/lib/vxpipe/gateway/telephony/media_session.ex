@@ -237,6 +237,21 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
     {:stop, :normal, state}
   end
 
+  def handle_info(
+        {:vxpipe_startup_speech, monitor},
+        %{attachment: %{room_monitor: monitor}} = state
+      ) do
+    command = %{state.attach_command | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
+
+    case state.engine.activate_speech_to_text(command) do
+      {:ok, ingress} ->
+        {:noreply, %{state | attachment: %{state.attachment | media_ingress: ingress}}}
+
+      _failed ->
+        {:stop, :shutdown, state}
+    end
+  end
+
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do
     {:stop, :media_unavailable, state}
   end

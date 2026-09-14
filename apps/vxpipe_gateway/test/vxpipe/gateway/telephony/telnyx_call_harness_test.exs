@@ -127,7 +127,13 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     incoming = post_fixture(context, "call-initiated-incoming")
     assert incoming.status == 200
 
-    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
     assert_receive {:test_telephony_answer, answer}, 2_000
     refute_receive {:test_telephony_answer, _duplicate}
 
@@ -162,7 +168,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     assert {:ok, %{attachment: %{admission: :main}}} = MediaSupervisor.snapshot(@incoming_leg_id)
     assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
 
-    begin_transfer(stt_transport, inbound_transport)
+    begin_transfer(stt_transport, inbound_transport, context.plan)
 
     assert_receive {:test_telephony_dial, dial}, 2_000
     assert dial.leg_id == @outgoing_leg_id
@@ -278,12 +284,13 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     )
   end
 
-  defp begin_transfer(stt_transport, socket) do
+  defp begin_transfer(stt_transport, socket, plan) do
     TestSpeechToTextTransport.deliver(
       stt_transport,
       ~s({"type":"Connected","request_id":"request-telnyx-harness","sequence_id":0})
     )
 
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
     assert_caller_audio(stt_transport, socket)
 
     TestSpeechToTextTransport.deliver(

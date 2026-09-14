@@ -88,7 +88,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
       reception = Map.fetch!(plan.participants, "reception")
-      assert {:ok, room} = CallEngine.start_call(plan)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
       TestTextToSpeechTransport.deliver_control(
@@ -212,7 +212,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -329,7 +329,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
     reception = Map.fetch!(plan.participants, "reception")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -418,7 +418,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = CallEngine.start_call(plan)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
       authority = room_authority(plan)
       room_monitor = Process.monitor(authority)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
@@ -614,7 +614,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = CallEngine.start_call(plan)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
       authority = room_authority(plan)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
       source_monitor = Process.monitor(source_tts)
@@ -714,7 +714,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     plan = compile_plan(support_stt: true)
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -810,7 +810,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
     variables = CallVariables.whereis(room.incarnation_id)
     lifecycle = call_lifecycle(room.incarnation_id)
 
@@ -967,7 +969,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -1034,7 +1036,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -1093,7 +1095,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -1177,7 +1179,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -1262,7 +1264,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     TestTextToSpeechTransport.deliver_control(
@@ -1412,7 +1414,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              CallDefinition.new(
                %{
                  schema_version: CallDefinition.schema_version(),
-                 wait_sounds: Keyword.get(options, :wait_sounds, %{}),
+                 wait_sounds:
+                   case Keyword.get(options, :wait_sounds, %{}) do
+                     nil -> nil
+                     sounds -> Map.put(sounds, :call_setup, nil)
+                   end,
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
@@ -1497,10 +1503,16 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
   end
 
   defp attach_ready(plan, room, participant, connection_id, output_sink) do
-    TestTransferConnection.attach(
-      attachment_command(plan, room, participant, connection_id),
-      output_sink
-    )
+    with {:ok, attachment} <-
+           TestTransferConnection.attach(
+             attachment_command(plan, room, participant, connection_id),
+             output_sink
+           ) do
+      if participant.definition_key == plan.entry_caller,
+        do: Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
+
+      {:ok, attachment}
+    end
   end
 
   defp attachment_command(plan, room, participant, connection_id) do

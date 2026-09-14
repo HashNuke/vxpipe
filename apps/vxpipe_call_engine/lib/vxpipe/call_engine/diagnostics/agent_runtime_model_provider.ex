@@ -19,6 +19,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider do
   end
 
   @impl true
+  def readiness(%Config{fixture: fixture}),
+    do: if(Process.alive?(fixture), do: :ready, else: :failed)
+
+  @impl true
   def streaming?(%Config{}), do: true
 
   @impl true

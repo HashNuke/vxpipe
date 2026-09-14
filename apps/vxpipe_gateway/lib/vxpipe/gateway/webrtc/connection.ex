@@ -173,6 +173,8 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          room_audio_ingress: room_audio_ingress,
          rtvi_channel_ref: nil,
          rtvi_turn_state: TurnState.new(),
+         call_ready?: false,
+         pending_client_ready: nil,
          session: session,
          admission_monitor: admission_monitor,
          sideband_channel_ref: nil,
@@ -294,12 +296,27 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         %{peer_connection: peer_connection, rtvi_channel_ref: channel_ref} = state
       ) do
     case RTVICodec.handle(payload) do
-      {:reply, reply} -> :ok = PeerConnection.send_data(peer_connection, channel_ref, reply)
-      {:command, {:send_text, input}} -> submit_text(input, state)
-      :ignore -> :ok
-    end
+      {:reply, reply} ->
+        :ok = PeerConnection.send_data(peer_connection, channel_ref, reply)
+        {:noreply, state}
 
-    {:noreply, state}
+      {:command, {:client_ready, id}} ->
+        if state.call_ready? do
+          :ok =
+            PeerConnection.send_data(peer_connection, channel_ref, RTVICodec.encode_bot_ready(id))
+
+          {:noreply, state}
+        else
+          {:noreply, %{state | pending_client_ready: id}}
+        end
+
+      {:command, {:send_text, input}} ->
+        submit_text(input, state)
+        {:noreply, state}
+
+      :ignore ->
+        {:noreply, state}
+    end
   end
 
   def handle_info(
@@ -465,6 +482,34 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   def handle_info({:vxpipe_transfer_acceptance_ready, attempt_id}, state) do
     {:noreply, TransferSideband.acceptance_ready(attempt_id, state)}
+  end
+
+  def handle_info(
+        {:vxpipe_startup_speech, monitor},
+        %{attachment: %{room_monitor: monitor}} = state
+      ) do
+    command = %{state.attach_command | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
+
+    case CallEngine.activate_speech_to_text(command) do
+      {:ok, ingress} ->
+        {:noreply, %{state | attachment: %{state.attachment | media_ingress: ingress}}}
+
+      _failed ->
+        {:stop, :shutdown, state}
+    end
+  end
+
+  def handle_info({:vxpipe_call_ready, monitor}, %{room_monitor: monitor} = state) do
+    if state.pending_client_ready != nil do
+      :ok =
+        PeerConnection.send_data(
+          state.peer_connection,
+          state.rtvi_channel_ref,
+          RTVICodec.encode_bot_ready(state.pending_client_ready)
+        )
+    end
+
+    {:noreply, %{state | call_ready?: true, pending_client_ready: nil}}
   end
 
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do

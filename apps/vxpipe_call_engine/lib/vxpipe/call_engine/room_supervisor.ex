@@ -249,7 +249,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
              command,
              runtime.provider,
              runtime.transport,
-             runtime.media_ingress,
+             Keyword.put(runtime.media_ingress, :input_admission, :closed),
              speech_to_text_usage(runtime)
            ) do
       bind_connection_speech_to_text(

@@ -14,7 +14,7 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
     ToolCallStarted
   }
 
-  test "answers a current RTVI 2.x client-ready message with bot-ready" do
+  test "defers a compatible client-ready reply to the owning connection" do
     client_ready =
       JSON.encode!(%{
         "id" => "ready-1",
@@ -26,7 +26,8 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
         }
       })
 
-    assert {:reply, reply} = Codec.handle(client_ready)
+    assert {:command, {:client_ready, "ready-1"}} = Codec.handle(client_ready)
+    reply = Codec.encode_bot_ready("ready-1")
 
     assert %{
              "id" => "ready-1",

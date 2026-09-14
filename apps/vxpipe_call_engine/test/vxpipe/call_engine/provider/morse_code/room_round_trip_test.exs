@@ -88,7 +88,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     connection_id = unique_id("connection")
 
@@ -103,7 +103,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, attachment} = Vxpipe.CallEngine.TestTransferConnection.attach(command, sink)
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
     push_text(attachment, plan, room, caller, connection_id, "SOS", 1)
 
     assert_receive {:vxpipe_event,
@@ -271,7 +272,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
 
   defp definition_input do
     %{
-      schema_version: "20260913.01",
+      schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{

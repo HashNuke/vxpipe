@@ -35,7 +35,8 @@ valid because ordinary asset CDNs use them, but operators must not put credentia
 URLs into definitions. The typed source is copied into the immutable resolved plan before a
 room starts and its routine inspection exposes only the source type.
 
-Omission means there is no opening-audio phase. It does not insert silence or delay startup.
+Omission means there is no opening-audio phase. Required call startup still waits for its
+resource readiness; `wait_sounds.call_setup` controls private audio during that interval.
 The runtime targets only the entry caller. Text uses a separate supervised TTS capability owned
 by the opening lifecycle, attributed to the caller with no agent activation, and released after
 opening completion. Agent greetings keep their own TTS capability. Normal text and media input
@@ -47,11 +48,13 @@ never silently opens normal conversation. A text source without a resolved TTS b
 validation before a room is registered; file playback is independent of TTS.
 
 Room mixing and both full-mix and individual-track recording obey the same opening boundary.
-The mixer starts closed when the pinned plan has opening audio; confirmed playout completion
-opens it before ordinary input/greeting admission. Frames timestamped before that boundary are
-discarded even when decoding or delivery finishes afterward. Recording workers may initialize
+The mixer starts closed for a pinned call; confirmed opening playout completion and complete
+initial resource readiness open it before ordinary input/greeting admission. Frames timestamped
+before that boundary are discarded even when decoding or delivery finishes afterward. Recording workers may initialize
 earlier, but receive no held caller audio. Private opening output does not enter room recordings.
-Opening completion does not revise privacy policy or restart warmed capabilities.
+Opening completion does not revise privacy policy or restart warmed capabilities. The original
+startup-readiness deadline includes this completion; idle and whole-call timers keep their existing
+owners and activity rules. A successful room-start receipt does not imply conversational readiness.
 
 ## Migration
 

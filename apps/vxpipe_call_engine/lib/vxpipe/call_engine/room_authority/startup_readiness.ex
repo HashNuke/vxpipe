@@ -3,7 +3,45 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
   alias Vxpipe.CallEngine.Command.CreateRoom
   alias Vxpipe.CallEngine.{CallLifecycle, Error, ResolvedCallPlan}
-  alias Vxpipe.CallEngine.RoomAuthority.FirstMessage
+
+  alias Vxpipe.CallEngine.RoomAuthority.{
+    CallerIdle,
+    ConnectionLifecycle,
+    FirstMessage,
+    OpeningAudio,
+    Startup,
+    StartupProbe
+  }
+
+  alias Vxpipe.CallEngine.{Id, RoomCapabilitySupervisor, RoomMixer}
+  alias Vxpipe.CallEngine.Media.OutputSink
+  alias Vxpipe.CallEngine.WaitSounds.Player
+
+  def preparation_result(ref, result, state) do
+    Process.demonitor(ref, [:flush])
+
+    with {:ok, prepared} <- result,
+         {:ok, state} <- Startup.install(prepared, state),
+         {:ok, state} <- prepared(state) do
+      {:noreply, CallerIdle.reconcile(state)}
+    else
+      _failed ->
+        ConnectionLifecycle.notify(state.connections, :call_start_failed)
+        {:stop, :startup_unavailable, state}
+    end
+  end
+
+  def reply({:ok, state}, _previous), do: {:noreply, CallerIdle.reconcile(state)}
+
+  def reply({:error, %Error{code: code}}, state) do
+    ConnectionLifecycle.notify(state.connections, :call_start_failed)
+    {:stop, code, state}
+  end
+
+  def reply({:error, _reason}, state) do
+    ConnectionLifecycle.notify(state.connections, :call_start_failed)
+    {:stop, :startup_unavailable, state}
+  end
 
   def bind(%CreateRoom{}, _incarnation_id), do: {:ok, nil}
 
@@ -12,6 +50,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
       {:ok, lifecycle} -> {:ok, lifecycle}
       {:error, :unavailable} -> {:error, :call_lifecycle_unavailable}
     end
+  end
+
+  def connection_attached(command, %{startup: startup, startup_ready?: false} = state)
+      when startup != nil do
+    connection = Map.fetch!(state.connections, command.connection_id)
+    state = start_output_probe(command, connection, state)
+    ready(state)
   end
 
   def connection_attached(command, state) do
@@ -28,6 +73,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     end
   end
 
+  def prepared(state) do
+    Enum.each(state.connections, fn {_id, connection} ->
+      if connection.speech_to_text == nil and
+           Map.get(state.speech_to_text_runtime, connection.participant_id) != nil do
+        send(connection.pid, {:vxpipe_startup_speech, connection.room_monitor})
+      end
+    end)
+
+    ready(state)
+  end
+
+  def ready(%{startup: %{status: :preparing}} = state), do: {:ok, state}
+
+  def ready(%{startup: startup, startup_ready?: false} = state) when startup != nil do
+    state = start_room_probe(state)
+    reconcile(state)
+  end
+
   def ready(%{startup_ready?: true} = state), do: FirstMessage.start(state)
 
   def ready(state) do
@@ -36,6 +99,260 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
       {:error, :unavailable} -> {:error, lifecycle_unavailable()}
     end
   end
+
+  def output_result(reference, connection_id, result, state) do
+    case Map.get(state.startup.waits, connection_id) do
+      %{task: %Task{ref: ^reference}} = wait ->
+        Process.demonitor(reference, [:flush])
+
+        if result == :ok do
+          wait = %{wait | task: nil, status: :ready}
+          state = put_wait(state, connection_id, wait)
+          reconcile(state)
+        else
+          {:error, startup_unavailable()}
+        end
+
+      _stale ->
+        {:ok, state}
+    end
+  end
+
+  def room_result(reference, result, %{startup: %{readiness: %Task{ref: reference}}} = state) do
+    Process.demonitor(reference, [:flush])
+
+    if result == :ok do
+      reconcile(%{state | startup: %{state.startup | readiness: nil, resources_ready?: true}})
+    else
+      {:error, startup_unavailable()}
+    end
+  end
+
+  def room_result(_reference, _result, state), do: {:ok, state}
+
+  def playback(player, episode, status, state) do
+    case Enum.find(state.startup.waits, fn {_id, wait} ->
+           wait.player == player and wait.episode == episode
+         end) do
+      {id, wait} ->
+        case status do
+          :stopped -> reconcile(put_wait(state, id, %{wait | player: nil, status: :stopped}))
+          {:paused, _offset} -> reconcile(put_wait(state, id, %{wait | status: :paused}))
+          {:failed, _reason} -> {:error, startup_unavailable()}
+        end
+
+      nil ->
+        {:ok, state}
+    end
+  end
+
+  def opening_changed(%{startup: nil} = state), do: FirstMessage.start(state)
+  def opening_changed(state), do: reconcile(state)
+
+  defp start_output_probe(_command, %{output_sink: nil}, state), do: state
+
+  defp start_output_probe(command, connection, state) do
+    identity =
+      Map.take(command, [:tenant_id, :room_id, :incarnation_id, :participant_id, :connection_id])
+
+    authority = state.media_policy_authority
+    deadline = state.startup.deadline_ms
+
+    task =
+      Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
+        {:startup_output, command.connection_id,
+         StartupProbe.output(connection.pid, identity, authority, deadline)}
+      end)
+
+    put_wait(state, command.connection_id, %{
+      task: task,
+      player: nil,
+      episode: Id.generate(:command),
+      status: :checking
+    })
+  end
+
+  defp start_room_probe(%{startup: %{readiness: nil, resources_ready?: false}} = state)
+       when map_size(state.connections) > 0 do
+    if pending_speech?(state) do
+      state
+    else
+      room = self()
+      authority = state.media_policy_authority
+      incarnation = state.snapshot.incarnation_id
+      deadline = state.startup.deadline_ms
+
+      task =
+        Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
+          {:startup_ready, StartupProbe.room(room, authority, incarnation, deadline)}
+        end)
+
+      %{state | startup: %{state.startup | readiness: task}}
+    end
+  end
+
+  defp start_room_probe(state), do: state
+
+  defp pending_speech?(state) do
+    Enum.any?(state.connections, fn {_id, connection} ->
+      connection.role == :human and connection.admission == :main and
+        connection.speech_to_text == nil and
+        Map.get(state.speech_to_text_runtime, connection.participant_id) != nil
+    end)
+  end
+
+  defp reconcile(%{startup_ready?: true} = state), do: FirstMessage.start(state)
+
+  defp reconcile(state) do
+    with {:ok, state} <- update_waits(state),
+         {:ok, state} <- start_opening(state) do
+      complete(state)
+    end
+  end
+
+  defp update_waits(state) do
+    Enum.reduce_while(state.startup.waits, {:ok, state}, fn {id, wait}, {:ok, state} ->
+      case update_wait(id, wait, state) do
+        {:ok, state} -> {:cont, {:ok, state}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp update_wait(id, %{status: :ready} = wait, state) do
+    if state.startup.resources_ready? or state.opening_audio.phase == :playing do
+      {:ok, put_wait(state, id, %{wait | status: :stopped})}
+    else
+      start_wait(id, wait, state)
+    end
+  end
+
+  defp update_wait(id, %{status: status} = wait, state) when status in [:playing, :paused] do
+    cond do
+      state.startup.resources_ready? and state.opening_audio.phase == :open ->
+        Player.stop(wait.player)
+        {:ok, put_wait(state, id, %{wait | status: :stopping})}
+
+      state.startup.status == :prepared and state.opening_audio.phase == :awaiting_connection and
+          status == :playing ->
+        Player.pause(wait.player)
+        {:ok, put_wait(state, id, %{wait | status: :pausing})}
+
+      state.opening_audio.phase == :open and status == :paused ->
+        Player.resume(wait.player)
+        {:ok, put_wait(state, id, %{wait | status: :playing})}
+
+      true ->
+        {:ok, state}
+    end
+  end
+
+  defp update_wait(_id, _wait, state), do: {:ok, state}
+
+  defp start_wait(id, wait, state) do
+    plan = state.participant_transfer_runtime.plan
+    assets = plan.wait_sound_assets
+    connection = Map.fetch!(state.connections, id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    digest =
+      if connection.participant_id == caller.participant_id,
+        do: Map.fetch!(assets.slots, :call_setup)
+
+    if digest do
+      options = [
+        owner: self(),
+        episode_id: wait.episode,
+        tenant_id: plan.tenant_id,
+        room_id: plan.room_id,
+        participant_id: connection.participant_id,
+        connection_generation: id,
+        attempt_id: "call-setup",
+        phase: :call_setup,
+        sinks: %{id => connection.output_sink},
+        asset: Map.fetch!(assets.assets, digest)
+      ]
+
+      case RoomCapabilitySupervisor.start_wait_audio(state.snapshot.incarnation_id, options) do
+        {:ok, player} -> {:ok, put_wait(state, id, %{wait | player: player, status: :playing})}
+        _failed -> {:error, startup_unavailable()}
+      end
+    else
+      {:ok, put_wait(state, id, %{wait | status: :stopped})}
+    end
+  end
+
+  defp start_opening(%{startup: %{status: :preparing}} = state), do: {:ok, state}
+
+  defp start_opening(%{opening_audio: %{phase: phase}} = state)
+       when phase != :awaiting_connection, do: {:ok, state}
+
+  defp start_opening(state) do
+    target = state.opening_audio.target_participant_id
+
+    case Enum.find(state.connections, fn {id, connection} ->
+           connection.participant_id == target and
+             match?(
+               %{status: status} when status in [:paused, :stopped],
+               Map.get(state.startup.waits, id)
+             )
+         end) do
+      {_id, connection} ->
+        with {:ok, _discarded} <- OutputSink.clear(connection.output_sink),
+             {:ok, opening} <-
+               OpeningAudio.start(
+                 state.opening_audio,
+                 connection.attach_command,
+                 connection,
+                 state.snapshot,
+                 self()
+               ) do
+          {:ok, %{state | opening_audio: opening}}
+        else
+          {:error, %Error{}} = error -> error
+          _failed -> {:error, startup_unavailable()}
+        end
+
+      nil ->
+        {:ok, state}
+    end
+  end
+
+  defp complete(%{startup: %{resources_ready?: true}, opening_audio: %{phase: :open}} = state) do
+    if Enum.all?(state.startup.waits, fn {_id, wait} -> wait.status == :stopped end) do
+      with :ok <- clear_outputs(state),
+           :ok <- CallLifecycle.ready(state.call_lifecycle),
+           :ok <- RoomMixer.complete_opening(state.room_mixer) do
+        Enum.each(state.connections, fn {_id, connection} ->
+          send(connection.pid, {:vxpipe_call_ready, connection.room_monitor})
+        end)
+
+        state = ConnectionLifecycle.open_inputs(%{state | startup_ready?: true})
+        FirstMessage.start(state)
+      else
+        _failed -> {:error, startup_unavailable()}
+      end
+    else
+      {:ok, state}
+    end
+  end
+
+  defp complete(state), do: {:ok, state}
+
+  defp clear_outputs(state) do
+    Enum.reduce_while(state.startup.waits, :ok, fn {id, _wait}, :ok ->
+      case OutputSink.clear(Map.fetch!(state.connections, id).output_sink) do
+        {:ok, _discarded} -> {:cont, :ok}
+        _failed -> {:halt, {:error, :output_unavailable}}
+      end
+    end)
+  end
+
+  defp put_wait(state, id, wait),
+    do: %{state | startup: %{state.startup | waits: Map.put(state.startup.waits, id, wait)}}
+
+  defp startup_unavailable,
+    do: Error.new(:startup_unavailable, "The call could not become ready.", retryable: true)
 
   defp lifecycle_unavailable do
     Error.new(

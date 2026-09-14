@@ -28,7 +28,9 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
         }
 
   @spec handle(binary()) ::
-          :ignore | {:reply, binary()} | {:command, {:send_text, send_text()}}
+          :ignore
+          | {:reply, binary()}
+          | {:command, {:send_text, send_text()} | {:client_ready, String.t()}}
   def handle(payload) when is_binary(payload) do
     with {:ok, message} when is_map(message) <- JSON.decode(payload) do
       handle_message(message)
@@ -268,7 +270,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
        })
        when is_binary(id) and is_binary(version) do
     case parse_version(version) do
-      {:ok, {@protocol_major, _minor, _patch}} -> {:reply, bot_ready(id)}
+      {:ok, {@protocol_major, _minor, _patch}} -> {:command, {:client_ready, id}}
       _unsupported_or_invalid -> {:reply, incompatible_version(id, version)}
     end
   end
@@ -303,7 +305,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
 
   defp handle_message(_message), do: :ignore
 
-  defp bot_ready(id) do
+  def encode_bot_ready(id) when is_binary(id) do
     JSON.encode!(%{
       "id" => id,
       "label" => @label,

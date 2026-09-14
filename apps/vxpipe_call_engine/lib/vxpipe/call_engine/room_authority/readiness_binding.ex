@@ -32,6 +32,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
     ]
   end
 
+  def capture(%State{startup: %{status: :preparing}}), do: {:error, :startup_preparing}
+
   def capture(%State{participant_transfer_runtime: nil}), do: {:error, :unsupported_definition}
 
   def capture(%State{} = state) do

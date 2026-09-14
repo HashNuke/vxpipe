@@ -70,7 +70,7 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
       drain_timeout_ms: 1_000
     ]
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive)
     assert {:ok, attach} = attach(plan, room, caller, connection_id)
 
     assert :ok = send_text(plan, room, caller, connection_id, "Please end the call.")
@@ -167,7 +167,10 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
                deadline: future_deadline()
              )
 
-    CallEngine.attach_connection(command)
+    with {:ok, attachment} <- CallEngine.attach_connection(command) do
+      Vxpipe.CallEngine.TestCallStartup.await_ready(attachment)
+      {:ok, attachment}
+    end
   end
 
   defp send_text(plan, room, caller, connection_id, content) do

@@ -45,6 +45,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
                media_started_event(binding)
              )
 
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
     assert {:ok, snapshot} = MediaSupervisor.snapshot(binding.client_state_leg_id)
     assert is_pid(snapshot.audio_output)
     assert is_pid(snapshot.room_audio_ingress)
@@ -209,7 +210,8 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
 
   defp compile_plan do
     definition_input = %{
-      schema_version: "20260913.01",
+      schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{capabilities: %{model_inference: "test-model"}},

@@ -34,6 +34,14 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
     await_start_permission(transport_options, observer, connection)
     send(observer, {:test_tts_transport_started, self(), connection})
 
+    if Keyword.get(transport_options, :ready_on_start, false) do
+      send(
+        owner,
+        {:vxpipe_tts_transport, self(),
+         {:control, ~s({"type":"Connected","request_id":"fixture-ready"})}}
+      )
+    end
+
     {:ok,
      %{
        observer: observer,

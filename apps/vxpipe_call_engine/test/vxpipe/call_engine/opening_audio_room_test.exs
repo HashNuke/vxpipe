@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     TestCallLifecycleTimer,
     TestOpeningAudioFetcher,
     TestSpeechToTextTransport,
-    TestTextToSpeechTransport
+    TestTextToSpeechTransport,
+    TestTransferConnection
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
@@ -39,8 +40,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     monitor = Process.monitor(transport)
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    receiver_command = attach_command(plan, room, receiver, "conn-human-receiver")
+    assert {:ok, _receiver_attachment} = TestTransferConnection.attach(receiver_command, nil)
     command = attach_command(plan, room, caller, "conn-human-opening")
-    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_tts_control, ^transport, speak}
     assert JSON.decode!(speak)["text"] == "This call may be recorded."
     assert_receive {:test_tts_control, ^transport, _flush}
@@ -84,11 +87,11 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       assert_receive {:test_recording_writer_opened, _caller, recording, %{stream_id: "full-mix"}}
       sink = start_supervised!({TestAudioOutputSink, observer: self()})
       command = attach_command(plan, room, caller, "conn-opening-recording")
-      assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+      assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
 
       if unquote(source) == :text do
         assert_receive {:test_tts_transport_started, transport, _connection}
-        assert_receive {:test_tts_control, ^transport, _speak}
+        assert_receive {:test_tts_control, ^transport, _speak}, 1_000
         assert_receive {:test_tts_control, ^transport, _flush}
 
         TestTextToSpeechTransport.deliver_control(
@@ -168,7 +171,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-opening")
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_stt_transport_started, stt_transport, _connection}
 
     assert_receive {:test_tts_control, ^tts_transport, speak}
@@ -176,7 +179,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_tts_control, ^tts_transport, _flush}
 
     assert {:error, %Error{code: :opening_audio_in_progress}} =
-             CallEngine.send_text(send_command(plan, room, caller, "conn-opening", "Too early"))
+             TestTransferConnection.send_text(
+               send_command(plan, room, caller, "conn-opening", "Too early")
+             )
 
     assert :ok = CallEngine.push_audio(attachment, audio_frame(plan, room, caller, 1))
     refute_receive {:test_stt_audio, ^stt_transport, _audio}
@@ -213,7 +218,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_stt_audio, ^stt_transport, <<2>>}
 
     assert :ok =
-             CallEngine.send_text(send_command(plan, room, caller, "conn-opening", "Now ready"))
+             TestTransferConnection.send_text(
+               send_command(plan, room, caller, "conn-opening", "Now ready")
+             )
   end
 
   test "ends the room when required opening speech fails" do
@@ -228,7 +235,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-opening-failure")
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_tts_control, ^tts_transport, _speak}
     assert_receive {:test_tts_control, ^tts_transport, _flush}
 
@@ -237,7 +244,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       ~s({"type":"Error","request_id":"req","code":"MESSAGE_INVALID"})
     )
 
-    assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable}
+    assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable},
+                   1_000
+
     assert room_monitor == attachment.room_monitor
 
     assert_receive {:opening_audio_telemetry, @opening_audio_stop_event,
@@ -252,7 +261,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     assert_receive {:test_tts_transport_started, tts_transport, _connection}
 
     receiver_sink =
@@ -261,7 +270,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     receiver_command =
       attach_command(plan, room, receiver, "conn-opening-receiver")
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(receiver_command, receiver_sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(receiver_command, receiver_sink)
     refute_receive {:test_tts_control, ^tts_transport, _payload}
     refute_receive {:test_audio_output, ^receiver_sink, _frame}
     assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
@@ -270,7 +279,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :caller_opening_sink)
 
     caller_command = attach_command(plan, room, caller, "conn-opening-caller")
-    assert {:ok, _attachment} = CallEngine.attach_connection(caller_command, caller_sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(caller_command, caller_sink)
     assert_receive {:test_tts_control, ^tts_transport, _speak}
     assert_receive {:test_tts_control, ^tts_transport, _flush}
 
@@ -292,7 +301,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :first_text_cache_sink)
 
     first_command = attach_command(first_plan, first_room, first_caller, "conn-text-cache-first")
-    assert {:ok, _attachment} = CallEngine.attach_connection(first_command, first_sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(first_command, first_sink)
     assert_receive {:test_tts_control, ^first_tts, _speak}
     assert_receive {:test_tts_control, ^first_tts, _flush}
     complete_speech(first_tts, first_sink, "text-cache-first")
@@ -309,7 +318,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     second_command =
       attach_command(second_plan, second_room, second_caller, "conn-text-cache-second")
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(second_command, second_sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(second_command, second_sink)
     assert_receive {:test_audio_output, ^second_sink, frame}
     assert frame.payload == <<1, 0, 2, 0>>
     assert_receive {:test_audio_output_finish, ^second_sink, _correlation_id}
@@ -328,7 +337,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :third_text_cache_sink)
 
     third_command = attach_command(third_plan, third_room, third_caller, "conn-text-cache-third")
-    assert {:ok, _attachment} = CallEngine.attach_connection(third_command, third_sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(third_command, third_sink)
     assert_receive {:test_tts_control, ^third_tts, _speak}
     assert_receive {:test_tts_control, ^third_tts, _flush}
     complete_speech(third_tts, third_sink, "text-cache-third")
@@ -355,15 +364,16 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-opening-idle")
-    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_stt_transport_started, _stt_transport, _connection}
-    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+    refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
     assert_receive {:test_tts_control, ^tts_transport, _speak}
     assert_receive {:test_tts_control, ^tts_transport, _flush}
     refute_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
 
     complete_speech(tts_transport, sink, "opening-idle")
     assert_eventually_open(plan)
+    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
     assert_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
   end
 
@@ -385,7 +395,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-file-opening")
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_stt_transport_started, stt_transport, _connection}
     assert_receive {:test_opening_audio_fetch, ^url, _limits}
 
@@ -422,7 +432,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_stt_audio, ^stt_transport, <<2>>}
   end
 
-  test "continues file opening when an unrelated text-to-speech capability fails" do
+  test "fails startup when required conversational speech fails during a file opening" do
     configure_speech_runtime()
     test = self()
 
@@ -451,7 +461,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-file-opening-tts-failure")
-    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_opening_audio_waiting, worker}
 
     TestTextToSpeechTransport.deliver_control(
@@ -459,14 +469,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       ~s({"type":"Error","request_id":"req","code":"MESSAGE_INVALID"})
     )
 
+    room_monitor = attachment.room_monitor
+    assert_receive {:DOWN, ^room_monitor, :process, _authority, :startup_unavailable}, 1_000
+    refute_receive {:test_call_ready, _room_id}
     send(worker, :release_opening_audio)
-    assert_receive {:test_audio_output, ^sink, _frame}
-    assert_receive {:test_audio_output_finish, ^sink, _correlation_id}
-    assert :ok = TestAudioOutputSink.playback_started(sink)
-    assert :ok = TestAudioOutputSink.playback_completed(sink)
-    assert_eventually_open(plan)
-    refute_receive {:DOWN, _room_monitor, :process, _room_authority, _reason}
-    assert is_reference(attachment.room_monitor)
   end
 
   test "ends the room when a required file opening cannot be loaded" do
@@ -495,12 +501,14 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert {:ok, room} = CallEngine.start_call(plan)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-file-opening-failure")
-    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    room_monitor = Process.monitor(authority)
     assert_receive {:test_opening_audio_waiting, worker}
     send(worker, :fail_opening_audio)
 
-    assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable}
-    assert room_monitor == attachment.room_monitor
+    assert_receive {:DOWN, ^room_monitor, :process, ^authority, :opening_audio_unavailable},
+                   1_000
   end
 
   test "rejects a missing resolved opening voice without falling back to the agent" do
@@ -539,7 +547,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-fixed-greeting")
-    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_stt_transport_started, _stt_transport, _connection}
 
     assert_receive {:test_tts_control, ^tts_transport, opening_speak}
@@ -562,7 +570,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
 
     assert :ok =
-             CallEngine.send_text(
+             TestTransferConnection.send_text(
                send_command(plan, room, caller, "conn-fixed-greeting", "Hello")
              )
 
@@ -597,7 +605,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-generated-greeting")
-    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_stt_transport_started, _stt_transport, _connection}
 
     assert_receive {:test_agent_runtime_stream, provider, request}
@@ -644,6 +652,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     definition_input = %{
       schema_version: CallDefinition.schema_version(),
+      wait_sounds: nil,
       entry_caller: "caller",
       entry_receiver: "receiver",
       opening_audio:
@@ -761,19 +770,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     }
   end
 
-  defp assert_eventually_open(plan, attempts \\ 20)
-
-  defp assert_eventually_open(_plan, 0), do: flunk("opening audio did not release input")
-
-  defp assert_eventually_open(plan, attempts) do
-    if RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :open do
-      :ok
-    else
-      receive do
-      after
-        5 -> assert_eventually_open(plan, attempts - 1)
-      end
-    end
+  defp assert_eventually_open(plan) do
+    room_id = plan.room_id
+    assert_receive {:test_call_ready, ^room_id}, 1_000
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :open
   end
 
   defp complete_speech(tts_transport, sink, speech_id) do
@@ -863,7 +863,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         encoding: :opus,
         sample_rate: 48_000
       ],
-      transport: {TestSpeechToTextTransport, [observer: self()]},
+      transport: {TestSpeechToTextTransport, [observer: self(), ready_on_start: true]},
       media_ingress: [
         maximum_frames: 8,
         maximum_bytes: 1_024,
@@ -881,7 +881,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, [observer: self()]},
+      transport: {TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
       maximum_requests: 2
     ]
 
@@ -929,7 +929,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       incarnation_id: room.incarnation_id,
       source_participant_id: caller.participant_id,
       connection_id: "conn-opening-recording",
-      track_id: "track-opening-recording",
+      track_id: "embedded",
       sequence_number: div(timestamp, 960),
       timestamp: timestamp,
       policy_revision:

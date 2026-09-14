@@ -156,7 +156,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     end)
   end
 
-  defp mcp_integrations(receiver, options) do
+  def mcp_integrations(receiver, options) do
     remote_bindings =
       Enum.flat_map(receiver.tools, fn
         {name, %ToolBinding{type: :mcp, remote: remote}} -> [{name, remote}]

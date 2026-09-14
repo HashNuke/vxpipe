@@ -27,7 +27,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     alias Vxpipe.Gateway.Media.{OutputArbiter, RoomAudioEgress}
 
     plan = compile_restrictive_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     stop_room_on_exit(plan)
     specialist = Map.fetch!(plan.participants, "specialist").participant_id
     assert {:ok, command} = join_command(plan, specialist)
@@ -38,6 +38,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
         participant = Map.fetch!(plan.participants, key).participant_id
         {key, connect(issue_session(plan, room, participant).session_id)}
       end)
+
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+    refute_audio(Map.fetch!(clients, "receiver"), 40)
 
     transports =
       Enum.map(clients, fn {_key, client} ->
@@ -167,13 +170,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     alias Vxpipe.Gateway.Media.{OutputArbiter, RoomAudioEgress, RoomAudioIngress}
 
     plan = compile_restrictive_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     stop_room_on_exit(plan)
     caller = Map.fetch!(plan.participants, "caller")
     receiver = Map.fetch!(plan.participants, "receiver")
     specialist = Map.fetch!(plan.participants, "specialist")
     client = connect(issue_session(plan, room, caller.participant_id).session_id)
     receiver_client = connect(issue_session(plan, room, receiver.participant_id).session_id)
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+    refute_audio(receiver_client, 40)
 
     assert {:ok, receiver_transport, _status} =
              Connection.readiness(receiver_client.connection_id)
@@ -342,7 +347,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
   test "two admitted humans exchange live mix-minus audio over WebRTC" do
     plan = compile_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     stop_room_on_exit(plan)
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -359,6 +364,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
       )
 
     receiver_client = connect(receiver_session.session_id)
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+    refute_audio(receiver_client, 40)
 
     assert {:ok, [output, input]} =
              Connection.readiness_resources(caller_client.connection_id, input?: true)
@@ -501,7 +508,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
   test "a receive-only connection can be ready without a negotiated input track" do
     plan = compile_monitor_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     stop_room_on_exit(plan)
     monitor = Map.fetch!(plan.participants, "monitor")
     assert {:ok, command} = join_command(plan, monitor.participant_id, :monitor)
@@ -561,7 +568,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
   test "a restrictive participant commits new live routes before queued audio can cross" do
     plan = compile_restrictive_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     stop_room_on_exit(plan)
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -570,6 +577,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     caller_client = connect(issue_session(plan, room, caller.participant_id).session_id)
     receiver_client = connect(issue_session(plan, room, receiver.participant_id).session_id)
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+    refute_audio(receiver_client, 40)
 
     :ok = send_audio(caller_client, 1, 960, 8_000)
     assert receiver_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
@@ -601,7 +610,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
   test "an authorized silent monitor hears permitted WebRTC sources and cannot publish" do
     plan = compile_monitor_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     stop_room_on_exit(plan)
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -610,6 +619,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     caller_client = connect(issue_session(plan, room, caller.participant_id).session_id)
     receiver_client = connect(issue_session(plan, room, receiver.participant_id).session_id)
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+    refute_audio(receiver_client, 40)
 
     assert {:ok, command} = join_command(plan, monitor.participant_id, :monitor)
     assert {:ok, _participant} = CallEngine.join_participant(command)
@@ -651,6 +662,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     input = %{
       schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -688,6 +700,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     input = %{
       schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -738,6 +751,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     input = %{
       schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

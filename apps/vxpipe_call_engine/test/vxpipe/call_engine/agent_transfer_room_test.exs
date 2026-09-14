@@ -62,7 +62,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
     variables = CallVariables.whereis(room.incarnation_id)
 
     assert [{source_activation, _value}] =
@@ -178,7 +180,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     plan = compile_plan(transfer_history: %{mode: "all_spoken"})
     caller = Map.fetch!(plan.participants, "caller")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     attach_caller(plan, room, caller)
 
     remembered = send_command(plan, room, caller, "Remember invoice 17.")
@@ -227,7 +229,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     attach_caller(plan, room, caller)
 
     binding = Map.fetch!(reception.tools, "transfer").transfer
@@ -272,7 +274,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     caller = Map.fetch!(plan.participants, "caller")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     attach_caller(plan, room, caller)
 
     assert :ok =
@@ -355,7 +357,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
     attach_caller(plan, room, caller)
 
     first = send_command(plan, room, caller, "Please try billing.")
@@ -556,7 +560,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
     attach_caller(plan, room, caller)
 
     assert :ok =
@@ -667,9 +673,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
 
     assert_receive {:test_tts_transport_started, source_transport, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_transport,
+      ~s({"type":"Connected","request_id":"initial-source-ready"})
+    )
 
     attach_caller(plan, room, caller)
 
@@ -768,8 +780,16 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
     assert_receive {:test_tts_transport_started, source_transport, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_transport,
+      ~s({"type":"Connected","request_id":"initial-source-ready"})
+    )
+
     attach_caller(plan, room, caller)
 
     assert :ok =
@@ -844,7 +864,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     billing = Map.fetch!(plan.participants, "billing")
     billing_participant_id = billing.participant_id
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
     attach_caller(plan, room, caller)
 
     transfer_through_model(
@@ -1115,7 +1137,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command)
+    assert {:ok, attachment} = CallEngine.attach_connection(command)
+    Vxpipe.CallEngine.TestCallStartup.await_ready(attachment)
   end
 
   defp send_command(plan, room, caller, content) do

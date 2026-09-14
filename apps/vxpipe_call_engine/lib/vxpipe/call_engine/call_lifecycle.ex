@@ -32,6 +32,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     end
   end
 
+  def readiness_deadline(lifecycle), do: safe_call(lifecycle, :readiness_deadline)
+
   @spec ready(pid()) :: :ok | {:error, :unavailable}
   def ready(lifecycle) when is_pid(lifecycle) do
     case safe_call(lifecycle, :ready) do
@@ -110,6 +112,7 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
         idle: :inactive,
         idle_timeout_ms: idle_timeout_ms,
         readiness: :pending,
+        readiness_deadline_ms: System.monotonic_time(:millisecond) + readiness_timeout_ms,
         timer: {timer_module, timer_options},
         timers: %{},
         unbound_events: []
@@ -135,6 +138,9 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   def handle_call({:bind, _authority}, _from, state) do
     {:reply, {:error, :already_bound}, state}
   end
+
+  def handle_call(:readiness_deadline, _from, state),
+    do: {:reply, state.readiness_deadline_ms, state}
 
   def handle_call(:ready, _from, %{readiness: :pending} = state) do
     {:reply, :ok, state |> cancel(:readiness) |> Map.put(:readiness, :ready)}

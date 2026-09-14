@@ -975,6 +975,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
              )
 
     assert {:ok, attachment} = CallEngine.attach_connection(attach_command)
+    Vxpipe.CallEngine.TestCallStartup.await_ready(attachment)
 
     assert {:ok, send_command} =
              SendText.new(

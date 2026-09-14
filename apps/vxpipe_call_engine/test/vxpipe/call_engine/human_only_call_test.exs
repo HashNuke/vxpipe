@@ -13,12 +13,30 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     TestAudioOutputSink,
     TestCallLifecycleTimer,
     TestMediaPolicyEnforcer,
-    TestRecordingWriter
+    TestRecordingWriter,
+    TestTransferConnection
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
+
+  setup do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    settings =
+      Keyword.update!(original, :room_mixer, fn mixer ->
+        mixer |> Keyword.put(:clock, fn -> 0 end) |> Keyword.put(:clock_origin_ms, 0)
+      end)
+
+    Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+
+    :ok
+  end
 
   test "starts two human entries without an agent, mixes audio, and retains call lifecycle" do
     plan = compile_plan()
@@ -30,7 +48,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     assert receiver.activation_id == nil
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                call_lifecycle: [
                  readiness_timeout_ms: 30_000,
                  idle_timeout_ms: 15_000,
@@ -44,8 +62,10 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     _ = registered_participant(plan, receiver.participant_id)
 
     caller_attachment = attach(plan, room, caller, "conn-human-caller")
-    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+    refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
     receiver_attachment = attach(plan, room, receiver, "conn-human-receiver")
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
+    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
 
     assert {:ok,
             %{
@@ -119,7 +139,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     )
 
     command = send_command(plan, room, caller, "conn-human-caller")
-    assert {:error, %Error{code: :agent_not_ready}} = CallEngine.send_text(command)
+    assert {:error, %Error{code: :agent_not_ready}} = TestTransferConnection.send_text(command)
 
     room_monitor = Process.monitor(authority)
     :ok = TestCallLifecycleTimer.fire(maximum_timer)
@@ -132,7 +152,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     plan = compile_plan()
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                call_lifecycle: [
                  readiness_timeout_ms: 30_000,
                  idle_timeout_ms: 15_000,
@@ -171,6 +191,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
 
     assert_receive {:test_audio_recording_bound, ^caller_sink, _handoff}
     receiver_attachment = attach(plan, room, receiver, "conn-recording-receiver")
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
 
     caller_audio = :binary.copy(<<100::little-signed-16>>, 960)
     receiver_audio = :binary.copy(<<200::little-signed-16>>, 960)
@@ -205,8 +226,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     assert_receive {:test_recording_writer_opened, _caller, ^recording, individual_stream}
 
     assert individual_stream.mode ==
-             {:individual_track, caller.participant_id, "conn-recording-caller",
-              "track-#{caller.participant_id}"}
+             {:individual_track, caller.participant_id, "conn-recording-caller", "embedded"}
 
     individual_stream_id = individual_stream.stream_id
     assert_receive {:test_recording_chunk, ^individual_stream_id, individual_chunk}
@@ -230,6 +250,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
 
     input = %{
       schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -282,7 +303,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command, output_sink)
+    assert {:ok, attachment} = TestTransferConnection.attach(command, output_sink)
     attachment
   end
 
@@ -310,7 +331,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
       incarnation_id: room.incarnation_id,
       source_participant_id: source_participant_id,
       connection_id: connection_id || "connection-#{source_participant_id}",
-      track_id: "track-#{source_participant_id}",
+      track_id: "embedded",
       sequence_number: 1,
       timestamp: 0,
       policy_revision: Snapshot.interval(policy, :audio_input, source_participant_id),

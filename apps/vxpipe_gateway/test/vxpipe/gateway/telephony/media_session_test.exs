@@ -52,6 +52,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
                media_started_event(binding, "stream-1")
              )
 
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
     assert {:ok, snapshot} = MediaSupervisor.snapshot(binding.client_state_leg_id)
     connection = snapshot.connection
     assert is_pid(snapshot.audio_output)
@@ -237,7 +238,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
   defp compile_plan do
     definition_input = %{
-      schema_version: "20260913.01",
+      schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{capabilities: %{model_inference: "test-model"}},
@@ -441,6 +443,24 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
   defp socket_loop(observer, state) do
     receive do
+      {:vxpipe_playback_command, "stream-1", action, receiver, request} ->
+        alias Vxpipe.Gateway.Telephony.PlaybackMarks
+
+        {:ok, frames, marks} =
+          PlaybackMarks.command(%PlaybackMarks{}, :telnyx, "stream-1", action, receiver, request)
+
+        Enum.each(frames, fn {:text, message} ->
+          case JSON.decode!(message) do
+            %{"event" => "mark", "mark" => %{"name" => name}} ->
+              PlaybackMarks.acknowledge(marks, name)
+
+            %{"event" => "clear"} ->
+              :ok
+          end
+        end)
+
+        socket_loop(observer, state)
+
       {:vxpipe_telnyx_socket_send, message} ->
         send(observer, {:test_telnyx_socket_send, message})
         socket_loop(observer, state)

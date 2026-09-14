@@ -53,31 +53,84 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   @spec validate(ResolvedCallPlan.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def validate(%ResolvedCallPlan{} = plan, options) when is_list(options) do
-    case new(plan, Keyword.put(options, :validation_only, true)) do
-      {:ok, %__MODULE__{}} -> :ok
+    case entries(plan) do
+      {:ok, entries} -> supported_configuration(entries, options)
       {:error, %Error{}} = error -> error
+    end
+  end
+
+  defp supported_configuration(entries, options) do
+    with :ok <- supported_model(entries.receiver),
+         {:ok, _integrations} <-
+           AgentActivationOptions.mcp_integrations(entries.receiver, options) do
+      for participant <- [entries.caller, entries.receiver],
+          kind <- [:speech_to_text, :text_to_speech],
+          reduce: :ok do
+        :ok -> supported_speech(participant, kind, options)
+        error -> error
+      end
+    end
+  end
+
+  defp supported_model(%{kind: :human}), do: :ok
+
+  defp supported_model(%{
+         capabilities: %{model_inference: %CapabilitySelection{provider: :req_llm}}
+       }),
+       do: :ok
+
+  defp supported_model(participant),
+    do: unsupported_speech_configuration(participant, :model_inference)
+
+  defp supported_speech(participant, kind, options) do
+    selection = Map.fetch!(participant.capabilities, kind)
+
+    case selection do
+      nil ->
+        :ok
+
+      %CapabilitySelection{provider: provider} ->
+        with {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
+             true <- Keyword.get(settings, :enabled) == true do
+          :ok
+        else
+          _unsupported -> unsupported_speech_configuration(participant, kind)
+        end
+    end
+  end
+
+  def entries(%ResolvedCallPlan{} = plan) do
+    with {:ok, caller} <- entry_participant(plan, :entry_caller, plan.entry_caller, :human),
+         {:ok, receiver} <-
+           entry_participant(plan, :entry_receiver, plan.entry_receiver, [:human, :agent]),
+         :ok <- supported_features(plan, caller, receiver),
+         {:ok, caller_command} <- participant_command(plan, caller),
+         {:ok, receiver_command} <- participant_command(plan, receiver) do
+      {:ok,
+       %{
+         caller: caller,
+         receiver: receiver,
+         caller_command: caller_command,
+         receiver_command: receiver_command
+       }}
     end
   end
 
   @spec new(ResolvedCallPlan.t(), keyword()) :: {:ok, t()} | {:error, Error.t()}
   def new(%ResolvedCallPlan{} = plan, options) when is_list(options) do
-    with {:ok, caller} <- entry_participant(plan, :entry_caller, plan.entry_caller, :human),
-         {:ok, receiver} <-
-           entry_participant(plan, :entry_receiver, plan.entry_receiver, [:human, :agent]),
-         :ok <- supported_features(plan, caller, receiver),
+    with {:ok, entries} <- entries(plan),
+         %{caller: caller, receiver: receiver} = entries,
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
            speech_to_text_runtimes(plan, [caller, receiver], plan.opening_audio, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options),
-         {:ok, opening_text_to_speech} <- opening_text_to_speech_runtime(plan, caller, options),
-         {:ok, caller_command} <- participant_command(plan, caller),
-         {:ok, receiver_command} <- participant_command(plan, receiver) do
+         {:ok, opening_text_to_speech} <- opening_text_to_speech_runtime(plan, caller, options) do
       {:ok,
        %__MODULE__{
          caller: caller,
-         caller_command: caller_command,
+         caller_command: entries.caller_command,
          receiver: receiver,
-         receiver_command: receiver_command,
+         receiver_command: entries.receiver_command,
          agent_activation: activation_options,
          speech_to_text_runtimes: speech_to_text_runtimes,
          text_to_speech: text_to_speech,
@@ -205,10 +258,24 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     with :ok <- supported_transport(plan),
          :ok <- supported_connection(caller),
          :ok <- supported_receiver(receiver),
-         :ok <- supported_tools(plan) do
+         :ok <- supported_tools(plan),
+         :ok <- supported_opening(plan.opening_audio) do
       :ok
     end
   end
+
+  defp supported_opening(nil), do: :ok
+  defp supported_opening(%OpeningAudio{type: :file_url}), do: :ok
+
+  defp supported_opening(%OpeningAudio{type: :text, text_to_speech: %CapabilitySelection{}}),
+    do: :ok
+
+  defp supported_opening(_invalid),
+    do:
+      unsupported(
+        ["opening_audio", "text_to_speech"],
+        "requires its own resolved text-to-speech profile"
+      )
 
   defp supported_receiver(%ResolvedCallPlan.Participant{kind: :agent} = receiver) do
     supported_first_message(receiver)

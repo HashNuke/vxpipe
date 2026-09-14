@@ -76,7 +76,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+               archive: Keyword.put(archive, :enabled, true)
+             )
 
     attach_caller(plan, room, caller, "conn-private-history")
 
@@ -89,7 +91,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         "What time is it?"
       )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
 
     assert_receive {:test_agent_runtime_stream, provider, _request}
 
@@ -284,7 +286,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                archive: Keyword.put(archive, :enabled, true)
              )
 
@@ -458,7 +460,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+               archive: Keyword.put(archive, :enabled, true)
+             )
 
     attach_caller(plan, room, caller, "conn-transcript-policy")
 
@@ -483,7 +487,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         "Do not archive this text."
       )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
     assert_receive {:test_agent_runtime_stream, provider, _request}
     assert {:ok, response} = ModelResponse.new(text: "This output is private.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
@@ -524,7 +528,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                archive: Keyword.put(archive, :enabled, true)
              )
 
@@ -546,7 +550,10 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                deadline: future_deadline()
              )
 
-    assert :ok = RoomAuthority.detach_connection(room_authority, detach, self())
+    assert :ok =
+             Vxpipe.CallEngine.TestTransferConnection.run(detach, fn ->
+               RoomAuthority.detach_connection(room_authority, detach, self())
+             end)
 
     assert %Snapshot{revision: 2, present_participant_ids: present_after_disconnect} =
              Authority.snapshot(Authority.whereis(room.incarnation_id))
@@ -608,7 +615,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert {:ok, handoff} = ArchiveSupervisor.open(archive)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                archive_handoff: handoff
              )
 
@@ -625,7 +632,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         "Can you check the time?"
       )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
 
     assert_receive {:test_agent_runtime_stream, provider, _request}
 
@@ -768,7 +775,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+               archive: Keyword.put(archive, :enabled, true)
+             )
 
     attach_caller(plan, room, caller, "conn-model-usage")
     _startup_facts = collect_archive_facts_through(:connection_attached)
@@ -782,7 +791,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         "Please answer this measured turn"
       )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
     assert_receive {:test_agent_runtime_stream, provider, _request}
 
     assert {:ok, response} =
@@ -835,7 +844,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+               archive: Keyword.put(archive, :enabled, true)
+             )
 
     assert {:ok, provider} =
              ProviderContext.new(
@@ -877,7 +888,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     unused = Map.fetch!(plan.participants, "unused-agent")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert room.room_id == room_id
 
@@ -905,7 +916,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(attach)
+    assert {:ok, attachment} = CallEngine.attach_connection(attach)
+    Vxpipe.CallEngine.TestCallStartup.await_ready(attachment)
 
     assert {:ok, command} =
              SendText.new(
@@ -920,7 +932,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                deadline: future_deadline()
              )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
 
     assert_receive {:test_agent_runtime_stream, provider, request}
     assert List.last(request.messages).content == "What time is it?"
@@ -971,7 +983,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_id = unique_id("room-policy-authority-exit")
     plan = compile_plan(room_id)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert [{room_authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
@@ -989,7 +1001,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_id = unique_id("room-mixer-exit")
     plan = compile_plan(room_id)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert [{room_authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
@@ -1007,7 +1019,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_id = unique_id("room-transcript-router-exit")
     plan = compile_plan(room_id)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert [{room_authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
@@ -1026,7 +1038,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_id = unique_id("room-unplanned-participant")
     plan = compile_plan(room_id)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert {:ok, join} =
              JoinParticipant.new(
@@ -1054,7 +1066,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     handoff = open_archive(maximum_pending_facts: 8)
     archive_monitor = Process.monitor(handoff.subscriber)
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive_handoff: handoff)
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive_handoff: handoff)
 
     assert_receive {:test_archive_write, baseline_writer, %BaselineSnapshot{call_id: call_id}}
     assert call_id == plan.call_id
@@ -1149,7 +1162,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     archive = archive_options()
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                archive: Keyword.put(archive, :enabled, true)
              )
 
@@ -1167,7 +1180,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         "Collect the intake details."
       )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
 
     assert_receive {:test_agent_runtime_stream, read_provider, read_request}
 
@@ -1292,7 +1305,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert [{activation_supervisor, _value}] =
              Registry.lookup(
@@ -1315,7 +1328,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     attach_caller(plan, room, caller, "conn-restarted")
     command = send_command(plan, room, caller, "conn-restarted", "Are you ready?")
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
     assert_receive {:test_agent_runtime_stream, provider, request}
     assert List.last(request.messages).content == "Are you ready?"
     assert {:ok, response} = ModelResponse.new(text: "Ready after restart.")
@@ -1333,7 +1346,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     plan = compile_plan(room_id, speech?: true)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert_receive {:test_tts_transport_started, _tts_transport,
                     %{url: tts_url, headers: [{"Authorization", "Token runtime-secret"}]}}
@@ -1434,7 +1447,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     plan = compile_plan_from(room_id, input, profiles)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     changed_input =
       put_in(input, [:participants, "receiver", :prompt], "Use a replacement prompt.")
@@ -1451,7 +1464,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     attach_caller(plan, room, caller, "conn-pinned-source")
     command = send_command(plan, room, caller, "conn-pinned-source", "Check the pinned agent.")
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
 
     assert_receive {:test_agent_runtime_stream, provider, request}
 
@@ -1524,14 +1537,14 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert is_pid(AgentActivationSupervisor.whereis_child(receiver.activation_id, :session))
 
     attach_caller(plan, room, caller, "conn-agent-runtime")
     command = send_command(plan, room, caller, "conn-agent-runtime", "Hello Agent Runtime")
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: correlation_id}}
     assert correlation_id == command.correlation_id
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{correlation_id: ^correlation_id}}
@@ -1562,11 +1575,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     plan = compile_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     attach_caller(plan, room, caller, "conn-fixture-turn")
 
     success = send_command(plan, room, caller, "conn-fixture-turn", "use local success")
-    assert :ok = CallEngine.send_text(success)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(success)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: success_correlation}}
     assert success_correlation == success.correlation_id
 
@@ -1578,7 +1591,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = ModelFixture.arm(fixture, :failure)
     failed = send_command(plan, room, caller, "conn-fixture-turn", "use local failure")
-    assert :ok = CallEngine.send_text(failed)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(failed)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: failure_correlation}}
     assert failure_correlation == failed.correlation_id
 
@@ -1593,7 +1606,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = ModelFixture.arm(fixture, :missing)
     missing = send_command(plan, room, caller, "conn-fixture-turn", "omit local output")
-    assert :ok = CallEngine.send_text(missing)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(missing)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: missing_correlation}}
     assert missing_correlation == missing.correlation_id
 
@@ -1610,8 +1623,19 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "cleans the attempted room tree when the selected provider transport fails to start" do
+    observer = self()
+
+    before_failure = fn ->
+      send(observer, {:failure_waiting, self()})
+
+      receive do
+        :fail_startup -> :ok
+      end
+    end
+
     configure_speech_runtime(
-      text_to_speech_transport: {TestFailingTextToSpeechTransport, [observer: self()]}
+      text_to_speech_transport:
+        {TestFailingTextToSpeechTransport, [observer: self(), before_failure: before_failure]}
     )
 
     room_id = unique_id("room-provider-start-failure")
@@ -1619,7 +1643,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:error, %Error{code: :room_start_failed}} = CallEngine.start_call(plan)
+    assert {:ok, _room} = CallEngine.start_call(plan)
+    assert_receive {:failure_waiting, worker}, 1_000
+    [{authority, _}] = Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+    monitor = Process.monitor(authority)
+    send(worker, :fail_startup)
+    assert_receive {:DOWN, ^monitor, :process, ^authority, :startup_unavailable}, 1_000
     assert_receive {:test_failing_tts_start_attempted, %{url: attempted_url}}
     assert attempted_url =~ "model=flux-plan-voice"
     refute_receive {:test_failing_tts_start_attempted, _second_attempt}
@@ -1856,7 +1885,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       if speech?, do: %{text_to_speech: text_to_speech_profile}, else: %{}
 
     %{
-      schema_version: "20260913.01",
+      schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -1912,7 +1942,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command, output_sink)
+    assert {:ok, attachment} =
+             Vxpipe.CallEngine.TestTransferConnection.attach(command, output_sink)
+
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
+    {:ok, attachment}
   end
 
   defp send_command(plan, room, caller, connection_id, content) do
@@ -1972,7 +2006,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         encoding: :opus,
         sample_rate: 48_000
       ],
-      transport: {TestSpeechToTextTransport, [observer: self()]},
+      transport: {TestSpeechToTextTransport, [observer: self(), ready_on_start: true]},
       media_ingress: media_ingress_options()
     ]
 
@@ -1989,7 +2023,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         Keyword.get(
           options,
           :text_to_speech_transport,
-          {TestTextToSpeechTransport, [observer: self()]}
+          {TestTextToSpeechTransport, [observer: self(), ready_on_start: true]}
         ),
       maximum_requests: 2
     ]

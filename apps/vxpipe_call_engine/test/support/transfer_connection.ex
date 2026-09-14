@@ -25,6 +25,8 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
 
   def run(command, callback), do: GenServer.call(name(command), {:run, callback})
 
+  def attachment(command), do: GenServer.call(name(command), :attachment)
+
   def control(command),
     do: run(command, fn -> CallEngine.participant_transfer_control(command) end)
 
@@ -110,11 +112,18 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
 
   @impl true
   def handle_call(:attach, _from, state) do
-    {:ok, attachment} = CallEngine.attach_connection(state.command, state.binding.output)
-    {:reply, {:ok, attachment}, put_in(state.binding.attachment, attachment)}
+    case CallEngine.attach_connection(state.command, state.binding.output) do
+      {:ok, attachment} ->
+        {:reply, {:ok, attachment}, put_in(state.binding.attachment, attachment)}
+
+      error ->
+        {:reply, error, state}
+    end
   end
 
   def handle_call({:run, callback}, _from, state), do: {:reply, callback.(), state}
+
+  def handle_call(:attachment, _from, state), do: {:reply, state.binding.attachment, state}
 
   def handle_call(:vxpipe_connection_readiness, _from, state),
     do: {:reply, {:ok, state.binding}, state}
@@ -182,9 +191,32 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_call_ready, monitor},
+        %{binding: %{attachment: %{room_monitor: monitor}}} = state
+      ) do
+    send(state.observer, {:test_call_ready, state.command.room_id})
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_transfer_active, attempt}, state) do
     send(state.observer, {:vxpipe_transfer_active, attempt})
     {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_startup_speech, monitor},
+        %{binding: %{attachment: %{room_monitor: monitor}}} = state
+      ) do
+    command = %{state.command | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
+
+    case CallEngine.activate_speech_to_text(command) do
+      {:ok, ingress} ->
+        {:noreply, put_in(state.binding.attachment.media_ingress, ingress)}
+
+      {:error, _reason} ->
+        {:noreply, state}
+    end
   end
 
   def handle_info(message, state) do

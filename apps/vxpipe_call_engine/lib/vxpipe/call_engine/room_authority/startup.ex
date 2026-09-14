@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
     TextToSpeechRuntime
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, ParticipantLifecycle, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime,
     as: ParticipantTransferRuntime
@@ -70,66 +70,133 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
 
-    with {:ok, startup} <- PlanStartup.new(plan, startup_options),
+    with {:ok, entries} <- PlanStartup.entries(plan),
          {:ok, _caller_snapshot, state} <-
-           ParticipantLifecycle.start(startup.caller_command, state),
-         {:ok, receiver_snapshot, state} <-
-           ParticipantLifecycle.start(
-             startup.receiver_command,
-             state,
-             entry_activation_options(startup.agent_activation)
-           ) do
-      state = %{
-        state
-        | speech_to_text_runtime: startup.speech_to_text_runtimes
-      }
+           ParticipantLifecycle.start(entries.caller_command, state),
+         {:ok, state} <- start_human_receiver(entries, state) do
+      runtime = %ParticipantTransferRuntime{plan: plan, startup_options: startup_options}
+      incarnation = state.snapshot.incarnation_id
 
-      with {:ok, state} <- activate_entry_receiver(startup, receiver_snapshot, state),
-           {:ok, opening_audio} <-
-             OpeningAudio.prepare(state.opening_audio, startup.opening_text_to_speech, state) do
-        runtime = %ParticipantTransferRuntime{plan: plan, startup_options: startup_options}
-        {:ok, %{state | participant_transfer_runtime: runtime, opening_audio: opening_audio}}
-      end
+      task =
+        Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
+          {:startup_prepared, prepare_entries(plan, startup_options, incarnation)}
+        end)
+
+      {:ok,
+       %{
+         state
+         | participant_transfer_runtime: runtime,
+           startup: %{
+             task: task,
+             status: :preparing,
+             waits: %{},
+             readiness: nil,
+             resources_ready?: false,
+             deadline_ms: Vxpipe.CallEngine.CallLifecycle.readiness_deadline(state.call_lifecycle)
+           }
+       }}
     else
       _error -> {:error, :entry_start_failed}
     end
   end
 
-  defp entry_activation_options(nil), do: []
-  defp entry_activation_options(options) when is_list(options), do: [agent_activation: options]
+  defp start_human_receiver(%{receiver: %{kind: :agent}}, state), do: {:ok, state}
 
-  defp activate_entry_receiver(
-         %PlanStartup{receiver: %ResolvedCallPlan.Participant{kind: :human}},
-         _receiver_snapshot,
-         state
-       ) do
-    {:ok, %{state | text_capability_required?: false}}
+  defp start_human_receiver(entries, state) do
+    with {:ok, _receiver, state} <- ParticipantLifecycle.start(entries.receiver_command, state),
+         do: {:ok, %{state | text_capability_required?: false}}
   end
 
-  defp activate_entry_receiver(
-         %PlanStartup{receiver: %ResolvedCallPlan.Participant{kind: :agent}} = startup,
-         receiver_snapshot,
-         state
-       ) do
-    coordinator_ref =
-      AgentActivationSupervisor.child_ref(startup.receiver.activation_id, :coordinator)
+  defp prepare_entries(plan, options, incarnation) do
+    owner = Keyword.fetch!(options, :owner)
 
-    text_capability = %{
-      activation_id: startup.receiver.activation_id,
-      module: AgentRuntimeCoordinator,
-      monitor: nil,
-      participant_id: receiver_snapshot.participant_id,
-      pid: coordinator_ref
-    }
+    with {:ok, startup} <- PlanStartup.new(plan, options),
+         {:ok, participant} <- prepare_receiver(startup, incarnation),
+         {:ok, voice} <-
+           prepare_text_to_speech(
+             startup.text_to_speech,
+             startup.receiver.participant_id,
+             incarnation,
+             owner
+           ),
+         {:ok, opening_voice} <-
+           prepare_text_to_speech(
+             startup.opening_text_to_speech,
+             startup.caller.participant_id,
+             incarnation,
+             owner
+           ) do
+      {:ok,
+       %{
+         configuration: startup,
+         participant: participant,
+         voice: voice,
+         opening_voice: opening_voice
+       }}
+    end
+  rescue
+    _exception -> {:error, :entry_start_failed}
+  catch
+    :exit, _reason -> {:error, :entry_start_failed}
+  end
 
-    state = %{state | text_capability: text_capability}
+  defp prepare_receiver(%{receiver: %{kind: :human}}, _incarnation), do: {:ok, nil}
 
-    start_selected_text_to_speech(
-      startup.text_to_speech,
-      receiver_snapshot.participant_id,
-      state
+  defp prepare_receiver(startup, incarnation) do
+    command = %{startup.receiver_command | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
+
+    ParticipantLifecycle.prepare(
+      command,
+      incarnation,
+      entry_activation_options(startup.agent_activation)
     )
   end
+
+  def install(prepared, state) do
+    with {:ok, state} <- commit_receiver(prepared.participant, state) do
+      startup = prepared.configuration
+
+      state = %{
+        state
+        | speech_to_text_runtime: startup.speech_to_text_runtimes,
+          text_to_speech_capability: activate_text_to_speech(prepared.voice),
+          text_to_speech_runtime: startup.text_to_speech,
+          opening_audio: %{
+            state.opening_audio
+            | capability: activate_text_to_speech(prepared.opening_voice)
+          },
+          startup: %{state.startup | task: nil, status: :prepared}
+      }
+
+      bind_entry_receiver(startup, state)
+    end
+  end
+
+  defp commit_receiver(nil, state), do: {:ok, state}
+
+  defp commit_receiver(participant, state) do
+    with {:ok, _snapshot, state} <- ParticipantLifecycle.commit(participant, state),
+         do: {:ok, state}
+  end
+
+  defp bind_entry_receiver(%{receiver: %{kind: :human}}, state), do: {:ok, state}
+
+  defp bind_entry_receiver(startup, state) do
+    receiver = startup.receiver
+
+    capability = %{
+      activation_id: receiver.activation_id,
+      module: AgentRuntimeCoordinator,
+      monitor: nil,
+      participant_id: receiver.participant_id,
+      pid: AgentActivationSupervisor.child_ref(receiver.activation_id, :coordinator)
+    }
+
+    {:ok, %{state | text_capability: capability}}
+  end
+
+  defp entry_activation_options(nil), do: []
+  defp entry_activation_options(options) when is_list(options), do: [agent_activation: options]
 
   defp start_text_capability(:deterministic_text, participant_id, state) do
     case RoomCapabilitySupervisor.start_deterministic_text(
@@ -269,17 +336,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       state.snapshot.incarnation_id,
       capability.pid
     )
-  end
-
-  defp start_selected_text_to_speech(runtime, participant_id, state) do
-    with {:ok, capability} <- prepare_text_to_speech(runtime, participant_id, state) do
-      {:ok,
-       %{
-         state
-         | text_to_speech_capability: activate_text_to_speech(capability),
-           text_to_speech_runtime: runtime
-       }}
-    end
   end
 
   @spec activate_text_to_speech(nil | map()) :: nil | map()

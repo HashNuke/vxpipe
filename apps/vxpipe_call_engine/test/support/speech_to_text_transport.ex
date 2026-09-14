@@ -32,6 +32,14 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
     observer = Keyword.fetch!(transport_options, :observer)
     send(observer, {:test_stt_transport_started, self(), Keyword.fetch!(options, :connection)})
 
+    if Keyword.get(transport_options, :ready_on_start, false) do
+      send(
+        owner,
+        {:vxpipe_stt_transport, self(),
+         {:message, ~s({"type":"Connected","request_id":"fixture-ready","sequence_id":0})}}
+      )
+    end
+
     {:ok,
      %{
        observer: observer,

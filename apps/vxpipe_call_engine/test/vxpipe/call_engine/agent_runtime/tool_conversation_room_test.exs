@@ -310,7 +310,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
 
   defp start_room(plan, connection_id) do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert {:ok, command} =
              AttachConnection.new(
@@ -323,7 +323,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command)
+    assert {:ok, attachment} = CallEngine.attach_connection(command)
+    Vxpipe.CallEngine.TestCallStartup.await_ready(attachment)
     {room, caller}
   end
 

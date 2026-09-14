@@ -194,7 +194,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     do: {:reply, ReadinessBinding.capture(state), state}
 
   def handle_call(:input_admission, _from, state) do
-    {:reply, OpeningAudio.admission(state.opening_audio), state}
+    admission =
+      if state.startup != nil and not state.startup_ready?,
+        do: :opening_audio,
+        else: OpeningAudio.admission(state.opening_audio)
+
+    {:reply, admission, state}
   end
 
   def handle_call({:join_participant, command}, _from, state) do
@@ -300,6 +305,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
+  def handle_info(
+        {ref, {:startup_prepared, result}},
+        %{startup: %{task: %Task{ref: ref}}} = state
+      ),
+      do: StartupReadiness.preparation_result(ref, result, state)
+
+  def handle_info({reference, {:startup_output, id, result}}, state),
+    do:
+      StartupReadiness.reply(StartupReadiness.output_result(reference, id, result, state), state)
+
+  def handle_info({reference, {:startup_ready, result}}, state),
+    do: StartupReadiness.reply(StartupReadiness.room_result(reference, result, state), state)
+
+  def handle_info({:vxpipe_wait_playback, player, episode, status}, %{startup: startup} = state)
+      when startup != nil,
+      do: StartupReadiness.reply(StartupReadiness.playback(player, episode, status, state), state)
+
   def handle_info({:vxpipe_transfer_progress, reference, progress}, state),
     do: ParticipantTransfer.progress(reference, progress, state)
 
@@ -500,6 +522,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  def handle_info(
+        {:vxpipe_tts_unavailable, capability, _reason},
+        %{startup: startup, startup_ready?: false, text_to_speech_capability: %{pid: capability}} =
+          state
+      )
+      when startup != nil,
+      do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
+
   def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state) do
     case ParticipantTransfer.text_to_speech_unavailable(capability, state) do
       {:handled, reply} ->
@@ -530,6 +560,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {:noreply, CallerIdle.reconcile(state)}
     end
   end
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{startup: startup, startup_ready?: false, text_to_speech_capability: %{monitor: monitor}} =
+          state
+      )
+      when startup != nil,
+      do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
 
   def handle_info(
         {:DOWN, monitor, :process, _pid, _reason},
@@ -671,7 +709,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     state = %{state | opening_audio: opening_audio}
 
     state =
-      if OpeningAudio.admission(opening_audio) == :open do
+      if OpeningAudio.admission(opening_audio) == :open and
+           (state.startup == nil or state.startup_ready?) do
         if state.room_mixer != nil do
           :ok = RoomMixer.complete_opening(state.room_mixer)
         end
@@ -681,11 +720,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state
       end
 
-    case FirstMessage.start(state) do
+    case StartupReadiness.opening_changed(state) do
       {:ok, state} -> {:noreply, CallerIdle.reconcile(state)}
       {:error, %Error{code: code}} -> {:stop, code, state}
     end
   end
+
+  defp begin_connection_startup(command, %{startup: startup, startup_ready?: false} = state)
+       when startup != nil,
+       do: StartupReadiness.connection_attached(command, state)
 
   defp begin_connection_startup(command, state) do
     connection = Map.fetch!(state.connections, command.connection_id)

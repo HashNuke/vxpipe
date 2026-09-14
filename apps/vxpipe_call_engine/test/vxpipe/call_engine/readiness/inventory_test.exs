@@ -318,7 +318,13 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
         {key, %{participant | capabilities: %Capabilities{}}}
       end)
 
-    plan = %{plan | participants: participants}
+    plan = %{
+      plan
+      | participants: participants,
+        wait_sounds: %Vxpipe.CallEngine.CallDefinition.WaitSounds{call_setup: nil}
+    }
+
+    assert {:ok, plan} = Vxpipe.CallEngine.prepare_call_audio(plan)
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
     assert {:ok, opening_audio} = Vxpipe.CallEngine.OpeningAudio.Settings.new([])
     incarnation = "inventory-#{System.unique_integer([:positive])}"
@@ -346,6 +352,7 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
         ]
 
     supervisor = start_supervised!({RoomIncarnationSupervisor, options})
+    Vxpipe.CallEngine.TestCallStartup.await_prepared(plan)
     snapshot = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
     [{room, _}] = Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
@@ -519,6 +526,48 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
              )
   end
 
+  test "initial output recaptures a negotiated binding without replacing its connection",
+       context do
+    alias Vxpipe.CallEngine.TestConnectionReadinessAdapter, as: Connection
+    alias Vxpipe.CallEngine.RoomAuthority.StartupProbe
+
+    room = start_room(context.plan)
+    snapshot = Vxpipe.CallEngine.RoomAuthority.snapshot(room.plan.tenant_id, room.plan.room_id)
+
+    identity = %{
+      tenant_id: room.plan.tenant_id,
+      room_id: room.plan.room_id,
+      incarnation_id: snapshot.incarnation_id,
+      participant_id: context.ids["one"],
+      connection_id: "initial-negotiation"
+    }
+
+    connection =
+      start_supervised!(
+        {Connection, identity: identity, observer: self(), readiness_block?: true}
+      )
+
+    assert {:ok, binding} = GenServer.call(connection, :vxpipe_connection_readiness)
+    original = binding.resource
+    observer = self()
+    deadline = System.monotonic_time(:millisecond) + 2_000
+
+    start_supervised!(
+      {Task,
+       fn ->
+         result = StartupProbe.output(connection, identity, room.policy, deadline)
+         send(observer, {:initial_output_result, result})
+       end}
+    )
+
+    assert_receive {:connection_readiness_waiting, ^connection}, 1_000
+    assert :ok = Connection.negotiate(connection)
+    assert_receive {:initial_output_result, :ok}, 1_000
+    assert {:ok, negotiated, :ready} = Connection.readiness(connection)
+    assert negotiated.instance == original.instance
+    assert negotiated.configuration != original.configuration
+  end
+
   test "captures supervised participant TTS even when it is outside the active room handle",
        context do
     alias Vxpipe.CallEngine.Provider.MorseCodeTTS
@@ -585,47 +634,55 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
 
     keys = Keyword.get(options, :keys, [room.plan.entry_caller, room.plan.entry_receiver])
 
-    Map.new(keys, fn key ->
-      participant = Map.fetch!(room.plan.participants, key)
+    connections =
+      Map.new(keys, fn key ->
+        participant = Map.fetch!(room.plan.participants, key)
 
-      identity = %{
-        tenant_id: room.plan.tenant_id,
-        room_id: room.plan.room_id,
-        incarnation_id: snapshot.incarnation_id,
-        participant_id: participant.participant_id,
-        connection_id: key
-      }
+        identity = %{
+          tenant_id: room.plan.tenant_id,
+          room_id: room.plan.room_id,
+          incarnation_id: snapshot.incarnation_id,
+          participant_id: participant.participant_id,
+          connection_id: key
+        }
 
-      connection =
-        start_supervised!(
-          {TestConnectionReadinessAdapter,
-           identity: identity,
-           observer: self(),
-           block?: key == Keyword.get(options, :block),
-           input_track: %{track_id: "input", codec: :opus, sample_rate: 48_000, channels: 1}},
-          id: {:connection, key}
-        )
+        connection =
+          start_supervised!(
+            {TestConnectionReadinessAdapter,
+             identity: identity,
+             observer: self(),
+             block?: false,
+             input_track: %{track_id: "input", codec: :opus, sample_rate: 48_000, channels: 1}},
+            id: {:connection, key}
+          )
 
-      assert {:ok, command} =
-               AttachConnection.new(
-                 Map.to_list(identity) ++
-                   [
-                     actor_id: room.plan.actor_id,
-                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-                   ]
-               )
+        assert {:ok, command} =
+                 AttachConnection.new(
+                   Map.to_list(identity) ++
+                     [
+                       actor_id: room.plan.actor_id,
+                       deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                     ]
+                 )
 
-      output =
-        start_supervised!(
-          {Vxpipe.CallEngine.TestAudioOutputSink, observer: self()},
-          id: {:output, key}
-        )
+        output =
+          start_supervised!(
+            {Vxpipe.CallEngine.TestAudioOutputSink, observer: self()},
+            id: {:output, key}
+          )
 
-      assert {:ok, _attachment} =
-               TestConnectionReadinessAdapter.attach(connection, command, output)
+        assert {:ok, _attachment} =
+                 TestConnectionReadinessAdapter.attach(connection, command, output)
 
-      {key, connection}
-    end)
+        {key, connection}
+      end)
+
+    if key = Keyword.get(options, :block) do
+      Vxpipe.CallEngine.TestCallStartup.await_ready(room.plan.room_id)
+      :ok = TestConnectionReadinessAdapter.block(Map.fetch!(connections, key))
+    end
+
+    connections
   end
 
   defp collect(prepared) do

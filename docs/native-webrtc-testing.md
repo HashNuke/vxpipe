@@ -1,4 +1,4 @@
-# Native WebRTC transfer checks
+# Native WebRTC startup and transfer checks
 
 Use the existing ExWebRTC peers in
 `apps/vxpipe_gateway/test/vxpipe/gateway/http/human_transfer_webrtc_test.exs` to reproduce
@@ -36,10 +36,24 @@ TTS readiness. They verify waiting audio and held text at both stages, cue-befor
 and spoken recovery through the retained source when model preparation fails. The Morse case
 uses the real local speech providers; precise readiness failures use controlled providers.
 
+For initial caller waiting during independent model and voice startup delays:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'initial'
+```
+
+Room creation returns while model construction is blocked. The native caller verifies private
+setup waiting and held text, then releases model preparation while withholding voice readiness.
+Its fixed greeting follows readiness. This case does not yet prove independent opening-audio
+preparation or cursor resume.
+
 ## Protocol boundary
 
 The caller's `chat` data channel carries RTVI 2.1 messages with `label: "rtvi-ai"`, including
-`client-ready`, `send-text` and received `user-transcription` messages. Transfer progress uses
+`client-ready`, `send-text` and received `user-transcription` messages. The correlated `bot-ready`
+reply waits for complete startup readiness and opening completion. A connected peer can receive
+setup waiting before that reply. Transfer progress uses
 the existing `server-message` envelope, with `data.t: "vxpipe.transfer"`, `data.v: 1`, and
 `data.d` containing attempt ID, destination, phase, blocker categories and elapsed milliseconds.
 

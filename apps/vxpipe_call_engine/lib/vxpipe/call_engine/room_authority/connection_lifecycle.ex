@@ -175,6 +175,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       OpeningAudio.admission(state.opening_audio) != :open ->
         {:error, opening_audio_in_progress()}
 
+      state.startup != nil and not state.startup_ready? ->
+        {:error, agent_not_ready()}
+
       not TextCapability.ready?(state) ->
         {:error, agent_not_ready()}
 
@@ -262,6 +265,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     end
   end
 
+  defp attachment_ready?(%State{startup: startup, startup_ready?: false}) when startup != nil,
+    do: true
+
   defp attachment_ready?(%State{text_capability_required?: false}), do: true
   defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
@@ -297,6 +303,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
     archive_recorder = ArchiveRecorder.connection_attached(state.archive_recorder, command, role)
     state = %{state | archive_recorder: archive_recorder}
+    if state.startup_ready?, do: send(subscriber, {:vxpipe_call_ready, room_monitor})
     runtime = selected_speech_to_text_runtime(command.participant_id, state)
 
     {input_mode, output_mode} = media_modes(role, state)
@@ -443,7 +450,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         speech_to_text_monitors: speech_to_text_monitors
     }
 
-    if connection.admission == :main and OpeningAudio.admission(state.opening_audio) == :open do
+    if connection.admission == :main and OpeningAudio.admission(state.opening_audio) == :open and
+         (state.startup == nil or state.startup_ready?) do
       :ok = Ingress.open(ingress)
     end
 

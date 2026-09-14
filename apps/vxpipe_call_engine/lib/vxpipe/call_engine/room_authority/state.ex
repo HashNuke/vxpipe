@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
   ]
   defstruct @enforce_keys ++
               [
+                startup: nil,
                 connection_monitors: %{},
                 connections: %{},
                 participant_transfer_runtime: nil,
@@ -73,6 +74,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           snapshot: Snapshot.t(),
           spoken_history: SpokenHistory.t(),
           speech_to_text_runtime: :application | map(),
+          startup: nil | map(),
           startup_ready?: boolean(),
           text_capability_required?: boolean(),
           speech_to_text_monitors: %{optional(reference()) => String.t()},

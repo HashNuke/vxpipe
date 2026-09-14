@@ -28,6 +28,7 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
       CallDefinition.new(
         %{
           schema_version: CallDefinition.schema_version(),
+          wait_sounds: %{call_setup: nil},
           entry_caller: "caller",
           entry_receiver: "reception",
           defaults: %{capabilities: %{}},
@@ -134,7 +135,11 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
         deadline: future_deadline()
       )
 
-    Vxpipe.CallEngine.TestTransferConnection.attach(command, output_sink)
+    with {:ok, attachment} <-
+           Vxpipe.CallEngine.TestTransferConnection.attach(command, output_sink) do
+      Vxpipe.CallEngine.TestCallStartup.await_ready(room.room_id)
+      {:ok, attachment}
+    end
   end
 
   def send_command(plan, room, caller, content) do

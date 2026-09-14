@@ -63,7 +63,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     plan = compile_plan(store)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                mcp_catalog_store: store,
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
@@ -158,7 +158,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     plan = compile_plan(store, speech: true)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                mcp_catalog_store: store,
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
@@ -235,7 +235,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     ]
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                archive: archive,
                mcp_catalog_store: store,
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
@@ -406,6 +406,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     %{
       schema_version: CallDefinition.schema_version(),
+      wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "reception",
       defaults: %{capabilities: %{}},
@@ -481,7 +482,11 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command, output_sink)
+    assert {:ok, attachment} =
+             Vxpipe.CallEngine.TestTransferConnection.attach(command, output_sink)
+
+    Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
+    {:ok, attachment}
     {caller, connection_id}
   end
 
@@ -500,7 +505,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
                deadline: future_deadline()
              )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
     command
   end
 
@@ -583,7 +588,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {Vxpipe.CallEngine.TestTextToSpeechTransport, [observer: self()]},
+      transport:
+        {Vxpipe.CallEngine.TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
       maximum_requests: 4
     ]
 
