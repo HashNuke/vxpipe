@@ -391,6 +391,18 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info(
+        {:vxpipe_event, %TextOutput{} = event},
+        %{attachment: %ConnectionAttachment{admission: :main}, session: session} = state
+      )
+      when event.tenant_id == session.tenant_id and event.room_id == session.room_id and
+             event.incarnation_id == session.incarnation_id do
+    # Transcript routing may include other listeners; spoken-turn progress belongs
+    # to the originating connection and must not occupy this listener's turn queue.
+    send_event(event, state)
+    {:noreply, state}
+  end
+
+  def handle_info(
         {:vxpipe_event, %AgentSpeechStarted{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do

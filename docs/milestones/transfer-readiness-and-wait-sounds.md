@@ -7,7 +7,7 @@ Human and AI handoffs now pass normal transfer and bounded recovery checks; huma
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,386 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four).
+1,396 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four).
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -329,8 +329,8 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after whole-room acceptance and handoff cancellation fixes: **22 tasks** in this
-section—human web handoff 5, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6,
+Remaining work after whole-room resource-loss acceptance: **21 tasks** in this
+section—human web handoff 4, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6,
 and final audit 2.
 The 13 open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
@@ -419,14 +419,18 @@ Acceptance and commit tasks:
   without replacing the prepared STT transport or room services when unaffected; stop the private
   speech pair when demand disappears. Keep the same worker, audience wait scope and deadline,
   then complete the cue and activation.
-- [ ] Delay required destination, remaining-participant and room capabilities independently, then
+- [x] Delay required destination, remaining-participant and room capabilities independently, then
   inject loss across the remaining preparation/adoption/release stages. Observe no premature success and
   unchanged healthy instances; verify held text/audio cannot interrupt or replay after release.
   Destination STT, a remaining human recognizer and room recording now independently hold the
   native three-peer handoff as its final blocker. Their ordinary success/retention and held-input
   checks pass. Required destination STT remains tracked after adoption until release completes;
   losing it then closes the call with failed progress instead of bypassing transfer cancellation.
-  Remaining-participant and room-resource loss stages are still open.
+  Nine three-peer cases now inject loss of each required resource during preparation, adoption
+  and release. Destination loss before adoption restores the recorded source conversation;
+  fatal losses close every peer without activation/completion or replacement speech. Release
+  failures are injected after the destination output gate opens. Healthy retained listeners
+  resume their cues, conversational audio, recognizer and recordings after successful recovery.
 - [x] Run the owning engine/Gateway/Console checks, including the existing web/phone transfer
   regressions, and all five root gates. Record exact results for the implementation being committed.
 - [x] Exercise the actual rendered desktop caller and mobile-sized desk with live model/Deepgram
@@ -924,6 +928,28 @@ the existing phone and Morse paths. This uses existing lifecycle owners and chan
 configuration or deadline. See the
 [briefing-retirement labnote](../../labnotes/20260915-0313-retire-private-briefing.md).
 
+### Whole-room resource-loss acceptance
+
+The three-peer handoff now injects independent destination-STT, remaining-human-STT and required
+recording failure during preparation, adoption and release. Adoption is paused with destination
+output held; release is paused after its output gate opens. Fatal cases close every connection
+without destination activation or caller completion. Destination loss before adoption instead
+restores the original recorded conversation, retains healthy bindings and resumes human audio,
+recognition and recording only after local cues. Nil waits still require those cues.
+
+That recovery case reproduced two defects. A failed recording-preparation reservation prevented
+current-policy track restoration; failed reservations now permit restoration and a fresh validated
+owner's preparation while rejecting old owners/tokens. The mixer follows the same retry contract.
+An authorized assistant transcript also crashed the remaining Gateway listener because it belonged
+to another connection's turn. Gateway now forwards that transcript without occupying the listener's
+local speech-progress queue. Existing synthesized replies still target the requesting connection.
+No provider restart, deadline extension, configuration field or UI change is introduced.
+The 25 focused mixer/recording checks, native recorded-recovery case and all five root gates pass:
+1,396 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four). Gateway
+includes 386 tests and 54 default native startup/transfer cases; all nine new resource-loss cases
+run in the default suite. The older intermittent recovery failure remains a separate open issue.
+See the [resource-loss labnote](../../labnotes/20260915-0323-whole-room-failure-acceptance.md).
+
 ### AI handoff integration
 
 - Agent destinations reuse the audience hold, prospective readiness, cue/drain, exact candidate
@@ -1088,6 +1114,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Whole-room resource loss and recorded recovery | Red recording/mixer reservation and native transcript failures; 25 focused engine checks, native recorded recovery and all five root gates pass: 1,396 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Nine three-peer cases cover independent destination STT, remaining-human STT and recording loss during preparation, adoption and partial release. No fatal loss reports activation/completion. Pre-adoption destination loss restores healthy resources, ordered cues, conversational audio, transcripts and recording. Independent delay/loss acceptance is complete; 21 checkpoint tasks remain. |
 | Private briefing retirement | The updated engine acceptance test first failed at missing cleanup, then all 34 engine human handoff cases, three focused native cases and all five root gates pass: 1,386 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing TTS survives until playback acknowledgement, then retires before acceptance. Source TTS and required destination STT remain independent. Retired notifications cannot cancel or duplicate acceptance; native custom/silent handoff and post-briefing caller recovery pass. Broader private-resource acceptance remains open; 22 checkpoint tasks remain. |
 | Handoff cancellation and release failures | Nine focused engine cases, two native caller/desk cases and all five root gates pass: 1,386 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. Gateway includes 377 tests and 45 default native startup/transfer cases. | Cancellation defeats a queued recovery success; deadline, phase loss and required adopted STT loss during release produce terminal failure without recovery or activation. The existing archive receives bounded failure causes. Completed briefing-resource retirement and the earlier intermittent recovery failure remain open; 22 checkpoint tasks remain. |
 | Whole-room native human handoff | Two engine regression cases and nine native handoff cases pass, including public HTTPS retrieval. All five root gates pass: 1,380 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. Gateway includes 375 tests and 43 default native startup/transfer cases. | Additional planned humans initialize selected STT on attachment; unsupported selected providers reject that attachment without replacing original resources. Destination STT, remaining-human STT and room recording each hold as the final blocker with custom/nil waits. Three peers receive ordered cues/conversation, held input is discarded, and unaffected speech/media/room bindings remain. The controlled native acceptance item is complete; 22 checkpoint tasks remain. |

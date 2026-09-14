@@ -72,6 +72,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
     with :ok <- validate_options(options),
          true <- Authority.whereis(state.identity.incarnation_id) == candidate.authority,
          true <- state.policy == candidate.base_snapshot,
+         state = retire_failed_lease(state, options),
          :ok <- compatible_lease(state.pending_policy, options),
          previous =
            if(state.pending_policy,
@@ -268,6 +269,12 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
         pending.candidate.base_snapshot == state.policy and
         PreparedSubscriptions.valid?(state, pending.subscriptions, pending.candidate.snapshot) and
         PreparedRecordings.valid?(state, pending.recordings, pending.candidate.snapshot)
+
+  defp retire_failed_lease(%{pending_policy: %{failed?: true, owner: owner}} = state, options) do
+    if owner == Keyword.fetch!(options, :owner), do: state, else: %{state | pending_policy: nil}
+  end
+
+  defp retire_failed_lease(state, _options), do: state
 
   defp compatible_lease(nil, _options), do: :ok
 

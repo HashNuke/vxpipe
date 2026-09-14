@@ -128,7 +128,8 @@ defmodule Vxpipe.CallEngine.RoomRecording do
     end
   end
 
-  def handle_call({:prepare_tracks, tracks, interval}, _from, %{pending_policy: nil} = state) do
+  def handle_call({:prepare_tracks, tracks, interval}, _from, %{pending_policy: pending} = state)
+      when is_nil(pending) or pending.failed? do
     case Preparation.prepare(state, tracks, interval) do
       {:ok, state} -> {:reply, :ok, state}
       {:error, reason, state} -> {:reply, {:error, reason}, state}

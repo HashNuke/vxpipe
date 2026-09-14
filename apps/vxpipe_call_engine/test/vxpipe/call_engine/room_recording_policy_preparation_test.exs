@@ -70,46 +70,91 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
     refute_receive {:test_recording_writer_opened, _caller, _source, _stream}
   end
 
-  test "discard and phase loss close only pending writers and permit retry" do
-    context = start_context()
-    phase = start_supervised!({Agent, fn -> :phase end})
-    options = Keyword.put(context.options, :owner, phase)
-    assert {:ok, live, :ready} = RoomRecording.readiness(context.recording)
+  for restoration <- [:live_tracks, :new_candidate] do
+    @tag restoration: restoration
+    test "discard and phase loss close only pending writers and permit #{restoration}", %{
+      restoration: restoration
+    } do
+      context = start_context()
+      phase = start_supervised!({Agent, fn -> :phase end})
+      options = Keyword.put(context.options, :owner, phase)
+      assert {:ok, live, :ready} = RoomRecording.readiness(context.recording)
 
-    assert {:ok, prepared} =
-             RoomRecording.prepare_policy(
-               context.recording,
-               context.candidate,
-               tracks(context),
-               options
-             )
+      assert {:ok, prepared} =
+               RoomRecording.prepare_policy(
+                 context.recording,
+                 context.candidate,
+                 tracks(context),
+                 options
+               )
 
-    assert_receive {:test_recording_writer_opened, source, source, _stream}
-    monitor = Process.monitor(source)
-    assert :ok = RoomRecording.discard_policy(context.recording, prepared.token)
-    assert_receive {:DOWN, ^monitor, :process, ^source, _reason}
-    assert {:ok, ^live, :ready} = RoomRecording.readiness(context.recording)
+      assert_receive {:test_recording_writer_opened, source, source, _stream}
+      monitor = Process.monitor(source)
+      assert :ok = RoomRecording.discard_policy(context.recording, prepared.token)
+      assert_receive {:DOWN, ^monitor, :process, ^source, _reason}
+      assert {:ok, ^live, :ready} = RoomRecording.readiness(context.recording)
 
-    assert {:ok, retry} =
-             RoomRecording.prepare_policy(
-               context.recording,
-               context.candidate,
-               tracks(context),
-               options
-             )
+      assert {:ok, retry} =
+               RoomRecording.prepare_policy(
+                 context.recording,
+                 context.candidate,
+                 tracks(context),
+                 options
+               )
 
-    assert_receive {:test_recording_writer_opened, replacement, replacement, _stream}
-    refute replacement == source
-    monitor = Process.monitor(replacement)
-    stop_supervised!(Agent)
-    assert_receive {:DOWN, ^monitor, :process, ^replacement, _reason}, 1_000
+      assert_receive {:test_recording_writer_opened, replacement, replacement, _stream}
+      refute replacement == source
+      monitor = Process.monitor(replacement)
+      stop_supervised!(Agent)
+      assert_receive {:DOWN, ^monitor, :process, ^replacement, _reason}, 1_000
 
-    assert {:error, :policy_not_ready} =
-             Enforcer.apply(context.recording, context.candidate.snapshot, 1_000)
+      assert {:error, :policy_not_ready} =
+               Enforcer.apply(context.recording, context.candidate.snapshot, 1_000)
 
-    assert :ok = RoomRecording.discard_policy(context.recording, retry.token)
-    assert {:ok, ^live, :ready} = RoomRecording.readiness(context.recording)
-    assert Authority.snapshot(context.authority) == context.candidate.base_snapshot
+      case restoration do
+        :live_tracks ->
+          assert :ok =
+                   RoomRecording.prepare_tracks(
+                     context.recording,
+                     [track(context.caller)],
+                     Snapshot.interval(context.candidate.base_snapshot, :recording)
+                   )
+
+          assert {:error, :policy_not_ready} =
+                   Enforcer.apply(context.recording, context.candidate.snapshot, 1_000)
+
+          assert :ok = RoomRecording.discard_policy(context.recording, retry.token)
+
+        :new_candidate ->
+          assert {:error, :preparation_conflict} =
+                   RoomRecording.prepare_policy(
+                     context.recording,
+                     context.candidate,
+                     tracks(context),
+                     options
+                   )
+
+          assert {:ok, fresh} =
+                   RoomRecording.prepare_policy(
+                     context.recording,
+                     context.candidate,
+                     tracks(context),
+                     context.options
+                   )
+
+          refute fresh.token == retry.token
+
+          assert {:error, :stale_preparation} =
+                   RoomRecording.discard_policy(context.recording, retry.token)
+
+          assert :ok = RoomRecording.discard_policy(context.recording, fresh.token)
+      end
+
+      assert {:ok, ^live, :ready} = RoomRecording.readiness(context.recording)
+      assert Authority.snapshot(context.authority) == context.candidate.base_snapshot
+      push(context, context.caller, 1, 0)
+      assert_receive {:test_recording_chunk, "full-mix", %{sequence: 0}}
+    end
   end
 
   test "a local writer must become ready before the future policy can be adopted" do

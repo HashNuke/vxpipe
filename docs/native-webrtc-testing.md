@@ -38,6 +38,23 @@ their selected STT on attachment through the same supervised runtime path as ini
 The private briefing transport must stop after playback acknowledgement and before acceptance;
 subsequent waiting, cues, required STT and conversation continue independently of that retired TTS.
 
+For independent resource loss during preparation, adoption and partial release:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'human handoff gates.*loss'
+```
+
+Nine three-peer cases lose destination STT, remaining-human STT or required room recording at
+each stage. The adoption cases pause the actual destination acknowledgement while output remains
+held; the release cases confirm its output gate is already open before injecting loss. Required
+speech loss waits for the transport to terminate. No fatal case may activate the desk or report
+completion to a caller. Destination loss before adoption instead restores the original recorded
+conversation: retained listeners receive cues before conversation, the caller hears the restored
+assistant, human audio reaches the remaining recognizer and recordings, and authorized assistant
+text reaches the other listener without taking over its local spoken-turn queue. Synthesized replies
+use the requesting caller's output; the other listener's audio assertion uses the mixed human route.
+
 For the local speech-provider round trip:
 
 ```shell

@@ -49,6 +49,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.PolicyPreparation do
     with :ok <- validate(options),
          true <- candidate.base_snapshot == state.policy,
          true <- candidate.snapshot.effective.record_audio or tracks == [],
+         state = retire_failed_lease(state, options),
          :ok <- compatible(state.pending_policy, options),
          :ok <- Preparation.validate_tracks(tracks, state.configuration, policy),
          true <- valid_subscriptions?(state, subscriptions),
@@ -262,6 +263,12 @@ defmodule Vxpipe.CallEngine.RoomRecording.PolicyPreparation do
       failed?: false
     }
   end
+
+  defp retire_failed_lease(%{pending_policy: %{failed?: true, owner: owner}} = state, options) do
+    if owner == Keyword.fetch!(options, :owner), do: state, else: %{state | pending_policy: nil}
+  end
+
+  defp retire_failed_lease(state, _options), do: state
 
   defp compatible(nil, _options), do: :ok
 

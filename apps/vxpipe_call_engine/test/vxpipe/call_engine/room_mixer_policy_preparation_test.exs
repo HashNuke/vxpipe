@@ -218,7 +218,13 @@ defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
       assert :ok = RoomMixer.push(context.mixer, frame(context, 1, 0))
       assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(context.mixer, 0)
       assert {:ok, [_]} = Subscription.take(live, 1)
-      assert :ok = RoomMixer.discard_policy(context.mixer, prepared.token)
+
+      if @failure == :phase_owner do
+        assert {:error, :preparation_conflict} =
+                 RoomMixer.prepare_policy(context.mixer, context.candidate, options)
+      else
+        assert :ok = RoomMixer.discard_policy(context.mixer, prepared.token)
+      end
 
       options =
         Keyword.put(context.options, :subscriptions, [
@@ -226,6 +232,7 @@ defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
         ])
 
       assert {:ok, next} = RoomMixer.prepare_policy(context.mixer, context.candidate, options)
+      refute next.token == prepared.token
       send(context.mixer, {:mixer_policy_expired, prepared.token})
 
       assert {:error, :stale_preparation} =
