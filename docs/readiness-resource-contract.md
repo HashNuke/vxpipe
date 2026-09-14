@@ -937,8 +937,18 @@ collector's current state, because they may describe a resource set that reconci
 Ordinary WebRTC handoffs verify removal of undemanded private STT while collection is pending and
 retention of the original STT transport across an unrelated membership revision. Both retain the
 existing connections and media actors and exchange caller/support audio after release. Policy
-changes during initial graph construction, cue playback or adoption, changed still-required
-resources and complete changing-listener lifecycle behavior remain separate acceptance work.
+changes during initial graph construction or adoption, changed still-required resources and
+complete changing-listener lifecycle behavior remain separate acceptance work.
+
+If the candidate becomes stale during a human connection cue, only the private cue is allowed to
+finish draining. Conversation remains held. The worker then resumes waits, prepares the current
+requirements under the original lease/deadline, and plays new cues before revalidating release.
+Final readiness queries also check candidate validity while awaiting resource replies. Every
+playback episode has a fresh correlation identifier even though the media generation stays stable;
+a previous cue's acknowledgement cannot identify its replay. Actual player failure still uses the
+existing bounded recovery path. Controlled engine checks cover removed STT demand with default
+waits and unaffected STT across a membership revision with silent waits, requiring the second cue's
+drain before success and proving the attempt deadline is unchanged.
 
 Design review rejected rebuilding a retained native output, using current STT evidence for a
 replacement session, and assigning preparation ownership to a short-lived collection worker.

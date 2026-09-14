@@ -113,16 +113,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
              participant: participant,
              waits: audience.waits ++ joining_waits
            }),
-         {:ok, ready} <-
-           await_preparation(prepared, collector, phase, request, {phase, :preparing, nil}),
-         :ok <- stop_waits(ready.waits, scope),
-         :ok <- clear(ready.connections),
-         :ok <- report_progress(phase, :cue, []),
-         {:ok, cues} <- play(ready.connections, ready.binding, scope, request, :cue),
-         :ok <- await_players(cues, :completed, scope, collector),
-         :ok <- Collector.refresh(collector),
-         :ok <- await_ready(collector, scope),
-         :ok <- RoomInventory.validate(phase.authority, ready.graph.inventory, remaining(scope)) do
+         {:ok, ready} <- prepare_release(prepared, collector, phase, request) do
       report_progress(phase, :releasing, [])
       {:ok, Map.delete(ready, :waits)}
     end
@@ -149,6 +140,38 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     else
       false -> {:error, :handoff_changed}
       error -> error
+    end
+  end
+
+  defp prepare_release(prepared, collector, phase, request) do
+    with {:ok, ready} <-
+           await_preparation(prepared, collector, phase, request, {phase, :preparing, nil}),
+         :ok <- stop_waits(ready.waits, ready.scope),
+         :ok <- clear(ready.connections) do
+      cue_release(%{ready | waits: []}, collector, phase, request)
+    end
+  end
+
+  defp cue_release(ready, collector, phase, request) do
+    scope = ready.scope
+    inventory = {phase.authority, ready.graph.inventory}
+
+    with :ok <- report_progress(phase, :cue, []),
+         {:ok, cues} <- play(ready.connections, ready.binding, scope, request, :cue),
+         :ok <- await_players(cues, :completed, scope, collector, inventory),
+         :ok <- validate_inventory(inventory, scope),
+         :ok <- Collector.refresh(collector),
+         :ok <- await_ready(collector, scope, [], nil, inventory),
+         :ok <- validate_inventory(inventory, scope) do
+      {:ok, ready}
+    else
+      {:error, :stale_candidate} ->
+        with :ok <- clear(ready.connections),
+             {:ok, waits} <- play(ready.connections, ready.binding, scope, request, :wait),
+             do: prepare_release(%{ready | waits: waits}, collector, phase, request)
+
+      error ->
+        error
     end
   end
 
@@ -271,32 +294,37 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     )
   end
 
-  defp await_ready(collector, scope, players \\ [], progress \\ nil) do
-    receive do
-      {:vxpipe_readiness_changed, ^collector, _notification} ->
-        case Collector.snapshot(collector) do
-          %{status: :ready} ->
-            :ok
+  defp await_ready(collector, scope, players \\ [], progress \\ nil, inventory \\ nil) do
+    with :ok <- validate_inventory(inventory, scope) do
+      receive do
+        {:vxpipe_readiness_changed, ^collector, _notification} ->
+          case Collector.snapshot(collector) do
+            %{status: :ready} ->
+              :ok
 
-          %{status: :failed, failure: failure} ->
-            {:error, failure || :readiness_failed}
+            %{status: :failed, failure: failure} ->
+              {:error, failure || :readiness_failed}
 
-          %{blockers: blockers} ->
-            progress = report_readiness(progress, blockers)
-            await_ready(collector, scope, players, progress)
-        end
+            %{blockers: blockers} ->
+              progress = report_readiness(progress, blockers)
+              await_ready(collector, scope, players, progress, inventory)
+          end
 
-      {:vxpipe_wait_playback, player, _episode, {:failed, reason}} ->
-        if player in players,
-          do: {:error, reason},
-          else: await_ready(collector, scope, players, progress)
+        {:vxpipe_wait_playback, player, _episode, {:failed, reason}} ->
+          if player in players,
+            do: {:error, reason},
+            else: await_ready(collector, scope, players, progress, inventory)
 
-      {:DOWN, _monitor, :process, player, _reason} ->
-        if player in players and not completed_player?(player),
-          do: {:error, :playback_unavailable},
-          else: await_ready(collector, scope, List.delete(players, player), progress)
-    after
-      remaining(scope) -> {:error, :deadline_elapsed}
+        {:DOWN, _monitor, :process, player, _reason} ->
+          if player in players and not completed_player?(player),
+            do: {:error, :playback_unavailable},
+            else: await_ready(collector, scope, List.delete(players, player), progress, inventory)
+      after
+        cue_check_timeout(inventory, scope) ->
+          if inventory && remaining(scope) > 0,
+            do: await_ready(collector, scope, players, progress, inventory),
+            else: {:error, :deadline_elapsed}
+      end
     end
   end
 
@@ -365,6 +393,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
 
   defp play(connections, binding, scope, request, mode, owner \\ self()) do
     assets = binding.plan.wait_sound_assets
+    episode = System.unique_integer([:positive, :monotonic])
 
     connections
     |> Enum.group_by(fn {_id, connection} -> connection.identity.participant_id end)
@@ -384,7 +413,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
           identity ++
             [
               owner: owner,
-              episode_id: "#{scope.attempt_id}:#{participant}:#{mode}",
+              episode_id: "#{scope.attempt_id}:#{participant}:#{mode}:#{episode}",
               participant_id: participant,
               connection_generation: scope.generation,
               attempt_id: scope.attempt_id,
@@ -414,14 +443,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     await_players(players, :stopped, scope)
   end
 
-  defp await_players(players, status, scope, collector \\ nil)
+  defp await_players(players, status, scope, collector \\ nil, inventory \\ nil)
 
-  defp await_players([], _status, _scope, _collector), do: :ok
+  defp await_players([], _status, _scope, _collector, _inventory), do: :ok
 
-  defp await_players(players, status, scope, collector) do
+  defp await_players(players, status, scope, collector, inventory) do
     receive do
       {:vxpipe_wait_playback, player, _episode, ^status} ->
-        await_players(List.delete(players, player), status, scope, collector)
+        await_players(List.delete(players, player), status, scope, collector, inventory)
 
       {:vxpipe_wait_playback, _player, _episode, {:failed, reason}} ->
         {:error, reason}
@@ -429,23 +458,42 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       {:DOWN, _monitor, :process, player, _reason} ->
         if player in players,
           do: {:error, :playback_unavailable},
-          else: await_players(players, status, scope, collector)
+          else: await_players(players, status, scope, collector, inventory)
 
       {:vxpipe_readiness_changed, ^collector, _notification} ->
-        case Collector.snapshot(collector) do
-          %{status: :ready} -> await_players(players, status, scope, collector)
-          %{status: :failed, failure: failure} -> {:error, failure || :readiness_failed}
-          %{status: :preparing} -> {:error, :readiness_lost}
+        with :ok <- validate_inventory(inventory, scope) do
+          case Collector.snapshot(collector) do
+            %{status: :ready} -> await_players(players, status, scope, collector, inventory)
+            %{status: :failed, failure: failure} -> {:error, failure || :readiness_failed}
+            %{status: :preparing} -> {:error, :readiness_lost}
+          end
+        else
+          {:error, :stale_candidate} -> await_players(players, status, scope)
+          error -> error
         end
     after
       cue_check_timeout(collector, scope) ->
         if collector && remaining(scope) > 0 do
-          with :ok <- Collector.refresh(collector),
-               :ok <- await_ready(collector, scope, players),
-               do: await_players(players, status, scope, collector)
+          with :ok <- validate_inventory(inventory, scope),
+               :ok <- Collector.refresh(collector),
+               :ok <- await_ready(collector, scope, players, nil, inventory) do
+            await_players(players, status, scope, collector, inventory)
+          else
+            {:error, :stale_candidate} -> await_players(players, status, scope)
+            error -> error
+          end
         else
           {:error, :deadline_elapsed}
         end
+    end
+  end
+
+  defp validate_inventory(nil, _scope), do: :ok
+
+  defp validate_inventory({authority, inventory}, scope) do
+    case remaining(scope) do
+      0 -> {:error, :deadline_elapsed}
+      timeout -> RoomInventory.validate(authority, inventory, timeout)
     end
   end
 

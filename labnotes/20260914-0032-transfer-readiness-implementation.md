@@ -7,10 +7,10 @@ Earlier sections are historical evidence, not parallel current task lists.
 
 Current committed evidence is in the milestone and the latest checkpoint sections at the end of
 this file. Human handoff now integrates waits, readiness, cues, prepared policy adoption, media
-release and bounded recovery. The pending-policy checkpoint below passes all five root gates:
-1,291 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
+release and bounded recovery. The cue-policy checkpoint below passes all five root gates:
+1,293 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
 call integration, complete phone/changing-listener behavior, remaining failure stages and audible acceptance remain
-open. The new [pending-policy checkpoint](#reconcile-policy-while-human-readiness-is-pending) below
+open. The new [cue-policy checkpoint](#recheck-policy-after-human-connection-cues) below
 records this turn's implementation and verification separately.
 
 Earlier entries are chronological snapshots. Their references to uncommitted work or missing
@@ -2619,3 +2619,48 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   the collector or wait players would lose reusable readiness or playback positions. Reuse those
   existing operations and ownership. Keep later phase/membership requirements open rather than
   claiming this pending-readiness evidence covers them. No UI/browser behavior changed.
+
+## Recheck policy after human connection cues
+
+- The preceding goal turn made progress and committed pending-readiness reconciliation as
+  `40fd4ff`. Revalidated the worktree; the other agent's documentation-site changes remain separate.
+- Extended the existing engine cue scenarios with policy changes after the caller cue reaches its
+  controlled drain: remove STT demand, or add an already connected listener without changing the
+  existing participants' permissions. Both fail waiting for a second cue in
+  `vxpipe-human-cue-policy-red.log` (seven cases, two failures).
+- Keep the current cue behind closed conversation gates and drain it in order. A stale candidate
+  stops probing its obsolete resource set; after drain, resume waiting, recompute preparation under
+  the same lease/deadline, then play fresh cues and revalidate before returning release evidence.
+  Final readiness queries also observe candidate invalidation while waiting. Actual player failure
+  still takes the existing recovery path; a policy retry is not transfer success.
+- The first implementation run passed the removal case but failed the retained-STT case. The
+  embedded connection fixture did not refresh private enforcers' base policy, unlike Gateway's
+  existing `PrivateMedia` operation. Its first correction mistakenly reapplied the same initial
+  snapshot and failed with `stale_policy_revision`; that is explicitly rejected by the policy
+  transition contract. Track the fixture's prior private policy and refresh only a retained pair
+  under a changed snapshot, matching the Gateway boundary.
+- Once the fixture reached the second cue, both new cases reproduced identical playback
+  correlations across old/new cues (`vxpipe-human-cue-policy-correlation-red-2.log`). Give each
+  playback episode its own identifier while retaining the media generation and attempt deadline.
+  This separates retry/recovery playback acknowledgements from the prior episode.
+- The cue matrix now uses ExUnit context for its outcome, avoiding constant-branch type warnings.
+  No test-only callback, dependency or UI component is added to production. Final focused and
+  umbrella verification follows; policy changes during graph construction or final adoption,
+  changed still-required resources and complete listener lifetimes remain open.
+- The seven cue cases now pass (`vxpipe-human-cue-policy-green-2.log`). Then enabled default waits
+  in the STT-removal retry and ran the complete human web/phone plus collector files: 33 checks,
+  zero failures (`vxpipe-human-cue-policy-engine.log`). The retained-STT retry still uses nil waits,
+  proving that silence changes neither the readiness requirement nor mandatory fresh cue.
+- Implementation review: let the current private cue drain rather than interrupting an uncertain
+  output timeline. It grants no conversational admission; candidate validation forces preparation
+  and a new cue afterward. Keep the existing preparation lease and collector; change only playback
+  episode identity. Immediate release on a stale snapshot and reusing old cue correlations were
+  rejected. The later coordinator commit boundary remains a separate unfinished requirement.
+- All five final root gates pass against this implementation: formatting, warnings-as-errors
+  compilation, strict Credo, tests and unused dependencies. There are 1,293 tests, zero failures and
+  15 integration exclusions at concurrency four, seed 982865. Evidence is
+  `vxpipe-human-cue-policy-root-results.json` and its five logs; all 596 engine and 327 Gateway checks
+  pass. Later edits only synchronize documentation and verification evidence.
+- Keep this as one human cue-policy checkpoint with the owning engine checks and fixture correction.
+  No running development server was restarted, no UI changed, and the other agent's documentation
+  site and visual labnotes remain untouched. Full milestone and delivery-slice acceptance stay open.

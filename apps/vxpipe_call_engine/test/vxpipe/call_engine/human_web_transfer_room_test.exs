@@ -380,13 +380,27 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-owner-lost"}}
   end
 
-  for outcome <- [:drain, :drain_during_recheck, :deadline, :cue_loss, :readiness_loss] do
-    test "human transfer keeps its cue barrier closed until #{outcome}" do
+  for outcome <- [
+        :drain,
+        :drain_during_recheck,
+        :deadline,
+        :cue_loss,
+        :readiness_loss,
+        :policy_change,
+        :unrelated_policy_change
+      ] do
+    @tag outcome: outcome
+    test "human transfer keeps its cue barrier closed until #{outcome}", %{outcome: outcome} do
       plan =
         compile_plan(
-          wait_sounds: nil,
+          wait_sounds: if(outcome == :policy_change, do: %{}, else: nil),
           transfer_timeout_ms: 2_000,
-          support_stt: unquote(outcome) == :readiness_loss
+          support_stt: outcome in [:readiness_loss, :policy_change, :unrelated_policy_change],
+          observer_policy:
+            if(outcome == :policy_change,
+              do: %{transcript_routes: %{}, save_transcripts: false},
+              else: %{}
+            )
         )
 
       caller = Map.fetch!(plan.participants, "caller")
@@ -409,6 +423,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
       support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :cue_support)
       assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
+
+      observer =
+        if outcome in [:policy_change, :unrelated_policy_change],
+          do: connect_policy_observer(plan, room)
+
       begin_transfer(plan, room, caller, "cue-transfer")
       assert_receive {:test_tts_transport_started, briefing, _}, 2_000
 
@@ -430,7 +449,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                )
 
       speech_transport =
-        if unquote(outcome) == :readiness_loss do
+        if outcome in [:readiness_loss, :policy_change, :unrelated_policy_change] do
           assert_receive {:test_stt_transport_started, transport, _}, 1_000
 
           TestSpeechToTextTransport.deliver(
@@ -446,7 +465,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 50
       assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) == policy
 
-      case unquote(outcome) do
+      case outcome do
         outcome when outcome in [:drain, :drain_during_recheck] ->
           connection =
             TestTransferConnection.run(
@@ -469,6 +488,41 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
             assert :ok = GenServer.call(connection, :complete_readiness)
           end
 
+          assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 1_000
+          assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
+
+        outcome when outcome in [:policy_change, :unrelated_policy_change] ->
+          pending = :sys.get_state(authority).pending_participant_transfer
+          assert {:ok, scope} = Phase.scope(pending.task.pid)
+          transport_monitor = Process.monitor(speech_transport)
+          {first_player, _reply} = :sys.get_state(caller_sink).pending_drain
+          first_monitor = Process.monitor(first_player)
+          {_callback, first_correlation} = :sys.get_state(caller_sink).callback
+
+          assert {:ok, _changed} =
+                   PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+
+          assert :ok = GenServer.call(caller_sink, :complete_drain)
+          assert_receive {:DOWN, ^first_monitor, :process, ^first_player, :normal}, 1_000
+          assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
+          {second_player, _reply} = :sys.get_state(caller_sink).pending_drain
+          assert second_player != first_player
+          assert {:ok, current_scope} = Phase.scope(pending.task.pid)
+          assert current_scope.deadline_ms == scope.deadline_ms
+          {_callback, second_correlation} = :sys.get_state(caller_sink).callback
+          assert second_correlation != first_correlation
+          refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 50
+          refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 50
+          assert :sys.get_state(caller_sink).output_generation > 0
+
+          if outcome == :policy_change do
+            assert_receive {:DOWN, ^transport_monitor, :process, ^speech_transport, _}, 1_000
+          else
+            refute_receive {:DOWN, ^transport_monitor, :process, ^speech_transport, _}, 50
+          end
+
+          refute_receive {:test_stt_transport_started, _replacement, _}, 50
+          assert :ok = GenServer.call(caller_sink, :complete_drain)
           assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 1_000
           assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
 
@@ -1112,6 +1166,32 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                    50
   end
 
+  defp connect_policy_observer(plan, room) do
+    observer = Map.fetch!(plan.participants, "observer")
+
+    assert {:ok, join} =
+             CallEngine.Command.JoinParticipant.new(
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: plan.room_id,
+               participant_id: observer.participant_id,
+               role: :human,
+               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+             )
+
+    assert {:ok, _participant} = CallEngine.join_participant(join)
+    sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :cue_observer)
+    assert {:ok, _} = attach_ready(plan, room, observer, "observer-connection", sink)
+
+    assert {:ok, _policy} =
+             PolicyAuthority.leave(
+               PolicyAuthority.whereis(room.incarnation_id),
+               observer.participant_id
+             )
+
+    observer.participant_id
+  end
+
   defp compile_plan(options \\ []) do
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
 
@@ -1165,7 +1245,12 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                      tools: %{},
                      transfers: ["human-support"]
                    },
-                   "human-support" => support
+                   "human-support" => support,
+                   "observer" => %{
+                     type: "human",
+                     connection: %{service: "web", mode: "receive", admission: "start_call"},
+                     while_present: Keyword.get(options, :observer_policy, %{})
+                   }
                  },
                  limits: %{max_duration_ms: 60_000}
                },
