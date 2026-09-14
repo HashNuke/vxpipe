@@ -1,5 +1,128 @@
 # Transfer readiness implementation
 
+## Status and detour audit at the user-requested pause
+
+On 2026-09-14 the user asked why implementation was still running after approximately eight
+hours, then requested an accounting of dependency work and detours in this labnote. Implementation
+is paused. This audit documents existing work; it does not resume the milestone.
+
+**The requested end-to-end transfer/wait flow is unfinished.** The milestone has completed its
+definition/assets and private playback component checkpoints. Common readiness is partial;
+initial caller waiting, coordinated transfers, recovery and sample/browser/provider acceptance
+remain open. The `transfer_receiver` to `transfer_joining` rename was already committed separately
+as `6dd801f` at 00:31. Subsequent work implements the broader authorized milestone.
+
+### What the eight hours produced
+
+The implementation labnote began at 00:32; the latest implementation commit, `b079dbf`, is dated
+08:44, approximately eight hours and twelve minutes later. These are local commit/note timestamps
+(UTC+07:00), not measurements of time spent coding or testing. The range `6dd801f..b079dbf` contains
+31 commits and changes 230 files, with 17,205 insertions and 330 deletions across implementation,
+tests, documentation and assets. Those totals describe scope, not completed acceptance criteria.
+There is no reliable per-activity timing record, so this audit does not assign invented durations
+to the detours or test runs.
+
+| Commit times | Work completed | Checkpoints |
+| --- | --- | --- |
+| 00:46–01:07 | Call-level URL/default/null semantics, pinned assets, independent private players, and clearing queued output while retaining codecs. | `66b6033`, `b9ddac9`, `f8bd969` |
+| 01:22–01:51 | Shared native output for private/room audio, phone playback marks, final cue drain and pacing after idle. One separate fixture-timeout adjustment. | `0e8efc6`, `b2bb177`, `840090e`, `1e36913` |
+| 02:06–03:42 | Readiness descriptors and bounded collection; STT/TTS, model/tools/MCP, room services, recording writers, media pipelines and exact output-route evidence. | `c0bd41f`, `13ebd83`, `52e3047`, `d3d6532`, `2e02e6a`, `59712bd`, `7f434b5` |
+| 04:04–04:49 | Negotiated web input, prepared speech tracks and decoders before microphone packets, native phone formats and validated phone streams. One separate catalog fixture adjustment. | `71d3a06`, `245e59e`, `c776097`, `0bc649e`, `bbba94e`, `cde2f91` |
+| 04:58–06:51 | Prospective membership preview, connection graphs, complete room requirements and resource expansion, agent recording taps, and cancellation of nested preparation workers. | `b02a2d2`, `1a2646c`, `a4730fb`, `be0267f`, `aa9993f`, `3f86d4a` |
+| 07:25–08:44 | Prepare affected STT sessions, bind their input, prepare replacement decoders, reserve shared output routes and stage mixer subscriptions before policy application. | `fb567d0`, `e9284ea`, `43aafa2`, `004f4ef`, `b079dbf` |
+
+The implementation proceeded from each component into the next missing prerequisite. Focused
+checks and all five umbrella gates were run for the committed checkpoints; some checkpoints
+repeated their gates after an additional defect was found. This added verification work, but the
+central sequencing problem was continuing to expand infrastructure before demonstrating a runnable
+startup/transfer slice. Passing component checks did not establish the requested user experience.
+I should have surfaced that gap and the expanding scope much earlier. The evidence below explains
+the path taken; it does not establish that doing all this groundwork serially was the best order.
+
+### Dependency and integration detours
+
+No dependency lockfile or package version changed in this commit range. The Agent Runtime
+application added the existing OTP `:crypto` application for its new signatures. The dependency
+work otherwise concerns project-owned integration with installed libraries and provider protocols.
+The earlier checkpoint sections retain the detailed red/green evidence; this index explains why
+each material detour was taken and where it ended.
+
+| Finding and its consequence | Resolution or remaining limit | Evidence |
+| --- | --- | --- |
+| Bundled ChucK WAV files had RIFF lengths including the eight-byte header; strict decoding rejected the intended defaults. Existing opening fixtures also had caches too small for those loops. | Corrected the engine asset headers without changing samples; kept remote decoding strict. Enlarged only fixture caches. Added legacy-plan hydration so old serialized plans receive omitted defaults. | `66b6033`; [definition/assets](#definition-and-asset-checkpoint). |
+| Private audio entered native recording taps, and direct/room paths used separate encoders. Existing phone interruption replaced its pipeline. | Added private/mixed audio scopes, a shared output arbiter and ordered clear while preserving native codecs and their timelines. These primitives still need lifecycle use. | `b9ddac9`, `f8bd969`, `0e8efc6`; [playback](#playback-primitive-checkpoint), [native clear](#ordered-native-output-clear-checkpoint), [shared output](#shared-recipient-output-checkpoint). |
+| Socket submission did not prove phone playout; provider clear also returns pending marks. A socket waiting synchronously on a leg could prevent that leg from receiving the playback acknowledgement it needed. | Correlate fresh marks after clear, drain the final cue, and dispatch leg events asynchronously with bounds. Stale marks cannot acknowledge new work. Deterministic checks pass; audible live-provider acceptance is outstanding. | `840090e`; [phone playback](#phone-playback-marks-and-finite-cue-drain). |
+| The installed Membrane.Realtimer emits overdue timestamps immediately. A retained output timeline excludes idle gaps, so resumed audio could burst to catch up. | Added a local paced-frame boundary that accounts for idle and encoding delay while retaining codec/timeline state. | `1e36913`; [idle pacing](#phone-pacing-across-idle-gaps), including the controlled-clock 20-second idle case. |
+| Process existence and a global policy revision cannot establish readiness of a particular provider, queue, subscription or tool dependency. | Added exact configuration/generation/interval descriptors and bounded external collection across selected capabilities. Missing dependencies keep readiness closed. This is substantial planned groundwork, with lifecycle integration still open. | `c0bd41f` through `7f434b5`; [barrier](#required-resource-barrier), [collection](#asynchronous-readiness-collection), and intervening adapter checkpoints. |
+| Recording writers opened on first audio; a failed preparation could be bypassed by lazy opening. Aggregate evidence could accept malformed or foreign dependencies. Agent tracks also lacked their exact native output tap. | Prepare required local writers from validated actual tracks/taps, retain successful writers, reject missing/foreign evidence and incompatible PCM formats. Remote storage completion remains outside the local readiness barrier. Candidate-policy recording preparation remains open. | `2e02e6a`, `be0267f`, `3f86d4a`; [recording](#recording-resources-and-mixer-subscriptions), [agent taps](#prepare-agent-recording-output-paths). |
+| WebRTC transport readiness needed server-side negotiated directions. A playing Membrane graph could still have no allocated decoder because Opus parsing waited for its first packet. Early preparation could also emit a format before Membrane allowed output. | Query actual transport/track evidence; send negotiated format plus an ordered preparation event through the real decoder to its sink, deferring output until playing. No microphone probe is required. | `71d3a06`, `c776097`; [negotiation](#negotiated-webrtc-connection-and-input-evidence), [decoder preparation](#decoder-preparation-before-packets). |
+| Common ingress held a Membrane supervisor PID rather than the pipeline actor; native phone formats differed from WebRTC. Reflection could label a configured but unloaded adapter unsupported. | Query the registered pipeline, pin actual web/phone formats, and load the configured module before checking callbacks. Cold-process and actual pipeline checks pass. The phone graph fixtures do not establish phone STT parity. | `0bc649e`, `1a2646c`; [common input](#common-prepared-input-and-phone-formats), [connection graphs](#bound-connection-resource-graphs). |
+| Existing admission/leave calls apply policy immediately; using them to discover future readiness would change permissions too early. A partial caller-supplied inventory could omit required actors. | Added authoritative read-only membership previews and reconstructed full room/connection requirements. Discovered and reused the existing per-participant TTS registry instead of creating another owner. Full candidate installation and orchestration remain open. | `b02a2d2`, `a4730fb`, `be0267f`; [prospective membership](#prospective-membership-policy), [inventory](#prospective-requirements-and-authoritative-room-bindings), [expansion](#expand-room-requirements-for-collection). |
+| Cancelling room preparation left nested blocked queries running because their task-stream ownership did not propagate cancellation. | Changed both preparation levels to supervised linked streams. Tests monitor the actual blocked workers and prove the owning media actors remain usable. Increasing timeouts was rejected for this defect. | `aa9993f`; [dedicated cancellation labnote](20260914-0641-readiness-worker-cancellation.md). |
+| Affected STT still connected during policy application. Prepared session evidence disappeared at adoption; pending events could replay, and unrelated membership refreshes could create another replacement. | Prepare affected sessions under the existing owner/attempt/deadline, retain the live session, preserve adopted evidence and advance only pending sequence cutoffs. Unchanged pending transports survive authoritative refresh. Input can select the same exact prepared session. | `fb567d0`, `e9284ea`; [speech policy](#prepare-affected-speech-policy), [prepared input](#bind-prepared-speech-input). |
+| Decoder replacement still happened during commit. Stopping a forbidden decoder could return a fatal connection error; unchanged permissions could mask removal of all actual demand. | Stage and acknowledge affected decoders before adoption, drop denied input normally, and compare demand as well as scoped policy. WebRTC/Telnyx/Twilio decoder checks pass. Full connection selection of these preparations remains open. | `43aafa2`; [decoder policy](#prepare-input-decoder-policy). |
+| Constructing a shared output route revoked its live predecessor before collection. | Added a separate pending route tied to the held generation and original deadline; activation requires exact ready evidence and drained private playback. Native output survives. Gateway room-egress integration remains open. | `004f4ef`; [shared output preparation](#prepare-shared-output-routes). |
+| New mixer subscribers could receive buffered pre-commit speech, collide with reserved IDs, lose an adopted handle on the next attempt, or remain required after leaving the prospective audience. | Stage missing subscriptions separately, fence new subscribers with source cutoffs, reserve IDs, retain per-subscription adopted bindings and reconcile the explicit complete desired set. Existing listeners retain queues and identities. | `b079dbf`; [mixer preparation](#prepare-mixer-policy-and-subscriptions). |
+| A held/released room output expects a new generation, but mixer frames still use zero. Clearing an in-flight shared frame can also leave its producer waiting forever. | Investigation paused with two red tests and no runtime fix. Subscription-local gates and discarded-frame acknowledgements are proposed, not implemented. | [paused hold/release work](#hold-and-release-room-output). |
+
+### Verification and fixture detours
+
+- Two policy fixtures had 100 ms acknowledgement deadlines that failed under umbrella scheduling
+  load. Increased those fixture deadlines to one second without changing production deadlines or
+  assertions. See `b2bb177` and the [policy-timeout labnote](20260914-0136-media-policy-test-timeouts.md).
+- The MCP catalog timeout fixture could expire before its blocked worker announced startup.
+  Increased only its refresh/wait headroom, retaining the timeout behavior under test. See
+  `bbba94e` and the [catalog-timeout labnote](20260914-0443-stabilize-catalog-timeout.md).
+- Updated simulated phone sockets to acknowledge the new clear/mark protocol and transfer fixtures
+  to await asynchronous start-event completion. WebRTC fixtures now wait for actual server evidence
+  and explicitly supply delayed STT/TTS Connected acknowledgements. These were fixture assumptions
+  exposed by stricter evidence, not a reason to bypass readiness in production.
+- New-fixture corrections included child IDs/required registries, actor versus supervisor handles,
+  missing identity/PCM format/deadline settings, valid policy/provider event shapes, callback arities,
+  and a context-versus-plan update. They are recorded at the owning checkpoints. Also corrected the
+  mix-minus self-audio expectation and used the earlier valid rejection boundary in a policy race.
+  These corrections do not count as fixed production defects. Two helper names conflicted with
+  `Kernel.binding/1`; renamed them. Formatting sometimes required another owning-child pass.
+- An existing transcript suppression path made one synthetic replay test pass without proving the
+  STT boundary; a valid turn-start replay reproduced the actual defect before the fix. The first
+  paused output-clear fixture blocked on its own manual pacing clock; advancing the actual tick
+  changed the failure to the intended missing producer acknowledgement. The original fixture
+  failures are not claimed as evidence for those production defects.
+- A transient build lock cleared without restarting a process. An expected Gateway fault-test run
+  emitted a logger-handler removal; its completed command and suite results still passed. Neither
+  incident required a dependency upgrade. Root reruns followed runtime fixes and fixture corrections;
+  detailed checkpoint results above/below distinguish intermediate runs from final verification.
+
+### Exact state and unfinished work
+
+- Latest committed implementation: `b079dbf`. Its final five root gates passed, including 1,210
+  tests with zero failures and 15 integration exclusions. The child counts in the retained final
+  test log sum to that result. This documents the last verified commit, not the paused worktree.
+- At pause, the only uncommitted code changes were one new test in `room_mixer_test.exs` and one
+  in `output_arbiter_test.exs`. Both focused runs failed for the expected missing behavior; neither
+  fix was implemented. The labnote was also modified. This documentation audit leaves those tests
+  untouched and does not include them in its documentation commit.
+- Startup still determines readiness from the existing caller/STT path. Human handoff still cancels
+  its timer and calls its existing committer after acceptance/briefing. The complete resource
+  collector, participant wait players, ordered cues and release acknowledgements are not composed
+  into those lifecycle paths. Do not present component readiness as a working transfer feature.
+- Remaining integration includes room-egress adoption of its prepared mixer/output pair; affected
+  transcript/recording policy preparation; complete graph selection with persistent phase ownership;
+  private destination preparation; early caller output and opening-message ordering; all-listener
+  holds, waits, cues and acknowledged release; bounded restoration and safe phase/blocker telemetry.
+  These must preserve the existing attempt deadline and unaffected capabilities.
+- Complete desktop/mobile sample verification, multi-participant/race coverage, and web/phone plus
+  phone/phone acceptance remain outstanding. Decoder checks alone do not prove phone STT support;
+  the Twilio PCMU versus configured STT-format question still needs explicit resolution. No rendered
+  browser check, live provider call or development-server restart was performed in this run.
+- The milestone and its implementation-order index entry remain unchecked. Their acceptance gates
+  are the completion criterion. The latest documentation request authorizes this accounting only;
+  implementation remains paused.
+
+Audit verification: cross-checked the timeline against all 31 commits in the stated range, checked
+all 26 local links/section anchors in this audit, reviewed the paused diffs and retained test
+results, and ran `git diff --check`. No new tests or runtime changes were made for this audit.
+
 ## Scope and design review
 
 The user authorized implementation of the complete transfer-readiness/wait-sounds milestone,
@@ -924,3 +1047,28 @@ unchecked; the milestone and index are still incomplete.
   validate the opaque prepared subscription handle, and adopt the ready output without querying
   the mixer from a policy-enforcement callback. Transcript/recording candidate preparation, complete
   graph selection, waits/cues, coordinated release, restoration and rendered/provider acceptance remain.
+
+## Hold and release room output
+
+- The prior mixer preparation checkpoint is committed as `b079dbf`, with a clean worktree and all
+  root checks passing. This is progress. While tracing room-egress adoption, found two prerequisites:
+  the mixer always emits output generation zero, and clearing a current arbiter room frame leaves
+  its shared producer without a completion acknowledgement. A retained room route cannot resume
+  reliably after a generation-fenced hold until both are addressed.
+- Proposed, not implemented: add subscription-local output gates that preserve subscription/readiness
+  identity, discard held audio and buffered pre-release frames, and stamp released frames with the
+  acknowledged generation.
+  Compose the mixer gate and native output hold/release outside the room-egress callback. Keep
+  per-listener gates separate from privacy policy and capability lifecycle.
+- Added a red mixer check: holding one listener must clear its old/held audio, leave the other
+  listener and subscription identity intact, and release only fresh frames with the new generation.
+  The focused run completed with 18 tests and one failure because `Subscription.hold/2` is absent.
+- Added a red shared-output check: clearing a playing room frame must acknowledge its discard to
+  the producer after native drain, allowing later room delivery. After correcting the manual pacing
+  fixture to advance its outstanding native tick, the run completed with 20 tests and one failure
+  on the missing `vxpipe_room_audio_output_sent` acknowledgement. This is flow-control evidence,
+  not proof that discarded audio played.
+- Both runs completed before this audit; no test job remains pending from this checkpoint. Retained
+  local log filenames are `vxpipe-mixer-output-gate-red.log` and `vxpipe-room-output-clear-red.log`.
+  No runtime changes for these two findings were made before the user-requested pause. The tests
+  remain uncommitted; no green or end-to-end acceptance is claimed.
