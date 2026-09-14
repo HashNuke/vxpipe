@@ -107,7 +107,8 @@ handoff audio and support transcripts. Recovery also preserves spoken assistant 
 the released output generation into new TTS requests. A failed private connection now releases its exact persisted destination
 admission while retaining history and single-use tokens. A fresh desk completed another transfer in
 the original live call, with retained caller audio and support/caller transcripts. Earlier intermittent
-briefing failure and the full failure-stage acceptance remain open. The milestone's
+briefing failure and the full failure-stage acceptance remain open. The existing desk status/control
+now exposes interrupted connectivity and restores the prior transfer phase on reconnection. The milestone's
 [current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
 implementation from remaining failure/privacy/diagnostic and audible acceptance.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay

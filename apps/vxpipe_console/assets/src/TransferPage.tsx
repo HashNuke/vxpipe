@@ -50,6 +50,7 @@ export default function TransferPage() {
   const accepting = useRef(false);
   const eventSequence = useRef(0);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [interrupted, setInterrupted] = useState(false);
   const [attemptId, setAttemptId] = useState<string>();
   const [error, setError] = useState<string>();
   const [events, setEvents] = useState<EventEntry[]>([]);
@@ -101,6 +102,7 @@ export default function TransferPage() {
     connection.current = undefined;
     activeAttempt.current = undefined;
     accepting.current = false;
+    setInterrupted(false);
     setProgress(undefined);
     setAttemptId(undefined);
     setPhase("connecting");
@@ -125,8 +127,13 @@ export default function TransferPage() {
         onControl: handleControl,
         onClosed: () => {
           accepting.current = false;
+          setInterrupted(false);
           setPhase("closed");
           record("Destination connection closed");
+        },
+        onInterrupted: (value) => {
+          setInterrupted(value);
+          record(value ? "Destination connection interrupted" : "Destination connection restored");
         },
       });
 
@@ -140,7 +147,7 @@ export default function TransferPage() {
   }
 
   function accept() {
-    if (phase !== "ready" || !attemptId || !connection.current) {
+    if (interrupted || phase !== "ready" || !attemptId || !connection.current) {
       return;
     }
 
@@ -159,6 +166,7 @@ export default function TransferPage() {
 
   function disconnect() {
     accepting.current = false;
+    setInterrupted(false);
     connection.current?.close();
     connection.current = undefined;
     activeAttempt.current = undefined;
@@ -173,12 +181,12 @@ export default function TransferPage() {
           <p>Human transfer desk</p>
         </header>
 
-        <section className={`transfer-status transfer-status--${phase}`} aria-label="Transfer status">
+        <section className={`transfer-status transfer-status--${interrupted ? "closed" : phase}`} aria-label="Transfer status">
           <span aria-hidden="true" />
           <div>
             <p>Destination state</p>
             <strong role="status" aria-live="polite">
-              {phase === "accepting" && progress ? progressCopy(progress) : phaseCopy[phase]}
+              {interrupted ? "Connection interrupted" : phase === "accepting" && progress ? progressCopy(progress) : phaseCopy[phase]}
             </strong>
           </div>
         </section>
@@ -193,7 +201,7 @@ export default function TransferPage() {
               </p>
             </div>
 
-            {phase === "briefing" || phase === "ready" ? (
+            {!interrupted && (phase === "briefing" || phase === "ready") ? (
               <button
                 className="transfer-action"
                 type="button"
@@ -202,7 +210,7 @@ export default function TransferPage() {
               >
                 Accept transfer
               </button>
-            ) : phase === "active" || phase === "accepting" ? (
+            ) : interrupted || phase === "active" || phase === "accepting" ? (
               <button className="transfer-action transfer-action--quiet" type="button" onClick={disconnect}>
                 Disconnect
               </button>

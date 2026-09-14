@@ -366,7 +366,9 @@ Implementation tasks:
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
   The existing diagnostics reporter aggregates returned audience/prepare/release/recover worker
-  durations without call identity or provider payloads.
+  durations without call identity or provider payloads. A disconnected browser peer now shows
+  “Connection interrupted” with the existing Disconnect action; reconnect restores the previous
+  transfer phase and acceptance remains unavailable during interruption.
 - [ ] Complete caller/destination failure and recovery detail, separate briefing/acceptance/cue
   timings, forced-worker termination observations, and remaining queue/drop diagnostics. The
   destination may already be closed during source recovery; its progress UI alone is insufficient.
@@ -729,7 +731,10 @@ also completed in the original call with live model/Deepgram services, both cues
 audio and final support/caller transcripts. Earlier attempts included rejected text submissions
 and a briefing that timed out without audio; their cause remains unestablished and full failure
 acceptance remains open. The [readmission labnote](../../labnotes/20260914-1929-transfer-desk-readmission.md)
-records both the failed attempts and the successful retry.
+records both the failed attempts and the successful retry. The subsequent
+[desk interruption fix](../../labnotes/20260914-1959-transfer-desk-disconnect.md) makes connection loss
+visible and allows manual disconnection during briefing, while retaining transiently interrupted peers.
+This resolves the stale page state, not the unexplained absence of briefing audio.
 
 Known remaining work in the first slice:
 
@@ -753,7 +758,7 @@ Known remaining work in the first slice:
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
 | Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 332-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,300 tests, zero failures, 15 exclusions; seed 306911 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Destination reservations release on connection loss/expiry; the rendered retry completes in the same call. Full slice acceptance stays open. |
+| Current human-handoff checkpoint | All five root gates pass; 1,300 tests, zero failures, 15 exclusions; seed 226627 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Destination reservations release on connection loss/expiry; the rendered retry completes in the same call. Full slice acceptance stays open. |
 | Cue barrier and failure recovery | Nine focused engine cases pass | Completion requires cue drain, including completion during a deferred readiness recheck. Stale policy candidates during cues or at the final commit check cause preparation and fresh cues under the original deadline, retaining unaffected STT; default and silent waits are covered. Cue-player or prepared STT failure recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
 | Rendered sample and spoken recovery | Real desktop/mobile-sized Chrome sessions with live model/Deepgram and synthesized microphone speech | Accepted default-wait handoffs preserve the caller and deliver support transcripts. Both peers decode cues and conversation; failed destination connection recovers two spoken assistant responses on the same peer. A fresh desk admission now completes a later transfer on the same caller peer, with audio and final transcripts. Custom/nil, independent readiness delays and physical audibility remain open. |
 | Destination readmission | Five Session lifetime cases, extended persistence admission case and repeated WebRTC recovery flow | Exact release preserves history, rejects stale release/token replay and retains active exclusion. Failed persistence release retries while unavailable; bound connections outlive credential TTL. |

@@ -67,6 +67,7 @@ test("negotiates the sideband peer, projects controls, and releases browser medi
 
   const onControl = vi.fn();
   const onClosed = vi.fn();
+  const onInterrupted = vi.fn();
 
   const session: GatewaySession = {
     session_id: "sess_support",
@@ -78,7 +79,7 @@ test("negotiates the sideband peer, projects controls, and releases browser medi
     },
   };
 
-  const connection = await openTransferConnection(session, { onControl, onClosed });
+  const connection = await openTransferConnection(session, { onControl, onClosed, onInterrupted });
 
   expect(peer.createDataChannel).toHaveBeenCalledWith("vxpipe", { ordered: true });
   expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/rtvi/offer", {
@@ -171,6 +172,16 @@ test("negotiates the sideband peer, projects controls, and releases browser medi
   expect(audio.srcObject).toBe(remoteStream);
   expect(audio.autoplay).toBe(true);
   expect(play).toHaveBeenCalledOnce();
+
+  peer.connectionState = "disconnected";
+  peer.onconnectionstatechange?.();
+  expect(onInterrupted).toHaveBeenLastCalledWith(true);
+  expect(onClosed).not.toHaveBeenCalled();
+  expect(peer.close).not.toHaveBeenCalled();
+
+  peer.connectionState = "connected";
+  peer.onconnectionstatechange?.();
+  expect(onInterrupted).toHaveBeenLastCalledWith(false);
 
   peer.connectionState = "closed";
   peer.onconnectionstatechange?.();

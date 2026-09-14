@@ -29,6 +29,7 @@ export type TransferConnection = {
 export type TransferConnectionCallbacks = {
   onControl: (control: TransferControl) => void;
   onClosed: () => void;
+  onInterrupted: (interrupted: boolean) => void;
 };
 
 export async function openTransferConnection(
@@ -42,6 +43,7 @@ export async function openTransferConnection(
   let remoteAudio: HTMLAudioElement | undefined;
   let connectionId: string | undefined;
   let closed = false;
+  let interrupted = false;
   let closeNotified = false;
   const pendingCandidates: RTCIceCandidate[] = [];
 
@@ -102,6 +104,12 @@ export async function openTransferConnection(
   peer.onconnectionstatechange = () => {
     if (peer.connectionState === "closed" || peer.connectionState === "failed") {
       close(true);
+    } else if (peer.connectionState === "disconnected" && !interrupted) {
+      interrupted = true;
+      callbacks.onInterrupted(true);
+    } else if (peer.connectionState === "connected" && interrupted) {
+      interrupted = false;
+      callbacks.onInterrupted(false);
     }
   };
 

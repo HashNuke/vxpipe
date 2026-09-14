@@ -2745,3 +2745,14 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
 - All five root gates pass: 1,300 tests, zero failures and 15 exclusions at concurrency four,
   seed 306911. Final logs/results are `vxpipe-readmission-final-*`. Development/test migrations
   completed without a server restart. Full human and subsequent slice acceptance remain open.
+
+
+## Expose interrupted desk connectivity
+
+- The [desk disconnect checkpoint](20260914-1959-transfer-desk-disconnect.md) fixes the stale
+  briefing display observed during live retry verification. Existing status and controls now show
+  interruption, allow manual disconnect and restore the prior phase when connectivity returns.
+- Two existing focused cases reproduced the missing notification/UI behavior before the fix.
+  All 11 Console asset checks and TypeScript pass; rendered mobile/desktop verification covers
+  interruption, restoration and manual disconnection with browser-only simulated connections.
+  This does not claim to resolve the unexplained live briefing timeout.

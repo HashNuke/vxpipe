@@ -112,6 +112,15 @@ test("connects the latest sample destination and activates only after explicit a
   fireEvent.click(acceptButton);
   expect(accept).not.toHaveBeenCalled();
 
+  act(() => callbacks.onInterrupted(true));
+  expect(screen.getByRole("status")).toHaveTextContent("Connection interrupted");
+  expect(screen.getByRole("button", { name: "Disconnect" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Accept transfer" })).not.toBeInTheDocument();
+
+  act(() => callbacks.onInterrupted(false));
+  expect(screen.getByRole("status")).toHaveTextContent("Listen to the private briefing");
+  expect(screen.getByRole("button", { name: "Accept transfer" })).toBeDisabled();
+
   act(() => {
     callbacks.onControl({ type: "acceptance_ready", attemptId: "xfer_demo" });
   });
