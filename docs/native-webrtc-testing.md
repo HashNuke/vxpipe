@@ -24,6 +24,18 @@ in process; it does not verify deployment TLS or a reverse proxy. The fixture ow
 setup and supervised peers, so an existing development server and external speech credentials
 are unnecessary. These checks also run in the ordinary umbrella suite.
 
+For independent model/voice preparation and failed-model recovery:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'AI handoff|agent_model loss'
+```
+
+These use the existing controlled provider to delay model initialization before withholding
+TTS readiness. They verify waiting audio and held text at both stages, cue-before-greeting,
+and spoken recovery through the retained source when model preparation fails. The Morse case
+uses the real local speech providers; precise readiness failures use controlled providers.
+
 ## Protocol boundary
 
 The caller's `chat` data channel carries RTVI 2.1 messages with `label: "rtvi-ai"`, including
