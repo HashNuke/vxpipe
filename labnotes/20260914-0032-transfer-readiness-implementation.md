@@ -1,11 +1,16 @@
 # Transfer readiness implementation
 
-The current [private speech binding checkpoint](#bind-private-speech-to-the-authorized-connection)
+The last fully verified commit is `5ab8c17`. Its
+[private speech binding checkpoint](#bind-private-speech-to-the-authorized-connection)
 allocates dormant speech for the exact authorized private connection under its real transfer phase.
 Input stays closed; an allocated pair cannot bypass prepared media adoption, and its failure cleans
 the pending attempt while retaining the source. All 46 focused transfer and speech checks and
 five root gates pass: 1,269 tests, zero failures and 15 integration exclusions. Gateway/full
 coordinator activation remains unfinished.
+
+The current uncommitted [Gateway preparation work](#gateway-preparation-detour-and-current-boundary)
+has passed three focused WebRTC checks. That result does not extend the full-suite evidence above
+to the current worktree. This notes update records the boundary without making further runtime edits.
 
 This extends persistent transfer ownership in `4801597`, private allocation in `c005511`,
 speech adoption in `a8106d4`,
@@ -63,12 +68,24 @@ The additional groundwork since the audit addresses room output, recording and p
   preliminary provider connection, keeps the pair outside critical registration until commit,
   and proves explicit cancellation preserves source audio. It also corrects repeated enforcement
   of an unchanged membership candidate. Authorized connection binding and persistent phase cleanup
-  are still required; this is not yet the integrated transfer lifecycle.
+  were still required at that checkpoint; the later commits below address them.
 - The [allocation lifetime checkpoint](#bind-private-allocation-to-its-phase) closes the interval
   before provider preparation starts and prevents unprepared/no-demand adoption. It reuses the
   temporary actor lifecycle and existing ingress monitor. An unrelated membership refresh already
   retained the private provider through existing policy reconciliation; the added check confirms
-  that behavior without changing it. Authorized connection/coordinator wiring remains unfinished.
+  that behavior without changing it. Connection binding followed in `5ab8c17`; full coordinator
+  wiring remains unfinished.
+- `4801597` retained the existing supervised transfer task through handoff. Previously its exit
+  after destination configuration would prematurely cancel resources leased to it. Completion now
+  checks that phase before publishing success; this does not implement readiness, cues or release.
+  See [phase ownership](#retain-the-actual-transfer-phase).
+- `5ab8c17` bound private speech to the exact authorized connection with closed input. Review found
+  three related integration defects: direct commit could bypass prepared adoption, startup could
+  open private input, and cancellation removed only one private connection. Their reproductions
+  and fixes are recorded in [the binding checkpoint](#bind-private-speech-to-the-authorized-connection).
+- The uncommitted Gateway work addresses the next boundary: ordinary media setup assumes room
+  admission, so it cannot prepare a private joining participant. Its rationale, focused evidence
+  and remaining checks are recorded [below](#gateway-preparation-detour-and-current-boundary).
 
 No dependency versions or production deadlines changed in these committed checkpoints. These are
 component results: complete resource selection, startup/transfer orchestration, waits/cues,
@@ -1940,3 +1957,48 @@ browser/provider session or server restart was performed for this documentation-
   timeout or production deadline was changed. Commit the internal private binding, gates, failure
   cleanup and evidence together while preserving the concurrent visual work. Full milestone and
   index acceptance remain open.
+
+## Gateway preparation detour and current boundary
+
+This update answers the request to keep the detours in the labnote. It records the existing
+uncommitted implementation and retained test results; it does not resume runtime editing or claim
+that this checkpoint is ready to commit with the implementation.
+
+- **Why this groundwork is needed:** ordinary Gateway setup asks the engine for admitted room
+  media configuration and immediately registers its actors as critical policy enforcers. Private
+  transfer attachments deliberately have disabled room input/output modes, so that setup creates
+  no room actors. Calling ordinary activation would conflate allocation with admission; merely
+  allocating engine speech would leave the decoder and room output missing from readiness.
+- **Current approach:** the actual WebRTC connection or phone media session requests preparation
+  from authority. Authority reuses private speech authorization and returns the installed base
+  policy, mixer configuration and original phase scope. Gateway allocates dormant room ingress
+  and egress under the existing connection supervisor, without starting their pipelines or live
+  subscription. The attachment retains disabled room permissions and closed speech input while
+  readiness can describe the future output subscription. The existing native output is retained.
+- **Ownership decision:** reuse the connection supervisor and existing phase-cancellation path
+  instead of introducing another owner process or registry. A repeated authorized request reuses
+  actors. Partial allocation failure stops the private connection so its supervisor owns cleanup.
+  The latter failure path and policy-refresh branch still need focused verification.
+- **Observed evidence:** `vxpipe-private-gateway-media-red.log` reports three tests with one
+  expected failure for the missing `Connection.prepare_transfer_media/2` operation. The completed
+  `vxpipe-private-gateway-media-green.log` reports three tests with zero failures. The new real
+  WebRTC check covers stale-attempt rejection, repeated allocation, retained native output,
+  dormant pipelines, disabled room permissions, no provider startup or caller audio leakage, and
+  actor cleanup after phase loss while the caller remains ready. It does not exercise successful
+  prepared-media adoption or a complete handoff.
+- **Still unverified:** the phone callback exists in the current diff but this focused run does
+  not cover it. Complete candidate collection using these actors, partial-construction cleanup,
+  refreshed policy, and successful adoption/promotion need verification. The five umbrella gates
+  have not been run for this Gateway diff. The 1,269-test result above belongs to `5ab8c17`.
+- **Remaining integration:** no lifecycle coordinator calls this new preparation operation yet.
+  Startup waiting, the acceptance window, all-listener holds/waits/cues, final policy and control
+  adoption, acknowledged release, restoration and rendered/audio acceptance remain open. The
+  milestone and index remain unchecked; this preparation API is not the requested finished flow.
+- **Dependency and environment accounting:** these Gateway changes add no package or lockfile
+  change and do not increase the original transfer deadline. No new provider/browser session or
+  development-server restart was performed for this notes update. Concurrent visual documentation
+  changes and the existing implementation/test diff are outside this documentation commit.
+
+Notes verification: compared this account with the current engine/Gateway diff, the completed red
+and green log summaries, and the milestone's unchecked acceptance tasks. Checked local Markdown
+links/anchors and whitespace. No new tests were written or run for this documentation update.
