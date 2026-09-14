@@ -937,8 +937,8 @@ collector's current state, because they may describe a resource set that reconci
 Ordinary WebRTC handoffs verify removal of undemanded private STT while collection is pending and
 retention of the original STT transport across an unrelated membership revision. Both retain the
 existing connections and media actors and exchange caller/support audio after release. Policy
-changes during initial graph construction or adoption, changed still-required resources and
-complete changing-listener lifecycle behavior remain separate acceptance work.
+changes during initial graph construction or after policy application, changed still-required
+resources and complete changing-listener lifecycle behavior remain separate acceptance work.
 
 If the candidate becomes stale during a human connection cue, only the private cue is allowed to
 finish draining. Conversation remains held. The worker then resumes waits, prepares the current
@@ -949,6 +949,16 @@ a previous cue's acknowledgement cannot identify its replay. Actual player failu
 existing bounded recovery path. Controlled engine checks cover removed STT demand with default
 waits and unaffected STT across a membership revision with silent waits, requiring the second cue's
 drain before success and proving the attempt deadline is unchanged.
+
+The coordinator also retries a changed binding or `stale_candidate` rejection between the worker's
+ready result and the policy commit. That rejection is preserved only from
+`Authority.commit_candidate/4`, before any enforcer can apply the candidate. A failure after policy
+application retains its existing fail-closed behavior. The retry retains the prepared participant,
+persistent phase, media generation and original deadline, resumes waits, collects current bindings,
+and requires fresh cues. Its collector belongs to the new worker; services and prepared resources
+remain with their existing owners. Controlled engine cases change policy at the phase-stop event
+and optionally refresh the authorized private connection before releasing the completed worker.
+They require another cue, an unchanged deadline and one final successful transfer.
 
 Design review rejected rebuilding a retained native output, using current STT evidence for a
 replacement session, and assigning preparation ownership to a short-lived collection worker.

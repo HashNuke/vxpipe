@@ -387,17 +387,30 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         :cue_loss,
         :readiness_loss,
         :policy_change,
-        :unrelated_policy_change
+        :unrelated_policy_change,
+        :commit_policy_change,
+        :commit_binding_change
       ] do
     @tag outcome: outcome
     test "human transfer keeps its cue barrier closed until #{outcome}", %{outcome: outcome} do
       plan =
         compile_plan(
-          wait_sounds: if(outcome == :policy_change, do: %{}, else: nil),
+          wait_sounds:
+            if(outcome in [:policy_change, :commit_policy_change, :commit_binding_change],
+              do: %{},
+              else: nil
+            ),
           transfer_timeout_ms: 2_000,
-          support_stt: outcome in [:readiness_loss, :policy_change, :unrelated_policy_change],
+          support_stt:
+            outcome in [
+              :readiness_loss,
+              :policy_change,
+              :unrelated_policy_change,
+              :commit_policy_change,
+              :commit_binding_change
+            ],
           observer_policy:
-            if(outcome == :policy_change,
+            if(outcome in [:policy_change, :commit_policy_change, :commit_binding_change],
               do: %{transcript_routes: %{}, save_transcripts: false},
               else: %{}
             )
@@ -425,8 +438,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
 
       observer =
-        if outcome in [:policy_change, :unrelated_policy_change],
-          do: connect_policy_observer(plan, room)
+        if outcome in [
+             :policy_change,
+             :unrelated_policy_change,
+             :commit_policy_change,
+             :commit_binding_change
+           ],
+           do: connect_policy_observer(plan, room)
 
       begin_transfer(plan, room, caller, "cue-transfer")
       assert_receive {:test_tts_transport_started, briefing, _}, 2_000
@@ -449,7 +467,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                )
 
       speech_transport =
-        if outcome in [:readiness_loss, :policy_change, :unrelated_policy_change] do
+        if outcome in [
+             :readiness_loss,
+             :policy_change,
+             :unrelated_policy_change,
+             :commit_policy_change,
+             :commit_binding_change
+           ] do
           assert_receive {:test_stt_transport_started, transport, _}, 1_000
 
           TestSpeechToTextTransport.deliver(
@@ -491,7 +515,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
           assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 1_000
           assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
 
-        outcome when outcome in [:policy_change, :unrelated_policy_change] ->
+        outcome
+        when outcome in [
+               :policy_change,
+               :unrelated_policy_change,
+               :commit_policy_change,
+               :commit_binding_change
+             ] ->
           pending = :sys.get_state(authority).pending_participant_transfer
           assert {:ok, scope} = Phase.scope(pending.task.pid)
           transport_monitor = Process.monitor(speech_transport)
@@ -499,10 +529,33 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
           first_monitor = Process.monitor(first_player)
           {_callback, first_correlation} = :sys.get_state(caller_sink).callback
 
-          assert {:ok, _changed} =
-                   PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+          if outcome in [:commit_policy_change, :commit_binding_change] do
+            pause = pause_prepared_handoff(scope.worker.pid)
+            assert :ok = GenServer.call(caller_sink, :complete_drain)
+            assert_receive {:handoff_prepared, ^pause}, 1_000
 
-          assert :ok = GenServer.call(caller_sink, :complete_drain)
+            assert {:ok, _changed} =
+                     PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+
+            if outcome == :commit_binding_change do
+              connection =
+                TestTransferConnection.run(
+                  attachment_command(plan, room, support, "support-connection"),
+                  fn -> self() end
+                )
+
+              assert {:ok, _receipt} =
+                       GenServer.call(connection, {:vxpipe_prepare_transfer_media, attempt})
+            end
+
+            send(scope.worker.pid, {:continue_handoff, pause})
+          else
+            assert {:ok, _changed} =
+                     PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+
+            assert :ok = GenServer.call(caller_sink, :complete_drain)
+          end
+
           assert_receive {:DOWN, ^first_monitor, :process, ^first_player, :normal}, 1_000
           assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
           {second_player, _reply} = :sys.get_state(caller_sink).pending_drain
@@ -515,7 +568,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
           refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 50
           assert :sys.get_state(caller_sink).output_generation > 0
 
-          if outcome == :policy_change do
+          if outcome in [:policy_change, :commit_policy_change, :commit_binding_change] do
             assert_receive {:DOWN, ^transport_monitor, :process, ^speech_transport, _}, 1_000
           else
             refute_receive {:DOWN, ^transport_monitor, :process, ^speech_transport, _}, 50
@@ -1164,6 +1217,32 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_event,
                     %ToolCallCompleted{tool_call_id: "policy-failed-human-transfer"}},
                    50
+  end
+
+  defp pause_prepared_handoff(worker) do
+    token = make_ref()
+    event = [:vxpipe, :call_engine, :transfer, :phase, :stop]
+
+    assert :ok =
+             :telemetry.attach(
+               token,
+               event,
+               fn _event, _measurements, metadata, owner ->
+                 if self() == worker and metadata.phase == :prepare and metadata.outcome == :ok do
+                   send(owner, {:handoff_prepared, token})
+
+                   receive do
+                     {:continue_handoff, ^token} -> :ok
+                   after
+                     2_000 -> :ok
+                   end
+                 end
+               end,
+               self()
+             )
+
+    on_exit(fn -> :telemetry.detach(token) end)
+    token
   end
 
   defp connect_policy_observer(plan, room) do

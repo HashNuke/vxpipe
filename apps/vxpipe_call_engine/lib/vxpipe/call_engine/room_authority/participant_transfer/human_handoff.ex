@@ -331,6 +331,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
                }
            }}
         else
+          false ->
+            retry_preparation(pending, ready, state)
+
+          {:error, :stale_candidate} ->
+            retry_preparation(pending, ready, state)
+
           _commit_failed ->
             GenServer.reply(pending.from, {:error, :unavailable})
             {:stop, :handoff_commit_failed, state}
@@ -353,6 +359,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   def handoff_result(_reference, _stage, _result, state), do: {:noreply, state}
+
+  defp retry_preparation(pending, ready, state) do
+    if deadline_elapsed?(pending) do
+      {:noreply, fail(pending, :destination_media_unavailable, state)}
+    else
+      :ok = Phase.handoff(pending.task.pid, :prepare, %{request: pending.request, ready: ready})
+      {:noreply, state}
+    end
+  end
 
   defp authorize_control(command, caller, pending, state) do
     connection = Map.get(state.connections, command.connection_id)

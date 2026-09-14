@@ -7,10 +7,10 @@ Earlier sections are historical evidence, not parallel current task lists.
 
 Current committed evidence is in the milestone and the latest checkpoint sections at the end of
 this file. Human handoff now integrates waits, readiness, cues, prepared policy adoption, media
-release and bounded recovery. The cue-policy checkpoint below passes all five root gates:
-1,293 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
+release and bounded recovery. The pre-commit policy checkpoint below passes all five root gates:
+1,295 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
 call integration, complete phone/changing-listener behavior, remaining failure stages and audible acceptance remain
-open. The new [cue-policy checkpoint](#recheck-policy-after-human-connection-cues) below
+open. The latest [pre-commit policy checkpoint](#retry-stale-human-policy-commits) below
 records this turn's implementation and verification separately.
 
 Earlier entries are chronological snapshots. Their references to uncommitted work or missing
@@ -2664,3 +2664,48 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
 - Keep this as one human cue-policy checkpoint with the owning engine checks and fixture correction.
   No running development server was restarted, no UI changed, and the other agent's documentation
   site and visual labnotes remain untouched. Full milestone and delivery-slice acceptance stay open.
+
+## Retry stale human policy commits
+
+- The preceding goal turn made progress and committed cue-policy retries as `56cfc47`. Revalidated
+  the worktree and continued the human transfer slice without touching the other agent's docs site.
+- Reproduced a policy change after the worker finishes readiness/cues but before RoomAuthority
+  commits its result. The existing synchronous phase-stop telemetry callback provides a controlled
+  test pause on that exact worker; it adds no production test hook. After the pause, the original
+  flow ends the room instead of issuing another cue (`vxpipe-human-commit-policy-red.log`: eight
+  cases, one failure).
+- `Authority.commit_candidate/4` already rejects a stale candidate before changing any enforcer.
+  Preserve that specific result through `HumanCommitter`, separately from failures after policy
+  application. The coordinator retries changed bindings or that pre-application rejection only;
+  ordinary commit/enforcement failures retain their existing fail-closed behavior.
+- Resume preparation on the same persistent transfer phase, original deadline and media generation,
+  reusing the prepared participant. The previous worker's collector ends with its owner; the retry
+  creates its own collector to query retained resources, without recreating the participant or
+  restarting unaffected services. Waiting and fresh cues precede another commit attempt. Expired
+  retries take the existing failure/recovery path rather than starting a fresh attempt budget.
+- The first eight cue scenarios pass (`vxpipe-human-commit-policy-green.log`). Added a second
+  coordinator-boundary case that removes private STT through its authorized connection while the
+  completed worker is paused. This changes the authoritative connection binding as well as policy;
+  fresh collection must use the updated binding and receipt before another cue and commit.
+- Full focused and umbrella verification follows. Initial graph-construction changes, replacement
+  of changed still-required resources, post-application policy changes/partial release, listener
+  lifetimes and the remaining acceptance work stay open.
+- Focused verification passes all 35 checks across human web/phone handoff and readiness collection
+  (`vxpipe-human-commit-policy-engine.log`). The nine cue cases include both commit races, retain
+  the two-second configured attempt deadline and require fresh playback correlations and drain
+  before success. Existing phase-loss and fatal privacy-enforcement cases still pass.
+- Implementation review: retry only evidence known stale before policy application, and reuse the
+  already prepared participant rather than starting another participant subtree. A returned worker
+  cannot keep owning the next collector; give the retry worker its own collector while retaining
+  resource ownership on the persistent phase. Do not translate arbitrary commit failures into
+  retries, which could reopen a partially committed conversation. Final root verification follows.
+
+- Final root verification passes all five gates: formatting, warnings-as-errors compilation, strict
+  Credo, tests and unused dependencies. The run reports 1,295 tests, zero failures and 15 exclusions
+  at concurrency four, seed 78325; all 598 engine and 327 Gateway checks pass. Evidence is
+  `vxpipe-human-commit-policy-root-results.json` and its five logs. Only documentation changed
+  after the verified implementation. No UI, dependency version or production deadline changed.
+- The intervening user status question was answered with a read-only audit; it was no implementation
+  progress. On continuation, revalidated the unchanged code and completed gate results, synchronized
+  the milestone/index evidence, and prepared this coherent checkpoint for commit. The docs-site
+  work and visual labnotes belong to the other agent and remain outside this checkpoint.

@@ -3,7 +3,7 @@
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
 Human-handoff integration now passes normal transfer, bounded recovery and cue-failure checks. All
-five root gates pass with 1,293 tests and zero failures (test concurrency four); full slice
+five root gates pass with 1,295 tests and zero failures (test concurrency four); full slice
 acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -43,7 +43,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
-passes all five root gates with 1,293 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+passes all five root gates with 1,295 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
@@ -358,9 +358,10 @@ Implementation tasks:
   while Gateway retains its connection and room-media actors; the WebRTC handoff completes. An
   unrelated membership revision retains the original STT transport. Reconciliation reuses the same
   collector, preparation owner, media generation and deadline. A stale candidate during cue playback
-  now drains privately, re-prepares and plays a fresh cue before release. Changes during initial
-  preparation/adoption, changed still-required resources and the complete changing audience remain
-  open.
+  now drains privately, re-prepares and plays a fresh cue before release. Changed bindings or a
+  stale-candidate rejection at the coordinator's final commit check also retry under the same phase
+  and deadline. Initial preparation changes, changes after policy application, changed still-required
+  resources and the complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -673,6 +674,12 @@ waiting resumes, requirements are refreshed, and new cues must drain before rele
 episode has a fresh correlation identifier. Controlled engine cases prove this with default waits
 when STT becomes unnecessary and with silent waits when an existing STT session remains unaffected.
 
+A changed binding or stale candidate detected at the final coordinator commit boundary also retries
+preparation, waiting and fresh cues. The prepared participant, phase and deadline remain unchanged.
+Only the policy authority's rejection before application is retryable; failures after enforcement
+begins retain their fail-closed behavior. Controlled phase-stop cases verify both the policy-only
+race and a refresh that removes the old private STT binding before the ready result is consumed.
+
 Before accepted handoff preparation, private speech is reconciled against the latest prospective
 policy even when an earlier private binding exists. Removing transcription demand stops only that
 capability/ingress pair, removes its monitors and updates the attachments of the retained Gateway
@@ -695,9 +702,9 @@ live remote URL retrieval remain separate acceptance evidence.
 Known remaining work in the first slice:
 
 - Complete readiness-loss, partial-release and expiry coverage across the remaining stages.
-- Reconcile changes during initial graph preparation/adoption and changes to still-required
-  resources; complete changing-listener lifetimes. Pending collection and cue playback now handle
-  removal of STT demand and unrelated membership revisions before release evidence is returned.
+- Reconcile changes during initial graph preparation, changes after policy application and changes
+  to still-required resources; complete changing-listener lifetimes. Pending collection, cue playback
+  and stale rejection at the final commit check now retry before policy application.
 - Finish failure, stage-timing and queue diagnostics beyond the implemented preparation status and
   returned-worker durations.
 - Complete default/custom/nil playback and private-audio/model-history isolation through the
@@ -712,8 +719,8 @@ Known remaining work in the first slice:
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
 | Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 327-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,293 tests, zero failures, 15 exclusions; seed 982865 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness and cue playback, cue/recheck ordering, progress and bounded recovery pass. Remaining slice acceptance stays open. |
-| Cue barrier and failure recovery | Seven focused engine cases pass | Completion requires cue drain, including completion during a deferred readiness recheck. Stale policy candidates cause preparation and fresh cues under the original deadline, retaining unaffected STT; default and silent waits are covered. Cue-player or prepared STT failure recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
+| Current human-handoff checkpoint | All five root gates pass; 1,295 tests, zero failures, 15 exclusions; seed 78325 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and bounded recovery pass. Remaining slice acceptance stays open. |
+| Cue barrier and failure recovery | Nine focused engine cases pass | Completion requires cue drain, including completion during a deferred readiness recheck. Stale policy candidates during cues or at the final commit check cause preparation and fresh cues under the original deadline, retaining unaffected STT; default and silent waits are covered. Cue-player or prepared STT failure recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
 | Wait configurations and conversational audio | Four ordinary WebRTC handoffs pass for default/custom/per-slot-nil/whole-nil waits | Peer-decoded tones distinguish custom waiting, mandatory cues and bidirectional conversation. Held microphone/private playback produces no STT input or recording chunks; subsequent conversation is recorded and support transcripts reach the caller. The custom fetch and providers are controlled fixtures. |
 | Earlier targeted engine and phone checks | 20 engine checks (15 human-transfer and five tool-registry); 17 Gateway checks (nine WebRTC, six outbound phone and two incoming harnesses) passed before the latest additions | Owning connections, post-briefing acceptance and actual incoming STT audio are exercised with simulated providers; these checks remain in the passing root suite. |
 | Preparation progress and diagnostics | Real WebRTC check observes STT blockers, cue and releasing before activation; telemetry/reporter checks pass | Progress contains only attempt ID, closed phase/blocker categories and elapsed time. The existing reporter aggregates returned worker durations without call identity or provider payloads. |

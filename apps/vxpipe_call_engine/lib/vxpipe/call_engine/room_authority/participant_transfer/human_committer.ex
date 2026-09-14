@@ -27,8 +27,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
              ready.candidate,
              pending.deadline_ms,
              enforcers
-           ),
-         true <- snapshot == ready.candidate.snapshot,
+           ) do
+      commit_participant(snapshot, pending, ready, state)
+    else
+      # Authority rejects a stale candidate before any enforcer can adopt it.
+      {:error, :stale_candidate} = stale -> stale
+      _failed -> {:error, :destination_commit_unavailable}
+    end
+  end
+
+  defp commit_participant(snapshot, pending, ready, state) do
+    with true <- snapshot == ready.candidate.snapshot,
          {:ok, _participant, state} <-
            ParticipantLifecycle.commit(ready.participant, state, {:prepared, ready.candidate}) do
       state =

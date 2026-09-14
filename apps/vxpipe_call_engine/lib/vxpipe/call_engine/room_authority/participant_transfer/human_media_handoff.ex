@@ -90,6 +90,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     end
   end
 
+  defp execute(:prepare, phase, %{request: request, ready: ready}) do
+    with {:ok, waits} <- play(ready.connections, ready.binding, ready.scope, request, :wait),
+         {:ok, collector} <- collect(ready.graph.resources, ready.binding, ready.scope),
+         {:ok, ready} <- prepare_release(Map.put(ready, :waits, waits), collector, phase, request) do
+      report_progress(phase, :releasing, [])
+      {:ok, Map.delete(ready, :waits)}
+    end
+  end
+
   defp execute(:prepare, phase, %{request: request, preparation: preparation}) do
     audience = phase.audience
     scope = audience.scope
@@ -234,9 +243,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
              prepared.graph.inventory,
              remaining(prepared.scope)
            ) do
-        :ok -> {:ok, prepared}
-        {:error, :stale_candidate} -> refresh_preparation(prepared, collector, phase, request)
-        error -> error
+        :ok ->
+          {:ok, prepared}
+
+        {:error, reason} when reason in [:stale_candidate, :room_changed] ->
+          refresh_preparation(prepared, collector, phase, request)
+
+        error ->
+          error
       end
     end
   end
