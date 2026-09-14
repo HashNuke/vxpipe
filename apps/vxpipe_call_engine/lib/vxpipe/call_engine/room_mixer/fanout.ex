@@ -106,7 +106,13 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
 
   defp sources(%{purpose: :participant} = entry, bucket, _recording_only, policy) do
     if MapSet.member?(policy.present_participant_ids, entry.recipient_id) do
-      {:ok, Router.sources(bucket, entry.recipient_id, entry.mode, policy.effective)}
+      frames = Router.sources(bucket, entry.recipient_id, entry.mode, policy.effective)
+      cutoffs = Map.get(entry, :source_cutoffs, %{})
+
+      {:ok,
+       Enum.reject(frames, fn frame ->
+         frame.sequence_number <= Map.get(cutoffs, TimestampBuffer.source_key(frame), -1)
+       end)}
     else
       :skip
     end

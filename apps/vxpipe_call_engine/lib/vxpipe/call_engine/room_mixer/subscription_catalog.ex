@@ -9,6 +9,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   defstruct @enforce_keys
 
   @type entry :: %{
+          optional(:source_cutoffs) => map(),
+          optional(:prepared_policy_token) => reference(),
           token: reference(),
           recipient_id: nil | String.t(),
           mode: MixedFrame.mode() | :individual_tracks | {:individual_tracks, [String.t()]},
@@ -37,21 +39,24 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
     do: {:error, :policy_unavailable}
 
   def add(%__MODULE__{} = catalog, options, identity, snapshot, mixer, source_sequences) do
+    with :ok <- unique_subscription(catalog, Keyword.get(options, :id)),
+         do: prepare(catalog, options, identity, snapshot, mixer, source_sequences)
+  end
+
+  def prepare(catalog, options, identity, snapshot, mixer, source_sequences) do
     with {:ok, id} <- nonempty(options, :id),
-         :ok <- unique_subscription(catalog, id),
          :ok <- subscription_identity(options, identity),
          {:ok, recipient_id} <- nonempty(options, :recipient_participant_id),
          :ok <- present_recipient(recipient_id, snapshot),
          {:ok, mode} <- subscription_mode(Keyword.get(options, :mode), snapshot),
          subscriber when is_pid(subscriber) <- Keyword.get(options, :subscriber),
-         :ok <- compatibility(catalog, recipient_id, mode, source_sequences) do
-      token = make_ref()
-      monitor = Process.monitor(subscriber)
-
+         :ok <- compatibility(catalog, recipient_id, mode, source_sequences),
+         {:ok, entry} <- prepare_entry(catalog, id, recipient_id, mode, subscriber) do
       handle = %Subscription{
         id: id,
         mixer: mixer,
-        token: token,
+        token: entry.token,
+        prepared_policy_token: Map.get(entry, :prepared_policy_token),
         tenant_id: identity.tenant_id,
         room_id: identity.room_id,
         incarnation_id: identity.incarnation_id,
@@ -60,26 +65,40 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
         purpose: :participant
       }
 
-      entry = %{
-        token: token,
-        recipient_id: recipient_id,
-        mode: mode,
-        purpose: :participant,
-        subscriber: subscriber,
-        monitor: monitor,
-        queue: :queue.new(),
-        notified?: false
-      }
-
       {:ok, handle,
        %{
          catalog
          | entries: Map.put(catalog.entries, id, entry),
-           monitors: Map.put(catalog.monitors, monitor, id)
+           monitors: Map.put(catalog.monitors, entry.monitor, id)
        }}
     else
       {:error, reason} -> {:error, reason}
       _invalid -> {:error, :invalid_subscription}
+    end
+  end
+
+  defp prepare_entry(catalog, id, recipient, mode, subscriber) do
+    case Map.fetch(catalog.entries, id) do
+      {:ok,
+       %{recipient_id: ^recipient, mode: ^mode, subscriber: ^subscriber, purpose: :participant} =
+           entry} ->
+        {:ok, entry}
+
+      {:ok, _conflict} ->
+        {:error, :conflicting_subscription}
+
+      :error ->
+        {:ok,
+         %{
+           token: make_ref(),
+           recipient_id: recipient,
+           mode: mode,
+           purpose: :participant,
+           subscriber: subscriber,
+           monitor: Process.monitor(subscriber),
+           queue: :queue.new(),
+           notified?: false
+         }}
     end
   end
 

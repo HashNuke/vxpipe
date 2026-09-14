@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Policy do
 
   alias Vxpipe.CallEngine.RoomMixer.{
     RecordingEgress,
+    PolicyPreparation,
     State,
     SubscriptionCatalog,
     TimestampBuffer
@@ -12,7 +13,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.Policy do
 
   @spec install(State.t(), Snapshot.t()) :: {:ok, State.t()} | {:error, term()}
   def install(%State{} = state, snapshot) do
-    with {:ok, snapshot} <- Snapshot.prepare(snapshot, state.policy) do
+    with {:ok, snapshot} <- Snapshot.prepare(snapshot, state.policy),
+         {:ok, state} <- PolicyPreparation.install(state, snapshot) do
       {buffer_dropped, buffer} =
         TimestampBuffer.retain(state.buffer, fn frame ->
           MapSet.member?(snapshot.present_participant_ids, frame.source_participant_id) and

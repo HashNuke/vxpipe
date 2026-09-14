@@ -880,3 +880,47 @@ unchecked; the milestone and index are still incomplete.
   1,199 tests with zero failures and 15 integrations excluded, and unused dependencies. The
   readiness contract and milestone record this output checkpoint without closing lifecycle gates.
   No application restart, browser inspection or provider call was performed for this backend change.
+
+## Prepare mixer policy and subscriptions
+
+- The previous goal turn completed and committed shared output preparation as `004f4ef`; this is
+  progress. The worktree is clean. The next missing dependency is a mixer acknowledgement of the
+  prospective policy and initialized destination subscription without admitting future media.
+- Keep current queues and subscription tokens in place. Reserve only missing subscriptions outside
+  active fanout, under the existing owner/attempt/deadline. Matching policy commit adopts them, while
+  discard/failure leaves live subscriptions untouched. A candidate is validated by its authority
+  outside the mixer callback; the callback must check the actual room authority and installed base.
+- Start with boundary checks for isolated preparation, exact descriptor adoption and retained live
+  delivery, using the actual policy authority and mixer rather than a fabricated policy snapshot.
+- The first two checks failed at the absent mixer preparation API, then passed with isolated staged
+  subscriptions and matching-policy adoption. Further red checks exposed delivery of pre-commit
+  buffered source audio to the joining subscriber and collision with ordinary registration of a
+  reserved ID. New subscriptions now receive per-source sequence cutoffs at adoption; existing
+  listeners retain their queues, and reserved IDs cannot be registered by another path.
+- The collector stops probing once ready and requires explicit refresh. Cancellation now notifies
+  the phase owner and new subscription owners. Failed preparation reports its known descriptor as
+  failed on refresh rather than leaving terminal failure classified as a transient unavailable query.
+  Source delivery remains available, and a failed candidate cannot be installed.
+- A red handle query showed that Gateway consumers need the same opaque subscription handle to
+  report readiness before and after commit. Handles now carry a private policy token when needed.
+  A later-attempt regression then exposed loss of that adopted handle during unchanged preparation.
+  Store the adopted policy binding on the affected subscription instead of tying every handle to
+  the newest room-level lease. Unchanged handles, configurations and generations now survive later
+  attempts; changed permissions update only their policy evidence.
+- Twenty-seven focused mixer checks pass, including ten new policy-preparation checks. They cover
+  the real authority, privacy application, source queue retention, discarded/expired/orphaned work,
+  subscriber loss, unchanged second-attempt handles, candidate refresh, foreign candidates and an
+  invalid subscription set. Root verification follows. No browser or live-provider acceptance yet.
+- Final membership review added a red case where one of two prospective listeners disappears.
+  Appending requested subscriptions kept the departed listener in the required set and rejected
+  refresh. An explicit subscription list now reconciles the complete desired set, cancelling only
+  removed new queues after the new set validates. Omission retains the prior selection. The joining
+  listener keeps its handle, generation and readiness evidence. All 28 focused checks pass.
+- All five final root gates pass: formatting, warnings-as-errors compilation, strict Credo,
+  1,210 tests with zero failures and 15 integrations excluded, and unused dependencies. Final
+  verification includes the listener-removal fix; earlier partial gate runs are not the final evidence.
+  Updated the readiness contract and milestone, leaving the common-readiness and lifecycle gates open.
+- Next dependency: Gateway room egress must prepare its prospective subscription/output pair,
+  validate the opaque prepared subscription handle, and adopt the ready output without querying
+  the mixer from a policy-enforcement callback. Transcript/recording candidate preparation, complete
+  graph selection, waits/cues, coordinated release, restoration and rendered/provider acceptance remain.

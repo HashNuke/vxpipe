@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     OpeningGate,
     Playout,
     Policy,
+    PolicyPreparation,
     RecordingEgress,
     State,
     Subscription,
@@ -98,6 +99,17 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   @impl Vxpipe.CallEngine.Readiness.Adapter
   def readiness(server), do: safe_call(server, :readiness)
 
+  def prepare_policy(server, candidate, options),
+    do: PolicyPreparation.request(server, candidate, options)
+
+  def discard_policy(server, token), do: safe_call(server, {:discard_policy, token})
+
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness_binding(%{instance: server, binding: {:prepared_policy, token}}),
+    do: safe_call(server, {:prepared_readiness, token})
+
+  def readiness_binding(%{instance: server}), do: readiness(server)
+
   @doc false
   def subscription_readiness(server, id, token) do
     safe_call(server, {:subscription_readiness, id, token})
@@ -130,10 +142,29 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   def handle_call(:readiness, _from, state) do
-    interval = Map.take(state.policy.intervals, [:audio_input, :audio_output, :recording])
-    resource = %{state.readiness_resource | policy_interval: interval}
+    resource = PolicyPreparation.resource(state, state.policy)
     {:reply, {:ok, resource, :ready}, state}
   end
+
+  def handle_call({:prepare_policy, candidate, options}, _from, state) do
+    case PolicyPreparation.begin(state, candidate, options) do
+      {:ok, prepared, state} -> {:reply, {:ok, prepared}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:discard_policy, token}, _from, state) do
+    case PolicyPreparation.discard(state, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:prepared_readiness, token}, _from, state),
+    do: {:reply, PolicyPreparation.readiness(state, token), state}
+
+  def handle_call({:subscription_readiness, {id, :prepared_policy, lease}, token}, _from, state),
+    do: {:reply, PolicyPreparation.subscription_readiness(state, lease, id, token), state}
 
   def handle_call({:subscription_readiness, id, token}, _from, state) do
     result = SubscriptionReadiness.fetch(state, id, token)
@@ -165,16 +196,20 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   def handle_call({:subscribe, options}, _from, state) do
-    case SubscriptionCatalog.add(
-           state.subscriptions,
-           options,
-           state.identity,
-           state.policy,
-           self(),
-           state.source_sequences
-         ) do
-      {:ok, handle, subscriptions} ->
-        {:reply, {:ok, handle}, %{state | subscriptions: subscriptions}}
+    with false <- PolicyPreparation.reserved?(state, Keyword.get(options, :id)),
+         {:ok, handle, subscriptions} <-
+           SubscriptionCatalog.add(
+             state.subscriptions,
+             options,
+             state.identity,
+             state.policy,
+             self(),
+             state.source_sequences
+           ) do
+      {:reply, {:ok, handle}, %{state | subscriptions: subscriptions}}
+    else
+      true ->
+        {:reply, {:error, :preparation_conflict}, state}
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
@@ -182,16 +217,20 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   def handle_call({:subscribe_recording, options}, _from, state) do
-    case SubscriptionCatalog.add_recording(
-           state.subscriptions,
-           options,
-           state.identity,
-           state.policy,
-           self(),
-           state.recording_token
-         ) do
-      {:ok, handle, subscriptions} ->
-        {:reply, {:ok, handle}, %{state | subscriptions: subscriptions}}
+    with false <- PolicyPreparation.reserved?(state, Keyword.get(options, :id)),
+         {:ok, handle, subscriptions} <-
+           SubscriptionCatalog.add_recording(
+             state.subscriptions,
+             options,
+             state.identity,
+             state.policy,
+             self(),
+             state.recording_token
+           ) do
+      {:reply, {:ok, handle}, %{state | subscriptions: subscriptions}}
+    else
+      true ->
+        {:reply, {:error, :preparation_conflict}, state}
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}
@@ -264,8 +303,14 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   def handle_info({:DOWN, monitor, :process, _subscriber, _reason}, state) do
     subscriptions = SubscriptionCatalog.remove_monitor(state.subscriptions, monitor)
-    {:noreply, %{state | subscriptions: subscriptions}}
+    state = PolicyPreparation.down(%{state | subscriptions: subscriptions}, monitor)
+    {:noreply, state}
   end
+
+  def handle_info({:mixer_policy_expired, token}, %{pending_policy: %{token: token}} = state),
+    do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info({:mixer_policy_expired, _stale}, state), do: {:noreply, state}
 
   def handle_info(
         {:vxpipe_recording_egress, handoff, %NormalizedFrame{} = frame},

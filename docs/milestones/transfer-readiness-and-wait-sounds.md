@@ -709,3 +709,20 @@ compilation, strict Credo, 1,199 tests with zero failures and 15 integrations ex
 dependencies. Mixer/room-egress candidate installation, full prepared graph selection and
 startup/transfer orchestration still need to use these bindings. No rendered or live-provider
 acceptance is claimed, and the common-readiness milestone and index remain unchecked.
+
+The mixer can now acknowledge an authoritative prospective policy and prepare the selected
+participant subscriptions under the phase's existing owner, attempt and deadline. New queues stay
+outside live audio delivery until policy commit. Existing queues and subscription generations remain
+intact, including adopted handles across later unchanged attempts. Commit excludes previously buffered
+source audio from a newly admitted queue while preserving it for existing listeners. Candidate refresh
+can remove one prospective listener's new queue without recreating other prepared subscriptions.
+
+Expiry, phase-owner loss and subscriber loss notify the owner, cancel only new queues and leave a
+failed preparation that cannot be committed. Collection refresh reports the failed evidence. Exact
+discard and stale cleanup preserve the installed source. Twenty-eight focused mixer checks cover
+these boundaries with the real policy authority, including changed privacy and foreign candidates.
+All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,210 tests with
+zero failures and 15 integrations excluded, and unused dependencies. Room-egress adoption of the
+prepared subscription/output pair, transcript/recording candidate preparation, complete graph selection
+and startup/transfer wait/cue/release orchestration remain unfinished, as does rendered/provider
+acceptance. The milestone and index remain open.

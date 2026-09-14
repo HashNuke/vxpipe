@@ -286,6 +286,46 @@ Design review rejected replacing during commit, accepting process startup alone 
 and treating a policy-denied route as transport failure. Output/mixer/recording candidate preparation,
 full connection-graph selection and startup/transfer coordination remain required.
 
+### Preparing mixer policy and subscriptions
+
+`RoomMixer.prepare_policy/3` accepts an authoritative candidate and the existing phase owner,
+attempt and absolute deadline. Its optional `subscriptions` list contains the ordinary participant
+subscription options, including exact room/recipient identity, subscriber and mode. An explicit list
+reconciles the complete desired set; omission during refresh retains the previously selected set.
+Removing a prospective listener cancels only its new queue, retaining other prepared handles. The mixer
+acknowledges the prospective audio/recording policy and initializes only missing bounded queues.
+It returns a preparation token, required descriptors and subscription handles. Existing matching
+subscriptions retain their queues, tokens and configuration; a conflicting subscription is rejected.
+The preparation set is bounded to 255 subscriptions plus the mixer resource.
+
+Candidate validation runs outside the mixer loop. The mixer also checks the registered authority
+for its incarnation and its exact installed base. Pending queues remain outside active fanout, and
+their handles cannot take audio until matching policy installation adopts them. Preparation changes
+neither current privacy nor current source delivery. Adoption uses the ordinary policy enforcement
+path, retaining the mixer, current queues and initialized subscription instances. New subscriptions
+exclude source frames accepted before commit, even when those frames remain buffered for existing
+listeners. This fence preserves existing listeners' queued audio without replaying it to a joiner.
+
+Prepared descriptors and handles remain queryable after adoption. An unchanged subscription keeps
+its adopted handle and readiness evidence through later attempts; only an affected subscription's
+policy binding changes. Unrelated membership invalidates the old candidate evidence but permits
+refresh with the same owner, attempt and deadline, retaining allocated queues and generations.
+Preparation cannot extend its deadline or replace a subscription ID through ordinary registration.
+
+Discard removes only pending queues. Expiry, owner loss or required subscriber loss fail the pending
+policy, notify its owner and cancel only new subscribers with exact subscription tokens. The known
+failed descriptors report `failed` on collection refresh, and matching policy installation rejects
+the failed preparation. The terminal preparation must be discarded before starting another attempt.
+Adoption releases phase ownership; later phase shutdown cannot stop adopted subscriptions.
+
+Design review rejected installing the candidate early, copying live queues into a replacement
+mixer, and resetting all listener subscriptions. It also rejected using one room-wide preparation
+token as the lifetime of every adopted handle: that invalidates unchanged routes on a later transfer.
+Twenty-eight focused checks cover the real mixer and policy authority, pre-commit isolation, buffered
+audio, policy denial, queue/handle retention, candidate refresh, foreign candidates, cancellation and
+stale cleanup. Room-egress preparation still needs to consume these handles, and full room recording,
+transcript routing, prepared graph selection and startup/transfer orchestration remain separate work.
+
 ## Collection and deadlines
 
 `RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required
