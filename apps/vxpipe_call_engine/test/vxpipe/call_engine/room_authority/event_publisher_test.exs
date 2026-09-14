@@ -125,6 +125,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EventPublisherTest do
       effective: effective
     }
 
-    Enforcer.apply(router, snapshot, 100)
+    Enforcer.apply(router, snapshot, 1_000)
   end
 end
