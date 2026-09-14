@@ -36,6 +36,18 @@ TTS readiness. They verify waiting audio and held text at both stages, cue-befor
 and spoken recovery through the retained source when model preparation fails. The Morse case
 uses the real local speech providers; precise readiness failures use controlled providers.
 
+For policy revisions after handoff adoption but before media release:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'after_.*adoption.*preparation'
+```
+
+Three native cases remove speech demand, make an unrelated revision, or change the permissions
+of a still-required recognizer. Unaffected media actors remain installed; only the affected STT
+transport is replaced, and its readiness gates completion. Both peers exchange audio after the
+handoff. Exact fresh-cue drain and unchanged deadline checks also run in the owning engine suite.
+
 For initial caller waiting during independent model and voice startup delays:
 
 ```shell

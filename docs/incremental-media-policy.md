@@ -71,3 +71,16 @@ monitors and deadlines still bound cancellation and cleanup.
 The focused initial-preparation regressions verify retained transport, worker, audience wait scope,
 room resources and deadline, plus successful cue/activation for both relevant and unrelated policy
 changes. See the [implementation labnote](../labnotes/20260914-2155-handoff-preparation-policy.md).
+
+
+After participant/policy adoption, media remains held until the release worker revalidates the
+current resource graph. A policy revision before any gate opens now restarts waiting, reconciles
+against the already authoritative policy and drains a fresh cue before release. It uses the live
+preparation path without repeating participant promotion or candidate installation. Unrelated
+revisions retain installed providers and room/media actors; changed transcript permissions replace
+only the affected STT transport and await its readiness. The same attempt and deadline apply.
+Failures once connection release begins still close the room because admission may be partial.
+
+Three focused engine cases and three native WebRTC cases cover removed speech demand, unrelated
+policy and changed but still-required speech. The native peers resume bidirectional audio while
+retaining their media actors. See the [release-policy labnote](../labnotes/20260915-0137-handoff-release-policy.md).

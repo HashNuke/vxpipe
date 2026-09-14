@@ -921,18 +921,30 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  for preparation <- [:none, :before_policy_change, :during_readiness, :during_unrelated_change] do
-    test "human handoff reconciles speech demand with #{preparation} preparation" do
+  for preparation <- [
+        :none,
+        :before_policy_change,
+        :during_readiness,
+        :during_unrelated_change,
+        :after_adoption,
+        :after_unrelated_adoption,
+        :after_speech_adoption
+      ] do
+    @tag preparation: preparation
+    test "human handoff reconciles speech demand with #{preparation} preparation", %{
+      preparation: preparation
+    } do
       restriction = %{transcript_routes: %{}, save_transcripts: false}
 
       plan =
         compile_plan(
-          support_policy: if(unquote(preparation) == :none, do: restriction, else: %{}),
+          support_policy: if(preparation == :none, do: restriction, else: %{}),
           observer_policy:
-            if(unquote(preparation) == :during_unrelated_change,
-              do: %{},
-              else: restriction
-            )
+            case preparation do
+              mode when mode in [:during_unrelated_change, :after_unrelated_adoption] -> %{}
+              :after_speech_adoption -> %{save_transcripts: false}
+              _restricted -> restriction
+            end
         )
 
       caller = Map.fetch!(plan.participants, "caller")
@@ -952,7 +964,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         |> then(&connect(&1.session_id, "chat"))
 
       policy_change =
-        if unquote(preparation) != :none do
+        if preparation != :none do
           observer = Map.fetch!(plan.participants, "observer")
 
           assert {:ok, join} =
@@ -1006,7 +1018,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         await_sideband(support_client, "transfer.preparation", 2_000)
 
       prior_media =
-        if unquote(preparation) == :before_policy_change do
+        if preparation == :before_policy_change do
           before = capture_private_media(plan, support_client, attempt)
           {policy_authority, observer} = policy_change
 
@@ -1037,7 +1049,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert :ok = send_acceptance(support_client, "accept-without-transcription", attempt)
 
       prior_media =
-        if unquote(preparation) in [:during_readiness, :during_unrelated_change] do
+        if preparation in [
+             :during_readiness,
+             :during_unrelated_change,
+             :after_adoption,
+             :after_unrelated_adoption,
+             :after_speech_adoption
+           ] do
           assert_receive {:test_stt_transport_started, transport, _}, 2_000
 
           assert %{"data" => %{"phase" => "preparing", "blockers" => blockers}} =
@@ -1048,10 +1066,46 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           before = capture_private_media(plan, support_client, attempt)
           {policy_authority, observer} = policy_change
 
-          assert {:ok, _policy} =
-                   CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+          if preparation in [:after_adoption, :after_unrelated_adoption, :after_speech_adoption] do
+            {media, _monitors, _connections} = before
+            token = pause_native_adoption(media.instance)
 
-          if unquote(preparation) == :during_unrelated_change do
+            TestSpeechToTextTransport.deliver(
+              transport,
+              ~s({"type":"Connected","request_id":"ready-before-adoption","sequence_id":0})
+            )
+
+            assert_receive {:native_adoption_waiting, ^token}, 2_000
+
+            try do
+              assert {:ok, _policy} =
+                       CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+            after
+              send(media.instance, {:continue_native_adoption, token})
+            end
+
+            if preparation == :after_speech_adoption do
+              assert_receive {:test_stt_transport_started, replacement, _}, 1_000
+              assert replacement != transport
+
+              assert :ok =
+                       await_destination_blocker(
+                         support_client,
+                         "speech_to_text",
+                         System.monotonic_time(:millisecond) + 2_000
+                       )
+
+              TestSpeechToTextTransport.deliver(
+                replacement,
+                ~s({"type":"Connected","request_id":"changed-native-speech","sequence_id":0})
+              )
+            end
+          else
+            assert {:ok, _policy} =
+                     CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+          end
+
+          if preparation == :during_unrelated_change do
             TestSpeechToTextTransport.deliver(
               transport,
               ~s({"type":"Connected","request_id":"retained-after-policy-change","sequence_id":0})
@@ -1072,8 +1126,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
       assert media.attachment.admission == :main
 
-      if unquote(preparation) != :during_unrelated_change,
-        do: assert(media.attachment.media_ingress == nil)
+      if preparation not in [
+           :during_unrelated_change,
+           :after_adoption,
+           :after_unrelated_adoption,
+           :after_speech_adoption
+         ],
+         do: assert(media.attachment.media_ingress == nil)
 
       assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
       refute_receive {:test_stt_transport_started, _transport, _}, 100
@@ -1086,7 +1145,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         assert media.room_output == before.room_output
 
         for {actor, monitor} <- monitors do
-          if unquote(preparation) == :during_unrelated_change do
+          if preparation in [
+               :during_unrelated_change,
+               :after_adoption,
+               :after_unrelated_adoption,
+               :after_speech_adoption
+             ] do
             assert media.attachment.media_ingress == before.attachment.media_ingress
             refute_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 100
           else
@@ -2136,6 +2200,45 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert {:ok, retry} = Preparation.run_candidate(room_authority, retained, options)
     assert :ok = Preparation.discard(retry)
+  end
+
+  defp await_destination_blocker(connection, kind, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    %{"data" => %{"blockers" => blockers}} =
+      await_sideband(connection, "transfer.progress", remaining, "preparing")
+
+    if kind in blockers,
+      do: :ok,
+      else: await_destination_blocker(connection, kind, deadline)
+  end
+
+  defp pause_native_adoption(connection) do
+    token = make_ref()
+    owner = self()
+
+    assert :ok =
+             :sys.install(
+               connection,
+               {token,
+                fn state, event, _process ->
+                  case event do
+                    {:in, {:"$gen_call", _from, {:vxpipe_handoff_gate, :adopt, _scope}}} ->
+                      send(owner, {:native_adoption_waiting, token})
+
+                      receive do
+                        {:continue_native_adoption, ^token} -> :done
+                      after
+                        1_000 -> :done
+                      end
+
+                    _other ->
+                      state
+                  end
+                end, nil}
+             )
+
+    token
   end
 
   defp capture_private_media(plan, client, attempt) do

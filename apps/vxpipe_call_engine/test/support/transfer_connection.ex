@@ -105,6 +105,8 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
        observer: Keyword.fetch!(options, :observer),
        defer_readiness?: false,
        pending_readiness: nil,
+       defer_adoption?: false,
+       pending_adoption: nil,
        private_policy: nil,
        binding: %{
          identity: identity,
@@ -201,7 +203,15 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
     end
   end
 
-  def handle_call(:adopt, _from, state) do
+  def handle_call(:defer_adoption, _from, state),
+    do: {:reply, :ok, %{state | defer_adoption?: true}}
+
+  def handle_call(:complete_adoption, _from, state) do
+    GenServer.reply(state.pending_adoption, :ok)
+    {:reply, :ok, %{state | defer_adoption?: false, pending_adoption: nil}}
+  end
+
+  def handle_call(:adopt, from, state) do
     attachment = %{
       state.binding.attachment
       | admission: :main,
@@ -210,7 +220,14 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
         room_audio_output_mode: :mix_minus
     }
 
-    {:reply, :ok, put_in(state.binding.attachment, attachment)}
+    state = put_in(state.binding.attachment, attachment)
+
+    if state.defer_adoption? do
+      send(state.observer, {:test_transfer_adoption_waiting, self()})
+      {:noreply, %{state | pending_adoption: from}}
+    else
+      {:reply, :ok, state}
+    end
   end
 
   @impl true

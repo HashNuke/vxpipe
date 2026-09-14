@@ -7,7 +7,7 @@ Human and AI handoffs now pass normal transfer and bounded recovery checks; huma
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,362 tests, zero failures and 15 integration exclusions (seed 307676; concurrency four).
+1,368 tests, zero failures and 15 integration exclusions (seed 235296; concurrency four).
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -373,8 +373,11 @@ Implementation tasks:
   stale-candidate rejection at the coordinator's final commit check also retry under the same phase
   and deadline. Stale initial graphs now retain partial preparation leases while recapturing the
   candidate: removal of demand stops only the speech pair, and an unrelated revision retains the
-  same prepared STT transport, room services, worker and audience wait scope. Changes after policy
-  application, other changed still-required resources and the complete changing audience remain open.
+  same prepared STT transport, room services, worker and audience wait scope. Policy revisions after
+  adoption now reconcile against the installed policy before any release and drain a fresh cue.
+  Engine and native cases cover removed speech demand, unrelated policy and changed still-required
+  STT, retaining unaffected room/media actors and the original deadline. Other capability kinds
+  and the complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -936,6 +939,19 @@ records the failing regression, unsuccessful retry-after-cleanup approach, retai
 verification. The ownership contract is documented under
 [prospective room preparation](../readiness-resource-contract.md#preparing-the-prospective-room).
 
+### Policy changes after adoption
+
+The release worker now checks current policy and room bindings while every conversational gate
+is still closed. A stale result resumes waiting and reconciles the installed resource set under the
+same phase/deadline, then drains another cue before release. It reuses live preparation and does
+not repeat participant promotion or policy installation. Three engine and three native WebRTC
+cases cover removed STT demand, unrelated policy and changed still-required STT, including the
+replacement provider acknowledgement and continued bidirectional audio. Unaffected room and media
+actors survive. The final release probe explicitly refreshes its collector so it cannot wait for
+an already-consumed ready notification. Failures after gate release starts retain the existing
+fail-closed behavior. Full changing-listener and failure-stage acceptance remain open.
+See the [release-policy labnote](../../labnotes/20260915-0137-handoff-release-policy.md).
+
 ### Initial caller startup integration
 
 - Static plan, selected-provider configuration and pinned MCP validation still precede room
@@ -983,6 +999,7 @@ verification. The ownership contract is documented under
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Policy changes after adoption | Three engine cases, three native policy cases and all 37 native startup/transfer cases pass. Final five root gates pass: 1,368 tests, zero failures, 15 exclusions; seed 235296 at concurrency four. | Reconcile removed or changed STT demand before release, retain unrelated room/media actors, wait for affected replacement readiness and drain another cue under the original deadline. An earlier root run's destination-loss recovery failure was not reproduced in 16 isolated runs, the full native file or the final root run; its cause and complete recovery acceptance remain open. |
 | Initial caller-waiting acceptance | 50 focused engine tests, ten native configuration/audio cases and 18 phone harness checks pass. All five root gates pass: 1,362 tests, zero failures, 15 exclusions; seed 307676 at concurrency four. Gateway includes 366 tests and 34 native startup/transfer cases. | Initial participant/room readiness, default/URL/nil behavior, opening/wait/greeting order, held-input/recording isolation and exactly-once greeting pass. Late readiness starts a skipped wait. Phone failure/expiry before or after media attachment ends the exact leg; live carrier audibility remains in phone-transfer acceptance. |
 | Initial startup diagnostics | 48 focused engine lifecycle/opening/telemetry tests, nine reporter tests, 23 coordinator tests and the new native STT/TTS case pass; all five root gates, 1,337 tests, zero failures, 15 exclusions; seed 346041 at concurrency four. The root run includes 343 Gateway tests and 27 native startup/transfer cases. | Model, STT, TTS, opening, missing media and late release readiness report closed blocker categories. Existing lifecycle transitions report one total duration/outcome; the existing reporter sanitizes before queue admission. Full configuration/resource and deterministic phone acceptance remain open. See the [diagnostics labnote](../../labnotes/20260915-0022-startup-readiness-diagnostics.md). |
 | Initial release freshness | 35 focused engine lifecycle/opening tests and 29 native WebRTC/RTVI checks pass; all five root gates, 1,326 tests, zero failures, 15 exclusions; seed 333264 at concurrency four | Readiness loss, changed generation and revised policy during an opening cannot prematurely admit conversation. The same wait cursor resumes, healthy instances remain installed and release occurs once. Full setup diagnostics and configuration/phone acceptance remain open. |

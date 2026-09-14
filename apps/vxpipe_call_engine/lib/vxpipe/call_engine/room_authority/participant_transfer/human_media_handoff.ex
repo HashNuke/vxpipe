@@ -121,8 +121,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
                else: :ok
            end),
          {:ok, collector} <- collect(ready.graph.resources, ready.binding, ready.scope),
-         :ok <- await_ready(collector, ready.scope),
-         true <- Authority.snapshot(ready.binding.policy_authority) == ready.candidate.snapshot,
+         {:ok, ready} <- validate_adopted_release(ready, collector, phase),
          :ok <-
            each(ready.connections, fn {id, binding} ->
              demand = Map.fetch!(ready.graph.inventory.inventory.connections, id).demand
@@ -134,6 +133,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     else
       false -> {:error, :handoff_changed}
       error -> error
+    end
+  end
+
+  # Policy is already authoritative here, but no conversational gate has opened.
+  # Retry only this closed side of release; a failure after any release stays fatal.
+  defp validate_adopted_release(ready, collector, phase) do
+    result =
+      with policy <- Authority.snapshot(ready.binding.policy_authority),
+           true <- policy == ready.candidate.snapshot,
+           {:ok, candidate} <-
+             Authority.preview_presence(
+               ready.binding.policy_authority,
+               policy.present_participant_ids
+             ),
+           {:ok, inventory} <-
+             RoomInventory.capture(phase.authority, candidate, remaining(ready.scope)),
+           :ok <- Collector.refresh(collector),
+           :ok <- await_ready(collector, ready.scope, [], nil, {phase.authority, inventory}),
+           :ok <- validate_inventory({phase.authority, inventory}, ready.scope) do
+        {:ok, ready}
+      else
+        false -> {:error, :stale_candidate}
+        error -> error
+      end
+
+    case result do
+      {:error, reason} when reason in [:stale_candidate, :room_changed] ->
+        request = phase.audience_request
+
+        with {:ok, waits} <- play(ready.connections, ready.binding, ready.scope, request, :wait),
+             prepared = ready |> Map.put(:adopted?, true) |> Map.put(:waits, waits),
+             {:ok, ready} <- prepare_release(prepared, collector, phase, request) do
+          validate_adopted_release(Map.delete(ready, :waits), collector, phase)
+        end
+
+      other ->
+        other
     end
   end
 
@@ -262,6 +298,40 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       do: PreparedConnection.discard_preparations(retained)
 
     result
+  end
+
+  defp prepare_current_graph(%{adopted?: true} = prepared, phase, request, _retained) do
+    scope = prepared.scope
+
+    with {:ok, binding} <- RoomAuthority.readiness_binding(phase.authority, remaining(scope)),
+         policy = Authority.snapshot(binding.policy_authority, remaining(scope)),
+         true <-
+           MapSet.member?(policy.present_participant_ids, request.destination_participant_id),
+         false <- MapSet.member?(policy.present_participant_ids, request.source_participant_id),
+         {:ok, candidate} <-
+           Authority.preview_presence(
+             binding.policy_authority,
+             policy.present_participant_ids,
+             remaining(scope)
+           ),
+         {:ok, connections} <- capture_connections(binding, policy.present_participant_ids),
+         added = Map.drop(connections, Map.keys(prepared.connections)),
+         :ok <- hold(added, scope),
+         {:ok, waits} <- play(added, binding, scope, request, :wait),
+         {:ok, graph} <- Preparation.run(phase.authority, candidate, remaining(scope)) do
+      {:ok,
+       %{
+         prepared
+         | binding: binding,
+           candidate: candidate,
+           connections: connections,
+           waits: prepared.waits ++ waits,
+           graph: graph
+       }}
+    else
+      changed when is_boolean(changed) -> {:error, :handoff_changed}
+      error -> error
+    end
   end
 
   defp prepare_current_graph(prepared, phase, request, retained) do
