@@ -11,6 +11,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   @type entry :: %{
           optional(:source_cutoffs) => map(),
           optional(:prepared_policy_token) => reference(),
+          optional(:output_generation) => non_neg_integer(),
+          optional(:output_held?) => boolean(),
           token: reference(),
           recipient_id: nil | String.t(),
           mode: MixedFrame.mode() | :individual_tracks | {:individual_tracks, [String.t()]},
@@ -186,6 +188,51 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
       entry = %{entry | queue: :queue.in(frame, entry.queue)}
       entry = notify_if_pending(entry, mixer, id)
       {:ok, %{catalog | entries: Map.put(catalog.entries, id, entry)}}
+    end
+  end
+
+  def gate(catalog, id, token, action, generation, source_sequences)
+      when is_integer(generation) and generation > 0 do
+    with {:ok, %{token: ^token, purpose: :participant} = entry} <- Map.fetch(catalog.entries, id),
+         {:ok, entry} <- gate_entry(entry, action, generation, source_sequences) do
+      {:ok, %{catalog | entries: Map.put(catalog.entries, id, entry)}}
+    else
+      {:error, reason} -> {{:error, reason}, catalog}
+      _invalid -> {{:error, :unknown_subscription}, catalog}
+    end
+  end
+
+  def gate(catalog, _id, _token, _action, _generation, _sequences),
+    do: {{:error, :stale_output_generation}, catalog}
+
+  defp gate_entry(entry, :hold, generation, _sequences) do
+    current = Map.get(entry, :output_generation, 0)
+
+    cond do
+      generation == current and Map.get(entry, :output_held?, false) ->
+        {:ok, entry}
+
+      generation > current ->
+        {:ok,
+         Map.merge(entry, %{
+           output_generation: generation,
+           output_held?: true,
+           queue: :queue.new(),
+           notified?: false
+         })}
+
+      true ->
+        {:error, :stale_output_generation}
+    end
+  end
+
+  defp gate_entry(entry, :release, generation, source_sequences) do
+    if generation == Map.get(entry, :output_generation, 0) do
+      if Map.get(entry, :output_held?, false),
+        do: {:ok, Map.merge(entry, %{output_held?: false, source_cutoffs: source_sequences})},
+        else: {:ok, entry}
+    else
+      {:error, :stale_output_generation}
     end
   end
 

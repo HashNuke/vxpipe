@@ -726,3 +726,13 @@ zero failures and 15 integrations excluded, and unused dependencies. Room-egress
 prepared subscription/output pair, transcript/recording candidate preparation, complete graph selection
 and startup/transfer wait/cue/release orchestration remain unfinished, as does rendered/provider
 acceptance. The milestone and index remain open.
+
+Existing room output now supports coordinated mixer/native hold and release without replacing its
+subscription, pipeline or codec. Held subscriptions discard queued/buffered speech; released frames
+carry the current generation. Native clear acknowledges discarded room frames so their producer
+cannot remain stuck. Gateway refuses release during private playback and reports terminal connection
+failure if its mixer/binding is lost after native release begins. Real mixer/shared-output checks
+verify private-before-room ordering and retained RTP/readiness identity. All five root gates pass,
+including 1,214 tests with zero failures and 15 integrations excluded; focused lanes pass 29 engine
+and 31 Gateway checks. Lifecycle use, direct speech generation, microphone/model gates, prepared
+egress adoption and the remaining readiness/acceptance requirements are still outstanding.

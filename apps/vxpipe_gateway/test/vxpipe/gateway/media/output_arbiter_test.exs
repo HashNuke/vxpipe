@@ -295,6 +295,72 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     send(native, room_tick)
   end
 
+  test "room egress holds its real mixer and releases fresh audio after private playback" do
+    alias Vxpipe.CallEngine.Media.NormalizedFrame
+    alias Vxpipe.CallEngine.RoomMixer
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    {output, native} = start_output()
+    {room, mixer} = start_mixed_room_output(output)
+    assert :ok = RoomAudioEgress.await_ready(room)
+    assert {:ok, resources} = RoomAudioEgress.readiness_resources(room)
+    assert {:ok, codec, :ready} = AudioEgress.readiness(native)
+    assert :ok = RoomAudioEgress.hold(room, 1)
+
+    frame = %NormalizedFrame{
+      tenant_id: "tenant",
+      room_id: "room",
+      incarnation_id: "incarnation",
+      source_participant_id: "agent",
+      connection_id: "source",
+      track_id: "track",
+      timestamp: 0,
+      sequence_number: 1,
+      policy_revision: 0,
+      sample_rate: 48_000,
+      channels: 1,
+      payload: :binary.copy(<<2, 0>>, 960)
+    }
+
+    assert :ok = RoomMixer.push(mixer, frame)
+    assert {:ok, %{delivered: 0}} = RoomMixer.flush_through(mixer, 0)
+    assert {:ok, ^resources} = RoomAudioEgress.readiness_resources(room)
+    assert :ok = OutputSink.push(output, %{direct("cue") | output_generation: 1})
+    assert :ok = OutputSink.finish(output, "cue", self())
+    assert_receive {:rtp, %{sequence_number: 0, timestamp: 0, ssrc: ssrc}}
+    assert_receive {:pace, ^native, tick}
+    assert {:error, :output_not_drained} = RoomAudioEgress.release(room, 1)
+    send(native, tick)
+    assert_receive {:vxpipe_audio_playback, ^output, "cue", {:completed, 20}}
+    assert :ok = OutputSink.drain(output)
+    assert :ok = RoomAudioEgress.release(room, 1)
+    assert :ok = RoomMixer.push(mixer, %{frame | timestamp: 960, sequence_number: 2})
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 960)
+    assert_receive {:rtp, %{sequence_number: 1, timestamp: 960, ssrc: ^ssrc}}
+    assert_receive {:pace, ^native, room_tick}
+    send(native, room_tick)
+    assert {:ok, ^resources} = RoomAudioEgress.readiness_resources(room)
+    assert {:ok, ^codec, :ready} = AudioEgress.readiness(native)
+  end
+
+  test "room output failure during release ends the connection boundary" do
+    alias Vxpipe.CallEngine.RoomMixer
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    {output, _native} = start_output()
+    {room, _mixer} = start_mixed_room_output(output)
+    assert :ok = RoomAudioEgress.await_ready(room)
+    assert :ok = RoomAudioEgress.hold(room, 1)
+    monitor = Process.monitor(room)
+    stop_supervised!({RoomMixer, "incarnation"})
+    assert {:error, :output_release_uncertain} = RoomAudioEgress.release(room, 1)
+
+    assert_receive {:vxpipe_connection_unavailable,
+                    {:room_audio_output, :output_release_uncertain}}
+
+    assert_receive {:DOWN, ^monitor, :process, ^room, :room_audio_output_unavailable}
+  end
+
   test "private playback follows the current room frame on one encoder and RTP clock" do
     {output, native} = start_output()
     assert {:ok, binding} = OutputArbiter.bind_room(output, identity())
@@ -366,6 +432,31 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert :ok = OutputArbiter.push_room(output, binding, mixed(960))
     assert_receive {:rtp, %{sequence_number: 1, timestamp: 960}}
     refute_receive {:vxpipe_room_output, ^output, ^old_binding, _}
+  end
+
+  test "holding a playing shared room frame acknowledges the discarded frame" do
+    {output, native} = start_output()
+
+    start_supervised!(
+      {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+    )
+
+    pipeline = start_shared_pipeline(output, "held-room")
+    assert_receive {:vxpipe_room_audio_output_ready, "held-room"}
+    assert {:ok, resource, :ready} = SharedOutputPipeline.readiness(pipeline)
+    assert :ok = SharedOutputPipeline.push("held-room", mixed(0))
+    assert_receive {:rtp, _packet}
+    assert_receive {:pace, ^native, tick}
+    request = :gen_server.send_request(output, {:vxpipe_audio_output_hold, 1})
+    _ = :sys.get_state(output)
+    assert :timeout = :gen_server.wait_response(request, 0)
+    send(native, tick)
+    assert {:reply, :ok} = :gen_server.wait_response(request, 1_000)
+    assert_receive {:vxpipe_room_audio_output_sent, "held-room", 0}
+    assert {:ok, ^resource, :ready} = SharedOutputPipeline.readiness(pipeline)
+    assert :ok = OutputSink.release(output, 1)
+    assert :ok = SharedOutputPipeline.push("held-room", %{mixed(960) | output_generation: 1})
+    assert_receive {:rtp, %{sequence_number: 1, timestamp: 960}}
   end
 
   test "room binding during clear waits for the drain instead of failing the connection" do
@@ -493,6 +584,70 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
       generation: 1,
       deadline_ms: System.monotonic_time(:millisecond) + 5_000
     ]
+  end
+
+  defp start_mixed_room_output(output) do
+    alias Vxpipe.CallEngine.{ConnectionAttachment, RoomAudioHandle, RoomMixer}
+    alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+    alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
+
+    start_supervised!({ConnectionPeerSupervisor, connection_id: "connection"})
+
+    mixer =
+      start_supervised!(
+        {RoomMixer,
+         Map.to_list(identity()) ++
+           [
+             sample_rate: 48_000,
+             channels: 1,
+             frame_samples: 960,
+             maximum_buffered_timestamps: 4,
+             maximum_sink_frames: 4,
+             register: false
+           ]}
+      )
+
+    snapshot = %Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new(["caller", "agent"]),
+      effective: %Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: :unrestricted,
+        record_audio: true,
+        save_transcripts: true
+      }
+    }
+
+    assert :ok = Enforcer.apply(mixer, snapshot, 1_000)
+
+    attachment = %ConnectionAttachment{
+      room_monitor: Process.monitor(mixer),
+      media_ingress: nil,
+      room_audio_output_mode: :mix_minus,
+      room_audio: %RoomAudioHandle{
+        mixer: mixer,
+        media_policy_authority: self(),
+        configuration: %{}
+      }
+    }
+
+    room =
+      start_supervised!(
+        {RoomAudioEgress,
+         Map.to_list(identity()) ++
+           [
+             connection_id: "connection",
+             attachment: attachment,
+             owner: self(),
+             pipeline: SharedOutputPipeline,
+             pipeline_options: [output_sink: output]
+           ]}
+      )
+
+    assert :ok = RoomAudioEgress.activate(room)
+    assert :ok = Enforcer.apply(room, snapshot, 1_000)
+    {room, mixer}
   end
 
   defp start_shared_pipeline(output, id, options \\ []) do

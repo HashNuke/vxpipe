@@ -104,6 +104,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
       else: :skip
   end
 
+  defp sources(%{purpose: :participant, output_held?: true}, _bucket, _recording_only, _policy),
+    do: :skip
+
   defp sources(%{purpose: :participant} = entry, bucket, _recording_only, policy) do
     if MapSet.member?(policy.present_participant_ids, entry.recipient_id) do
       frames = Router.sources(bucket, entry.recipient_id, entry.mode, policy.effective)
@@ -166,6 +169,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
       mode: mode,
       source_participant_ids: frames |> Enum.map(& &1.source_participant_id) |> Enum.uniq(),
       timestamp: delivery.timestamp,
+      output_generation: Map.get(delivery.entry, :output_generation, 0),
       policy_revision: SubscriptionCatalog.interval(delivery.entry, delivery.policy),
       sample_rate: delivery.format.sample_rate,
       channels: delivery.format.channels,

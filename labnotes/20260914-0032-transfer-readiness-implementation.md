@@ -1,5 +1,9 @@
 # Transfer readiness implementation
 
+Implementation resumed following the goal continuation after the pause audit. See the latest
+[room output hold/release checkpoint](#resumed-room-output-hold-and-release); the pause audit below
+records the earlier state and is retained for accountability.
+
 ## Status and detour audit at the user-requested pause
 
 On 2026-09-14 the user asked why implementation was still running after approximately eight
@@ -1072,3 +1076,42 @@ unchecked; the milestone and index are still incomplete.
   local log filenames are `vxpipe-mixer-output-gate-red.log` and `vxpipe-room-output-clear-red.log`.
   No runtime changes for these two findings were made before the user-requested pause. The tests
   remain uncommitted; no green or end-to-end acceptance is claimed.
+
+## Resumed room output hold and release
+
+- The preceding documentation turn made progress by committing the detour audit as `a6527f9`.
+  The subsequent goal continuation requested implementation again. Rechecked the worktree: only
+  the two documented red tests remained modified, with no live test job. Continued from those
+  checks without broadening their scope into another readiness-adapter survey.
+- Mixer subscription holds now clear only that listener's queue and suppress held delivery. Release
+  captures source cutoffs so buffered held audio cannot replay, and fresh frames carry the released
+  generation. Duplicate transitions retain state; stale generations cannot change it. Subscription
+  tokens/readiness, other listeners, policy and recording lifetimes remain unchanged.
+- Native clear now sends a distinct discarded-room-frame notification only after its successful
+  drain. Shared output translates that into producer flow control, releasing an otherwise stuck
+  egress frame. It never claims that the discarded frame played or that a private cue completed.
+  The original focused files passed with 29 engine checks and 20 Gateway checks.
+- Added the missing combined Gateway operation: hold the real mixer subscription before native
+  output; release native output only after private playback drains, then release the subscription.
+  Capture/revalidate the exact route and relevant policy binding outside the egress callback.
+  A failure after native release reports uncertain release and notifies the connection owner to end
+  its room-output boundary. The coordinator still owns cancellation/deadlines and all-listener release.
+- Two Gateway integration checks first failed at the absent `RoomAudioEgress.hold/2` boundary
+  (22 tests, two failures). The completed implementation passes 31 Gateway checks plus 29 engine
+  checks. The actual mixer, shared pipeline and native WebRTC output prove private audio precedes
+  fresh room audio on the same RTP clock/SSRC and retain their exact readiness descriptors. A lost
+  mixer during release proves terminal connection-owner notification. Full root gates follow.
+- Remaining lifecycle wiring must supply the current generation to direct conversational TTS and
+  opening/briefing output as well as wait players, and gate microphone/model admission. Those frame
+  producers still default to generation zero unless explicitly supplied; this checkpoint only
+  integrates the room-mixer output path. Prepared egress adoption, complete readiness, startup,
+  transfer orchestration, restoration and rendered/provider acceptance remain unfinished.
+- The focused combined fixture needed no production dependency or timeout workaround. Recorded
+  the gate ordering, rejected alternatives and acceptance limits in the readiness resource contract.
+- Final root verification passes all five required gates: formatting, warnings-as-errors compilation,
+  strict Credo, 1,214 tests with zero failures and 15 integrations excluded, and unused dependencies.
+  The root command completed with exit zero; retained local logs use the prefix
+  `vxpipe-output-gate-root-`. No browser, live provider or development-server restart was performed.
+  The milestone records the room-output boundary while leaving all remaining lifecycle acceptance
+  gates open. Pending prepared subscriptions still need their held generation carried through
+  egress adoption before this can be used for the incoming transfer destination.

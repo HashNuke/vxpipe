@@ -412,6 +412,15 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   defp response(:room_finish, {:error, :interrupted}, state), do: {:noreply, state}
   defp response(:room_finish, _, state), do: unavailable(state)
 
+  defp response({:cleared_room, current, action}, {:ok, _played} = reply, state) do
+    send(
+      current.binding.caller,
+      {:vxpipe_room_output_discarded, self(), current.binding.token, current.timestamp}
+    )
+
+    response(action, reply, state)
+  end
+
   defp response(action, {:ok, played}, state) do
     case action do
       {:clear, from} -> GenServer.reply(from, {:ok, played})
@@ -534,6 +543,12 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     do: send(current.callback, {:vxpipe_audio_playback, self(), current.turn, event})
 
   defp clear(state, action, discard_pending? \\ true) do
+    action =
+      case state.current do
+        %{kind: :room} = current -> {:cleared_room, current, action}
+        _other -> action
+      end
+
     if state.current && state.current.kind == :direct,
       do: Process.demonitor(state.current.monitor, [:flush])
 

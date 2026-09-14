@@ -288,6 +288,14 @@ defmodule Vxpipe.CallEngine do
   def room_audio_subscription_readiness(%Subscription{} = subscription),
     do: Subscription.readiness(subscription)
 
+  @doc false
+  def hold_room_audio(%Subscription{} = subscription, generation),
+    do: Subscription.hold(subscription, generation)
+
+  @doc false
+  def release_room_audio(%Subscription{} = subscription, generation),
+    do: Subscription.release(subscription, generation)
+
   @spec take_room_audio(Subscription.t(), pos_integer()) ::
           {:ok, [Vxpipe.CallEngine.Media.MixedFrame.t()]} | {:error, term()}
   def take_room_audio(%Subscription{} = subscription, maximum_frames)

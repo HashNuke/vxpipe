@@ -6,7 +6,14 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.Gateway.Media.RoomAudioEgress.{Delivery, PipelineLifecycle, Readiness, State}
+
+  alias Vxpipe.Gateway.Media.RoomAudioEgress.{
+    Delivery,
+    OutputGate,
+    PipelineLifecycle,
+    Readiness,
+    State
+  }
 
   @call_timeout 5_000
 
@@ -26,6 +33,9 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   @spec await_ready(pid()) :: :ok | {:error, term()}
   def await_ready(egress), do: safe_call(egress, :await_ready)
 
+  def hold(egress, generation), do: OutputGate.change(egress, :hold, generation)
+  def release(egress, generation), do: OutputGate.change(egress, :release, generation)
+
   @impl true
   def readiness(egress), do: Readiness.readiness(egress)
 
@@ -38,6 +48,9 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   def handle_call(:readiness_binding, _from, state) do
     {:reply, {:ok, Readiness.binding(state)}, state}
   end
+
+  def handle_call(:output_gate_binding, _from, state),
+    do: {:reply, OutputGate.binding(state), state}
 
   def handle_call(:activate, _from, %{pipeline_pid: nil, subscription: nil} = state) do
     case PipelineLifecycle.launch(state) do
@@ -73,6 +86,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   def handle_call({:vxpipe_apply_media_policy, _invalid}, _from, state) do
     {:reply, {:error, :invalid_policy}, state}
   end
+
+  @impl true
+  def handle_cast(:output_release_failed, state),
+    do: stop_unavailable(:output_release_uncertain, state)
 
   @impl true
   def handle_info(

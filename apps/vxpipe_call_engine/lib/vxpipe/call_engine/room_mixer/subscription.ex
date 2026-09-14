@@ -42,6 +42,14 @@ defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
     RoomMixer.take(subscription, maximum_frames)
   end
 
+  @spec hold(t(), pos_integer()) :: :ok | {:error, term()}
+  def hold(%__MODULE__{} = subscription, generation),
+    do: RoomMixer.gate_subscription(subscription, :hold, generation)
+
+  @spec release(t(), pos_integer()) :: :ok | {:error, term()}
+  def release(%__MODULE__{} = subscription, generation),
+    do: RoomMixer.gate_subscription(subscription, :release, generation)
+
   @impl true
   def readiness(%__MODULE__{prepared_policy_token: token} = subscription)
       when is_reference(token) do

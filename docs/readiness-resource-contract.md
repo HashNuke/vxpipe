@@ -534,6 +534,34 @@ delivery. Nineteen focused arbiter checks cover preparation, exact evidence, cue
 adoption, cancellation and retained output identity. Mixer subscriptions and room-egress candidate
 installation still need to use this protocol; these checks do not prove transfer orchestration.
 
+### Holding an existing room output
+
+`RoomAudioEgress.hold/2` closes the exact mixer subscription and then holds/clears its shared
+native output under one generation. Dependency calls run outside the egress callback so native
+completion and policy acknowledgements remain serviceable. The operation rechecks its pipeline,
+subscription, relevant interval and exact arbiter route before acknowledging success.
+
+The mixer gate is participant-subscription-local. It clears that queue, skips held delivery and
+captures source sequence cutoffs at release, excluding audio buffered before release. Newly mixed
+frames carry the released output generation. Duplicate holds/releases preserve the gate's state;
+an old generation cannot reopen it. Gates do not change privacy policy, subscription tokens,
+readiness generations, recording subscriptions or another listener's queue.
+
+Clearing a playing shared room frame emits a distinct discard acknowledgement after native clear
+completes. The shared producer uses it to release its in-flight frame; this does not report played
+audio or satisfy private cue completion. `RoomAudioEgress.release/2` requires native release first,
+which rejects undrained private playback, then opens the mixer subscription and revalidates the
+binding. Failure after native release reports an uncertain release and ends the connection's room
+output boundary through its existing owner notification. The lifecycle coordinator must still own
+the attempt deadline, cancellation and release across all connections, microphone and model gates.
+
+Design review rejected restarting codecs/subscriptions for a hold, changing privacy policy just to
+wait, and resetting every frame to a new generation at the output sink (which would admit stale
+frames). Focused checks cover independent mixer queues, discarded buffered speech, retained
+readiness, native discard completion, real mixer/egress/private-output ordering on one RTP timeline,
+and terminal release failure. These checks enable room output gating; they do not establish the
+complete startup/transfer sequence or browser/provider acceptance.
+
 ## Negotiated WebRTC media
 
 Connection readiness now queries ExWebRTC's current transport state and negotiated transceivers

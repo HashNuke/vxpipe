@@ -106,6 +106,38 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     refute changed.policy_interval == alice_resource.policy_interval
   end
 
+  test "holding one subscription discards its old and held audio without restarting other routes" do
+    mixer = start_mixer()
+    :ok = apply_policy(mixer, 0, ["alice", "bob", "charlie"])
+    assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
+    assert {:ok, charlie} = subscribe(mixer, "charlie-output", "charlie", :mix_minus)
+    assert {:ok, original, :ready} = Subscription.readiness(alice)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [1, 2]))
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+    assert :ok = Subscription.hold(alice, 1)
+    assert :ok = Subscription.hold(alice, 1)
+    assert {:ok, []} = Subscription.take(alice, 1)
+    assert {:ok, [_]} = Subscription.take(charlie, 1)
+    assert {:ok, ^original, :ready} = Subscription.readiness(alice)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 2, 2, [3, 4]))
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 2)
+    assert {:ok, []} = Subscription.take(alice, 1)
+    assert {:ok, [_]} = Subscription.take(charlie, 1)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 3, 4, [5, 6]))
+    assert {:error, :stale_output_generation} = Subscription.release(alice, 0)
+    assert :ok = Subscription.release(alice, 1)
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 4)
+    assert {:ok, []} = Subscription.take(alice, 1)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 4, 6, [7, 8]))
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 6)
+    assert {:ok, [received]} = Subscription.take(alice, 1)
+    assert received.output_generation == 1
+    assert received.timestamp == 6
+    assert :ok = Subscription.release(alice, 1)
+    assert {:error, :stale_output_generation} = Subscription.hold(alice, 1)
+    assert {:ok, ^original, :ready} = Subscription.readiness(alice)
+  end
+
   test "aligns PCM sources and emits policy-filtered mix-minus, full-mix, and track output" do
     mixer = start_mixer()
     :ok = apply_policy(mixer, 0, ["alice", "bob", "monitor", "debugger"])

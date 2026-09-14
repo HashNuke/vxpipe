@@ -96,6 +96,15 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   @spec stats(GenServer.server()) :: map() | {:error, :unavailable}
   def stats(server), do: safe_call(server, :stats)
 
+  @doc false
+  def gate_subscription(%Subscription{} = subscription, action, generation)
+      when action in [:hold, :release] do
+    safe_call(
+      subscription.mixer,
+      {:subscription_gate, subscription.id, subscription.token, action, generation}
+    )
+  end
+
   @impl Vxpipe.CallEngine.Readiness.Adapter
   def readiness(server), do: safe_call(server, :readiness)
 
@@ -272,6 +281,20 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   def handle_call(:stats, _from, state) do
     {:reply, state_stats(state), state}
+  end
+
+  def handle_call({:subscription_gate, id, token, action, generation}, _from, state) do
+    {reply, subscriptions} =
+      SubscriptionCatalog.gate(
+        state.subscriptions,
+        id,
+        token,
+        action,
+        generation,
+        state.source_sequences
+      )
+
+    {:reply, reply, %{state | subscriptions: subscriptions}}
   end
 
   def handle_call(:ingress_configuration, _from, state) do

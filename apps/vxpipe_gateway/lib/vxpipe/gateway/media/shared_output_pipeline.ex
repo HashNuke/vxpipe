@@ -106,9 +106,10 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
       do: {:stop, :normal, state}
 
   def handle_info(
-        {:vxpipe_room_output, output, binding, timestamp},
+        {event, output, binding, timestamp},
         %{output: output, binding: binding} = state
-      ) do
+      )
+      when event in [:vxpipe_room_output, :vxpipe_room_output_discarded] do
     sent(timestamp, state)
     {:noreply, state}
   end
