@@ -1,31 +1,54 @@
 // @ts-check
-import { readFileSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 
+import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
+import starlightThemeBlack from 'starlight-theme-black';
+import { developmentServerConfig } from './src/config/development-server.mjs';
 
-// bin/dev --tailscale provisions the certificate before starting this process.
-const tailscale = process.env.VXPIPE_DEV_TLS === 'phoenix';
+const developmentServer = developmentServerConfig(process.env);
 
 // https://astro.build/config
 export default defineConfig({
-  server: tailscale ? {
-    host: process.env.VXPIPE_TAILSCALE_IP,
-    allowedHosts: [process.env.APP_HOST ?? ''],
-  } : {},
+  ...developmentServer,
 
   vite: {
-    server: {
-      https: tailscale ? {
-        cert: readFileSync(process.env.VXPIPE_DEV_TLS_CERTFILE ?? ''),
-        key: readFileSync(process.env.VXPIPE_DEV_TLS_KEYFILE ?? ''),
-      } : undefined,
+    ...developmentServer.vite,
+    // Resolve LobeHub's extensionless imports when rendering icons in Node.
+    environments: {
+      ssr: { resolve: { noExternal: ['@lobehub/icons'] } },
+      prerender: { resolve: { noExternal: ['@lobehub/icons'] } },
     },
   },
 
   redirects: {
-    '/docs': '/docs/en/',
+    '/en': '/',
+    '/docs': '/en/docs/',
+    '/docs/en': '/en/docs/',
   },
 
-  integrations: [starlight()],
+  integrations: [
+    react(),
+    starlight({
+      title: 'VxPipe',
+      defaultLocale: 'en',
+      locales: {
+        en: { label: 'English' },
+      },
+      plugins: [
+        starlightThemeBlack({
+          navLinks: [
+            { label: 'Home', link: '/' },
+            { label: 'Docs', link: '/docs/' },
+          ],
+        }),
+      ],
+      sidebar: [
+        {
+          label: 'Documentation',
+          items: [{ autogenerate: { directory: 'docs' } }],
+        },
+      ],
+    }),
+  ],
 });

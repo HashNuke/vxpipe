@@ -1,0 +1,22 @@
+import { readFileSync } from 'node:fs';
+
+export function developmentServerConfig(env) {
+  // bin/dev --tailscale provisions the certificate before starting Astro.
+  const tailscale = env.VXPIPE_DEV_TLS === 'phoenix';
+
+  return {
+    server: tailscale ? {
+      host: env.VXPIPE_TAILSCALE_IP,
+      allowedHosts: [env.APP_HOST ?? ''],
+    } : {},
+
+    vite: {
+      server: {
+        https: tailscale ? {
+          cert: readFileSync(env.VXPIPE_DEV_TLS_CERTFILE ?? ''),
+          key: readFileSync(env.VXPIPE_DEV_TLS_KEYFILE ?? ''),
+        } : undefined,
+      },
+    },
+  };
+}

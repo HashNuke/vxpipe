@@ -1,0 +1,186 @@
+---
+title: VxPipe
+description: The open-source engine for real-time voice AI.
+template: splash
+hero:
+  title: Own your voice AI stack.
+  tagline: The open-source engine for real-time voice AI. Build browser and phone agents with transport, speech, model orchestration, tools, and human handoff in one self-hosted Elixir system.
+  actions:
+    - text: Get started
+      link: /en/docs/getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/HashNuke/vxpipe
+      icon: github
+      variant: secondary
+---
+
+import {
+  Badge,
+  Card,
+  CardGrid,
+  LinkCard,
+  Steps,
+} from '@astrojs/starlight/components';
+import AiStudio from '@lobehub/icons/es/AiStudio/components/Mono.js';
+import Claude from '@lobehub/icons/es/Claude/components/Color.js';
+import ElevenLabs from '@lobehub/icons/es/ElevenLabs/components/Mono.js';
+import Fireworks from '@lobehub/icons/es/Fireworks/components/Color.js';
+import Grok from '@lobehub/icons/es/Grok/components/Mono.js';
+import Mistral from '@lobehub/icons/es/Mistral/components/Color.js';
+import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono.js';
+import AssemblyAILogo from '../../assets/logos/assembly-ai.svg';
+import CartesiaLogo from '../../assets/logos/cartesia.svg';
+import DeepgramLogo from '../../assets/logos/deepgram.svg';
+import FishAudioLogo from '../../assets/logos/fish-audio.svg';
+import InworldAILogo from '../../assets/logos/inworld-ai.svg';
+import MinimaxLogo from '../../assets/logos/minimax-io.svg';
+import ResembleAILogo from '../../assets/logos/resemble-ai.svg';
+import RimeAILogo from '../../assets/logos/rime-ai.svg';
+import SarvamLogo from '../../assets/logos/sarvam.svg';
+import TelnyxLogo from '../../assets/logos/telnyx.svg';
+import TwilioLogo from '../../assets/logos/twilio.svg';
+import '../../styles/landing.css';
+
+<div className="trust-row" aria-label="Project attributes">
+  <Badge text="Apache 2.0" variant="success" size="large" />
+  <Badge text="Self-hostable" variant="note" size="large" />
+  <Badge text="Built on Elixir" variant="tip" size="large" />
+</div>
+
+## Transport and pipeline, together
+
+VxPipe gives a voice agent one runtime from the caller's first word to the
+agent's response. Keep the audio path, model loop, tools, and handoffs in one
+place instead of coordinating separate real-time systems.
+
+<CardGrid>
+  <Card title="Meet callers anywhere" icon="phone">
+    Serve conversations in the browser or over the phone through a shared call
+    engine.
+  </Card>
+  <Card title="Compose the full agent loop" icon="random">
+    Connect streaming speech, model inference, tools, and audio output with
+    clear, replaceable provider boundaries.
+  </Card>
+  <Card title="Keep control of the runtime" icon="server">
+    Run VxPipe on your infrastructure and choose the services that fit your
+    product.
+  </Card>
+  <Card title="Bring in the right person" icon="comment">
+    Build transfers and human handoff into the same conversation flow as your
+    agents.
+  </Card>
+</CardGrid>
+
+## Quickstart
+
+Run VxPipe locally with Docker.
+
+<Steps>
+1. **Run the container.**
+
+   ```shell
+   docker run --rm -p 4000:4000 \
+     vxpipe/vxpipe
+   ```
+
+2. **Open VxPipe.**
+
+   Visit [localhost:4000/start](http://localhost:4000/start).
+</Steps>
+
+<div className="provider-groups">
+  <section className="provider-group" aria-labelledby="ai-providers">
+    <h2 id="ai-providers">Supported AI Providers</h2>
+    <div className="provider-logos">
+      <span className="provider-logo">
+        <OpenAI size={32} aria-hidden="true" focusable="false" />
+        <span>OpenAI</span>
+      </span>
+      <span className="provider-logo">
+        <Claude size={32} aria-hidden="true" focusable="false" />
+        <span>Claude</span>
+      </span>
+      <span className="provider-logo">
+        <AiStudio size={32} aria-hidden="true" focusable="false" />
+        <span>Google AI Studio</span>
+      </span>
+      <span className="provider-logo">
+        <Mistral size={32} aria-hidden="true" focusable="false" />
+        <span>Mistral</span>
+      </span>
+      <span className="provider-logo">
+        <Grok size={32} aria-hidden="true" focusable="false" />
+        <span>Grok</span>
+      </span>
+      <span className="provider-logo">
+        <Fireworks size={32} aria-hidden="true" focusable="false" />
+        <span>Fireworks AI</span>
+      </span>
+      <span className="provider-logo">
+        <ElevenLabs size={32} aria-hidden="true" focusable="false" />
+        <span>ElevenLabs</span>
+      </span>
+      <span className="provider-logo provider-logo--deepgram">
+        <DeepgramLogo width="32" height="32" aria-hidden="true" focusable="false" />
+        <span>Deepgram</span>
+      </span>
+      <span className="provider-logo">
+        <RimeAILogo class="provider-wordmark provider-wordmark--compact provider-wordmark--rime" role="img" aria-label="Rime AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <SarvamLogo class="provider-wordmark provider-wordmark--sarvam" role="img" aria-label="Sarvam" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <AssemblyAILogo class="provider-wordmark" role="img" aria-label="AssemblyAI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <InworldAILogo class="provider-wordmark" role="img" aria-label="Inworld AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <ResembleAILogo class="provider-wordmark" role="img" aria-label="Resemble AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <FishAudioLogo class="provider-icon" aria-hidden="true" focusable="false" />
+        <span>Fish Audio</span>
+      </span>
+      <span className="provider-logo">
+        <MinimaxLogo class="provider-wordmark" role="img" aria-label="MiniMax" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <CartesiaLogo class="provider-wordmark" role="img" aria-label="Cartesia" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
+      </span>
+    </div>
+  </section>
+  <section className="provider-group" aria-labelledby="telephony-providers">
+    <h2 id="telephony-providers">Supported Telephony Providers</h2>
+    <div className="provider-logos">
+      <span className="provider-logo provider-logo--twilio">
+        <TwilioLogo width="32" height="32" aria-hidden="true" focusable="false" />
+        <span>Twilio</span>
+      </span>
+      <span className="provider-logo">
+        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
+      </span>
+    </div>
+  </section>
+</div>
+
+## Start building
+
+<CardGrid>
+  <LinkCard
+    title="Read the getting started guide"
+    description="Installation and your first VxPipe agent."
+    href="/en/docs/getting-started/"
+  />
+  <LinkCard
+    title="Explore the source"
+    description="Follow development and contribute on GitHub."
+    href="https://github.com/HashNuke/vxpipe"
+  />
+</CardGrid>

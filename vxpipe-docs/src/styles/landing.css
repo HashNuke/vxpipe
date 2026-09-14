@@ -1,0 +1,98 @@
+.trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.trust-row {
+  justify-content: center;
+  margin-block: 0 4rem;
+}
+
+.provider-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  padding-block: 1.5rem;
+  text-align: center;
+}
+
+.provider-groups .provider-group {
+  margin: 0;
+  min-width: 0;
+}
+
+.provider-group h2 {
+  margin: 0 0 1.5rem;
+}
+
+.provider-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem 2.5rem;
+}
+
+.provider-logos .provider-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  min-height: 2.75rem;
+  color: var(--sl-color-white);
+  font-size: var(--sl-text-xl);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.provider-logo svg {
+  flex-shrink: 0;
+}
+
+.provider-logo--twilio > svg {
+  color: #f22f46;
+}
+
+.provider-logo--deepgram > svg {
+  color: #13ef93;
+}
+
+.provider-wordmark {
+  width: auto;
+  height: 1.75rem;
+  max-width: 10.75rem;
+  --text_00: currentColor;
+}
+
+.provider-wordmark path[fill="white"],
+.provider-wordmark path[fill="#fff"],
+.provider-wordmark g[fill="#fff"] {
+  fill: currentColor;
+}
+
+.provider-wordmark--compact {
+  height: 2rem;
+}
+
+.provider-wordmark--rime {
+  margin-bottom: 0.4em;
+}
+
+.provider-wordmark--sarvam {
+  height: 1.4rem;
+}
+
+.provider-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.provider-icon [fill="#000"] {
+  fill: currentColor;
+}
+
+.provider-logo span {
+  font-size: inherit;
+  font-weight: inherit;
+}

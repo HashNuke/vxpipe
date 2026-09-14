@@ -7,7 +7,8 @@ import test from 'node:test';
 
 function loadConfig(env) {
   const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `
-    import config from './astro.config.mjs';
+    import { developmentServerConfig } from './src/config/development-server.mjs';
+    const config = developmentServerConfig(process.env);
     console.log(JSON.stringify({
       host: config.server?.host ?? false,
       allowedHosts: config.server?.allowedHosts ?? [],
