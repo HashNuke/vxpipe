@@ -3,14 +3,15 @@ defmodule Vxpipe.Gateway.TelnyxCallScenario do
 
   alias Vxpipe.Gateway.TelephonyCallScenario
 
-  def build(observer, public_key, media_admission, inbound_leg_id, outbound_leg_id) do
+  def build(observer, public_key, media_admission, inbound_leg_id, outbound_leg_id, options \\ []) do
     TelephonyCallScenario.build(
       :telnyx,
       observer,
       public_key,
       media_admission,
       inbound_leg_id,
-      outbound_leg_id
+      outbound_leg_id,
+      options
     )
   end
 end

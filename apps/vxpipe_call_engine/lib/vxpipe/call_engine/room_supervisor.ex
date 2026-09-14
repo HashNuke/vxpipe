@@ -59,6 +59,17 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
+  def monitor_room(tenant_id, room_id, incarnation_id) do
+    with {:ok, authority} <- lookup_room(tenant_id, room_id),
+         %{incarnation_id: ^incarnation_id} <- GenServer.call(authority, :snapshot, 1_000) do
+      {:ok, Process.monitor(authority)}
+    else
+      _unavailable -> {:error, :room_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :room_unavailable}
+  end
+
   def join_participant(%JoinParticipant{} = command) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
       [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)

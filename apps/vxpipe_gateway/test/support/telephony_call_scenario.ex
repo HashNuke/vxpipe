@@ -15,9 +15,17 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   @twilio_account_sid "AC00000000000000000000000000000000"
   @twilio_inbound_call_sid "CA00000000000000000000000000000000"
 
-  def build(provider, observer, credential, media_admission, inbound_leg_id, outbound_leg_id)
+  def build(
+        provider,
+        observer,
+        credential,
+        media_admission,
+        inbound_leg_id,
+        outbound_leg_id,
+        options \\ []
+      )
       when provider in [:telnyx, :twilio] and is_pid(observer) do
-    plan = compile_plan(provider)
+    plan = compile_plan(provider, options)
     caller = Map.fetch!(plan.participants, "caller")
     service_options = service_options(provider, plan.tenant_id, credential, observer)
     registry = ServiceRegistry.init!(enabled: true, services: [service_options])
@@ -48,7 +56,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
     }
   end
 
-  defp compile_plan(provider) do
+  defp compile_plan(provider, options) do
     id = System.unique_integer([:positive, :monotonic])
 
     {:ok, definition} =
@@ -58,6 +66,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           entry_caller: "caller",
           entry_receiver: "reception",
           defaults: %{capabilities: %{}},
+          wait_sounds: Keyword.get(options, :wait_sounds, %{}),
           participants: %{
             "caller" => %{
               type: "human",
@@ -122,7 +131,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           "test-model" => %{
             kind: :model_inference,
             provider: :req_llm,
-            options: %{model: "test:scripted"}
+            options: %{model: Keyword.get(options, :model, "test:scripted")}
           },
           "test-voice" => %{
             kind: :text_to_speech,

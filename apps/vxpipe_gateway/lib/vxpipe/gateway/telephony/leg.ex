@@ -4,9 +4,9 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   use GenServer
 
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
-  alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.CallEngine.Telephony.{Adapter, EndLeg, Event, LegReference}
   alias Vxpipe.Calls.TelephonyAdmissionClaim
-  alias Vxpipe.Gateway.Telephony.{IncomingLegActivationResult, LegUsage}
+  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IncomingLegActivationResult, LegUsage}
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) do
@@ -54,6 +54,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       identity: Keyword.fetch!(options, :identity),
       initial_event: Keyword.fetch!(options, :event),
       incarnation_id: nil,
+      room_monitor: nil,
       result: nil,
       status: :starting,
       usage: nil,
@@ -83,7 +84,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       Process.send_after(self(), :retire, 1_000)
     end
 
-    {:noreply, state}
+    case monitor_room(state) do
+      {:ok, state} -> {:noreply, state}
+      {:error, :room_unavailable} -> {:stop, :normal, end_room_leg(state)}
+    end
   end
 
   @impl true
@@ -149,6 +153,42 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     do: {:stop, :normal, state}
 
   def handle_info(:retire, state), do: {:noreply, state}
+
+  def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state),
+    do: {:stop, :normal, end_room_leg(state)}
+
+  defp monitor_room(
+         %{activation: %IncomingLegActivationResult{service: %ConfiguredService{}}} = state
+       ) do
+    binding = state.activation.binding
+
+    case Vxpipe.CallEngine.monitor_room(
+           binding.tenant_id,
+           binding.room_id,
+           binding.incarnation_id
+         ) do
+      {:ok, monitor} -> {:ok, %{state | room_monitor: monitor}}
+      {:error, :room_unavailable} = error -> error
+    end
+  end
+
+  defp monitor_room(state), do: {:ok, state}
+
+  defp end_room_leg(state) do
+    binding = state.activation.binding
+    service = state.activation.service
+
+    _result =
+      Adapter.end_leg(service.adapter, service.adapter_options, %EndLeg{
+        leg: %LegReference{
+          leg_id: binding.client_state_leg_id,
+          provider_call_control_id: binding.provider_call_control_id
+        },
+        reason: :room_ended
+      })
+
+    %{state | usage: LegUsage.fail(state.usage, :cancelled)}
+  end
 
   defp admit(state) do
     case call_backend(state.backend, :claim_incoming, [state.identity, state.initial_event]) do

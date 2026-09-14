@@ -51,6 +51,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
            binding: binding,
            media_url: media_url,
            submission: submission,
+           service: service,
            usage: LegUsage.identify(usage, submission)
          }}
 

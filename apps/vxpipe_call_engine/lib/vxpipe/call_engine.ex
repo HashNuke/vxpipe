@@ -90,6 +90,13 @@ defmodule Vxpipe.CallEngine do
     RoomSupervisor.participant_snapshot(tenant_id, room_id, participant_id)
   end
 
+  @doc "Monitors one exact room incarnation without attaching a participant or media connection."
+  @spec monitor_room(String.t(), String.t(), String.t()) ::
+          {:ok, reference()} | {:error, :room_unavailable}
+  def monitor_room(tenant_id, room_id, incarnation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
+      do: RoomSupervisor.monitor_room(tenant_id, room_id, incarnation_id)
+
   @spec inspect_live_call(String.t(), String.t()) ::
           {:ok, Vxpipe.CallEngine.LiveInspection.Snapshot.t()} | {:error, :call_not_live}
   def inspect_live_call(tenant_id, call_id) when is_binary(tenant_id) and is_binary(call_id) do

@@ -56,6 +56,28 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   @startup_progress [:vxpipe, :call_engine, :startup, :progress]
   @startup_stop [:vxpipe, :call_engine, :startup, :stop]
 
+  test "monitoring a room selects its exact tenant and incarnation before caller media attaches" do
+    plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
+    assert {:ok, room} = start_call(plan)
+    assert_receive {:test_call_lifecycle_timer_scheduled, _, 60_000}
+    assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+
+    assert {:error, :room_unavailable} =
+             CallEngine.monitor_room("another-tenant", plan.room_id, room.incarnation_id)
+
+    assert {:error, :room_unavailable} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, "another-incarnation")
+
+    assert {:ok, monitor} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+    :ok = TestCallLifecycleTimer.fire(readiness_timer)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :startup_readiness_timeout}}, 1_000
+
+    assert {:error, :room_unavailable} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+  end
+
   for outcome <- [:ready, :failed, :timeout, :disconnected] do
     test "observes blocked model startup through #{outcome} without private identity" do
       attach_startup_telemetry()

@@ -37,7 +37,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
   @outgoing_stream_sid "MZ00000000000000000000000000000001"
   @received_at DateTime.to_unix(~U[2026-09-11 17:00:05Z])
 
-  setup do
+  setup context do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     agent_runtime =
@@ -84,12 +84,35 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
     admission = start_supervised!({MediaAdmission, name: nil})
 
+    scenario_options =
+      if outcome = context[:initial_outcome] do
+        configured = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+        Application.put_env(
+          :vxpipe_call_engine,
+          Vxpipe.CallEngine.Application,
+          Keyword.put(configured, :call_lifecycle,
+            readiness_timeout_ms: 30_000,
+            idle_timeout_ms: 15_000,
+            timer: {Vxpipe.CallEngine.TestCallLifecycleTimer, observer: self()}
+          )
+        )
+
+        [
+          model: if(outcome == :model, do: "test:blocked-unavailable", else: "test:blocked"),
+          wait_sounds: if(outcome in [:max_duration, :disconnected], do: nil, else: %{})
+        ]
+      else
+        []
+      end
+
     scenario =
       TwilioCallScenario.build(
         self(),
         admission,
         @incoming_leg_id,
-        @outgoing_leg_id
+        @outgoing_leg_id,
+        scenario_options
       )
 
     backend =
@@ -122,6 +145,162 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       plan: scenario.plan,
       service_options: scenario.service_options
     }
+  end
+
+  for outcome <- [:ready, :model, :readiness, :max_duration, :disconnected] do
+    @tag initial_outcome: outcome
+    test "initial phone startup handles #{outcome} under its original clocks", context do
+      outcome = context.initial_outcome
+      assert post_voice(context).status == 200
+      assert_receive {:test_twilio_answer, answer}, 2_000
+      assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
+      assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+      assert_receive {:test_agent_runtime_model_preparing, preparer}, 2_000
+      preparation_monitor = Process.monitor(preparer)
+
+      [{authority, _}] =
+        Registry.lookup(
+          Vxpipe.CallEngine.RoomRegistry,
+          {context.plan.tenant_id, context.plan.room_id}
+        )
+
+      room_monitor = Process.monitor(authority)
+
+      transport =
+        start_supervised!(
+          Supervisor.child_spec({TestTelephonySocket, observer: self()}, restart: :temporary),
+          id: :initial_phone_socket
+        )
+
+      transport_monitor = Process.monitor(transport)
+
+      assert {:ok, _binding, _socket} =
+               TestTelephonySocket.open(transport, MediaSocket, fn ->
+                 TwilioFixture.open_media(
+                   context.endpoint,
+                   context.service_options,
+                   answer.media_url,
+                   @incoming_call_sid,
+                   @incoming_stream_sid
+                 )
+               end)
+
+      if outcome in [:max_duration, :disconnected] do
+        refute_receive {:test_phone_output, ^transport, _}, 150
+      else
+        assert_phone_wait(transport, System.monotonic_time(:millisecond) + 2_000)
+      end
+
+      assert Vxpipe.CallEngine.RoomAuthority.input_admission(
+               context.plan.tenant_id,
+               context.plan.room_id
+             ) == :opening_audio
+
+      refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+      refute_receive {:test_call_lifecycle_timer_scheduled, _, 15_000}
+
+      case outcome do
+        :ready ->
+          send(preparer, :release_test_agent_runtime_model)
+          assert_receive {:test_tts_transport_started, voice, _}, 2_000
+          assert_receive {:test_stt_transport_started, speech, _}, 2_000
+
+          TestTextToSpeechTransport.deliver_control(
+            voice,
+            ~s({"type":"Connected","request_id":"phone-voice-ready"})
+          )
+
+          assert_phone_wait(transport, System.monotonic_time(:millisecond) + 2_000)
+          refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+
+          TestSpeechToTextTransport.deliver(
+            speech,
+            ~s({"type":"Connected","request_id":"phone-speech-ready","sequence_id":0})
+          )
+
+          Vxpipe.CallEngine.TestCallStartup.await_open(context.plan)
+          assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}, 2_000
+          refute_receive {:test_call_lifecycle_timer_cancelled, ^maximum_timer}
+          refute_receive {:test_tts_transport_started, _, _}
+          refute_receive {:test_stt_transport_started, _, _}
+          assert_caller_audio(speech, transport)
+
+        :model ->
+          send(preparer, :release_test_agent_runtime_model)
+
+        :readiness ->
+          Vxpipe.CallEngine.TestCallLifecycleTimer.fire(readiness_timer)
+
+        :max_duration ->
+          Vxpipe.CallEngine.TestCallLifecycleTimer.fire(maximum_timer)
+
+        :disconnected ->
+          stop_supervised!(:initial_phone_socket)
+      end
+
+      if outcome != :ready do
+        assert_receive {:DOWN, ^room_monitor, :process, ^authority, _}, 2_000
+        assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 2_000
+        assert_receive {:DOWN, ^transport_monitor, :process, ^transport, _}, 2_000
+        assert_receive {:test_twilio_end_leg, request}, 2_000
+        assert request.leg.leg_id == @incoming_leg_id
+        assert request.reason == :room_ended
+        refute_receive {:test_twilio_end_leg, _duplicate}
+        refute_receive {:test_tts_transport_started, _, _}
+        refute_receive {:test_call_lifecycle_timer_scheduled, _, 15_000}
+      end
+    end
+  end
+
+  for outcome <- [:model, :readiness, :max_duration] do
+    @tag initial_outcome: outcome
+    test "initial phone #{outcome} ends the answered leg before a media socket connects",
+         context do
+      assert post_voice(context).status == 200
+      assert_receive {:test_twilio_answer, _answer}, 2_000
+
+      [{leg, _}] =
+        Registry.lookup(
+          Vxpipe.Gateway.Telephony.LegRegistry,
+          {:twilio, "primary-phone", @incoming_call_sid}
+        )
+
+      monitor = Process.monitor(leg)
+      assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
+      assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+      assert_receive {:test_agent_runtime_model_preparing, preparer}, 2_000
+      preparation_monitor = Process.monitor(preparer)
+
+      case unquote(outcome) do
+        :model -> send(preparer, :release_test_agent_runtime_model)
+        :readiness -> Vxpipe.CallEngine.TestCallLifecycleTimer.fire(readiness_timer)
+        :max_duration -> Vxpipe.CallEngine.TestCallLifecycleTimer.fire(maximum_timer)
+      end
+
+      assert_receive {:test_twilio_end_leg, request}, 2_000
+      assert request.leg.leg_id == @incoming_leg_id
+      assert request.reason == :room_ended
+      assert_receive {:DOWN, ^monitor, :process, ^leg, _}, 2_000
+      assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 2_000
+      refute_receive {:test_twilio_end_leg, _duplicate}
+      refute_receive {:test_tts_transport_started, _, _}
+    end
+  end
+
+  defp assert_phone_wait(transport, deadline) do
+    receive do
+      {:test_phone_output, ^transport, output} ->
+        case JSON.decode!(output) do
+          %{"event" => "media", "media" => %{"payload" => payload}} ->
+            assert byte_size(Base.decode64!(payload)) > 0
+
+          _control ->
+            assert_phone_wait(transport, deadline)
+        end
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("missing phone setup waiting")
+    end
   end
 
   test "runs one signed incoming call through private press-1 phone transfer after storage loss",

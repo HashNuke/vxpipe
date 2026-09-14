@@ -1149,6 +1149,15 @@ If command submission is rejected or the binding does not match the configured p
 tenant/connection, activation revokes the unconsumed media admission. An unknown carrier submission
 outcome remains a submitted outcome and is resolved only by later exact-leg events; it is not retried.
 
+The incoming leg retains its pinned service and monitors the exact room incarnation as soon as
+activation completes. The engine's trusted `monitor_room/3` boundary checks tenant, room and
+incarnation before returning a process monitor; it does not attach media or participants. Room
+termination, or finding that the room already disappeared during activation, submits one `EndLeg`
+request through that same service and retires the local leg. Its existing socket monitors then
+close the media socket and invalidate unconsumed admission. This covers model/setup failure and
+original deadline expiry even before a caller establishes media. Carrier submission is still not
+proof of physical disconnection; actual provider acceptance remains in the explicit provider lane.
+
 Saving a definition now derives a separate durable inbound telephony route for each human
 `receive`/`start_call` connection whose service is not `web`. The route binds the immutable
 definition revision and participant ref to the configured service ref plus literal E.164 number;
