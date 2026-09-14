@@ -858,6 +858,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     authority = room_authority(plan)
+    observe_transfer_workers(authority)
     authority_monitor = Process.monitor(authority)
     assert_receive {:test_tts_transport_started, source, _}, 2_000
 
@@ -872,6 +873,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert_receive {:test_tts_transport_started, _briefing, _}, 2_000
     pending = :sys.get_state(authority).pending_participant_transfer
     Process.exit(pending.task.pid, :kill)
+
+    assert_receive {:transfer_worker, %{count: 1}, %{outcome: :unexpected}}, 1_000
 
     assert_receive {:test_audio_output_drain, ^sink}, 1_000
     recovering = :sys.get_state(authority).pending_participant_transfer
@@ -902,6 +905,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :handoff_recovery_failed},
                    1_000
+
+    assert_receive {:transfer_worker, %{count: 1}, %{outcome: :cancelled}}, 1_000
+    refute_receive {:transfer_worker, _, _}, 0
 
     refute_receive {:test_tts_transport_started, _replacement, _}, 50
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cancel-queued-recovery"}}, 50
@@ -1113,184 +1119,252 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              Agent.get(foreign, fn _ -> CallEngine.activate_speech_to_text(command) end)
   end
 
-  test "an exact web destination hears its private briefing before promotion" do
-    plan = compile_plan(wait_sounds: nil)
-    caller = Map.fetch!(plan.participants, "caller")
-    reception = Map.fetch!(plan.participants, "reception")
-    support = Map.fetch!(plan.participants, "human-support")
+  for completion <- [:accepted, :timed_out, :phase_lost] do
+    @tag completion: completion
+    test "an exact web destination hears its private briefing before #{completion}", %{
+      completion: completion
+    } do
+      observe_transfer_phases()
+      plan = compile_plan(wait_sounds: nil)
+      caller = Map.fetch!(plan.participants, "caller")
+      reception = Map.fetch!(plan.participants, "reception")
+      support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} =
-             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
 
-    variables = CallVariables.whereis(room.incarnation_id)
-    lifecycle = call_lifecycle(room.incarnation_id)
+      variables = CallVariables.whereis(room.incarnation_id)
+      lifecycle = call_lifecycle(room.incarnation_id)
 
-    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+      assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
-    TestTextToSpeechTransport.deliver_control(
-      source_tts,
-      ~s({"type":"Connected","request_id":"source-ready"})
-    )
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
 
-    caller_sink =
-      start_supervised!({TestAudioOutputSink, observer: self()}, id: :caller_output_sink)
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :caller_output_sink)
 
-    support_sink =
-      start_supervised!({TestAudioOutputSink, observer: self()}, id: :support_output_sink)
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :support_output_sink)
 
-    assert {:ok,
-            %ConnectionAttachment{
-              admission: :main,
-              room_audio_input_mode: :enabled,
-              room_audio_output_mode: :mix_minus
-            }} =
-             attach_ready(plan, room, caller, "caller-connection", caller_sink)
+      assert {:ok,
+              %ConnectionAttachment{
+                admission: :main,
+                room_audio_input_mode: :enabled,
+                room_audio_output_mode: :mix_minus
+              }} =
+               attach_ready(plan, room, caller, "caller-connection", caller_sink)
 
-    source_supervisor = participant_supervisor(plan, reception.participant_id)
-    source_monitor = Process.monitor(source_supervisor)
-    source_tts_monitor = Process.monitor(source_tts)
+      source_supervisor = participant_supervisor(plan, reception.participant_id)
+      source_monitor = Process.monitor(source_supervisor)
+      source_tts_monitor = Process.monitor(source_tts)
 
-    assert :ok =
-             Vxpipe.CallEngine.TestTransferConnection.send_text(
-               send_command(plan, room, caller, "Please connect me to human support.")
-             )
+      assert :ok =
+               Vxpipe.CallEngine.TestTransferConnection.send_text(
+                 send_command(plan, room, caller, "Please connect me to human support.")
+               )
 
-    assert_receive {:test_agent_runtime_stream, source_provider, _request}, 2_000
+      assert_receive {:test_agent_runtime_stream, source_provider, _request}, 2_000
 
-    reason = "Taylor is calling about order 17."
+      reason = "Taylor is calling about order 17."
 
-    assert {:ok, transfer_call} =
-             ToolCall.new(
-               id: "human-support-transfer",
-               name: "transfer",
-               arguments: %{"destination" => "human-support", "reason" => reason}
-             )
+      assert {:ok, transfer_call} =
+               ToolCall.new(
+                 id: "human-support-transfer",
+                 name: "transfer",
+                 arguments: %{"destination" => "human-support", "reason" => reason}
+               )
 
-    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
-    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+      send(source_provider, {:test_agent_runtime_response, {:ok, response}})
 
-    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+      assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
 
-    assert {:error, %Vxpipe.CallEngine.Error{code: :participant_not_found}} =
-             CallEngine.participant_snapshot(plan.tenant_id, plan.room_id, support.participant_id)
+      assert {:error, %Vxpipe.CallEngine.Error{code: :participant_not_found}} =
+               CallEngine.participant_snapshot(
+                 plan.tenant_id,
+                 plan.room_id,
+                 support.participant_id
+               )
 
-    assert {:ok,
-            %ConnectionAttachment{
-              admission: :transfer_preparation,
-              room_audio_input_mode: :disabled,
-              room_audio_output_mode: :disabled,
-              transfer_attempt_id: attempt_id
-            } = pending_attachment} =
-             attach_ready(plan, room, support, "support-connection", support_sink)
+      assert {:ok,
+              %ConnectionAttachment{
+                admission: :transfer_preparation,
+                room_audio_input_mode: :disabled,
+                room_audio_output_mode: :disabled,
+                transfer_attempt_id: attempt_id
+              } = pending_attachment} =
+               attach_ready(plan, room, support, "support-connection", support_sink)
 
-    assert is_binary(attempt_id)
-    assert :disabled = CallEngine.room_audio_configuration(pending_attachment)
-    assert :disabled = CallEngine.room_audio_output_configuration(pending_attachment)
+      assert is_binary(attempt_id)
+      assert :disabled = CallEngine.room_audio_configuration(pending_attachment)
+      assert :disabled = CallEngine.room_audio_output_configuration(pending_attachment)
 
-    assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_not_ready}} =
-             TestTransferConnection.control(
-               transfer_control(plan, room, support, attempt_id, :accept)
-             )
+      assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_not_ready}} =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt_id, :accept)
+               )
 
-    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
-                   50
+      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
+                     50
 
-    assert :ok =
-             TestTransferConnection.control(
-               transfer_control(plan, room, support, attempt_id, :media_ready)
-             )
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt_id, :media_ready)
+               )
 
-    authority = room_authority(plan)
-    pending = :sys.get_state(authority).pending_participant_transfer
-    briefing = pending.preparation.text_to_speech
-    briefing_monitor = Process.monitor(briefing.pid)
-    transport_monitor = Process.monitor(briefing_tts)
-    briefing_request = pending.briefing_request
+      authority = room_authority(plan)
+      pending = :sys.get_state(authority).pending_participant_transfer
+      briefing = pending.preparation.text_to_speech
+      briefing_monitor = Process.monitor(briefing.pid)
+      transport_monitor = Process.monitor(briefing_tts)
+      briefing_request = pending.briefing_request
 
-    assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
+      assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
 
-    assert JSON.decode!(speak) == %{
-             "text" => reason <> " This call is recorded.",
-             "type" => "Speak"
-           }
+      assert JSON.decode!(speak) == %{
+               "text" => reason <> " This call is recorded.",
+               "type" => "Speak"
+             }
 
-    assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
+      assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
 
-    TestTextToSpeechTransport.deliver_control(
-      briefing_tts,
-      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"private-briefing"})
-    )
+      TestTextToSpeechTransport.deliver_control(
+        briefing_tts,
+        ~s({"type":"SpeechStarted","request_id":"req","speech_id":"private-briefing"})
+      )
 
-    TestTextToSpeechTransport.deliver_audio(briefing_tts, <<1, 0, 2, 0>>)
+      TestTextToSpeechTransport.deliver_audio(briefing_tts, <<1, 0, 2, 0>>)
 
-    assert_receive {:test_audio_output, ^support_sink, _frame}, 2_000
-    refute_receive {:test_audio_output, ^caller_sink, _frame}, 50
+      assert_receive {:test_audio_output, ^support_sink, _frame}, 2_000
+      refute_receive {:test_audio_output, ^caller_sink, _frame}, 50
 
-    TestTextToSpeechTransport.deliver_control(
-      briefing_tts,
-      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"private-briefing"})
-    )
+      TestTextToSpeechTransport.deliver_control(
+        briefing_tts,
+        ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"private-briefing"})
+      )
 
-    assert_receive {:test_audio_output_finish, ^support_sink, _turn}, 2_000
+      assert_receive {:test_audio_output_finish, ^support_sink, _turn}, 2_000
 
-    usage_facts = collect_tts_usage(2)
+      usage_facts = collect_tts_usage(2)
 
-    assert Enum.all?(usage_facts, fn fact ->
-             fact.call_id == plan.call_id and
-               fact.participant_id == support.participant_id and
-               fact.activation_id == nil and
-               fact.payload["provider"]["name"] == "deepgram" and
-               fact.payload["provider"]["integration_id"] == "test-voice" and
-               fact.payload["provider"]["request_id"] == "req" and
-               fact.payload["provider"]["operation_id"] == "private-briefing"
-           end)
+      assert Enum.all?(usage_facts, fn fact ->
+               fact.call_id == plan.call_id and
+                 fact.participant_id == support.participant_id and
+                 fact.activation_id == nil and
+                 fact.payload["provider"]["name"] == "deepgram" and
+                 fact.payload["provider"]["integration_id"] == "test-voice" and
+                 fact.payload["provider"]["request_id"] == "req" and
+                 fact.payload["provider"]["operation_id"] == "private-briefing"
+             end)
 
-    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
-                   50
+      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
+                     50
 
-    refute_receive {:DOWN, ^briefing_monitor, :process, _, _}, 50
-    assert :ok = TestAudioOutputSink.playback_started(support_sink)
-    assert :ok = TestAudioOutputSink.playback_completed(support_sink)
-    assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 2_000
-    assert_receive {:DOWN, ^briefing_monitor, :process, _, _}, 1_000
-    assert_receive {:DOWN, ^transport_monitor, :process, ^briefing_tts, _}, 1_000
-    refute_receive {:DOWN, ^source_tts_monitor, :process, ^source_tts, _}, 50
+      refute_receive {:DOWN, ^briefing_monitor, :process, _, _}, 50
+      assert :ok = TestAudioOutputSink.playback_started(support_sink)
+      assert :ok = TestAudioOutputSink.playback_completed(support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 2_000
 
-    # Delayed notifications from retired private speech cannot cancel the live attempt.
-    send(authority, {:vxpipe_tts_playback, briefing.pid, briefing_request, :completed})
-    send(authority, {:vxpipe_tts_unavailable, briefing.pid, :transport_closed})
-    send(authority, {:DOWN, briefing.monitor, :process, briefing.pid, :shutdown})
-    _ = :sys.get_state(authority)
-    refute_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 50
-    refute_receive {:vxpipe_transfer_progress, ^attempt_id, %{phase: :recovering}}, 50
+      assert_receive {:transfer_phase, %{duration: briefing_duration},
+                      %{phase: :briefing, outcome: :ok}},
+                     1_000
 
-    assert :ok =
-             TestTransferConnection.control(
-               transfer_control(plan, room, support, attempt_id, :accept)
-             )
+      assert briefing_duration >= 0
+      refute_receive {:transfer_phase, _, %{phase: :acceptance}}, 0
+      assert_receive {:DOWN, ^briefing_monitor, :process, _, _}, 1_000
+      assert_receive {:DOWN, ^transport_monitor, :process, ^briefing_tts, _}, 1_000
+      refute_receive {:DOWN, ^source_tts_monitor, :process, ^source_tts, _}, 50
 
-    assert_receive {:vxpipe_transfer_active, ^attempt_id},
-                   2_000
+      # Delayed notifications from retired private speech cannot cancel the live attempt.
+      send(authority, {:vxpipe_tts_playback, briefing.pid, briefing_request, :completed})
+      send(authority, {:vxpipe_tts_unavailable, briefing.pid, :transport_closed})
+      send(authority, {:DOWN, briefing.monitor, :process, briefing.pid, :shutdown})
+      _ = :sys.get_state(authority)
+      refute_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 50
+      refute_receive {:vxpipe_transfer_progress, ^attempt_id, %{phase: :recovering}}, 50
 
-    assert_receive {:vxpipe_event,
-                    %ToolCallCompleted{
-                      tool_call_id: "human-support-transfer",
-                      result: %{
-                        "destination" => "human-support",
-                        "status" => "completed"
-                      }
-                    }},
-                   2_000
+      if completion == :accepted do
+        assert :ok =
+                 TestTransferConnection.control(
+                   transfer_control(plan, room, support, attempt_id, :accept)
+                 )
 
-    assert_receive {:DOWN, ^source_monitor, :process, ^source_supervisor, _reason}, 2_000
+        assert_receive {:transfer_phase, %{duration: acceptance_duration},
+                        %{phase: :acceptance, outcome: :ok}},
+                       1_000
 
-    assert {:ok, support_snapshot} =
-             CallEngine.participant_snapshot(plan.tenant_id, plan.room_id, support.participant_id)
+        assert acceptance_duration >= 0
 
-    assert support_snapshot.participant_id == support.participant_id
-    assert CallVariables.whereis(room.incarnation_id) == variables
-    assert call_lifecycle(room.incarnation_id) == lifecycle
-    assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == nil
+        assert_receive {:vxpipe_transfer_active, ^attempt_id},
+                       2_000
+
+        for _listener <- [:caller, :support] do
+          assert_receive {:transfer_phase, %{duration: cue_duration},
+                          %{phase: :cue, outcome: :ok}},
+                         1_000
+
+          assert cue_duration >= 0
+        end
+
+        refute_receive {:transfer_phase, _, %{phase: :briefing}}, 0
+        refute_receive {:transfer_phase, _, %{phase: :acceptance}}, 0
+
+        assert_receive {:vxpipe_event,
+                        %ToolCallCompleted{
+                          tool_call_id: "human-support-transfer",
+                          result: %{
+                            "destination" => "human-support",
+                            "status" => "completed"
+                          }
+                        }},
+                       2_000
+
+        assert_receive {:DOWN, ^source_monitor, :process, ^source_supervisor, _reason}, 2_000
+
+        assert {:ok, support_snapshot} =
+                 CallEngine.participant_snapshot(
+                   plan.tenant_id,
+                   plan.room_id,
+                   support.participant_id
+                 )
+
+        assert support_snapshot.participant_id == support.participant_id
+        assert CallVariables.whereis(room.incarnation_id) == variables
+        assert call_lifecycle(room.incarnation_id) == lifecycle
+        assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == nil
+      else
+        pending = :sys.get_state(authority).pending_participant_transfer
+
+        outcome =
+          case completion do
+            :timed_out ->
+              send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
+              :timeout
+
+            :phase_lost ->
+              Process.exit(pending.task.pid, :kill)
+              :terminated
+          end
+
+        assert_receive {:transfer_phase, %{duration: duration},
+                        %{phase: :acceptance, outcome: ^outcome}},
+                       1_000
+
+        assert duration >= 0
+
+        assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "human-support-transfer"}},
+                       2_000
+
+        assert_receive {:transfer_phase, _, %{phase: :cue, outcome: :ok}}, 1_000
+        refute_receive {:transfer_phase, _, %{phase: :acceptance}}, 0
+        refute_receive {:transfer_phase, _, %{phase: :briefing}}, 0
+        refute_receive {:DOWN, ^source_tts_monitor, :process, ^source_tts, _}, 0
+        assert :sys.get_state(authority).pending_participant_transfer == nil
+      end
+    end
   end
 
   test "only the exact destination connection can control the current attempt" do
@@ -1664,6 +1738,42 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_event,
                     %ToolCallCompleted{tool_call_id: "policy-failed-human-transfer"}},
                    50
+  end
+
+  defp observe_transfer_phases do
+    token = make_ref()
+    event = [:vxpipe, :call_engine, :transfer, :phase, :stop]
+    owner = self()
+
+    assert :ok =
+             :telemetry.attach(
+               token,
+               event,
+               fn _, measurements, metadata, _ ->
+                 send(owner, {:transfer_phase, measurements, metadata})
+               end,
+               nil
+             )
+
+    on_exit(fn -> :telemetry.detach(token) end)
+  end
+
+  defp observe_transfer_workers(authority) do
+    token = make_ref()
+    owner = self()
+
+    assert :ok =
+             :telemetry.attach(
+               token,
+               [:vxpipe, :call_engine, :transfer, :worker, :stop],
+               fn _, measurements, metadata, _ ->
+                 if self() == authority,
+                   do: send(owner, {:transfer_worker, measurements, metadata})
+               end,
+               nil
+             )
+
+    on_exit(fn -> :telemetry.detach(token) end)
   end
 
   defp pause_handoff_result(worker, stage \\ :prepare) do

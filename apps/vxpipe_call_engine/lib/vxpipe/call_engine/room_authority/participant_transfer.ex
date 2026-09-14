@@ -236,6 +236,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}}} =
           state
       ) do
+    Vxpipe.CallEngine.Telemetry.transfer_worker_stop(:unexpected)
     {:noreply, state} = worker_failed(reference, :preparation_process_down, state)
     {:handled, state}
   end

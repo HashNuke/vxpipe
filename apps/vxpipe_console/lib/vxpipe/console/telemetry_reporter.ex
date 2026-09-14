@@ -12,6 +12,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
   alias Vxpipe.Console.TelemetryReporter.MCPProjection
   alias Vxpipe.Console.TelemetryReporter.OpeningAudioProjection
   alias Vxpipe.Console.TelemetryReporter.StartupProjection
+  alias Vxpipe.Console.TelemetryReporter.TransferProjection
 
   @events [
     [:vxpipe, :gateway, :http, :request, :stop],
@@ -47,8 +48,8 @@ defmodule Vxpipe.Console.TelemetryReporter do
   ]
   @background_stop_outcomes [:ok, :failed, :unknown, :terminated]
   @background_handoff_outcomes [:queued, :duplicate, :overflow, :consumed]
-  @transfer_phases [:audience, :prepare, :release, :recover]
-  @transfer_outcomes [:ok, :failed, :timeout]
+  @transfer_phases [:audience, :prepare, :release, :recover, :briefing, :acceptance, :cue]
+  @transfer_outcomes [:ok, :failed, :timeout, :terminated, :cancelled]
 
   @type option ::
           {:handler_id, term()}
@@ -72,7 +73,10 @@ defmodule Vxpipe.Console.TelemetryReporter do
   def events,
     do:
       @events ++
-        MCPProjection.events() ++ OpeningAudioProjection.events() ++ StartupProjection.events()
+        MCPProjection.events() ++
+        OpeningAudioProjection.events() ++
+        StartupProjection.events() ++
+        TransferProjection.events()
 
   @doc false
   def handle_event(event, measurements, metadata, config) do
@@ -136,6 +140,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
        mcp: MCPProjection.new(),
        opening_audio: OpeningAudioProjection.new(),
        startup: StartupProjection.new(),
+       transfer_observations: TransferProjection.new(),
        pending: pending,
        provider_failures: %{},
        received_events: 0,
@@ -170,7 +175,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
       received_events: state.received_events,
       runtime: runtime_snapshot(state.runtime, state.runtime_sampled_at),
       tts: %{first_audio: state.tts_first_audio},
-      transfers: %{phases: state.transfer_phases}
+      transfers: Map.put(state.transfer_observations, :phases, state.transfer_phases)
     }
 
     {:reply, snapshot, state}
@@ -352,6 +357,13 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp project(event, measurements, metadata, state) do
+    case TransferProjection.project(event, measurements, metadata, state.transfer_observations) do
+      {:ok, transfers} -> %{state | transfer_observations: transfers}
+      :unhandled -> project_opening(event, measurements, metadata, state)
+    end
+  end
+
+  defp project_opening(event, measurements, metadata, state) do
     case OpeningAudioProjection.project(event, measurements, metadata, state.opening_audio) do
       {:ok, opening_audio} -> %{state | opening_audio: opening_audio}
       :unhandled -> project_startup(event, measurements, metadata, state)
@@ -484,6 +496,13 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp sanitize_event(event, measurements, metadata) do
+    case TransferProjection.sanitize(event, measurements, metadata) do
+      {:ok, measurements, metadata} -> {measurements, metadata}
+      :unhandled -> sanitize_opening(event, measurements, metadata)
+    end
+  end
+
+  defp sanitize_opening(event, measurements, metadata) do
     case OpeningAudioProjection.sanitize(event, measurements, metadata) do
       {:ok, measurements, metadata} -> {measurements, metadata}
       :unhandled -> sanitize_startup(event, measurements, metadata)

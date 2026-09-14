@@ -363,6 +363,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
 
   test "private playback follows the current room frame on one encoder and RTP clock" do
     {output, native} = start_output()
+    observe_drops(output)
     assert {:ok, binding} = OutputArbiter.bind_room(output, identity())
     assert :ok = OutputArbiter.push_room(output, binding, mixed(0))
     assert_receive {:rtp, %{sequence_number: 0, timestamp: 0, ssrc: ssrc}}
@@ -379,6 +380,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert_receive {:pace, ^native, cue_tick}
     assert :ok = OutputSink.finish(output, "cue", self())
     assert :dropped = OutputArbiter.push_room(output, binding, mixed(960))
+    assert_receive {:output_drop, %{count: 1}, %{source: :room, reason: :busy}}
     refute_receive {:vxpipe_audio_playback, ^output, "cue", {:completed, _}}
     send(native, cue_tick)
     assert_receive {:vxpipe_audio_playback, ^output, "cue", {:completed, 20}}
@@ -388,6 +390,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
 
   test "hold drains existing output, fences old generations and permits only private playback" do
     {output, native} = start_output()
+    observe_drops(output)
     assert {:ok, binding} = OutputArbiter.bind_room(output, identity())
     assert :ok = OutputSink.push(output, %{direct("old") | audio_scope: :conversation})
     assert_receive {:pace, ^native, tick}
@@ -395,9 +398,11 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     _ = :sys.get_state(output)
     assert :timeout = :gen_server.wait_response(request, 0)
     assert {:error, :held} = OutputArbiter.push_room(output, binding, mixed(0))
+    assert_receive {:output_drop, %{count: 1}, %{source: :room, reason: :held}}
     send(native, tick)
     assert {:reply, :ok} = :gen_server.wait_response(request, 1_000)
     assert {:error, :stale_output_generation} = OutputSink.push(output, direct("old"))
+    assert_receive {:output_drop, %{count: 1}, %{source: :direct, reason: :stale}}
     cue = Map.put(direct("cue"), :output_generation, 1)
     assert :ok = OutputSink.push(output, cue)
     assert_receive {:pace, ^native, cue_tick}
@@ -667,6 +672,23 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
              )
 
     pipeline
+  end
+
+  defp observe_drops(output) do
+    token = make_ref()
+    owner = self()
+
+    assert :ok =
+             :telemetry.attach(
+               token,
+               [:vxpipe, :gateway, :audio_output, :drop],
+               fn _, measurements, metadata, _ ->
+                 if self() == output, do: send(owner, {:output_drop, measurements, metadata})
+               end,
+               nil
+             )
+
+    on_exit(fn -> :telemetry.detach(token) end)
   end
 
   defp start_output(native_adapter \\ AudioEgress) do

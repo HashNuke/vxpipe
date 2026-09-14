@@ -40,7 +40,7 @@ private preparation. The missing work is completing and verifying their use in o
 
 | Area | Current boundary | Next required result |
 | --- | --- | --- |
-| Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. | Complete remaining failure stages, policy adoption, safe diagnostics and sample/audible acceptance. |
+| Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. Failure reasons, lifecycle timing and bounded playback diagnostics are available. | Complete remaining failure stages, policy adoption and sample/audible acceptance. |
 | Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
 | AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
 | Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
@@ -329,8 +329,8 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after whole-room resource-loss acceptance: **21 tasks** in this
-section—human web handoff 4, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6,
+Remaining work after human-handoff diagnostics: **20 tasks** in this
+section—human web handoff 3, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6,
 and final audit 2.
 The 13 open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
@@ -395,14 +395,19 @@ Implementation tasks:
   durations without call identity or provider payloads. A disconnected browser peer now shows
   “Connection interrupted” with the existing Disconnect action; reconnect restores the previous
   transfer phase and acceptance remains unavailable during interruption.
-- [ ] Complete caller/destination failure and recovery detail, separate briefing/acceptance/cue
+- [x] Complete caller/destination failure and recovery detail, separate briefing/acceptance/cue
   timings, forced-worker termination observations, and remaining queue/drop diagnostics. The
   destination may already be closed during source recovery; its progress UI alone is insufficient.
   Existing caller RTVI and destination progress now carry a bounded failure reason. Recovery
   progress is sent before private-destination cleanup, and restored callers retain that reason.
-  Timeout and required-STT failure during release report distinct terminal reasons. Separate
-  lifecycle timings, forced-worker observations and queue/drop diagnostics remain open.
-  See the [diagnostics labnote](../../labnotes/20260915-0359-human-transfer-diagnostics.md).
+  Timeout and required-STT failure during release report distinct terminal reasons. Briefing,
+  acceptance and per-listener cue durations now end at actual control/playback boundaries,
+  including acceptance timeout and phase loss. Surviving owners count confirmed worker
+  cancellation and unexpected exit. Sampled player slot depth/capacity and rejected/discarded
+  output submissions reach finite Console aggregates, sanitized before queue admission. All
+  five root gates pass: 1,401 tests, zero failures and 16 integration exclusions. See the
+  [reason-delivery labnote](../../labnotes/20260915-0359-human-transfer-diagnostics.md) and
+  [lifecycle observations](../../labnotes/20260915-0417-transfer-lifecycle-observations.md).
 
 Acceptance and commit tasks:
 
@@ -888,8 +893,6 @@ Known remaining work in the first slice:
 - Complete changes after policy application, other still-required resources and changing-listener
   lifetimes. Stale initial graph preparation now retries without discarding unchanged partial
   resources; pending collection, cue playback and final stale rejection also retry before application.
-- Finish failure, stage-timing and queue diagnostics beyond the implemented preparation status and
-  returned-worker durations.
 - Complete readiness-loss and policy-change handling for other capability kinds and changing
   membership; ordinary three-peer destination/remaining-human/room delay acceptance now passes.
 - Complete physical two-device and live phone recovery verification. Rendered Chrome now uses live
@@ -1119,6 +1122,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Human transfer lifecycle diagnostics | Red-green engine, output-arbiter and reporter checks pass, including acceptance, timeout and worker loss. All five root gates pass: 1,401 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing, acceptance and finite cue durations follow actual control/playback boundaries. Surviving owners count confirmed cancellation and unexpected worker exits. Console aggregates sampled player slot pressure and rejected/discarded arbiter submissions, stripping private data before mailbox admission. Combined with reason delivery, the human diagnostics item is complete; 20 checkpoint tasks remain. |
 | Transfer failure reasons | Native recovered-call reason delivery, terminal release timeout/STT-loss cases and 19 Gateway codec checks pass. All five root gates pass: 1,398 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | The connected desk receives a bounded reason before cleanup; the recovered caller receives the same reason. Terminal release failures report timeout or known speech loss. Unknown/internal details are not exposed. Lifecycle timings, forced-worker and queue diagnostics remain open; 21 checkpoint tasks remain. |
 | Whole-room resource loss and recorded recovery | Red recording/mixer reservation and native transcript failures; 25 focused engine checks, native recorded recovery and all five root gates pass: 1,396 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Nine three-peer cases cover independent destination STT, remaining-human STT and recording loss during preparation, adoption and partial release. No fatal loss reports activation/completion. Pre-adoption destination loss restores healthy resources, ordered cues, conversational audio, transcripts and recording. Independent delay/loss acceptance is complete; 21 checkpoint tasks remain. |
 | Private briefing retirement | The updated engine acceptance test first failed at missing cleanup, then all 34 engine human handoff cases, three focused native cases and all five root gates pass: 1,386 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing TTS survives until playback acknowledgement, then retires before acceptance. Source TTS and required destination STT remain independent. Retired notifications cannot cancel or duplicate acceptance; native custom/silent handoff and post-briefing caller recovery pass. Broader private-resource acceptance remains open; 22 checkpoint tasks remain. |

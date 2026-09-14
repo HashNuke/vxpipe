@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanBriefing do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Capability.TextToSpeech
-  alias Vxpipe.CallEngine.{Id, TextToSpeechRequest}
+  alias Vxpipe.CallEngine.{Id, Telemetry, TextToSpeechRequest}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{HumanPreparation, Pending}
   alias Vxpipe.CallEngine.RoomAuthority.{Startup, State}
 
@@ -48,9 +48,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanBriefing do
 
   @spec complete(Pending.t(), State.t()) :: Pending.t()
   def complete(%Pending{} = pending, %State{} = state) do
+    pending = stop_timing(pending, :ok)
     _ = Startup.discard_text_to_speech(pending.preparation.text_to_speech, state)
     preparation = %{pending.preparation | text_to_speech: nil}
-    %{pending | preparation: preparation, briefing: :completed, briefing_request: nil}
+
+    %{
+      pending
+      | preparation: preparation,
+        briefing: :completed,
+        briefing_request: nil,
+        acceptance_started_at: Telemetry.started_at()
+    }
+  end
+
+  def stop_timing(%Pending{} = pending, outcome) do
+    for {phase, started_at} <- [
+          briefing: pending.briefing_started_at,
+          acceptance: pending.acceptance_started_at
+        ],
+        is_integer(started_at) do
+      Telemetry.transfer_phase_stop(started_at, phase, outcome)
+    end
+
+    %{pending | briefing_started_at: nil, acceptance_started_at: nil}
   end
 
   defp text(pending, preparation) do

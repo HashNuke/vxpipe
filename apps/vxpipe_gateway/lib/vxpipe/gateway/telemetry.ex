@@ -8,6 +8,37 @@ defmodule Vxpipe.Gateway.Telemetry do
   """
 
   @request_stop_event [:vxpipe, :gateway, :http, :request, :stop]
+  @output_drop_event [:vxpipe, :gateway, :audio_output, :drop]
+
+  @doc "Counts rejected or discarded output frame submissions without their content."
+  def output_drop(source, reason) when source in [:room, :direct] do
+    category =
+      case reason do
+        :busy ->
+          :busy
+
+        :held ->
+          :held
+
+        :interrupted ->
+          :cleared
+
+        value when value in [:clearing, :draining] ->
+          :clearing
+
+        value when value in [:stale_room_binding, :stale_output_generation] ->
+          :stale
+
+        value
+        when value in [:wrong_recipient, :wrong_connection, :invalid_frame, :unsupported_audio] ->
+          :invalid
+
+        _other ->
+          :unavailable
+      end
+
+    :telemetry.execute(@output_drop_event, %{count: 1}, %{source: source, reason: category})
+  end
 
   @doc "Returns the event emitted when a gateway HTTP request stops."
   @spec request_stop_event() :: nonempty_list(atom())

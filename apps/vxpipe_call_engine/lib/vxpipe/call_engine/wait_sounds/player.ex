@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
   alias Vxpipe.CallEngine.OpeningAudio.Asset
+  alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.WaitSounds.Cursor
 
   @fields [
@@ -32,7 +33,8 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
                 pending: %{},
                 monitors: %{},
                 correlation: nil,
-                timer: nil
+                timer: nil,
+                started_at: nil
               ]
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
@@ -67,7 +69,8 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
           monitors =
             [state.owner | Map.values(state.sinks)] |> Map.new(&{Process.monitor(&1), &1})
 
-          {:ok, %{state | monitors: monitors}, {:continue, :frame}}
+          {:ok, %{state | monitors: monitors, started_at: Telemetry.started_at()},
+           {:continue, :frame}}
         else
           {:stop, :invalid_configuration}
         end
@@ -90,6 +93,8 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
         correlation = "#{state.episode_id}:#{state.connection_generation}:drain"
         timer = Process.send_after(self(), {:frame_timeout, correlation}, 5_000)
 
+        pressure(%{state | pending: pending}, :draining)
+
         {:noreply,
          %{state | pending: pending, mode: :draining, correlation: correlation, timer: timer}}
 
@@ -104,6 +109,8 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
           end)
 
         timer = Process.send_after(self(), {:frame_timeout, correlation}, 5_000)
+
+        if rem(state.sequence, 50) == 0, do: pressure(%{state | pending: pending}, :queued)
 
         {:noreply,
          %{
@@ -124,6 +131,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
     do: {:noreply, %{state | mode: :playing}, {:continue, :frame}}
 
   def handle_cast(:stop, %{mode: :paused} = state) do
+    stop_timing(state, :cancelled)
     notify(state, :stopped)
     {:stop, :normal, state}
   end
@@ -147,7 +155,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
   end
 
   def handle_info({:frame_timeout, correlation}, %{correlation: correlation} = state),
-    do: failed(state)
+    do: failed(state, :timeout)
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
       when is_map_key(state.monitors, monitor),
@@ -172,6 +180,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
 
         if map_size(state.pending) == 0 do
           Process.cancel_timer(state.timer)
+          stop_timing(state, if(state.mode == :stopping, do: :cancelled, else: :ok))
           notify(state, if(state.mode == :stopping, do: :stopped, else: :completed))
           {:stop, :normal, state}
         else
@@ -215,6 +224,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
           {:noreply, %{state | mode: :paused}}
 
         :stopping ->
+          stop_timing(state, :cancelled)
           notify(state, :stopped)
           {:stop, :normal, state}
       end
@@ -243,11 +253,31 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
     }
   end
 
-  defp failed(state) do
+  defp failed(state, outcome \\ :failed) do
+    stop_timing(state, outcome)
     notify(state, {:failed, :output_unavailable})
     {:stop, :normal, state}
   end
 
-  defp notify(state, status),
-    do: send(state.owner, {:vxpipe_wait_playback, self(), state.episode_id, status})
+  defp notify(state, status) do
+    observation =
+      case status do
+        {:paused, _position} -> :paused
+        {:failed, _reason} -> :failed
+        terminal -> terminal
+      end
+
+    pressure(state, observation)
+    send(state.owner, {:vxpipe_wait_playback, self(), state.episode_id, status})
+  end
+
+  defp pressure(state, status) do
+    kind = if state.loop, do: :wait, else: :cue
+    Telemetry.wait_sound_pressure(kind, status, map_size(state.pending), map_size(state.sinks))
+  end
+
+  defp stop_timing(%{loop: false} = state, outcome),
+    do: Telemetry.transfer_phase_stop(state.started_at, :cue, outcome)
+
+  defp stop_timing(_state, _outcome), do: :ok
 end

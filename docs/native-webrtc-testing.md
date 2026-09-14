@@ -163,6 +163,30 @@ The human destination's `vxpipe` channel carries the existing transfer controls.
 attempt ID, and awaits `transfer.active`. Media remains held through readiness and cue drain.
 This is a Vxpipe acceptance channel alongside RTVI; audio travels over RTP, not in those messages.
 
+## Transfer diagnostic observations
+
+The existing `Vxpipe.Console.TelemetryReporter.snapshot/1` includes `transfers.phases` for
+audience, preparation, release, recovery, briefing, acceptance and cue durations. Briefing ends
+after acknowledged playback; acceptance ends on valid acceptance or failure. Cue durations are
+per finite playback episode through final drain, including repeated cues after readiness changes.
+
+Additional bounded aggregates under `transfers` are:
+
+- `workers`: counts of confirmed `cancelled` phase workers and exact monitored `unexpected`
+  exits, observed by the surviving supervisor or room authority.
+- `playback`: sample count and peak depth/capacity by wait/cue kind and playback status. Depth is
+  occupied player output slots in the current frame/drain batch, with one slot per sink. Samples
+  occur on the first frame, every 50 frames and drain/terminal transitions; this is not a live
+  per-listener queue view.
+- `output_drops`: rejected/discarded output frame submissions by room/direct source and bounded
+  reason. These measure arbiter admission and clearing, not RTP/network loss.
+
+The corresponding new telemetry events are `[:vxpipe, :call_engine, :transfer, :worker, :stop]`,
+`[:vxpipe, :call_engine, :wait_sounds, :pressure]`, and
+`[:vxpipe, :gateway, :audio_output, :drop]`. Existing transfer phase events carry the additional
+durations. Metadata has fixed categories; the reporter removes private fields before queueing.
+These observations add no call configuration or UI component.
+
 ## Audio boundary and evidence
 
 The Morse case selects real local Morse STT/TTS with a scripted model response. It:

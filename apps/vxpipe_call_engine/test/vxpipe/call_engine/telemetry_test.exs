@@ -22,6 +22,8 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
              [:vxpipe, :call_engine, :startup, :progress],
              [:vxpipe, :call_engine, :startup, :stop],
              @transfer_phase_stop_event,
+             [:vxpipe, :call_engine, :transfer, :worker, :stop],
+             [:vxpipe, :call_engine, :wait_sounds, :pressure],
              [:vxpipe, :call_engine, :provider, :failure],
              @background_tool_admission_event,
              @background_tool_stop_event,

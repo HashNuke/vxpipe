@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl}
-  alias Vxpipe.CallEngine.{Error, TextToSpeechRequest}
+  alias Vxpipe.CallEngine.{Error, Telemetry, TextToSpeechRequest}
 
   alias Vxpipe.CallEngine.RoomAuthority.{ConnectionLifecycle, Startup, State}
 
@@ -240,8 +240,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   def connection_down(_connection_id, %State{}), do: :unhandled
 
-  defp apply_control(:accept, %Pending{accepted?: false, briefing: :completed} = pending),
-    do: {:ok, %{pending | accepted?: true}}
+  defp apply_control(:accept, %Pending{accepted?: false, briefing: :completed} = pending) do
+    pending = HumanBriefing.stop_timing(pending, :ok)
+    {:ok, %{pending | accepted?: true}}
+  end
 
   defp apply_control(:accept, %Pending{accepted?: false}) do
     {:error, Error.new(:participant_transfer_not_ready, "The private briefing has not finished.")}
@@ -265,9 +267,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
     case connection do
       %{output_sink: output_sink} when is_pid(output_sink) ->
+        started_at = Telemetry.started_at()
+
         case HumanBriefing.start(pending, pending.preparation, connection, state) do
           {:ok, request} ->
-            pending = %{pending | briefing: :playing, briefing_request: request}
+            pending = %{
+              pending
+              | briefing: :playing,
+                briefing_request: request,
+                briefing_started_at: started_at
+            }
+
             {:ok, %{state | pending_participant_transfer: pending}}
 
           {:error, :unavailable} ->
@@ -516,6 +526,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp fail(pending, cause, state) do
+    outcome =
+      case cause do
+        :deadline_elapsed -> :timeout
+        :preparation_process_down -> :terminated
+        _failure -> :failed
+      end
+
+    pending = HumanBriefing.stop_timing(pending, outcome)
     # Report before discarding the private destination so a still-connected desk
     # can receive the same bounded reason as the caller that remains in the room.
     if MapSet.size(state.held_participant_ids) > 0 do

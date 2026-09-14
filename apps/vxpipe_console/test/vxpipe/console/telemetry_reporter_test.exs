@@ -107,6 +107,68 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     refute inspect(snapshot) =~ sentinel
   end
 
+  test "aggregates transfer lifecycle and playback pressure without private event data" do
+    {_id, reporter} = start_reporter(max_pending_events: 32)
+    sentinel = "private-transfer-details"
+
+    for phase <- [:briefing, :acceptance, :cue] do
+      :telemetry.execute(@transfer_phase_stop, %{count: 1, duration: duration_ms(20)}, %{
+        phase: phase,
+        outcome: :ok,
+        attempt_id: sentinel
+      })
+    end
+
+    :telemetry.execute([:vxpipe, :call_engine, :transfer, :worker, :stop], %{count: 1}, %{
+      outcome: :unexpected,
+      error: sentinel
+    })
+
+    :telemetry.execute(
+      [:vxpipe, :call_engine, :wait_sounds, :pressure],
+      %{count: 1, depth: 2, limit: 2, audio: sentinel},
+      %{kind: :wait, status: :queued, participant: sentinel}
+    )
+
+    :telemetry.execute([:vxpipe, :gateway, :audio_output, :drop], %{count: 1}, %{
+      source: :room,
+      reason: :held,
+      frame: sentinel
+    })
+
+    snapshot = TelemetryReporter.snapshot(reporter)
+
+    for phase <- [:briefing, :acceptance, :cue] do
+      assert snapshot.transfers.phases[{phase, :ok}] == duration_stats(20_000)
+    end
+
+    assert snapshot.transfers.workers == %{unexpected: 1}
+
+    assert snapshot.transfers.playback[{:wait, :queued}] == %{
+             count: 1,
+             max_depth: 2,
+             max_limit: 2
+           }
+
+    assert snapshot.transfers.output_drops == %{{:room, :held} => 1}
+    refute inspect(snapshot) =~ sentinel
+
+    :ok = :sys.suspend(reporter)
+
+    :telemetry.execute(
+      [:vxpipe, :call_engine, :wait_sounds, :pressure],
+      %{count: 1, depth: 0, limit: 1, audio: sentinel},
+      %{kind: sentinel, status: sentinel, participant: sentinel}
+    )
+
+    {:messages, messages} = Process.info(reporter, :messages)
+    refute inspect(messages) =~ sentinel
+    :ok = :sys.resume(reporter)
+
+    assert TelemetryReporter.snapshot(reporter).transfers.playback[{:unknown, :unknown}] ==
+             %{count: 1, max_depth: 0, max_limit: 1}
+  end
+
   test "drops excess pending events instead of growing its mailbox" do
     {_child_id, reporter} = start_reporter(max_pending_events: 2)
     :ok = :sys.suspend(reporter)

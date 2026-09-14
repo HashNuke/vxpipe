@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, MixedFrame}
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.Gateway.Media.OutputArbiter.{PreparedRoom, Readiness}
+  alias Vxpipe.Gateway.Telemetry
 
   @timeout 5_000
 
@@ -177,6 +178,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   def handle_call({:room, binding, %MixedFrame{} = frame}, {caller, _} = from, state) do
     with :ok <- room_allowed(binding, caller, frame, state) do
       if state.current || state.pending_direct do
+        Telemetry.output_drop(:room, :busy)
         {:reply, :dropped, state}
       else
         token = token()
@@ -209,7 +211,9 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
          )}
       end
     else
-      {:error, reason} -> {:reply, {:error, reason}, state}
+      {:error, reason} ->
+        Telemetry.output_drop(:room, reason)
+        {:reply, {:error, reason}, state}
     end
   end
 
@@ -220,13 +224,16 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
           {:noreply, %{state | pending_direct: {frame, from}}}
 
         state.current && state.current.kind == :room ->
+          Telemetry.output_drop(:direct, :busy)
           {:reply, {:error, :busy}, state}
 
         true ->
           {:noreply, push_direct(state, frame, from)}
       end
     else
-      {:error, reason} -> {:reply, {:error, reason}, state}
+      {:error, reason} ->
+        Telemetry.output_drop(:direct, reason)
+        {:reply, {:error, reason}, state}
     end
   end
 
@@ -565,8 +572,10 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     if state.current && state.current.kind == :direct,
       do: Process.demonitor(state.current.monitor, [:flush])
 
-    if state.pending_direct && discard_pending?,
-      do: GenServer.reply(elem(state.pending_direct, 1), {:error, :interrupted})
+    if state.pending_direct && discard_pending? do
+      Telemetry.output_drop(:direct, :interrupted)
+      GenServer.reply(elem(state.pending_direct, 1), {:error, :interrupted})
+    end
 
     request(
       %{

@@ -18,6 +18,8 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @startup_progress_event [:vxpipe, :call_engine, :startup, :progress]
   @startup_stop_event [:vxpipe, :call_engine, :startup, :stop]
   @transfer_phase_stop_event [:vxpipe, :call_engine, :transfer, :phase, :stop]
+  @transfer_worker_stop_event [:vxpipe, :call_engine, :transfer, :worker, :stop]
+  @wait_sound_pressure_event [:vxpipe, :call_engine, :wait_sounds, :pressure]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_stop_event [:vxpipe, :call_engine, :background_tool, :stop]
@@ -31,6 +33,8 @@ defmodule Vxpipe.CallEngine.Telemetry do
     @startup_progress_event,
     @startup_stop_event,
     @transfer_phase_stop_event,
+    @transfer_worker_stop_event,
+    @wait_sound_pressure_event,
     @provider_failure_event,
     @background_tool_admission_event,
     @background_tool_stop_event,
@@ -112,20 +116,37 @@ defmodule Vxpipe.CallEngine.Telemetry do
     )
   end
 
-  @doc "Emits elapsed time for a completed human-handoff worker stage without call identity."
+  @doc "Emits elapsed time for a transfer phase without call identity."
   @spec transfer_phase_stop(
           integer(),
-          :audience | :prepare | :release | :recover,
-          :ok | :failed | :timeout
+          :audience | :prepare | :release | :recover | :briefing | :acceptance | :cue,
+          :ok | :failed | :timeout | :terminated | :cancelled
         ) :: :ok
   def transfer_phase_stop(started_at, phase, outcome)
-      when is_integer(started_at) and phase in [:audience, :prepare, :release, :recover] and
-             outcome in [:ok, :failed, :timeout] do
+      when is_integer(started_at) and
+             phase in [:audience, :prepare, :release, :recover, :briefing, :acceptance, :cue] and
+             outcome in [:ok, :failed, :timeout, :terminated, :cancelled] do
     :telemetry.execute(
       @transfer_phase_stop_event,
       %{count: 1, duration: System.monotonic_time() - started_at},
       %{phase: phase, outcome: outcome}
     )
+  end
+
+  @doc "Counts forced phase termination at its surviving supervisor or monitor owner."
+  def transfer_worker_stop(outcome) when outcome in [:cancelled, :unexpected],
+    do: :telemetry.execute(@transfer_worker_stop_event, %{count: 1}, %{outcome: outcome})
+
+  @doc "Reports pending private playback slots without listener identity or audio."
+  def wait_sound_pressure(kind, status, depth, limit)
+      when kind in [:wait, :cue] and
+             status in [:queued, :draining, :paused, :stopped, :completed, :failed] and
+             is_integer(depth) and is_integer(limit) and depth >= 0 and depth <= limit and
+             limit > 0 do
+    :telemetry.execute(@wait_sound_pressure_event, %{count: 1, depth: depth, limit: limit}, %{
+      kind: kind,
+      status: status
+    })
   end
 
   @doc "Emits one safe provider failure category."

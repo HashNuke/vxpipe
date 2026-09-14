@@ -73,6 +73,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
   end
 
   test "multiple output sinks follow one participant cursor and stop only after both drain" do
+    observe_pressure()
     second_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
 
     {player, first_sink} =
@@ -86,6 +87,10 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     assert first.correlation_id == second.correlation_id
     assert_receive {:test_audio_output_finish, ^first_sink, _}
     assert_receive {:test_audio_output_finish, ^second_sink, _}
+
+    assert_receive {:player_pressure, ^player, %{depth: 2, limit: 2},
+                    %{kind: :wait, status: :queued}}
+
     Player.stop(player)
     _ = :sys.get_state(player)
     monitor = Process.monitor(player)
@@ -95,6 +100,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     complete(second_sink)
     assert_receive {:vxpipe_wait_playback, ^player, "shared", :stopped}
     assert_receive {:DOWN, ^monitor, :process, ^player, :normal}
+    assert_receive {:player_pressure, ^player, %{depth: 0, limit: 2}, %{status: :stopped}}
   end
 
   test "finite cues await final drain on every output and carry the held generation" do
@@ -121,6 +127,23 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     refute_receive {:vxpipe_wait_playback, ^player, "cue-drain", :completed}
     assert :ok = GenServer.call(second, :complete_drain)
     assert_receive {:vxpipe_wait_playback, ^player, "cue-drain", :completed}
+  end
+
+  defp observe_pressure do
+    token = make_ref()
+    owner = self()
+
+    assert :ok =
+             :telemetry.attach(
+               token,
+               [:vxpipe, :call_engine, :wait_sounds, :pressure],
+               fn _, measurements, metadata, _ ->
+                 send(owner, {:player_pressure, self(), measurements, metadata})
+               end,
+               nil
+             )
+
+    on_exit(fn -> :telemetry.detach(token) end)
   end
 
   defp start_player(asset, episode, options \\ []) do

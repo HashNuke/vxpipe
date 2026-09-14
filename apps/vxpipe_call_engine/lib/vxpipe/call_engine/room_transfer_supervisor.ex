@@ -84,7 +84,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   @spec terminate(String.t(), pid()) :: :ok | {:error, :unavailable}
   def terminate(incarnation_id, task) when is_pid(task) do
     case Task.Supervisor.terminate_child(via(incarnation_id), task) do
-      :ok -> :ok
+      :ok -> Vxpipe.CallEngine.Telemetry.transfer_worker_stop(:cancelled)
       {:error, :not_found} -> :ok
     end
   catch

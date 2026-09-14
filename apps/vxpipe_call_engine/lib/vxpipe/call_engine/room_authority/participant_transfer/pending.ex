@@ -10,6 +10,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending do
                 accepted?: false,
                 briefing: :not_required,
                 briefing_request: nil,
+                briefing_started_at: nil,
+                acceptance_started_at: nil,
                 destination_connection_id: nil,
                 media_ready?: false,
                 handoff: nil,
@@ -26,6 +28,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending do
           accepted?: boolean(),
           briefing: :not_required | :waiting | :playing | :completed,
           briefing_request: nil | Vxpipe.CallEngine.TextToSpeechRequest.t(),
+          briefing_started_at: nil | integer(),
+          acceptance_started_at: nil | integer(),
           destination_connection_id: nil | String.t(),
           media_ready?: boolean(),
           preparation:
