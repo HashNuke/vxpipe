@@ -150,6 +150,13 @@ reply waits for complete startup readiness and opening completion. A connected p
 setup waiting before that reply. Transfer progress uses
 the existing `server-message` envelope, with `data.t: "vxpipe.transfer"`, `data.v: 1`, and
 `data.d` containing attempt ID, destination, phase, blocker categories and elapsed milliseconds.
+Recovery and failure progress also carry an optional `reason` code: `timeout`,
+`destination_disconnected`, `speech_to_text_unavailable`, `text_to_speech_unavailable`,
+`media_unavailable`, `policy_changed`, `preparation_failed`, or `unavailable`. These reflect the
+known engine failure category, never provider error text. Successful transfer progress omits the
+field; successful source recovery retains the reason the transfer failed. Both the caller's RTVI
+channel and the destination's `transfer.progress` sideband carry it. Recovery progress is sent
+before private-destination cleanup; the caller still receives the outcome if the desk has gone.
 
 The human destination's `vxpipe` channel carries the existing transfer controls. It waits for
 `transfer.acceptance_ready` after the private briefing, sends `transfer.accept` with the exact

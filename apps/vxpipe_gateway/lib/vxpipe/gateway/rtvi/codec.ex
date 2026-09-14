@@ -209,7 +209,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   def encode_transfer_progress(attempt_id, progress) do
     data =
       progress
-      |> Map.take([:destination, :phase, :blockers, :elapsed_ms])
+      |> Map.take([:destination, :phase, :blockers, :elapsed_ms, :reason])
       |> Map.put(:attempt_id, attempt_id)
 
     {:ok,

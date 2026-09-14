@@ -330,7 +330,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           state = record_output_generation(state, recovered)
           state = restore_text_to_speech(state, recovered.text_to_speech)
           state = History.failed(state, pending.request, cause, :completed)
-          Progress.publish(pending, :recovered, [], state)
+          Progress.publish(pending, :recovered, [], state, cause)
           GenServer.reply(pending.from, {:error, :unavailable})
 
           {:noreply,
@@ -365,7 +365,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
             retry_preparation(pending, ready, state)
 
           _commit_failed ->
-            Progress.publish(pending, :failed, [], state)
+            Progress.publish(pending, :failed, [], state, :destination_commit_unavailable)
             GenServer.reply(pending.from, {:error, :unavailable})
             {:stop, :handoff_commit_failed, state}
         end
@@ -415,9 +415,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   defp release_failed(pending, state) do
     Phase.cancel(pending)
-    Progress.publish(pending, :failed, [], state)
-    GenServer.reply(pending.from, {:error, :unavailable})
     cause = Map.get(pending.handoff, :failure, :destination_media_unavailable)
+    Progress.publish(pending, :failed, [], state, cause)
+    GenServer.reply(pending.from, {:error, :unavailable})
     state = History.failed(state, pending.request, cause, :failed)
     {:stop, :handoff_release_failed, state}
   end
@@ -516,6 +516,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp fail(pending, cause, state) do
+    # Report before discarding the private destination so a still-connected desk
+    # can receive the same bounded reason as the caller that remains in the room.
+    if MapSet.size(state.held_participant_ids) > 0 do
+      Progress.publish(pending, :recovering, [], state, cause)
+    end
+
     Phase.cancel(pending)
     discard_preparation(pending, state)
     Cleanup.discard_destination(pending.request)
@@ -525,15 +531,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       start_recovery(pending, cause, state)
     else
       state = History.failed(state, pending.request, cause, :not_required)
-      Progress.publish(pending, :recovered, [], state)
+      Progress.publish(pending, :recovered, [], state, cause)
       GenServer.reply(pending.from, {:error, :unavailable})
       %{state | pending_participant_transfer: nil}
     end
   end
 
   defp start_recovery(pending, cause, state) do
-    Progress.publish(pending, :recovering, [], state)
-
     source_text_to_speech =
       if state.text_to_speech_capability == nil, do: state.text_to_speech_runtime
 
@@ -564,7 +568,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   defp recovery_failed(pending, state) do
     Phase.cancel(pending)
-    Progress.publish(pending, :failed, [], state)
+    cause = Map.get(pending.handoff, :failure, pending.handoff.cause)
+    Progress.publish(pending, :failed, [], state, cause)
     GenServer.reply(pending.from, {:error, :unavailable})
 
     outcome =

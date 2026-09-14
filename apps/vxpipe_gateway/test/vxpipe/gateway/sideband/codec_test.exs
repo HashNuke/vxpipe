@@ -3,6 +3,35 @@ defmodule Vxpipe.Gateway.Sideband.CodecTest do
 
   alias Vxpipe.Gateway.Sideband.Codec
 
+  for {codec, method, path} <- [
+        {Vxpipe.Gateway.Sideband.Codec, :encode_progress, ["data"]},
+        {Vxpipe.Gateway.RTVI.Codec, :encode_transfer_progress, ["data", "d"]}
+      ] do
+    test "#{inspect(codec)} carries the transfer reason without unrelated private details" do
+      codec = unquote(codec)
+      method = unquote(method)
+
+      progress = %{
+        phase: :recovering,
+        blockers: [],
+        elapsed_ms: 250,
+        reason: :speech_to_text_unavailable,
+        provider_error: "private-provider-response"
+      }
+
+      assert {:ok, payload} = apply(codec, method, ["transfer-1", progress])
+      message = JSON.decode!(payload)
+      data = get_in(message, unquote(path))
+      assert data["reason"] == "speech_to_text_unavailable"
+      assert data["attempt_id"] == "transfer-1"
+      refute payload =~ "private-provider-response"
+
+      healthy = progress |> Map.delete(:reason) |> Map.put(:phase, :completed)
+      assert {:ok, payload} = apply(codec, method, ["transfer-1", healthy])
+      refute payload =~ "reason"
+    end
+  end
+
   test "decodes destination acceptance for one explicit transfer attempt" do
     payload =
       JSON.encode!(%{

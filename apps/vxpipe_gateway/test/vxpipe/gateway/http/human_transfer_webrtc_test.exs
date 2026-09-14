@@ -992,8 +992,18 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         end
 
         if recovers? do
+          assert %{"data" => %{"reason" => failure_reason}} =
+                   await_sideband(support_client, "transfer.progress", 2_000, "recovering")
+
+          # The speech owner can report provider loss directly, or the readiness
+          # collector can observe the failed media binding first.
+          assert failure_reason in ["speech_to_text_unavailable", "media_unavailable"]
+
           await_recovered(room_authority, System.monotonic_time(:millisecond) + 2_000)
-          assert %{"phase" => "recovered"} = await_transfer_progress(caller_client, "recovered")
+
+          assert %{"phase" => "recovered", "reason" => ^failure_reason} =
+                   await_transfer_progress(caller_client, "recovered")
+
           refute_receive {:DOWN, ^authority_monitor, :process, ^room_authority, _reason}, 50
           refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 50
           assert {:ok, recovered} = CallEngine.RoomAuthority.readiness_binding(room_authority)
@@ -1362,11 +1372,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
                   pending = :sys.get_state(authority).pending_participant_transfer
                   send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
-                  await_terminal_transfer_failure(caller_client, attempt)
+
+                  assert %{"reason" => "timeout"} =
+                           await_terminal_transfer_failure(caller_client, attempt)
 
                 :release_speech_loss ->
                   TestSpeechToTextTransport.disconnect(transport, :test_release_failure)
-                  await_terminal_transfer_failure(caller_client, attempt)
+
+                  assert %{"reason" => "speech_to_text_unavailable"} =
+                           await_terminal_transfer_failure(caller_client, attempt)
 
                 _policy_change ->
                   assert {:ok, _policy} =
@@ -2590,13 +2604,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       %{
         "data" => %{
           "t" => "vxpipe.transfer",
-          "d" => %{"attempt_id" => ^attempt, "phase" => phase}
+          "d" => %{"attempt_id" => ^attempt, "phase" => phase} = progress
         }
       } ->
         refute phase in ["recovering", "recovered", "completed"],
                "a failed release attempted recovery or reported success"
 
-        if phase != "failed", do: await_terminal_transfer_failure(connection, attempt, deadline)
+        if phase == "failed",
+          do: progress,
+          else: await_terminal_transfer_failure(connection, attempt, deadline)
 
       _other ->
         await_terminal_transfer_failure(connection, attempt, deadline)

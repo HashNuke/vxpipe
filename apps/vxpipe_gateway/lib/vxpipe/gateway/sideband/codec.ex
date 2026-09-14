@@ -35,13 +35,13 @@ defmodule Vxpipe.Gateway.Sideband.Codec do
     do: encode(attempt_id, "transfer.acceptance_ready", %{"attempt_id" => attempt_id})
 
   @spec encode_progress(String.t(), map()) :: {:ok, binary()}
-  def encode_progress(attempt_id, %{phase: phase, blockers: blockers, elapsed_ms: elapsed_ms}) do
-    encode(attempt_id, "transfer.progress", %{
-      "attempt_id" => attempt_id,
-      "phase" => phase,
-      "blockers" => blockers,
-      "elapsed_ms" => elapsed_ms
-    })
+  def encode_progress(attempt_id, %{phase: _, blockers: _, elapsed_ms: _} = progress) do
+    data =
+      progress
+      |> Map.take([:phase, :blockers, :elapsed_ms, :reason])
+      |> Map.put(:attempt_id, attempt_id)
+
+    encode(attempt_id, "transfer.progress", data)
   end
 
   @spec encode_error(String.t()) :: binary()

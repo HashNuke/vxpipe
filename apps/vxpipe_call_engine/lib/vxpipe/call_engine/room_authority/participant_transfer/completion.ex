@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Completion do
         start_first_message(state, pending.request.caller_participant_id)
 
       {:error, _reason} ->
-        Progress.publish(pending, :failed, [], state)
+        Progress.publish(pending, :failed, [], state, :destination_commit_unavailable)
         GenServer.reply(pending.from, {:error, :unavailable})
         exit(:shutdown)
     end
