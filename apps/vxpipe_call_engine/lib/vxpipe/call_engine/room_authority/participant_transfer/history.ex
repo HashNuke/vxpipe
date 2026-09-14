@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
     :deadline_elapsed,
     :destination_commit_unavailable,
     :destination_connection_unavailable,
+    :destination_media_unavailable,
     :destination_participant_unavailable,
     :destination_plan_unavailable,
     :destination_speech_to_text_unavailable,
@@ -23,6 +24,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
           :deadline_elapsed
           | :destination_commit_unavailable
           | :destination_connection_unavailable
+          | :destination_media_unavailable
           | :destination_participant_unavailable
           | :destination_plan_unavailable
           | :destination_speech_to_text_unavailable

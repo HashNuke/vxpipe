@@ -88,7 +88,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
           timer: timer
         }
 
-        {:noreply, %{state | pending_participant_transfer: pending}}
+        held =
+          if destination.kind == :human,
+            do:
+              MapSet.new(state.connections, fn {_id, connection} -> connection.participant_id end),
+            else: state.held_participant_ids
+
+        {:noreply, %{state | pending_participant_transfer: pending, held_participant_ids: held}}
 
       {:error, :unavailable} ->
         state = History.failed(state, request, :preparation_supervisor_unavailable)

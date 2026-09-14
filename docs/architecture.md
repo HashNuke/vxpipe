@@ -1873,9 +1873,12 @@ uncorrelatable wire messages.
 
 One deliberately separate transport mechanism exists for a provisional human-transfer
 destination. Its WebRTC connection may negotiate a `vxpipe` data channel alongside RTVI's `chat`
-channel. The server sends `transfer.preparation`, the authenticated destination sends
-`transfer.accept`, and the server sends `transfer.active` only after engine commit and usable main
-media. Controls carry bounded public attempt/participant identifiers, never briefing content or
+channel. The server sends `transfer.preparation`, followed by `transfer.acceptance_ready` with the
+same `attempt_id` after private briefing playback completes. The authenticated destination may
+then send `transfer.accept`; early or duplicate acceptance cannot advance the handoff. The server
+sends `transfer.active` only after required capabilities are ready, private connection cues finish,
+and the committed main media is released. Phone destinations use the same acceptance window for
+DTMF. Controls carry bounded public attempt/participant identifiers, never briefing content or
 internal authorization detail. This is not an RTVI message family and does not alter behavior for
 an unmodified RTVI 2.x client. Future adapters may expose the same protocol-neutral engine command
 through another authenticated mechanism.

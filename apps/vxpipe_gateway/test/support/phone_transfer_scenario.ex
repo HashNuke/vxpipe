@@ -1,8 +1,6 @@
 defmodule Vxpipe.Gateway.PhoneTransferScenario do
   @moduledoc false
 
-  alias Vxpipe.CallEngine
-
   alias Vxpipe.CallEngine.{
     CallDefinition,
     CallInvocation,
@@ -136,7 +134,7 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
         deadline: future_deadline()
       )
 
-    CallEngine.attach_connection(command, output_sink)
+    Vxpipe.CallEngine.TestTransferConnection.attach(command, output_sink)
   end
 
   def send_command(plan, room, caller, content) do

@@ -24,11 +24,26 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
        observer: Keyword.fetch!(options, :observer),
        pending_output: nil,
        played_ms: 0,
+       automatic_playback_ms: nil,
+       output_generation: 0,
        recording_egress: nil
      }}
   end
 
   @impl true
+  def handle_call({:vxpipe_audio_output_hold, generation}, _from, state),
+    do: {:reply, :ok, %{state | output_generation: generation}}
+
+  def handle_call(
+        {:vxpipe_audio_output_release, generation},
+        _from,
+        %{output_generation: generation} = state
+      ),
+      do: {:reply, :ok, %{state | output_generation: 0}}
+
+  def handle_call(:vxpipe_audio_output_clear, _from, state),
+    do: {:reply, {:ok, 0}, %{state | callback: nil}}
+
   def handle_call({:vxpipe_bind_recording_egress, handoff}, _from, state) do
     send(state.observer, {:test_audio_recording_bound, self(), handoff})
     {:reply, :ok, %{state | recording_egress: handoff}}
@@ -49,7 +64,16 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def handle_call({:vxpipe_audio_output, frame}, from, state) do
     send(state.observer, {:test_audio_output, self(), frame})
-    state = %{state | callback: {frame.reply_to, frame.correlation_id}}
+
+    automatic =
+      if frame.audio_scope == :private and frame.output_generation > 0,
+        do: div(byte_size(frame.payload) * 1_000, frame.sample_rate * frame.channels * 2)
+
+    state = %{
+      state
+      | callback: {frame.reply_to, frame.correlation_id},
+        automatic_playback_ms: automatic
+    }
 
     if state.block_output do
       {:noreply, %{state | pending_output: from}}
@@ -60,6 +84,15 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def handle_call({:vxpipe_audio_output_finish, turn, callback}, _from, state) do
     send(state.observer, {:test_audio_output_finish, self(), turn})
+
+    if state.automatic_playback_ms do
+      Process.send_after(
+        callback,
+        {:vxpipe_audio_playback, self(), turn, {:completed, state.automatic_playback_ms}},
+        state.automatic_playback_ms
+      )
+    end
+
     {:reply, :ok, %{state | callback: {callback, turn}}}
   end
 

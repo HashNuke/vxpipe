@@ -166,7 +166,8 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          session: session,
          sideband_channel_ref: nil,
          transfer_media_ready?: false,
-         transfer_preparation_sent?: false
+         transfer_preparation_sent?: false,
+         transfer_acceptance_ready?: false
        }}
     else
       _error -> {:stop, :connection_attachment_failed}
@@ -174,6 +175,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   @impl true
+  def handle_call({:vxpipe_handoff_gate, action, scope}, {caller, _}, state) do
+    case Vxpipe.Gateway.Media.HandoffGate.control(action, scope, caller, state) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:vxpipe_prepare_transfer_media, attempt_id}, _from, state) do
     options = [
       engine: CallEngine,
@@ -231,6 +239,18 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     audio_tracks = Map.put(state.audio_tracks, track.id, track_codecs(peer_connection, track.id))
     {:noreply, %{state | audio_tracks: audio_tracks}}
   end
+
+  def handle_info(
+        {:ex_webrtc, _peer, {:rtp, _track, _rid, _packet}},
+        %{handoff_gate: %{held?: true}} = state
+      ),
+      do: {:noreply, state}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{handoff_gate: %{monitor: monitor}} = state
+      ),
+      do: {:stop, :shutdown, state}
 
   def handle_info(
         {:ex_webrtc, peer_connection, {:rtp, track_id, _rid, %Packet{} = packet}},
@@ -407,6 +427,15 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
       ) do
     send_event(event, state)
     {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_transfer_active, attempt_id}, state) do
+    TransferSideband.send_active(attempt_id, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_transfer_acceptance_ready, attempt_id}, state) do
+    {:noreply, TransferSideband.acceptance_ready(attempt_id, state)}
   end
 
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do

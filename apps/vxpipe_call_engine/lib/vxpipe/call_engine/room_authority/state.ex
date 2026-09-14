@@ -30,6 +30,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 background_tool_calls: %{},
                 pending_agent_teardowns: %{},
                 pending_connection_promotions: %{},
+                committed_departures: MapSet.new(),
+                held_participant_ids: MapSet.new(),
                 next_sequence: 1,
                 participant_monitors: %{},
                 participant_supervisors: %{},

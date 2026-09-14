@@ -2364,3 +2364,34 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
 - Console TypeScript passes; the two focused files contain three passing checks. Asset build passes.
   Complete milestone acceptance remains open for remaining failure/privacy/diagnostic and audible
   checks, followed by the AI, initial-call, phone and changing-listener delivery slices.
+
+### Commit preparation
+
+- Committed operational model/tool readiness separately as `01a2469`; overlapping requests and
+  tool-capacity enforcement remain intact. The main handoff runtime and narrow Console changes
+  are separate pending commits, preserving the other agent's documentation-site work.
+- The first four-concurrent-case full run had one remaining failure out of 1,278 checks: a raw
+  private-media fixture requested allocation after seeing the provider process start but before
+  RoomAuthority installed the completed preparation. Its transfer helper now waits for that
+  authoritative preparation state. Both engine human-transfer suites pass again: 15 checks,
+  zero failures (`vxpipe-human-preparation-ack-green.log`). The other seven application suites,
+  including all 320 Gateway checks, passed in the preceding full run.
+- Documented the actual web `transfer.acceptance_ready` message and the shared phone acceptance
+  window in the existing architecture protocol section. No new public wait-sound fields or
+  additional UI components were introduced.
+
+### Passing human-handoff implementation checkpoint
+
+- Final root verification passes against the staged implementation: `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix credo --strict`, `mix test --max-cases 4`, and
+  `mix deps.unlock --check-unused`. The complete suite contains 1,278 tests, zero failures and
+  15 integration exclusions (`vxpipe-human-ready-commit-results.json` and corresponding logs).
+  Four concurrent cases reduce contention; they do not exclude any additional tests or alter
+  production deadlines. Earlier default-concurrency failures remain recorded above.
+- Package the engine/Gateway human-handoff integration together with its owning web/phone checks
+  and protocol documentation. Its supported normal flow and destination/phase/player recovery are
+  runnable; full delivery acceptance remains open for the explicitly listed remaining cases.
+  The existing Console acceptance/status/button changes follow as their own small commit.
+- Milestone implementation tasks now mark the implemented early hold, acceptance, ordinary handoff
+  and corrected phone/embedded boundaries. Root/owning checks are marked verified. Complete human
+  slice acceptance, the other four slices, milestone 23 and the packaging/retention hold remain open.

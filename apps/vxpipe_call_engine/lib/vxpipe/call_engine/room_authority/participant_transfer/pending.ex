@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending do
                 briefing_request: nil,
                 destination_connection_id: nil,
                 media_ready?: false,
+                handoff: nil,
                 preparation: nil
               ]
 

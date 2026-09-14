@@ -55,7 +55,8 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
       authority: self(),
       incarnation_id: incarnation_id,
       attempt_id: attempt_id,
-      deadline_ms: deadline_ms
+      deadline_ms: deadline_ms,
+      audience_request: if(destination.kind == :human, do: request)
     }
 
     task =
@@ -128,6 +129,32 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
       :ok -> :ok
       {:error, :not_found} -> :ok
     end
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  def handoff(incarnation_id, work) when is_function(work, 0) do
+    Task.Supervisor.async(via(incarnation_id), work)
+  end
+
+  def recover(pending) do
+    deadline =
+      System.monotonic_time(:millisecond) + ParticipantTransfer.SourceRestorer.timeout_ms()
+
+    scope = %{
+      authority: self(),
+      incarnation_id: pending.request.incarnation_id,
+      attempt_id: pending.attempt_id,
+      deadline_ms: deadline
+    }
+
+    task =
+      Task.Supervisor.async_nolink(via(scope.incarnation_id), fn ->
+        Phase.run(scope, fn -> {:handoff, :recover, pending.request} end)
+      end)
+
+    send(task.pid, {:vxpipe_transfer_phase_start, task.ref})
+    {:ok, task, deadline}
   catch
     :exit, _reason -> {:error, :unavailable}
   end

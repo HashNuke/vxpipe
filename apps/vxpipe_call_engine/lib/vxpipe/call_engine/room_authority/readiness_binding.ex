@@ -106,6 +106,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
     end)
   end
 
+  defp attempt(%{handoff: %{stage: :recovering}}), do: nil
   defp attempt(%{attempt_id: id, deadline_ms: deadline}), do: %{id: id, deadline_ms: deadline}
   defp attempt(_pending), do: nil
 end

@@ -54,6 +54,9 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   def init(options), do: {:ok, State.new(options)}
 
   @impl true
+  def handle_call({:adopt_attachment, attachment}, {owner, _}, %{owner: owner} = state),
+    do: {:reply, :ok, %{state | attachment: attachment}}
+
   def handle_call(:readiness_binding, _from, state) do
     {:reply, {:ok, Readiness.binding(state)}, state}
   end

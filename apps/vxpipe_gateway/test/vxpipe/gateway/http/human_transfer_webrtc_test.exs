@@ -83,13 +83,235 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     :ok
   end
 
+  test "human handoff retains source and private admission until destination STT is ready" do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+    source_monitor = Process.monitor(source_tts)
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    caller_client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat"))
+
+    assert :ok = send_rtvi_text(caller_client)
+    assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "ready-human-transfer",
+               name: "transfer",
+               arguments: %{
+                 "destination" => "human-support",
+                 "reason" => "Please connect human support."
+               }
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+    # The caller waits from transfer authorization, before a destination even connects.
+    assert caller_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+    assert :ok = send_rtvi_text(caller_client, "before-destination")
+
+    assert %{"type" => "error-response", "id" => "before-destination"} =
+             await_sideband(caller_client, "error-response", 2_000)
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    %{"data" => %{"attempt_id" => attempt_id}} =
+      await_sideband(support_client, "transfer.preparation", 5_000)
+
+    [{room_authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    connection = Map.fetch!(binding.connections, support_client.connection_id).pid
+    policy = Authority.snapshot(binding.policy_authority)
+    assert_receive {:test_tts_control, ^briefing_tts, _speak}, 2_000
+    assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
+
+    assert :ok = send_acceptance(support_client, "accept-before-briefing", attempt_id)
+
+    assert %{"id" => "accept-before-briefing", "type" => "error"} =
+             await_sideband(support_client, "error", 2_000)
+
+    assert :sys.get_state(room_authority).pending_participant_transfer.accepted? == false
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"readiness-briefing"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(briefing_tts, :binary.copy(<<1, 0>>, 960))
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"readiness-briefing"})
+    )
+
+    assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+             await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+    assert :ok = send_acceptance(support_client, "accept-ready-support", attempt_id)
+
+    assert_receive {:test_stt_transport_started, joining_stt, _}, 2_000
+    {:ok, private} = GenServer.call(connection, :vxpipe_connection_readiness)
+    assert private.attachment.admission == :transfer_preparation
+    assert Authority.snapshot(binding.policy_authority) == policy
+    refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 100
+    assert :ok = send_rtvi_text(caller_client, "held-turn")
+
+    assert %{"type" => "error-response", "id" => "held-turn"} =
+             await_sideband(caller_client, "error-response", 2_000)
+
+    refute_receive {:test_agent_runtime_stream, _model,
+                    %{correlation: %{correlation_id: "held-turn"}}},
+                   100
+
+    TestSpeechToTextTransport.deliver(
+      joining_stt,
+      ~s({"type":"Connected","request_id":"ready-human-stt","sequence_id":0})
+    )
+
+    assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+             await_sideband(support_client, "transfer.active", 5_000)
+
+    {:ok, admitted} = GenServer.call(connection, :vxpipe_connection_readiness)
+    assert admitted.attachment.admission == :main
+    assert admitted.output == private.output
+    assert admitted.room_input == private.room_input
+    assert admitted.room_output == private.room_output
+    assert admitted.attachment.media_ingress == private.attachment.media_ingress
+    refute_receive {:test_stt_transport_started, _replacement, _}, 100
+    assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
+    assert {:ok, final} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    assert final.attempt == nil
+    assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
+  end
+
+  for loss <- [:destination, :phase, :wait_player] do
+    test "recovers the held caller after #{loss} loss without replacing source media" do
+      plan = compile_plan()
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = CallEngine.start_call(plan)
+      stop_room_on_exit(plan)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller_client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat"))
+
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      {:ok, initial} = CallEngine.RoomAuthority.readiness_binding(authority)
+      caller_connection = Map.fetch!(initial.connections, caller_client.connection_id).pid
+      caller_monitor = Process.monitor(caller_connection)
+      {:ok, before} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
+      assert :ok = send_rtvi_text(caller_client)
+      assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+
+      assert {:ok, call} =
+               ToolCall.new(
+                 id: "recover-human-transfer",
+                 name: "transfer",
+                 arguments: %{"destination" => "human-support", "reason" => "Connect support."}
+               )
+
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+      send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+      assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
+      assert {:ok, acknowledgement} = ModelResponse.new(text: "I am connecting support.")
+      send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
+      assert caller_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+
+      support_client =
+        plan
+        |> issue_session(room, support.participant_id)
+        |> then(&connect(&1.session_id, "vxpipe"))
+
+      assert %{"type" => "transfer.preparation"} =
+               await_sideband(support_client, "transfer.preparation", 2_000)
+
+      {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+      pending = :sys.get_state(authority).pending_participant_transfer
+
+      case unquote(loss) do
+        :destination ->
+          GenServer.stop(
+            Map.fetch!(binding.connections, support_client.connection_id).pid,
+            :normal
+          )
+
+        :phase ->
+          Process.exit(pending.task.pid, :kill)
+
+        :wait_player ->
+          {:ok, phase} =
+            CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(pending.task.pid)
+
+          [player] = phase.audience.waits
+          Process.exit(player, :kill)
+      end
+
+      await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
+      refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
+      {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
+      assert after_recovery.output == before.output
+      assert after_recovery.room_input == before.room_input
+      assert after_recovery.room_output == before.room_output
+      assert :sys.get_state(caller_connection).handoff_gate == nil
+      refute_receive {:test_tts_transport_started, _replacement, _}, 50
+
+      # Finish the scripted response to the failed tool before starting another caller turn.
+      assert_receive {:test_agent_runtime_stream, recovery_provider, _}, 2_000
+      assert {:ok, recovery_response} = ModelResponse.new(text: "I am still here.")
+      send(recovery_provider, {:test_agent_runtime_response, {:ok, recovery_response}})
+
+      assert %{"data" => %{"text" => "I am still here."}} =
+               await_sideband(caller_client, "bot-output", 2_000)
+
+      assert %{"type" => "bot-stopped-speaking"} =
+               await_sideband(caller_client, "bot-stopped-speaking", 2_000)
+
+      assert :ok = send_rtvi_text(caller_client, "after-recovery")
+
+      assert_receive {:test_agent_runtime_stream, _model,
+                      %{correlation: %{correlation_id: "after-recovery"}}},
+                     2_000
+    end
+  end
+
   for failure <- [:phase, :room_input, :room_output] do
     @private_media_failure failure
     test "private WebRTC media stays gated and cleans up after #{@private_media_failure} loss" do
       alias Vxpipe.CallEngine.MediaPolicy.Authority
       alias Vxpipe.Gateway.WebRTC.Connection
 
-      plan = compile_plan()
+      plan = compile_plan(wait_sounds: nil)
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
       assert {:ok, room} = CallEngine.start_call(plan)
@@ -218,6 +440,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         assert_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 2_000
       end
 
+      await_recovered(room_authority, System.monotonic_time(:millisecond) + 2_000)
       assert Authority.snapshot(Authority.whereis(room.incarnation_id)) == policy
       assert {:ok, _resource, :ready} = Connection.readiness(caller_client.connection_id)
     end
@@ -227,7 +450,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     alias Vxpipe.CallEngine.Media.OutputSink
     alias Vxpipe.CallEngine.MediaPolicy.Authority
     alias Vxpipe.CallEngine.Readiness.{Collector, Preparation}
-    alias Vxpipe.Gateway.Media.RoomAudioEgress
+    alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
     {:ok, room_binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
     caller_connection = Map.fetch!(room_binding.connections, caller.connection_id).pid
@@ -243,14 +466,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       |> MapSet.put(joining.identity.participant_id)
 
     assert {:ok, candidate} = Authority.preview_presence(room_binding.policy_authority, presence)
-    assert :ok = RoomAudioEgress.hold(caller_binding.room_output, 1)
-    assert :ok = OutputSink.hold(joining.output, 1)
+    assert {:ok, phase} = Phase.scope(private.owner)
+    generation = phase.audience.scope.generation
+    assert :ok = OutputSink.hold(joining.output, generation)
 
     options = [
       owner: private.owner,
       attempt_id: private.attempt_id,
       deadline_ms: private.deadline_ms,
-      generation: 1
+      generation: generation
     ]
 
     assert {:ok, prepared} = Preparation.run_candidate(room_authority, candidate, options)
@@ -302,15 +526,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     {:ok, retained} = CallEngine.RoomAuthority.readiness_binding(room_authority)
     assert Map.fetch!(retained.participants, source) == source_capabilities
 
-    monitor = Process.monitor(private_stt)
-    assert :ok = Preparation.discard(prepared)
-    assert_receive {:DOWN, ^monitor, :process, ^private_stt, _}, 2_000
+    # Keep the prepared graph owned by the phase until the test injects its target loss.
+    # Discarding it here can trigger recovery before that failure is exercised.
     stop_supervised!({Collector, private.attempt_id})
-    assert :ok = RoomAudioEgress.release(caller_binding.room_output, 1)
   end
 
   test "a destination accepts privately before joining bidirectional room audio" do
-    plan = compile_plan()
+    plan = compile_plan(wait_sounds: nil)
 
     assert {:ok, room} =
              CallEngine.start_call(plan,
@@ -437,7 +659,6 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
            } = await_sideband(support_client, "error", 5_000)
 
     refute_receive {:test_stt_transport_started, _, _}
-    :ok = send_acceptance(support_client, "accept-support", attempt_id)
 
     assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
 
@@ -462,13 +683,22 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
 
+    assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+             await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+    :ok = send_acceptance(support_client, "accept-support", attempt_id)
+    assert_receive {:test_stt_transport_started, support_stt, _connection}, 2_000
+
+    TestSpeechToTextTransport.deliver(
+      support_stt,
+      ~s({"type":"Connected","request_id":"support-request","sequence_id":0})
+    )
+
     assert %{
              "id" => ^attempt_id,
              "type" => "transfer.active",
              "data" => %{"attempt_id" => ^attempt_id}
            } = await_sideband(support_client, "transfer.active", 5_000)
-
-    assert_receive {:test_stt_transport_started, support_stt, _connection}, 2_000
 
     assert {:ok, output, :ready} =
              Vxpipe.Gateway.WebRTC.Connection.readiness(support_client.connection_id)
@@ -508,18 +738,6 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
          resources: graph,
          deadline_ms: System.monotonic_time(:millisecond) + 5_000}
       )
-
-    assert_receive {:vxpipe_readiness_changed, ^collector,
-                    %{status: :preparing, blockers: blockers}},
-                   2_000
-
-    assert Enum.any?(blockers, &(&1.kind == :speech_to_text))
-    refute_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
-
-    TestSpeechToTextTransport.deliver(
-      support_stt,
-      ~s({"type":"Connected","request_id":"support-request","sequence_id":0})
-    )
 
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
 
@@ -698,12 +916,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                MapSet.put(policy.present_participant_ids, observer)
              )
 
-    assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+    generation = System.unique_integer([:positive, :monotonic])
+    assert :ok = RoomAudioEgress.hold(binding.room_output, generation)
 
     options = [
       owner: self(),
       attempt_id: "candidate-speech",
-      generation: 1,
+      generation: generation,
       deadline_ms: System.monotonic_time(:millisecond) + 5_000
     ]
 
@@ -801,7 +1020,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     outputs =
       Enum.map(room_binding.connections, fn {_id, connection} ->
         assert {:ok, binding} = GenServer.call(connection.pid, :vxpipe_connection_readiness)
-        assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+
+        assert :ok =
+                 RoomAudioEgress.hold(binding.room_output, Keyword.fetch!(options, :generation))
+
         binding.room_output
       end)
 
@@ -840,7 +1062,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       options
     )
 
-    Enum.each(outputs, fn output -> assert :ok = RoomAudioEgress.release(output, 1) end)
+    Enum.each(outputs, fn output ->
+      assert :ok = RoomAudioEgress.release(output, Keyword.fetch!(options, :generation))
+    end)
   end
 
   defp verify_recording_preparation_boundary(
@@ -877,7 +1101,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = Preparation.discard(retry)
   end
 
-  defp compile_plan do
+  defp compile_plan(options \\ []) do
     resource_id = unique_id("human-transfer-definition")
 
     assert {:ok, definition} =
@@ -887,6 +1111,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
+                 wait_sounds: Keyword.get(options, :wait_sounds, %{}),
                  participants: %{
                    "caller" => %{
                      type: "human",
@@ -1086,12 +1311,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert response.status == 200
   end
 
-  defp send_rtvi_text(connection) do
+  defp send_rtvi_text(connection, id \\ unique_id("turn")) do
     PeerConnection.send_data(
       connection.client,
       connection.channel_ref,
       JSON.encode!(%{
-        "id" => unique_id("turn"),
+        "id" => id,
         "label" => "rtvi-ai",
         "type" => "send-text",
         "data" => %{
@@ -1183,6 +1408,21 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp decodable_pcm_size(packet) do
     decoder = Decoder.Native.create(48_000, 1)
     packet |> then(&Decoder.Native.decode_packet(decoder, &1.payload)) |> byte_size()
+  end
+
+  defp await_recovered(authority, deadline) do
+    state = :sys.get_state(authority)
+
+    if state.pending_participant_transfer == nil and MapSet.size(state.held_participant_ids) == 0 do
+      :ok
+    else
+      assert System.monotonic_time(:millisecond) < deadline, "caller recovery did not finish"
+
+      receive do
+      after
+        10 -> await_recovered(authority, deadline)
+      end
+    end
   end
 
   defp stop_room_on_exit(plan) do

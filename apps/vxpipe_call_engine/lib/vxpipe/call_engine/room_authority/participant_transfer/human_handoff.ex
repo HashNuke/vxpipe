@@ -9,14 +9,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
     Cleanup,
-    Completion,
     History,
     HumanBriefing,
     HumanCommitter,
     HumanPreparation,
     Pending,
     Phase,
-    PrivateMedia,
     PrivateSpeech
   }
 
@@ -123,7 +121,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     if HumanBriefing.matches?(pending, capability, request) do
       state =
         case status do
-          :completed ->
+          :completed when pending.briefing != :completed ->
+            notify_acceptance_ready(pending, state)
             {:ok, state} = progress(%{pending | briefing: :completed}, state)
             state
 
@@ -223,13 +222,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   @spec pending?(Pending.t(), State.t()) :: boolean()
   def pending?(%Pending{} = pending, %State{} = state), do: human_pending?(pending, state)
 
-  defp apply_control(:accept, %Pending{accepted?: false} = pending),
+  defp apply_control(:accept, %Pending{accepted?: false, briefing: :completed} = pending),
     do: {:ok, %{pending | accepted?: true}}
+
+  defp apply_control(:accept, %Pending{accepted?: false}) do
+    {:error, Error.new(:participant_transfer_not_ready, "The private briefing has not finished.")}
+  end
 
   defp apply_control(:media_ready, %Pending{media_ready?: false} = pending),
     do: {:ok, %{pending | media_ready?: true}}
 
   defp apply_control(_action, _pending), do: {:error, :duplicate}
+
+  defp notify_acceptance_ready(pending, state) do
+    Enum.each(state.connections, fn {_id, connection} ->
+      if connection.transfer_attempt_id == pending.attempt_id do
+        send(connection.pid, {:vxpipe_transfer_acceptance_ready, pending.attempt_id})
+      end
+    end)
+  end
 
   defp progress(%Pending{media_ready?: true, briefing: :waiting} = pending, state) do
     connection = transfer_connection(pending.attempt_id, state)
@@ -255,11 +266,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       Authorizer.authorize(pending.request, state) != :ok ->
         {:ok, fail(pending, :source_authority_changed, state)}
 
-      PrivateSpeech.bound?(pending, state) or PrivateMedia.bound?(pending, state) ->
+      pending.handoff != nil ->
         {:ok, %{state | pending_participant_transfer: pending}}
 
       true ->
-        commit(pending, state)
+        :ok =
+          Phase.handoff(pending.task.pid, :prepare, %{
+            request: pending.request,
+            preparation: pending.preparation
+          })
+
+        held =
+          MapSet.new(state.connections, fn {_id, connection} -> connection.participant_id end)
+
+        {:ok,
+         %{
+           state
+           | pending_participant_transfer: %{pending | handoff: :preparing},
+             held_participant_ids: held
+         }}
     end
   end
 
@@ -267,17 +292,67 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     {:ok, %{state | pending_participant_transfer: pending}}
   end
 
-  defp commit(pending, state) do
-    demonitor_outbound_leg(pending.preparation)
+  def handoff_result(
+        reference,
+        stage,
+        result,
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+          state
+      ) do
+    case {stage, pending.handoff, result} do
+      {:recover, %{stage: :recovering, deadline_ms: deadline, cause: cause}, {:ok, _binding}} ->
+        with :ok <- Authorizer.authorize(pending.request, state),
+             :ok <- Phase.finish(%{pending | deadline_ms: deadline}) do
+          state = History.failed(state, pending.request, cause, :completed)
+          GenServer.reply(pending.from, {:error, :unavailable})
 
-    case HumanCommitter.commit(pending, pending.preparation, state) do
-      {:ok, result, state} ->
-        {:ok, Completion.finish(pending, result, state)}
+          {:noreply,
+           %{state | pending_participant_transfer: nil, held_participant_ids: MapSet.new()}}
+        else
+          _failure -> recovery_failed(pending, state)
+        end
 
-      {:error, :destination_unavailable, state} ->
-        {:ok, fail(pending, :destination_commit_unavailable, state)}
+      {_, %{stage: :recovering}, _failure} ->
+        recovery_failed(pending, state)
+
+      {:prepare, :preparing, {:ok, ready}} ->
+        with :ok <- Authorizer.authorize(pending.request, state),
+             {:ok, current} <- Vxpipe.CallEngine.RoomAuthority.ReadinessBinding.capture(state),
+             true <- current == ready.graph.inventory.binding,
+             {:ok, state} <- HumanCommitter.commit_ready(pending, ready, state) do
+          :ok = Phase.handoff(pending.task.pid, :release, ready)
+
+          {:noreply,
+           %{
+             state
+             | pending_participant_transfer: %{
+                 pending
+                 | handoff: %{stage: :releasing, ready: ready}
+               }
+           }}
+        else
+          _commit_failed ->
+            GenServer.reply(pending.from, {:error, :unavailable})
+            {:stop, :handoff_commit_failed, state}
+        end
+
+      {:release, %{stage: :releasing}, {:ok, ready}} ->
+        demonitor_outbound_leg(pending.preparation)
+        {:noreply, HumanCommitter.finish_ready(pending, ready, state)}
+
+      {_, %{stage: :releasing}, _failure} ->
+        GenServer.reply(pending.from, {:error, :unavailable})
+        {:stop, :handoff_release_failed, state}
+
+      {_, _, {:error, _reason}} ->
+        {:noreply, fail(pending, :destination_media_unavailable, state)}
+
+      _stale ->
+        {:noreply, state}
     end
   end
+
+  def handoff_result(_reference, _stage, _result, state), do: {:noreply, state}
 
   defp authorize_control(command, caller, pending, state) do
     connection = Map.get(state.connections, command.connection_id)
@@ -334,13 +409,61 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     end)
   end
 
+  defp fail(%Pending{handoff: %{stage: :recovering}} = pending, _cause, state) do
+    send(
+      self(),
+      {:vxpipe_transfer_handoff_result, pending.task.ref, :recover, {:error, :recovery_failed}}
+    )
+
+    state
+  end
+
   defp fail(pending, cause, state) do
     Phase.cancel(pending)
     discard_preparation(pending, state)
+    Cleanup.discard_destination(pending.request)
     state = ConnectionLifecycle.discard_transfer(pending.attempt_id, :transfer_failed, state)
-    state = History.failed(state, pending.request, cause, :not_required)
+
+    if MapSet.size(state.held_participant_ids) > 0 do
+      start_recovery(pending, cause, state)
+    else
+      state = History.failed(state, pending.request, cause, :not_required)
+      GenServer.reply(pending.from, {:error, :unavailable})
+      %{state | pending_participant_transfer: nil}
+    end
+  end
+
+  defp start_recovery(pending, cause, state) do
+    case Vxpipe.CallEngine.RoomTransferSupervisor.recover(pending) do
+      {:ok, task, deadline} ->
+        timer =
+          Process.send_after(
+            self(),
+            {:vxpipe_participant_transfer_deadline, task.ref},
+            max(deadline - System.monotonic_time(:millisecond), 0)
+          )
+
+        pending = %{
+          pending
+          | task: task,
+            timer: timer,
+            preparation: nil,
+            handoff: %{stage: :recovering, cause: cause, deadline_ms: deadline}
+        }
+
+        %{state | pending_participant_transfer: pending}
+
+      {:error, _reason} ->
+        pending = %{pending | handoff: %{stage: :recovering, cause: cause}}
+        fail(pending, :recovery_failed, %{state | pending_participant_transfer: pending})
+    end
+  end
+
+  defp recovery_failed(pending, state) do
+    Phase.cancel(pending)
     GenServer.reply(pending.from, {:error, :unavailable})
-    %{state | pending_participant_transfer: nil}
+    state = History.failed(state, pending.request, pending.handoff.cause, :failed)
+    {:stop, :handoff_recovery_failed, state}
   end
 
   defp discard_preparation(%Pending{preparation: %HumanPreparation{} = preparation}, state) do

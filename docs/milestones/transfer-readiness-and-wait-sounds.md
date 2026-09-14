@@ -2,7 +2,8 @@
 
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
-Normal human-handoff integration is uncommitted and the latest full suite has nine failures.
+Human-handoff integration now passes normal transfer and bounded-recovery checks. All five root
+gates pass with 1,278 tests and zero failures (test concurrency four); full slice acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
 Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecycle.md),
@@ -34,15 +35,15 @@ private preparation. The missing work is completing and verifying their use in o
 
 | Area | Current boundary | Next required result |
 | --- | --- | --- |
-| Human web transfer | Uncommitted normal acceptance prepares media, collects readiness, plays cues, adopts and releases; six WebRTC checks pass with simulated providers. | Finish early audience holds, post-briefing acceptance, recovery and sample verification; pass the full suite before committing. |
-| Phone transfer | Private preparation components pass without selected STT; current full call harnesses fail with `media_connection/unsupported_audio`. | Resolve the configured speech/media integration and verify actual phone handoff ordering. Component preparation does not establish phone STT compatibility. |
+| Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and audience-player loss recover the caller through the same retained media. | Complete remaining readiness/cue failures, safe diagnostics and sample/audible acceptance. |
+| Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
 | AI transfer | Existing transfer works under its earlier contract; the new wait/readiness/cue sequence is not integrated. | Reuse the completed human flow's coordination for an agent destination, including model/tools and first-message gating. |
 | Initial call | Opening playback exists; early caller waiting and full initial readiness orchestration are unfinished. | Provide caller output before expensive setup, compose waiting with opening playback, then release conversation once. |
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
-The last verified implementation commit is `c4fea8c` (1,274 tests, zero failures). The latest full
-run of the subsequent worktree reports 1,275 tests and nine failures; later phone fixture changes
-still leave both incoming-call harnesses failing. Neither result establishes full milestone acceptance.
+The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
+passes all five root gates with 1,278 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
 
@@ -306,17 +307,19 @@ slice demands it. There is no separate infrastructure-completion phase.
 
 | Delivery checkpoint | Runnable result | Depends on | Status |
 | --- | --- | --- | --- |
-| [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | In progress; uncommitted integration, acceptance open |
+| [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | Normal flow and recovery implemented; full acceptance open |
 | [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Not integrated |
 | [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Not integrated |
-| [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Components exist; full handoff currently fails |
+| [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local incoming/outbound handoff checks pass; full acceptance open |
 | [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Component coverage only |
 
 A checkpoint stays open until its runnable acceptance and applicable
 [common gates](index.md#common-implementation-and-verification-gates) pass. Fix regressions in
-existing supported paths within the checkpoint that introduces them: the known phone/embedded
-failures block the human-web checkpoint's commit even though broader phone acceptance has its own
-slice. Record unavailable external verification explicitly; do not label a local simulation as
+existing supported paths within the checkpoint that introduces them. The user requested continuing
+coherent implementation commits as progress is verified; a delivery checkpoint may contain several
+such commits and remains open until its complete acceptance passes. Keep Console edits limited to
+the existing transfer controls and status; `vxpipe-docs` belongs to another agent. Record unavailable
+external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
@@ -327,27 +330,28 @@ on a second device, hear its private briefing, accept, hear the local waits/cues
 directions with permitted transcripts. A delayed or failed capability produces a useful preparing
 or recovery state rather than a false completion or unexplained return to the create-room screen.
 
-Carry forward the existing uncommitted `HumanMediaHandoff`/`HandoffGate` integration and six passing
-WebRTC checks. The new normal-handoff regression disables waits; these results do not close this
-checkpoint.
+Carry forward the existing `HumanMediaHandoff`/`HandoffGate` integration. The normal-handoff check
+uses default waits and rejects caller text before the destination connects. Recovery checks exercise
+destination and phase loss, retained media and a fresh caller turn; complete checkpoint acceptance
+still requires the remaining failure, privacy, sample and audible verification below.
 
 Implementation tasks:
 
-- [ ] Gate all existing audience input/output/model turns at authorized transfer start and begin
+- [x] Gate all existing audience input/output/model turns at authorized transfer start and begin
   `transfer_to_human` immediately. Suspend caller-idle handling while preserving the whole-call
   clock; suppress competing source speech and discard held microphone frames without replay.
-- [ ] Enforce briefing completion before authenticated acceptance on both server control paths.
+- [x] Enforce briefing completion before authenticated acceptance on both server control paths.
   Keep early/duplicate controls harmless and start `transfer_joining` immediately upon valid
   acceptance. The original total attempt deadline covers every stage.
-- [ ] Finish ordinary acceptance through whole-room preparation, ordered wait clearing, every
+- [x] Finish ordinary acceptance through whole-room preparation, ordered wait clearing, every
   listener's cue, exact policy adoption, acknowledged release and one consistent completion.
   Retain source resources until completion and retain unaffected capability/codec instances.
 - [ ] Finish rejection, expiry, disconnect and preparation/cue failure cleanup. Recover the source
   within the existing restoration budget, with readiness and cue before release; close when
   recovery is impossible or partial release leaves uncertain media admission. Never redial.
-- [ ] Resolve existing engine connection-fixture failures and the configured phone
+- [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
-  Remove prepared private resources that the resulting policy does not demand.
+- [ ] Remove prepared private resources that the resulting policy does not demand.
 - [ ] Connect Console phases and safe diagnostics to the actual engine state: briefing, accepting,
   preparing, connected and failure/recovery. Show the blocking capability kind and phase timing
   without exposing provider payloads. Keep the acceptance button readable through transitions.
@@ -360,7 +364,7 @@ Acceptance and commit tasks:
 - [ ] Delay required destination, remaining-participant and room capabilities independently, then
   inject readiness loss and cue backpressure. Observe no premature conversation/success and
   unchanged healthy instances; verify held text/audio cannot interrupt or replay after release.
-- [ ] Run the owning engine/Gateway/Console checks, including the existing web/phone transfer
+- [x] Run the owning engine/Gateway/Console checks, including the existing web/phone transfer
   regressions, and all five root gates. Record exact results for the implementation being committed.
 - [ ] Inspect desktop `/pipecat-console` and mobile-sized `/transfer` with `agent-browser` in
   rendered Chrome, deliberately delaying readiness. Verify the audible two-device handoff and
@@ -607,51 +611,51 @@ retains the chronological red/green results, failed approaches and intermediate 
 | Readiness descriptions and bounded collection across speech, model/tools/MCP, recording, room services and negotiated media | `c0bd41f`, `52e3047`, `d3d6532`, `2e02e6a`, `71d3a06`, `0bc649e`, `cde2f91` | Exact identity/configuration/generation and provider acknowledgements replace PID-only assumptions. Required unsupported resources fail; unchanged instances remain reusable. The common collector exists, but each ordinary lifecycle still has to use it. |
 | Prospective membership, affected speech/decoder/output/mixer preparation and full candidate collection | `b02a2d2`, `fb567d0`, `43aafa2`, `b079dbf`, `97119f8`, `9fc4b83`, `02ab65e` | Real media checks cover prepare/discard/retry/adopt without prematurely replacing live routes. The room graph includes remaining participants and room resources; candidate readiness grants no early permission. |
 | Candidate recording tracks/taps and exact membership adoption | `4b14530`, `666ca37`, `69b5ad6` | Local recording paths prepare under future policy without changing current permissions; an exact collected membership commits in one revision under the original deadline. Remote persistence remains asynchronous. |
-| Attempt-owned private speech and actual Gateway preparation | `a8106d4`, `c005511`, `4801597`, `5ab8c17`, `c4fea8c` | Private actors are bound to the authorized connection and persistent phase. WebRTC preparation waits for destination STT while retaining caller/source resources. Phone component checks select no STT, so they do not prove the currently failing configured phone handoff. |
+| Attempt-owned private speech and actual Gateway preparation | `a8106d4`, `c005511`, `4801597`, `5ab8c17`, `c4fea8c` | Private actors are bound to the authorized connection and persistent phase. WebRTC preparation waits for destination STT while retaining caller/source resources. Phone component checks select no STT, while later worktree checks exercise configured incoming phone STT. |
 
 The durable [readiness resource contract](../readiness-resource-contract.md) records ownership,
 identity, preparation/adoption and cleanup rules. The
 [incremental policy contract](../incremental-media-policy.md) remains authoritative: readiness or
 waiting must not restart any unaffected participant or room capability.
 
-### Human handoff integration in the worktree
+### Human handoff integration
 
-Normal acceptance now invokes private media preparation and full prospective collection, starts
-participant waits, drains cues, commits the exact membership, adopts existing media actors and
-awaits release before completion. Held text/model admission and caller-idle handling are gated;
-source retirement occurs after completion. This integration is **uncommitted and incomplete**.
+Transfer authorization holds connected audience input/output/model turns and starts their private
+wait players before destination preparation. Human acceptance is enabled after the private briefing
+finishes. Acceptance prepares the prospective graph, waits for all demanded resources, clears waits,
+drains cues, commits the exact membership and adopts/releases the prepared media. Source resources
+remain retained until completion; normal handoff does not replace unchanged codec/media instances.
 
-The six passing WebRTC checks include delayed destination STT, private admission while preparing,
-retained media actors, held-text rejection, audio/transcript integration and a surviving room after
-source teardown. The newly added normal-handoff regression disables waiting sounds. It therefore
-does not demonstrate the default/custom waiting experience, all failure paths, or rendered UI.
+Destination, phase and audience-player loss enter bounded source recovery. The caller retains its
+connection, input/output routes and initialized source resources, hears the recovery cue and can
+continue its conversation. Recovery uses the existing 750 ms budget and completes the failed tool
+result only after release. Model/tool readiness now describes operational initialization; ordinary
+request admission continues to enforce occupancy and capacity limits.
 
 Known remaining work in the first slice:
 
-- Audience holds currently start after acceptance/briefing, rather than at transfer authorization.
-- Early acceptance still latches; the approved server-side post-briefing window is unfinished.
-- Phase loss can close held connections; bounded source restoration is not implemented by that
-  cleanup. Recovery requires its own readiness, cue and release sequence.
-- Existing embedded test connections do not implement the new preparation protocol. Actual phone
-  harnesses also fail with `media_connection/unsupported_audio`; these are distinct findings.
-- Selected-but-undemanded private speech cleanup, changing membership/connection behavior and full
-  sample/diagnostic integration remain open. No browser or live audible acceptance is claimed.
+- Complete readiness-loss, cue-backpressure, partial-release and expiry coverage across all stages.
+- Remove selected-but-undemanded private speech and finish safe blocker/timing diagnostics.
+- Verify default/custom/nil playback and private-audio isolation through the full sample path.
+- Complete audible two-device and recovery verification. Rendered UI checks use simulated browser
+  admission/media events and do not establish physical-device or live-provider audio behavior.
+- Changing membership/connections and multiple listeners retain their later dedicated checkpoint.
 
 ### Verification ledger
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
-| Last verified implementation, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
-| Subsequent human-handoff worktree | Six WebRTC transfer checks pass with simulated providers | The exercised normal web handoff waits for destination STT and retains the prepared actors/room. Broader acceptance remains open. |
-| Latest full worktree run, before subsequent phone fixture edits | Format, warnings-as-errors compile, strict Credo and unused dependencies pass; 1,275 tests, nine failures, 15 exclusions | Five engine transfer failures and four Gateway phone failures remain. This is not a green implementation checkpoint. |
-| Latest targeted phone diagnosis, after fixture edits | Two incoming-call harnesses fail; both report `media_connection/unsupported_audio` during preparation | A remaining phone media integration failure is reproduced. No subsequent full root pass is recorded. |
-| Rendered browser, physical two-device audio and live phone provider | Not verified for this milestone | Automated media delivery/marks cannot substitute for audible and UI acceptance. |
+| Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
+| Human handoff and recovery | Nine WebRTC transfer checks pass with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff; destination/phase/player loss restores a fresh caller conversation through retained media. |
+| Current human-handoff checkpoint | All five root gates pass; 1,278 tests, zero failures, 15 exclusions; test concurrency four | Existing regressions, early audience waiting, normal handoff and destination/phase/player recovery pass. Remaining slice acceptance stays open. |
+| Targeted engine and phone checks | 20 engine checks (15 human-transfer and five tool-registry); 17 Gateway checks (nine WebRTC, six outbound phone and two incoming harnesses) pass | Owning connections, post-briefing acceptance and actual incoming STT audio are exercised with simulated providers. |
+| Console and rendered browser | TypeScript and three focused UI checks pass; desktop/mobile Chrome inspection uses simulated admission/media events | Acceptance enablement/control dispatch and button readability across state changes are verified at 390 px and 1440 px. Physical two-device audio and live phone provider checks remain open. |
 
 Retained command/log details are in the labnote's
 [normal acceptance integration](../../labnotes/20260914-0032-transfer-readiness-implementation.md#wire-normal-acceptance-through-prepared-media)
 and [phone diagnosis and delivery review](../../labnotes/20260914-0032-transfer-readiness-implementation.md#phone-diagnosis-and-vertical-delivery-review).
-Do not apply an earlier green result to the dirty worktree or check off the milestone from these
-component results.
+Do not apply an earlier green result to later changes or check off the milestone before complete
+slice acceptance.
 
 ### Detours and lessons applied to delivery
 
@@ -668,7 +672,7 @@ component results.
   Fixture defects are recorded separately from production failures.
 - **Integration mistake:** an initial handoff check appeared green while completion crashed the
   room. A surviving-room assertion exposed it; correcting alias scope fixed that specific defect.
-  The broader phone and recovery problems are still open.
+  Phone formats and ordinary recovery are corrected; full failure-path acceptance remains open.
 - **Sequencing mistake:** implementation repeatedly expanded the next component prerequisite and
   reran component/root checks before proving a complete user flow. No dependency version or lockfile
   upgrades explain that expansion, and no reliable per-activity timing record exists. The checkpoint

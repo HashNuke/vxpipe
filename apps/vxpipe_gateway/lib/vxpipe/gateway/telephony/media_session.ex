@@ -96,6 +96,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
            private_media: nil,
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
+           transfer_acceptance_ready?: false,
            socket_owner: socket_owner,
            stream_id: Keyword.fetch!(options, :stream_id)
          })}
@@ -119,6 +120,13 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       {:ok, receipt, state} -> {:reply, {:ok, receipt}, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
       {:stop, reason} -> {:stop, :shutdown, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:vxpipe_handoff_gate, action, scope}, {caller, _}, state) do
+    case Vxpipe.Gateway.Media.HandoffGate.control(action, scope, caller, state) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
@@ -147,6 +155,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         :connection_id,
         :room_audio_egress,
         :room_audio_ingress,
+        :transfer_acceptance_ready?,
         :stream_id
       ])}, state}
   end
@@ -177,6 +186,13 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   def handle_call(
+        {:event, source, %Event{kind: :media, stream_id: stream_id}},
+        _from,
+        %{socket_owner: source, stream_id: stream_id, handoff_gate: %{held?: true}} = state
+      ),
+      do: {:reply, :ok, state}
+
+  def handle_call(
         {:event, source,
          %Event{kind: :media, stream_id: stream_id, media: %MediaPacket{}} = event},
         _from,
@@ -199,6 +215,23 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_transfer_acceptance_ready, attempt_id},
+        %{
+          attachment: %ConnectionAttachment{
+            admission: :transfer_preparation,
+            transfer_attempt_id: attempt_id
+          }
+        } = state
+      ),
+      do: {:noreply, %{state | transfer_acceptance_ready?: true}}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{handoff_gate: %{monitor: monitor}} = state
+      ),
+      do: {:stop, :shutdown, state}
+
   def handle_info({:DOWN, monitor, :process, _process, _reason}, %{monitors: monitors} = state)
       when is_map_key(monitors, monitor) do
     {:stop, :normal, state}
@@ -305,7 +338,11 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
            transfer_control_command(state, state.attachment.transfer_attempt_id, action),
          :ok <- state.engine.participant_transfer_control(command) do
       reported = MapSet.put(state.reported_transfer_controls, action)
-      {:ok, %{state | reported_transfer_controls: reported}}
+      ready? = action != :accept and state.transfer_acceptance_ready?
+      {:ok, %{state | reported_transfer_controls: reported, transfer_acceptance_ready?: ready?}}
+    else
+      {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_not_ready}} -> {:ok, state}
+      error -> error
     end
   end
 

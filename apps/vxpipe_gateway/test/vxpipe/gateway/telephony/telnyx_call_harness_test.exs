@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.Gateway.HTTP.Endpoint
+  alias Vxpipe.Gateway.TestTelephonySocket
 
   alias Vxpipe.Gateway.Telephony.{
     CallIngress,
@@ -139,21 +140,29 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     answered = post_fixture(context, "call-answered-incoming")
     assert answered.status == 200
 
+    inbound_transport =
+      start_supervised!({TestTelephonySocket, observer: self()}, id: :incoming_socket)
+
+    outbound_transport =
+      start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
+
     assert {:ok, inbound_binding, inbound_socket} =
-             TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
-               "call_control_id" => "inbound-call-control",
-               "call_session_id" => "inbound-call-session",
-               "client_state" => ClientState.encode(@incoming_leg_id),
-               "from" => "+15550001001",
-               "stream_id" => "inbound-stream",
-               "to" => "+15550001000"
-             })
+             TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
+               TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
+                 "call_control_id" => "inbound-call-control",
+                 "call_session_id" => "inbound-call-session",
+                 "client_state" => ClientState.encode(@incoming_leg_id),
+                 "from" => "+15550001001",
+                 "stream_id" => "inbound-stream",
+                 "to" => "+15550001000"
+               })
+             end)
 
     assert inbound_binding.client_state_leg_id == @incoming_leg_id
     assert {:ok, %{attachment: %{admission: :main}}} = MediaSupervisor.snapshot(@incoming_leg_id)
     assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
 
-    begin_transfer(stt_transport)
+    begin_transfer(stt_transport, inbound_transport)
 
     assert_receive {:test_telephony_dial, dial}, 2_000
     assert dial.leg_id == @outgoing_leg_id
@@ -171,25 +180,27 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     refute_receive {:test_telephony_dial, _duplicate}
 
-    assert {:ok, _outbound_binding, outbound_socket} =
-             TelnyxFixture.open_media(context.endpoint, dial.media_url, %{
-               "call_control_id" => "outbound-call-control",
-               "call_session_id" => "outbound-call-session",
-               "client_state" => outgoing_client_state,
-               "from" => "+15550001000",
-               "stream_id" => "outbound-stream",
-               "to" => "+15550001002"
-             })
+    assert {:ok, _outbound_binding, _outbound_socket} =
+             TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
+               TelnyxFixture.open_media(context.endpoint, dial.media_url, %{
+                 "call_control_id" => "outbound-call-control",
+                 "call_session_id" => "outbound-call-session",
+                 "client_state" => outgoing_client_state,
+                 "from" => "+15550001000",
+                 "stream_id" => "outbound-stream",
+                 "to" => "+15550001002"
+               })
+             end)
 
     assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
 
-    assert {:ok, outbound_socket} =
-             MediaSocket.handle_in(
+    assert {:ok, _outbound_socket} =
+             TestTelephonySocket.input(
+               outbound_transport,
                {TelnyxFixture.body("media-dtmf", %{
                   "digit" => "1",
                   "stream_id" => "outbound-stream"
-                }), opcode: :text},
-               outbound_socket
+                }), opcode: :text}
              )
 
     assert {:ok, %{attachment: %{admission: :transfer_preparation}}} =
@@ -206,16 +217,25 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     source_monitor = Process.monitor(source_agent)
     finish_private_briefing(briefing_tts)
 
+    assert {:ok, %{transfer_acceptance_ready?: true}} = await_transfer_state(:acceptance_ready)
+
+    assert {:ok, _socket} =
+             TestTelephonySocket.input(
+               outbound_transport,
+               {TelnyxFixture.body("media-dtmf", %{
+                  "digit" => "1",
+                  "stream_id" => "outbound-stream",
+                  "sequence_number" => 100
+                }), opcode: :text}
+             )
+
     assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
 
-    assert_receive {:vxpipe_telnyx_socket_send, output}, 2_000
-
-    assert {:push, {:text, ^output}, _socket} =
-             MediaSocket.handle_info(output_message(output), outbound_socket)
+    assert_receive {:test_phone_output, ^outbound_transport, output}, 2_000
 
     assert %{"event" => "media"} = JSON.decode!(output)
 
-    assert {:ok, %{attachment: %{admission: :main}}} = await_main_attachment()
+    assert {:ok, %{attachment: %{admission: :main}}} = await_transfer_state(:main)
 
     caller = Map.fetch!(context.plan.participants, "caller")
     support = Map.fetch!(context.plan.participants, "human-support")
@@ -258,7 +278,14 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     )
   end
 
-  defp begin_transfer(stt_transport) do
+  defp begin_transfer(stt_transport, socket) do
+    TestSpeechToTextTransport.deliver(
+      stt_transport,
+      ~s({"type":"Connected","request_id":"request-telnyx-harness","sequence_id":0})
+    )
+
+    assert_caller_audio(stt_transport, socket)
+
     TestSpeechToTextTransport.deliver(
       stt_transport,
       turn_message("StartOfTurn", 1, "Please connect me to human support.")
@@ -283,6 +310,34 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp assert_caller_audio(stt_transport, socket) do
+    encoder = Membrane.Opus.Encoder.Native.create(16_000, 1, 2_048, -1_000, 3_001)
+
+    assert {:ok, payload} =
+             Membrane.Opus.Encoder.Native.encode_packet(
+               encoder,
+               :binary.copy(<<0::16>>, 320),
+               320
+             )
+
+    message = %{
+      "event" => "media",
+      "stream_id" => "inbound-stream",
+      "sequence_number" => 2,
+      "media" => %{
+        "track" => "inbound",
+        "chunk" => 1,
+        "timestamp" => 0,
+        "payload" => Base.encode64(payload)
+      }
+    }
+
+    assert {:ok, _socket} =
+             TestTelephonySocket.input(socket, {JSON.encode!(message), opcode: :text})
+
+    assert_receive {:test_stt_audio, ^stt_transport, ^payload}, 2_000
   end
 
   defp turn_message(event, sequence, transcript, trigger \\ nil) do
@@ -320,8 +375,6 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     )
   end
 
-  defp output_message(output), do: {:vxpipe_telnyx_socket_send, output}
-
   defp stop_room(tenant_id, room_id) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {tenant_id, room_id}) do
       [{room, _value}] -> Process.exit(room, :shutdown)
@@ -329,25 +382,27 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     end
   end
 
-  defp await_main_attachment do
-    deadline = System.monotonic_time(:millisecond) + 2_000
-    await_main_attachment(deadline)
+  defp await_transfer_state(expected) do
+    await_transfer_state(expected, System.monotonic_time(:millisecond) + 2_000)
   end
 
-  defp await_main_attachment(deadline) do
-    case MediaSupervisor.snapshot(@outgoing_leg_id) do
-      {:ok, %{attachment: %{admission: :main}}} = result ->
-        result
+  defp await_transfer_state(expected, deadline) do
+    result = MediaSupervisor.snapshot(@outgoing_leg_id)
 
-      result ->
-        if System.monotonic_time(:millisecond) < deadline do
-          receive do
-          after
-            10 -> await_main_attachment(deadline)
-          end
-        else
-          result
-        end
+    ready? =
+      case {expected, result} do
+        {:main, {:ok, %{attachment: %{admission: :main}}}} -> true
+        {:acceptance_ready, {:ok, %{transfer_acceptance_ready?: true}}} -> true
+        _pending -> false
+      end
+
+    if ready? or System.monotonic_time(:millisecond) >= deadline do
+      result
+    else
+      receive do
+      after
+        10 -> await_transfer_state(expected, deadline)
+      end
     end
   end
 end

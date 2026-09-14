@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.Gateway.HTTP.Endpoint
+  alias Vxpipe.Gateway.TestTelephonySocket
 
   alias Vxpipe.Gateway.Telephony.{
     CallIngress,
@@ -138,40 +139,50 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
     :ok = TelephonyHarnessBackend.make_storage_unavailable(context.backend)
 
+    inbound_transport =
+      start_supervised!({TestTelephonySocket, observer: self()}, id: :incoming_socket)
+
+    outbound_transport =
+      start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
+
     assert {:ok, inbound_binding, inbound_socket} =
-             TwilioFixture.open_media(
-               context.endpoint,
-               context.service_options,
-               answer.media_url,
-               @incoming_call_sid,
-               @incoming_stream_sid
-             )
+             TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
+               TwilioFixture.open_media(
+                 context.endpoint,
+                 context.service_options,
+                 answer.media_url,
+                 @incoming_call_sid,
+                 @incoming_stream_sid
+               )
+             end)
 
     assert inbound_binding.client_state_leg_id == @incoming_leg_id
     assert {:ok, %{attachment: %{admission: :main}}} = MediaSupervisor.snapshot(@incoming_leg_id)
     assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
 
-    begin_transfer(stt_transport)
+    begin_transfer(stt_transport, inbound_transport)
 
     assert_receive {:test_twilio_dial, dial}, 2_000
     assert dial.leg_id == @outgoing_leg_id
     assert dial.to == "+15550001002"
 
-    assert {:ok, _outbound_binding, outbound_socket} =
-             TwilioFixture.open_media(
-               context.endpoint,
-               context.service_options,
-               dial.media_url,
-               @outgoing_call_sid,
-               @outgoing_stream_sid
-             )
+    assert {:ok, _outbound_binding, _outbound_socket} =
+             TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
+               TwilioFixture.open_media(
+                 context.endpoint,
+                 context.service_options,
+                 dial.media_url,
+                 @outgoing_call_sid,
+                 @outgoing_stream_sid
+               )
+             end)
 
     assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
 
-    assert {:ok, outbound_socket} =
-             MediaSocket.handle_in(
-               TwilioFixture.dtmf(@outgoing_stream_sid, 2, "1"),
-               outbound_socket
+    assert {:ok, _outbound_socket} =
+             TestTelephonySocket.input(
+               outbound_transport,
+               TwilioFixture.dtmf(@outgoing_stream_sid, 2, "1")
              )
 
     assert {:ok, %{attachment: %{admission: :transfer_preparation}}} =
@@ -188,14 +199,19 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     source_monitor = Process.monitor(source_agent)
     finish_private_briefing(briefing_tts)
 
-    assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
-    assert_receive {:vxpipe_twilio_socket_send, output}, 2_000
+    assert {:ok, %{transfer_acceptance_ready?: true}} = await_transfer_state(:acceptance_ready)
 
-    assert {:push, {:text, ^output}, _socket} =
-             MediaSocket.handle_info(TwilioFixture.output_message(output), outbound_socket)
+    assert {:ok, _socket} =
+             TestTelephonySocket.input(
+               outbound_transport,
+               TwilioFixture.dtmf(@outgoing_stream_sid, 100, "1")
+             )
+
+    assert_receive {:DOWN, ^source_monitor, :process, ^source_agent, _reason}, 2_000
+    assert_receive {:test_phone_output, ^outbound_transport, output}, 2_000
 
     assert %{"event" => "media", "streamSid" => @outgoing_stream_sid} = JSON.decode!(output)
-    assert {:ok, %{attachment: %{admission: :main}}} = await_main_attachment()
+    assert {:ok, %{attachment: %{admission: :main}}} = await_transfer_state(:main)
 
     caller = Map.fetch!(context.plan.participants, "caller")
     support = Map.fetch!(context.plan.participants, "human-support")
@@ -235,7 +251,14 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     )
   end
 
-  defp begin_transfer(stt_transport) do
+  defp begin_transfer(stt_transport, socket) do
+    TestSpeechToTextTransport.deliver(
+      stt_transport,
+      ~s({"type":"Connected","request_id":"request-twilio-harness","sequence_id":0})
+    )
+
+    assert_caller_audio(stt_transport, socket)
+
     TestSpeechToTextTransport.deliver(
       stt_transport,
       turn_message("StartOfTurn", 1, "Please connect me to human support.")
@@ -260,6 +283,26 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp assert_caller_audio(stt_transport, socket) do
+    message = %{
+      "event" => "media",
+      "streamSid" => @incoming_stream_sid,
+      "sequenceNumber" => "2",
+      "media" => %{
+        "track" => "inbound",
+        "chunk" => "1",
+        "timestamp" => "0",
+        "payload" => Base.encode64(:binary.copy(<<255>>, 160))
+      }
+    }
+
+    assert {:ok, _socket} =
+             TestTelephonySocket.input(socket, {JSON.encode!(message), opcode: :text})
+
+    pcm = :binary.copy(<<0::16>>, 160)
+    assert_receive {:test_stt_audio, ^stt_transport, ^pcm}, 2_000
   end
 
   defp turn_message(event, sequence, transcript, trigger \\ nil) do
@@ -304,25 +347,27 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     end
   end
 
-  defp await_main_attachment do
-    deadline = System.monotonic_time(:millisecond) + 2_000
-    await_main_attachment(deadline)
+  defp await_transfer_state(expected) do
+    await_transfer_state(expected, System.monotonic_time(:millisecond) + 2_000)
   end
 
-  defp await_main_attachment(deadline) do
-    case MediaSupervisor.snapshot(@outgoing_leg_id) do
-      {:ok, %{attachment: %{admission: :main}}} = result ->
-        result
+  defp await_transfer_state(expected, deadline) do
+    result = MediaSupervisor.snapshot(@outgoing_leg_id)
 
-      result ->
-        if System.monotonic_time(:millisecond) < deadline do
-          receive do
-          after
-            10 -> await_main_attachment(deadline)
-          end
-        else
-          result
-        end
+    ready? =
+      case {expected, result} do
+        {:main, {:ok, %{attachment: %{admission: :main}}}} -> true
+        {:acceptance_ready, {:ok, %{transfer_acceptance_ready?: true}}} -> true
+        _pending -> false
+      end
+
+    if ready? or System.monotonic_time(:millisecond) >= deadline do
+      result
+    else
+      receive do
+      after
+        10 -> await_transfer_state(expected, deadline)
+      end
     end
   end
 end

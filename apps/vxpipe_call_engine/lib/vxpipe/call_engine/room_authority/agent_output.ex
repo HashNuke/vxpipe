@@ -41,6 +41,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     connection = Map.get(state.connections, command.connection_id)
 
     if TurnState.active?(state, command) and
+         not MapSet.member?(state.held_participant_ids, command.participant_id) and
          TextCapability.current?(state, capability) and
          connection != nil and
          connection.participant_id == command.participant_id do

@@ -16,15 +16,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
 
   def run(scope, prepare) when is_function(prepare, 0) do
     monitor = Process.monitor(scope.authority)
-    scope = Map.put(scope, :owner, self())
+    scope = Map.merge(scope, %{owner: self(), player_monitors: %{}})
 
     try do
       receive do
         {:vxpipe_transfer_phase_start, reference} when is_reference(reference) ->
-          with {:ok, preparation} <- prepare.() do
-            send(scope.authority, {:vxpipe_transfer_prepared, reference, preparation})
-            await_completion(scope, monitor)
-          end
+          start_preparation(Map.put(scope, :reference, reference), prepare, monitor)
 
         {:DOWN, ^monitor, :process, _owner, _reason} ->
           {:error, :preparation_process_down}
@@ -38,6 +35,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
 
   @spec scope(pid()) :: {:ok, scope()} | {:error, :unavailable}
   def scope(phase), do: request(phase, :scope, @request_timeout_ms)
+
+  def handoff(phase, stage, payload) do
+    send(phase, {:vxpipe_transfer_handoff, self(), stage, payload})
+    :ok
+  end
 
   @spec complete(pid(), integer()) :: :ok | {:error, :not_owner | :unavailable}
   def complete(phase, deadline_ms) do
@@ -64,11 +66,74 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
     :ok
   end
 
+  defp start_preparation(%{audience_request: request} = scope, prepare, monitor)
+       when not is_nil(request) do
+    task =
+      RoomTransferSupervisor.handoff(scope.incarnation_id, fn ->
+        with {:ok, audience} <-
+               Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff.run(
+                 :audience,
+                 scope,
+                 request
+               ),
+             {:ok, preparation} <- prepare.(),
+             do: {:ok, {audience, preparation}}
+      end)
+
+    await_completion(Map.merge(scope, %{worker: task, stage: :destination_preparation}), monitor)
+  end
+
+  defp start_preparation(scope, prepare, monitor) do
+    case prepare.() do
+      {:ok, preparation} ->
+        send(scope.authority, {:vxpipe_transfer_prepared, scope.reference, preparation})
+        await_completion(scope, monitor)
+
+      {:handoff, stage, payload} ->
+        start_handoff(scope, stage, payload, monitor)
+
+      error ->
+        error
+    end
+  end
+
   defp await_completion(scope, monitor) do
     if remaining_ms(scope.deadline_ms) == 0 do
       {:error, :deadline_elapsed}
     else
       receive do
+        {:vxpipe_transfer_handoff, authority, stage, payload}
+        when authority == scope.authority ->
+          if Map.get(scope, :worker) do
+            {:error, :handoff_already_running}
+          else
+            start_handoff(scope, stage, payload, monitor)
+          end
+
+        {reference, result} when is_reference(reference) ->
+          case Map.get(scope, :worker) do
+            %Task{ref: ^reference} ->
+              Process.demonitor(reference, [:flush])
+              worker_result(scope, result, monitor)
+
+            _stale ->
+              await_completion(scope, monitor)
+          end
+
+        {:vxpipe_wait_playback, _player, _episode, {:failed, _reason}} ->
+          {:error, :wait_playback_failed}
+
+        {:vxpipe_wait_playback, player, _episode, status} = message ->
+          scope =
+            if status in [:stopped, :completed], do: settle_player(scope, player), else: scope
+
+          if worker = Map.get(scope, :worker), do: send(worker.pid, message)
+          await_completion(scope, monitor)
+
+        {:DOWN, reference, :process, _player, _reason}
+        when is_map_key(scope.player_monitors, reference) ->
+          {:error, :wait_playback_failed}
+
         {:vxpipe_transfer_phase, _caller, reply, :scope} ->
           send(reply, {reply, {:ok, scope}})
           await_completion(scope, monitor)
@@ -82,6 +147,54 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
         remaining_ms(scope.deadline_ms) -> {:error, :deadline_elapsed}
       end
     end
+  end
+
+  defp start_handoff(scope, stage, payload, monitor) do
+    task =
+      RoomTransferSupervisor.handoff(scope.incarnation_id, fn ->
+        Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff.run(
+          stage,
+          scope,
+          payload
+        )
+      end)
+
+    await_completion(Map.merge(scope, %{worker: task, stage: stage}), monitor)
+  end
+
+  defp worker_result(
+         %{stage: :destination_preparation} = scope,
+         {:ok, {audience, preparation}},
+         monitor
+       ) do
+    scope = Map.put(scope, :player_monitors, Map.new(audience.waits, &{Process.monitor(&1), &1}))
+    send(scope.authority, {:vxpipe_transfer_prepared, scope.reference, preparation})
+
+    await_completion(
+      scope |> Map.drop([:worker, :stage]) |> Map.put(:audience, audience),
+      monitor
+    )
+  end
+
+  defp worker_result(%{stage: :destination_preparation}, error, _monitor), do: error
+
+  defp worker_result(scope, result, monitor) do
+    send(scope.authority, {:vxpipe_transfer_handoff_result, scope.reference, scope.stage, result})
+    await_completion(Map.drop(scope, [:worker, :stage]), monitor)
+  end
+
+  defp settle_player(scope, player) do
+    monitors =
+      Enum.reduce(scope.player_monitors, scope.player_monitors, fn
+        {reference, ^player}, monitors ->
+          Process.demonitor(reference, [:flush])
+          Map.delete(monitors, reference)
+
+        _other, monitors ->
+          monitors
+      end)
+
+    %{scope | player_monitors: monitors}
   end
 
   defp complete_request(scope, monitor, caller, reply) do

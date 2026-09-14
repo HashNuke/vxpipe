@@ -17,7 +17,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
 
   def build(provider, observer, credential, media_admission, inbound_leg_id, outbound_leg_id)
       when provider in [:telnyx, :twilio] and is_pid(observer) do
-    plan = compile_plan()
+    plan = compile_plan(provider)
     caller = Map.fetch!(plan.participants, "caller")
     service_options = service_options(provider, plan.tenant_id, credential, observer)
     registry = ServiceRegistry.init!(enabled: true, services: [service_options])
@@ -48,7 +48,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
     }
   end
 
-  defp compile_plan do
+  defp compile_plan(provider) do
     id = System.unique_integer([:positive, :monotonic])
 
     {:ok, definition} =
@@ -117,11 +117,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           "test-stt" => %{
             kind: :speech_to_text,
             provider: Flux,
-            options: %{
-              model: "flux-general-multi",
-              encoding: :opus,
-              sample_rate: 48_000
-            }
+            options: speech_options(provider)
           },
           "test-model" => %{
             kind: :model_inference,
@@ -143,6 +139,12 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
 
     plan
   end
+
+  defp speech_options(:telnyx),
+    do: %{model: "flux-general-multi", encoding: :opus, sample_rate: 16_000}
+
+  defp speech_options(:twilio),
+    do: %{model: "flux-general-multi", encoding: :linear16, sample_rate: 8_000}
 
   defp claim(provider, plan, participant_id) do
     identity = claim_identity(provider)

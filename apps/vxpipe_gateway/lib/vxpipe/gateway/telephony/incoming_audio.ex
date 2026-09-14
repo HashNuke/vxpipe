@@ -2,7 +2,14 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ConnectionAttachment
+  alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Gateway.Media.RoomAudioIngress
+  alias Vxpipe.Gateway.Telephony.Twilio.PCMU.Codec
+
+  def speech_track(%{codec: :pcmu, sample_rate: 8_000, channels: 1} = track),
+    do: %{track | codec: :linear16}
+
+  def speech_track(track), do: track
 
   @spec deliver(module(), ConnectionAttachment.t(), pid() | nil, struct()) ::
           :ok | :drop | :unavailable
@@ -24,8 +31,16 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
     do: :disabled
 
   defp deliver_speech_audio(engine, %ConnectionAttachment{} = attachment, frame) do
-    engine.push_audio(attachment, frame)
+    with {:ok, speech_frame} <- speech_frame(frame),
+         do: engine.push_audio(attachment, speech_frame)
   end
+
+  defp speech_frame(%AudioFrame{codec: :pcmu, sample_rate: 8_000, channels: 1} = frame) do
+    with {:ok, payload} <- Codec.decode(frame.payload),
+         do: {:ok, %{frame | codec: :linear16, payload: payload}}
+  end
+
+  defp speech_frame(frame), do: {:ok, frame}
 
   defp fatal_audio_result?(:ok), do: false
   defp fatal_audio_result?(:disabled), do: false

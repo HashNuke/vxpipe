@@ -74,7 +74,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   @spec commit(ParticipantPreparation.t(), State.t()) ::
           {:ok, struct(), State.t()}
           | {:error, :media_policy_unavailable | :participant_unavailable}
-  def commit(%ParticipantPreparation{} = preparation, %State{} = state) do
+  def commit(preparation, state, policy \\ :admit)
+
+  def commit(%ParticipantPreparation{} = preparation, %State{} = state, policy) do
     participant = preparation.snapshot
     participant_supervisor = preparation.participant_supervisor
     monitor = Process.monitor(participant_supervisor)
@@ -86,7 +88,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
              participant.participant_id,
              participant_supervisor
            ),
-         :ok <- admit_media_policy(state.media_policy_authority, participant.participant_id) do
+         :ok <-
+           commit_media_policy(state.media_policy_authority, participant.participant_id, policy) do
       commit_available(preparation, participant, monitor, state)
     else
       false ->
@@ -148,7 +151,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   def remove(monitor, reason, %State{} = state) do
     {participant_id, participant_monitors} = Map.pop(state.participant_monitors, monitor)
 
-    :ok = leave_media_policy(state.media_policy_authority, participant_id)
+    if MapSet.member?(state.committed_departures, participant_id) do
+      snapshot = MediaPolicyAuthority.snapshot(state.media_policy_authority)
+
+      if MapSet.member?(snapshot.present_participant_ids, participant_id),
+        do: exit(:committed_departure_changed)
+    else
+      :ok = leave_media_policy(state.media_policy_authority, participant_id)
+    end
 
     affected_connections =
       Map.filter(state.connections, fn {_connection_id, connection} ->
@@ -175,6 +185,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
     state = %{
       state
       | participant_monitors: participant_monitors,
+        committed_departures: MapSet.delete(state.committed_departures, participant_id),
         participant_supervisors: Map.delete(state.participant_supervisors, participant_id),
         participant_ids: MapSet.delete(state.participant_ids, participant_id),
         participant_roles: Map.delete(state.participant_roles, participant_id)
@@ -230,6 +241,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
       "The participant already exists.",
       details: %{"participant_id" => participant_id}
     )
+  end
+
+  defp commit_media_policy(authority, participant, :admit),
+    do: admit_media_policy(authority, participant)
+
+  defp commit_media_policy(authority, participant, {:prepared, candidate}) do
+    if MediaPolicyAuthority.snapshot(authority) == candidate.snapshot and
+         MapSet.member?(candidate.snapshot.present_participant_ids, participant),
+       do: :ok,
+       else: {:error, :media_policy_unavailable}
   end
 
   defp admit_media_policy(nil, _participant_id), do: :ok

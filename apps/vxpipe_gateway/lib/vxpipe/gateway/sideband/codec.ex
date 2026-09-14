@@ -30,6 +30,10 @@ defmodule Vxpipe.Gateway.Sideband.Codec do
     encode(attempt_id, "transfer.active", %{"attempt_id" => attempt_id})
   end
 
+  @spec encode_acceptance_ready(String.t()) :: {:ok, binary()}
+  def encode_acceptance_ready(attempt_id),
+    do: encode(attempt_id, "transfer.acceptance_ready", %{"attempt_id" => attempt_id})
+
   @spec encode_error(String.t()) :: binary()
   def encode_error(id) do
     JSON.encode!(%{

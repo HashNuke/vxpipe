@@ -14,6 +14,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.SourceRestorer do
 
   @restoration_timeout_ms 750
 
+  def timeout_ms, do: @restoration_timeout_ms
+
   @spec start(Request.t(), GenServer.from(), History.failure_cause(), State.t()) ::
           :not_required | {:ok, Restoration.t()} | {:error, :unavailable}
   def start(%Request{} = request, from, cause, %State{} = state) do

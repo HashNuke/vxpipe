@@ -16,6 +16,14 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
     audio_subscription: :audio_output
   }
 
+  def hold(binding, scope), do: Vxpipe.Gateway.Media.HandoffGate.hold(binding, scope)
+  def recover(binding, scope), do: Vxpipe.Gateway.Media.HandoffGate.recover(binding, scope)
+
+  def release(binding, scope, demand),
+    do: Vxpipe.Gateway.Media.HandoffGate.release(binding, scope, demand)
+
+  def adopt(binding, scope), do: Vxpipe.Gateway.Media.HandoffGate.adopt(binding, scope)
+
   def binding(state, transport, transport_binding, output) do
     command = state.attach_command
 
@@ -133,6 +141,7 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
 
   defp prepare_part(:speech_input, binding, _candidate, _demand, track, options) do
     input = binding.attachment.media_ingress
+    track = speech_track(binding, track)
 
     with %Resource{kind: :speech_to_text} = provider <- Keyword.get(options, :speech_to_text),
          :ok <- Ingress.prepare_track(input, track, provider),
@@ -195,10 +204,20 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
   defp prepare_input(binding, track, demand) do
     with :ok <- prepare_track(RoomAudioIngress, binding.room_input, track, demand.audio_input?),
          :ok <-
-           prepare_track(Ingress, binding.attachment.media_ingress, track, demand.speech_to_text?) do
+           prepare_track(
+             Ingress,
+             binding.attachment.media_ingress,
+             speech_track(binding, track),
+             demand.speech_to_text?
+           ) do
       :ok
     end
   end
+
+  defp speech_track(%{transport: Vxpipe.Gateway.Telephony.MediaSession}, track),
+    do: Vxpipe.Gateway.Telephony.IncomingAudio.speech_track(track)
+
+  defp speech_track(_binding, track), do: track
 
   defp prepare_track(_adapter, _input, _track, false), do: :ok
   defp prepare_track(adapter, input, track, true), do: adapter.prepare_track(input, track)

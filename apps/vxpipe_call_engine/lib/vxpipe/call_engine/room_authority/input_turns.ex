@@ -30,25 +30,35 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   def accept_text(command, caller, %State{} = state) do
     case ConnectionLifecycle.authorize_text(command, caller, state) do
       {:ok, capability} ->
-        state = CallerIdle.activity(state)
+        if MapSet.member?(state.held_participant_ids, command.participant_id) do
+          {:reply,
+           {:error, Error.new(:conversation_held, "Conversation is paused during transfer.")},
+           state}
+        else
+          accept_authorized_text(command, capability, state)
+        end
 
-        case AgentOutput.interrupt(command, state) do
-          {:ok, state} ->
-            case TextCapability.respond(capability, command) do
-              :ok ->
-                state = state |> TurnState.put(command) |> emit_participant_text_turn(command)
-                {:reply, :ok, state}
+      {:error, error} ->
+        {:reply, {:error, error}, state}
+    end
+  end
 
-              {:error, reason} ->
-                {:reply, {:error, agent_busy(reason)}, state}
-            end
+  defp accept_authorized_text(command, capability, state) do
+    state = CallerIdle.activity(state)
+
+    case AgentOutput.interrupt(command, state) do
+      {:ok, state} ->
+        case TextCapability.respond(capability, command) do
+          :ok ->
+            state = state |> TurnState.put(command) |> emit_participant_text_turn(command)
+            {:reply, :ok, state}
 
           {:error, reason} ->
             {:reply, {:error, agent_busy(reason)}, state}
         end
 
-      {:error, error} ->
-        {:reply, {:error, error}, state}
+      {:error, reason} ->
+        {:reply, {:error, agent_busy(reason)}, state}
     end
   end
 
@@ -93,7 +103,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   defp apply_speech_to_text_signal(_signal, _connection_id, _connection, state), do: state
 
   defp begin_audio_turn(signal, connection_id, connection, state) do
-    if new_policy_session?(connection.speech_to_text.turn, signal) and is_binary(signal.text) do
+    if not MapSet.member?(state.held_participant_ids, connection.participant_id) and
+         new_policy_session?(connection.speech_to_text.turn, signal) and is_binary(signal.text) do
       state = CallerIdle.activity(state)
 
       turn = %{
@@ -237,7 +248,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     content = String.trim(text)
 
     result =
-      if content == "" do
+      if content == "" or MapSet.member?(state.held_participant_ids, connection.participant_id) do
         :empty
       else
         SendText.new(

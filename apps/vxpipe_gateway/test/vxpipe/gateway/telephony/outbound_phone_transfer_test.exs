@@ -89,7 +89,13 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     on_exit(fn -> LegSupervisor.stop_outgoing(leg_id) end)
     connector = PhoneTransferScenario.connector(provider, plan.tenant_id, self(), leg_id)
     assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
-    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
     caller_sink = start_supervised!({TestAudioOutputSink, observer: self()})
 
     assert {:ok, _attachment} =
@@ -208,7 +214,12 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     connector = PhoneTransferScenario.connector(provider, plan.tenant_id, self(), leg_id)
 
     assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
-    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
 
     caller_sink =
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :outbound_phone_caller_sink)
@@ -230,14 +241,26 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     socket = start_supervised!({TestTelephonySocket, observer: self()})
 
+    media_started = PhoneTransferScenario.media_started_event(provider, leg_id)
+
     assert :ok =
              TestTelephonySocket.run(socket, fn ->
                OutgoingLeg.dispatch(
                  leg,
-                 PhoneTransferScenario.media_started_event(provider, leg_id),
+                 media_started,
                  5_000
                )
              end)
+
+    [{session, _}] =
+      Registry.lookup(Vxpipe.Gateway.Media.Registry, {:telephony_media_session, leg_id})
+
+    assert :ok =
+             TestTelephonySocket.bind_readiness(
+               socket,
+               :sys.get_state(session).binding,
+               media_started.stream_id
+             )
 
     assert {:ok,
             %{
@@ -281,6 +304,19 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     message = receive_media(provider)
     assert %{"event" => "media"} = JSON.decode!(message)
+
+    assert_eventually(fn ->
+      match?({:ok, %{transfer_acceptance_ready?: true}}, MediaSupervisor.snapshot(leg_id))
+    end)
+
+    assert :ok =
+             TestTelephonySocket.run(socket, fn ->
+               OutgoingLeg.dispatch(
+                 leg,
+                 PhoneTransferScenario.dtmf_event(provider, leg_id, "1"),
+                 5_000
+               )
+             end)
 
     assert_receive {:vxpipe_event,
                     %ToolCallCompleted{
@@ -349,7 +385,12 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
       )
 
     assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
-    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
 
     caller_sink =
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :machine_caller_sink)
@@ -399,7 +440,7 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
   defp begin_transfer(plan, room, caller) do
     assert :ok =
-             CallEngine.send_text(
+             Vxpipe.CallEngine.TestTransferConnection.send_text(
                PhoneTransferScenario.send_command(
                  plan,
                  room,

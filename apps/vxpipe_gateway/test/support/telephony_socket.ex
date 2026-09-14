@@ -14,12 +14,45 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
   def bind_readiness(socket, binding, stream_id),
     do: GenServer.call(socket, {:bind_readiness, binding, stream_id})
 
+  def open(socket, callback, operation),
+    do: GenServer.call(socket, {:open, callback, operation}, 10_000)
+
+  def input(socket, packet), do: GenServer.call(socket, {:input, packet}, 5_000)
+
   @impl true
-  def init(observer), do: {:ok, %{observer: observer, readiness: nil}}
+  def init(observer),
+    do: {:ok, %{observer: observer, readiness: nil, callback: nil, socket: nil, sequence: 10}}
 
   @impl true
   def handle_call({:run, operation}, _from, state) do
     {:reply, operation.(), state}
+  end
+
+  def handle_call({:open, callback, operation}, _from, state) do
+    case operation.() do
+      {:ok, binding, socket} = result ->
+        {:reply, result,
+         %{
+           state
+           | callback: callback,
+             socket: socket,
+             readiness: %{
+               binding: binding,
+               stream_id: socket.stream_id,
+               readiness_resource: socket.readiness_resource
+             }
+         }}
+
+      error ->
+        {:reply, error, state}
+    end
+  end
+
+  def handle_call({:input, packet}, _from, state) do
+    case state.callback.handle_in(packet, state.socket) do
+      {:ok, socket} = result -> {:reply, result, %{state | socket: socket}}
+      other -> {:reply, other, state}
+    end
   end
 
   def handle_call({:bind_readiness, binding, stream_id}, _from, state) do
@@ -33,6 +66,23 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
   end
 
   @impl true
+  def handle_info(message, %{callback: callback} = state) when not is_nil(callback) do
+    case callback.handle_info(message, state.socket) do
+      {:ok, socket} ->
+        {:noreply, %{state | socket: socket}}
+
+      {:push, frames, socket} ->
+        state = %{state | socket: socket}
+        {:noreply, Enum.reduce(List.wrap(frames), state, &deliver/2)}
+
+      {:stop, reason, socket} ->
+        {:stop, reason, %{state | socket: socket}}
+
+      {:stop, reason, _close_frame, socket} ->
+        {:stop, reason, %{state | socket: socket}}
+    end
+  end
+
   def handle_info({:vxpipe_telnyx_socket_send, message}, state) do
     send(state.observer, {:test_telnyx_socket_send, message})
     {:noreply, state}
@@ -71,5 +121,32 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
     end)
 
     {:noreply, state}
+  end
+
+  defp deliver({:text, message}, state) do
+    send(state.observer, {:test_phone_output, self(), message})
+
+    case JSON.decode!(message) do
+      %{"event" => "mark"} = mark ->
+        mark =
+          case state.socket.binding.provider do
+            :telnyx ->
+              Map.merge(mark, %{
+                "stream_id" => state.socket.stream_id,
+                "sequence_number" => state.sequence
+              })
+
+            :twilio ->
+              Map.put(mark, "sequenceNumber", Integer.to_string(state.sequence))
+          end
+
+        {:ok, socket} =
+          state.callback.handle_in({JSON.encode!(mark), opcode: :text}, state.socket)
+
+        %{state | socket: socket, sequence: state.sequence + 1}
+
+      _audio_or_clear ->
+        state
+    end
   end
 end

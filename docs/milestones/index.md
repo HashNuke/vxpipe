@@ -91,9 +91,11 @@ ordering or lift the packaging/retention hold.
 The subsequent [transfer readiness and participant wait sounds milestone](transfer-readiness-and-wait-sounds.md)
 adds milestone 23 before delivery. The user authorized implementation on 2026-09-14 and requested
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
-committed; normal human-handoff integration is uncommitted and the latest full worktree run has
-nine failures. The milestone's [current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence)
-distinguishes that work from the last verified implementation (`c4fea8c`, 1,274 tests, zero failures).
+committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
+prepared media release and bounded caller recovery. All five root gates pass: 1,278 tests, zero
+failures and 15 exclusions, with test concurrency four. The milestone's
+[current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
+implementation from remaining failure/privacy/diagnostic and audible acceptance.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.
 

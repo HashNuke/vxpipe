@@ -34,10 +34,26 @@ defmodule Vxpipe.Gateway.WebRTC.TransferSideband do
       ) do
     {:ok, message} = Codec.encode_preparation(attempt_id, state.session.participant_id)
     send_data(message, state)
+    if state.transfer_acceptance_ready?, do: send_acceptance_ready(attempt_id, state)
     %{state | transfer_preparation_sent?: true}
   end
 
   def channel_opened(state), do: state
+
+  def acceptance_ready(
+        attempt_id,
+        %{
+          attachment: %ConnectionAttachment{
+            admission: :transfer_preparation,
+            transfer_attempt_id: attempt_id
+          }
+        } = state
+      ) do
+    if state.transfer_preparation_sent?, do: send_acceptance_ready(attempt_id, state)
+    %{state | transfer_acceptance_ready?: true}
+  end
+
+  def acceptance_ready(_attempt_id, state), do: state
 
   @spec media_connected(map()) :: {:ok, map()} | {:stop, map()}
   def media_connected(
@@ -120,8 +136,13 @@ defmodule Vxpipe.Gateway.WebRTC.TransferSideband do
     )
   end
 
-  defp send_active(attempt_id, state) do
+  def send_active(attempt_id, state) do
     {:ok, message} = Codec.encode_active(attempt_id)
+    send_data(message, state)
+  end
+
+  defp send_acceptance_ready(attempt_id, state) do
+    {:ok, message} = Codec.encode_acceptance_ready(attempt_id)
     send_data(message, state)
   end
 
