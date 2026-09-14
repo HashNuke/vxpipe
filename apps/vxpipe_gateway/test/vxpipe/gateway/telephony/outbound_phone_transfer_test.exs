@@ -69,6 +69,135 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     assert_private_transfer(:twilio)
   end
 
+  for provider <- [:telnyx, :twilio] do
+    test "#{provider} prepares private decoder and output before room admission" do
+      assert_private_preparation(unquote(provider))
+    end
+  end
+
+  defp assert_private_preparation(provider) do
+    alias Vxpipe.CallEngine.Media.{ConnectionReadiness, OutputSink}
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.Collector
+    alias Vxpipe.CallEngine.RoomMixer
+    alias Vxpipe.Gateway.Telephony.MediaSession
+
+    plan = PhoneTransferScenario.compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    leg_id = PhoneTransferScenario.unique_id("private-phone")
+    on_exit(fn -> LegSupervisor.stop_outgoing(leg_id) end)
+    connector = PhoneTransferScenario.connector(provider, plan.tenant_id, self(), leg_id)
+    assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
+    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    assert {:ok, _attachment} =
+             PhoneTransferScenario.attach(plan, room, caller, "caller-connection", caller_sink)
+
+    begin_transfer(plan, room, caller)
+    assert_dial(provider, leg_id)
+    assert_receive {:test_tts_transport_started, _briefing_tts, _connection}, 2_000
+    assert {:ok, leg} = LegSupervisor.lookup_outgoing(leg_id)
+    socket = start_supervised!({TestTelephonySocket, observer: self()})
+    event = PhoneTransferScenario.media_started_event(provider, leg_id)
+
+    assert :ok =
+             TestTelephonySocket.run(socket, fn -> OutgoingLeg.dispatch(leg, event, 5_000) end)
+
+    assert {:ok, snapshot} = MediaSupervisor.snapshot(leg_id)
+    attempt_id = snapshot.attachment.transfer_attempt_id
+
+    [{session, _}] =
+      Registry.lookup(Vxpipe.Gateway.Media.Registry, {:telephony_media_session, leg_id})
+
+    assert :ok =
+             TestTelephonySocket.bind_readiness(
+               socket,
+               :sys.get_state(session).binding,
+               event.stream_id
+             )
+
+    assert {:error, _} = MediaSession.prepare_transfer_media(session, "stale")
+    assert {:ok, private} = MediaSession.prepare_transfer_media(session, attempt_id)
+    assert {:ok, ^private} = MediaSession.prepare_transfer_media(session, attempt_id)
+    {:ok, binding} = GenServer.call(session, :vxpipe_connection_readiness)
+    assert binding.output == snapshot.audio_output
+    assert binding.attachment == snapshot.attachment
+    assert binding.attachment.media_ingress == nil
+    assert :sys.get_state(binding.room_input).pipeline_pid == nil
+    assert :sys.get_state(binding.room_output).pipeline_pid == nil
+    assert length(private.enforcers) == 2
+
+    authority = Authority.whereis(room.incarnation_id)
+    policy = Authority.snapshot(authority)
+
+    presence =
+      policy.present_participant_ids
+      |> MapSet.delete(Map.fetch!(plan.participants, "reception").participant_id)
+      |> MapSet.put(support.participant_id)
+
+    assert {:ok, candidate} = Authority.preview_presence(authority, presence)
+    assert :ok = OutputSink.hold(binding.output, 1)
+
+    options = [
+      owner: private.owner,
+      attempt_id: attempt_id,
+      deadline_ms: private.deadline_ms,
+      generation: 1,
+      subscriptions: [binding.policy_subscription]
+    ]
+
+    mixer = RoomMixer.whereis(room.incarnation_id)
+    assert {:ok, prepared_mixer} = RoomMixer.prepare_policy(mixer, candidate, options)
+    subscription = Map.fetch!(prepared_mixer.subscriptions, leg_id <> ":room-output")
+
+    assert {:ok, graph} =
+             ConnectionReadiness.prepare_candidate(
+               session,
+               binding.identity,
+               candidate,
+               [audio_input?: true, room_output?: true, speech_to_text?: false],
+               Keyword.put(options, :subscription, subscription)
+             )
+
+    expected_format =
+      case provider do
+        :telnyx -> %{codec: :opus, sample_rate: 16_000, channels: 1}
+        :twilio -> %{codec: :pcmu, sample_rate: 8_000, channels: 1}
+      end
+
+    assert graph.input_track == Map.put(expected_format, :track_id, event.stream_id)
+    refute Enum.any?(graph.resources, &(&1.kind == :speech_to_text))
+
+    collector =
+      start_supervised!(
+        {Collector,
+         Keyword.merge(options,
+           owner: self(),
+           incarnation_id: room.incarnation_id,
+           resources: Enum.uniq(prepared_mixer.resources ++ graph.resources)
+         )}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert Authority.snapshot(authority) == policy
+    assert {:ok, current} = MediaSupervisor.snapshot(leg_id)
+    assert current.attachment == snapshot.attachment
+    assert :ok = ConnectionReadiness.discard_candidate(graph)
+    assert :ok = RoomMixer.discard_policy(mixer, prepared_mixer.token)
+    stop_supervised!({Collector, attempt_id})
+
+    monitors = Enum.map([session | private.enforcers], &{&1, Process.monitor(&1)})
+    Process.exit(private.owner, :kill)
+
+    for {actor, monitor} <- monitors do
+      assert_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 2_000
+    end
+
+    assert Authority.snapshot(authority) == policy
+  end
+
   defp assert_private_transfer(provider) when provider in [:telnyx, :twilio] do
     plan = PhoneTransferScenario.compile_plan()
     caller = Map.fetch!(plan.participants, "caller")

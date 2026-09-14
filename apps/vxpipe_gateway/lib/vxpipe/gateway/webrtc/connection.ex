@@ -66,6 +66,9 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     call(connection_id, {:add_ice_candidates, candidates})
   end
 
+  def prepare_transfer_media(connection_id, attempt_id),
+    do: call(connection_id, {:vxpipe_prepare_transfer_media, attempt_id})
+
   @impl true
   def readiness(connection), do: Readiness.readiness(connection, :output)
 
@@ -136,6 +139,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
        %{
          candidate_gathering_timeout_ms: Keyword.fetch!(options, :candidate_gathering_timeout_ms),
          attachment: attachment,
+         private_media: nil,
          attach_command: attach_command,
          audio_egress: audio_egress,
          audio_tracks: %{},
@@ -170,6 +174,22 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   @impl true
+  def handle_call({:vxpipe_prepare_transfer_media, attempt_id}, _from, state) do
+    options = [
+      engine: CallEngine,
+      supervisor: ConnectionPeerSupervisor,
+      input_pipeline: Vxpipe.Gateway.WebRTC.AudioPipeline,
+      input_options: [jitter_latency: state.audio_jitter_latency_ms],
+      output: state.audio_egress
+    ]
+
+    case Vxpipe.Gateway.Media.PrivateMedia.prepare(state, attempt_id, options) do
+      {:ok, receipt, state} -> {:reply, {:ok, receipt}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+      {:stop, reason} -> {:stop, :shutdown, {:error, reason}, state}
+    end
+  end
+
   def handle_call(:vxpipe_connection_readiness, _from, state) do
     binding =
       Vxpipe.Gateway.Media.ConnectionReadiness.binding(
@@ -390,6 +410,14 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do
+    {:stop, :shutdown, state}
+  end
+
+  def handle_info(
+        {:DOWN, reference, :process, _actor, _reason},
+        %{private_media: %{monitors: monitors}} = state
+      )
+      when is_map_key(monitors, reference) do
     {:stop, :shutdown, state}
   end
 

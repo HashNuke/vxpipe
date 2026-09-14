@@ -195,6 +195,11 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
+  def prepare_transfer_media(%AttachConnection{} = command, attempt_id) do
+    with {:ok, authority} <- lookup_room(command.tenant_id, command.room_id),
+         do: RoomAuthority.prepare_transfer_media(authority, command, attempt_id)
+  end
+
   defp start_connection_speech_to_text(
          room_authority,
          command,

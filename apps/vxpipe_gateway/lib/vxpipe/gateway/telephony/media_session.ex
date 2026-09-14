@@ -50,6 +50,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
   @impl true
   def readiness(session), do: Readiness.readiness(session, :output)
+
+  def prepare_transfer_media(session, attempt_id),
+    do: safe_call(session, {:vxpipe_prepare_transfer_media, attempt_id})
+
   def input_readiness(session), do: Readiness.readiness(session, :input)
   def input_track(session), do: Readiness.input_track(session)
   def readiness_resources(session, options \\ []), do: Readiness.resources(session, options)
@@ -89,6 +93,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
                binding: Keyword.fetch!(options, :connection_id)
              ),
            connection_id: Keyword.fetch!(options, :connection_id),
+           private_media: nil,
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
            socket_owner: socket_owner,
@@ -101,6 +106,22 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   @impl true
+  def handle_call({:vxpipe_prepare_transfer_media, attempt_id}, _from, state) do
+    options = [
+      engine: state.engine,
+      supervisor: state.child_supervisor,
+      input_pipeline: state.media_pipelines.room_ingress,
+      input_options: [track_id: state.stream_id],
+      output: state.audio_output
+    ]
+
+    case Vxpipe.Gateway.Media.PrivateMedia.prepare(state, attempt_id, options) do
+      {:ok, receipt, state} -> {:reply, {:ok, receipt}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+      {:stop, reason} -> {:stop, :shutdown, {:error, reason}, state}
+    end
+  end
+
   def handle_call(:vxpipe_connection_readiness, _from, state) do
     binding =
       Vxpipe.Gateway.Media.ConnectionReadiness.binding(
@@ -184,6 +205,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do
+    {:stop, :media_unavailable, state}
+  end
+
+  def handle_info(
+        {:DOWN, reference, :process, _actor, _reason},
+        %{private_media: %{monitors: monitors}} = state
+      )
+      when is_map_key(monitors, reference) do
     {:stop, :media_unavailable, state}
   end
 

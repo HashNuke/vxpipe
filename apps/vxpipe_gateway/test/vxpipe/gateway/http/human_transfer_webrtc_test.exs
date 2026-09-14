@@ -83,6 +83,232 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     :ok
   end
 
+  for failure <- [:phase, :room_input, :room_output] do
+    @private_media_failure failure
+    test "private WebRTC media stays gated and cleans up after #{@private_media_failure} loss" do
+      alias Vxpipe.CallEngine.MediaPolicy.Authority
+      alias Vxpipe.Gateway.WebRTC.Connection
+
+      plan = compile_plan()
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = CallEngine.start_call(plan)
+      stop_room_on_exit(plan)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller_client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat"))
+
+      assert :ok = send_rtvi_text(caller_client)
+      assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+
+      assert {:ok, call} =
+               ToolCall.new(
+                 id: "private-media-transfer",
+                 name: "transfer",
+                 arguments: %{"destination" => "human-support", "reason" => "A private handoff."}
+               )
+
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+      send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+
+      support_client =
+        plan
+        |> issue_session(room, support.participant_id)
+        |> then(&connect(&1.session_id, "vxpipe"))
+
+      %{"data" => %{"attempt_id" => attempt_id}} =
+        await_sideband(support_client, "transfer.preparation", 5_000)
+
+      [{room_authority, _}] =
+        Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+      {:ok, room_binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+      connection = Map.fetch!(room_binding.connections, support_client.connection_id).pid
+      {:ok, before} = GenServer.call(connection, :vxpipe_connection_readiness)
+      phase = :sys.get_state(room_authority).pending_participant_transfer
+
+      assert {:error, _} =
+               Connection.prepare_transfer_media(support_client.connection_id, "stale")
+
+      assert {:ok, private} =
+               Connection.prepare_transfer_media(support_client.connection_id, attempt_id)
+
+      assert private.owner == phase.task.pid
+      assert private.attempt_id == phase.attempt_id
+      assert private.deadline_ms == phase.deadline_ms
+
+      assert {:ok, ^private} =
+               Connection.prepare_transfer_media(support_client.connection_id, attempt_id)
+
+      {:ok, binding} = GenServer.call(connection, :vxpipe_connection_readiness)
+      assert binding.output == before.output
+      assert binding.attachment.admission == :transfer_preparation
+      assert binding.attachment.room_audio_input_mode == :disabled
+      assert binding.attachment.room_audio_output_mode == :disabled
+      assert is_pid(binding.room_input)
+      assert is_pid(binding.room_output)
+      assert is_pid(binding.attachment.media_ingress)
+      assert Keyword.fetch!(binding.policy_subscription, :subscriber) == binding.room_output
+      assert Keyword.fetch!(binding.policy_subscription, :mode) == :mix_minus
+
+      policy = Authority.snapshot(Authority.whereis(room.incarnation_id))
+      input = :sys.get_state(binding.room_input)
+      output = :sys.get_state(binding.room_output)
+      assert input.policy == policy
+      assert output.policy == policy
+      assert input.pipeline_pid == nil
+      assert output.pipeline_pid == nil
+      assert output.subscription == nil
+      refute MapSet.member?(policy.present_participant_ids, support.participant_id)
+      refute_receive {:test_stt_transport_started, _, _}
+
+      assert :ok = send_audio(support_client, 1, 960, -8_000)
+      refute_audio(caller_client, 200)
+
+      observer = Map.fetch!(plan.participants, "observer").participant_id
+      authority = Authority.whereis(room.incarnation_id)
+      assert {:ok, _restricted} = Authority.admit(authority, observer)
+
+      assert {:ok, ^private} =
+               Connection.prepare_transfer_media(support_client.connection_id, attempt_id)
+
+      assert {:ok, policy} = Authority.leave(authority, observer)
+
+      assert {:ok, ^private} =
+               Connection.prepare_transfer_media(support_client.connection_id, attempt_id)
+
+      for actor <- private.enforcers do
+        assert :sys.get_state(actor).policy == policy
+      end
+
+      refute_receive {:test_stt_transport_started, _, _}
+
+      verify_private_candidate(
+        plan,
+        room,
+        room_authority,
+        caller_client,
+        binding,
+        private,
+        policy
+      )
+
+      monitors = Enum.map(private.enforcers, &{&1, Process.monitor(&1)})
+      connection_monitor = Process.monitor(connection)
+
+      target =
+        case @private_media_failure do
+          :phase -> phase.task.pid
+          kind -> Map.fetch!(binding, kind)
+        end
+
+      Process.exit(target, :kill)
+      assert_receive {:DOWN, ^connection_monitor, :process, ^connection, :shutdown}, 2_000
+
+      for {actor, monitor} <- monitors do
+        assert_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 2_000
+      end
+
+      assert Authority.snapshot(Authority.whereis(room.incarnation_id)) == policy
+      assert {:ok, _resource, :ready} = Connection.readiness(caller_client.connection_id)
+    end
+  end
+
+  defp verify_private_candidate(plan, room, room_authority, caller, joining, private, policy) do
+    alias Vxpipe.CallEngine.Media.OutputSink
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.{Collector, Preparation}
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    {:ok, room_binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    caller_connection = Map.fetch!(room_binding.connections, caller.connection_id).pid
+    {:ok, caller_binding} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
+    source = Map.fetch!(plan.participants, "reception").participant_id
+    source_capabilities = Map.fetch!(room_binding.participants, source)
+    caller_input = :sys.get_state(caller_binding.room_input).pipeline_pid
+    caller_output = :sys.get_state(caller_binding.room_output).pipeline_pid
+
+    presence =
+      policy.present_participant_ids
+      |> MapSet.delete(source)
+      |> MapSet.put(joining.identity.participant_id)
+
+    assert {:ok, candidate} = Authority.preview_presence(room_binding.policy_authority, presence)
+    assert :ok = RoomAudioEgress.hold(caller_binding.room_output, 1)
+    assert :ok = OutputSink.hold(joining.output, 1)
+
+    options = [
+      owner: private.owner,
+      attempt_id: private.attempt_id,
+      deadline_ms: private.deadline_ms,
+      generation: 1
+    ]
+
+    assert {:ok, prepared} = Preparation.run_candidate(room_authority, candidate, options)
+
+    assert MapSet.new(Map.keys(prepared.connections)) ==
+             MapSet.new([caller.connection_id, joining.identity.connection_id])
+
+    refute Enum.any?(prepared.resources, &(&1.scope == {:participant, source}))
+    assert Enum.any?(prepared.resources, &(&1.kind == :speech_to_text))
+
+    assert Enum.any?(
+             prepared.resources,
+             &(&1.kind == :room_audio_ingress and
+                 &1.scope == {:participant, joining.identity.participant_id})
+           )
+
+    assert Enum.any?(
+             prepared.resources,
+             &(&1.kind == :room_audio_egress and
+                 &1.scope == {:participant, joining.identity.participant_id})
+           )
+
+    assert_receive {:test_stt_transport_started, private_stt, _}, 2_000
+
+    collector =
+      start_supervised!(
+        {Collector,
+         Keyword.merge(options,
+           owner: self(),
+           incarnation_id: room.incarnation_id,
+           resources: prepared.resources
+         )}
+      )
+
+    assert Collector.snapshot(collector).status == :preparing
+    refute_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 100
+
+    TestSpeechToTextTransport.deliver(
+      private_stt,
+      ~s({"type":"Connected","request_id":"private-ready","sequence_id":0})
+    )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert Authority.snapshot(room_binding.policy_authority) == policy
+    assert :sys.get_state(joining.room_input).pipeline_pid == nil
+    assert :sys.get_state(joining.room_output).pipeline_pid == nil
+    assert :sys.get_state(caller_binding.room_input).pipeline_pid == caller_input
+    assert :sys.get_state(caller_binding.room_output).pipeline_pid == caller_output
+    {:ok, retained} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    assert Map.fetch!(retained.participants, source) == source_capabilities
+
+    monitor = Process.monitor(private_stt)
+    assert :ok = Preparation.discard(prepared)
+    assert_receive {:DOWN, ^monitor, :process, ^private_stt, _}, 2_000
+    stop_supervised!({Collector, private.attempt_id})
+    assert :ok = RoomAudioEgress.release(caller_binding.room_output, 1)
+  end
+
   test "a destination accepts privately before joining bidirectional room audio" do
     plan = compile_plan()
 

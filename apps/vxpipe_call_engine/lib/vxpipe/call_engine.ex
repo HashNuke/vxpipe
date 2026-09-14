@@ -196,6 +196,12 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  @doc "Allocates private transfer media configuration without granting room admission."
+  @spec prepare_transfer_media(AttachConnection.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def prepare_transfer_media(%AttachConnection{} = command, attempt_id),
+    do: RoomSupervisor.prepare_transfer_media(command, attempt_id)
+
   @spec push_audio(ConnectionAttachment.t(), AudioFrame.t()) ::
           :ok
           | {:error,

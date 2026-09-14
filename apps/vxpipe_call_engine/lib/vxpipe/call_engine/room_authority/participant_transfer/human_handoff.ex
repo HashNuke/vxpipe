@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     HumanPreparation,
     Pending,
     Phase,
+    PrivateMedia,
     PrivateSpeech
   }
 
@@ -254,7 +255,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       Authorizer.authorize(pending.request, state) != :ok ->
         {:ok, fail(pending, :source_authority_changed, state)}
 
-      PrivateSpeech.bound?(pending, state) ->
+      PrivateSpeech.bound?(pending, state) or PrivateMedia.bound?(pending, state) ->
         {:ok, %{state | pending_participant_transfer: pending}}
 
       true ->

@@ -41,7 +41,12 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
   end
 
   defp policy_subscription(state) do
-    mode = state.attachment.room_audio_output_mode
+    mode =
+      case Map.get(state, :private_media) do
+        %{output_mode: mode} -> mode
+        _ordinary -> state.attachment.room_audio_output_mode
+      end
+
     command = state.attach_command
 
     if is_pid(state.room_audio_egress) and mode in [:full_mix, :mix_minus] do

@@ -203,7 +203,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     end
   end
 
-  test "private speech allocation respects an unconfigured destination" do
+  test "private media without selected speech still requires prepared adoption" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
@@ -213,7 +213,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :no_stt_support)
     assert {:ok, _} = attach(plan, room, caller, "caller-connection", caller_sink)
     begin_transfer(plan, room, caller, "no-private-stt")
-    assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
 
     assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
              attach(plan, room, support, "support-connection", support_sink)
@@ -232,6 +232,26 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     assert Map.fetch!(:sys.get_state(authority).connections, command.connection_id).speech_to_text ==
              nil
+
+    assert {:ok, %{speech_to_text: nil} = media} =
+             CallEngine.prepare_transfer_media(command, attempt_id)
+
+    assert :ok =
+             CallEngine.participant_transfer_control(
+               transfer_control(plan, room, support, attempt_id, :media_ready)
+             )
+
+    finish_private_briefing(briefing_tts, support_sink)
+
+    assert :ok =
+             CallEngine.participant_transfer_control(
+               transfer_control(plan, room, support, attempt_id, :accept)
+             )
+
+    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "no-private-stt"}}
+    refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _}
+    assert {:ok, _scope} = Phase.scope(media.owner)
+    assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) == media.policy
   end
 
   test "private speech allocation rejects foreign connections, identities and attempts" do

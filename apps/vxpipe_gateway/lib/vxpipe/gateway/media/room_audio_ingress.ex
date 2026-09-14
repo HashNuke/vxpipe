@@ -220,10 +220,17 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   defp apply_policy(snapshot, from, state) do
     participant = state.identity.participant_id
 
-    if Snapshot.interval(snapshot, :audio_input, participant) ==
-         Snapshot.interval(state.policy, :audio_input, participant),
-       do: {:reply, :ok, %{state | policy: snapshot}},
-       else: replace_pipeline(snapshot, from, state)
+    cond do
+      is_nil(state.pipeline_pid) and not PolicyPreparation.required?(snapshot, participant) ->
+        {:reply, :ok, %{state | policy: snapshot}}
+
+      Snapshot.interval(snapshot, :audio_input, participant) ==
+          Snapshot.interval(state.policy, :audio_input, participant) ->
+        {:reply, :ok, %{state | policy: snapshot}}
+
+      true ->
+        replace_pipeline(snapshot, from, state)
+    end
   end
 
   defp replace_pipeline(snapshot, from, state) do

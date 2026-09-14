@@ -1,25 +1,26 @@
 # Transfer readiness implementation
 
-The last fully verified commit is `5ab8c17`. Its
-[private speech binding checkpoint](#bind-private-speech-to-the-authorized-connection)
-allocates dormant speech for the exact authorized private connection under its real transfer phase.
-Input stays closed; an allocated pair cannot bypass prepared media adoption, and its failure cleans
-the pending attempt while retaining the source. All 46 focused transfer and speech checks and
-five root gates pass: 1,269 tests, zero failures and 15 integration exclusions. Gateway/full
-coordinator activation remains unfinished.
+The current [Gateway preparation checkpoint](#integrate-private-gateway-preparation) allocates
+dormant private media on actual WebRTC and phone connections. Complete prospective WebRTC room
+collection waits for destination STT while retaining caller pipelines and source capabilities.
+Preparation without STT cannot bypass adoption; private actor loss cancels the attempt, and
+unrelated policy refresh leaves an undemanded decoder stopped. All 46 engine and 46 Gateway
+focused checks pass, followed by all five root gates: 1,274 tests, zero failures and 15 integration
+exclusions. Automatic lifecycle invocation and successful prepared handoff remain unfinished.
 
-The current uncommitted [Gateway preparation work](#gateway-preparation-detour-and-current-boundary)
-has passed three focused WebRTC checks. That result does not extend the full-suite evidence above
-to the current worktree. This notes update records the boundary without making further runtime edits.
+The earlier [Gateway notes snapshot](#gateway-preparation-detour-and-current-boundary) retains the
+initial three-test result and then-unverified work. The implementation evidence below supersedes
+that snapshot without claiming end-to-end transfer acceptance.
 
-This extends persistent transfer ownership in `4801597`, private allocation in `c005511`,
+This extends authorized private speech binding in `5ab8c17`, persistent transfer ownership in
+`4801597`, private allocation in `c005511`,
 speech adoption in `a8106d4`,
 the complete-membership commit in `69b5ad6`,
 native tap preparation in `666ca37` and writer/track adoption in `4b14530`.
 The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
 and pause audit retain their historical failures/worktree snapshots, not current status.
 
-**The end-to-end milestone remains unfinished.** Private destination actors, startup/transfer
+**The end-to-end milestone remains unfinished.** Prepared destination adoption, startup/transfer
 orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
 The [handoff investigation](#recording-tap-investigation-and-handoff-resume-point) identifies the
@@ -83,9 +84,10 @@ The additional groundwork since the audit addresses room output, recording and p
   three related integration defects: direct commit could bypass prepared adoption, startup could
   open private input, and cancellation removed only one private connection. Their reproductions
   and fixes are recorded in [the binding checkpoint](#bind-private-speech-to-the-authorized-connection).
-- The uncommitted Gateway work addresses the next boundary: ordinary media setup assumes room
-  admission, so it cannot prepare a private joining participant. Its rationale, focused evidence
-  and remaining checks are recorded [below](#gateway-preparation-detour-and-current-boundary).
+- The [Gateway checkpoint](#integrate-private-gateway-preparation) addresses the next boundary:
+  ordinary media setup assumes room admission, so it cannot prepare a private joining participant.
+  The notes snapshot records the initial rationale; the implementation section records the
+  completion-guard, actor-loss and policy-refresh defects found during integration and verification.
 
 No dependency versions or production deadlines changed in these committed checkpoints. These are
 component results: complete resource selection, startup/transfer orchestration, waits/cues,
@@ -2002,3 +2004,61 @@ that this checkpoint is ready to commit with the implementation.
 Notes verification: compared this account with the current engine/Gateway diff, the completed red
 and green log summaries, and the milestone's unchecked acceptance tasks. Checked local Markdown
 links/anchors and whitespace. No new tests were written or run for this documentation update.
+
+## Integrate private Gateway preparation
+
+- The preceding notes-only turn made progress with `83156d9`. Revalidated the current worktree
+  and resumed the existing implementation while preserving the separate visual documentation work.
+- Extended the real WebRTC check through complete prospective room preparation: remove the source
+  from future membership, include caller and destination, hold outputs and collect actual resources
+  under the original phase scope. Delayed destination STT keeps the collector preparing; its
+  acknowledgement permits readiness without admission. Caller pipelines and source capabilities
+  remain unchanged, and discarding preparation ends the pending provider. The first run failed on
+  a new fixture's nonexistent `deliver_control/2` helper; changing it to the existing `deliver/2`
+  produced a passing check (`vxpipe-private-gateway-candidate-green.log`). That initial failure is
+  not evidence of a production defect.
+- Added Telnyx and Twilio private decoder/output checks with no selected STT. The simulated socket
+  now optionally reports its exact bound transport and acknowledges the existing playback-mark
+  protocol. The first combined run rejected duplicate subscription resources supplied by the test;
+  deduplicating identical descriptors matches the whole-room runner's existing collection behavior.
+  All six phone checks pass in `vxpipe-private-gateway-phone-green.log`. They prove Opus/PCMU media
+  preparation, not STT support for either format or live phone playback.
+- Review identified an STT-dependent completion guard. A real engine check with no destination STT
+  reproduced `ToolCallCompleted` after allocation but before prepared adoption
+  (`vxpipe-private-gateway-no-stt-red.log`: one test, one failure). Authority now records private
+  room-media preparation independently of speech, and the human commit guard covers either.
+  All 12 human web engine checks pass in `vxpipe-private-gateway-no-stt-green.log`.
+- Abrupt private ingress/egress loss did not notify the connection because these dormant actors
+  were intentionally outside critical registration. The real WebRTC variants reproduced both
+  missing cleanup paths (`vxpipe-private-gateway-actor-loss-red.log`: five tests, two failures).
+  The connection now monitors its private actors and uses its existing shutdown/failure path.
+  Eleven combined web/phone checks pass in `vxpipe-private-gateway-actor-loss-green.log`.
+- A subsequent policy-refresh check exposed another concrete dependency: an absent participant's
+  default audio-input interval changes with the room revision. Ordinary ingress enforcement
+  interpreted that as a request to launch its missing decoder even though input remained
+  undemanded (`vxpipe-private-gateway-refresh.log`: 11 tests, three failures). Such a dormant input
+  now updates policy without starting a decoder. The refresh preserves every private actor,
+  starts no speech provider, and the complete graph can still prepare afterwards. All 24 combined
+  Gateway transfer and input-policy checks pass in `vxpipe-private-gateway-refresh-green.log`.
+- No dependency version, production deadline or application configuration changed. The extra
+  failures above distinguish project integration defects from new test-fixture errors. Full
+  lifecycle invocation and prepared adoption remain outstanding; the currently automatic handoff
+  still uses its earlier path. No browser/provider session or development-server restart was used.
+  Formatting, broader focused verification and the five root gates follow before implementation
+  commit. The milestone/index acceptance boxes remain open.
+- Final focused verification passes 46 engine checks (`vxpipe-private-gateway-engine-focused.log`)
+  and 46 Gateway checks (`vxpipe-private-gateway-verified-focused.log`). All five root commands pass
+  under `vxpipe-private-gateway-root-`: formatting, warnings-as-errors compilation, strict Credo,
+  all eight application suites and unused dependencies. The full suite reports 1,274 tests,
+  zero failures and 15 integration exclusions. Per-command exit codes are retained, and all 15
+  changed/new code and test files match their hashes from the start of root verification.
+  Local documentation links/anchors and `git diff --check` pass. Commit implementation, focused
+  checks, contract and labnotes together; preserve the concurrent visual documentation work.
+- Concrete integration boundary for resuming: the owning connection now accepts
+  `{:vxpipe_prepare_transfer_media, attempt_id}` and candidate collection can use its dormant
+  actors. The persistent phase must invoke it, select enforcers by actual future demand, and
+  coordinate all listeners through waits, readiness, cues, held policy/control adoption and
+  acknowledged release. Existing committers still discard source TTS and schedule source teardown
+  during commit, while Gateway promotion still calls ordinary media startup. Those paths must use
+  the prepared actors and retain source resources until the required completion point. The
+  current successful preparation/discard checks do not establish successful adoption or release.

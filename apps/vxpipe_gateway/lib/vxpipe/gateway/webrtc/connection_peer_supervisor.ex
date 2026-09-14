@@ -35,6 +35,9 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
   @impl true
   def init(:ok), do: DynamicSupervisor.init(strategy: :one_for_one)
 
+  def start_child(connection_id, spec),
+    do: DynamicSupervisor.start_child(via(connection_id), spec)
+
   def start_peer(connection_id, controlling_process, ice_servers) do
     child_spec = %{
       id: PeerConnection,

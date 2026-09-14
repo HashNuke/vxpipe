@@ -890,3 +890,19 @@ five root gates pass: 1,269 tests, zero failures and 15 integration exclusions.
 Gateway dormant media setup, coordinator invocation, complete candidate
 adoption and wait/cue/release acceptance remain unfinished. The internal operation is not yet used
 by the sample handoff.
+
+Gateway now exposes internal private preparation on actual WebRTC connections and phone media
+sessions. It allocates dormant room ingress/egress alongside the authorized closed speech binding,
+retains native output, and exposes the future mixer subscription without room admission or critical
+registration. Repeated requests retain actors and refresh their installed base policy. Preparation
+without STT also blocks immediate commit; private actor loss fails the attempt and uses connection
+supervision for cleanup. Refreshing an unrelated policy leaves an absent, undemanded decoder absent.
+
+The [Gateway preparation contract](../readiness-resource-contract.md#private-gateway-media-preparation)
+records this boundary. A real WebRTC check collects the complete prospective caller/human room
+after the provider acknowledgement, retaining caller pipelines and source capabilities; Telnyx and
+Twilio checks collect private decoder/output graphs with no selected STT. These are preparation and
+cancellation checks. Forty-six engine and 46 Gateway focused checks and all five root gates pass:
+1,274 tests, zero failures and 15 integration exclusions. Full lifecycle invocation, successful
+prepared adoption/promotion, startup waiting, waits/cues, release and manual acceptance remain
+unfinished; no additional acceptance box is checked by this component.

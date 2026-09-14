@@ -211,12 +211,44 @@ unavailable event fails only the exact private attempt and cleans all its privat
 pending resources; the source stays available. Destination actor PIDs are created inside the authorized
 operation rather than accepted through a second, caller-supplied binding handshake.
 
-Gateway and the complete coordinator do not yet invoke this internal operation. The next integration
-must create the destination's dormant media actors, collect the complete candidate, adopt the pair
-through the final enforcer barrier and explicitly release input. The ordinary committer is not a
+Gateway can now request this allocation through its private media operation below. The complete
+coordinator must invoke that operation, adopt the selected actors through the final enforcer
+barrier and explicitly release input. The ordinary committer is not a
 fallback for an allocated private pair; without that integration the attempt remains pending until
 failure or its original deadline. This checkpoint does not establish successful private adoption
 through the sample transfer flow.
+
+### Private Gateway media preparation
+
+WebRTC connections and phone media sessions accept the internal
+`{:vxpipe_prepare_transfer_media, attempt_id}` query. The owning connection requests authority's
+configuration and private speech allocation under the exact authorization above. Authority supplies
+the actual transfer owner, attempt and original deadline; the requester cannot replace that scope.
+Room media preparation is tracked even when the destination has no STT profile, so absence of speech
+cannot allow ordinary acceptance/briefing completion to bypass prepared adoption.
+
+Gateway creates dormant `RoomAudioIngress` and `RoomAudioEgress` under its existing connection
+supervisor. Their base policy is applied locally without critical registration, pipeline startup,
+or live mixer subscription. The connection retains its native output, private admission and disabled
+room modes. Only its closed speech ingress is attached, when selected. The future mix-minus
+subscription descriptor is available to candidate collection without granting room output.
+Repeated requests reuse actors and refresh their base policy. A missing, undemanded input decoder
+stays absent when an unrelated policy revision changes its default interval.
+
+The connection monitors its private actors. Actor loss ends that private connection and the engine's
+existing failure path cancels the exact attempt; phase loss discards its private connections.
+Partial construction failure also stops the private connection, letting its existing supervisor
+clean all children. This reuses connection supervision rather than introducing another process or
+registry. Pending provider/pipeline preparations retain their independent phase leases.
+
+A real WebRTC check prepares and collects the entire prospective caller/human room while retaining
+the source for cancellation. It waits for the actual destination provider acknowledgement, preserves
+caller pipelines, and discards pending media without admission. Separate Telnyx Opus and Twilio PCMU
+checks prepare their real decoder/output paths with no selected STT, using socket readiness and
+simulated playback acknowledgements. These phone checks do not establish PCMU compatibility with a
+configured STT profile. Actor/phase-loss checks and a policy refresh keep current room permissions
+unchanged. The lifecycle does not invoke this operation automatically yet: final actor selection,
+prepared adoption, attachment promotion, waits/cues and acknowledged release remain required.
 
 ## Prospective requirements and room bindings
 
