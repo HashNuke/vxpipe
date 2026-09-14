@@ -1,8 +1,15 @@
 # Transfer readiness implementation
 
-Implementation resumed following the goal continuation after the pause audit. See the latest
-[candidate connection checkpoint](#select-candidate-connection-resources); the pause audit below
-records the earlier state and is retained for accountability.
+Implementation resumed following the goal continuation after the pause audit. The latest committed
+implementation is `9fc4b83`, documented in the
+[candidate connection checkpoint](#select-candidate-connection-resources). The
+[prospective room graph](#prepare-the-prospective-room-graph) is uncommitted work with focused checks
+only. The pause audit below records the earlier state and is retained for accountability.
+
+**The end-to-end milestone remains unfinished.** This notes update records the existing work;
+it adds no implementation or tests. The latest committed checkpoint passed all five root checks
+(1,224 tests, zero failures, 15 integration exclusions). Those results do not verify the current
+uncommitted room-preparation changes.
 
 ## Detour update after the pause audit
 
@@ -20,11 +27,19 @@ The additional groundwork since the audit addresses the room-output path:
   page mount. Its separate fix checks for newly added registry bindings and room processes while
   allowing cleanup. Committed as `0eaa94d`; see
   [the diagnostics labnote](20260914-0942-diagnostics-registry-cleanup.md).
+- `9fc4b83` connected prepared speech, decoder and output resources to the candidate connection
+  query. Review exposed a decoder that was replaced after its demand disappeared; preparation now
+  stages its shutdown instead. A new WebRTC fixture also needed to await server transport readiness
+  rather than assume client connection completion proved it. See
+  [candidate connection selection](#select-candidate-connection-resources).
+- The uncommitted whole-room runner assembles those connections with prepared mixer subscriptions
+  and transcript routing. Recording still uses installed-policy preparation and cannot yet stage
+  a changed recording policy safely. The current evidence and ownership gap are recorded in
+  [the prospective room checkpoint](#prepare-the-prospective-room-graph).
 
-All five root checks pass for the resulting checkpoint, including 1,223 tests with zero failures
-and 15 integration exclusions. No dependency versions or production deadlines changed in this
-additional work. These are component results: complete resource selection, startup/transfer
-orchestration, waits/cues, restoration and rendered/provider acceptance remain unfinished.
+No dependency versions or production deadlines changed in these committed checkpoints. These are
+component results: complete resource selection, startup/transfer orchestration, waits/cues,
+restoration and rendered/provider acceptance remain unfinished.
 
 ## Status and detour audit at the user-requested pause
 
@@ -1252,3 +1267,73 @@ unchecked; the milestone and index are still incomplete.
 - Verified the changed documentation's local links/anchors and `git diff --check`. No rendered
   browser inspection, live provider call or development-server restart was performed. Keep the
   milestone/index open and preserve concurrent `vxpipe-docs/` work outside this commit.
+
+## Prepare the prospective room graph
+
+Status at this notes update: **uncommitted implementation; focused verification only**.
+
+- The preceding turn committed candidate connection collection as `9fc4b83` with all root gates
+  passing. This is progress. Rechecked the worktree and retained concurrent `vxpipe-docs/` changes.
+- Connect whole-room preparation to the existing authoritative inventory and candidate connection
+  query. Derive the complete mixer subscription request set from actual connection bindings, prepare
+  selected speech sessions under the persistent phase lease, and collect every remaining participant
+  plus room resource. Transcript routing needs prospective-policy acknowledgement without changing
+  current projection decisions or restarting its process.
+- Start with actual WebRTC listeners and a prospective departure that changes permitted routing.
+  The check must collect the complete resulting room before policy application, preserve unaffected
+  resources, and deliver audio after adoption. Recording candidate preparation and creation of
+  private destination actors remain explicit requirements; do not silently substitute current
+  resources when their prospective configuration is unsupported.
+- The initial WebRTC check failed at the missing `Preparation.run_candidate/3` API. Its retained
+  red log reports one test and one failure. The subsequent green log reports one test, zero
+  failures and five excluded tests. These are `vxpipe-room-candidate-red.log` and
+  `vxpipe-room-candidate-green.log` in the local temporary log directory.
+- The working implementation captures actual connection bindings, prepares the complete requested
+  mixer subscription set and transcript router, selects affected speech preparations, and collects
+  connection resources under one owner/attempt/deadline. It returns cancellation handles and
+  revalidates the authoritative inventory before success. Transcript policy preparation keeps
+  current projections unchanged until policy installation and retains the router process.
+- The green WebRTC check removes a restrictive participant prospectively, collects the two
+  remaining connections, verifies that transcript permissions stay closed before commit, and
+  adopts the same resource descriptors. Actual audio reaches the remaining listener after release;
+  native output descriptors are retained. This fixture configures neither recording nor STT, so
+  it does not establish whole-room recording or speech preparation, private transfer admission,
+  or the user-facing transfer flow.
+- Existing engine transcript-router, connection-readiness and inventory checks also finished:
+  38 tests, zero failures, recorded in `vxpipe-room-candidate-engine.log`. This notes update read
+  the completed logs; it did not rerun those commands. The new router lease/cancellation behavior
+  still needs focused failure coverage, and the whole-room changes have not passed all five root
+  gates. Do not carry forward the preceding commit's green gates as evidence for this worktree.
+
+### Recording preparation gap
+
+- `RoomRecording.Preparation` reads the installed mixer recording policy, rejects a different
+  interval, and validates individual tracks against currently present participants. It then
+  changes the live recorder's required tracks and opens missing writers. Calling this path for a
+  future participant set is insufficient for private preparation before policy commit.
+- `Recording.Writer` provides `open/2`, `offer/2` and optional `readiness/1`; it has no scoped
+  cancellation callback. `RoomRecording.Streams` passes the recorder as the writer's source.
+  A future writer therefore needs an explicit ownership/cancellation design before it can be
+  prepared independently and either adopted or discarded without disturbing live recording.
+- Candidate preparation also needs exact prospective recording subscription and output-tap
+  evidence. Relabeling current resources with the future interval would claim readiness without
+  preparing the actual paths. No recording fix or writer-interface change was made in this update.
+  This is an unresolved project implementation dependency, not an external service outage or a
+  reason to raise the transfer deadline.
+
+### Resume boundary and notes verification
+
+- Seven engine/Gateway source and test files currently contain the uncommitted whole-room changes,
+  including the new candidate-preparation and transcript-policy-preparation modules. Keep their
+  implementation, remaining verification and documentation together in a subsequent checkpoint.
+  Concurrent changes under `vxpipe-docs/` belong to the user's separate work.
+- After this component is verified, the milestone still needs recording candidate preparation,
+  private destination actors and persistent phase ownership wired into startup and transfer;
+  all-listener waits/cues and release acknowledgements; bounded restoration; and sample/browser
+  plus web/phone acceptance. None of those remaining gates is checked off by this notes update.
+- Cross-checked this update against the relevant diffs, writer/preparation interfaces, completed
+  focused logs and the preceding checkpoint's per-command root result file. The earlier eight-hour
+  timeline and detour table remain historical evidence. No new test, browser session, provider call
+  or development-server restart was performed for this documentation request.
+- Documentation verification passed: all 33 local links/anchors resolve, and `git diff --check`
+  reports no whitespace errors in the changed labnote.
