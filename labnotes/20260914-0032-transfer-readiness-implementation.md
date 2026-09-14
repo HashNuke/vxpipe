@@ -1,21 +1,26 @@
 # Transfer readiness implementation
 
-Implementation resumed following the goal continuation after the pause audit. The latest
+The latest committed implementation is `69b5ad6`. Its
 [candidate commit checkpoint](#commit-the-exact-prospective-membership) installs the complete
-prepared membership through one policy barrier within the original phase deadline. All five root
-gates pass: 1,251 tests, zero failures and 15 integration exclusions. It builds on native recording
-tap preparation committed as `666ca37` and writer/track adoption in `4b14530`. The earlier notes-only
-audit and its uncommitted-work snapshot are retained below for accountability.
+prepared membership through one policy barrier within the original phase deadline. Its five root
+gates passed: 1,251 tests, zero failures and 15 integration exclusions. It builds on native recording
+tap preparation committed as `666ca37` and writer/track adoption in `4b14530`.
+
+**The current worktree is not fully verified.** Private STT initialization has uncommitted changes:
+the constructor checks pass, but the room-level check fails at the missing supervisor API. The
+[latest investigation](#private-stt-initialization-and-cancellation-ownership) records that evidence
+and an ownership problem that must be addressed before connecting this to the transfer lifecycle.
+The earlier pause audit and its worktree snapshot below are historical, not current status.
 
 **The end-to-end milestone remains unfinished.** Private destination actors, startup/transfer
 orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
-The [investigation notes](#recording-tap-investigation-and-handoff-resume-point) identify the concrete
-handoff integration point to resume after the recording groundwork.
+The [handoff investigation](#recording-tap-investigation-and-handoff-resume-point) identifies the
+existing completion sequence that still needs to use the prepared resources.
 
 ## Detour update after the pause audit
 
-The additional groundwork since the audit addresses room output and recording preparation:
+The additional groundwork since the audit addresses room output, recording and policy adoption:
 
 - `bd7b1e1` added per-listener holds and released-frame generations, and acknowledged discarded
   shared frames so a retained producer could resume. These were prerequisites for using the
@@ -40,8 +45,21 @@ The additional groundwork since the audit addresses room output and recording pr
 - The [recording checkpoint](#prepare-recording-ownership-and-policy) now stages future recording
   writers and tracks without changing live recording, retains existing sequence numbers, and adopts
   the prepared mixer subscriptions. Review caught mixer/writer loss and retained-descriptor defects;
-  their red/green evidence is recorded below. Native agent tap preparation across changed recording
-  intervals and the complete lifecycle remain unfinished.
+  their red/green evidence is recorded below.
+- `666ca37` completed [candidate native tap preparation](#prepare-native-recording-taps-for-a-candidate-policy).
+  Physical tap/codec evidence stays stable while the prepared mixer owns future recording permission.
+  Preparing the candidate leaves currently denied recording closed; adoption retains the tap.
+  An existing transcript fixture's 100 ms acknowledgement failed under the umbrella load; its
+  separate one-second fixture correction is `ec5d408`, with production deadlines unchanged.
+- `69b5ad6` added [one complete membership commit](#commit-the-exact-prospective-membership).
+  Separate destination admission and source departure would produce policy revisions different
+  from the snapshot prepared for transfer. The new operation commits that exact snapshot within
+  the original deadline. The human handoff still needs to call it and coordinate control state.
+- The next private STT boundary is still uncommitted. Its constructor now avoids connecting a
+  provider before current policy requires speech. Room-supervisor integration remains red, and
+  source inspection found that registering private actors as critical enforcers would make their
+  cancellation stop the policy authority. The detailed resume note below distinguishes this
+  finding from implemented fixes.
 
 No dependency versions or production deadlines changed in these committed checkpoints. These are
 component results: complete resource selection, startup/transfer orchestration, waits/cues,
@@ -1587,3 +1605,62 @@ Documentation verification: all 34 local labnote links/anchors resolve, and `git
   fix, package change, production timeout increase, browser/provider session or server restart was
   required. Keep milestone/index acceptance open and commit the policy operation, focused checks
   and documentation together.
+
+## Private STT initialization and cancellation ownership
+
+This is the requested notes update after `69b5ad6`. It records the current implementation attempt
+and source investigation; this documentation checkpoint does not complete or commit that code.
+
+- **Why initialization needs groundwork:** the ordinary STT constructor opens its transport
+  immediately. A private joining participant is absent from the installed policy, so applying
+  that policy would close the new session before candidate preparation creates another. This
+  extra connect/close/connect cycle is avoidable and consumes the existing handoff budget.
+- **Current uncommitted change:** an internal `initial_policy` option determines whether the
+  constructor allocates a transport. Omission preserves ordinary startup. A valid policy with no
+  speech demand leaves the transport absent; later policy demand starts the existing asynchronous
+  connector and still requires the provider acknowledgement. The initial snapshot is only an
+  allocation input: normal enforcement installs the actual policy. Storing it as already installed
+  would conflict with the existing rejection of duplicate policy revisions during registration.
+  Invalid initial policy is rejected before starting a transport. This adds no call-definition field.
+- **Observed focused evidence:** `vxpipe-private-stt-initial-red.log` records 12 tests and one
+  intended failure because a provider connection started without demand. The retained green run,
+  `vxpipe-private-stt-initial-green.log`, has 12 tests and zero failures. It proves deferred startup
+  and acknowledged readiness at the capability boundary, not private room admission or transfer.
+- **Current failing boundary:** `vxpipe-private-stt-pair-red.log` completed with 14 tests and one
+  failure: `RoomCapabilitySupervisor.start_speech_to_text/8` does not exist. The new test proposes
+  passing the initial policy to a supervised capability/ingress pair, preparing one provider session,
+  and keeping microphone ingress closed through adoption. Execution stops at the missing API, so
+  its later readiness, retention and closed-input assertions have not passed.
+- **Ownership problem found in review:** that draft test registers both private actors with
+  `Authority.register_enforcer/3`. Registration installs a critical monitor; losing any registered
+  enforcer stops the authority. Stopping a cancelled private pair through its supervisor would
+  therefore stop the room's policy authority. This follows from the registration and `:DOWN`
+  handlers; it is not a newly reproduced phone failure or a verified cancellation fix.
+- **Proposed next boundary, not implemented:** keep the staged pair under the phase owner and
+  original deadline, apply the base policy locally, and include the new actors in the final
+  candidate enforcement barrier before promoting them to critical enforcers. Cancellation before
+  commit must clean up only the staged pair and preserve the source. Existing participant subtree
+  preparation and supervisor cleanup should be reused. A separate pending-enforcer registry would
+  duplicate ownership; simply forwarding the constructor option would leave cancellation unsafe.
+  This proposal still needs focused failure evidence and a durable contract before implementation.
+- **Resume checks:** first correct the draft test's premature registration. Prove cancellation and
+  phase-owner loss preserve the source, then prove adoption retains the exact prepared provider
+  generation while ingress stays closed until explicit release. Capture the source resource before
+  preparation to check exact retention, and construct fresh audio frames for each push so stale
+  fixture timestamps cannot masquerade as closed ingress. The full connection authorization and
+  persistent phase ownership remain separate integration requirements.
+
+At this snapshot, four code/test files are uncommitted: the STT capability, its state module,
+`capability/speech_to_text_test.exs`, and `speech_to_text_media_policy_room_test.exs`. They are
+preserved outside this notes commit. No new implementation or test was added during this notes
+update, and no root suite was rerun. Re-reading `vxpipe-candidate-commit-root-results.json` confirms
+five exit-zero commands; the eight test summaries total 1,251 tests, zero failures and 15 excluded
+integrations. Those results belong to `69b5ad6`, not the current worktree. No dependency upgrade,
+production deadline change, browser/provider session or server restart was performed.
+
+The milestone and index remain open. Startup, human/AI handoff, waits, cues, release acknowledgements,
+bounded recovery and browser/phone acceptance still need a runnable integrated slice. More passing
+component checks must not be presented as resolution of the reported phone/console transfer problem.
+
+Documentation verification for this update: all 38 local labnote links/anchors resolve, and
+`git diff --check` passes.
