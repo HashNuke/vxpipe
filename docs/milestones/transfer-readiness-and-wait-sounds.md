@@ -1,12 +1,13 @@
 # Transfer readiness and participant wait sounds
 
-Status: implementation in progress (2026-09-15). Human web handoff and initial caller waiting are
-accepted delivery slices. Human acceptance includes native configuration/audio, complete readiness,
-policy reconciliation, private-resource cleanup, recovery and existing rendered sample evidence.
-Initial waiting includes native audio and deterministic phone lifecycle acceptance. AI handoff,
-phone parity and changing/multiple listeners remain open. All five root gates pass with 1,411 tests,
-zero failures and 16 integration exclusions (seed 235296; concurrency four). Seventeen checkpoint
-tasks remain.
+Status: implementation in progress (2026-09-15). Human web handoff, AI handoff and initial caller
+waiting are accepted delivery slices. Human acceptance includes native configuration/audio,
+complete readiness, policy reconciliation, private-resource cleanup, recovery and existing rendered
+sample evidence. AI acceptance includes independent model/voice/tool/MCP readiness, default/URL/nil
+waits, ordered greeting, privacy and resource retention. Initial waiting includes native audio and
+deterministic phone lifecycle acceptance. Phone parity and changing/multiple listeners remain open.
+All five root gates pass with 1,415 tests, zero failures and 16 integration exclusions (seed 235296;
+concurrency four). Fourteen checkpoint tasks remain.
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -41,7 +42,7 @@ private preparation. The missing work is completing and verifying their use in o
 | --- | --- | --- |
 | Human web transfer | Accepted: complete readiness, private waits/briefing/cues, policy reconciliation, resource retention, bidirectional media/transcripts and bounded recovery pass. A reproduced output-clear race no longer turns unchanged output into fatal unavailability during recovery. | Retain this acceptance while completing the remaining slices. |
 | Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
-| AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
+| AI transfer | Accepted: independent model, voice, MCP initialization and local-tool readiness gates, default/URL/nil waits, ordered cue/greeting, private held input and retained resources. Failure recovers spoken source conversation; fresh activations work on re-entry. | Retain this acceptance while completing phone and changing-listener slices. |
 | Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
@@ -313,7 +314,7 @@ slice demands it. There is no separate infrastructure-completion phase.
 | Delivery checkpoint | Runnable result | Depends on | Status |
 | --- | --- | --- | --- |
 | [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | Accepted: native flow/failure checks, existing rendered sample and root gates pass |
-| [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Normal flow and bounded recovery integrated; full acceptance open |
+| [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Accepted: native readiness/configuration/privacy, recovery and root gates pass |
 | [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Accepted: native configuration/audio and deterministic phone lifecycle checks pass |
 | [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local incoming/outbound handoff checks pass; full acceptance open |
 | [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Component coverage only |
@@ -328,12 +329,11 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after human web handoff acceptance: **17 tasks** in this
-section—AI handoff 3, phone handoff parity 6, changing/multiple listeners 6,
-and final audit 2.
+Remaining work after human web, AI handoff and initial waiting acceptance: **14 tasks** in this
+section—phone handoff parity 6, changing/multiple listeners 6, and final audit 2.
 The open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
-percentage. Three delivery slices still have acceptance work remaining.
+percentage. Two delivery slices still have acceptance work remaining.
 
 ### Checkpoint: human web handoff
 
@@ -491,12 +491,14 @@ Implementation tasks:
 - [x] Reuse the human slice's hold/readiness/cue/adopt/release sequence, skipping human briefing,
   acceptance and joining playback. Keep the existing allowlist, Variables, history modes and
   total transfer deadline; introduce no alternate transfer configuration.
-- [ ] Prepare the destination activation, model/tool/MCP bindings and demanded STT/TTS/output
+- [x] Prepare the destination activation, model/tool/MCP bindings and demanded STT/TTS/output
   before release. Prevent destination greeting, model requests and late source speech from
   crossing the held interval. Preserve every unaffected participant and room capability.
-  The shared prospective inventory now gates agent destinations, including delayed TTS. The
-  native model-initialization delay/failure, existing deadline checks and fresh-activation re-entry
-  pass; independent tool/MCP and every retained resource's end-to-end evidence remain open.
+  The shared prospective inventory gates agent destinations. Native model/voice delays and failures,
+  independently delayed scoped MCP initialization and the local registry's readiness reply pass.
+  Local bindings are compiled normally; readiness never invokes a dummy tool. Existing deadline
+  and fresh-activation re-entry checks pass. Caller STT/media, room services and prepared tool/MCP
+  resource identities survive handoff; only the departing source retires.
 - [x] Apply first-message behavior once after release/completion. Discard failed destination
   preparation and recover or end under the same failure contract as human transfers.
 - [x] Expose the destination and actual preparing/failure phase through RTVI and the existing
@@ -512,11 +514,17 @@ Acceptance and commit tasks:
   Receive waiting audio and reject held text at both stages, then receive the cue and greeting.
   Failed model preparation recovers a spoken source response and another caller turn through the
   same output/room-media actors, without replacing the healthy source TTS.
-- [ ] Complete native independent tool/MCP delays, URL/nil waiting and exactly-once greeting
-  and completion evidence. Verify the remaining audio/transcript privacy and resource-reuse contracts.
-- [ ] Verify received wait/cue/greeting order through native WebRTC audio. Inspect rendered states
+- [x] Complete native independent tool/MCP delays, URL/nil waiting and exactly-once greeting
+  and completion evidence. Four configurations cover default, URL, per-slot nil and whole-object
+  nil waits. Held microphone/text and late source speech are excluded from STT, recordings and
+  destination history. The delivered greeting and admitted caller history survive. A model-issued
+  MCP invocation works after release without recreating the prepared binding.
+- [x] Verify received wait/cue/greeting order through native WebRTC audio. Inspect rendered states
   only if UI changes are necessary. Pass focused agent-transfer checks and all five root gates,
-  update evidence and commit the slice.
+  update evidence and commit the slice. Four new native cases and 22 focused engine cases pass;
+  the final root suite passes 1,415 tests with zero failures and 16 integration exclusions.
+  No production or UI change was needed for this acceptance checkpoint. See the
+  [AI readiness labnote](../../labnotes/20260915-0602-ai-handoff-readiness.md).
 
 ### Checkpoint: initial caller waiting
 
@@ -757,9 +765,9 @@ the verification method, not readiness, privacy, deadline or playback contracts.
 speech providers and peers are sufficient for deterministic audio checks, while controlled
 providers retain precise delay/failure injection. Phone-provider interoperability remains a
 separate lane. Physical speaker audibility is not implied by peer-decoded audio.
-The AI acceptance checklist now records independent model/TTS verification separately from the
-remaining tool/configuration/privacy work. This uses existing provider fixtures and does not
-introduce a new runtime contract or change checkpoint prerequisites.
+The AI acceptance checklist records independent model/TTS verification and the completed
+tool/configuration/privacy matrix. These use existing provider fixtures and do not introduce a
+new runtime contract or change checkpoint prerequisites.
 
 ### Initial preparation retry review
 
@@ -999,10 +1007,15 @@ See the [resource-loss labnote](../../labnotes/20260915-0323-whole-room-failure-
   caller received “Billing is ready” and a subsequent billing-department response. The screenshot
   was inspected and showed no horizontal overflow. This is decoded browser audio with live
   providers, not physical speaker verification. Native peers now cover independent model delay
-  and preparation failure; independent tool delays and AI URL/nil acceptance remain open.
+  and preparation failure. The completed native tool/configuration matrix independently delays
+  scoped MCP initialization and local-tool readiness, verifies default/URL/nil waits and rejects
+  held input/late source speech. Caller STT/media, room services and prepared tools remain intact;
+  one completion and cue-ordered greeting precede a working destination MCP invocation.
 
 The [agent handoff labnote](../../labnotes/20260914-2008-agent-handoff-readiness.md) records the
 red/green boundary, integration corrections, removed lifecycle code and exact verification logs.
+The [AI acceptance labnote](../../labnotes/20260915-0602-ai-handoff-readiness.md) records the final
+native matrix, fixture corrections, retained-resource/privacy audit and all five root gates.
 
 ### Caller progress and testing direction
 
@@ -1142,6 +1155,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| AI handoff acceptance | Four new native configuration cases and 22 focused engine cases pass. All five root gates pass: 1,415 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Independently delayed MCP initialization and local tool readiness hold the caller; default/URL/nil waits end before cue/greeting. Held input and late source output remain private. Caller media/STT, room services and prepared tool resources persist; a real destination MCP invocation works after release. Combined with existing model/voice, recovery, deadline, history and re-entry evidence, the AI slice is accepted. Fourteen checkpoint tasks remain. |
 | Human web handoff acceptance and recovery-clear race | Two owning regressions fail with the old observer; all 24 output-arbiter cases pass after the fix. The native old-observer run reproduces fatal recovery unavailability; both corrected native recovery checks pass. All five root gates pass: 1,411 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Clearing status can change during a readiness query without invalidating an unchanged output binding. Native recovery preserves the caller, cue/speech and a later human transfer. Combined with the recorded configuration/privacy/resource/failure/sample evidence, the human slice is accepted. Seventeen checkpoint tasks remain. |
 | Recording demand during human handoff | Expected red writer-dependency assertion; ten owning recorder cases and both native policy variants pass. All five root gates pass: 1,408 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Denied recording retires private writers and removes writer readiness dependencies, while unrelated policy retains the writer and stream. Native handoffs preserve worker/deadline, room/source and existing media/speech bindings, and cue a readmitted listener before conversation. Human private-resource cleanup is complete; 19 checkpoint tasks remain. |
 | Retired briefing events during recovery | Two engine cases reproduce a missing match clause; all three focused cases, 36 owning handoff tests and five root gates pass after the fix. Root: 1,405 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | A late completion from retired briefing TTS no longer crashes RoomAuthority after recovery discards the preparation. Late playback/unavailable/monitor events leave pending recovery unchanged, and actual cue drain permits recovery with retained source TTS. This does not explain the historical native unavailable result; 20 checkpoint tasks remain. |

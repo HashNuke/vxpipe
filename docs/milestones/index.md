@@ -65,7 +65,7 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff and initial waiting accepted; AI handoff, phone parity and changing-listener acceptance remain, with complete readiness, private waits/cues and acknowledged release throughout.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff and initial waiting accepted; phone parity and changing-listener acceptance remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -91,7 +91,7 @@ ordering or lift the packaging/retention hold.
 The [transfer readiness and participant wait sounds milestone](transfer-readiness-and-wait-sounds.md)
 was authorized on 2026-09-14 for delivery through runnable vertical checkpoints. Definition/assets,
 private playback and complete resource readiness are integrated into ordinary calls. Human web
-handoff and initial caller waiting are accepted slices. AI handoff, phone parity and
+handoff, AI handoff and initial caller waiting are accepted slices. Phone parity and
 changing/multiple listeners remain open.
 
 Human web acceptance covers default/URL/nil waits, private briefing and authenticated acceptance,
@@ -101,7 +101,7 @@ bindings, admission cleanup and spoken recovery. Existing rendered desktop/mobil
 the live sample. Recording denial excludes unneeded writers without replacing unaffected resources.
 The latest native regression reproduces a fatal recovery result caused by output-clearing status
 being mistaken for changed resource identity; the fixed case recovers and completes a subsequent
-transfer on the same caller peer. All five root gates pass: 1,411 tests, zero failures and
+transfer on the same caller peer. The latest root run passes all five gates: 1,415 tests, zero failures and
 16 integration exclusions (seed 235296, concurrency four). The
 [recovery checkpoint](../../labnotes/20260915-0526-recovery-failure-tracing.md) records the causal
 reproduction, fixture corrections and human cleanup acceptance audit.
@@ -111,10 +111,17 @@ preparation pauses waiting for private playout and resumes the same cursor if re
 pending. Complete readiness and opening completion gate conversation and exactly one first-message
 action. Native configuration/audio checks and deterministic incoming-phone lifecycle checks pass.
 
-There are **17 checkpoint tasks remaining**: AI 3, phone 6, changing/multiple listeners 6,
-and final audit 2. AI model/voice delays already work; independent tool/MCP readiness and its full
-configuration/privacy acceptance remain. Phone-provider playout and the complete changing-audience
-matrix still need their own evidence. Native WebRTC results do not establish live phone audibility.
+AI acceptance now includes independently delayed model, voice, MCP initialization and local-tool
+readiness, with default/URL/nil waits. Native peers verify cue-before-greeting, held input and
+late-source exclusion, retained caller STT/media, room services and prepared tool resources, and a
+working destination MCP invocation. Four new native cases and 22 focused engine cases pass;
+existing recovery, deadline, history and re-entry checks remain green. The
+[AI acceptance labnote](../../labnotes/20260915-0602-ai-handoff-readiness.md) records the evidence
+and fixture corrections. This checkpoint adds no production behavior or UI.
+
+There are **14 checkpoint tasks remaining**: phone 6, changing/multiple listeners 6,
+and final audit 2. Phone-provider playout and the complete changing-audience matrix still need
+their own evidence. Native WebRTC results do not establish live phone audibility.
 The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
 and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the
 implementation boundaries, exact check results and links to checkpoint labnotes. Full milestone

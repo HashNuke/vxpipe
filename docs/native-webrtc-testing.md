@@ -110,17 +110,24 @@ setup and supervised peers, so an existing development server and external speec
 are unnecessary. These checks also run in the ordinary umbrella suite, except the explicitly
 tagged public-URL integration variant above.
 
-For independent model/voice preparation and failed-model recovery:
+For AI model/voice/tool preparation, wait configuration and failed-model recovery:
 
 ```shell
 mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
   --name-pattern 'AI handoff|agent_model loss'
 ```
 
-These use the existing controlled provider to delay model initialization before withholding
-TTS readiness. They verify waiting audio and held text at both stages, cue-before-greeting,
-and spoken recovery through the retained source when model preparation fails. The Morse case
-uses the real local speech providers; precise readiness failures use controlled providers.
+These delay model initialization and TTS readiness independently. Four additional cases delay
+scoped MCP initialization and the local tool registry's readiness reply with default, URL,
+per-slot nil and whole-object nil waits. Local bindings use ordinary compilation; readiness
+does not invoke a tool. After release, a model-issued MCP invocation reaches the pinned remote
+operation. The URL fetcher and remote protocol client are controlled fixtures.
+
+The native peers verify wait/cue/greeting order, held microphone/text and late-source exclusion,
+retained caller STT/media and room services, unchanged prepared tool bindings and one greeting/
+completion. Failed-model preparation restores spoken conversation through the retained source.
+The Morse case uses the real local speech providers; precise readiness failures use controlled
+providers.
 
 For policy revisions after handoff adoption but before media release:
 

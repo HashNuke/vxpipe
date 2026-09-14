@@ -683,6 +683,251 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    2_000
   end
 
+  for mode <- [:defaults, :custom_url, :silent_caller, :silent_all] do
+    @tag agent_wait_mode: mode
+    test "AI handoff gates MCP and local tools with #{mode} waits", context do
+      mode = context.agent_wait_mode
+      {sounds, options} = agent_wait_configuration(mode)
+      owner = self()
+      remote_result = {:ok, %{"content" => [%{"type" => "text", "text" => "Customer found."}]}}
+
+      remote_client =
+        start_supervised!(
+          {Agent, fn -> %{responses: [{:wait, owner, remote_result}], invocations: []} end}
+        )
+
+      {catalog, _binding} =
+        CallEngine.RemoteMCPFixture.binding!(remote_client, self(), "private-mcp-sentinel",
+          credential_generation: unique_id("ai-readiness"),
+          client_config: [
+            test_client: remote_client,
+            test_observer: self(),
+            private: "private-mcp-sentinel",
+            test_gate_initialization: true
+          ]
+        )
+
+      catalog_store = start_supervised!({CallEngine.RemoteMCP.CatalogStore, catalog: catalog})
+
+      plan =
+        compile_plan(
+          agent_destination: true,
+          caller_speech_to_text?: true,
+          tenant_id: "tenant-demo",
+          mcp_integrations: catalog,
+          billing_tools: %{
+            "customer_lookup" => %{type: "mcp", integration: "records", tool: "lookup_customer"},
+            "test_agent_tool" => %{type: "host", tool: "test_agent_tool"}
+          },
+          billing_history: %{mode: "all_spoken"},
+          wait_sounds: sounds
+        )
+
+      options =
+        Keyword.merge(options,
+          mcp_catalog_store: catalog_store,
+          remote_mcp_connection_provider: CallEngine.TestRemoteMCPConnectionProvider,
+          remote_mcp_protocol_client: CallEngine.TestRemoteMCPProtocolClient,
+          recording: [
+            enabled: true,
+            targets: [:full_mix, :individual_tracks],
+            writer: {CallEngine.TestRecordingWriter, observer: self()},
+            maximum_pull_frames: 20
+          ]
+        )
+
+      assert {:ok, room} = CallEngine.start_call(plan, options)
+      stop_room_on_exit(plan)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+      source_monitor = Process.monitor(source_tts)
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller = Map.fetch!(plan.participants, "caller")
+
+      client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat", false))
+
+      assert_receive {:test_stt_transport_started, speech, _}, 2_000
+      speech_monitor = Process.monitor(speech)
+
+      TestSpeechToTextTransport.deliver(
+        speech,
+        ~s({"type":"Connected","request_id":"caller-ready","sequence_id":0})
+      )
+
+      await_call_ready(client)
+
+      if mode == :custom_url do
+        assert_receive {:test_opening_audio_fetch, "https://media.example.com/handoff.wav", _},
+                       1_000
+      end
+
+      assert :ok =
+               send_rtvi_text(
+                 client,
+                 "transfer-with-tools",
+                 true,
+                 "Please connect me to billing."
+               )
+
+      assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      assert {:ok, before_transfer} = CallEngine.RoomAuthority.readiness_binding(authority)
+      connection = Map.fetch!(before_transfer.connections, client.connection_id).pid
+      assert {:ok, media} = GenServer.call(connection, :vxpipe_connection_readiness)
+
+      assert {:ok, call} =
+               ToolCall.new(
+                 id: "to-billing",
+                 name: "transfer",
+                 arguments: %{"destination" => "billing"}
+               )
+
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+      send(provider, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:test_remote_mcp_initializing, remote_owner}, 2_000
+      assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
+      assert {:ok, acknowledgement} = ModelResponse.new(text: "Late source acknowledgement.")
+      send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
+      progress = await_transfer_progress(client, "preparing")
+      assert_startup_wait(client, mode)
+      assert :ok = send_rtvi_text(client, "held-during-mcp", false, "held-during-mcp")
+      assert %{"id" => "held-during-mcp"} = await_sideband(client, "error-response", 2_000)
+      send_tone(client, 500, 1)
+      refute_receive {:test_stt_audio, ^speech, _held_input}, 100
+      refute_receive {:test_recording_chunk, _, _private_audio}, 100
+      refute_receive {:test_tts_transport_started, _destination, _}, 0
+      refute_receive {:test_tts_control, ^source_tts, _late_speech}, 0
+      assert Agent.get(remote_client, & &1.invocations) == []
+      send(remote_owner, :test_remote_mcp_initialized)
+      assert_receive {:test_tts_transport_started, destination_tts, _}, 2_000
+
+      assert {:ok, remote_resource, :ready} =
+               CallEngine.RemoteMCP.IntegrationOwner.readiness(remote_owner)
+
+      tools =
+        CallEngine.AgentActivationSupervisor.whereis_child(
+          remote_resource.binding,
+          :invocation_registry
+        )
+
+      assert {:ok, tool_resource, :ready} = CallEngine.Tool.InvocationRegistry.readiness(tools)
+      token = pause_tool_readiness(tools)
+
+      try do
+        assert_receive {:tool_readiness_waiting, ^token}, 2_000
+
+        TestTextToSpeechTransport.deliver_control(
+          destination_tts,
+          ~s({"type":"Connected","request_id":"destination-ready"})
+        )
+
+        assert :ok = send_rtvi_text(client, "held-during-tools", false, "held-during-tools")
+        assert %{"id" => "held-during-tools"} = await_sideband(client, "error-response", 2_000)
+        refute_receive {:test_tts_control, ^destination_tts, _greeting}, 50
+
+        refute_receive {:test_agent_runtime_stream, _model,
+                        %{messages: [%{content: "Handle billing requests."} | _]}},
+                       0
+
+        refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 0
+        refute_native_activation(client, System.monotonic_time(:millisecond) + 50)
+        assert Agent.get(remote_client, & &1.invocations) == []
+      after
+        send(tools, {:continue_tool_readiness, token})
+      end
+
+      completed = await_transfer_progress(client, "completed")
+      assert completed["attempt_id"] == progress["attempt_id"]
+      assert_receive {:test_tts_control, ^destination_tts, speak}, 2_000
+      assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Billing is ready."}
+      assert_receive {:test_tts_control, ^destination_tts, _flush}, 2_000
+      assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
+      refute_receive {:test_stt_transport_started, _replacement, _}, 0
+      refute_receive {:DOWN, ^speech_monitor, :process, ^speech, _}, 0
+      refute_receive {:test_stt_audio, ^speech, _held_input}, 0
+      refute_receive {:test_recording_chunk, _, _private_audio}, 0
+
+      assert {:ok, after_transfer} = CallEngine.RoomAuthority.readiness_binding(authority)
+      assert after_transfer.room == before_transfer.room
+      assert after_transfer.connections == before_transfer.connections
+
+      assert Map.fetch!(after_transfer.participants, caller.participant_id) ==
+               Map.fetch!(before_transfer.participants, caller.participant_id)
+
+      assert {:ok, retained_media} = GenServer.call(connection, :vxpipe_connection_readiness)
+      assert retained_media.output == media.output
+      assert retained_media.room_input == media.room_input
+      assert retained_media.room_output == media.room_output
+      assert retained_media.attachment.media_ingress == media.attachment.media_ingress
+
+      assert {:ok, ^remote_resource, :ready} =
+               CallEngine.RemoteMCP.IntegrationOwner.readiness(remote_owner)
+
+      assert {:ok, ^tool_resource, :ready} = CallEngine.Tool.InvocationRegistry.readiness(tools)
+      refute_receive {:test_tts_transport_started, _replacement, _}, 0
+
+      deliver_voice_tone(destination_tts, "billing-greeting", 1_500)
+      assert_handoff_audio_order(client, 1_500, if(mode == :custom_url, do: 250))
+      await_agent_greeting_end(client, System.monotonic_time(:millisecond) + 2_000)
+      assert :ok = send_client_ready(client)
+      refute_receive {:test_tts_control, ^destination_tts, _duplicate_greeting}, 0
+      refute_native_activation(client, System.monotonic_time(:millisecond) + 50)
+      send_tone(client, 500, 11)
+      assert_receive {:test_stt_audio, ^speech, _conversation}, 2_000
+      assert_receive {:test_recording_chunk, _, _conversation}, 2_000
+
+      assert :ok =
+               send_rtvi_text(client, "use-billing-tools", false, "Look up my billing account.")
+
+      assert_receive {:test_agent_runtime_stream, billing_provider,
+                      %{correlation: %{correlation_id: "use-billing-tools"}} = request},
+                     2_000
+
+      assert Enum.sort(Enum.map(request.tools, & &1.name)) == [
+               "customer_lookup",
+               "test_agent_tool"
+             ]
+
+      contents = Enum.map(request.messages, & &1.content)
+      assert "Please connect me to billing." in contents
+      assert "Billing is ready." in contents
+
+      for marker <- [
+            "held-during-mcp",
+            "held-during-tools",
+            "Late source acknowledgement.",
+            "handoff.wav",
+            "private-mcp-sentinel"
+          ] do
+        refute inspect(request) =~ marker
+      end
+
+      assert {:ok, lookup} =
+               ToolCall.new(
+                 id: "lookup",
+                 name: "customer_lookup",
+                 arguments: %{"customer_id" => "test-customer"}
+               )
+
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [lookup])
+      send(billing_provider, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:test_remote_mcp_invocation_started, execution}, 2_000
+
+      assert [%{name: "lookup_customer", arguments: %{"customer_id" => "test-customer"}}] =
+               Agent.get(remote_client, & &1.invocations)
+
+      send(execution, :release_test_remote_mcp)
+      refute_receive {:test_opening_audio_fetch, _url, _limits}, 0
+    end
+  end
+
   for {wait_mode, last_ready, loss_at} <- [
         {:defaults, :destination, nil},
         {:custom_url, :destination, nil},
@@ -2990,6 +3235,67 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp startup_wait_configuration(:silent_caller), do: {%{call_setup: nil}, []}
   defp startup_wait_configuration(mode), do: wait_configuration(mode)
 
+  defp agent_wait_configuration(:custom_url) do
+    {sounds, options} = wait_configuration(:custom_url)
+    {%{transfer_to_agent: sounds.transfer_to_human}, options}
+  end
+
+  defp agent_wait_configuration(:silent_caller), do: {%{transfer_to_agent: nil}, []}
+  defp agent_wait_configuration(mode), do: wait_configuration(mode)
+
+  defp await_agent_greeting_end(connection, deadline) do
+    client = connection.client
+    channel = connection.channel_ref
+
+    receive do
+      {:ex_webrtc, ^client, {:data, ^channel, payload}} ->
+        message = JSON.decode!(payload)
+
+        refute match?(
+                 %{
+                   "type" => "server-message",
+                   "data" => %{"t" => "vxpipe.transfer", "d" => %{"phase" => "completed"}}
+                 },
+                 message
+               ),
+               "duplicate transfer completion"
+
+        if message["type"] != "bot-stopped-speaking",
+          do: await_agent_greeting_end(connection, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("missing greeting completion")
+    end
+  end
+
+  defp pause_tool_readiness(tools) do
+    owner = self()
+    token = make_ref()
+
+    assert :ok =
+             :sys.install(
+               tools,
+               {token,
+                fn
+                  :waiting, {:in, {:"$gen_call", _from, :readiness}}, _process ->
+                    send(owner, {:tool_readiness_waiting, token})
+
+                    receive do
+                      {:continue_tool_readiness, ^token} -> :ok
+                    after
+                      1_000 -> :ok
+                    end
+
+                    :done
+
+                  state, _event, _process ->
+                    state
+                end, :waiting}
+             )
+
+    token
+  end
+
   defp assert_startup_wait(client, mode) do
     case mode do
       mode when mode in [:silent_caller, :silent_all] -> refute_audio(client, 150)
@@ -3121,6 +3427,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    "billing" => %{
                      type: "agent",
                      prompt: "Handle billing requests.",
+                     tools: Keyword.get(options, :billing_tools, %{}),
+                     transfer_history: Keyword.get(options, :billing_history, %{mode: "fresh"}),
                      capabilities: %{
                        model_inference: "billing-model",
                        text_to_speech: "test-voice"
@@ -3172,7 +3480,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
-               tenant_id: unique_id("tenant-human-transfer"),
+               tenant_id: Keyword.get(options, :tenant_id, unique_id("tenant-human-transfer")),
                actor_id: unique_id("actor-human-transfer"),
                call_id: unique_id("call-human-transfer"),
                room_id: unique_id("room-human-transfer")
@@ -3215,7 +3523,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                      )
                  }
                },
-               host_tools: %{}
+               host_tools: %{"test_agent_tool" => CallEngine.TestAgentTool},
+               mcp_integrations: Keyword.get(options, :mcp_integrations)
              })
 
     plan
