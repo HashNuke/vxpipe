@@ -1,16 +1,17 @@
 # Transfer readiness implementation
 
 Implementation resumed following the goal continuation after the pause audit. The latest
-[recording checkpoint](#prepare-recording-ownership-and-policy), committed as `4b14530`, adds
-prospective writer ownership, track selection and policy adoption and passes all five root gates: 1,243 tests,
-zero failures and 15 integration exclusions. The earlier notes-only audit and its uncommitted-work
-snapshot are retained below for accountability.
+[candidate tap checkpoint](#prepare-native-recording-taps-for-a-candidate-policy) completes native
+recording tap selection across changed recording intervals. All five root gates pass: 1,248 tests,
+zero failures and 15 integration exclusions. It builds on prospective writer ownership and track
+adoption committed as `4b14530`. The earlier notes-only audit and its uncommitted-work snapshot are
+retained below for accountability.
 
-**The end-to-end milestone remains unfinished.** Native agent recording taps across changed recording
-intervals, private destination actors, startup/transfer orchestration, waits/cues and recovery still require integration
+**The end-to-end milestone remains unfinished.** Private destination actors, startup/transfer
+orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
-The [latest investigation notes](#recording-tap-investigation-and-handoff-resume-point) identify
-the remaining recording boundary and the concrete handoff integration point.
+The [investigation notes](#recording-tap-investigation-and-handoff-resume-point) identify the concrete
+handoff integration point to resume after the recording groundwork.
 
 ## Detour update after the pause audit
 
@@ -1492,3 +1493,56 @@ Those are evidence for `4b14530`, not newly run checks or live transfer acceptan
 upgrade, production deadline change, browser session, provider call or server restart was performed.
 Concurrent `vxpipe-docs/` changes remain outside this documentation checkpoint.
 Documentation verification: all 34 local labnote links/anchors resolve, and `git diff --check` passes.
+
+## Prepare native recording taps for a candidate policy
+
+- The preceding goal turn made progress by committing the requested investigation notes as
+  `8dc6726`. Resumed implementation from the verified worktree; concurrent `vxpipe-docs/` work stays
+  separate. The remaining tap mismatch above was confirmed in the installed recording query.
+- The mixer already owns the mutable recording gate; changing permission does not allocate another
+  native tap or codec. Separate physical tap readiness from permission readiness, and require the
+  exact prepared mixer resource alongside the tap in candidate recording collection. Reuse the
+  existing authoritative candidate and phase lease rather than creating a per-tap registry.
+- A focused authoritative-policy check first failed at the missing `EgressReadiness.prepare_candidate/5`
+  API (`vxpipe-tap-policy-red.log`). It now proves that preparation leaves denied recording closed,
+  adoption retains the native resource and tap, and only committed permission admits audio. The
+  installed query still rejects mismatched or denied recording policy. Initial focused coverage
+  passed seven checks (`vxpipe-tap-policy-green.log`).
+- Candidate recording selection first failed at its missing prepared-mixer argument, then passed
+  with physical tap and mixer dependencies carried into the recording result. The test prepares an
+  agent writer privately and verifies scoped cancellation. The whole-room runner supplies its
+  already prepared mixer resource. Final focused engine coverage passes 41 tests in
+  `vxpipe-tap-selection-green.log`.
+- Corrected one new test expectation: an unavailable discarded mixer binding keeps the existing
+  collector in `preparing`, not immediate `failed`. The check now verifies closed collection and
+  the actual unavailable mixer binding while the physical tap remains ready. This did not require
+  changing collector semantics or its original deadline.
+- Added a real WebRTC agent-room check for recording permission relaxation, complete resource
+  collection, discard/retry, exact adoption and output release. Its first run exposed a fixture
+  error: direct calls assumed every adapter implemented the optional `readiness_binding/1` callback.
+  Rechecking through the actual collector uses the supported adapter contract and verifies the
+  complete resource set. This fixture failure is not claimed as a production defect.
+- The durable readiness contract records the ownership decision and rejected alternatives. Native
+  tap selection no longer needs a recording-interval workaround. Private destination preparation,
+  persistent startup/transfer orchestration, waits/cues, recovery and browser/provider acceptance
+  remain unfinished. No package version or production deadline changes are part of this checkpoint.
+- Both WebRTC files now pass eight tests (`vxpipe-tap-policy-room-green.log`), including the new
+  full-room permission change and the existing human audio/transcript transfer. Root verification
+  initially stopped at formatting of the changed recording-output fixture; formatted that exact
+  file and restarted the gates under `vxpipe-tap-policy-verified-root-`. Formatting, compilation and
+  strict Credo have passed; the full test command is still running. No runtime fix was needed for
+  that formatting failure.
+- That root run completed with one existing event-publisher fixture failure at its 100 ms policy
+  setup acknowledgement; all new engine and Gateway cases passed. The unchanged fixture passes
+  in isolation. Its separate [deadline labnote](20260914-1156-transcript-fixture-deadline.md)
+  records the evidence and one-second fixture correction. Production timeouts and transcript
+  behavior remain unchanged. Final root gates repeat for the corrected worktree.
+- Final verification passes all five root gates: formatting, warnings-as-errors compilation,
+  strict Credo, 1,248 tests with zero failures and 15 integration exclusions, and unused dependencies.
+  The eight application summaries and all per-command exits in
+  `vxpipe-tap-policy-final-root-results.json` confirm completion. The fixture fix is committed
+  separately as `ec5d408`; no package change or production timeout increase was needed.
+- Verified local documentation links/anchors and `git diff --check`. No rendered browser inspection,
+  live provider call or development-server restart was performed. The user's concurrent Starlight
+  migration is committed as `175b331`; remaining `vxpipe-docs/` edits are preserved. This completes
+  the native tap dependency, while milestone/index acceptance and lifecycle integration remain open.

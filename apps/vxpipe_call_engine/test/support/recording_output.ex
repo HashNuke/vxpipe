@@ -31,8 +31,12 @@ defmodule Vxpipe.CallEngine.TestRecordingOutput do
        handoff: nil,
        pause?: false,
        resource:
-         Resource.new(:audio_output, {:participant, "caller"}, __MODULE__, options,
-           binding: "listener-connection"
+         Resource.new(
+           :audio_output,
+           {:participant, Keyword.get(options, :participant_id, "caller")},
+           __MODULE__,
+           options,
+           binding: Keyword.get(options, :connection_id, "listener-connection")
          )
      }}
   end

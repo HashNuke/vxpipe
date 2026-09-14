@@ -154,9 +154,11 @@ contract. A required agent without a permitted, bound receiving output still fai
 
 WebRTC and common phone output expose their current recording binding through a bounded local
 query. The engine observes dependencies outside the native output's callback: it validates the
-actual mixer issuer, room identity, receiving connection, PCM sample rate/channels/frame size and
-recording interval, then rechecks the native resource and handoff. The collector descriptor preserves the codec's
-generation while its configuration signature also pins the handoff. Different bindings invalidate
+actual mixer issuer, room identity, receiving connection and PCM sample rate/channels/frame size,
+then rechecks the native resource and handoff. Installed preparation also checks the current recording
+interval; candidate preparation requires the exact prepared mixer policy dependency described below.
+The physical tap descriptor preserves the codec's generation while its configuration signature pins
+the handoff. Its policy interval is nil because the mixer owns the mutable recording gate. Different bindings invalidate
 readiness; queue/cursor values and unrelated transcript policy changes do not change the binding.
 No audio is offered, consumed or synthesized to establish readiness.
 
@@ -771,8 +773,9 @@ lease. An unrelated revision requires a refreshed candidate under the same origi
 
 Candidate recording now stages future writer ownership and selected tracks separately from live
 recording, as described below. The installed-policy query still rejects changed recording sources
-instead of mutating live requirements prematurely. Private destination actors, native agent recording
-taps across changed recording intervals, and lifecycle orchestration remain unfinished. Do not treat
+instead of mutating live requirements prematurely. Native agent taps are selected with the same
+prepared mixer policy evidence, including changed recording intervals. Private destination actors
+and lifecycle orchestration remain unfinished. Do not treat
 this runner as complete transfer readiness.
 
 Design review rejected deriving subscriptions from a partial caller list, replacing transcript
@@ -829,8 +832,38 @@ cancellation callbacks where source ownership already supplies cleanup. Engine c
 future writer creation, recording during preparation, adoption, delayed local readiness,
 discard/retry, phase loss, mixer/writer loss, full-mix retention and policy refresh. The WebRTC room check
 prepares changed human recording membership while preserving current writer resources, discards it
-and continues the original conversation. Preparing a native agent output tap for a different
-recording interval remains separate work; current exact tap evidence is still required there.
+and continues the original conversation.
+
+### Native recording taps under a candidate policy
+
+An existing native tap can be physically initialized while its mixer recording gate is closed.
+`Recording.EgressReadiness.prepare_candidate/5` validates the authoritative candidate and pairs that
+exact tap with the prepared mixer resource already owned by the room phase. It verifies the actual
+mixer instance, identity, connection, format and bounded capacity, rechecks the native binding,
+and observes the exact mixer descriptor before and after the tap query. The candidate must permit
+recording and its scoped intervals must match the mixer's acknowledged preparation. Relabeled
+installed evidence, stale candidates, discarded preparations and foreign mixers cannot establish
+this dependency.
+
+The physical tap descriptor has no policy interval: changing permission updates the mixer's existing
+gate without allocating a tap or restarting its codec. Candidate recording selection returns both
+the tap and mixer resources for collection; a ready tap alone cannot open recording. The whole-room
+aggregate deduplicates the shared mixer dependency. Installed-policy preparation retains its current
+permission/interval checks. Prepared recording writers, subscriptions and policy adoption retain
+their separate ownership contracts above.
+
+Design review rejected a second registry of tap preparation leases because the mixer already owns
+the gate and original phase lease. Copying a future interval onto a current tap descriptor would
+claim permission readiness without observing its owner. A physical descriptor plus the exact prepared
+mixer dependency preserves allocation and enforces the actual permission boundary.
+
+Engine checks cover preparation while recording is denied, unchanged tap/codec identity after
+adoption, ignored audio before commit, accepted audio after commit, selected agent writer cleanup,
+discarded policy evidence and rejection of installed/relabeled/stale evidence. A real WebRTC room
+prepares both caller and agent recording paths under a changed recording interval, discards and
+retries, collects the complete resource set, adopts those exact resources and releases output.
+The existing human transfer still exercises bidirectional audio and destination transcripts. These
+checks establish candidate recording preparation, not the unfinished transfer/wait lifecycle.
 
 ## Phone transport
 

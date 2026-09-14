@@ -97,6 +97,17 @@ defmodule Vxpipe.CallEngine.RoomMixer.RecordingEgress do
 
   def readiness(_state, _handoff, _policy), do: {:error, :unavailable}
 
+  def tap_readiness(%__MODULE__{} = state, %EgressHandoff{} = handoff) do
+    if EgressHandoff.issued_by?(handoff, self(), state) do
+      status = if EgressHandoff.available?(handoff), do: :ready, else: :preparing
+      {:ok, EgressHandoff.recording_binding(handoff), status}
+    else
+      {:error, :unavailable}
+    end
+  end
+
+  def tap_readiness(_state, _handoff), do: {:error, :unavailable}
+
   @spec install_policy(nil | t(), Snapshot.t()) :: {non_neg_integer(), nil | t()}
   def install_policy(nil, _snapshot), do: {0, nil}
 

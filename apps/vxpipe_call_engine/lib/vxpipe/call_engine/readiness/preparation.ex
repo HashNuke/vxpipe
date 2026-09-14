@@ -93,7 +93,7 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
 
   defp finish(room, captured, resources, connections, preparations, deadline, options \\ nil) do
     with {:ok, tracks, recording, recording_preparations} <-
-           prepare_recording(captured, connections, options) do
+           prepare_recording(captured, connections, resources, options) do
       case complete(
              room,
              captured,
@@ -113,13 +113,15 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
     end
   end
 
-  defp prepare_recording(captured, connections, nil) do
+  defp prepare_recording(captured, connections, _resources, nil) do
     with {:ok, tracks, resources} <- RecordingPreparation.prepare(captured, connections),
          do: {:ok, tracks, resources, []}
   end
 
-  defp prepare_recording(captured, connections, options),
-    do: RecordingPreparation.prepare_candidate(captured, connections, options)
+  defp prepare_recording(captured, connections, resources, options) do
+    mixer_resource = Enum.find(resources, &(&1.kind == :room_mixer and &1.scope == :room))
+    RecordingPreparation.prepare_candidate(captured, connections, options, mixer_resource)
+  end
 
   defp complete(room, captured, resources, connections, tracks, preparations, deadline) do
     with {:ok, resources} <- complete_resources(resources, captured),

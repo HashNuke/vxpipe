@@ -356,6 +356,97 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              await_sideband(caller_client, "user-transcription", 5_000)
   end
 
+  test "prepares the complete agent recording path before relaxing recording permission" do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.{Collector, Preparation}
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    plan = compile_plan()
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               recording: [
+                 enabled: true,
+                 targets: [:individual_tracks],
+                 writer: {CallEngine.TestRecordingWriter, observer: self()},
+                 maximum_pull_frames: 20
+               ]
+             )
+
+    stop_room_on_exit(plan)
+    caller = Map.fetch!(plan.participants, "caller")
+    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    _client =
+      plan |> issue_session(room, caller.participant_id) |> then(&connect(&1.session_id, "chat"))
+
+    [{room_authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    assert {:ok, room_binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    [connection] = Map.values(room_binding.connections)
+    assert {:ok, binding} = GenServer.call(connection.pid, :vxpipe_connection_readiness)
+    assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+    authority = Authority.whereis(room.incarnation_id)
+    restricted = Map.fetch!(plan.participants, "recording-restriction").participant_id
+    assert {:ok, denied} = Authority.admit(authority, restricted)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.delete(denied.present_participant_ids, restricted)
+             )
+
+    options = [
+      owner: self(),
+      attempt_id: "agent-recording-policy",
+      generation: 1,
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+
+    assert {:ok, prepared} = Preparation.run_candidate(room_authority, candidate, options)
+    taps = Enum.filter(prepared.resources, &(&1.kind == :recording_output))
+    assert length(taps) == 1
+    assert Enum.count(prepared.resources, &(&1.kind == :recording_writer)) == 2
+    assert Authority.snapshot(authority) == denied
+
+    collector =
+      start_supervised!(
+        {Collector,
+         Keyword.merge(options,
+           incarnation_id: room.incarnation_id,
+           resources: prepared.resources
+         )}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert :ok = Preparation.discard(prepared)
+    stop_supervised!({Collector, "agent-recording-policy"})
+    assert {:ok, retry} = Preparation.run_candidate(room_authority, candidate, options)
+    assert Enum.filter(retry.resources, &(&1.kind == :recording_output)) == taps
+
+    collector =
+      start_supervised!(
+        {Collector,
+         Keyword.merge(options, incarnation_id: room.incarnation_id, resources: retry.resources)}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert {:ok, snapshot} = Authority.leave(authority, restricted)
+    assert snapshot == candidate.snapshot
+
+    assert :ok = Collector.refresh(collector)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+
+    assert :ok = RoomAudioEgress.release(binding.room_output, 1)
+    refute_receive {:test_tts_transport_started, _replacement, _connection}
+  end
+
   defp verify_prepared_speech_graph(connection, identity, current, policy, plan, room) do
     alias Vxpipe.CallEngine.Capability.SpeechToText
     alias Vxpipe.CallEngine.Media.ConnectionReadiness
@@ -598,6 +689,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                      connection: %{service: "web", mode: "receive", admission: "start_call"},
                      capabilities: %{},
                      while_present: %{save_transcripts: false}
+                   },
+                   "recording-restriction" => %{
+                     type: "human",
+                     connection: %{service: "web", mode: "receive", admission: "start_call"},
+                     capabilities: %{},
+                     while_present: %{record_audio: false}
                    }
                  },
                  limits: %{max_duration_ms: 60_000}

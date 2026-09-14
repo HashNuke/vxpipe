@@ -806,3 +806,20 @@ All five final root gates pass with 1,243 tests, zero failures and 15 integratio
 Native agent output tap preparation across changed
 recording intervals, private destination actors and startup/transfer orchestration remain required;
 the milestone and its acceptance checklists remain open.
+
+Candidate recording selection now pairs each required native agent tap with the room's prepared
+mixer policy resource. The physical tap retains its descriptor and codec generation across recording
+permission changes; the mixer keeps a denied live gate closed until adoption. Preparation checks actual
+identity, binding, PCM format, capacity and candidate policy evidence instead of relabeling the
+installed recording interval. A discarded policy dependency keeps the combined readiness barrier
+closed even when the unchanged tap remains physically ready.
+
+Forty-one focused engine checks and eight Gateway WebRTC checks pass. The new WebRTC case collects
+the complete caller/agent recording graph before relaxing recording permission, cancels and retries
+preparation, adopts the exact collected resources and releases output. Engine checks also prove
+audio is ignored before permission commit, tap/codec identity is retained, scoped writer cleanup
+works, and installed/relabeled/stale policy evidence cannot authorize candidate recording. All five
+root gates pass: 1,248 tests, zero failures and 15 integration exclusions. An existing transcript
+fixture's acknowledgement deadline was corrected in a separate test-only checkpoint; production
+deadlines remain unchanged. Private destination actors, startup/transfer orchestration, waits/cues,
+restoration and browser/provider acceptance remain unfinished.

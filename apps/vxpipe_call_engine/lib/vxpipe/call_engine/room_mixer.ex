@@ -142,6 +142,11 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     safe_call(server, {:recording_egress_readiness, handoff})
   end
 
+  @doc false
+  def recording_tap_readiness(server, handoff) do
+    safe_call(server, {:recording_tap_readiness, handoff})
+  end
+
   @spec ingress_configuration(GenServer.server()) :: {:ok, map()} | {:error, :unavailable}
   def ingress_configuration(server), do: safe_call(server, :ingress_configuration)
 
@@ -280,6 +285,10 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   def handle_call({:recording_egress_readiness, handoff}, _from, state) do
     {:reply, RecordingEgress.readiness(state.recording_egress, handoff, state.policy), state}
+  end
+
+  def handle_call({:recording_tap_readiness, handoff}, _from, state) do
+    {:reply, RecordingEgress.tap_readiness(state.recording_egress, handoff), state}
   end
 
   def handle_call({:flush_through, timestamp}, _from, state) do
