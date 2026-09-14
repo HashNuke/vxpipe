@@ -534,6 +534,43 @@ delivery. Nineteen focused arbiter checks cover preparation, exact evidence, cue
 adoption, cancellation and retained output identity. Mixer subscriptions and room-egress candidate
 installation still need to use this protocol; these checks do not prove transfer orchestration.
 
+### Preparing room egress for policy adoption
+
+`RoomAudioEgress.prepare_policy/4` takes the authoritative candidate, the exact mixer-prepared
+subscription and the phase's owner, attempt, absolute deadline and held output generation. It
+validates the room/participant/subscription before any gate mutation and rechecks before staging.
+The mixer confirms that this queue's actual subscriber is the egress process; matching room and
+participant IDs alone is insufficient. Mixer preparation can hold a pending participant queue
+without adding it to active delivery; the adopted queue keeps that hold until explicit release.
+A pending queue cannot be released
+through the live subscription API before commit.
+
+An existing shared egress retains its pipeline, subscription token and native output. Routing
+permission changes belong to the mixer; they do not require a new forwarding pipeline. A joining
+connection with no room route starts its shared pipeline against a pending native binding. Its
+prepared readiness includes the exact prospective subscription and native route. Resource evidence
+remains queryable after adoption, and unchanged preparations preserve all existing descriptors.
+
+The policy callback adopts only collected ready resources under the original valid lease and a
+held, drained output. Retained routes revalidate their native binding, and new routes activate their
+reserved binding. No codec or provider starts during commit. Mixer-dependent observation happens
+outside the callback; ordinary mixer delivery is scheduled after the callback returns. Existing
+readiness waiters are answered only after successful adoption, while media remains held.
+
+An unrelated membership update keeps a dormant joining egress dormant. Its candidate can be
+refreshed under the same lease without replacing the pending pipeline or subscription. Expiry,
+owner loss or pending-pipeline/subscription failure invalidate prepared evidence and notify the
+phase owner; cleanup affects only the pending route. Explicit discard acknowledges native
+reservation cleanup. A stale discard cannot remove a later preparation or an adopted route.
+
+Design review rejected replacing a shared forwarding pipeline merely for a different permission
+interval, premature live activation of a joining route, and holding a supplied subscription before
+validating its owner/identity. Nine focused real-authority/mixer/native-output checks exercise
+adoption, retained identities, private isolation, cancellation, owner loss, foreign-room rejection,
+revoked native bindings, actual queue ownership and membership refresh. Complete connection-graph
+selection and transfer orchestration still need to use this protocol; this is not complete
+lifecycle acceptance.
+
 ### Holding an existing room output
 
 `RoomAudioEgress.hold/2` closes the exact mixer subscription and then holds/clears its shared

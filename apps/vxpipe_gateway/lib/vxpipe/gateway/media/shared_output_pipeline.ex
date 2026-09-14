@@ -13,6 +13,8 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
   def activate(pipeline, resource, generation),
     do: GenServer.call(pipeline, {:activate, resource, generation}, 5_000)
 
+  def discard(pipeline), do: GenServer.call(pipeline, :discard_preparation, 1_000)
+
   def readiness(pipeline) do
     with {:ok, output, token} <- GenServer.call(pipeline, :output_binding, 1_000),
          do: OutputArbiter.room_binding_readiness(output, token)
@@ -66,6 +68,18 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
   def handle_call(:output_binding, _from, state) do
     {:reply, {:ok, state.output, state.binding}, state}
   end
+
+  def handle_call(
+        :discard_preparation,
+        {owner, _},
+        %{owner: owner, preparation: preparation} = state
+      )
+      when not is_nil(preparation) do
+    {:reply, OutputArbiter.discard_room(state.output, state.binding), state}
+  end
+
+  def handle_call(:discard_preparation, _from, state),
+    do: {:reply, {:error, :stale_preparation}, state}
 
   def handle_call({:activate, resource, generation}, {owner, _}, %{owner: owner} = state) do
     if state.preparation != nil or state.activated_generation == generation do

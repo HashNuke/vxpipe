@@ -50,6 +50,10 @@ defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
   def release(%__MODULE__{} = subscription, generation),
     do: RoomMixer.gate_subscription(subscription, :release, generation)
 
+  @doc false
+  def confirm_subscriber(%__MODULE__{} = subscription, subscriber) when is_pid(subscriber),
+    do: RoomMixer.confirm_subscriber(subscription, subscriber)
+
   @impl true
   def readiness(%__MODULE__{prepared_policy_token: token} = subscription)
       when is_reference(token) do

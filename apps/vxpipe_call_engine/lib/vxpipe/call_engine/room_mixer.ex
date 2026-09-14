@@ -125,6 +125,14 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   @doc false
+  def confirm_subscriber(%Subscription{} = subscription, subscriber) when is_pid(subscriber),
+    do:
+      safe_call(
+        subscription.mixer,
+        {:confirm_subscriber, subscription.id, subscription.token, subscriber}
+      )
+
+  @doc false
   def recording_configuration(server, token) do
     safe_call(server, {:recording_configuration, token})
   end
@@ -178,6 +186,15 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   def handle_call({:subscription_readiness, id, token}, _from, state) do
     result = SubscriptionReadiness.fetch(state, id, token)
     {:reply, result, state}
+  end
+
+  def handle_call({:confirm_subscriber, id, token, subscriber}, _from, state) do
+    reply =
+      if PolicyPreparation.subscriber?(state, id, token, subscriber),
+        do: :ok,
+        else: {:error, :invalid_subscription_owner}
+
+    {:reply, reply, state}
   end
 
   def handle_call({:recording_configuration, token}, _from, state) do
@@ -284,17 +301,16 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   def handle_call({:subscription_gate, id, token, action, generation}, _from, state) do
-    {reply, subscriptions} =
-      SubscriptionCatalog.gate(
-        state.subscriptions,
+    {reply, state} =
+      PolicyPreparation.gate_subscription(
+        state,
         id,
         token,
         action,
-        generation,
-        state.source_sequences
+        generation
       )
 
-    {:reply, reply, %{state | subscriptions: subscriptions}}
+    {:reply, reply, state}
   end
 
   def handle_call(:ingress_configuration, _from, state) do

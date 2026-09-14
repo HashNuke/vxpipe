@@ -27,6 +27,9 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
 
   def discard_room(output, token), do: GenServer.call(output, {:discard_room, token}, @timeout)
 
+  def confirm_hold(output, generation, drained? \\ false),
+    do: GenServer.call(output, {:confirm_hold, generation, drained?}, @timeout)
+
   def commit_room(output, %Resource{} = expected, generation) do
     case room_binding_readiness(output, expected.generation) do
       {:ok, ^expected, :ready} ->
@@ -105,6 +108,16 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   @impl true
   def handle_call({:readiness_binding, selection}, _from, state) do
     {:reply, Readiness.binding(state, selection), state}
+  end
+
+  def handle_call({:confirm_hold, generation, drained?}, _from, state) do
+    held? =
+      state.held? and state.generation == generation and not state.clearing? and
+        not state.draining?
+
+    idle? = state.current == nil and state.pending_direct == nil
+    reply = if held? and (not drained? or idle?), do: :ok, else: {:error, :output_not_held}
+    {:reply, reply, state}
   end
 
   def handle_call({:prepare_room, identity, options}, {caller, _}, state) do

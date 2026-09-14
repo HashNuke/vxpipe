@@ -28,7 +28,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.State do
     :subscription,
     :subscription_id
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [pending_policy: nil]
 
   @type t :: %__MODULE__{
           attachment: term(),
@@ -51,7 +51,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.State do
           policy: Snapshot.t() | nil,
           ready_waiters: [GenServer.from()],
           subscription: term() | nil,
-          subscription_id: String.t()
+          subscription_id: String.t(),
+          pending_policy: nil | map()
         }
 
   @spec new(keyword()) :: t()

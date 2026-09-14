@@ -736,3 +736,21 @@ verify private-before-room ordering and retained RTP/readiness identity. All fiv
 including 1,214 tests with zero failures and 15 integrations excluded; focused lanes pass 29 engine
 and 31 Gateway checks. Lifecycle use, direct speech generation, microphone/model gates, prepared
 egress adoption and the remaining readiness/acceptance requirements are still outstanding.
+
+Gateway room egress now accepts the authoritative candidate and exact mixer-prepared subscription
+under the phase's original owner, attempt, deadline and held generation. Existing shared routes
+remain in place through affected policy changes; a joining connection prepares its route privately.
+Commit adopts collected ready output while its mixer queue stays held, preserving readiness and
+native codec identities. The mixer verifies the actual queue consumer before preparation can
+change its gates. Foreign bindings, revoked native routes and failed preparation cannot satisfy
+adoption. Unrelated membership changes keep a private joining route dormant and allow candidate
+refresh without recreating its pipeline or extending the lease.
+
+The focused lanes pass 29 engine and 40 Gateway checks, including nine new real-authority/mixer/
+native-output contracts. All five final root gates pass, including 1,223 tests with zero failures
+and 15 integrations excluded. A separate diagnostics fixture correction allows unrelated room
+cleanup while continuing to reject newly created bindings or room processes.
+Full connection-graph selection, remaining room-service/recording candidate
+preparation, direct speech generations, microphone/model gates and startup/transfer orchestration
+remain unfinished, along with rendered/provider acceptance. No implementation or acceptance gate is
+closed by this component checkpoint.

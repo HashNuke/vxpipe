@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
     Delivery,
     OutputGate,
     PipelineLifecycle,
+    PolicyPreparation,
     Readiness,
     State
   }
@@ -42,6 +43,14 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   def readiness_resources(egress), do: Readiness.resources(egress)
 
   @impl true
+  def readiness_binding(resource), do: Readiness.readiness_binding(resource)
+
+  def prepare_policy(egress, candidate, subscription, options),
+    do: PolicyPreparation.request(egress, candidate, subscription, options)
+
+  def discard_policy(egress, token), do: safe_call(egress, {:discard_policy, token})
+
+  @impl true
   def init(options), do: {:ok, State.new(options)}
 
   @impl true
@@ -51,6 +60,39 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
 
   def handle_call(:output_gate_binding, _from, state),
     do: {:reply, OutputGate.binding(state), state}
+
+  def handle_call({:output_preparation_binding, candidate, subscription, options}, _from, state),
+    do:
+      {:reply, PolicyPreparation.preparation_binding(state, candidate, subscription, options),
+       state}
+
+  def handle_call({:prepare_policy, candidate, subscription, options}, _from, state) do
+    case PolicyPreparation.begin(state, candidate, subscription, options) do
+      {:ok, prepared, state} -> {:reply, {:ok, prepared}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:discard_policy, token}, _from, state) do
+    case PolicyPreparation.discard(state, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:policy_readiness_binding, token}, _from, state),
+    do: {:reply, PolicyPreparation.binding(state, token), state}
+
+  def handle_call(
+        {:confirm_policy_readiness, token, binding, resource, status, dependencies},
+        _from,
+        state
+      ) do
+    case PolicyPreparation.confirm(state, token, binding, resource, status, dependencies) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
 
   def handle_call(:activate, _from, %{pipeline_pid: nil, subscription: nil} = state) do
     case PipelineLifecycle.launch(state) do
@@ -74,8 +116,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, from, state) do
     with {:ok, snapshot} <- Snapshot.prepare(snapshot, state.policy),
-         {:ok, reply_mode, state} <- install_policy(snapshot, from, state),
-         {:ok, state} <- Delivery.drain(state) do
+         {:ok, reply_mode, state} <- install_policy(snapshot, from, state) do
+      send(self(), :drain_room_audio)
       policy_reply(reply_mode, state)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -92,6 +134,35 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
     do: stop_unavailable(:output_release_uncertain, state)
 
   @impl true
+  def handle_info(:drain_room_audio, state), do: continue(state)
+
+  def handle_info({:output_policy_expired, token}, %{pending_policy: %{token: token}} = state),
+    do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{pending_policy: %{monitor: monitor}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{pending_policy: %{pipeline: %{pipeline_monitor: monitor}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:vxpipe_room_subscription_cancelled, _mixer, id, token},
+        %{pending_policy: %{subscription: %{id: id, token: token}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:vxpipe_room_audio_output_ready, id},
+        %{pending_policy: %{pipeline: %{pipeline_id: id}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.pipeline_ready(state)}
+
   def handle_info(
         {:vxpipe_room_audio_output_ready, pipeline_id},
         %{pipeline_id: pipeline_id} = state
@@ -152,11 +223,22 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
     end
   end
 
-  defp install_policy(snapshot, _from, %{policy: nil} = state) do
+  defp install_policy(snapshot, from, state) do
+    case PolicyPreparation.install(state, snapshot) do
+      {:continue, state} -> install_live_policy(snapshot, from, state)
+      {:ok, state} -> {:ok, :immediate, state}
+      {:error, reason, state} -> {:error, reason, state}
+    end
+  end
+
+  defp install_live_policy(snapshot, _from, %{policy: nil} = state) do
     {:ok, :immediate, %{state | policy: snapshot}}
   end
 
-  defp install_policy(snapshot, from, state) do
+  defp install_live_policy(snapshot, _from, %{pipeline_pid: nil} = state),
+    do: {:ok, :immediate, %{state | policy: snapshot}}
+
+  defp install_live_policy(snapshot, from, state) do
     participant = state.identity.participant_id
 
     if Snapshot.interval(snapshot, :audio_output, participant) ==

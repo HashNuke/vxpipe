@@ -2,7 +2,62 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Candidate}
-  alias Vxpipe.CallEngine.RoomMixer.{PreparedSubscriptions, SubscriptionReadiness}
+
+  alias Vxpipe.CallEngine.RoomMixer.{
+    PreparedSubscriptions,
+    SubscriptionCatalog,
+    SubscriptionReadiness
+  }
+
+  def subscriber?(state, id, token, subscriber) do
+    pending =
+      if state.pending_policy, do: Map.get(state.pending_policy.subscriptions.catalog.entries, id)
+
+    Enum.any?([Map.get(state.subscriptions.entries, id), pending], fn
+      %{token: ^token, subscriber: ^subscriber} -> true
+      _other -> false
+    end)
+  end
+
+  def gate_subscription(state, id, token, action, generation) do
+    case SubscriptionCatalog.gate(
+           state.subscriptions,
+           id,
+           token,
+           action,
+           generation,
+           state.source_sequences
+         ) do
+      {{:error, :unknown_subscription}, _catalog} ->
+        gate_pending(state, id, token, action, generation)
+
+      {reply, catalog} ->
+        {reply, %{state | subscriptions: catalog}}
+    end
+  end
+
+  defp gate_pending(%{pending_policy: pending} = state, id, token, :hold, generation)
+       when not is_nil(pending) do
+    if valid?(state, pending) do
+      {reply, catalog} =
+        SubscriptionCatalog.gate(
+          pending.subscriptions.catalog,
+          id,
+          token,
+          :hold,
+          generation,
+          state.source_sequences
+        )
+
+      subscriptions = %{pending.subscriptions | catalog: catalog}
+      {reply, %{state | pending_policy: %{pending | subscriptions: subscriptions}}}
+    else
+      {{:error, :stale_preparation}, state}
+    end
+  end
+
+  defp gate_pending(state, _id, _token, _action, _generation),
+    do: {{:error, :unknown_subscription}, state}
 
   def request(server, %Candidate{} = candidate, options) do
     with :ok <- validate_options(options),

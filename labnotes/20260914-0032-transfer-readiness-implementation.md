@@ -1,8 +1,30 @@
 # Transfer readiness implementation
 
 Implementation resumed following the goal continuation after the pause audit. See the latest
-[room output hold/release checkpoint](#resumed-room-output-hold-and-release); the pause audit below
+[room egress policy preparation checkpoint](#prepare-room-egress-for-policy-adoption); the pause audit below
 records the earlier state and is retained for accountability.
+
+## Detour update after the pause audit
+
+The additional groundwork since the audit addresses the room-output path:
+
+- `bd7b1e1` added per-listener holds and released-frame generations, and acknowledged discarded
+  shared frames so a retained producer could resume. These were prerequisites for using the
+  existing output through a transfer; the codec and subscription stay in place.
+- The prepared-egress checkpoint stages only a missing joining route and adopts its prepared
+  mixer subscription while held. Its boundary checks exposed foreign-queue gating, stale native
+  route evidence, accidental activation during unrelated membership changes, an unanswered
+  readiness waiter and a queue assigned to the wrong consumer. Each defect and its red/green
+  evidence is recorded in [the checkpoint below](#prepare-room-egress-for-policy-adoption).
+- An existing diagnostics fixture failed because unrelated rooms finished shutting down during
+  page mount. Its separate fix checks for newly added registry bindings and room processes while
+  allowing cleanup. Committed as `0eaa94d`; see
+  [the diagnostics labnote](20260914-0942-diagnostics-registry-cleanup.md).
+
+All five root checks pass for the resulting checkpoint, including 1,223 tests with zero failures
+and 15 integration exclusions. No dependency versions or production deadlines changed in this
+additional work. These are component results: complete resource selection, startup/transfer
+orchestration, waits/cues, restoration and rendered/provider acceptance remain unfinished.
 
 ## Status and detour audit at the user-requested pause
 
@@ -1115,3 +1137,63 @@ unchecked; the milestone and index are still incomplete.
   The milestone records the room-output boundary while leaving all remaining lifecycle acceptance
   gates open. Pending prepared subscriptions still need their held generation carried through
   egress adoption before this can be used for the incoming transfer destination.
+
+## Prepare room egress for policy adoption
+
+- The previous goal turn committed coordinated room-output gates as `bd7b1e1` and passed all
+  root checks. Revalidated a clean worktree. Continued into the existing Gateway egress path,
+  rather than adding another survey of capability adapters.
+- Design decision: shared output has no codec or policy configuration of its own. Retain an
+  existing pipeline and mixer subscription through an affected output-policy change while held;
+  stage a shared pipeline only for a joining connection that has no room route. The mixer owns
+  audio permission changes. Ordinary direct-encoder fallback behavior is retained.
+- Five integration checks first failed on the absent egress preparation API. Candidate validation,
+  the exact prepared mixer handle, held generation and original owner/attempt/deadline now bind
+  preparation. Newly prepared mixer queues can be held before adoption and stay held afterward.
+  The first green run passes all five checks, covering retained and joining output, unchanged
+  resource identity, scoped discard and phase-owner loss.
+- Readiness validates the opaque prepared subscription binding and persists its descriptor through
+  adoption. Dependency observations run outside the egress callback; policy acknowledgement defers
+  mixer delivery until after the callback returns. Pending shared routes support explicit discard,
+  so cancellation can acknowledge native reservation cleanup without waiting for a DOWN race.
+- Review exposed two real defects in the initial implementation. A foreign subscription was held
+  before its identity was rejected, silencing another room. Also, replacing a retained native room
+  binding after collection still allowed stale readiness to commit. Both red checks reproduced their
+  intended failures. Validation now precedes gating and rechecks before staging; retained route
+  adoption revalidates the exact native binding. Broader focused verification follows.
+- The only new-fixture correction so far was removing a leftover `do` while extracting the mixer
+  preparation helper. No dependency version, production timeout or running server changed. Full
+  connection-graph selection and startup/transfer lifecycle integration remain unfinished.
+- The first broader pass succeeded with 38 Gateway checks. A further membership check then
+  reproduced the dormant joining egress taking the ordinary replacement path on an unrelated
+  admission, colliding with its reserved native route and failing the policy barrier. Dormant
+  egress now updates its installed policy without launching a live pipeline. Candidate refresh
+  retains the pending route, subscription, original lease and resource generations/configurations.
+- Extending the joining check to an already-waiting `await_ready` caller exposed a missing adoption
+  acknowledgement: the prepared pipeline's earlier ready message correctly stayed private, but
+  commit did not answer that caller. Commit now replies only after successful prepared-route
+  activation. Both defects were reproduced before their fixes; final focused and root checks follow.
+- Concurrent user work appeared under `vxpipe-docs/` during this checkpoint. Preserve those edits
+  and stage only this checkpoint's engine/Gateway implementation, checks and documentation.
+- The initial full root run passed all five gates with 1,222 tests. Final delivery-path review
+  then reproduced false readiness for a mixer queue with matching room/participant IDs but the
+  wrong subscriber process (nine checks, one failure). The mixer now confirms the actual queue
+  consumer before egress can hold or prepare it. This adds no new resource lifetime. Final focused
+  and root gates repeat for this additional boundary fix; the earlier run is intermediate evidence.
+- The repeated root run passed all engine/Gateway checks but failed an existing diagnostics
+  read-only fixture when the global registry lost 20 bindings during page mount. Equality rejected
+  unrelated cleanup. The fixture now compares actual binding/room PID sets to reject additions
+  while allowing removals; it does not merely compare counts. The separate
+  [diagnostics cleanup labnote](20260914-0942-diagnostics-registry-cleanup.md) records this detour and
+  its verification. Application/UI code and production timeouts are unchanged by that correction.
+- Final focused results pass 29 engine checks, 40 Gateway checks and eight diagnostics checks.
+  The final root logs record passing formatting, warnings-as-errors compilation, strict Credo,
+  and all eight application suites: 1,223 tests, zero failures and 15 integration exclusions.
+  Log filenames use the prefix `vxpipe-egress-policy-verified-root-`. The original job handle was
+  unavailable after context recovery, so the last unused-dependency check was confirmed separately
+  with exit zero; the already-completed test suite was not rerun for that bookkeeping issue.
+- Updated this labnote's detour index and the milestone evidence. The diagnostics fixture is a
+  separate commit purpose from engine/Gateway prepared output. Concurrent documentation-app edits
+  remain outside both checkpoints. No new implementation was added for this notes update, and no
+  browser, provider call or development-server restart was performed. The full milestone remains
+  open; these checks do not establish the requested end-to-end transfer behavior.
