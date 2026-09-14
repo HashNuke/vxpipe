@@ -535,7 +535,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       caller_connection = Map.fetch!(initial.connections, caller_client.connection_id).pid
       caller_monitor = Process.monitor(caller_connection)
       {:ok, before} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
-      assert :ok = send_rtvi_text(caller_client)
+      assert :ok = send_rtvi_text(caller_client, "recover-with-speech", true)
       assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
 
       assert {:ok, call} =
@@ -598,6 +598,31 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert %{"data" => %{"text" => "I am still here."}} =
                await_sideband(caller_client, "bot-output", 2_000)
+
+      assert_receive {:test_tts_control, ^source_tts, speak}, 2_000
+      assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "I am still here."}
+      assert_receive {:test_tts_control, ^source_tts, _flush}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"SpeechStarted","speech_id":"recovered-speech"})
+      )
+
+      pcm =
+        for sample <- 0..4_799, into: <<>> do
+          amplitude = round(12_000 * :math.sin(2 * :math.pi() * 1_500 * sample / 48_000))
+          <<amplitude::little-signed-16>>
+        end
+
+      reference = TestTextToSpeechTransport.deliver_audio_with_result(source_tts, pcm)
+      assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"SpeechMetadata","speech_id":"recovered-speech"})
+      )
+
+      assert :ok = await_tone(caller_client, 1_500, 2_000)
 
       assert %{"type" => "bot-stopped-speaking"} =
                await_sideband(caller_client, "bot-stopped-speaking", 2_000)
@@ -1680,7 +1705,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert response.status == 200
   end
 
-  defp send_rtvi_text(connection, id \\ unique_id("turn")) do
+  defp send_rtvi_text(connection, id \\ unique_id("turn"), audio_response \\ false) do
     PeerConnection.send_data(
       connection.client,
       connection.channel_ref,
@@ -1690,7 +1715,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         "type" => "send-text",
         "data" => %{
           "content" => "Please connect me to human support.",
-          "options" => %{"run_immediately" => true, "audio_response" => false}
+          "options" => %{"run_immediately" => true, "audio_response" => audio_response}
         }
       })
     )

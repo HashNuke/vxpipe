@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
              :output_id,
              :purpose
            ]}
-  defstruct @enforce_keys ++ [purpose: :agent_turn, source_policy: %{}]
+  defstruct @enforce_keys ++ [purpose: :agent_turn, source_policy: %{}, output_generation: 0]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -42,6 +42,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
           text: String.t(),
           output_sink: pid(),
           purpose: :agent_turn | :opening_audio | :transfer_briefing,
-          source_policy: map()
+          source_policy: map(),
+          output_generation: non_neg_integer()
         }
 end

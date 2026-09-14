@@ -102,7 +102,10 @@ trigger preparation and fresh cues under the original deadline. Changed bindings
 rejections at the final commit check also retry before any policy application, retaining the prepared
 participant and the same deadline. Preparation blockers and
 cue/release progress now reach the existing transfer desk; returned worker durations reach the
-existing diagnostics reporter. The milestone's
+existing diagnostics reporter. Rendered desktop/mobile Chrome checks now confirm live default-wait
+handoff audio and support transcripts. Recovery also preserves spoken assistant responses by carrying
+the released output generation into new TTS requests. A later desk admission after failed preparation
+is still rejected by persistence and remains an explicit sample blocker. The milestone's
 [current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
 implementation from remaining failure/privacy/diagnostic and audible acceptance.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay

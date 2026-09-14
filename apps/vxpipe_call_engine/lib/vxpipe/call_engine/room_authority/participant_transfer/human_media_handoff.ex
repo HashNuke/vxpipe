@@ -83,7 +83,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
              demand = Map.fetch!(graph.inventory.inventory.connections, id).demand
              connection.adapter.release(connection, scope, demand)
            end) do
-      {:ok, binding}
+      {:ok, %{connections: connections, scope: scope}}
     else
       false -> {:error, :source_unavailable}
       error -> error

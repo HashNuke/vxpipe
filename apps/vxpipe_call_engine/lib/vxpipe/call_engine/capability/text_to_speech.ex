@@ -551,6 +551,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       channels: state.media_format.channels,
       byte_order: state.media_format.byte_order,
       payload: audio,
+      output_generation: request.output_generation,
       reply_to: self()
     })
   end

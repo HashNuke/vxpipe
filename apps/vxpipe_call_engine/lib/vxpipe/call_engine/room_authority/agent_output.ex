@@ -86,6 +86,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
           output_id: output.id,
           text: text,
           output_sink: connection.output_sink,
+          output_generation: Map.get(connection, :output_generation, 0),
           source_policy: source_policy
         }
 

@@ -960,6 +960,13 @@ remain with their existing owners. Controlled engine cases change policy at the 
 and optionally refresh the authorized private connection before releasing the completed worker.
 They require another cue, an unchanged deadline and one final successful transfer.
 
+After all release acknowledgements, the coordinator records the released output generation on each
+affected connection, including source recovery. New TTS requests capture that generation and retain
+it on all their frames. A pre-hold request retains its old generation and remains fenced; output
+must not stamp arbitrary arriving speech with the latest generation. The same TTS process and
+native output continue. Real WebRTC recovery checks require decoded synthesized audio and completed
+playback before another caller turn; live rendered recovery confirms continued spoken responses.
+
 Design review rejected rebuilding a retained native output, using current STT evidence for a
 replacement session, and assigning preparation ownership to a short-lived collection worker.
 Actual WebRTC checks prepare/discard/retry/adopt a changed decoder, retain native output, verify

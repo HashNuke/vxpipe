@@ -300,9 +300,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           state
       ) do
     case {stage, pending.handoff, result} do
-      {:recover, %{stage: :recovering, deadline_ms: deadline, cause: cause}, {:ok, _binding}} ->
+      {:recover, %{stage: :recovering, deadline_ms: deadline, cause: cause}, {:ok, recovered}} ->
         with :ok <- Authorizer.authorize(pending.request, state),
              :ok <- Phase.finish(%{pending | deadline_ms: deadline}) do
+          state = record_output_generation(state, recovered)
           state = History.failed(state, pending.request, cause, :completed)
           GenServer.reply(pending.from, {:error, :unavailable})
 
@@ -344,6 +345,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
       {:release, %{stage: :releasing}, {:ok, ready}} ->
         demonitor_outbound_leg(pending.preparation)
+        state = record_output_generation(state, ready)
         {:noreply, HumanCommitter.finish_ready(pending, ready, state)}
 
       {_, %{stage: :releasing}, _failure} ->
@@ -359,6 +361,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   def handoff_result(_reference, _stage, _result, state), do: {:noreply, state}
+
+  defp record_output_generation(state, released) do
+    connections =
+      Enum.reduce(released.connections, state.connections, fn {id, _binding}, connections ->
+        Map.update!(connections, id, &Map.put(&1, :output_generation, released.scope.generation))
+      end)
+
+    %{state | connections: connections}
+  end
 
   defp retry_preparation(pending, ready, state) do
     if deadline_elapsed?(pending) do

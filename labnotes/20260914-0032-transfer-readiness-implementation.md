@@ -7,11 +7,12 @@ Earlier sections are historical evidence, not parallel current task lists.
 
 Current committed evidence is in the milestone and the latest checkpoint sections at the end of
 this file. Human handoff now integrates waits, readiness, cues, prepared policy adoption, media
-release and bounded recovery. The pre-commit policy checkpoint below passes all five root gates:
+release and bounded recovery. The spoken recovery checkpoint passes all five root gates:
 1,295 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
 call integration, complete phone/changing-listener behavior, remaining failure stages and audible acceptance remain
-open. The latest [pre-commit policy checkpoint](#retry-stale-human-policy-commits) below
-records this turn's implementation and verification separately.
+open. The latest [spoken recovery checkpoint](20260914-1915-human-recovery-audio.md) records real-browser
+handoff/transcription evidence, the corrected TTS generation defect and the remaining persisted
+destination readmission failure.
 
 Earlier entries are chronological snapshots. Their references to uncommitted work or missing
 integration describe their own checkpoint, not the current worktree. No earlier passing run should
@@ -2709,3 +2710,20 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   progress. On continuation, revalidated the unchanged code and completed gate results, synchronized
   the milestone/index evidence, and prepared this coherent checkpoint for commit. The docs-site
   work and visual labnotes belong to the other agent and remain outside this checkpoint.
+
+## Verify rendered handoff and repair spoken recovery
+
+- Committed stale policy retries as `ab1d965`, then exercised the real desktop caller/mobile desk
+  with live model and Deepgram services. Accepted handoffs preserve the desktop, exchange browser
+  audio and deliver support transcripts. The detailed [recovery audio labnote](20260914-1915-human-recovery-audio.md)
+  records the browser setup, probe evidence, source defect, red/green test changes and tooling detours.
+- Rendered recovery exposed TTS using generation zero after output release. Three formerly text-only
+  recovery cases now synthesize actual WebRTC speech. New TTS requests capture the acknowledged
+  connection output generation while earlier requests remain fenced. Live recovery now completes
+  the assistant's spoken response and another spoken turn on the same peer.
+- A repeated desk connection in that call is rejected by persistence's single call/participant
+  admission restriction. Keep that explicit blocker and the remaining full slice/milestone work
+  open. This checkpoint does not change persistence, add UI components or restart the dev server.
+- All five final root gates pass: 1,295 tests, zero failures, 15 exclusions, concurrency four and
+  seed 510739. Evidence is `vxpipe-human-recovery-audio-final-results.json` and its five logs.
+  The new labnote and the milestone/index/resource contract are committed with the implementation.
