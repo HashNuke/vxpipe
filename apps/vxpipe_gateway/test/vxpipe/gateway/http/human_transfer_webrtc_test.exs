@@ -1033,8 +1033,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         end
 
         if recovers? do
-          assert %{"data" => %{"reason" => failure_reason}} =
-                   await_sideband(support_client, "transfer.progress", 2_000, "recovering")
+          # The failed destination is being disconnected; the retained caller owns
+          # the reliable recovery-status assertion.
+          assert %{"reason" => failure_reason} =
+                   await_transfer_progress(caller_client, "recovering")
 
           # The speech owner can report provider loss directly, or the readiness
           # collector can observe the failed media binding first.
@@ -1627,6 +1629,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
   for loss <- [
         :destination,
+        :destination_output_clear,
         :briefing_destination,
         :briefing_voice,
         :briefing_timeout,
@@ -1641,7 +1644,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       agent_destination? = unquote(loss) in [:agent_destination, :agent_model]
 
       {wait_sounds, wait_options} =
-        wait_configuration(if unquote(loss) == :destination, do: :custom_url, else: :defaults)
+        wait_configuration(
+          if unquote(loss) in [:destination, :destination_output_clear],
+            do: :custom_url,
+            else: :defaults
+        )
 
       plan =
         compile_plan(
@@ -1726,7 +1733,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           assert %{"type" => "transfer.preparation"} =
                    await_sideband(client, "transfer.preparation", 2_000)
 
-          if unquote(loss) in [:destination, :acceptance_timeout] do
+          if unquote(loss) in [:destination, :destination_output_clear, :acceptance_timeout] do
             assert_receive {:test_tts_control, ^destination_preparer, speak}, 2_000
             assert String.contains?(JSON.decode!(speak)["text"], "Private desk notice:")
             assert_receive {:test_tts_control, ^destination_preparer, _flush}, 2_000
@@ -1757,6 +1764,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       pending = :sys.get_state(authority).pending_participant_transfer
       phase_monitor = Process.monitor(pending.task.pid)
 
+      recovery_gate =
+        if unquote(loss) == :destination_output_clear,
+          do: pause_native_gate(caller_connection, :recover)
+
       case unquote(loss) do
         :agent_model ->
           send(destination_preparer, :release_test_agent_runtime_model)
@@ -1764,7 +1775,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :agent_destination ->
           TestTextToSpeechTransport.disconnect(destination_preparer, :test_destination_failed)
 
-        loss when loss in [:destination, :briefing_destination] ->
+        loss when loss in [:destination, :destination_output_clear, :briefing_destination] ->
           GenServer.stop(
             Map.fetch!(binding.connections, support_client.connection_id).pid,
             :normal
@@ -1787,6 +1798,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           [player] = phase.audience.waits
           Process.exit(player, :kill)
       end
+
+      if recovery_gate,
+        do: clear_during_recovery_readiness(caller_connection, before.output, recovery_gate)
 
       release_timeout =
         if unquote(loss) in [:briefing_timeout, :acceptance_timeout], do: 6_000, else: 2_000
@@ -1866,7 +1880,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert_private_transfer_history(retry_request)
 
-      if unquote(loss) == :destination do
+      if unquote(loss) in [:destination, :destination_output_clear] do
         assert {:ok, retry_call} =
                  ToolCall.new(
                    id: "retry-human-transfer",
@@ -2804,8 +2818,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                connection,
                {token,
                 fn state, event, _process ->
-                  case event do
-                    {:in, {:"$gen_call", _from, {:vxpipe_handoff_gate, ^action, _scope}}} ->
+                  case {state, event} do
+                    {:done, _event} ->
+                      :done
+
+                    {_state,
+                     {:in, {:"$gen_call", _from, {:vxpipe_handoff_gate, ^action, _scope}}}} ->
                       send(owner, {:native_gate_waiting, token})
 
                       receive do
@@ -2821,6 +2839,98 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              )
 
     token
+  end
+
+  defp clear_during_recovery_readiness(connection, output, gate) do
+    alias Vxpipe.CallEngine.Media.OutputSink
+    alias Vxpipe.CallEngine.Readiness.Collector
+    alias Vxpipe.Gateway.Media.OutputArbiter
+
+    assert_receive {:native_gate_waiting, ^gate}, 1_000
+    assert {:ok, resource, _status} = OutputArbiter.readiness(output)
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: "native-recovery-clear",
+         attempt_id: "native-recovery-clear",
+         resources: [resource],
+         deadline_ms: System.monotonic_time(:millisecond) + 500},
+        id: :recovery_output_readiness
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 500
+    stop_supervised!(:recovery_output_readiness)
+    assert {:ok, _discarded} = OutputSink.clear(output)
+
+    assert {:ok, %{native: native, status: :ready}} =
+             GenServer.call(output, {:readiness_binding, :private})
+
+    owner = self()
+    token = make_ref()
+
+    assert :ok =
+             :sys.install(
+               native,
+               {token,
+                fn state, event, _process ->
+                  case {state, event} do
+                    {nil, {:in, {:"$gen_call", {caller, _}, :readiness}}} ->
+                      send(owner, {:recovery_native_readiness, token, caller})
+
+                      receive do
+                        {:continue_recovery_readiness, ^token} -> :clearing
+                      after
+                        1_000 -> :done
+                      end
+
+                    {:clearing, {:in, {:"$gen_call", _from, :vxpipe_audio_output_clear}}} ->
+                      send(owner, {:recovery_native_clear, token})
+
+                      receive do
+                        {:continue_recovery_clear, ^token} -> :done
+                      after
+                        1_000 -> :done
+                      end
+
+                    _other ->
+                      state
+                  end
+                end, nil}
+             )
+
+    try do
+      send(connection, {:continue_native_gate, gate})
+      assert_receive {:recovery_native_readiness, ^token, reader}, 1_000
+
+      assert :ok =
+               :sys.install(
+                 output,
+                 {token,
+                  fn state, event, _process ->
+                    case event do
+                      {:out, {:ok, %{status: :preparing}}, {^reader, _tag}, _state} ->
+                        send(owner, {:recovery_output_rechecked, token})
+                        state
+
+                      _other ->
+                        state
+                    end
+                  end, nil}
+               )
+
+      clear = :gen_server.send_request(output, :vxpipe_audio_output_clear)
+      _ = :sys.get_state(output)
+      send(native, {:continue_recovery_readiness, token})
+      assert_receive {:recovery_native_clear, ^token}, 1_000
+      assert_receive {:recovery_output_rechecked, ^token}, 1_000
+      send(native, {:continue_recovery_clear, token})
+      assert {:reply, {:ok, _discarded}} = :gen_server.wait_response(clear, 1_000)
+    after
+      send(native, {:continue_recovery_readiness, token})
+      send(native, {:continue_recovery_clear, token})
+    end
   end
 
   defp capture_private_media(plan, client, attempt) do

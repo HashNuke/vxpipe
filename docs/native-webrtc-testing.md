@@ -81,8 +81,22 @@ the configured five-second total attempt timer expire during briefing or accepta
 one private-admission release, old-phase termination, no destination activation, the correct
 bounded failure reason and recovery on the retained caller/media actors. The native caller receives
 its recovery cue and spoken assistant response, then submits another turn. The existing
-`destination` loss case also completes another transfer after recovery. Passing these cases does
-not establish the cause of the separately recorded intermittent recovery failure.
+`destination` loss case also completes another transfer after recovery. These early-boundary cases
+cover their own failures; the output-readiness case below provides a separate causal reproduction.
+
+For the reproduced output-readiness race during destination-disconnect recovery:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'destination_output_clear loss'
+```
+
+This case pauses the recovery hold's real native-output readiness query, begins an actual clear,
+and allows the observer to read the changed clearing status before completing that clear. The
+old observer reports `unavailable` and closes the caller at the same recovery assertion as the
+historical failure. The check requires recovery cue and speech, another caller turn and a later
+accepted transfer on the original peer. The output's resource identity remains unchanged; status
+changes must report current readiness instead of invalidating that identity.
 
 For the local speech-provider round trip:
 

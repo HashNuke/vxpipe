@@ -57,13 +57,14 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter.Readiness do
   defp observe(output, selection) do
     with {:ok, binding} <- GenServer.call(output, {:readiness_binding, selection}, 1_000),
          {:ok, native, status} <- native_readiness(binding),
-         {:ok, ^binding} <- GenServer.call(output, {:readiness_binding, selection}, 1_000) do
+         {:ok, current} <- GenServer.call(output, {:readiness_binding, selection}, 1_000),
+         true <- Map.delete(current, :status) == Map.delete(binding, :status) do
       resource = %{
         binding.resource
         | configuration: Resource.signature({binding.resource.configuration, native})
       }
 
-      {:ok, resource, combine(binding.status, status), native}
+      {:ok, resource, combine(current.status, status), native}
     else
       _unavailable -> {:error, :unavailable}
     end

@@ -56,6 +56,41 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert {:error, :unavailable} = OutputArbiter.readiness(output)
   end
 
+  for selection <- [:private, :room] do
+    test "#{selection} readiness keeps its binding when clearing starts during observation" do
+      {output, native} = start_output()
+      assert {:ok, binding} = OutputArbiter.bind_room(output, identity())
+
+      observe = fn ->
+        case unquote(selection) do
+          :private -> OutputArbiter.readiness(output)
+          :room -> OutputArbiter.room_binding_readiness(output, binding)
+        end
+      end
+
+      assert {:ok, resource, :ready} = observe.()
+      assert :ok = OutputSink.push(output, direct("wait"))
+      assert_receive {:pace, ^native, tick}
+      token = pause_native_readiness(native)
+      owner = self()
+      start_supervised!({Task, fn -> send(owner, {:observed_output, observe.()}) end})
+
+      try do
+        assert_receive {:native_readiness_waiting, ^token}
+        clearing = :gen_server.send_request(output, :vxpipe_audio_output_clear)
+        _ = :sys.get_state(output)
+        send(native, {:continue_native_readiness, token})
+        assert_receive {:observed_output, {:ok, ^resource, :preparing}}, 1_000
+        assert :timeout = :gen_server.wait_response(clearing, 0)
+        send(native, tick)
+        assert {:reply, {:ok, _discarded}} = :gen_server.wait_response(clearing, 1_000)
+        assert {:ok, ^resource, :ready} = observe.()
+      after
+        send(native, {:continue_native_readiness, token})
+      end
+    end
+  end
+
   test "a native output without a readiness adapter cannot become ready" do
     {output, _native} = start_output(__MODULE__)
     assert {:ok, resource, :failed} = OutputArbiter.readiness(output)
@@ -689,6 +724,35 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
              )
 
     on_exit(fn -> :telemetry.detach(token) end)
+  end
+
+  defp pause_native_readiness(native) do
+    token = make_ref()
+    owner = self()
+
+    assert :ok =
+             :sys.install(
+               native,
+               {token,
+                fn
+                  :done, _event, _process ->
+                    :done
+
+                  _state, {:in, {:"$gen_call", _from, :readiness}}, _process ->
+                    send(owner, {:native_readiness_waiting, token})
+
+                    receive do
+                      {:continue_native_readiness, ^token} -> :done
+                    after
+                      1_000 -> :done
+                    end
+
+                  state, _event, _process ->
+                    state
+                end, nil}
+             )
+
+    token
   end
 
   defp start_output(native_adapter \\ AudioEgress) do

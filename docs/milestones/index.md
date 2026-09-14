@@ -65,7 +65,7 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Deliver human web handoff, AI handoff, initial waiting, phone parity and changing-listener slices with complete readiness, private waits/cues and acknowledged release; human and AI handoffs with bounded recovery implemented, complete slice acceptance pending.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff and initial waiting accepted; AI handoff, phone parity and changing-listener acceptance remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -88,103 +88,37 @@ unchanged services during membership revisions. The live-mixing and human-transf
 milestones track the speech and audio checkpoints; this does not change milestone
 ordering or lift the packaging/retention hold.
 
-The subsequent [transfer readiness and participant wait sounds milestone](transfer-readiness-and-wait-sounds.md)
-adds milestone 23 before delivery. The user authorized implementation on 2026-09-14 and requested
-runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
-committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
-prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,405 tests, zero failures and 16 exclusions, with test concurrency four (seed 235296). Eight ordinary WebRTC
-cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
-audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
-reconciles removed STT demand and retains the original STT transport across unrelated membership
-revisions, with working caller/support audio afterward. Stale candidates during cue playback
-trigger preparation and fresh cues under the original deadline. Changed bindings and stale-policy
-rejections at the final commit check also retry before any policy application, retaining the prepared
-participant and the same deadline. Stale initial graphs now retain partial preparation leases across
-retry, preserving unaffected STT while removing a speech pair whose demand disappears. Preparation blockers and
-cue/release progress now reach the existing transfer desk; returned worker durations reach the
-existing diagnostics reporter. Rendered desktop/mobile Chrome checks now confirm live default-wait
-handoff audio and support transcripts. Recovery also preserves spoken assistant responses by carrying
-the released output generation into new TTS requests. A failed private connection now releases its exact persisted destination
-admission while retaining history and single-use tokens. A fresh desk completed another transfer in
-the original live call, with retained caller audio and support/caller transcripts. Earlier intermittent
-briefing failure and the full failure-stage acceptance remain open. The existing desk status/control
-now exposes interrupted connectivity and restores the prior transfer phase on reconnection. The milestone's
-[current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
-implementation from remaining failure/privacy/diagnostic and audible acceptance.
-AI destinations now reuse the same hold/readiness/cue/adopt/release sequence. Delayed TTS gates
-their greeting, failed destination TTS recovers spoken source conversation, and re-entry binds the
-fresh activation. Required source restoration uses the existing 750 ms budget; the superseded
-separate agent restoration path was removed. The live rendered caller transfers to billing,
-receives waiting audio/cue/greeting and continues on the same peer. Caller preparation, blockers,
-completion and recovery now use the existing RTVI server-message extension and sample event ledger.
-No caller UI changes are required. Native peers own further transport
-and audio diagnosis, with browser checks limited to presentation/interoperability. Independent
-tool delays and complete configuration/privacy acceptance remain open.
-The native human-handoff case now uses real Morse speech providers, converts WebRTC Opus to
-16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 392 checks include
-58 default native startup/transfer cases, with a separate opt-in public-URL integration case. Independent
-model initialization and TTS readiness delays now retain caller waiting and gates; failed model preparation recovers spoken source conversation.
-Earlier intermittent phase-loss recovery failure remains an acceptance
-concern despite passing bounded repeats and the final root run. A mixed repeat also exposed an
-intermittent Morse audio timeout; eleven isolated Morse executions passed, and native failures now
-identify the missing frequency. See [native testing](../native-webrtc-testing.md).
-Initial caller media and private waiting now run before model construction completes. Complete
-initial resource readiness and opening completion gate conversation, recording and RTVI bot-ready.
-File and text openings now prepare independently of model construction. Waiting continues until
-opening PCM is playable, pauses through private playout, and resumes the same cursor if resources
-remain unready. Native decoded audio and engine PCM checks verify that order and cursor continuity.
-Silent caller disconnect, killed wait players and original deadline expiry now stop pending startup
-work. Explicit detach clears queued waiting; another silent caller connection keeps startup alive.
-Native startup failures deliver one peerLeft before bounded teardown. Initial release now rechecks
-resource readiness, generations and policy after opening/wait playout; pending readiness resumes
-the same cursor and retains healthy capabilities. Setup blocker/timing events now reach the existing
-bounded diagnostics reporter, including native independent STT/TTS readiness. No UI component is
-added. Initial-call acceptance now passes ten native default/URL/nil and opening/greeting cases,
-including a delayed recording writer, plus 18 deterministic phone harness checks. Late readiness
-starts a previously skipped wait; failed/expired incoming phone startup ends the exact provider leg
-even before media attachment. Policy changes after handoff adoption now reconcile the current
-resources and replay cues before any release. Native cases retain media actors and replace only
-STT affected by changed transcript permissions. Policy or exact-resource changes during release
-acknowledgements now close the room without false completion; the coordinator validates its final
-binding/policy before publishing success. Human-handoff audio acceptance now includes a real public
-HTTPS WAV fetch, ordered wait/cue/conversation on both native peers and model-history isolation
-after private briefing and recovery. An additional planned human now initializes its selected STT
-on connection attachment.
-Nine native handoffs independently hold for destination/remaining-human STT and room recording,
-then deliver ordered cues and conversation to three peers. Cancellation now defeats queued recovery
-success; failures during release publish failed status and history instead of attempting source
-restoration. Required destination STT remains tracked after adoption through release. Engine and
-native caller/desk checks cover these orderings. Completed private briefing TTS now stops before
-acceptance, while source TTS remains available for recovery; delayed retired-capability events are
-ignored even after recovery discards the preparation. The prior missing match clause crashed
-RoomAuthority on a late completion; engine timeout/phase-loss cases now deliver those events
-during actual recovery cue drain and finish with retained source TTS. Nine three-peer cases now
-cover independent destination STT, remaining-human STT and
-recording loss during preparation, adoption and partial release. Pre-adoption destination loss
-recovers the recorded source conversation while retaining healthy resources; failed reservations
-no longer prevent restoration or a valid new preparation. Authorized assistant transcripts reach
-other listeners without crashing their connections or occupying their speech-progress queue.
-Independent resource-delay/loss acceptance is complete. Existing caller and destination progress
-now carry bounded failure reasons before destination cleanup and through source recovery. Native
-checks verify reason continuity and distinct timeout/STT-loss reporting during release. Separate
-briefing/acceptance/cue timings now cover actual lifecycle boundaries. Confirmed cancellation and
-unexpected worker exits are observed by surviving owners; sampled player slot pressure and output
-rejections reach bounded, sanitized Console aggregates. Human-handoff diagnostics and private-resource
-cleanup are complete; 19 checkpoint tasks remain (human 2, AI 3, phone 6, changing/multiple listeners 6,
-final audit 2). Recording denial now retires private writers and removes writer readiness dependencies;
-unrelated policy retains the same writer and recording stream. Two native cases keep existing room,
-source and speech/media bindings, and cue a readmitted listener before conversation. The denied case
-completes while writer readiness remains withheld. All five root gates pass: 1,408 tests, zero failures,
-16 integration exclusions; seed 235296, concurrency four. See the
-[recording-demand checkpoint](../../labnotes/20260915-0505-recording-demand-reconciliation.md).
-Native early failure checks now prove recovery after briefing disconnect/voice failure and actual
-attempt expiry during briefing or acceptance. Each releases the private admission once, stops the
-old phase, avoids activation and restores cue, spoken response and another caller turn on retained
-media. No production change was needed. The separate intermittent recovery failure remains open.
-The initial caller-waiting slice is accepted. Four delivery checkpoints
-and full milestone acceptance remain open. Packaging and retention stay
-behind the same explicit review hold.
+The [transfer readiness and participant wait sounds milestone](transfer-readiness-and-wait-sounds.md)
+was authorized on 2026-09-14 for delivery through runnable vertical checkpoints. Definition/assets,
+private playback and complete resource readiness are integrated into ordinary calls. Human web
+handoff and initial caller waiting are accepted slices. AI handoff, phone parity and
+changing/multiple listeners remain open.
+
+Human web acceptance covers default/URL/nil waits, private briefing and authenticated acceptance,
+whole-room readiness, ordered cues, bidirectional conversation and permitted support transcripts.
+Native peers verify independent resource delay/loss, policy reconciliation, retained speech/media
+bindings, admission cleanup and spoken recovery. Existing rendered desktop/mobile checks exercise
+the live sample. Recording denial excludes unneeded writers without replacing unaffected resources.
+The latest native regression reproduces a fatal recovery result caused by output-clearing status
+being mistaken for changed resource identity; the fixed case recovers and completes a subsequent
+transfer on the same caller peer. All five root gates pass: 1,411 tests, zero failures and
+16 integration exclusions (seed 235296, concurrency four). The
+[recovery checkpoint](../../labnotes/20260915-0526-recovery-failure-tracing.md) records the causal
+reproduction, fixture corrections and human cleanup acceptance audit.
+
+Initial callers can receive waiting audio before model construction finishes. Independent opening
+preparation pauses waiting for private playout and resumes the same cursor if resources remain
+pending. Complete readiness and opening completion gate conversation and exactly one first-message
+action. Native configuration/audio checks and deterministic incoming-phone lifecycle checks pass.
+
+There are **17 checkpoint tasks remaining**: AI 3, phone 6, changing/multiple listeners 6,
+and final audit 2. AI model/voice delays already work; independent tool/MCP readiness and its full
+configuration/privacy acceptance remain. Phone-provider playout and the complete changing-audience
+matrix still need their own evidence. Native WebRTC results do not establish live phone audibility.
+The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
+and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the
+implementation boundaries, exact check results and links to checkpoint labnotes. Full milestone
+acceptance remains open, and packaging/retention keep their existing explicit review hold.
 
 The opening-audio review also reproduced and corrected recording of caller audio during the
 announcement in the later room-mixing path. The [opening milestone](opening-audio-and-call-lifecycle.md#completion-and-evidence)
@@ -382,7 +316,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Versioned call-details publications](call-details-publications.md#specification-review) | Approved | milestone_review_a; Approved initial draft; clarified lifecycle/direction/route/plan digest in publication contents. |
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
-| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Five runnable checkpoints include tasks, recovery, diagnostics and verification. Human handoff, bounded recovery and cue-failure handling are committed; complete slice acceptance remains open. |
+| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff and initial waiting accepted; AI, phone and changing-listener acceptance remain in their runnable checkpoints. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification
