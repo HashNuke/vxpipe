@@ -24,12 +24,23 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     context = preparation_room()
     %{capability: capability, transport: transport, candidate: candidate} = context
     assert {:ok, original, :ready} = SpeechToText.readiness(capability)
+    ingress = context.attachment.media_ingress
+    track = Map.take(preparation_frame(context, 1), [:track_id, :codec, :sample_rate, :channels])
+    assert :ok = Ingress.prepare_track(ingress, track)
+    assert {:ok, original_input, :ready} = Ingress.readiness(ingress)
     options = preparation_options()
 
     assert {:ok, prepared} = SpeechToText.prepare_policy(capability, candidate, options)
     assert prepared.change == :replace
     assert [resource] = prepared.resources
     assert_receive {:test_stt_transport_started, replacement, _connection}, 1_000
+
+    assert {:error, :unavailable} =
+             Ingress.prepare_track(ingress, track, %{resource | generation: make_ref()})
+
+    assert {:error, :unavailable} =
+             Ingress.readiness_resources(ingress, %{resource | configuration: <<0>>})
+
     assert {:ok, ^prepared} = SpeechToText.prepare_policy(capability, candidate, options)
 
     assert {:error, :preparation_conflict} =
@@ -49,7 +60,12 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert_receive {:test_stt_audio, ^transport, <<1>>}
     refute_receive {:test_stt_audio, ^replacement, _audio}
 
-    collector = collect([resource], context.room.incarnation_id)
+    assert :ok = Ingress.prepare_track(ingress, track, resource)
+    assert {:ok, [prepared_input, ^resource]} = Ingress.readiness_resources(ingress, resource)
+    assert prepared_input.policy_interval == resource.policy_interval
+    assert prepared_input.generation == original_input.generation
+    assert {:ok, ^original_input, :ready} = Ingress.readiness(ingress)
+    collector = collect([prepared_input, resource], context.room.incarnation_id)
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}, 1_000
     TestSpeechToTextTransport.deliver(replacement, connected_message())
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
@@ -57,6 +73,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     TestSpeechToTextTransport.deliver(replacement, turn_message("StartOfTurn", 1, "not admitted"))
     refute_receive {:vxpipe_event, %ParticipantTranscription{text: "not admitted"}}
     assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
+    assert {:ok, ^prepared_input, :ready} = Ingress.readiness_binding(prepared_input)
     assert {:ok, _participant} = CallEngine.join_participant(context.join)
     assert_receive {:test_stt_transport_closed, ^transport}, 1_000
     refute_receive {:test_stt_transport_started, _, _}
@@ -64,6 +81,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert committed.generation == resource.generation
     assert committed.policy_interval == resource.policy_interval
     assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
+    assert {:ok, ^prepared_input, :ready} = Ingress.readiness_binding(prepared_input)
     assert {:error, :stale_preparation} = SpeechToText.discard_policy(capability, prepared.token)
     assert Authority.snapshot(context.authority) == candidate.snapshot
     assert :ok = CallEngine.push_audio(context.attachment, preparation_frame(context, 2))
@@ -88,12 +106,19 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
              SpeechToText.prepare_policy(capability, candidate, preparation_options())
 
     assert_receive {:test_stt_transport_started, replacement, _connection}, 1_000
+    ingress = context.attachment.media_ingress
+    track = Map.take(preparation_frame(context, 1), [:track_id, :codec, :sample_rate, :channels])
+    [resource] = prepared.resources
+    assert :ok = Ingress.prepare_track(ingress, track, resource)
+    assert {:ok, [prepared_input, ^resource]} = Ingress.readiness_resources(ingress, resource)
     monitor = Process.monitor(replacement)
     assert :ok = SpeechToText.discard_policy(capability, prepared.token)
     assert_receive {:DOWN, ^monitor, :process, ^replacement, _reason}, 1_000
     assert {:ok, ^original, :ready} = SpeechToText.readiness(capability)
     refute_receive {:test_stt_transport_closed, ^transport}
     assert {:error, :unavailable} = SpeechToText.readiness_binding(hd(prepared.resources))
+    assert {:error, :unavailable} = Ingress.readiness_binding(prepared_input)
+    assert {:error, :unavailable} = Ingress.prepare_track(ingress, track, resource)
     assert Authority.snapshot(context.authority) == candidate.base_snapshot
   end
 
@@ -101,12 +126,20 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     context = preparation_room(restriction: %{record_audio: false})
     %{capability: capability, transport: transport, candidate: candidate} = context
     assert {:ok, original, :ready} = SpeechToText.readiness(capability)
+    ingress = context.attachment.media_ingress
+    track = Map.take(preparation_frame(context, 1), [:track_id, :codec, :sample_rate, :channels])
+    assert :ok = Ingress.prepare_track(ingress, track)
+    assert {:ok, original_input, :ready} = Ingress.readiness(ingress)
 
     assert {:ok, %{change: :retain, resources: [^original]}} =
              SpeechToText.prepare_policy(capability, candidate, preparation_options())
 
+    assert :ok = Ingress.prepare_track(ingress, track, original)
+    assert {:ok, [^original_input, ^original]} = Ingress.readiness_resources(ingress, original)
+
     assert {:ok, _participant} = CallEngine.join_participant(context.join)
     assert {:ok, ^original, :ready} = SpeechToText.readiness(capability)
+    assert {:ok, [^original_input, ^original]} = Ingress.readiness_resources(ingress, original)
     refute_receive {:test_stt_transport_started, _, _}
     refute_receive {:test_stt_transport_closed, ^transport}
   end
@@ -126,6 +159,49 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     refute_receive {:test_stt_transport_started, _, _}
     assert :ok = CallEngine.push_audio(context.attachment, preparation_frame(context, 1))
     refute_receive {:test_stt_audio, _, _}
+  end
+
+  test "prepares a future input route while the installed policy still denies microphone delivery" do
+    context = preparation_room(restriction: %{transcript_routes: %{}, save_transcripts: false})
+    ingress = context.attachment.media_ingress
+    assert {:ok, _participant} = CallEngine.join_participant(context.join)
+    transport = context.transport
+    assert_receive {:test_stt_transport_closed, ^transport}
+    base = Authority.snapshot(context.authority)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               context.authority,
+               MapSet.delete(base.present_participant_ids, context.join.participant_id)
+             )
+
+    assert {:ok, %{resources: [provider]}} =
+             SpeechToText.prepare_policy(context.capability, candidate, preparation_options())
+
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    track = Map.take(preparation_frame(context, 1), [:track_id, :codec, :sample_rate, :channels])
+
+    assert {:error, :unsupported_audio} =
+             Ingress.prepare_track(ingress, %{track | codec: :linear16}, provider)
+
+    assert :ok = Ingress.prepare_track(ingress, track, provider)
+    assert {:ok, [input, ^provider]} = Ingress.readiness_resources(ingress, provider)
+    collector = collect([input, provider], context.room.incarnation_id)
+    TestSpeechToTextTransport.deliver(replacement, connected_message())
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert {:ok, _live_input, :preparing} = Ingress.readiness(ingress)
+    assert :ok = CallEngine.push_audio(context.attachment, preparation_frame(context, 1))
+    refute_receive {:test_stt_audio, ^replacement, _audio}
+    assert Authority.snapshot(context.authority) == base
+
+    assert {:ok, installed} = Authority.leave(context.authority, context.join.participant_id)
+    assert installed == candidate.snapshot
+    assert {:ok, ^input, :ready} = Ingress.readiness_binding(input)
+    frame = %{preparation_frame(context, 2) | payload: <<2>>}
+    assert :ok = CallEngine.push_audio(context.attachment, frame)
+    assert_receive {:test_stt_audio, ^replacement, <<2>>}
+    refute_receive {:test_stt_audio, ^replacement, <<1>>}
+    refute_receive {:test_stt_transport_started, _, _}
   end
 
   test "preparation owner loss cancels only its pending speech session" do
@@ -157,7 +233,15 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
              SpeechToText.prepare_policy(context.capability, context.candidate, options)
 
     assert_receive {:test_stt_transport_started, replacement, _connection}
-    collector = collect(prepared.resources, context.room.incarnation_id)
+    ingress = context.attachment.media_ingress
+    track = Map.take(preparation_frame(context, 1), [:track_id, :codec, :sample_rate, :channels])
+    [provider] = prepared.resources
+    assert :ok = Ingress.prepare_track(ingress, track, provider)
+
+    assert {:ok, [prepared_input, ^provider] = resources} =
+             Ingress.readiness_resources(ingress, provider)
+
+    collector = collect(resources, context.room.incarnation_id)
     TestSpeechToTextTransport.deliver(replacement, connected_message())
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
 
@@ -172,6 +256,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert {:ok, _participant} = CallEngine.join_participant(join)
     assert {:ok, ^original, :ready} = SpeechToText.readiness(context.capability)
     assert {:error, :unavailable} = SpeechToText.readiness_binding(hd(prepared.resources))
+    assert {:error, :unavailable} = Ingress.readiness_binding(prepared_input)
     current = Authority.snapshot(context.authority)
     destination = context.join.participant_id
 
@@ -189,10 +274,19 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert after_rebase.configuration == before.configuration
     assert after_rebase.policy_interval != before.policy_interval
     assert {:ok, ^after_rebase, :ready} = SpeechToText.readiness_binding(after_rebase)
+
+    assert {:ok, [rebound_input, ^after_rebase]} =
+             Ingress.readiness_resources(ingress, after_rebase)
+
+    assert rebound_input.generation == prepared_input.generation
+    assert rebound_input.configuration == prepared_input.configuration
+    assert rebound_input.policy_interval == after_rebase.policy_interval
+    assert {:ok, ^rebound_input, :ready} = Ingress.readiness_binding(rebound_input)
     refute_receive {:test_stt_transport_started, _, _}
     assert {:ok, _participant} = CallEngine.join_participant(context.join)
     assert {:ok, committed, :ready} = SpeechToText.readiness(context.capability)
     assert committed.generation == before.generation
+    assert {:ok, ^rebound_input, :ready} = Ingress.readiness_binding(rebound_input)
     assert :ok = CallEngine.push_audio(context.attachment, preparation_frame(context, 1))
     assert_receive {:test_stt_audio, ^replacement, <<1>>}
   end

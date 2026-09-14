@@ -18,7 +18,14 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   @impl true
   def readiness(ingress), do: Readiness.readiness(ingress)
   def readiness_resources(ingress), do: Readiness.resources(ingress)
+  def readiness_resources(ingress, provider), do: Readiness.resources(ingress, provider)
   def prepare_track(ingress, track), do: Readiness.prepare_track(ingress, track)
+
+  def prepare_track(ingress, track, provider),
+    do: Readiness.prepare_track(ingress, track, provider)
+
+  @impl true
+  def readiness_binding(resource), do: Readiness.readiness_binding(resource)
 
   def child_spec(options) do
     %{

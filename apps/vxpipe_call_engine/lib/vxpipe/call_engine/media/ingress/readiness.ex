@@ -10,20 +10,31 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
          do: {:ok, resource, status}
   end
 
-  def resources(ingress) do
-    with {:ok, resource, _status, dependencies} <- observe(ingress),
+  def resources(ingress, provider \\ :current) do
+    with {:ok, resource, _status, dependencies} <- observe(ingress, provider),
          do: {:ok, [resource | dependencies]}
   end
 
-  def prepare_track(ingress, track) do
+  def readiness_binding(%Resource{
+        instance: ingress,
+        binding: {_connection, :prepared_speech, provider}
+      }) do
+    with {:ok, resource, status, _dependencies} <- observe(ingress, provider),
+         do: {:ok, resource, status}
+  end
+
+  def readiness_binding(%Resource{instance: ingress}), do: readiness(ingress)
+
+  def prepare_track(ingress, track, selection \\ :current) do
     with :ok <- validate_track(track),
          {:ok, binding} <- call(ingress, :readiness_binding),
          :ok <- validate_track_binding(binding, track) do
-      if binding.prepared_track == track do
+      if binding.prepared_track == track and selection == :current do
         :ok
       else
-        with {:ok, provider} <- SpeechToText.input_binding(binding.capability),
+        with {:ok, provider} <- input_binding(binding, selection),
              :ok <- validate_provider(binding, provider),
+             :ok <- validate_interval(binding, provider, selection),
              :ok <- validate_format(track, provider.media_format) do
           call(ingress, {:prepare_track, binding.resource, track})
         end
@@ -43,17 +54,20 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
           Resource.signature({state.readiness_resource.configuration, state.prepared_track})
     }
 
+    capacity? =
+      state.total_bytes < state.maximum_bytes and
+        :queue.len(state.queue) + if(state.in_flight == nil, do: 0, else: 1) <
+          state.maximum_frames
+
     %{
       resource: resource,
       identity: state.identity,
       capability: state.capability,
       prepared_track: state.prepared_track,
       track_id: state.track_id,
+      capacity?: capacity?,
       available?:
-        interval != nil and state.policy_demand? and state.prepared_track != nil and
-          state.total_bytes < state.maximum_bytes and
-          :queue.len(state.queue) + if(state.in_flight == nil, do: 0, else: 1) <
-            state.maximum_frames
+        interval != nil and state.policy_demand? and state.prepared_track != nil and capacity?
     }
   end
 
@@ -65,18 +79,54 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
     end
   end
 
-  defp observe(ingress) do
+  defp observe(ingress, selection \\ :current) do
     with {:ok, binding} <- call(ingress, :readiness_binding),
-         {:ok, provider} <- SpeechToText.input_binding(binding.capability),
+         {:ok, provider} <- input_binding(binding, selection),
+         :ok <- validate_interval(binding, provider, selection),
          {:ok, ^binding} <- call(ingress, :readiness_binding) do
       case validate_provider(binding, provider) do
-        :ok -> report(binding, provider)
+        :ok -> report(prepare_binding(binding, provider), provider)
         {:error, _reason} -> {:ok, binding.resource, :failed, []}
       end
     else
       _unavailable_or_changed -> {:error, :unavailable}
     end
   end
+
+  defp input_binding(binding, :current), do: SpeechToText.input_binding(binding.capability)
+
+  defp input_binding(binding, %Resource{} = provider),
+    do: SpeechToText.input_binding(binding.capability, provider)
+
+  defp input_binding(_binding, _selection), do: {:error, :unavailable}
+
+  defp validate_interval(_binding, _provider, :current), do: :ok
+
+  defp validate_interval(binding, provider, _selection) do
+    if binding.resource.policy_interval in provider.policy_intervals,
+      do: :ok,
+      else: {:error, :policy_not_prepared}
+  end
+
+  defp prepare_binding(
+         binding,
+         %{resource: %{binding: {_id, :prepared_policy, _token}}} = provider
+       ) do
+    resource = %{
+      binding.resource
+      | binding: {binding.identity.connection_id, :prepared_speech, provider.resource},
+        policy_interval: provider.resource.policy_interval
+    }
+
+    %{
+      binding
+      | resource: resource,
+        available?:
+          resource.policy_interval != nil and binding.prepared_track != nil and binding.capacity?
+    }
+  end
+
+  defp prepare_binding(binding, _provider), do: binding
 
   defp report(binding, provider) do
     resource = %{
@@ -113,12 +163,20 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
     if identity == binding.identity and resource.kind == :speech_to_text and
          resource.instance == binding.capability and
          resource.scope == {:participant, identity.participant_id} and
-         resource.binding == identity.connection_id and Resource.bound?(resource),
+         valid_provider_binding?(resource.binding, identity.connection_id) and
+         Resource.bound?(resource),
        do: :ok,
        else: {:error, :wrong_connection}
   end
 
   defp validate_provider(_binding, _provider), do: {:error, :unavailable}
+
+  defp valid_provider_binding?(connection, connection), do: true
+
+  defp valid_provider_binding?({connection, :prepared_policy, token}, connection),
+    do: is_reference(token)
+
+  defp valid_provider_binding?(_binding, _connection), do: false
 
   defp validate_format(track, %{codec: codec, sample_rate: sample_rate}) do
     if track.codec == codec and track.sample_rate == sample_rate,

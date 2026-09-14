@@ -121,6 +121,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   @doc false
+  def input_binding(state) do
+    {:ok, resource, status} = readiness(state)
+
+    {:ok,
+     %{
+       identity: state.identity,
+       media_format: Map.take(state.media_format, [:codec, :sample_rate]),
+       resource: resource,
+       status: status,
+       policy_intervals: [state.policy_revision]
+     }}
+  end
+
+  @doc false
   def prepare_session(%__MODULE__{} = state, snapshot) do
     prepared =
       %{state | transport: nil, connector: nil, usage: nil, pending_policy: nil}

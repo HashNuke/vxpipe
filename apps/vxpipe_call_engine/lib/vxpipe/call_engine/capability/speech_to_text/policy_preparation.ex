@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Readiness.Provider
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Telemetry
 
   @derive {Inspect, only: [:attempt_id, :change, :deadline_ms]}
@@ -138,6 +139,31 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   end
 
   def readiness(_state, _token), do: {:error, :unavailable}
+
+  def input_binding(state, %Resource{binding: {_connection, :prepared_policy, token}} = expected) do
+    with {:ok, ^expected, status} <- readiness(state, token) do
+      {session, intervals} = input_session(state, token)
+      {:ok, binding} = State.input_binding(session)
+      {:ok, %{binding | resource: expected, status: status, policy_intervals: intervals}}
+    else
+      _stale_or_changed -> {:error, :unavailable}
+    end
+  end
+
+  def input_binding(state, %Resource{} = expected) do
+    case State.input_binding(state) do
+      {:ok, %{resource: ^expected}} = binding -> binding
+      _stale_or_changed -> {:error, :unavailable}
+    end
+  end
+
+  def input_binding(_state, _expected), do: {:error, :unavailable}
+
+  defp input_session(%{pending_policy: %{token: token} = pending} = state, token) do
+    {pending.state, Enum.uniq([state.policy_revision, pending.state.policy_revision])}
+  end
+
+  defp input_session(state, _adopted_token), do: {state, [state.policy_revision]}
 
   def install(%{pending_policy: nil} = state, snapshot), do: install_live(state, snapshot)
 

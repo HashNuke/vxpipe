@@ -29,6 +29,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  def input_binding(capability, resource) do
+    GenServer.call(capability, {:input_binding, resource}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   def prepare_policy(capability, candidate, options),
     do: PolicyPreparation.request(capability, candidate, options)
 
@@ -104,18 +110,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def handle_call({:prepared_policy_readiness, token}, _from, state),
     do: {:reply, PolicyPreparation.readiness(state, token), state}
 
-  def handle_call(:input_binding, _from, state) do
-    {:ok, resource, status} = State.readiness(state)
+  def handle_call(:input_binding, _from, state),
+    do: {:reply, State.input_binding(state), state}
 
-    binding = %{
-      identity: state.identity,
-      media_format: Map.take(state.media_format, [:codec, :sample_rate]),
-      resource: resource,
-      status: status
-    }
-
-    {:reply, {:ok, binding}, state}
-  end
+  def handle_call({:input_binding, resource}, _from, state),
+    do: {:reply, PolicyPreparation.input_binding(state, resource), state}
 
   def handle_call({:push_audio, frame}, _from, state) do
     case State.send_audio(state, frame) do

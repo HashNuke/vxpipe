@@ -230,6 +230,29 @@ candidate input/output/recording and room-enforcer support, private destination 
 startup/transfer coordinator's gates, cues and release acknowledgements. Callers must supply the
 existing attempt deadline; this API does not create or extend a transfer budget.
 
+### Input bound to the prepared speech session
+
+`Media.Ingress.prepare_track/3` and `readiness_resources/2` accept the exact STT resource returned
+by policy preparation. The capability acknowledges that descriptor's identity, generation,
+configuration, audio format and applicable input policy intervals. A discarded, expired, stale or
+altered descriptor cannot validate a track. Queries stay outside the ingress receive loop; the
+final track bind verifies that the input resource has not changed during validation.
+
+The input descriptor binds its existing buffer generation and negotiated track to the selected STT
+session. The collector queries that same provider lease, including its connection acknowledgement.
+For a replacement, it reports the prospective speech interval while accepting an input buffer still
+under the installed base policy. After adoption, only the committed interval is accepted. The
+prepared descriptor remains observable after commit, without replacing the input buffer or starting
+another speech session. An unchanged provider produces the ordinary unchanged input descriptor.
+
+This preparation pins the negotiated track, but does not open a microphone gate, apply policy,
+consume queued audio, or forward audio to the pending session. A currently denied route can become
+ready for its future policy while continuing to discard microphone input. Unrelated membership
+revisions preserve the provider and buffer generations; after candidate refresh, the input binding
+uses the refreshed provider interval. The provider owns cancellation and expiry, so this input
+binding creates no second lease or deadline. Gateway connection-graph selection and coordinated
+startup/transfer invocation remain pending.
+
 ## Collection and deadlines
 
 `RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required

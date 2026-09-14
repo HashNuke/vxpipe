@@ -784,3 +784,34 @@ unchecked; the milestone and index are still incomplete.
   enforcers, selecting prepared bindings in the full connection/room graph, private destination
   prewarming, initial asynchronous setup, participant waits/cues, fenced release and restoration,
   and rendered/phone-provider acceptance. These checks do not prove that larger runtime sequence.
+
+## Bind prepared speech input
+
+- The previous goal turn committed candidate STT preparation as `fb567d0`; this turn starts from
+  a clean worktree. Inspection found that input readiness still queries only the installed session,
+  so it cannot collect the prepared provider together with its actual input buffer and track.
+- Extend the existing input protocol to select an exact prepared STT resource. Validate the negotiated
+  format and installed input interval against that session's existing policy lease; retain the input
+  buffer generation and all current microphone permissions. The STT owner/deadline remains the single
+  lease owner. Room tests will collect both resources before and after real participant admission,
+  and invalidate the input binding when that provider preparation is discarded.
+- The two extended room checks failed at the missing three-argument track preparation API. The
+  implementation now validates the selected provider descriptor and exposes a binding that the
+  collector can observe both before and after policy adoption. Ordinary current-session callers
+  retain their existing API and descriptors.
+- Focused checks also exercise preparation under a currently denied input policy, incompatible
+  codec rejection without pinning the track, altered provider descriptors, and refreshing a stale
+  candidate after unrelated membership changes. The denied-input check confirms that no held audio
+  reaches the prepared session; the existing live input policy remains unchanged until commit.
+- Design review rejected a second ingress policy lease/timer and synthetic readiness based solely on
+  the future interval. The input adapter queries the existing provider lease and validates the live
+  buffer's interval, track, identity and capacity. No capability query runs inside an ingress callback.
+  The complete connection graph and startup/transfer orchestration still need to select these bindings.
+- Final focused run passes 45 checks across speech-policy rooms, input buffers, STT and the readiness
+  collector. All five root checks pass: format, warnings-as-errors compilation, strict Credo,
+  1,179 tests with zero failures and 15 integrations excluded, and unused dependencies. No browser,
+  provider call, or running-server restart was performed.
+- Gateway's connection adapter still calls the two-argument track preparation and current-resource
+  query, and accepts only installed policy intervals. Its next integration needs explicit persistent
+  phase ownership and the attempt's existing deadline; an ephemeral query worker must not own STT
+  preparations. Other candidate media/room enforcers and the complete lifecycle sequence remain open.

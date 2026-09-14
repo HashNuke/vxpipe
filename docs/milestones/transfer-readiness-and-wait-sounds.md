@@ -668,3 +668,16 @@ Seventy-five focused checks pass for this speech-preparation checkpoint. All fiv
 formatting, warnings-as-errors compilation, strict Credo, 1,178 tests with zero failures and
 15 integrations excluded, and unused dependencies. This is deterministic room/provider-fixture
 evidence; no rendered browser or live-provider acceptance is claimed. The milestone remains open.
+
+STT input readiness now accepts the exact prepared provider resource, validates its negotiated track
+and applicable input interval, and lets the collector observe that provider with the existing input
+buffer. The same descriptor remains valid after adoption. An unchanged provider retains the ordinary
+input descriptor, and unrelated candidate refresh retains both buffer and provider generations.
+Preparation under a currently denied input policy becomes ready without delivering microphone audio;
+discarded or altered provider descriptors cannot validate the track or pass collection.
+
+Forty-five focused checks and all five root gates pass for this input-binding checkpoint: 1,179 tests,
+zero failures and 15 integrations excluded. The connection-graph adapter still queries installed
+resources; selecting prepared resources there requires the persistent phase owner and existing
+deadline, plus candidate preparation of the other media and room enforcers. Startup/transfer waits,
+cues, final release, restoration and rendered/provider acceptance remain incomplete.
