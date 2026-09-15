@@ -91,9 +91,11 @@ The focused 18-test group, including two real-connection checks, passes. A dispo
 across fresh VMs preserves four distinct admissions for two tenants per existing carrier despite
 matching aliases/provider IDs. Gateway live identity and credential readers remain pending;
 progress stays at 4 of 7 checkpoints complete. See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
-The root run at `68989dd` completed 1,588 tests with 89 failures and 38 exclusions. A missed dynamic
-claim fixture constructor caused carrier setup failures and leaked test configuration into later
-cases. The correction passes all 26 carrier harness tests; full umbrella verification is rerunning.
+The latest root run at `d2fbbd7` completes 1,588 tests with one failure and 38 exclusions. The
+fixture correction removes the carrier setup/configuration failure cascade from `68989dd`;
+the remaining failure is an unchanged five-participant WebRTC audio timeout, which passes in
+isolation without a source change. All 136 Persistence
+and 106 Console tests pass. Common acceptance remains open.
 See [fixture evidence](../../labnotes/20260916-0344-repair-carrier-claim-fixture.md).
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:

@@ -18,3 +18,18 @@
 - Full umbrella verification will rerun after this small correction commit. Milestone progress
   remains four of seven complete, three partial; the preceding focused identity/storage evidence
   remains valid, while common acceptance is open until the corrected root run passes.
+
+## Full verification after correction
+
+- The full root retry at `d2fbbd7` completes 1,588 tests with one failure and 38 exclusions
+  (seed 235296, concurrency four). MCP 37, Agent Runtime 95, Engine 697, Calls 84, Artifacts 20,
+  Persistence 136 and Console 106 have zero failures. Gateway has 413 tests and one failure.
+- The carrier constructor failures and subsequent audio-preparation cascade are gone. The only
+  failure is the native five-participant handoff case waiting for 250 Hz audio after reconnection
+  (`human_transfer_webrtc_test.exs:518`). Its source is unchanged since the passing `9026af2`
+  umbrella run. Prior labnotes also record intermittent failures in this case; this run alone
+  does not establish their cause.
+- Log: `tmp/carrier-claim-fixture-root-test.log`. Common umbrella acceptance remains open.
+- The unchanged case passes in isolation: one test, zero failures, 67 excluded, same seed.
+  Log: `tmp/carrier-claim-fixture-native-isolated.log`. This narrows the observation but does
+  not explain the full-suite timeout or turn the failed umbrella run into a pass.

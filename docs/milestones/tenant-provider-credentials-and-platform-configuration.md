@@ -2,10 +2,11 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2, 5 and 6 are complete. Of seven checkpoints, four are complete,
-three are partial. The latest full umbrella run at `68989dd` ran 1,588 tests with 89 failures
-and 38 exclusions: a missed Gateway claim fixture constructor caused setup failures and leaked
-test configuration. The fixture correction passes its 26 carrier harness tests; the corrected
-root run and final milestone acceptance remain open.
+three are partial. The latest full umbrella run at `d2fbbd7` ran 1,588 tests with one failure
+and 38 exclusions. The carrier fixture correction removed the setup/configuration failure
+cascade; the remaining failure is the unchanged five-participant WebRTC audio timeout.
+That case passes in isolation; the full-suite timeout remains unexplained.
+Common umbrella acceptance and the unfinished checkpoints remain open.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
 reviewed. Final independent implementation review and the remaining checkpoints are open.
@@ -720,7 +721,9 @@ entry service. Conflicting control/session IDs and ambiguous historical unbound 
 admission. Eighteen focused tests pass, including the two real-connection transaction checks;
 Calls 84 and Persistence 136 tests pass (11 excluded). A fresh-VM disposable database check recovers
 four correct duplicates across two tenants per existing carrier. Independent review and static
-root gates pass. Gateway live identity/readers and the next full umbrella run remain pending.
+root gates pass. The full root run after the fixture correction completes 1,588 tests with
+one native five-participant WebRTC timeout and 38 exclusions. Gateway live identity/readers
+and common acceptance remain pending.
 See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
 
 ## Specification review

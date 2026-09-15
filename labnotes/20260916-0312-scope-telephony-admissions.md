@@ -63,4 +63,5 @@
 The root run at `68989dd` subsequently completed 1,588 tests with 89 failures and 38 exclusions.
 A missed dynamic Gateway claim constructor caused setup failures and leaked test configuration;
 see the [fixture correction](20260916-0344-repair-carrier-claim-fixture.md). The corrected umbrella
-run remains pending; the focused identity evidence above does not imply root acceptance.
+run at `d2fbbd7` completes 1,588 tests with one native five-participant WebRTC timeout and
+38 exclusions; the focused identity evidence above does not imply root acceptance.
