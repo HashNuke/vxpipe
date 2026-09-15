@@ -48,5 +48,13 @@ Three small requests on the docs landing visual (`vxpipe-docs`, `CallRoomVisual`
 - `node --test test/call-room-visual.test.mjs` -> pass (was red before the CSS fix).
 - `node --test` (vxpipe-docs) -> 4 pass, 0 fail.
 - Harness screenshots: `/tmp/crv-harness/screenshot-1789441571409.png` (desktop, fixed).
-- `git status`: only `vxpipe-docs/src/styles/call-room.css`,
-  `vxpipe-docs/test/call-room-visual.test.mjs`, plus labnotes.
+## Follow-up: caller top edge aligns with active agent card
+
+Set `.crv-grid` back to `align-items: start` with the caller pinned to `start`,
+so the caller top edge meets the front-deck card top edge (both sit at the row top;
+the front profile renders at deck top via the `translate(0, 0)` slot). The lane keeps
+`align-self: stretch` so the mixer stays at row mid-height. Measured callerTop ==
+frontTop (delta 0); mixer == deck center, ~1px off caller center at production
+heights (153 vs 150). Tests updated (grid-start + caller-start assertions), docs
+suite 4/4 green. Left uncommitted per request (commit 97b6268 covers the prior
+three fixes).

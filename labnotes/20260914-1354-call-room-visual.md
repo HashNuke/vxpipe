@@ -119,3 +119,6 @@ turn-taking centerpiece.
   (`:observer`, `:dbg`/`recon_trace`, LiveDashboard are all generic).
 - Detail expansions deferred: transport legs, provider badges, supervision
   tree, CallVariables read/write. User to pick 1–2.
+- Follow-up: inactive badges grey out through a `--dim` custom property
+  flipped by the slot keyframes (card blur stays blur-only). Verified
+  grayscale(0/1) per card state in Chrome, render checked, suite 4/4.
