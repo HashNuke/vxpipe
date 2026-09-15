@@ -20,7 +20,9 @@ provider/model selections, no capability profiles, encrypted tenant AI/speech an
 credentials, and platform environment settings. Its checkpoints deliver runnable call flows,
 including carrier ingress authentication, transfers and cleanup. ReqLLM adapter selection stays
 internal. Superseded provider configuration paths must be deleted, not retained as optional or
-legacy fallbacks; acceptance includes conflicting-old-settings tests. Implementation remains unchecked.
+legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
+the first tenant voice slice is pending. The cleanup baseline had one native handoff timeout that
+passed in isolation; final umbrella acceptance remains open. Implementation remains unchecked.
 The platform database contract uses `VXPIPE_DB_URL` before `DATABASE_URL` and
 `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; development needs no database env variables and
 defaults to `vxpipe_dev` with pool size 10.

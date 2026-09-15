@@ -1,6 +1,6 @@
 # Tenant-scoped provider credentials and platform configuration
 
-Status: specification requested 2026-09-15; implementation not started.
+Status: implementation authorized 2026-09-15; preparatory cleanup complete; checkpoint 1 pending.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. Agent specification review is complete; implementation remains unchecked.
 
@@ -42,8 +42,8 @@ An absent Bedrock credential must never fall through to the platform's AWS envir
 Telnyx's webhook public key is verification metadata, not a private signing key; associate it with
 the tenant service and version it with the authentication configuration.
 
-This decision supersedes [Runtime TOML configuration](../runtime-toml-configuration.md) and the
-older proposed deployment-config-file contract. Definition JSON remains the portable behavior
+This decision supersedes the discarded runtime TOML proposal and the older proposed
+deployment-config-file contract. Definition JSON remains the portable behavior
 document. Removal applies to provider env/global-application fallbacks as well as TOML.
 
 Removal means deleting the old provider configuration readers, merges and fallback branches,
@@ -84,7 +84,8 @@ production databases; retain the existing explicitly test-scoped overrides.
 
 ## Code review baseline and change map
 
-These observations are from the current source, including uncommitted TOML work.
+These planning observations were captured before the preparatory cleanup, including the
+since-discarded uncommitted TOML work. They identify the vertical slices’ integration boundaries.
 
 | Reviewed code | Current behavior and required change |
 | --- | --- |
@@ -421,7 +422,7 @@ Depends on checkpoints 1–2; execute after the carrier slices in index order.
 - [ ] Seed conflicting ambient provider/AWS credentials in isolated tests. Requests must use only
   the selected tenant record; Bedrock must never pick up platform S3 credentials.
 - [ ] Update each provider page with required tenant auth and inline provider/model examples.
-  Preserve optional-option links and their centrally configured ReqLLM documentation version.
+  Recreate optional-option links and their centrally configured ReqLLM documentation version.
   Clearly label unsupported provider/auth combinations until their sub-checkpoint passes.
 
 Exit: every advertised supported provider has a working provisioning-to-request example; optional
@@ -459,6 +460,9 @@ Depends on checkpoints 1–6. This is the final operational cutover and acceptan
 - [ ] Remove remaining TOML loader/`VXPIPE_CONFIG`, `vxpipe.toml.sample`, global provider
   credential configuration and unused `apps/vxpipe_config`/TOML dependencies. Update exact child
   dependencies and lockfile entries. Runtime normalization needed by adapters stays with its owner.
+  The user deleted the uncommitted app before implementation; the preparatory cleanup removes
+  its dangling consumers now. Final acceptance must still audit their absence. ReqLLM’s
+  `llm_db` dependency requires its own TOML parser; it is not a platform config loader.
 - [ ] Audit and delete every superseded provider configuration entry point, reader, merge and
   fallback branch, including `provider_api_key_environment`, global provider model/options and
   application-scope carrier configuration. Remove obsolete settings from docs/examples and
@@ -468,7 +472,9 @@ Depends on checkpoints 1–6. This is the final operational cutover and acceptan
   activation must fail with no provider request. With one, only that credential and the definition
   options are used; the old file is never read and SDK ambient discovery is never invoked.
 - [ ] Restore and catalog platform database/pool, S3, listener/TLS, callback origin and encryption
-  settings in `config/runtime.exs` and `.env.example`. Exercise launcher/Console/Astro wiring;
+  settings in `config/runtime.exs` and `env.sample` (keep `.env.example` synchronized or retire
+  the duplicate). Add concise comments, mandatory placeholders, and commented optional variables.
+  Exercise launcher/Console/Astro wiring;
   no provider secret is required before tenant DB provisioning.
 - [ ] Implement the database contract: `VXPIPE_DB_URL` before `DATABASE_URL`, and
   `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; default development to `vxpipe_dev` and pool 10
@@ -516,7 +522,7 @@ Every case is required; append concrete evidence under its owning checkpoint.
 | Live isolation | Admitted legs retain exact identity and bounded credentials during DB outage | Credential-source failure is tested separately from admission-only outage; no new dial, tenant cache crossover or speculative redial |
 | Rotation/revocation | New calls select current version; active lifetime is explicit | Revoked version cannot admit a new call; key loss/ciphertext swapping fails safely |
 | Persistence/inspection | Credentials encrypted; definitions/plans/archives contain safe references | API keys still hash-only; no plaintext/ciphertext payload in call artifacts or logs |
-| Platform restart | Database/S3/HTTP/key settings from env; provider auth from tenant DB | No provider env fallback, TOML dependency, old-plan activation or capability-profile lookup |
+| Platform restart | Database/S3/HTTP/key settings from env; provider auth from tenant DB | No provider env fallback, runtime TOML loader, old-plan activation or capability-profile lookup |
 | Database configuration | Prefixed URL/pool variables win; generic aliases work; development uses `vxpipe_dev` and pool 10 without either pair | Invalid selected values fail safely; retired alias cannot configure persistence; test database/pool are not overridden; no development DB default outside development |
 | No alternate provider configuration | Superseded readers/merges/branches are deleted, not disabled | Old env/application/file settings cannot rescue missing DB credentials or override definition options; no SDK ambient lookup or compatibility mode |
 
@@ -537,6 +543,23 @@ Every case is required; append concrete evidence under its owning checkpoint.
   sufficient to reproduce each runnable flow; rendered verification applies to UI changes.
 - Existing runtime source is not changed by this planning document. Superseded behavior is removed
   by the implementation checkpoints, with migration evidence and no retained live legacy fallback.
+
+## Preparatory worktree cleanup
+
+- [x] Review the dirty worktree before implementation and discard the superseded TOML/global
+  provider additions with their dependencies and tests; preserve unrelated website work.
+- [x] Independently review cleanup with GPT 6 Astra xhigh. The auth additions also allowed local
+  credential-file paths and mixed Bedrock auth; preserve those findings as future regression cases.
+- [x] Run the restored umbrella gates and record baseline results in the cleanup labnote.
+  Static root gates and launcher/build checks pass. The full suite ran 1,436 tests with one
+  existing native human-handoff timeout; that exact case passed in isolation without source
+  changes. The cause remains unresolved and final umbrella acceptance remains unchecked.
+  The docs suite also retains a pre-existing badge assertion mismatch.
+
+This restores the committed runtime as the implementation baseline. Its old provider env/profile
+paths remain to be replaced by the owning vertical slices; cleanup alone completes no call flow.
+The [cleanup labnote](../../labnotes/20260915-1600-tenant-credential-storage.md) records exact
+scope, independent review, root/isolated test evidence and rendered homepage checks.
 
 ## Evidence ledger
 
