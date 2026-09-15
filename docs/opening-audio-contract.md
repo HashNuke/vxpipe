@@ -99,9 +99,10 @@ text opening. There is no fallback to participant capabilities, call defaults, a
 application provider settings or an invented voice.
 
 Old profile-based definitions and prepared plans cannot run through the current parser/runtime.
-The milestone's explicit stored-revision conversion and prepared-call drain remain a final-cutover
-requirement before deployment over existing data. Historical revisions and completed-call plans
-remain immutable. Omitted openings and file URLs need no TTS selection.
+Before deployment over existing data, replace affected definitions through existing administration
+and cancel old prepared calls so they cannot activate. Historical revisions and completed-call
+plans remain immutable. The credential milestone requires a concrete cutover, not a general
+profile-conversion framework. Omitted openings and file URLs need no TTS selection.
 
 ## File asset profile
 

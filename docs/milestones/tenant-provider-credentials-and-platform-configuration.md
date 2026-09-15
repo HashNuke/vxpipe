@@ -1,9 +1,10 @@
 # Tenant-scoped provider credentials and platform configuration
 
-Status: implementation authorized 2026-09-15; preparatory cleanup complete; checkpoint 1 implemented and verified.
+Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
+Preparatory cleanup and checkpoint 1 are complete.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
-Telnyx/Twilio credentials. Agent specification review is complete; final implementation review
-and the remaining checkpoint exits are open.
+Telnyx/Twilio credentials. The initial specification was independently reviewed; the scope correction
+below has local review. Final independent implementation review and the remaining checkpoints are open.
 
 Prerequisites: the implemented workflows in
 [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md),
@@ -19,6 +20,21 @@ Design sources: [Tenant control plane](../tenant-control-plane.md),
 [Architecture](../architecture.md), [ReqLLM runtime](../reqllm-agent-runtime.md),
 [Opening audio contract](../opening-audio-contract.md), and
 [Context compaction](../context-compaction.md).
+
+## Scope correction — 2026-09-15
+
+The user clarified: existing call paths should read tenant credentials from the database.
+This milestone changes credential/configuration ownership and verifies the affected readers.
+It does not add transfer, recovery or carrier workflows, or require replaying every acceptance
+scenario from their completed milestones. A failing credential lookup follows existing failure
+handling. Focused integration checks prove that the correct tenant binding reaches each adapter.
+
+The previous plan over-scoped this change. Remove third-party API-key rotation/revocation
+operations, carrier key-overlap machinery and broad call-flow demonstrations. The user separately
+confirmed platform encryption-key rotation: the platform operator owns that key, and re-encrypting
+stored values does not change tenants' upstream credentials. There are seven checkpoints; one is
+complete, two are partial and four are not started. This is a scope correction, not additional
+implementation progress. See [the scope decision](../credential-cutover-scope.md).
 
 ## Outcome and configuration ownership
 
@@ -98,7 +114,7 @@ Treat unset/blank `STORAGE_BUCKET` as absent. Validate an active destination and
 endpoint configuration without printing secrets. Retired-only settings supply no destination;
 they must neither enable publication nor rescue explicitly enabled recording without a new bucket.
 The user requested this configuration change on 2026-09-15; it can ship as a separate coherent
-commit before the remaining provider call-flow work, while checkpoint 7's full restart exit stays open.
+commit before the remaining provider-reader work, while checkpoint 7's platform cutover remains open.
 
 ## Code review baseline and change map
 
@@ -190,7 +206,7 @@ unique ingress key, `provider: "telnyx"` or `"twilio"`, exact account/connection
 credential reference, optional originating number and allowed service policy. Credentials and
 service must belong to the same tenant and provider; enforce that at the database boundary.
 The service references the stable credential identity; a new leg resolves its current active
-version and pins that version privately. Rotation does not require republishing the definition.
+version and supplies it to the existing leg configuration.
 Public callback/media origins remain platform settings, with routes derived from the stored binding.
 
 The call definition continues to carry phone intent, literal/protected-variable destination,
@@ -214,8 +230,8 @@ aliases in different tenants must never return another tenant's claim, including
 - Encrypt recoverable payloads before persistence with authenticated encryption using an existing
   vetted facility or OTP crypto primitives. Bind tenant/provider/credential identity as associated
   authenticated data to detect ciphertext swapping. Keys come from the platform secret boundary,
-  outside PostgreSQL. Specify nonce generation, key validation, versioning and rotation in the
-  first slice; no production default key.
+  outside PostgreSQL. Specify nonce generation, key validation and stored-format versioning;
+  no production default key. Platform encryption-key rotation is covered in checkpoint 6.
 - Store Telnyx API keys and Twilio auth tokens in encrypted payloads. Store account/connection
   identifiers and verification public keys as controlled tenant metadata where needed for routing.
   Validate all provider authentication shapes before accepting a write.
@@ -251,26 +267,19 @@ aliases in different tenants must never return another tenant's claim, including
    Use bounded preparation workers outside room-authority and media callbacks. Lookup/decryption
    failure starts no provider request; transfer failure preserves existing source-recovery behavior.
 
-### Rotation, revocation and database outages
+### Reader lifetime and unavailable storage
 
-A new activation/leg uses the current active credential version. Existing provider configurations
-and admitted carrier legs hold a private snapshot for their bounded lifetime; rotation does not
-silently swap credentials mid-request or mid-leg. Revocation blocks new save/publish/prepare and
-resolution. It is not an automatic termination of established calls.
+New capability/leg construction reads the selected tenant credential. An already constructed
+provider client or admitted leg keeps its existing private configuration for its normal owned
+lifetime. Moving the source to PostgreSQL must not add a database query to each media frame or
+silently replace a running client's configuration.
 
-Known live carrier callbacks, media-token completion and final cleanup must be verifiable with the
-leg's pinned identity/configuration without a fresh database dependency. New admissions, new legs,
-and credential acquisition fail closed on database/key-provider outage. Established media and
-permitted cleanup continue; no global provider fallback or credential cache shared across tenants.
-Keep credential-source/key failure distinct from an admission-store-only failure in tests. The
-existing carrier harness can disable admission persistence while still dialing transfers; that
-does not prove behavior when new credential resolution itself is unavailable. An admission-only
-outage may preserve existing transfer behavior when credentials are independently available.
-
-Define bounded version overlap for carrier callback verification during rotation, limited to the
-exact tenant/service and admitted leg. Retire old verification material with its final lease.
-No old version authorizes a new incoming call after revocation. If the carrier invalidates a token
-upstream, report cleanup/auth failure honestly; never retry or switch accounts speculatively.
+Missing, inactive, wrong-tenant or undecryptable credentials fail closed when read; old environment
+or application settings cannot rescue them. Test lookup failure separately from admission-store
+failure, because an unavailable credential source must prevent a new provider request or dial.
+Preserve existing admitted-leg callback/media/cleanup behavior using its initialized configuration.
+Do not introduce a third-party credential rotation protocol, verification-key overlap registry
+or refresh service.
 
 ### Authenticate carrier ingress before trusting tenant data
 
@@ -294,18 +303,16 @@ unverified `AccountSid`, destination phone number, connection ID or arbitrary te
   semantics. Pin tenant/service in live registry/correlation keys wherever current service IDs
   alone would collide between tenants.
 
-## Vertical implementation checkpoints
+## Credential cutover checkpoints
 
-Each checkpoint must end with the stated operator/caller flow working, including implementation,
-focused tests, relevant docs and labnotes. Storage, schema and runtime work belong together within
-a slice; they are not separately completed milestones. Use red-green-refactor from the owning
-child. Run full umbrella tests after independent review, as requested, not after every edit.
+Keep each credential-reader change, focused tests, relevant docs and labnotes in one usable
+checkpoint. Use red-green-refactor for behavior changes. Reuse existing call-flow harnesses only
+where necessary to prove the DB-to-adapter boundary; transfer readiness, cue playback, recovery,
+bridging and media behavior remain owned by their existing milestones.
 
-Checkpoint demonstrations use isolated, provisioned state. A changed selection schema must not
-be deployed over old persisted plans before their explicit cutover: keep the prior deployment
-running until checkpoint 7's revision conversion and prepared-call drain are ready. Converted
-paths have no dual-read profile/global-credential fallback. Migrate affected in-repo fixtures and
-sample inputs when changing shared structures, not at the final cleanup checkpoint.
+Keep schema cutover explicit: reject old profile inputs and document how to replace affected
+local definitions/prepared calls through existing administration. Do not add a general legacy
+profile conversion framework. Migrate in-repo fixtures and sample inputs with shared structures.
 
 ### Checkpoint 1 — Provision Google/Deepgram and run an inline tenant voice call
 
@@ -340,148 +347,119 @@ Depends on the implemented prerequisites above.
 Exit: one usable tenant voice call driven by inline provider/model selections and encrypted DB
 credentials. Google is the public provider name. Implementation, tests and setup docs ship together.
 
-### Checkpoint 2 — Open, transfer and return with independently selected providers
+### Checkpoint 2 — Finish AI and speech credential readers
 
 Depends on checkpoint 1.
 
-- [ ] Write failing end-to-end cases for independent opening TTS, human entry, agent transfer,
-  human transfer/briefing and source recovery with tenant credentials and whole-selection overrides.
-  - [x] Verify persisted human entry with an independent opening credential, private playback,
-    tenant/binding cache isolation and revocation before a new activation.
-  - [ ] Verify the agent/human transfer and source-recovery flows with tenant credentials.
-- [ ] Complete credential resolution for opening TTS, caller connection STT, destination model/
-  speech construction, private briefing and subsequent participant activation. Preserve deadlines,
-  waits/readiness, cue-before-conversation, source continuity and local Morse operation.
-- [ ] Block definition save when any effective transfer destination or opening selection lacks its
-  credential, even when the entry participants are fully configured.
-- [ ] Verify an unavailable destination credential during transfer preserves the source; no secret
-  enters transfer context/history, usage, cached audio identity or inspection. Cache identity remains
-  tenant/provider/model/options/binding scoped without including secret bytes.
-- [ ] Exercise source → destination → source with deterministic media and provider doubles;
-  document the exact working definition and render the existing sample if its UI behavior changes.
+- [ ] Inventory the existing opening, connection STT, agent activation, destination preparation,
+  private briefing and source-restoration readers. Confirm each receives the host-injected tenant
+  credential source; remove any remaining profile/global/env reader or merge.
+- [x] Verify the opening reader with persisted tenant credentials, independent selection,
+  tenant/binding cache isolation and rejection of an unavailable binding.
+- [ ] Add focused tests at remaining reader/adapter boundaries for the selected tenant/provider/name,
+  whole-selection overrides and missing/wrong-tenant/inactive credential failure. Check that a
+  later destination's missing binding blocks definition save before rows are written.
+- [ ] Verify a new activation reads the DB credential and lookup failure enters the existing
+  preparation-failure path before any provider request. Reuse the existing source-failure contract.
+- [ ] Check that selections, cache identity, prepared plans and public error/history projections
+  contain safe references, never credential payloads. Record the reader inventory and evidence.
 
-Exit: the existing opening and transfer flows use inline selections and tenant credentials across
-their full lifecycle, with audible recovery on a controlled destination preparation failure.
+Exit: every existing AI/speech construction path reads tenant DB credentials through the shared
+boundary. No new transfer/recovery behavior or full round-trip audio demonstration is required.
 
-### Checkpoint 3 — Receive a Telnyx call and transfer to a phone using tenant credentials
+### Checkpoint 3 — Move Telnyx credential readers to tenant storage
 
-Depends on checkpoints 1–2 and the implemented Telnyx adapter.
+Depends on the credential store and existing Telnyx integration.
 
-- [ ] Write a failing two-tenant scenario: provision Telnyx auth, register a tenant phone service,
-  save/publish a phone definition, accept a signed incoming call, then dial/brief/accept/bridge a
-  destination and hang up using only the tenant DB credential.
-- [ ] Add the tenant telephony service table/port and trusted registration workflow in this slice.
-  Bind ingress key, service ID, provider connection, originating number, verification public key
-  and stable credential reference. Pin the resolved credential version per leg; enforce
-  tenant/provider ownership and unique ingress keys.
-- [ ] Extend definition save/publish/prepare validation to non-web services, including outgoing
-  destinations. Pin safe account/service identity in plans; reject retargeting behind a prepared call.
-- [ ] Migrate durable telephony claim queries and unique constraints to tenant/canonical service
-  identity, including explicit backfill validation for existing rows. Exercise matching service
-  aliases and repeated provider event/leg IDs across tenants, replay and database reload/restart;
-  no lookup may return another tenant's claim or suppress its legitimate admission.
-- [ ] Replace Telnyx `ServiceRegistry` secret snapshots for new admissions/legs with tenant
-  resolution. Remove application-scope credential fallback. Retain internal provider validators
-  and platform callback/media origins; no public adapter field is added.
-- [ ] Authenticate Telnyx ingress from the registered ingress key, then verify raw-body signature,
-  timestamp, connection and leg correlation before Calls admission. Resolve command credentials
-  for answer, dial, media start/stop and end-call at the appropriate leg boundary.
-- [ ] Test unknown ingress, invalid signature, wrong connection/provider/tenant, missing/revoked
-  credential and storage outage before admission. No case may dispatch an event or submit a dial.
-- [ ] Prove duplicate callbacks do not recreate/redial; an admitted leg retains bounded private
-  configuration for callbacks/media/cleanup during DB outage. Tenant service IDs cannot collide in
-  live ownership keys. A failed new transfer preserves the original live call.
-- [ ] Inject credential-source/key failure separately from the existing admission-store failure
-  switch: assert no new dial, source recovery and continued admitted-leg media/callbacks/cleanup.
-  Preserve admission-store-only behavior when the required credentials remain available.
-- [ ] Document provisioning and the signed local-phone demonstration, including redacted output.
-  Keep any live Telnyx audibility check explicitly tagged and separately authorized.
+- [ ] Add the tenant service record/port and trusted registration needed to locate existing Telnyx
+  configuration. Bind tenant, provider, account/connection, ingress key and credential reference.
+  Validate ownership and unique ingress keys; keep public callback/media origins platform-owned.
+- [ ] Resolve matching tenant service credentials during definition save/publish/prepare and
+  existing leg construction. Pin safe service identity so an old plan cannot change accounts.
+- [ ] Replace application/global service credential lookup for existing answer, dial, media and
+  hangup commands. Verify the actual adapter receives only the selected tenant credential.
+- [ ] Resolve webhook verification metadata from the stored ingress binding. Preserve raw-body,
+  signature, timestamp, provider-connection and leg checks before dispatch.
+- [ ] Keep durable and live service/leg lookup tenant-scoped when introducing tenant service
+  records. Test matching aliases/provider IDs across tenants and persisted duplicate lookup.
+- [ ] Test missing/wrong-tenant/inactive credentials and credential-source failure: no new request,
+  admission or dial and no global fallback. Preserve initialized configuration for existing legs.
+- [ ] Update provisioning/configuration documentation. Reuse targeted command/webhook tests;
+  complete dialing, briefing, press-1, bridging and live audibility scenarios belong to the
+  existing Telnyx milestone.
 
-Exit: one complete Telnyx inbound and outbound-transfer call using tenant DB credentials, with
-verified webhook ingress and working media/cleanup under the existing carrier contracts.
+Exit: existing Telnyx command and authentication paths obtain their credentials/metadata from the
+correct tenant DB records, with no application-scope credential fallback.
 
-### Checkpoint 4 — Run the same incoming and transfer flow through Twilio
+### Checkpoint 4 — Move Twilio credential readers to tenant storage
 
-Depends on checkpoint 3 and the implemented Twilio adapter.
+Depends on the common tenant service boundary from checkpoint 3 and the existing Twilio adapter.
 
-- [ ] Write a failing parity scenario using a tenant Twilio account SID/auth token, its phone
-  service binding and the existing provider-neutral phone definition.
-- [ ] Add validated Twilio credential provisioning to the common store and service workflow.
-  Reject mixed Telnyx/Twilio fields and account/service mismatch before save or activation.
-- [ ] Migrate voice webhooks, status callbacks and REST dial/end-call credential resolution.
-  Derive exact signature URLs from platform origin plus stored tenant/service route.
-- [ ] Migrate `TwilioMedia` authentication too: resolve or use the admitted leg's pinned auth,
-  verify WSS signature, then consume the exact single-use token and validate account/call/stream.
-- [ ] Add non-consuming, bounded token-to-auth-lease discovery for bound media and pending
-  outbound reservations. Verify with the pinned version, then consume against that same lease;
-  test wrong signatures, pending binding, expiry, replacement and concurrent-consumption races
-  without an unauthenticated waiter, token consumption or fresh DB lookup for an admitted leg.
-- [ ] Exercise incoming Voice/TwiML → authenticated media → tenant agent → outgoing private
-  briefing → destination press-1 → bridge → cleanup, including duplicate/late callback handling.
-- [ ] Test token/signature/account substitution between tenants, revoked/missing bindings, service
-  fallback rejection and DB outage after admission. Failed authentication consumes no media token.
-- [ ] Repeat durable cross-tenant replay/restart checks for Twilio and independently disable the
-  credential source: no new dial, source recovery, existing-leg media/callbacks/cleanup preserved.
-  Do not substitute the admission-store-only outage harness for this credential-failure proof.
-- [ ] Document the working Twilio provisioning/call flow and retain the original milestone's
-  separate pending live-provider audibility gate.
+- [ ] Add validated Twilio account SID/auth-token provisioning to the common service workflow.
+  Reject wrong-provider, mixed auth fields and account/service mismatch.
+- [ ] Migrate voice/status webhook and REST dial/hangup credential reads to the tenant records.
+  Preserve the configured public signature URL and account/call/stream identity checks.
+- [ ] Migrate WSS media authentication. Locate the existing leg/reservation's private configuration
+  without consuming its token or installing a waiter before signature verification. Keep pending
+  outbound reservations and exact token/binding consumption working with the selected tenant auth.
+- [ ] Test the actual signature and command boundaries with two tenants, missing/inactive bindings,
+  wrong tokens/accounts and unavailable credential storage. Failed authentication consumes no token;
+  no request uses application/global credentials.
+- [ ] Verify tenant scope in durable/live duplicate lookup and preserve initialized configuration
+  for existing legs. Reuse focused carrier tests and update setup documentation.
 
-Exit: Twilio delivers the same ordinary call and transfer flow with tenant auth for every
-control, callback and media-authentication boundary; no global Twilio credential is consulted.
+Exit: existing Twilio command, webhook and media-authentication readers use tenant DB credentials.
+The original Twilio milestone's live-provider audibility gate remains separate.
 
-### Checkpoint 5 — Run the remaining supported providers with their required auth/options
+### Checkpoint 5 — Preserve existing provider credential integrations
 
-Depends on checkpoints 1–2; execute after the carrier slices in index order.
+Depends on the shared credential source; keep changes in small provider-specific commits.
 
-- [ ] Inventory the installed ReqLLM provider set and existing provider docs/root provider list.
-  Deliver provider-specific auth/option handling in small sub-checkpoints; each must provision a
-  credential, save a definition, activate its adapter and verify a request with a local double.
-- [ ] Cover ordinary API-key providers and existing alternative auth shapes (Bedrock IAM/API key,
-  Vertex service account/access token, supported OAuth token input) against installed source.
-  Do not promise OAuth onboarding/refresh or accept arbitrary local auth-file paths.
-- [ ] Prove nested provider options survive translation and invalid/mutually exclusive auth inputs
-  fail before requests. Defaults, protected keys, model validation and supported provider-native
-  routing/compaction preserve their existing contracts.
-- [ ] Test router model paths, accurate upstream credential ownership and provider usage identity.
-  Keep Vxpipe fallback chains and configurable adapter modules absent.
-- [ ] Seed conflicting ambient provider/AWS credentials in isolated tests. Requests must use only
-  the selected tenant record; Bedrock must never pick up platform S3 credentials.
-- [ ] Update each provider page with required tenant auth and inline provider/model examples.
-  Recreate optional-option links and their centrally configured ReqLLM documentation version.
-  Clearly label unsupported provider/auth combinations until their sub-checkpoint passes.
+- [ ] Inventory Vxpipe's existing advertised providers and previously supported auth/option paths
+  against installed source. An installed SDK adapter alone does not create a new provider feature
+  requirement. Preserve supported behavior while replacing its credential source.
+- [ ] Supply each supported adapter's expected auth shape from the selected tenant record,
+  including existing non-API-key integrations. Validate malformed/mixed inputs before requests;
+  no OAuth onboarding/refresh or arbitrary credential-file discovery is added.
+- [ ] Verify actual adapter request construction with focused doubles: tenant/provider/name,
+  model/options, nested options and existing router model paths. Preserve current validation,
+  provider identity and protected transport settings.
+- [ ] Seed conflicting ambient credentials and prove they are never used. Bedrock tenant auth
+  must not fall through to platform S3 AWS settings.
+- [ ] Update affected provider setup pages and option links. Mark genuinely unsupported
+  combinations honestly; do not expand model/provider functionality as part of this cutover.
 
-Exit: every advertised supported provider has a working provisioning-to-request example; optional
-settings remain documented without exposing ReqLLM as a public adapter choice.
+Exit: existing supported provider integrations read explicit tenant credentials and retain their
+public inline selection/options contract, with no SDK ambient credential fallback.
 
-### Checkpoint 6 — Rotate/revoke tenant credentials while calls are running
+### Checkpoint 6 — Rotate the platform-owned encryption key
 
-Depends on checkpoints 1–5.
+Depends on the encrypted credential store from checkpoint 1. The platform operator controls the
+encryption key; tenant/provider API-key values are unchanged by this operation.
 
-- [ ] Write failing operator scenarios for rotate/revoke during an AI call and during admitted
-  Telnyx/Twilio legs, including webhook delivery and pending media admission.
-- [ ] Deliver trusted rotate/revoke operations with version metadata and bounded audit events.
-  New activations use the new version; revoked credentials block new save/publish/prepare/legs.
-- [ ] Implement the documented active-configuration lifetime and bounded carrier verification
-  overlap. Retain only exact service/leg leases, retire them on teardown, and reject old
-  credentials for new incoming calls. Exercise control-plane outage and cleanup after revocation.
-- [ ] Verify concurrent credential rotation/revocation and definition writes cannot cross tenant
-  scope or persist a revision after an already-observed invalid credential. Record the precise
-  commit/activation boundary; no claim of immediate termination of established calls.
-- [ ] Demonstrate encryption-key rotation/restart and backup restoration in a disposable DB with
-  key versions provisioned externally; missing/wrong keys fail closed with safe diagnostics.
-- [ ] Audit errors, Inspect/log output, event projections, archive/plan serialization and
-  management summaries for accidental key/token/payload disclosure.
+- [ ] Support an operator-supplied active encryption key and the old keys needed to decrypt stored
+  rows during transition. New writes use the active key; no encryption key is stored in PostgreSQL.
+- [ ] Provide a bounded, resumable re-encryption operation that decrypts each existing payload and
+  encrypts the same value under the active key, preserving tenant/provider/credential identity.
+  Keep secret values and ciphertext out of command output and logs.
+- [ ] Verify interruption/retry and concurrent credential writes cannot lose or misassign payloads.
+  Report safe progress and remaining key IDs so the operator can determine when an old key is unused.
+- [ ] Verify a disposable DB across restart: old/new rows decrypt during transition; after complete
+  re-encryption, removing the old key still permits all credential reads. Missing/wrong keys fail
+  closed. Confirm the plaintext third-party credentials are unchanged.
+- [ ] Document key provisioning, re-encryption and old-key retirement. Do not add external-provider
+  API-key rotation, callback-token overlap or requirements on tenants' credential schedules.
 
-Exit: an operator rotates a tenant credential, sees a new call use it, revokes it and sees a new
-call/save rejected, while the existing bounded call/leg behaves as documented.
+Exit: the platform operator can replace the encryption key protecting stored secrets and retire
+the old key after verified re-encryption, without changing any third-party credential.
 
-### Checkpoint 7 — Start and recover the complete platform with environment and DB configuration
+### Checkpoint 7 — Finish platform configuration and remove old readers
 
-Depends on checkpoints 1–6. This is the final operational cutover and acceptance slice.
+Depends on the credential-reader checkpoints above. This is the final operational cutover and acceptance slice.
 
-- [ ] Write a restart/boot scenario with platform env settings, pre-provisioned tenant credentials
-  and inline definitions: migrate/start → prepare/join → provider/phone call → permitted artifact
-  publication. No runtime config file is available.
+- [ ] Verify startup/configuration loading with platform env settings and pre-provisioned tenant
+  credentials. A provider construction smoke check proves the DB source after restart; do not
+  repeat complete voice/phone/artifact lifecycle scenarios from other milestones.
 - [ ] Remove remaining TOML loader/`VXPIPE_CONFIG`, `vxpipe.toml.sample`, global provider
   credential configuration and unused `apps/vxpipe_config`/TOML dependencies. Update exact child
   dependencies and lockfile entries. Runtime normalization needed by adapters stays with its owner.
@@ -515,20 +493,18 @@ Depends on checkpoints 1–6. This is the final operational cutover and acceptan
   unset/blank values, invalid selected URL/pool values, the retired name alone and test-database
   isolation. Demonstrate development boot/provision/prepare using the default local database/pool
   with all four database env vars unset; verify non-development never defaults to `vxpipe_dev`.
-- [ ] Convert old profile sources using an explicit operator-supplied registry snapshot, then save
-  new immutable revisions through the normal credential gate. Never guess historical aliases or
-  rewrite existing revisions; explicitly publish the replacements.
-- [ ] Drain/cancel old prepared calls and invalidate their join rights before retiring live old
-  plan support. Test rejection of old plans for new activation and retain safe historical
-  inspection if required. The generic Erlang term decoder cannot perform this migration.
+- [ ] Document replacement of old profile-based definitions/prepared calls using existing
+  administration. Keep old-plan activation rejected and immutable history intact. Add a migration
+  only for a demonstrated persisted-data requirement; no generic profile-conversion framework.
 - [ ] Update architecture, tenant operations, developer/provider docs and the container delivery
   specification. Environment plus tenant DB replaces the proposed deployment JSON/TOML loader;
   JSON call definitions remain. Preserve embedded fixture/local-provider use without Ecto.
 - [ ] Obtain the requested independent agent review of the final implementation, fix findings,
   then run all five common root gates once the reviewed checkpoint is ready. Record exact results.
-- [ ] Run a disposable PostgreSQL end-to-end acceptance for two tenants plus controlled key/DB
-  outage, rotation, restart and profile cutover. Use existing synthetic phone/media lanes;
-  distinguish these from externally authorized real carrier audibility checks.
+- [ ] Verify two-tenant persistence, unavailable/wrong encryption keys, safe failure projections
+  and restart at the credential/configuration boundary. Platform encryption-key rotation is
+  covered in checkpoint 6; upstream credential rotation, backup drills and full carrier audibility
+  acceptance are outside this milestone.
 - [ ] Validate source-development/macOS boot now. Verify packaged/container boot only after the
   separate delivery milestone's hold is released; do not claim or require a not-yet-built image.
 - [ ] Update the checkpoint evidence ledger, milestone index and labnotes. Leave this milestone
@@ -540,25 +516,30 @@ paths removed. Container publishing remains governed by its separate milestone.
 
 ## Acceptance matrix
 
-Every case is required; append concrete evidence under its owning checkpoint.
+Each row verifies a changed credential/configuration boundary. Existing call-flow regression tests
+remain part of the umbrella suite; this matrix does not create a second call-flow milestone.
 
-| Flow | Success | Required failure evidence |
-| --- | --- | --- |
-| Inline provider selection | `google` and `deepgram` select their adapters internally | Profile strings, `req_llm`, adapter fields and invalid option overrides reject |
-| Save/publish/prepare | All effective speech/model/phone requirements resolve for the tenant | Missing/revoked/wrong-tenant credential or unknown service creates no new revision/routes |
-| Opening and transfers | Independent voice and destination credentials work with default/override rules | Missing later-destination credential blocks save; activation failure preserves source recovery |
-| Telnyx | Signed incoming call and outbound accepted phone transfer | Invalid signature/timestamp/connection, application fallback, wrong tenant and duplicate dial reject |
-| Twilio | Voice callback, signed WSS media and outbound accepted transfer | Wrong SID/token/URL signature; failed auth consumes no media token or installs a waiter; pending/rotated lease races fail safely |
-| Durable isolation | Tenant/canonical service identity scopes persisted duplicate claims | Matching aliases/event/leg IDs in different tenants cannot cross claims, including replay after restart |
-| Live isolation | Admitted legs retain exact identity and bounded credentials during DB outage | Credential-source failure is tested separately from admission-only outage; no new dial, tenant cache crossover or speculative redial |
-| Rotation/revocation | New calls select current version; active lifetime is explicit | Revoked version cannot admit a new call; key loss/ciphertext swapping fails safely |
-| Persistence/inspection | Credentials encrypted; definitions/plans/archives contain safe references | API keys still hash-only; no plaintext/ciphertext payload in call artifacts or logs |
-| Platform restart | Database/S3/HTTP/key settings from env; provider auth from tenant DB | No provider env fallback, runtime TOML loader, old-plan activation or capability-profile lookup |
-| Database configuration | Prefixed URL/pool variables win; generic aliases work; development uses `vxpipe_dev` and pool 10 without either pair | Invalid selected values fail safely; retired alias cannot configure persistence; test database/pool are not overridden; no development DB default outside development |
-| No alternate provider configuration | Superseded readers/merges/branches are deleted, not disabled | Old env/application/file settings cannot rescue missing DB credentials or override definition options; no SDK ambient lookup or compatibility mode |
+| Boundary | Required evidence |
+| --- | --- |
+| Inline selection | Actual provider/model and supported options select internal adapters; retired profiles/public adapter fields reject. |
+| Save/publish/prepare | Every effective requirement, including later destinations, resolves for the tenant before a write; missing/wrong-tenant/inactive bindings fail safely. |
+| AI/speech construction | Opening, connection, agent, destination, briefing and restoration readers use the injected DB source; actual adapters receive the exact selected credential. |
+| Telnyx | Existing commands and webhook verification use matching tenant credentials/metadata; invalid auth or unavailable credentials produce no dispatch/request. |
+| Twilio | Existing REST, webhook and WSS boundaries use matching tenant auth; failed authentication consumes no media token or waiter. |
+| Tenant service isolation | Live and persisted lookups cannot cross tenants with matching aliases or provider event/leg IDs. |
+| Reader failure | Missing/undecryptable/inactive credentials fail before new provider work; existing initialized clients retain their normal owned lifetime. |
+| Persistence/privacy | Recoverable credentials are encrypted; Vxpipe API keys remain hash-only; definitions, plans, archives, inspection and logs exclude credential payloads. |
+| Encryption-key rotation | Re-encryption and restart preserve the exact tenant credential values; verified completion permits removal of the old platform key. |
+| Platform env | Database/S3/HTTP/key settings load from env; required placeholders and commented optional settings appear in visible `env.sample`. |
+| Database aliases | Approved precedence/defaults, invalid-value failure and test-database isolation hold. |
+| Removed readers | No provider env/application/TOML/profile fallback, SDK ambient discovery or obsolete `apps/vxpipe_config` consumer remains. |
 
 ## Scope and rejected alternatives
 
+- Rotating/revoking third-party credentials, backup/restore drills, carrier verification-key overlap,
+  OAuth lifecycle work and broad transfer/recovery demonstrations are excluded. Existing
+  inactive-status validation remains part of safe reads. Platform-owned encryption-key rotation
+  is included; it changes the storage protection, not the third-party credential values.
 - This includes tenant credentials for hosted AI/speech and Telnyx/Twilio. It does not move
   platform S3 credentials to tenant storage or introduce platform-shared provider accounts.
 - Capability profiles and public adapter fields are removed. Definition defaults supply reuse;
@@ -570,10 +551,10 @@ Every case is required; append concrete evidence under its owning checkpoint.
   usable upstream. It verifies local requirements; activation handles later failure explicitly.
 - No general OAuth onboarding, arbitrary secret-file reads, cross-provider fallback, automatic
   redial, new telephony protocol or unrelated MCP credential migration is included.
-- No new management UI is needed for the first slices. The trusted operator interface must be
-  sufficient to reproduce each runnable flow; rendered verification applies to UI changes.
-- Existing runtime source is not changed by this planning document. Superseded behavior is removed
-  by the implementation checkpoints, with migration evidence and no retained live legacy fallback.
+- No new management UI is needed. Trusted provisioning plus metadata inspection must support
+  setup; rendered verification applies if the cutover actually changes UI behavior.
+- Existing transfer/recovery/media behavior stays in its owning milestones. Fix a regression
+  introduced by the cutover; unrelated defects and enhancements are separate work.
 
 ## Preparatory worktree cleanup
 
@@ -599,19 +580,27 @@ Implementation boxes stay unchecked until their runnable exits and failure cases
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
 | 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
-| 2 — Opening and transfers | Opening/human-entry slice implemented; transfers pending | Four database-backed opening checks and 23 Engine opening tests pass. The playback gate now labels all opening frames private; cache reuse is scoped to tenant/binding and cannot rescue a revoked opening credential. Tenant identifier correction is committed separately. All five root gates pass: 1,510 tests, zero failures, 30 excluded (seed 235296), after a separate [policy-shutdown fix](../room-policy-failure-ownership.md) for missing transfer failure progress/history. Native audio passes this run; its earlier timing cause remains unexplained. See [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md). |
-| 3 — Telnyx tenant phone flow | Not started | Pending |
-| 4 — Twilio tenant phone flow | Not started | Pending |
-| 5 — Remaining provider requests | Not started | Pending |
-| 6 — Live credential rotation | Not started | Pending |
-| 7 — Platform restart and cutover | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
+| 2 — AI/speech credential readers | Opening reader verified; remaining reader audit/tests pending | Four database-backed opening checks and 23 Engine opening tests pass. The playback gate now labels all opening frames private; cache reuse is scoped to tenant/binding and cannot rescue a revoked opening credential. Tenant identifier correction is committed separately. All five root gates pass: 1,510 tests, zero failures, 30 excluded (seed 235296), after a separate [policy-shutdown fix](../room-policy-failure-ownership.md) for missing transfer failure progress/history. Native audio passes this run; its earlier timing cause remains unexplained. See [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md). |
+| 3 — Telnyx credential readers | Not started | Pending |
+| 4 — Twilio credential readers | Not started | Pending |
+| 5 — Existing provider credential integrations | Not started | Pending |
+| 6 — Platform encryption-key rotation | Not started | Pending |
+| 7 — Platform configuration and cleanup | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
 
-- [ ] Demonstrate all runnable exits and acceptance cases.
+- [ ] Verify every credential/configuration boundary and checkpoint exit above.
 - [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates)
   after independent implementation review.
 - [ ] Update this milestone, index and related documentation with actual implementation evidence.
 
 ## Specification review
+
+Scope correction (2026-09-15): local review traced the user's DB-reader clarification against every
+checkpoint. Removed third-party credential lifecycle feature work, narrowed existing-flow acceptance
+to credential boundaries and retained tenant isolation/authentication/no-fallback requirements.
+A subsequent user clarification explicitly retains platform-owned encryption-key rotation.
+The seven-checkpoint count remains; scope and implementation evidence are distinct. No new runtime
+code is included in this scope commit. The independent review history below applies to the earlier
+specification; final independent implementation review remains pending after the reviewer usage limit.
 
 Local source review on 2026-09-15 traced profile selection, provider startup, prepared-plan
 encoding, tenant administration, carrier service fallback, webhook/WSS authentication, outbound
@@ -623,9 +612,9 @@ tenant-scoped deduplication, non-consuming Twilio auth-lease discovery, and sepa
 versus admission-storage outage tests. Each is now specified in the carrier contracts, owning
 checkpoints and acceptance matrix. Bounded re-review reported no remaining blocking findings
 or vertical-order contradiction. This is specification review, not runtime implementation approval.
-The later explicit-deletion clarification and checkpoint 7 removal/negative-test tasks also
+The later explicit-deletion clarification and platform removal/negative-test tasks also
 received bounded agent review with no blocking findings; no alternate configuration path is retained.
-The database alias/default contract and its checkpoint 7 tasks received bounded agent review
+The database alias/default contract and its platform configuration tasks received bounded agent review
 against current runtime/development/test configuration, with no blocking findings or order change.
 The explicit speech-profile reader deletion and shared artifact bucket tasks received independent
 review on 2026-09-15. The review confirmed their dependency order and added missing/blank/invalid/

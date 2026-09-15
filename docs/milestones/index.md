@@ -17,9 +17,11 @@ readiness and participant wait sounds in response to that review; the user autho
 working platform and decided to proceed with packaging and retention.
 Milestone 24 records the 2026-09-15 provider-credential change plan: inline upstream
 provider/model selections, no capability profiles, encrypted tenant AI/speech and Telnyx/Twilio
-credentials, and platform environment settings. Its checkpoints deliver runnable call flows,
-including carrier ingress authentication, transfers and cleanup. ReqLLM adapter selection stays
-internal. Superseded provider configuration paths must be deleted, not retained as optional or
+credentials, and platform environment settings. The user's scope correction limits the work to
+existing credential readers and their focused integration checks. Third-party API-key rotation
+is excluded; platform-owned encryption-key rotation remains included. Existing transfer/recovery
+and carrier workflows are reused. ReqLLM adapter selection stays internal. Superseded provider
+configuration paths must be deleted, not retained as optional or
 legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
 checkpoint 1 now integrates encrypted Google/Deepgram provisioning, inline selections, transactional
 credential checks and fresh runtime resolution. The synthetic tenant voice flow and 19 focused
@@ -34,12 +36,12 @@ and tenant/binding cache isolation with revocation checks. A separately tested
 [policy-shutdown fix](../room-policy-failure-ownership.md) resolves missing transfer failure
 progress/history during adopted speech loss. All five root gates pass: 1,510 tests, zero failures,
 30 exclusions (seed 235296). Native audio passes this run; its earlier timing cause remains
-unexplained. Tenant transfer and recovery acceptance remain open.
+unexplained. The remaining AI/speech credential-reader audit and focused checks are open.
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did
-not recur; its cause remains unproven. The full milestone remains unchecked pending its call flows
-and remaining configuration cutover.
+not recur; its cause remains unproven. The full milestone remains unchecked pending remaining
+credential readers, platform encryption-key rotation and configuration cleanup.
 The remaining platform database contract will use `VXPIPE_DB_URL` before `DATABASE_URL` and
 `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; development needs no database env variables and
 defaults to `vxpipe_dev` with pool size 10.
@@ -94,7 +96,7 @@ progress without claiming the entire milestone is complete.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
-24. [ ] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Deliver inline upstream provider/model calls and tenant-authenticated Telnyx/Twilio calls through vertical checkpoints; validate encrypted tenant credentials before save and keep platform infrastructure env-backed.
+24. [ ] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Move existing provider credential readers to tenant DB storage, retain inline selections, rotate the platform encryption key and remove obsolete configuration paths.
 25. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 26. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -365,7 +367,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Whole-call retention and deletion**: G5; R19–R21.
 - **Context compaction and supported LLM fallback**: G13; R47, R48, R50.
 - **Transfer readiness and participant wait sounds**: user-requested pre-delivery refinement of G7/G8/G9; all required resources ready, independent local playback, URL/null/default configuration and cue-before-bridge completion.
-- **Tenant-scoped provider credentials and platform configuration**: user-requested replacement of capability profiles/TOML with inline upstream provider/model selections and encrypted tenant credentials, including Telnyx/Twilio control/webhook/media authentication; runnable vertical checkpoints, no application credential fallback, platform infrastructure env-backed and ReqLLM internal.
+- **Tenant-scoped provider credentials and platform configuration**: replace capability profiles/TOML with inline upstream selections and encrypted tenant credential readers, including existing Telnyx/Twilio control/webhook/media authentication; no application credential fallback, platform infrastructure env-backed and ReqLLM internal. The [scope correction](../credential-cutover-scope.md) excludes third-party API-key rotation and broad call-flow feature work, while retaining platform encryption-key rotation.
 - **Embedded and JSON-configured container delivery**: Container/OTP boundary; complete approved scope.
 
 ## Specification review evidence
@@ -405,7 +407,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
-| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Specification source-reviewed and agent-reviewed | Lorentz identified durable tenant deduplication, non-consuming Twilio auth-lease discovery and distinct credential-outage checks; corrected and re-reviewed without remaining blockers. Seven vertical checkpoints; implementation remains unchecked. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification reviewed; user scope correction locally reviewed | Seven credential/configuration checkpoints: one complete, two partial and four not started. Existing-reader migration and platform encryption-key rotation remain; third-party credential rotation and broad call-flow demonstrations are excluded. Final independent implementation review remains pending. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification
