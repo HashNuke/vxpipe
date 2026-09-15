@@ -1,14 +1,14 @@
-# Embedded and JSON-configured container delivery
+# Embedded and container delivery
 
 Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
-Prerequisites: [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
+Prerequisites: [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
 Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical definition boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](../gateway-console-boundary.md).
 
 ## Runnable outcome
 
 Docker is the primary packaged distribution. The same approved call flow runs in
-the `vxpipe/vxpipe` image using a mounted versioned JSON configuration, and the
+the `vxpipe/vxpipe` image using platform environment settings and encrypted tenant records, and the
 components can also be consumed as libraries within an Elixir host application.
 Operators can migrate/bootstrap, check readiness, join through configured ingress
 and shut down without silently losing or resurrecting work.
@@ -34,8 +34,8 @@ user explicitly releases that hold.
   that components can be used as libraries inside users' Elixir applications,
   linking to working host/dependency examples without requiring the Docker image.
 - OTP namespaced application settings are canonical at application boundaries; reusable supervisors accept explicit options for embedded hosts. No runtime Mix.env branching or dependency config/<env>.exs assumptions. Read deployment environment only in config/runtime.exs and normalize once.
-- Provide an image/release runner accepting an explicit --config path for one versioned JSON file. Inline definitions and pinned resource references normalize through the same typed compiler/settings as embedded use. Closed registries only; reject unknown versions/unsupported enabled features rather than loading arbitrary modules/atoms.
-- Document API-key/provider/MCP secret provisioning through runtime environment/mounted secret references/private configuration boundaries. Public definitions/plans, errors, logs and image layers never contain credentials; no env-file contents committed. Distinguish provider credentials from gateway-issued hash-only API keys and one-time bootstrap output.
+- Use the platform environment contract from the credential milestone for the image/release runner. JSON call definitions and pinned resource references use the same typed compiler as embedded use. Add no deployment JSON/TOML loader or provider-global fallback. Closed catalogs reject unsupported provider/options and arbitrary module selection.
+- Document encrypted tenant provider provisioning through protected operator input and platform keyring injection through the runtime environment. Preserve the existing private MCP credential boundary. Public definitions/plans, errors, logs and image layers never contain credentials; no env-file contents committed. Distinguish provider credentials from gateway-issued hash-only API keys and one-time bootstrap output.
 - An embedded engine with inline trusted configuration can run without PostgreSQL; full durable tenant preparation/admission still requires configured persistence. Runtime archive is async, not a database-free admission guarantee. Reusable host app has no dependency on gateway, sample frontend or development Tailscale ingress.
 - A host may additionally embed `vxpipe_gateway` without Phoenix or `vxpipe_console`.
   Document its explicit supervision/configuration and mountable Plug/protocol interface,
@@ -57,9 +57,9 @@ user explicitly releases that hold.
 
 ## Implementation checklist
 
-- [ ] Red-test application-option/JSON normalization parity, missing config/secrets, unsupported version/adapter and embedded isolation.
-- [ ] Implement versioned config loader, release/image entrypoint, explicit migration/bootstrap commands and runtime health/shutdown integration.
-- [ ] Add container build/run instructions with safe mounted config examples and no real
+- [ ] Red-test platform env/application-option parity, unavailable tenant credentials, unsupported definition/provider and embedded isolation.
+- [ ] Implement the release/image entrypoint, explicit migration/bootstrap commands and runtime health/shutdown integration using the established platform env and tenant DB configuration.
+- [ ] Add container build/run instructions with safe platform env and tenant provisioning examples and no real
   secrets; verify licenses and required notices for the pinned direct and transitive
   dependencies before distributing the image.
 - [ ] Lead the root README with tested Docker instructions for `vxpipe/vxpipe`,
@@ -79,7 +79,7 @@ user explicitly releases that hold.
   Verify its linked Elixir library example runs in a consuming host without
   Docker. README commands must match the built/released artifact and the source
   repository must remain `HashNuke/vxpipe`.
-- [ ] Equivalent OTP and JSON inputs produce equivalent plans/policies without ambient Mix.env behavior in a consuming app.
+- [ ] Equivalent inline definitions produce equivalent plans/policies through hosted tenant storage and explicit embedded options, without ambient Mix.env behavior in a consuming app.
 - [ ] Missing invalid config/secrets fail safely before unauthorized startup; image/build/logs contain no credentials and public strings cannot choose modules/atoms.
 - [ ] Embedded engine runs without Ecto/gateway/sample; full container does not claim durable admission when PG is unavailable.
 - [ ] Embedded gateway admission/signaling runs without console/Phoenix, using explicitly
@@ -96,7 +96,7 @@ user explicitly releases that hold.
 
 ## Manual verification
 
-1. Build the image from the implementation checkpoint and mount a synthetic configuration plus separately provisioned secrets.
+1. Build the image from the implementation checkpoint, inject platform settings and provision synthetic tenant credentials through the established operator workflow.
 2. Run documented migrations/bootstrap, inspect safe health responses, prepare and join a call through real configured ingress.
 3. Exercise one end-to-end approved flow and compare with an embedded host fixture using equivalent settings.
 4. Restart configuration, fail an archive sink during a live call, then gracefully stop the release; inspect correct admission shutdown and truthful persisted artifacts.
@@ -145,3 +145,10 @@ and loader, so they remain implementation gates. This changes documentation and
 distribution priorities without changing prerequisites, implementation order,
 application boundaries, or the pre-delivery hold. No image has been built or
 published by this follow-up, and no implementation checkbox is completed.
+
+### Credential configuration scope review (2026-09-16)
+
+The approved credential milestone supersedes the deployment JSON-loader proposal. Delivery uses
+platform env plus encrypted tenant credentials; JSON remains call-definition data. The prerequisite
+now includes that configuration cutover. The packaging hold, embedded library boundary and delivery
+acceptance remain unchanged. This is a specification correction, not implemented container support.

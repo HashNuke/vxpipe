@@ -1,6 +1,13 @@
 # Twilio through the common telephony contract
 
 Status: implementation in progress. Specification review: approved (2026-09-08).
+
+Credential configuration update (2026-09-16): new legs now resolve encrypted tenant service
+records; existing owners retain their initialized configuration. The earlier application-scope
+lookup/configuration evidence below is historical and superseded. See
+[tenant telephony setup](../tenant-telephony-services.md). This changes credential readers only;
+this milestone still owns its original carrier/audio acceptance.
+
 Prerequisites: [Telnyx/common telephony slice](telnyx-calls.md), including its tested provider-neutral adapter contract.
 Sources: [Common telephony boundary](../../labnotes/20260905-0405-call-definition-design.md#keep-telephony-provider-neutral-and-pin-the-resolved-definition-in-the-room); [transfer and machine behavior](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [R32](../call-definition-gap-review.md).
 

@@ -16,12 +16,10 @@ commands to start your first call when the Docker package is ready. The
 
 ## Prepare your configuration
 
-The planned quickstart uses two local files:
-
-- `vxpipe.json`: your call and runtime settings, mounted read-only at
-  `/etc/vxpipe/config.json`.
-- `.env`: credentials for your configured providers, passed to the container at
-  startup.
+The planned quickstart injects platform settings from an ignored `.env` based on the visible
+[`env.sample`](../env.sample). PostgreSQL stores provisioned tenant provider credentials and call
+definitions; the operator supplies the encryption keyring separately from the database. There is
+no deployment JSON/TOML loader. JSON remains a supported format for call-definition inputs.
 
 The first Docker release will include a working minimal configuration and the
 exact environment variable names. The example maps HTTP port 4000; the final

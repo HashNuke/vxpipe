@@ -1,6 +1,13 @@
 # Telnyx calls and phone transfers
 
 Status: complete (2026-09-11). Specification review: approved (2026-09-08).
+
+Credential configuration update (2026-09-16): new legs now resolve encrypted tenant service
+records; existing owners retain their initialized configuration. The earlier application-scope
+lookup/configuration evidence below is historical and superseded. See
+[tenant telephony setup](../tenant-telephony-services.md). This changes credential readers only;
+this milestone still owns its original carrier/audio acceptance.
+
 Prerequisites: [Human web transfers](human-web-transfers.md), including admission, private preparation, mixer and media policy.
 Sources: [Common telephony intent](../../labnotes/20260905-0405-call-definition-design.md#keep-telephony-provider-neutral-and-pin-the-resolved-definition-in-the-room); [protected destinations](../../labnotes/20260905-0405-call-definition-design.md#protected-dynamic-dial-destinations--approved-r13-decision); [machine detection](../../labnotes/20260905-0405-call-definition-design.md#provider-answering-machine-detection--resolved-r32).
 

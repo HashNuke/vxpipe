@@ -12,9 +12,10 @@ Docker release coming soon; this command is a preview.
 
 ```shell
 docker run --rm -p 4000:4000 --env-file .env \
-  -v "$PWD/vxpipe.json:/etc/vxpipe/config.json:ro" \
-  vxpipe/vxpipe --config /etc/vxpipe/config.json
+  vxpipe/vxpipe
 ```
+
+Platform settings come from `env.sample`; provision provider credentials per tenant in PostgreSQL.
 
 Then open the [voice console](http://localhost:4000/pipecat-console).
 

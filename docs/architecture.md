@@ -640,7 +640,7 @@ Prompt instructions are not a security guarantee. Vxpipe still enforces tool
 access, trusted identity, and argument checks; no confirmation token, approval
 endpoint, or generic confirmation state machine is introduced.
 
-R47 keeps provider-supported settings in reusable configured services/profiles;
+R47 keeps provider-supported settings in validated inline capability selections and tenant carrier services;
 conversation, interruption, and call-duration policy remain engine-owned. Reject
 known unsupported options/combinations during definition validation rather than
 silently dropping them. Failures discoverable only from the provider use normal
@@ -703,10 +703,11 @@ implementation details; the deferred general result/document-inspection design
 is unchanged.
 
 R50 permits explicitly configured LLM provider-native/router fallback only where
-the selected agent-runtime/ReqLLM provider surface supports the provider options. A pinned model
-capability profile may contribute recursively data-valued generation options over application
-defaults; credentials, streaming selection, and executable transport/hooks remain
-application-owned. The provider constructor validates the merged settings before room startup.
+the selected agent-runtime/ReqLLM provider surface supports the provider options. A pinned inline model
+selection supplies supported data-valued options. Fresh construction resolves credentials from
+the tenant database; transport hooks, streaming and resource limits stay application-owned. The
+provider constructor validates the selection before startup. The existing Zenmux integration uses
+one Zenmux key even when its model/routing data names downstream providers.
 This does not add a Vxpipe fallback schema, direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
 permission, privacy, and usage constraints, recording actual observed provider/
 model attribution without inventing hidden upstream attempts or IDs. This does
@@ -718,14 +719,14 @@ remain separate from runtime implementation.
 ### First messages and transfer responsibility
 
 Optional call-level `opening_audio` plays to `entry_caller` before
-`entry_receiver` begins the normal conversation. Schema `20260913.01` represents its source
+`entry_receiver` begins the normal conversation. Schema `20260915.01` represents its source
 as the closed tagged object documented in [the opening-audio contract](opening-audio-contract.md):
-fixed text or an HTTPS file URL. Text requires its own `opening_audio.text_to_speech` capability
-profile, resolved independently of participant capabilities and call defaults. Its temporary
+fixed text or an HTTPS file URL. Text requires its own inline `opening_audio.text_to_speech`
+selection, resolved independently of participant capabilities and call defaults. Its temporary
 supervised TTS capability is attributed to the entry caller with no agent activation and released
 after playback. An initial human receiver is supported. There is no inherited/fallback agent
-voice, and an absent or unavailable opening profile fails explicitly. The text itself is fixed;
-an LLM does not generate it. File playback requires no TTS profile.
+voice, and an absent or unavailable opening selection/credential fails explicitly. The text itself is fixed;
+an LLM does not generate it. File playback requires no TTS credential.
 
 Room and participant capabilities may start and warm up while opening audio
 plays. The gate controls media delivery, not process startup: do not route user
@@ -750,7 +751,7 @@ text or voice must not reuse stale audio; secrets belong in neither cache keys
 nor logs. The configured reusable asset is not a per-call recording/export, and
 does not acquire per-call retention. The application owns one bounded in-memory LRU for file and
 generated-text assets. File keys hash tenant, exact URL, and a media profile. Text keys hash tenant,
-exact text, selected capability-profile reference, provider/model/voice, output-affecting settings,
+exact text, non-secret tenant credential binding, provider/model/voice, output-affecting settings,
 and a render profile. A supervised
 forwarding sink collects only bounded complete provider PCM on a text miss; a hit uses the ordinary
 temporary asset player without a new TTS request. Asset preparation itself starts no call tree
@@ -1024,7 +1025,7 @@ distinct equivalent and retains `nil` instead of duplicating its Call SID into a
 Matching includes the optional value, so adapters cannot discard a real session identifier merely
 because another carrier lacks one.
 
-Configured telephony services share service ID, ingress key, application/tenant scope, optional
+Configured telephony services share canonical service ID, ingress key, tenant scope, optional
 outbound number, public TLS base, media-token lifetime, and closed machine-detection policy. A
 provider profile owns the rest. Telnyx retains its Voice API connection ID, Ed25519 public key and
 API key; Twilio retains its Account SID and Auth Token. The Twilio Account SID becomes the safe
@@ -1121,26 +1122,22 @@ dial submission without selecting by phone number. The remaining authenticated b
 Voice API events are acknowledged through `ignore`.
 
 Gateway exposes this boundary at
-`POST /api/telephony/telnyx/:ingress_key/events`. The deployment configuration resolves the opaque
-ingress key to one enabled application- or tenant-scoped service, its expected Voice API connection
-ID, and its webhook verifier. The same configured service pins the provider command adapter and
-secret options, an optional E.164 outbound origination number, a provider-reachable HTTPS public
-base URL, the short media-token lifetime, and a closed answering-machine setting that defaults to
-`disabled` and may be set to `detect`. The resolved room request chooses the configured service and
-destination but cannot override that provider-profile setting. Outbound lookup first selects an exact
-tenant-scoped service ID and otherwise falls back to the application-scoped service with that ID; it
-never uses another tenant's configuration. The origination number is deployment configuration rather
-than a call-definition value or a model-selected destination.
-Plain HTTP, missing-host, userinfo-bearing, query-bearing, fragment-bearing, and missing-secret
-configurations fail during startup. Credentials and verifier material remain inside that
-configured service and are never passed to the ingress handler or included in its derived
-inspection; the handler receives only a safe service identity and a common event. The route is
-backend-only for CORS, limits the untouched request body to 128 KiB, authenticates before JSON
-decoding, and rejects an otherwise valid event whose
-`connection_id` does not match the selected service. Authenticated events outside the consumed
-vocabulary are acknowledged without dispatch. This is only the provider ingress seam: durable
-admission, event deduplication, and exact call/participant/leg correlation are owned by Calls and
-are not implied by authentication or decoding alone.
+`POST /api/telephony/telnyx/:ingress_key/events`. New legs resolve the opaque ingress key through
+the stored tenant service, then load its exact encrypted credential and verification metadata.
+Outbound lookup requires the prepared participant's canonical tenant/service/provider/account/
+credential reference. The alias never falls back to application configuration. Stored service
+metadata owns the originating number, machine-detection policy and existing media/timer settings;
+`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` supplies the externally visible HTTPS origin and mounted path.
+
+The HTTP boundary keeps the original body for verification. Bounded untrusted identifiers can
+locate an existing leg's private initialized configuration; they do not authorize dispatch.
+Signature, timestamp and account checks run before the normal handler receives that snapshot and
+a normalized event. Dispatch uses the same selected owner, including during storage outage, and
+cannot adopt a replacement after verification. Private configuration is not a public projection.
+The route remains backend-only for CORS and limits the body to 128 KiB. Authenticated unused events
+are acknowledged without dispatch. Calls owns durable admission and tenant/service-scoped
+idempotency; Gateway owns exact live correlation. See [tenant telephony services](tenant-telephony-services.md).
+
 
 Incoming leg activation derives one internal telephony-leg ID, constructs the exact media binding,
 issues its short-lived token, and submits one provider-neutral answer command through the pinned
@@ -1163,9 +1160,8 @@ Saving a definition now derives a separate durable inbound telephony route for e
 definition revision and participant ref to the configured service ref plus literal E.164 number;
 it stores no carrier credentials. Publication activates these routes in the same transaction that
 switches the definition's web routes, and publishing a later revision deactivates the earlier
-revision's routes. A tenant-scoped service lookup is constrained to that tenant. An
-application-scoped lookup may cross tenants only when service and number identify exactly one
-published route; zero or multiple matches fail closed. This gives authenticated ingress a durable
+revision's routes. Service lookup is constrained to the authenticated tenant; zero or multiple
+published matches fail closed. Application-wide carrier lookup is removed. This gives ingress a durable
 definition-selection boundary without using caller identity or a provider leg ID as the route.
 
 Calls claims each normalized incoming event against that published route before a room can start.
@@ -1201,9 +1197,9 @@ terminal transition is idempotent; a different incarnation or mismatched claim i
 rather than silently reassigned.
 
 Gateway's default telephony ingress handler starts one temporary OTP leg owner keyed by configured
-service plus provider and provider leg ID. The HTTP boundary supplies that default owner with the
-same immutable configured-service registry and media-admission process used to authenticate the
-webhook and admit its media socket; custom ingress/backends remain untouched. The owner performs
+tenant/canonical service plus provider and provider leg ID. The HTTP boundary supplies the
+verified private configuration and the existing media-admission process. Custom ingress handlers
+and backends receive this same private snapshot at their trusted boundary. The owner performs
 the durable claim itself, then serializes room startup, carrier answer submission, exact live
 evidence, and lifecycle projection before it accepts ordinary later callbacks. Registering before
 the claim closes the retry window between transaction commit and live ownership: concurrent copies
@@ -3426,18 +3422,21 @@ must not branch on `Mix.env()`. Deployment environment variables are read only
 from `config/runtime.exs` and translated into application settings before the
 applications start.
 
-The Docker runner accepts one versioned JSON configuration through an explicit
-`--config` path. The same schema permits pinned resource references or complete
-inline definitions for a standalone process.
+Platform environment settings and encrypted tenant storage are the hosted configuration sources.
+The visible `env.sample` catalogs database, encryption keyring, shared bucket and listener/origin
+settings. Provider/model/options are inline call-definition data, while tenant credentials are
+provisioned through the Calls/Persistence boundary. There is no deployment JSON/TOML loader or
+provider env/global fallback. JSON remains a supported representation of call definitions.
 
-The JSON loader is an adapter into the same validated application options. It
-must not create an independent configuration path or allow raw string-keyed JSON
-to flow through runtime processes.
+Closed code-owned catalogs choose supported integrations; public input cannot select arbitrary
+BEAM modules. Each new provider client resolves its tenant binding. Existing clients retain their
+private initialized configuration for their owned lifetime. Plans, public errors and history
+exclude secret payloads. Platform-owned key re-encryption preserves the upstream credentials.
 
-External strings resolve through closed registries. JSON never selects an
-arbitrary BEAM module and never uses `String.to_atom/1`. Provider credentials are
-runtime secret references to environment variables, mounted files, or an
-external secret store. Resolved plans and validation errors are redacted.
+The container delivery milestone remains held and unimplemented. Its eventual runner must use
+these same platform settings and stored tenant credentials; no new configuration-file mechanism
+is required. Embedded hosts can still supply explicit options and credential sources, including
+credential-free fixture/Morse use without Ecto.
 
 A resolved room plan pins:
 
@@ -3447,7 +3446,7 @@ A resolved room plan pins:
 - transport, codec, and media policies;
 - turn, interruption, and tool policies, plus supported configured LLM routing options;
 - artifact capture and event policies; and
-- secret reference generations without storing secret values.
+- non-secret tenant credential bindings without storing secret values or encryption-key IDs.
 
 Stored-data retention periods are not pinned in the room plan; the current
 application/tenant setting applies to existing and future calls.
@@ -3910,8 +3909,20 @@ The implementation and verification evidence are detailed in
 
 ### Current definition-driven call runtime
 
+Current schema `20260915.01` uses inline provider/model/options and tenant credential bindings.
+The ReqLLM runtime supports the existing Google/Zenmux model integrations; speech uses Deepgram
+or credential-free Morse, while model fixtures are credential-free. Prepared hosted phone plans pin canonical tenant service
+references, and each new live reader resolves the corresponding encrypted record. See
+[inline selections](inline-provider-selections.md), [reader boundaries](credential-reader-boundaries.md)
+and [tenant telephony services](tenant-telephony-services.md) for current contracts.
+
+#### Historical initial implementation
+
+The following records the original staged implementation, including superseded Jido, profile and
+global-credential behavior. It is not current configuration or setup guidance.
+
 The initial definition checkpoints released engine-owned schema `20260906.02`; the
-current schema is `20260910.01`. It adds per-tool conversation admission: omission resolves
+then-current schema was `20260910.01`. It added per-tool conversation admission: omission resolves
 to `blocking`, while only explicit `"non_blocking"` opts into later caller turns during
 pending work. Both modes always use the same independently supervised Call Engine worker
 path. Resource ID/revision and trusted
@@ -4011,11 +4022,12 @@ legacy preset model inference disabled unless an embedding host configures it ex
 ### Implemented prepared-call admission slice
 
 The durable development path supersedes direct trusted room creation when PostgreSQL is
-configured, while preserving it as a database-free fallback:
+configured. Hosted admission fails when persistence is unavailable; database-free use is an
+explicit embedding choice, not a hosted fallback:
 
-1. Console starts a trusted sample process before its endpoint. That process uses only
-   public Calls workflows to bootstrap a fresh development tenant/API key and publish the
-   configured sample definition. Its inspect projection excludes the plaintext key and
+1. Console starts a trusted sample process before its endpoint. It selects the stable provisioned
+   `VXPIPE_DEV_TENANT`, issues a server-held call-scoped API key and publishes the sample definition
+   through public Calls workflows. It does not bootstrap a replacement tenant on restart. Its inspect projection excludes the plaintext key and
    initial variables.
 2. `POST /sample/calls` authenticates with that server-held key, prepares a durable call,
    and returns only the public tenant/call/participant locator and opaque join token.
@@ -4054,8 +4066,8 @@ state or live-session responses.
    preserving the same participant and conversation contracts.
 8. **Durability and operations:** add snapshots, replay, exporters, cluster
    ownership, admission control, health, tracing, and retention.
-9. **JSON release and image:** compile mounted JSON into a redacted resolved
-   plan, start the release, and verify readiness, drain, and deterministic exit.
+9. **Release and image:** load platform environment settings and provisioned tenant records,
+   start the release, and verify readiness, drain, and deterministic exit.
 10. **Second-adapter proof:** implement a minimal test-only second protocol
     adapter to ensure RTVI concepts have not leaked into `vxpipe_call_engine`.
 
