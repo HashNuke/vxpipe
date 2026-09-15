@@ -8,6 +8,8 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
 
   @spec decode(binary()) :: {:ok, ResolvedCallPlan.t()} | {:error, :invalid_stored_call_plan}
   def decode(encoded) when is_binary(encoded) do
+    ResolvedCallPlan.ensure_data_loaded!()
+
     case :erlang.binary_to_term(encoded, [:safe]) do
       %ResolvedCallPlan{} = plan -> {:ok, plan}
       _invalid -> {:error, :invalid_stored_call_plan}

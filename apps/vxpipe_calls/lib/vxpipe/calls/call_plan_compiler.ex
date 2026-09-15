@@ -2,7 +2,7 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
   @moduledoc false
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.Calls.CallDurationSettings
+  alias Vxpipe.Calls.{CallDurationSettings, TelephonyPlanBindings}
 
   @spec compile(
           Vxpipe.CallEngine.CallDefinition.t(),
@@ -17,13 +17,15 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
   def compile(definition, invocation, options) when is_list(options) do
     with {:ok, registries} <- registries(options),
          {:ok, duration_options} <-
-           CallDurationSettings.compiler_options(invocation.tenant_id, options) do
-      CallEngine.compile_definition(
-        definition,
-        invocation,
-        registries,
-        engine_options(options) ++ duration_options
-      )
+           CallDurationSettings.compiler_options(invocation.tenant_id, options),
+         {:ok, plan} <-
+           CallEngine.compile_definition(
+             definition,
+             invocation,
+             registries,
+             engine_options(options) ++ duration_options
+           ) do
+      TelephonyPlanBindings.pin(plan, options)
     end
   end
 

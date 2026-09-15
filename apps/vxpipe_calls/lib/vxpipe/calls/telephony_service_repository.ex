@@ -22,6 +22,9 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
   @doc """
   Lock exact tenant services and active linked credentials around a DB-only write callback.
 
+  Each requirement has a name and error path. When it includes a `reference`, compare that
+  complete stable identity with the locked service before invoking the callback. Compare every
+  supplied reference, including repeated aliases; reuse locks without dropping mismatches.
   Repositories used by the callback must share this repository's transaction context.
   """
   @callback with_active(term(), String.t(), [map()], (-> term())) :: term()

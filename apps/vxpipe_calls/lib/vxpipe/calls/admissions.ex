@@ -41,7 +41,7 @@ defmodule Vxpipe.Calls.Admissions do
          {:ok, token_pair} <-
            build_token(call.plan, participant_key, route.participant_ref, options),
          {:ok, stored_call, _stored_token} <-
-           DefinitionCredentials.with_active(revision, options, fn ->
+           DefinitionCredentials.with_active(revision, call.plan, options, fn ->
              Repositories.call(call_repository, :insert_prepared_call, [call, token_pair.stored])
            end) do
       {:ok, stored_call, token_pair.issued}

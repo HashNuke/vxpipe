@@ -64,9 +64,14 @@ Morse-decoding failure (33 excluded); its unchanged isolated case reproduces. Li
 readers and full umbrella acceptance remain pending. See [service evidence](../../labnotes/20260916-0000-tenant-telephony-services.md).
 Private Telnyx service resolution and transactional definition save/publish/web-preparation guards
 now pass 13 focused checks, Calls 81 and Persistence 106 tests (6 excluded), static gates and
-independent review. Incoming final insertion, canonical plan references and live readers remain
-pending; checkpoint 3 is still partial. The full root run completes 1,554 tests with the same
+independent review. Incoming final insertion and live readers remain pending; checkpoint 3 is
+still partial. The full root run at that checkpoint completes 1,554 tests with the same
 native Morse assertion failure and 33 exclusions; unused-lock checks pass. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+Canonical service/account/credential references now enter hosted plans before their digest
+and are compared under final web-write locks. Focused checks pass for rebinding, duplicate
+references, privacy and historical inspection; broad Calls 84 and Persistence 119 tests pass
+(9 excluded). Live activation enforcement and incoming final insertion remain pending.
+See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the

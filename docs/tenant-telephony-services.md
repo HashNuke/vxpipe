@@ -1,8 +1,8 @@
 # Tenant telephony service storage
 
-Status: trusted Telnyx registration, the operator CLI, private credential resolution and
-definition save/publish/web-preparation guards are implemented. Canonical prepared-plan bindings,
-the incoming admission's final write guard and Gateway live-reader migration remain pending in
+Status: trusted Telnyx registration, the operator CLI, private credential resolution,
+canonical prepared-plan bindings and definition save/publish/web-preparation guards are implemented.
+The incoming admission's final write guard and Gateway live-reader migration remain pending in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage).
 
 ## Ownership and identity
@@ -16,7 +16,7 @@ provider connection ID, public verification key, optional originating number and
 options. It references the credential's stable public UUID. The database foreign key includes
 credential ID, tenant and provider, so changing one cannot select another tenant/provider's key.
 The alias is what a definition names; it is distinct from the canonical service identity that the
-reader cutover must pin. This storage slice does not yet add that prepared-plan binding.
+reader cutover pins in prepared plans.
 
 Only existing Telnyx configuration is accepted here. API keys are provisioned separately through
 [encrypted provider storage](provider-credential-storage.md). Service inputs reject secret fields,
@@ -95,10 +95,44 @@ the guarded operation must share its transaction context. Existing write errors,
 duplicate call IDs, retain their original meaning. Credential-free web definitions need no service
 repository.
 
-Incoming preparation shares the preflight check. Its final insert guard remains pending: that
-change must preserve duplicate-event recovery outside an aborted insert transaction. Canonical
-service/account references and fresh live-leg resolution are also still pending. These guards
-alone do not complete the carrier reader cutover.
+Incoming preparation shares the preflight check and canonical plan binding. Its final insert
+guard remains pending: that change must preserve duplicate-event recovery outside an aborted
+insert transaction. Fresh live-leg resolution and activation enforcement remain pending. These
+guards alone do not complete the carrier reader cutover.
+
+## Prepared service references
+
+The Calls compiler resolves each distinct tenant-local service alias once and projects its
+tenant, canonical service UUID, alias, provider, account/connection identity and credential UUID
+into an Engine-owned `Telephony.ServiceReference`. Participants sharing an alias use the same
+reference. The existing prepared-plan digest includes this metadata; neither a credential value,
+credential version nor encryption-key ID is pinned.
+
+The final web-preparation write compares every participant's reference with the currently locked
+service. A service/account/credential rebind between compile and insertion rejects the write.
+Repeated aliases reuse one locked snapshot, but every reference is compared before the callback;
+a differing second reference cannot disappear through deduplication. Missing or wrong-tenant
+references also reject before a write.
+
+Public connection JSON still accepts only the existing intent fields; callers cannot supply
+canonical pins. Raw embedded Engine compilation remains independent of the host's database and
+leaves the optional reference empty. Historical serialized plans lacking the field remain
+decodable for inspection without silently inserting a new binding. The new write guard rejects
+such unbound phone plans. Live activation and outbound-request enforcement of these references
+remain the next reader slice; this change alone does not reject every old hosted plan at startup.
+
+Cold-process verification exposed an existing safe-decoding dependency on previously loaded plan
+atoms. The codec now asks the Engine plan type to load its fixed data and enum owners before
+using the unchanged safe decoder. The list includes existing prepared-audio, transfer and
+call-variable validator data. Stored bytes never select a module to load. A fresh subprocess
+test covers a pinned plan with bounded call variables and rejects unknown external atoms without
+interning them. A disposable DB fetch also passes before any definition compilation or service
+lookup in the reader process; both current and legacy plan representations remain readable.
+
+Keeping only an alias would permit account changes after preparation. Storing private snapshots
+would leak credentials into immutable history, and pinning encryption-key IDs would couple calls
+to platform re-encryption. Stable non-secret identity avoids those problems while leaving fresh
+credential resolution at the owning live-reader boundary.
 
 ## Alternatives and verification
 

@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
     :transfer_history,
     :variable_permissions
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [telephony_service: nil]
 
   @type t :: %__MODULE__{
           definition_key: String.t(),
@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
           kind: :human | :agent,
           description: nil | String.t(),
           connection: nil | ConnectionIntent.t(),
+          telephony_service: nil | Vxpipe.CallEngine.Telephony.ServiceReference.t(),
           transfer_notice: nil | String.t(),
           prompt: nil | String.t(),
           first_message: nil | atom(),

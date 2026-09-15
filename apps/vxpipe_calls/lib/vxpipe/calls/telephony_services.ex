@@ -8,6 +8,19 @@ defmodule Vxpipe.Calls.TelephonyServices do
   """
 
   alias Vxpipe.Calls.{ProviderAuth, Repositories, ResolvedTelephonyService, TelephonyService}
+  alias Vxpipe.CallEngine.Telephony.ServiceReference
+
+  @doc "Projects stable, non-secret identity for a prepared plan or locked comparison."
+  def reference(%TelephonyService{} = service) do
+    %ServiceReference{
+      tenant_id: service.tenant_key,
+      service_id: service.id,
+      name: service.name,
+      provider: service.provider,
+      provider_connection_id: service.provider_connection_id,
+      credential_id: service.credential_id
+    }
+  end
 
   def register(tenant_key, attributes, options \\ []) do
     with {:ok, service} <- TelephonyService.new(tenant_key, attributes),

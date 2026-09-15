@@ -401,8 +401,14 @@ Depends on the credential store and existing Telnyx integration.
   existing leg construction. Pin safe service identity so an old plan cannot change accounts.
   - [x] Resolve the exact active service credential privately; check every phone destination at
     save/publish/web preparation and hold the binding through the final database write. Incoming
-    preparation shares preflight; its final insert guard, canonical plan binding and live leg
+    preparation shares preflight; its final insert guard and live leg
     construction remain pending. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+  - [x] Pin canonical tenant/service/provider/account/credential identity in prepared plans.
+    Resolve each alias once per host compile, include the metadata in the existing digest, and
+    compare every participant's reference under final web-write locks. Post-compile rebinding
+    fails before insertion. Embedded Engine compilation remains independent; historical plans
+    remain inspectable without repinning. Live activation/reference enforcement is still pending.
+    See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
 - [ ] Replace application/global service credential lookup for existing answer, dial, media and
   hangup commands. Verify the actual adapter receives only the selected tenant credential.
 - [ ] Resolve webhook verification metadata from the stored ingress binding. Preserve raw-body,
@@ -671,10 +677,18 @@ exits and failure cases pass.
 Checkpoint 3 definition-guard follow-up: private exact service resolution and final
 save/publish/web-preparation guards pass 13 focused database tests, Calls 81 and Persistence 106
 tests (6 excluded), root static gates and independent GPT 6 Astra xhigh review. Incoming admission
-shares preflight only; its final insert guard, canonical plan references and live readers remain
-pending. Checkpoint 3 stays partial. The full root run at `a21ba3f` completes 1,554 tests with the
+shared preflight only at that checkpoint; its final insert guard, canonical plan references and
+live readers remained pending. Checkpoint 3 stays partial. The full root run at `a21ba3f` completes 1,554 tests with the
 same native Morse assertion failure and 33 exclusions; unused-lock checks pass. Common umbrella
 acceptance remains open. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+
+Checkpoint 3 canonical-binding follow-up: hosted compilation now pins safe service identity before
+the plan digest, and the final web write compares every reference under existing locks. Three Calls
+checks and ten focused Persistence checks pass, including post-compile account/service/credential
+rebinding, duplicate-reference mismatch, stored identity/digest/privacy and legacy inspection.
+Broad suites pass 84 Calls and 119 Persistence tests (9 excluded). Incoming final insertion,
+live activation/reference enforcement and tenant-scoped carrier readers remain pending.
+See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
 
 ## Specification review
 

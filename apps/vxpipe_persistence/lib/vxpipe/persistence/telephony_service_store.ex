@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.TelephonyService, as: Service
-  alias Vxpipe.Calls.ResolvedTelephonyService
+  alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyServices}
   alias Vxpipe.Persistence.ProviderCredentialStore
   alias Vxpipe.Persistence.Schema.{ProviderCredential, TelephonyService}
 
@@ -74,23 +74,46 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   def with_active(context, tenant_key, requirements, operation) do
     with_repository(context, fn repo ->
       transaction(repo, fn ->
-        requirements
-        |> Enum.sort_by(&{&1.name, &1.path})
-        |> Enum.uniq_by(& &1.name)
-        |> Enum.each(fn requirement ->
-          case resolve_locked(context, tenant_key, requirement.name) do
-            {:ok, _private_snapshot} ->
-              :ok
-
-            {:error, _reason} ->
-              repo.rollback({:provider_credential_unavailable, requirement.path})
-          end
-        end)
-
+        _ = lock_requirements(context, tenant_key, requirements)
         operation.()
       end)
     end)
   end
+
+  defp lock_requirements(context, tenant_key, requirements) do
+    repo = Keyword.fetch!(context, :repo)
+
+    requirements
+    |> Enum.sort_by(&{&1.name, &1.path})
+    |> Enum.reduce(%{}, fn requirement, snapshots ->
+      snapshot =
+        Map.get_lazy(snapshots, requirement.name, fn ->
+          required_snapshot(context, tenant_key, requirement)
+        end)
+
+      unless matching_reference?(snapshot.service, requirement) do
+        repo.rollback({:provider_credential_unavailable, requirement.path})
+      end
+
+      Map.put(snapshots, requirement.name, snapshot)
+    end)
+  end
+
+  defp required_snapshot(context, tenant_key, requirement) do
+    case resolve_locked(context, tenant_key, requirement.name) do
+      {:ok, snapshot} ->
+        snapshot
+
+      {:error, _reason} ->
+        repo = Keyword.fetch!(context, :repo)
+        repo.rollback({:provider_credential_unavailable, requirement.path})
+    end
+  end
+
+  defp matching_reference?(service, %{reference: expected}),
+    do: TelephonyServices.reference(service) == expected
+
+  defp matching_reference?(_service, _requirement), do: true
 
   defp resolve_locked(context, tenant_key, name) do
     repo = Keyword.fetch!(context, :repo)

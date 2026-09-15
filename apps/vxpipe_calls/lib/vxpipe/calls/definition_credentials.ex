@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.DefinitionCredentials do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.{CallDefinition, Error}
+  alias Vxpipe.CallEngine.{CallDefinition, Error, ResolvedCallPlan}
   alias Vxpipe.CallEngine.CallDefinition.CapabilityRequirements
 
   alias Vxpipe.Calls.{
@@ -10,6 +10,7 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     ProviderCredentials,
     Repositories,
     ResolvedProviderCredential,
+    TelephonyPlanBindings,
     TelephonyServices
   }
 
@@ -20,6 +21,27 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
              revision: revision.revision
            ) do
       with_active(definition, revision.tenant_key, options, operation)
+    end
+  end
+
+  def with_active(
+        %DefinitionRevision{} = revision,
+        %ResolvedCallPlan{} = plan,
+        options,
+        operation
+      ) do
+    with true <- revision.tenant_key == plan.tenant_id,
+         {:ok, definition} <-
+           CallDefinition.new(revision.source,
+             resource_id: revision.definition_id,
+             revision: revision.revision
+           ) do
+      with_active_capabilities(definition, revision.tenant_key, options, fn ->
+        TelephonyPlanBindings.with_active(plan, options, operation)
+      end)
+    else
+      false -> unavailable(["tenant_id"])
+      error -> error
     end
   end
 
