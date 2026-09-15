@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   @maximum_audio_bytes 131_072
 
+  @derive {Inspect, only: [:identity, :provider_module, :readiness_status, :policy_revision]}
   @enforce_keys [
     :connection,
     :connector,

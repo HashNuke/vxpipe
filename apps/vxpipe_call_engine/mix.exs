@@ -36,12 +36,13 @@ defmodule Vxpipe.CallEngine.MixProject do
       {:membrane_audio_mix_plugin, "~> 0.16.5"},
       {:membrane_core, "~> 1.0"},
       {:membrane_raw_audio_format, "~> 0.12.3"},
+      {:mint, "~> 1.9.3"},
+      {:mint_web_socket, "~> 1.0.6"},
       {:req, "~> 0.7.4"},
       {:req_llm, "~> 1.22"},
       {:telemetry, "~> 1.3"},
       {:vxpipe_agent_runtime, in_umbrella: true},
-      {:vxpipe_mcp, in_umbrella: true},
-      {:websockex, "~> 0.5.1"}
+      {:vxpipe_mcp, in_umbrella: true}
     ]
   end
 end
