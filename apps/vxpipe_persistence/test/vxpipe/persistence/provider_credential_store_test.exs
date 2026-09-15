@@ -24,8 +24,8 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
     [tenant: tenant, other: other, issued: issued, context: context, options: options(context)]
   end
 
-  test "provisions encrypted Google/Deepgram bindings and returns only tenant metadata", data do
-    for provider <- ["google", "deepgram"] do
+  test "provisions encrypted model/speech bindings and returns only tenant metadata", data do
+    for provider <- ["google", "deepgram", "zenmux"] do
       secret = provider <> "-tenant-key"
 
       assert {:ok, metadata} =
@@ -62,7 +62,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
     end
 
     assert {:ok, credentials} = ProviderCredentials.list(data.tenant.key, data.options)
-    assert Enum.map(credentials, & &1.provider) == ["deepgram", "google"]
+    assert Enum.map(credentials, & &1.provider) == ["deepgram", "google", "zenmux"]
     assert {:ok, []} = ProviderCredentials.list(data.other.key, data.options)
 
     assert {:error, :provider_credential_not_found} =
@@ -84,6 +84,11 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
           {"req_llm", "api_key", %{"api_key" => "secret"}},
           {"bedrock", "api_key", %{"api_key" => "secret"}},
           {"google", "oauth", %{"api_key" => "secret"}},
+          {"zenmux", "oauth", %{"api_key" => "secret"}},
+          {"zenmux", "api_key", %{"api_key" => "secret", "auth_token" => "mixed"}},
+          {"zenmux", "api_key", %{"api_key" => " "}},
+          {"zenmux", "api_key", %{"api_key" => "secret\r\nheader"}},
+          {"zenmux", "api_key", %{"api_key" => String.duplicate("x", 8_193)}},
           {"telnyx", "oauth", %{"api_key" => "secret"}},
           {"telnyx", "api_key", %{"api_key" => " "}},
           {"telnyx", "api_key", %{"api_key" => "secret\r\nheader"}},

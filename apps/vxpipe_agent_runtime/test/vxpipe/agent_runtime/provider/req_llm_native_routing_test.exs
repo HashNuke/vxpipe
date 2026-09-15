@@ -1,7 +1,7 @@
 defmodule Vxpipe.AgentRuntime.Provider.ReqLLMNativeRoutingTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelResponse, ModelTool}
+  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelResponse, ModelTool, ProviderSelection}
   alias Vxpipe.AgentRuntime.Provider.ReqLLM, as: Provider
 
   @routing %{
@@ -20,9 +20,32 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMNativeRoutingTest do
 
   test "sends one provider-native fallback request with the exact model-visible tools" do
     owner = self()
+    previous_env = System.get_env("ZENMUX_API_KEY")
+    previous_config = Application.fetch_env(:req_llm, :zenmux)
+    previous_key = Application.fetch_env(:req_llm, :zenmux_api_key)
+    System.put_env("ZENMUX_API_KEY", "ambient-private-marker")
+    Application.put_env(:req_llm, :zenmux_api_key, "application-private-marker")
+
+    Application.put_env(:req_llm, :zenmux, base_url: "https://retired-endpoint.example.test")
+
+    on_exit(fn ->
+      if previous_env,
+        do: System.put_env("ZENMUX_API_KEY", previous_env),
+        else: System.delete_env("ZENMUX_API_KEY")
+
+      for {key, previous} <- [zenmux: previous_config, zenmux_api_key: previous_key] do
+        case previous do
+          {:ok, value} -> Application.put_env(:req_llm, key, value)
+          :error -> Application.delete_env(:req_llm, key)
+        end
+      end
+    end)
 
     Req.Test.expect(__MODULE__, fn connection ->
       body = connection |> Req.Test.raw_body() |> JSON.decode!()
+      assert connection.scheme == :https
+      assert connection.host == "zenmux.ai"
+      assert Plug.Conn.get_req_header(connection, "authorization") == ["Bearer controlled-secret"]
 
       send(
         owner,
@@ -45,17 +68,24 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMNativeRoutingTest do
       })
     end)
 
-    assert {:ok, config} =
-             Provider.new(
-               api_key: "controlled-secret",
-               model: "zenmux:openai/gpt-5",
-               generation_options: [
-                 provider_options: [provider: @routing],
-                 req_http_options: [plug: {Req.Test, __MODULE__}],
-                 total_timeout: :infinity
-               ],
-               streaming: false
+    assert {:ok, options} =
+             ProviderSelection.translate(
+               "zenmux",
+               "openai/gpt-5",
+               %{"temperature" => 0.2, "max_tokens" => 256},
+               %{"provider" => JSON.decode!(JSON.encode!(@routing))}
              )
+
+    options =
+      options
+      |> Keyword.put(:api_key, "controlled-secret")
+      |> Keyword.put(:streaming, false)
+      |> Keyword.update!(:generation_options, fn generation ->
+        Keyword.put(generation, :req_http_options, plug: {Req.Test, __MODULE__})
+      end)
+
+    assert {:error, :invalid_configuration} = Provider.new(Keyword.delete(options, :api_key))
+    assert {:ok, config} = Provider.new(options)
 
     tool = %ModelTool{
       name: "lookup_policy",
@@ -82,6 +112,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMNativeRoutingTest do
     assert_receive {:native_routing_wire_request, "POST", "/api/v1/chat/completions", body}
     assert body["model"] == "openai/gpt-5"
     assert body["provider"] == JSON.decode!(JSON.encode!(@routing))
+    assert body["temperature"] == 0.2
+    assert body["max_completion_tokens"] == 256
 
     assert [
              %{

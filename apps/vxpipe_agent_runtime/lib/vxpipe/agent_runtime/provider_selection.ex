@@ -2,6 +2,7 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
   @moduledoc "Validates public model selections and translates them to internal provider options."
 
   @google_endpoint "https://generativelanguage.googleapis.com/v1beta"
+  @zenmux_endpoint "https://zenmux.ai/api/v1"
   @common [:temperature, :top_p, :top_k, :max_tokens, :seed, :stop]
   @google [:google_thinking_budget, :google_thinking_level]
 
@@ -30,6 +31,32 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
              Keyword.put(generation, :on_unsupported, :error)
            ) do
       {:ok, [model: "google:" <> model, generation_options: generation, streaming: true]}
+    else
+      _invalid -> {:error, :invalid_provider_selection}
+    end
+  rescue
+    _exception -> {:error, :invalid_provider_selection}
+  end
+
+  def translate("zenmux", model, common, specific) when is_binary(model) do
+    with true <- local_model?(model),
+         {:ok, common} <- options(common, @common),
+         true <- Enum.all?(common, &valid_common?/1),
+         {:ok, specific} <- options(specific, [:provider]),
+         true <- Enum.all?(specific, fn {:provider, value} -> valid_native_routing?(value) end),
+         specific <- native_options(specific),
+         {:ok, resolved} <- ReqLLM.model("zenmux:" <> model),
+         true <- resolved.provider == :zenmux,
+         generation <- common ++ [base_url: @zenmux_endpoint, provider_options: specific],
+         {:ok, provider} <- ReqLLM.provider(:zenmux),
+         {:ok, _validated} <-
+           ReqLLM.Provider.Options.process(
+             provider,
+             :chat,
+             resolved,
+             Keyword.put(generation, :on_unsupported, :error)
+           ) do
+      {:ok, [model: "zenmux:" <> model, generation_options: generation, streaming: true]}
     else
       _invalid -> {:error, :invalid_provider_selection}
     end
@@ -76,4 +103,48 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
         {:google_thinking_level, value} -> value in ["minimal", "low", "medium", "high"]
       end)
   end
+
+  defp valid_native_routing?(%_struct{}), do: false
+
+  defp valid_native_routing?(input) when is_map(input),
+    do: Enum.all?(input, &valid_native_field?/1)
+
+  defp valid_native_routing?(_input), do: false
+
+  defp valid_native_field?({"fallback", value}),
+    do: is_boolean(value) or routing_provider?(value)
+
+  defp valid_native_field?({"routing", %_struct{}}), do: false
+
+  defp valid_native_field?({"routing", input}) when is_map(input),
+    do: Enum.all?(input, &valid_routing_field?/1)
+
+  defp valid_native_field?(_field), do: false
+
+  defp valid_routing_field?({"type", value}),
+    do: value in ["priority", "round_robin", "least_latency"]
+
+  defp valid_routing_field?({"primary_factor", value}), do: value in ["cost", "speed", "quality"]
+
+  defp valid_routing_field?({"providers", values}) when is_list(values),
+    do: length(values) in 1..16 and Enum.all?(values, &routing_provider?/1)
+
+  defp valid_routing_field?(_field), do: false
+
+  defp routing_provider?(value),
+    do: is_binary(value) and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z/, value)
+
+  defp native_options(specific) do
+    Enum.map(specific, fn {:provider, input} ->
+      {:ok, fields} = options(input, [:fallback, :routing])
+      {:provider, Map.new(fields, &native_field/1)}
+    end)
+  end
+
+  defp native_field({:routing, input}) do
+    {:ok, fields} = options(input, [:type, :primary_factor, :providers])
+    {:routing, Map.new(fields)}
+  end
+
+  defp native_field(field), do: field
 end

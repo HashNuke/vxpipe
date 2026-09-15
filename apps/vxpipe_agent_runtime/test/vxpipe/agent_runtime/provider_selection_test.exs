@@ -3,6 +3,75 @@ defmodule Vxpipe.AgentRuntime.ProviderSelectionTest do
 
   alias Vxpipe.AgentRuntime.ProviderSelection
 
+  @routing %{
+    "fallback" => "anthropic",
+    "routing" => %{
+      "type" => "priority",
+      "primary_factor" => "quality",
+      "providers" => ["openai", "anthropic"]
+    }
+  }
+
+  test "preserves the existing Zenmux model path and nested routing with a fixed endpoint" do
+    assert {:ok, options} =
+             ProviderSelection.translate(
+               "zenmux",
+               "openai/gpt-5",
+               %{"temperature" => 0.2, "max_tokens" => 256},
+               %{"provider" => @routing}
+             )
+
+    assert Keyword.fetch!(options, :model) == "zenmux:openai/gpt-5"
+    assert Keyword.fetch!(options, :streaming)
+    generation = Keyword.fetch!(options, :generation_options)
+    assert Keyword.fetch!(generation, :base_url) == "https://zenmux.ai/api/v1"
+    assert Keyword.fetch!(generation, :temperature) == 0.2
+    assert Keyword.fetch!(generation, :max_tokens) == 256
+
+    assert Keyword.fetch!(generation, :provider_options) == [
+             provider: %{
+               fallback: "anthropic",
+               routing: %{
+                 type: "priority",
+                 primary_factor: "quality",
+                 providers: ["openai", "anthropic"]
+               }
+             }
+           ]
+
+    refute Keyword.has_key?(options, :api_key)
+
+    assert {:ok, _options} = ProviderSelection.translate("zenmux", "openai/gpt-5", %{}, %{})
+  end
+
+  test "rejects malformed native routing and private Zenmux options before construction" do
+    for {model, common, specific} <- [
+          {"zenmux:openai/gpt-5", %{}, %{}},
+          {"openai/gpt-5", %{"output_repair" => fn _ -> :ok end}, %{}},
+          {"openai/gpt-5", %{}, %{"api_key" => "private-marker"}},
+          {"openai/gpt-5", %{}, %{"base_url" => "https://private-marker"}},
+          {"openai/gpt-5", %{}, %{"req_http_options" => %{}}},
+          {"openai/gpt-5", %{}, %{"provider" => "anthropic"}},
+          {"openai/gpt-5", %{}, %{"provider" => %{"fallback" => 42}}},
+          {"openai/gpt-5", %{}, %{"provider" => %{"api_key" => "private-marker"}}},
+          {"openai/gpt-5", %{},
+           %{"provider" => put_in(@routing, ["routing", "type"], "unsupported")}},
+          {"openai/gpt-5", %{},
+           %{"provider" => put_in(@routing, ["routing", "providers"], "openai")}},
+          {"openai/gpt-5", %{},
+           %{"provider" => put_in(@routing, ["routing", "providers"], ["https://private-marker"])}},
+          {"openai/gpt-5", %{}, %{"provider" => put_in(@routing, ["routing", "headers"], %{})}}
+        ] do
+      assert {:error, :invalid_provider_selection} =
+               ProviderSelection.translate("zenmux", model, common, specific)
+    end
+
+    for provider <- ["openai", "anthropic", "openrouter", "bedrock", "azure", "vertex"] do
+      assert {:error, :invalid_provider_selection} =
+               ProviderSelection.translate(provider, "model", %{}, %{})
+    end
+  end
+
   test "translates provider-local Google selection and pins endpoint and header authentication" do
     assert {:ok, options} =
              ProviderSelection.translate(

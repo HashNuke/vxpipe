@@ -86,14 +86,14 @@ that option is rejected before network I/O.
 
 The credential cutover replaces capability profiles and application-level provider
 settings with [inline selections](inline-provider-selections.md) and tenant DB
-credentials. The current inline catalog supports Google model inference. Zenmux
-native routing remains implemented and tested in the internal ReqLLM adapter;
-its inline selection and tenant-credential migration are still pending in
+credentials. The inline catalog supports Google and the existing Zenmux model integration.
+Zenmux's inline selection, named tenant credential and native routing now reach the internal
+ReqLLM adapter; focused verification is recorded in
 [checkpoint 5](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-5--preserve-existing-provider-credential-integrations).
 
 The pre-cutover Engine activation test verified `zenmux:openai/gpt-5`, nested
 `provider_options.provider` routing data and ordinary generation options. The
-inline migration must preserve that existing contract while rejecting executable
+inline migration preserves that existing contract while rejecting executable
 hooks and protected transport/authentication fields. `openai` and `anthropic`
 inside that routing data are Zenmux destinations; they do not require separate
 Vxpipe credentials. The [provider inventory](existing-provider-credentials.md)

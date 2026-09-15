@@ -23,8 +23,9 @@ is excluded; platform-owned encryption-key rotation remains included. Existing t
 and carrier workflows are reused. Provider credential migration covers existing Vxpipe integrations
 only; no new provider or authentication-mode support is required.
 The [source-backed provider inventory](../existing-provider-credentials.md) identifies
-Zenmux as the remaining model integration, using its existing API-key and native-routing contract;
-that inventory does not advance implementation counts. Existing carrier/keyring structures
+Zenmux as the remaining model integration. Its existing API-key/native-routing contract now uses
+inline selections and tenant DB credentials; focused tests, independent implementation review and
+static root gates pass, while final root verification remains pending. Existing carrier/keyring structures
 and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider
 configuration paths must be deleted, not retained as optional or
 legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
@@ -43,8 +44,8 @@ Destination save checks pass (18 tests, 2 excluded), the Engine constructor/comp
 (15 tests), and three tagged local DB activation checks pass. Independent GPT 6 Astra xhigh review
 found no blockers. An unsupported native wait-tone assertion found by the umbrella run was corrected
 in a separate reviewed test-only checkpoint. Checkpoint 2 passed all five root gates: 1,532 tests,
-zero failures, 33 excluded (seed 235296). Milestone 24 has **2 of 7 checkpoints complete**, two partial
-and three not started. Telnyx named API-key provisioning now uses encrypted tenant storage and
+zero failures, 33 excluded (seed 235296). Milestone 24 has **2 of 7 checkpoints complete**, three partial
+and two not started. Telnyx named API-key provisioning now uses encrypted tenant storage and
 protected CLI input; live carrier readers remain pending. Its 14 focused
 tests, 81 Calls tests and 89 Persistence tests pass. Independent review and all five root gates pass
 for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296).
@@ -429,7 +430,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
-| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: two complete, two partial and three not started. Existing-reader migration and platform encryption-key rotation remain; new provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. Final independent implementation review remains pending. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: two complete, three partial and two not started. Existing-reader migration and platform encryption-key rotation remain; new provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. Final independent implementation review remains pending. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification

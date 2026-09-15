@@ -2,7 +2,7 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1 and 2 are complete. Of seven checkpoints, two are complete,
-two are partial and three are not started.
+three are partial and two are not started.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
 reviewed. Final independent implementation review and the remaining checkpoints are open.
@@ -185,7 +185,8 @@ initial hosted providers; verify additional model/option combinations as each pr
 - `model` is the provider-local identifier. The Google example becomes
   `google:gemini-3.5-flash-lite` only inside the integration. Router model paths such as
   `openai/gpt-5` remain intact; the existing Zenmux integration uses a Zenmux credential.
-  Its inline migration is pending in checkpoint 5; see the [provider inventory](../existing-provider-credentials.md).
+  Its inline migration is implemented with focused checks in checkpoint 5;
+  see the [provider inventory](../existing-provider-credentials.md).
 - `options` and `provider_options` contain supported non-secret data. Validate types,
   conflicts, bounds and supported combinations, then translate to the adapter's option shape.
   Neither object may replace credentials, provider/adapter identity, tool authority or protected
@@ -444,18 +445,23 @@ Depends on the shared credential source; keep changes in small provider-specific
   [inventory](../existing-provider-credentials.md) identifies Google, Deepgram, Zenmux, Telnyx
   and Twilio with their existing API-key or Account SID/Auth Token shapes; Morse/fixtures need
   no credentials. Google/Deepgram are migrated, carrier readers have their own checkpoints,
-  and Zenmux is the remaining model integration. This inventory is not migration completion.
-- [ ] Supply each existing adapter's current auth shape from the selected tenant record.
+  and Zenmux is the remaining model integration owned here. This inventory is not migration completion.
+- [x] Supply each existing model/speech adapter's current auth shape from the selected tenant record.
   Validate malformed/mixed inputs before requests. New provider/auth-mode support, OAuth
   onboarding/refresh and arbitrary credential-file discovery are outside this checkpoint.
-- [ ] Verify actual adapter request construction with focused doubles: tenant/provider/name,
+- [x] Verify actual adapter request construction with focused doubles: tenant/provider/name,
   model/options, nested options and existing router model paths. Preserve current validation,
   provider identity and protected transport settings.
-- [ ] Seed conflicting ambient credentials for the existing integrations and prove they are
+- [x] Seed conflicting ambient credentials for the existing integrations and prove they are
   never used. Unsupported provider/auth combinations remain rejected; no new integration is
   required to exercise this isolation rule.
-- [ ] Update affected provider setup pages and option links. Mark genuinely unsupported
+- [x] Update affected provider setup pages and option links. Mark genuinely unsupported
   combinations honestly; do not expand model/provider functionality as part of this cutover.
+
+The remaining model integration is implemented and focused checks pass. Independent implementation
+review found no production blocker; its application-auth fixture correction is verified. The final
+root run remains pending for this checkpoint; it is not yet counted complete.
+Telnyx/Twilio reader completion remains owned by checkpoints 3 and 4.
 
 Exit: existing supported provider integrations read explicit tenant credentials and retain their
 public inline selection/options contract, with no SDK ambient credential fallback.
@@ -611,8 +617,8 @@ scope, independent review, root/isolated test evidence and rendered homepage che
 
 ## Evidence ledger
 
-Current progress: **2 of 7 complete** (checkpoints 1 and 2), **2 partial** (checkpoints 3 and 7),
-and **3 not started** (checkpoints 4–6). Implementation boxes stay unchecked until their runnable
+Current progress: **2 of 7 complete** (checkpoints 1 and 2), **3 partial** (checkpoints 3, 5 and 7),
+and **2 not started** (checkpoints 4 and 6). Implementation boxes stay unchecked until their runnable
 exits and failure cases pass.
 
 | Checkpoint | Implementation | Focused/flow evidence |
@@ -621,7 +627,7 @@ exits and failure cases pass.
 | 2 — AI/speech credential readers | Implemented and verified | Opening, connection, briefing and source-restoration readers use fresh tenant resolution; legacy global readers are removed. Destination save validation covers missing/wrong-tenant/inactive model/TTS/STT bindings before writes; the Persistence group passes 18 tests (2 excluded). Named tenant isolation, whole-selection overrides and fresh construction pass 15 Engine tests. Three tagged local DB activation tests verify current Google/Deepgram authentication and safe failure before requests. Independent GPT 6 Astra xhigh review found no blockers. All five root gates pass: 1,532 tests, zero failures, 33 excluded (seed 235296). A native test assertion found in the initial run was corrected in a separate reviewed commit; its focused case and the full Gateway suite pass. Live provider checks remain excluded. See the [reader inventory](../credential-reader-boundaries.md), [destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md), [native assertion correction](../../labnotes/20260915-2317-native-readiness-assertion.md), [global-reader evidence](../../labnotes/20260915-2223-remove-global-readers.md), [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md) and [source-reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md). |
 | 3 — Telnyx credential readers | Encrypted provisioning and trusted service storage verified; live readers pending | Named Telnyx keys use the existing encrypted store and protected-input CLI with the existing carrier key-size limit. Focused red/green: 14 tests, zero failures after the change. Calls 81 and Persistence 89 tests pass (6 excluded); format, compile and strict Credo pass. Independent GPT 6 Astra xhigh review found no code blocker; a transitional documentation claim was corrected. All five root gates pass for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296). Trusted service registration/lookup adds 8 passing focused checks, with Calls 81 and Persistence 95 tests passing (6 excluded). The operator CLI adds 3 passing focused tests; all 98 Persistence tests pass (6 excluded). Static root gates and independent review pass. Full root run: 1,543 tests, one native WebRTC Morse-decoding failure, 33 excluded; the unchanged isolated case reproduces. Live readers and full umbrella acceptance remain pending. See [service evidence](../../labnotes/20260916-0000-tenant-telephony-services.md). See [service storage](../tenant-telephony-services.md) and [Telnyx provisioning evidence](../../labnotes/20260915-2341-telnyx-credential-provisioning.md). |
 | 4 — Twilio credential readers | Not started | Pending |
-| 5 — Existing provider credential integrations | Inventory recorded; migration not started | Pre-cutover source and request tests establish Zenmux API-key/native-routing support. Its inline tenant migration remains pending; no new provider or auth-mode support is required. See the [inventory](../existing-provider-credentials.md). |
+| 5 — Existing provider credential integrations | Zenmux migration implemented; final verification pending | Named API-key provisioning, inline model/options translation, tenant startup resolution and native routing use the existing adapters. Agent Runtime 5, Engine constructor 5 and Persistence focused 33 tests pass (2 excluded). Independent GPT 6 Astra xhigh review found no production blocker; its application-auth fixture correction is verified by the 95-test Agent Runtime suite (4 excluded). Static root gates pass; the final root run remains pending. No new provider or auth-mode support is added. See the [inventory](../existing-provider-credentials.md) and [Zenmux evidence](../../labnotes/20260916-0033-zenmux-tenant-credentials.md). |
 | 6 — Platform encryption-key rotation | Not started | Pending |
 | 7 — Platform configuration and cleanup | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
 

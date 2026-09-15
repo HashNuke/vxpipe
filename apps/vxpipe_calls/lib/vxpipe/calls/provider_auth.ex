@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.ProviderAuth do
   @moduledoc "Closed, local validation of supported provider credential payloads."
 
-  @providers ["google", "deepgram", "telnyx"]
+  @providers ["google", "deepgram", "zenmux", "telnyx"]
 
   @spec validate(term(), term(), term()) :: :ok | {:error, :invalid_provider_auth}
   def validate(provider, "api_key", %{"api_key" => key} = payload)

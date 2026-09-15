@@ -5,6 +5,43 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModelTest do
   alias Vxpipe.CallEngine.PlanStartup.AgentModel
   alias Vxpipe.CallEngine.TestTenantCredentialSource
 
+  test "constructs the existing Zenmux adapter from only the selected tenant binding" do
+    routing = %{"fallback" => "anthropic", "routing" => %{"providers" => ["openai", "anthropic"]}}
+
+    selection = %{
+      selection()
+      | provider: "zenmux",
+        model: "openai/gpt-5",
+        credential_name: "router",
+        provider_options: %{"provider" => routing}
+    }
+
+    bindings = %{{"tenant-model", "zenmux", "router"} => %{"api_key" => "zenmux-tenant-marker"}}
+
+    options =
+      Keyword.put(options(), :credential_source, {TestTenantCredentialSource, {self(), bindings}})
+
+    assert {:ok, model} = AgentModel.resolve(selection, "tenant-model", options)
+    assert_receive {:tenant_credential_resolved, "tenant-model", "zenmux", "router"}
+    assert model.configuration.api_key == "zenmux-tenant-marker"
+    assert model.configuration.model.provider == :zenmux
+    assert model.configuration.model.id == "openai/gpt-5"
+    assert model.configuration.generation_options[:temperature] == 0.2
+
+    assert model.configuration.generation_options[:provider_options] == [
+             provider: %{fallback: "anthropic", routing: %{providers: ["openai", "anthropic"]}}
+           ]
+
+    refute inspect(model) =~ "tenant-marker"
+
+    for {tenant, input} <- [
+          {"other-tenant", selection},
+          {"tenant-model", %{selection | credential_name: "default"}}
+        ] do
+      assert {:error, :unsupported_provider_options} = AgentModel.resolve(input, tenant, options)
+    end
+  end
+
   test "translates the inline selection without merging application authentication or options" do
     assert {:ok, model} = AgentModel.resolve(selection(), "tenant-model", options())
     assert model.configuration.api_key == "tenant-synthetic-key"

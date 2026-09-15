@@ -37,7 +37,7 @@ metadata no longer selects credentials for later process creation.
 
 ## Provider translation
 
-Agent Runtime translates Google model selection to ReqLLM internally. Public configuration cannot
+Agent Runtime translates Google and Zenmux model selections to ReqLLM internally. Public configuration cannot
 select ReqLLM, a module, request callback, headers, endpoint or credential. The initial option
 allowlist covers bounded generation settings and mutually exclusive Google thinking controls.
 It deliberately excludes provider-managed tools and transport/authentication fields.
@@ -46,6 +46,39 @@ Google requests pin `https://generativelanguage.googleapis.com/v1beta` and use h
 authentication. An explicit API key alone was insufficient: installed ReqLLM can consult an
 application-configured provider endpoint. The synthetic test seeds a conflicting endpoint and
 observes the actual generated request before redirecting it to a local test server.
+
+Zenmux preserves the existing `openai/gpt-5` model path and native routing contract through
+one named tenant Zenmux credential. Its endpoint is fixed to `https://zenmux.ai/api/v1`; public
+options cannot replace it or supply authentication. For example, a model selection can be:
+
+```json
+{
+  "provider": "zenmux",
+  "model": "openai/gpt-5",
+  "credential_name": "router",
+  "options": {"temperature": 0.2, "max_tokens": 256},
+  "provider_options": {
+    "provider": {
+      "fallback": "anthropic",
+      "routing": {
+        "type": "priority",
+        "primary_factor": "quality",
+        "providers": ["openai", "anthropic"]
+      }
+    }
+  }
+}
+```
+
+The supported native object has optional `fallback` (boolean or provider name) and `routing`
+fields. Routing accepts `type` (`priority`, `round_robin`, `least_latency`), `primary_factor`
+(`cost`, `speed`, `quality`) and one to sixteen provider names. Names contain at most 64 ASCII
+letters/digits, dots, underscores or hyphens and start with a letter/digit. Unknown fields,
+credential/transport options and executable values fail local validation. Only these fixed
+JSON keys are translated to ReqLLM's internal atom keys; the encoded routing object is unchanged.
+The request builder translates `max_tokens` to Zenmux's `max_completion_tokens` field.
+The [provider inventory](existing-provider-credentials.md) records the pre-cutover support evidence;
+this migration adds no direct OpenAI/Anthropic authentication or other SDK provider integration.
 
 The Google text adapter selects streaming explicitly. The installed model data omitted the
 `streaming.text` field even for the sample model, causing the old automatic check to choose
@@ -92,6 +125,11 @@ The local protocol checks run in the explicitly excluded integration lane; no li
 or external speech services are used by these checks.
 
 ## Verification and remaining work
+
+The [Zenmux checkpoint](../labnotes/20260916-0033-zenmux-tenant-credentials.md) records focused
+red/green checks for encrypted provisioning, named tenant resolution, persisted selections,
+unavailable bindings and exact request construction with conflicting ambient credentials/endpoint.
+The request retains its tool schema and provider-reported model/usage. No live Zenmux call is claimed.
 
 Focused red/green evidence currently covers inline parsing, whole-selection overrides, safe
 option rejection, provider translation, tenant isolation, fresh publication/preparation checks,

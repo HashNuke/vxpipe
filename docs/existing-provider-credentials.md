@@ -11,7 +11,7 @@ Installed ReqLLM adapters, model catalog entries and website logos do not add re
 | --- | --- | --- | --- |
 | Google Gemini model inference | API key | [ReqLLM constructor tests](../apps/vxpipe_agent_runtime/test/vxpipe/agent_runtime/provider/req_llm_test.exs), [Google integration lane](../apps/vxpipe_agent_runtime/test/integration/req_llm_provider_test.exs), and the development model selection in `b5917ae:config/dev.exs` | Inline tenant lookup implemented in checkpoints 1–2. |
 | Deepgram Flux STT and TTS | API key | [STT adapter](../apps/vxpipe_call_engine/lib/vxpipe/call_engine/provider/deepgram/flux.ex), [TTS adapter](../apps/vxpipe_call_engine/lib/vxpipe/call_engine/provider/deepgram/flux_text_to_speech.ex), and both development selections in the reference tree | Inline tenant lookup implemented in checkpoints 1–2. |
-| Zenmux model inference and native routing | API key for Zenmux | [Encoded request test](../apps/vxpipe_agent_runtime/test/vxpipe/agent_runtime/provider/req_llm_native_routing_test.exs), introduced by `e9d3ab4`; pre-cutover Engine activation test described below | Internal adapter still exists; inline selection and tenant credential migration remain pending in checkpoint 5. |
+| Zenmux model inference and native routing | API key for Zenmux | [Encoded request test](../apps/vxpipe_agent_runtime/test/vxpipe/agent_runtime/provider/req_llm_native_routing_test.exs), introduced by `e9d3ab4`; pre-cutover Engine activation test described below | Inline selection, named tenant lookup and native routing implemented; checkpoint 5 verification is recorded in the milestone ledger. |
 | Telnyx Voice API | API key; webhook verification uses the service's Ed25519 public key | [Existing carrier configuration](../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/telnyx/service_profile.ex), [command tests](../apps/vxpipe_gateway/test/vxpipe/gateway/telephony/telnyx/adapter_test.exs), [verification tests](../apps/vxpipe_gateway/test/vxpipe/gateway/telephony/telnyx/webhook_verifier_test.exs) | Encrypted API-key provisioning and trusted service registration implemented; live readers remain pending in checkpoint 3. |
 | Twilio Voice | Account SID and Auth Token | [Existing carrier configuration](../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/twilio/service_profile.ex), [command tests](../apps/vxpipe_gateway/test/vxpipe/gateway/telephony/twilio/adapter_test.exs), [webhook and media readers](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage) | Tenant credential migration remains pending in checkpoint 4. |
 | Local Morse speech and test fixtures | None | [Current capability catalog](../apps/vxpipe_call_engine/lib/vxpipe/call_engine/capability_catalog.ex) and the Morse adapters in the reference tree | Preserve credential-free operation. |
@@ -36,11 +36,12 @@ The Agent Runtime request test observes one request to `/api/v1/chat/completions
 `routing.primary_factor`) and the exact tool schema. It retains the provider's
 reported model and usage. These are existing behavior, not a new router feature.
 
-Checkpoint 5 therefore needs the existing Zenmux API-key shape from tenant storage, inline
+Checkpoint 5 supplies the existing Zenmux API-key shape from tenant storage, inline
 provider/model translation, the supported nested native routing data and focused request checks.
 Public options still cannot replace credentials or redirect credential-bearing requests.
 The [current translator](../apps/vxpipe_agent_runtime/lib/vxpipe/agent_runtime/provider_selection.ex)
-is Google-only, so this document is not an instruction to use Zenmux in an inline definition yet.
+supports Google and Zenmux. See the [inline example](inline-provider-selections.md#provider-translation)
+and [checkpoint evidence](../labnotes/20260916-0033-zenmux-tenant-credentials.md).
 
 `openai` and `anthropic` in these tests identify models or destinations selected by Zenmux.
 They do not establish separate OpenAI or Anthropic authentication integrations in Vxpipe.

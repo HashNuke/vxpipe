@@ -19,7 +19,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     :window_duration_ms
   ]
 
-  def validate(%CapabilitySelection{kind: :model_inference, provider: "google"} = selection) do
+  def validate(%CapabilitySelection{kind: :model_inference, provider: provider} = selection)
+      when provider in ["google", "zenmux"] do
     case Vxpipe.AgentRuntime.ProviderSelection.translate(
            selection.provider,
            selection.model,
@@ -49,8 +50,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   def validate(_selection), do: {:error, :unsupported_capability}
 
-  def adapter(%CapabilitySelection{kind: :model_inference, provider: "google"}),
-    do: {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM}
+  def adapter(%CapabilitySelection{kind: :model_inference, provider: provider})
+      when provider in ["google", "zenmux"],
+      do: {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM}
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "deepgram"}),
     do: {:ok, Deepgram.Flux}

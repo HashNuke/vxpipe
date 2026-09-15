@@ -76,6 +76,90 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     assert claim.call.tenant_key == ctx.tenant.key
   end
 
+  test "persists the existing Zenmux selection and resolves only its named tenant credential",
+       ctx do
+    selection = %{
+      provider: "zenmux",
+      model: "openai/gpt-5",
+      credential_name: "router",
+      options: %{temperature: 0.2},
+      provider_options: %{
+        provider: %{fallback: "anthropic", routing: %{providers: ["openai", "anthropic"]}}
+      }
+    }
+
+    source = put_in(source(), [:defaults, :capabilities, :model_inference], selection)
+    before = row_counts()
+
+    assert {:error, %{code: :provider_credential_unavailable}} =
+             Calls.save_definition(ctx.tenant.key, source, ctx.options)
+
+    assert row_counts() == before
+
+    for tenant <- [ctx.tenant, ctx.other] do
+      assert {:ok, _credential} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 "zenmux",
+                 "router",
+                 "api_key",
+                 %{"api_key" => "zenmux-#{tenant.key}-private-marker"},
+                 ctx.options
+               )
+    end
+
+    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source, ctx.options)
+    assert draft.validation_errors == []
+
+    assert {:ok, published} =
+             Calls.publish_definition(ctx.tenant.key, draft.definition_id, 1, ctx.options)
+
+    assert [route] = published.routes
+    assert {:ok, prepared, token} = Calls.prepare_call(ctx.principal, route.key, %{}, ctx.options)
+
+    assert {:ok, claim} =
+             Calls.claim_join_token(
+               token.secret,
+               %{tenant_key: ctx.tenant.key, call_id: prepared.id, participant_key: route.key},
+               ctx.options
+             )
+
+    restored = claim.call.plan.participants["assistant"].capabilities.model_inference
+    assert restored.provider == "zenmux"
+    assert restored.model == "openai/gpt-5"
+    assert restored.credential_name == "router"
+    assert restored.options == %{"temperature" => 0.2}
+    assert restored.provider_options == JSON.decode!(JSON.encode!(selection.provider_options))
+    refute :erlang.term_to_binary(claim.call) =~ "private-marker"
+
+    runtime = [credential_source: {Vxpipe.Calls.ProviderCredentialSource, ctx.options}]
+
+    for tenant <- [ctx.tenant, ctx.other] do
+      assert {:ok, resolved} =
+               Vxpipe.CallEngine.CredentialSource.resolve(tenant.key, restored, runtime)
+
+      assert resolved.payload == %{"api_key" => "zenmux-#{tenant.key}-private-marker"}
+      refute inspect(resolved) =~ "private-marker"
+    end
+
+    assert {:ok, credential} =
+             ProviderCredentials.resolve(ctx.tenant.key, "zenmux", "router", ctx.options)
+
+    assert {1, _} =
+             Repo.update_all(
+               from(c in Vxpipe.Persistence.Schema.ProviderCredential,
+                 where: c.public_id == ^credential.credential.id
+               ),
+               set: [status: "revoked"]
+             )
+
+    assert {:error, :provider_credential_unavailable} =
+             Vxpipe.CallEngine.CredentialSource.resolve(ctx.tenant.key, restored, runtime)
+
+    assert {:error, %{code: :provider_credential_unavailable}} =
+             Calls.prepare_call(ctx.principal, route.key, %{}, ctx.options)
+  end
+
   test "another tenant cannot save the same provider selections or create any rows", ctx do
     before = row_counts()
     assert {:error, error} = Calls.save_definition(ctx.other.key, source(), ctx.options)

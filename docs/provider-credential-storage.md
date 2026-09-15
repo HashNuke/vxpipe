@@ -1,8 +1,8 @@
 # Tenant provider credential storage
 
-Trusted operators can provision Google, Deepgram and Telnyx API keys in PostgreSQL and list their
+Trusted operators can provision Google, Deepgram, Zenmux and Telnyx API keys in PostgreSQL and list their
 metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
-Inline Google/Deepgram definitions now resolve this store at save, publication, preparation
+Inline Google/Deepgram/Zenmux definitions now resolve this store at save, publication, preparation
 and capability creation; see [inline selections](inline-provider-selections.md). Telnyx credential
 provisioning and trusted service registration are available; live carrier DB readers remain checkpoint 3 work.
 
@@ -36,6 +36,8 @@ mix vxpipe.provider_credential.provision \
 mix vxpipe.provider_credential.provision \
   --tenant TENANT_KEY --provider deepgram < path/to/protected-deepgram.json
 mix vxpipe.provider_credential.provision \
+  --tenant TENANT_KEY --provider zenmux --name router < path/to/protected-zenmux.json
+mix vxpipe.provider_credential.provision \
   --tenant TENANT_KEY --provider telnyx --name support-phone < path/to/protected-telnyx.json
 mix vxpipe.provider_credential.list --tenant TENANT_KEY
 ```
@@ -43,7 +45,9 @@ mix vxpipe.provider_credential.list --tenant TENANT_KEY
 The input shape is `{"api_key":"REPLACE_WITH_PROVIDER_KEY"}`. These providers currently support
 only `api_key` auth; additional fields, unsupported auth kinds, empty values, whitespace and
 control characters fail local validation. Telnyx keys are limited to 4,096 bytes to match the
-existing carrier configuration boundary; Google/Deepgram keys retain their 8,192-byte limit.
+existing carrier configuration boundary; Google/Deepgram/Zenmux keys use an 8,192-byte limit.
+Zenmux uses one API key even when its model path or native routing names downstream providers.
+Direct authentication with those providers is not implied by a Zenmux selection.
 Telnyx connection IDs and verification public keys belong to [service metadata](tenant-telephony-services.md),
 not this payload. Trusted service registration now links the public credential ID to the matching
 tenant/provider; Gateway live-reader migration remains pending.
