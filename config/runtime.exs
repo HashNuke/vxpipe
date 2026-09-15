@@ -7,6 +7,20 @@ nonempty_env = fn name ->
   end
 end
 
+credential_keyring =
+  if config_env() != :test do
+    case Vxpipe.Persistence.CredentialKeyring.from_config(
+           nonempty_env.("VXPIPE_CREDENTIAL_KEY_ID"),
+           nonempty_env.("VXPIPE_CREDENTIAL_KEYS")
+         ) do
+      {:ok, keyring} ->
+        keyring
+
+      {:error, _reason} ->
+        raise "invalid VXPIPE_CREDENTIAL_KEY_ID / VXPIPE_CREDENTIAL_KEYS configuration"
+    end
+  end
+
 database_url =
   case {config_env(), nonempty_env.("VXPIPE_DATABASE_URL")} do
     {:dev, nil} ->
@@ -37,6 +51,9 @@ if database_url do
     artifact_repository: {Vxpipe.Persistence.ArtifactStore, Vxpipe.Persistence.Repo},
     usage_repository: {Vxpipe.Persistence.UsageStore, Vxpipe.Persistence.Repo},
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
+    provider_credential_repository:
+      {Vxpipe.Persistence.ProviderCredentialStore,
+       [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
     definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo},
     call_details_inspection_repository:

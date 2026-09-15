@@ -1,6 +1,6 @@
 # Tenant-scoped provider credentials and platform configuration
 
-Status: implementation authorized 2026-09-15; preparatory cleanup complete; checkpoint 1 pending.
+Status: implementation authorized 2026-09-15; preparatory cleanup complete; checkpoint 1 in progress.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. Agent specification review is complete; implementation remains unchecked.
 
@@ -81,6 +81,23 @@ not provider-configuration fallbacks. Retire `VXPIPE_DATABASE_URL`; do not keep 
 Preserve the dedicated test database and Sandbox pool configuration. Normal database URL/pool
 variables must not override `config/test.exs` or accidentally direct tests to development or
 production databases; retain the existing explicitly test-scoped overrides.
+
+### Shared platform artifact bucket
+
+Recordings and call-details publications use one platform bucket, selected by `STORAGE_BUCKET`.
+Use `AWS_REGION` and optional `AWS_ENDPOINT` for the destination, `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` for static credentials, and optional `AWS_SESSION_TOKEN` when supplying
+AWS temporary credentials. The user chose these unprefixed names in place of the earlier
+`VXPIPE_BUCKET` proposal. Their object keys retain the existing distinct recording/publication
+namespaces. Remove the separate `VXPIPE_RECORDING_S3_*` and `VXPIPE_CALL_DETAILS_S3_*` settings
+and fallback rules. A deployment cannot configure independent destinations for these two artifacts.
+Preserve enablement: a configured database and non-empty bucket enable call-details publication;
+recording still requires its explicit enable flag and must fail safely if its bucket is missing.
+Treat unset/blank `STORAGE_BUCKET` as absent. Validate an active destination and reject malformed
+endpoint configuration without printing secrets. Retired-only settings supply no destination;
+they must neither enable publication nor rescue explicitly enabled recording without a new bucket.
+The user requested this configuration change on 2026-09-15; it can ship as a separate coherent
+commit before the remaining provider call-flow work, while checkpoint 7's full restart exit stays open.
 
 ## Code review baseline and change map
 
@@ -309,6 +326,10 @@ Depends on the implemented prerequisites above.
   definitions in this checkpoint so the umbrella compiles and the normal sample remains runnable.
 - [ ] Remove global/TOML/env credential reads and boot-time provider-key requirements for this
   delivered flow. Credentials are read after the Repo starts, through the tenant resolver.
+- [ ] Delete `VXPIPE_DEV_SPEECH_PROFILE` reads and both `speech_profile` switch branches in
+  `config/runtime.exs`, plus obsolete launcher/sample/docs/test references. Select local Morse
+  through the inline definition. Test that setting the retired variable cannot change the selected
+  provider or activate a legacy fallback. Removing only the line from `env.sample` is insufficient.
 - [ ] Make Console sample setup select a stable provisioned development tenant through trusted
   operator setup; its call-scoped API key remains server-held. No startup import of provider env
   keys or copying a global secret into automatically created tenants.
@@ -476,6 +497,12 @@ Depends on checkpoints 1–6. This is the final operational cutover and acceptan
   the duplicate). Add concise comments, mandatory placeholders, and commented optional variables.
   Exercise launcher/Console/Astro wiring;
   no provider secret is required before tenant DB provisioning.
+- [ ] Configure recordings and call-details publication from the same `STORAGE_BUCKET`,
+  `AWS_REGION`, `AWS_ENDPOINT` and AWS credential settings. Remove both old S3 setting families and their fallback rules from
+  runtime, samples and current operational docs. Test that both writers use the same bucket,
+  region and endpoint, and that conflicting retired values cannot select another destination.
+  Cover unset, blank, invalid and retired-only settings, preserving independent recording enablement
+  and current publication enablement. An enabled writer cannot silently lose its required bucket.
 - [ ] Implement the database contract: `VXPIPE_DB_URL` before `DATABASE_URL`, and
   `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; default development to `vxpipe_dev` and pool 10
   without database env requirements. Retire `VXPIPE_DATABASE_URL` and update CLI diagnostics,
@@ -567,7 +594,7 @@ Implementation boxes stay unchecked until their runnable exits and failure cases
 
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
-| 1 — Tenant voice call | Not started | Pending |
+| 1 — Tenant voice call | Provisioning/storage implemented; inline call flow pending | 16 focused and 65 persistence tests pass; disposable DB/fresh-VM and PTY checks pass; independent review clear. Root: 1,452 tests, one native audio failure (passes isolated). See [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
 | 2 — Opening and transfers | Not started | Pending |
 | 3 — Telnyx tenant phone flow | Not started | Pending |
 | 4 — Twilio tenant phone flow | Not started | Pending |
@@ -596,6 +623,10 @@ The later explicit-deletion clarification and checkpoint 7 removal/negative-test
 received bounded agent review with no blocking findings; no alternate configuration path is retained.
 The database alias/default contract and its checkpoint 7 tasks received bounded agent review
 against current runtime/development/test configuration, with no blocking findings or order change.
+The explicit speech-profile reader deletion and shared artifact bucket tasks received independent
+review on 2026-09-15. The review confirmed their dependency order and added missing/blank/invalid/
+retired-only bucket cases plus enablement preservation. This is specification review; the bucket
+cutover and inline speech-profile deletion remain implementation tasks.
 
 Documentation checks passed: 131 relative links/anchors across this milestone and the index,
 one parsed JSON example, seven sequential checkpoints with exits, 61 unchecked tasks, and index

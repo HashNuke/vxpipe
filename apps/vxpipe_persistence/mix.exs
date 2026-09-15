@@ -18,7 +18,7 @@ defmodule Vxpipe.Persistence.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:crypto, :logger],
       mod: {Vxpipe.Persistence.Application, []}
     ]
   end

@@ -67,6 +67,14 @@ Revocation prevents new authentication with that API key. It does not terminate
 an established session or couple future join-token validity to the issuing key.
 Join tokens are introduced by the prepared-call milestone.
 
+## Provision upstream provider credentials
+
+Google and Deepgram credentials have separate encrypted tenant storage and trusted
+provision/list commands. See [provider credential storage](provider-credential-storage.md)
+for platform encryption settings, protected stdin input and metadata output. These records
+are not yet consumed by the current profile-based call flow; the tenant provider milestone
+tracks that cutover. API-key issuance and authentication above remain independent.
+
 ## Save and publish call definitions
 
 Configure the application/tenant capability and host-tool catalogs before saving
