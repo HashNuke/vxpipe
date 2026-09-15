@@ -48,8 +48,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     speech_to_text = [
       enabled: true,
@@ -986,7 +985,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         compile_plan(
           reception_model: "test:blocked",
           reception_first_message: %{mode: "fixed", text: "Reception is ready."},
-          opening_audio: %{type: "text", text: "Opening notice.", text_to_speech: "test-voice"},
+          opening_audio: %{
+            type: "text",
+            text: "Opening notice.",
+            text_to_speech: speech_selection(:text_to_speech, options)
+          },
           wait_sounds: sounds
         )
 
@@ -2728,6 +2731,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       {:ok, room_binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
       connection = Map.fetch!(room_binding.connections, support_client.connection_id).pid
+      connection_monitor = Process.monitor(connection)
       {:ok, before} = GenServer.call(connection, :vxpipe_connection_readiness)
       phase = :sys.get_state(room_authority).pending_participant_transfer
 
@@ -2787,6 +2791,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       refute_receive {:test_stt_transport_started, _, _}
 
+      refute_receive {:DOWN, ^connection_monitor, :process, ^connection, _reason}, 0
+
       verify_private_candidate(
         plan,
         room,
@@ -2797,8 +2803,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         policy
       )
 
+      refute_receive {:DOWN, ^connection_monitor, :process, ^connection, _reason}, 0
       monitors = Enum.map(private.enforcers, &{&1, Process.monitor(&1)})
-      connection_monitor = Process.monitor(connection)
 
       target =
         case @private_media_failure do
@@ -3894,7 +3900,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                            if(
                              Keyword.get(options, :morse, false) or
                                Keyword.get(options, :caller_speech_to_text?, false),
-                             do: %{speech_to_text: "test-stt"},
+                             do: %{speech_to_text: speech_selection(:speech_to_text, options)},
                              else: %{}
                            ),
                          connection: %{
@@ -3911,8 +3917,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                              mode: "wait_for_input"
                            }),
                          capabilities: %{
-                           model_inference: "test-model",
-                           text_to_speech: "test-voice"
+                           model_inference: %{
+                             provider: "fixture",
+                             model: Keyword.get(options, :reception_model, "test:scripted")
+                           },
+                           text_to_speech: speech_selection(:text_to_speech, options)
                          },
                          tools: %{},
                          transfers:
@@ -3928,8 +3937,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                          transfer_history:
                            Keyword.get(options, :billing_history, %{mode: "fresh"}),
                          capabilities: %{
-                           model_inference: "billing-model",
-                           text_to_speech: "test-voice"
+                           model_inference: %{
+                             provider: "fixture",
+                             model: Keyword.get(options, :billing_model, "test:scripted")
+                           },
+                           text_to_speech: speech_selection(:text_to_speech, options)
                          },
                          first_message:
                            Keyword.get(options, :billing_first_message, %{
@@ -3942,7 +3954,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                          type: "human",
                          description: "A human support specialist",
                          while_present: Keyword.get(options, :support_policy, %{}),
-                         capabilities: %{speech_to_text: "test-stt"},
+                         capabilities: %{
+                           speech_to_text: speech_selection(:speech_to_text, options)
+                         },
                          connection: %{
                            service: "web",
                            mode: "receive",
@@ -3956,7 +3970,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                          connection: %{service: "web", mode: "receive", admission: "start_call"},
                          capabilities:
                            if(Keyword.get(options, :observer_speech_to_text?, false),
-                             do: %{speech_to_text: "test-stt"},
+                             do: %{speech_to_text: speech_selection(:speech_to_text, options)},
                              else: %{}
                            ),
                          while_present:
@@ -3993,46 +4007,38 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{
-                 "test-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: Keyword.get(options, :reception_model, "test:scripted")}
-                 },
-                 "billing-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: Keyword.get(options, :billing_model, "test:scripted")}
-                 },
-                 "test-stt" => %{
-                   kind: :speech_to_text,
-                   provider: if(Keyword.get(options, :morse), do: MorseCodeSTT, else: Flux),
-                   options:
-                     if(Keyword.get(options, :morse),
-                       do: @morse_options |> Map.new() |> Map.put(:sample_rate, 16_000),
-                       else: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
-                     )
-                 },
-                 "test-voice" => %{
-                   kind: :text_to_speech,
-                   provider:
-                     if(Keyword.get(options, :morse), do: MorseCodeTTS, else: FluxTextToSpeech),
-                   options:
-                     if(Keyword.get(options, :morse),
-                       do: Map.new(@morse_options),
-                       else: %{
-                         model: "flux-test-voice",
-                         encoding: :linear16,
-                         sample_rate: 48_000
-                       }
-                     )
-                 }
-               },
                host_tools: %{"test_agent_tool" => CallEngine.TestAgentTool},
                mcp_integrations: Keyword.get(options, :mcp_integrations)
              })
 
     plan
+  end
+
+  defp speech_selection(kind, options) do
+    if Keyword.get(options, :morse) do
+      settings = Map.new(@morse_options)
+
+      settings =
+        if kind == :speech_to_text, do: Map.put(settings, :sample_rate, 16_000), else: settings
+
+      %{provider: "morse", model: "morse", options: settings}
+    else
+      case kind do
+        :speech_to_text ->
+          %{
+            provider: "deepgram",
+            model: "flux-general-en",
+            options: %{encoding: "opus", sample_rate: 48_000}
+          }
+
+        :text_to_speech ->
+          %{
+            provider: "deepgram",
+            model: "flux-test-voice",
+            options: %{encoding: "linear16", sample_rate: 48_000}
+          }
+      end
+    end
   end
 
   defp issue_session(plan, room, participant_id, release \\ nil) do
@@ -4551,7 +4557,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         end
     after
       remaining ->
-        assert {:ok, _decoder, [{:final, ^expected}]} = MorseDecoder.flush(morse)
+        assert {:ok, _decoder, [{:final, ^expected}]} = MorseDecoder.flush(morse),
+               "Morse audio ended without #{inspect(expected)}: " <>
+                 inspect(
+                   Map.take(morse, [
+                     :text,
+                     :marks,
+                     :current_kind,
+                     :current_windows,
+                     :total_windows
+                   ])
+                 )
     end
   end
 

@@ -30,7 +30,7 @@ config :vxpipe_calls, Vxpipe.Calls,
   ],
   call_duration: [max_duration_ms: 1_800_000, tenants: %{}],
   live_inspection_source: {Vxpipe.Calls.EngineLiveInspectionSource, []},
-  registries: %{capability_profiles: %{}, host_tools: %{}}
+  registries: %{host_tools: %{}}
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   call_lifecycle: [
@@ -40,9 +40,6 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   ],
   agent_runtime: [
     implementation: :agent_runtime,
-    model_provider: Vxpipe.AgentRuntime.Provider.ReqLLM,
-    model_provider_options: [],
-    model_provider_label: :req_llm,
     context_compaction: [enabled: false],
     tool_invocation_timeout_ms: 30_000,
     maximum_tool_invocations: 4,

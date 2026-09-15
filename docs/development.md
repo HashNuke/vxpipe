@@ -33,22 +33,21 @@ mix assets.setup
 npm --prefix vxpipe-docs ci
 ```
 
-With PostgreSQL running, initialize the default `vxpipe_dev` database. The local
-fixture settings let these setup commands run without provider credentials:
+With PostgreSQL running, initialize the default `vxpipe_dev` database:
 
 ```shell
-VXPIPE_DEV_MODEL_FIXTURE=true VXPIPE_DEV_SPEECH_PROFILE=morse \
-  mix do ecto.create, ecto.migrate
+mix do ecto.create, ecto.migrate
 ```
 
-Development enables Gemini model inference plus the Deepgram Flux
-speech-to-text and text-to-speech capabilities. Put development credentials in
-the ignored repository-root `.env` file before starting the stack:
+Copy the visible [`env.sample`](../env.sample) to the ignored repository-root `.env`
+and replace its encryption-key placeholders. Follow
+[provider credential setup](provider-credential-storage.md#configure-and-provision) to
+bootstrap a tenant and provision its Google and Deepgram credentials through protected stdin.
+Operator Mix commands need these platform variables exported in their launching shell.
 
-```shell
-DEEPGRAM_API_KEY=replace-with-a-development-key
-GEMINI_API_KEY=replace-with-a-development-key
-```
+Set `VXPIPE_DEV_TENANT` to that tenant's public key. The sample selects Google Gemini and
+Deepgram Flux directly in its definition and resolves their `default` tenant bindings.
+The server can boot without provider credentials; an unprovisioned sample cannot create calls.
 
 Then start the Vxpipe umbrella, Console frontend, and Astro docs together:
 
@@ -61,48 +60,33 @@ The Console is at `http://localhost:4000/`. The landing page is at
 `http://localhost:4321/docs/en/`. Astro reloads as you edit the site and stops with
 the rest of the stack on Ctrl-C. Use `--tailscale` for HTTPS access over Tailscale.
 
-Unlike `bin/dev`, the quick start's direct `mix run --no-halt` command does not
-load `.env`; export the provider keys in the launching shell as shown there.
+Unlike `bin/dev`, direct `mix` commands do not load `.env`; export the platform settings
+in the launching shell or inject them through your secret manager.
 
 ## Local fixtures
 
-For a deterministic local model boundary, set `VXPIPE_DEV_MODEL_FIXTURE=true`
-instead of supplying `GEMINI_API_KEY`. The fixture keeps Deepgram speech enabled,
-so spoken sample output still requires `DEEPGRAM_API_KEY`. With the fixture enabled,
-the diagnostics board exposes one-shot **Success**, **Delay**, **Failure**, and
-**No output** controls for the next model request. Values `delay`, `failure`, and
-`missing` may also select the initial/default outcome. The fixture is disabled in
-base configuration and never reads a switch from call input.
+Local calls select `%{provider: "fixture", model: "test:scripted"}` for model inference
+and `%{provider: "morse", model: "morse", options: %{sample_rate: 16_000}}` for speech.
+The embedding host explicitly configures the fixture adapter and Morse transport.
+These local selections need no provider credential. The repository's default browser sample
+uses the provisioned Google/Deepgram tenant; there is no environment switch for changing it.
 
-For a credential-free typed call with audible Morse output, combine the local model
-fixture with the opt-in Morse speech profile:
+Run the deterministic direct-PCM voice round trip from the owning application:
 
 ```shell
-VXPIPE_DEV_MODEL_FIXTURE=true
-VXPIPE_DEV_SPEECH_PROFILE=morse
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/provider/morse_code/room_round_trip_test.exs
 ```
 
-Set these values in `.env` when using `bin/dev`. For the quick start's direct
-localhost launch, use:
-
-```shell
-APP_HOST=localhost VXPIPE_DEV_TLS=http \
-  VXPIPE_DEV_MODEL_FIXTURE=true VXPIPE_DEV_SPEECH_PROFILE=morse \
-  mix run --no-halt
-```
-
-With this profile, `DEEPGRAM_API_KEY` and `GEMINI_API_KEY` are not required. The
-trusted sample keeps browser speech-to-text unselected, accepts typed Console input,
-and emits the agent response through 48 kHz Morse TTS so the existing WebRTC output
-path can play it. Browser microphone RTP is Opus and is deliberately not presented as
-compatible with the linear16-only Morse STT provider. Use the call-engine direct-PCM
-verification path described below when testing local Morse recognition.
+That test configures a supervised local model fixture and both Morse transports, sends
+encoded caller audio, and verifies the reply through the real audio output path.
+Browser microphone RTP is Opus; Morse STT accepts mono little-endian linear16.
 
 ## Reloading and HTTPS
 
-Goreman loads the credentials into its child processes, including Watchman
-restarts. Reusable call-engine code receives provider options through the OTP
-application environment and does not read these environment variables directly.
+Goreman loads platform configuration into its child processes, including Watchman
+restarts. Runtime configuration supplies the database and encryption keyring; reusable
+call-engine code resolves tenant credentials through the injected credential source.
 
 Goreman runs the call engine, gateway, and Console applications in one BEAM
 instance. The Console's Phoenix endpoint supervises its esbuild development watcher,
@@ -143,8 +127,7 @@ With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
 address must be available on this machine. Use `--tailscale` to discover the
 Tailscale hostname and address automatically.
 
-The repository-root `.env.example` documents development credentials and optional
-Goreman process overrides. Goreman automatically loads `.env` from the repository
+The visible repository-root `env.sample` documents platform settings. Goreman automatically loads `.env` from the repository
 root selected by `-basedir`, including when `bin/dev` is launched from another
 directory. Values reach its child processes without being exported into the
 parent shell.
@@ -190,7 +173,7 @@ application environment. In development, `APP_HOST` becomes the exact allowed
 origin on port 4000, using the selected HTTPS or HTTP scheme. Environment variables
 are read from `config/runtime.exs`; `config/dev.exs` supplies local defaults.
 
-With PostgreSQL enabled, the playground's **Create room** action first asks the
+With a provisioned tenant selected, the playground's **Create room** action first asks the
 Console's same-origin sample endpoint for a managed admission. The Console uses its
 private API key and configured initial variables to create a prepared call; the
 browser receives only the public tenant/call/participant locator and a five-minute
@@ -199,9 +182,8 @@ atomically claims it and starts the pinned plan exactly once. Neither the API ke
 the initial variables enter browser requests or responses. The sample endpoint and
 managed admission routes are disabled by default outside repository development.
 
-The database-free fallback asks the gateway to compile the same trusted sample
-definition directly and returns a bound session in one response. It remains an
-embedding/development compatibility path, not the durable admission design.
+An embedding host can configure an explicit trusted inline definition and credential source
+through the gateway API. The repository sample uses the durable tenant admission path.
 
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
 targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and performs
@@ -209,7 +191,7 @@ the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is route
 through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
 signals become RTVI speaking and replacement-transcription messages; a committed
 turn is sent through the room's participant-owned Agent Runtime session using the pinned Gemini
-model profile. Its
+model selection. Its
 complete text response is streamed through Flux TTS as 48 kHz linear16, encoded
 to 20 ms Opus packets, and paced onto the negotiated browser audio track. RTVI
 bot speaking boundaries and 2.x bot-output progress follow the gateway's paced

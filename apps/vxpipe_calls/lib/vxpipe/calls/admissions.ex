@@ -3,6 +3,7 @@ defmodule Vxpipe.Calls.Admissions do
 
   alias Vxpipe.Calls.{
     AdmissionClaim,
+    DefinitionCredentials,
     IssuedJoinToken,
     JoinToken,
     PreparedCall,
@@ -40,7 +41,9 @@ defmodule Vxpipe.Calls.Admissions do
          {:ok, token_pair} <-
            build_token(call.plan, participant_key, route.participant_ref, options),
          {:ok, stored_call, _stored_token} <-
-           Repositories.call(call_repository, :insert_prepared_call, [call, token_pair.stored]) do
+           DefinitionCredentials.with_active(revision, options, fn ->
+             Repositories.call(call_repository, :insert_prepared_call, [call, token_pair.stored])
+           end) do
       {:ok, stored_call, token_pair.issued}
     end
   end

@@ -114,9 +114,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
       entry_receiver: "reception",
       defaults: %{
         capabilities: %{
-          speech_to_text: "default-stt",
-          model_inference: "default-model",
-          text_to_speech: "default-voice"
+          speech_to_text: %{provider: "morse", model: "morse"},
+          model_inference: %{provider: "fixture", model: "test:scripted"},
+          text_to_speech: %{provider: "morse", model: "morse"}
         }
       },
       participants: %{
@@ -150,15 +150,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
 
   defp registries(integrations) do
     %{
-      capability_profiles: %{
-        "default-stt" => %{kind: :speech_to_text, provider: :test_stt, options: %{}},
-        "default-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{}
-        },
-        "default-voice" => %{kind: :text_to_speech, provider: :test_tts, options: %{}}
-      },
       host_tools: %{},
       mcp_integrations: integrations
     }

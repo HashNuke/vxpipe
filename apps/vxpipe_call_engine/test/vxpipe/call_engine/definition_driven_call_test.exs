@@ -380,7 +380,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                fact.participant_id == caller.participant_id and
                fact.activation_id == caller.activation_id and
                fact.payload["provider"]["name"] == "deepgram" and
-               fact.payload["provider"]["integration_id"] == "plan-stt" and
+               fact.payload["provider"]["integration_id"] ==
+                 Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                   caller.capabilities.speech_to_text,
+                   plan.tenant_id
+                 ) and
                fact.payload["provider"]["request_id"] == "request-private-history" and
                is_binary(fact.payload["attribution"]["service_interval_id"])
            end)
@@ -432,7 +436,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                fact.participant_id == receiver.participant_id and
                fact.activation_id == receiver.activation_id and
                fact.payload["provider"]["name"] == "deepgram" and
-               fact.payload["provider"]["integration_id"] == "plan-tts" and
+               fact.payload["provider"]["integration_id"] ==
+                 Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                   receiver.capabilities.text_to_speech,
+                   plan.tenant_id
+                 ) and
                fact.payload["provider"]["request_id"] == "req" and
                fact.payload["provider"]["operation_id"] == "speech-private"
            end)
@@ -823,7 +831,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                fact.correlation_id == command.correlation_id and
                fact.public_sequence == nil and
                fact.payload["provider"]["name"] == "test" and
-               fact.payload["provider"]["integration_id"] == "test-model" and
+               fact.payload["provider"]["integration_id"] ==
+                 Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                   receiver.capabilities.model_inference,
+                   plan.tenant_id
+                 ) and
                fact.payload["provider"]["request_id"] == "provider-request-room-1" and
                fact.payload["provider"]["operation_id"] == "provider-response-room-1"
            end)
@@ -1339,7 +1351,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 4}}
   end
 
-  test "pins selected speech options while using application-owned secrets and transports" do
+  test "pins inline speech options while using tenant credentials and configured transports" do
     configure_agent_runtime_provider(self())
     configure_speech_runtime()
     room_id = unique_id("room")
@@ -1349,7 +1361,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
 
     assert_receive {:test_tts_transport_started, _tts_transport,
-                    %{url: tts_url, headers: [{"Authorization", "Token runtime-secret"}]}}
+                    %{url: tts_url, headers: [{"Authorization", "Token runtime-test-secret"}]}}
 
     assert tts_url =~ "model=flux-plan-voice"
 
@@ -1357,13 +1369,13 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     attach_caller(plan, room, caller, "conn-speech-plan", sink)
 
     assert_receive {:test_stt_transport_started, _stt_transport,
-                    %{url: stt_url, headers: [{"Authorization", "Token runtime-secret"}]}}
+                    %{url: stt_url, headers: [{"Authorization", "Token runtime-test-secret"}]}}
 
     assert stt_url =~ "model=flux-general-multi"
   end
 
-  for profile <- ["plan-stt", "morse-stt"] do
-    test "resolves #{profile} only when an additional planned human attaches" do
+  for provider <- [:deepgram, :morse] do
+    test "resolves #{provider} only when an additional planned human attaches" do
       configure_agent_runtime_provider(self())
       configure_speech_runtime()
 
@@ -1373,7 +1385,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
           definition_transform: fn input ->
             listener = %{
               Map.fetch!(input.participants, "caller")
-              | capabilities: %{speech_to_text: unquote(profile)}
+              | capabilities: %{
+                  speech_to_text: speech_selection(:speech_to_text, unquote(provider))
+                }
             }
 
             put_in(input, [:participants, "listener"], listener)
@@ -1418,7 +1432,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
       result = CallEngine.TestTransferConnection.attach(attach, nil)
 
-      if unquote(profile) == "plan-stt" do
+      if unquote(provider) == :deepgram do
         assert {:ok, %ConnectionAttachment{media_ingress: ingress}} = result
         assert is_pid(ingress)
         assert_receive {:test_stt_transport_started, listener_stt, %{url: url}}
@@ -1441,7 +1455,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "resolves explicitly registered alternate speech providers without changing defaults" do
-    plan = compile_plan(unique_id("room-morse-runtime"), speech?: true, speech_profile: :morse)
+    plan = compile_plan(unique_id("room-morse-runtime"), speech?: true, speech_provider: :morse)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
@@ -1501,7 +1515,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert speech_to_text.participant_id == caller.participant_id
     assert speech_to_text.activation_id == caller.activation_id
     assert speech_to_text.usage_provider.name == "morse_code"
-    assert speech_to_text.usage_provider.integration_id == "morse-stt"
+
+    assert speech_to_text.usage_provider.integration_id ==
+             Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+               caller.capabilities.speech_to_text,
+               plan.tenant_id
+             )
 
     assert {MorseCodeTTS, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
              startup.text_to_speech.provider
@@ -1512,17 +1531,22 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert startup.text_to_speech.participant_id == receiver.participant_id
     assert startup.text_to_speech.activation_id == receiver.activation_id
     assert startup.text_to_speech.usage_provider.name == "morse_code"
-    assert startup.text_to_speech.usage_provider.integration_id == "morse-tts"
+
+    assert startup.text_to_speech.usage_provider.integration_id ==
+             Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+               receiver.capabilities.text_to_speech,
+               plan.tenant_id
+             )
+
     assert Keyword.fetch!(default_stt, :provider) == Flux
     assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech
   end
 
-  test "keeps the active agent pinned after source definition and profile maps change" do
+  test "keeps the active agent pinned after source prompt and inline selection change" do
     configure_agent_runtime_provider(self())
     room_id = unique_id("room-pinned-source")
     input = definition_input([])
-    profiles = capability_profiles([])
-    plan = compile_plan_from(room_id, input, profiles)
+    plan = compile_plan_from(room_id, input)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
@@ -1530,13 +1554,19 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     changed_input =
       put_in(input, [:participants, "receiver", :prompt], "Use a replacement prompt.")
 
-    changed_profiles =
-      put_in(profiles, ["test-model", :options, :model], "replacement:model")
+    changed_input =
+      put_in(
+        changed_input,
+        [:participants, "receiver", :capabilities, :model_inference, :model],
+        "replacement:model"
+      )
 
     assert get_in(changed_input, [:participants, "receiver", :prompt]) ==
              "Use a replacement prompt."
 
-    assert get_in(changed_profiles, ["test-model", :options, :model]) == "replacement:model"
+    assert changed_input.participants["receiver"].capabilities.model_inference.model ==
+             "replacement:model"
+
     assert room.room_id == room_id
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -1549,7 +1579,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert [%Message{role: :system, content: "Use the available host action."} | _messages] =
              request.messages
 
-    assert receiver.capabilities.model_inference.options == %{model: "test:scripted"}
+    assert receiver.capabilities.model_inference.model == "test:scripted"
 
     assert {:ok, response} = ModelResponse.new(text: "Pinned configuration retained.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
@@ -1569,9 +1599,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       settings
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, AgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, fixture: fixture)
-      |> Keyword.put(:model_provider_label, :local_fixture)
+      |> Keyword.put(:fixture, {AgentRuntimeModelProvider, [fixture: fixture]})
 
     assert {:ok, startup} =
              PlanStartup.new(plan,
@@ -1582,7 +1610,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                text_to_speech: [enabled: false]
              )
 
-    assert startup.agent_activation[:provider] == :local_fixture
+    assert startup.agent_activation[:provider] == "fixture"
     assert startup.agent_activation[:runtime] == :agent_runtime
     assert startup.agent_activation[:model_provider] == AgentRuntimeModelProvider
     assert startup.agent_activation[:model].fixture == fixture
@@ -1752,7 +1780,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   test "rejects an unsupported model provider before registering a room" do
     room_id = unique_id("room-unsupported-provider")
-    plan = compile_plan(room_id, model_provider: :unsupported_model_provider)
+    plan = compile_plan(room_id)
+    receiver = plan.participants["receiver"]
+    invalid = %{receiver.capabilities.model_inference | provider: "unsupported"}
+    receiver = %{receiver | capabilities: %{receiver.capabilities | model_inference: invalid}}
+    plan = %{plan | participants: Map.put(plan.participants, "receiver", receiver)}
 
     assert {:error,
             %Error{
@@ -1799,9 +1831,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   defp compile_plan(room_id, options \\ []) do
     transform = Keyword.get(options, :definition_transform, &Function.identity/1)
     input = options |> definition_input() |> transform.()
-    profiles = capability_profiles(options)
-
-    compile_plan_from(room_id, input, profiles, options)
+    compile_plan_from(room_id, input, options)
   end
 
   defp open_archive(options) do
@@ -1886,7 +1916,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     )
   end
 
-  defp compile_plan_from(room_id, input, profiles, options \\ []) do
+  defp compile_plan_from(room_id, input, options \\ []) do
     assert {:ok, definition} =
              CallDefinition.new(input,
                resource_id: "definition-test",
@@ -1907,7 +1937,6 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              )
 
     registries = %{
-      capability_profiles: profiles,
       host_tools: %{"get_current_time" => CurrentTime}
     }
 
@@ -1915,52 +1944,40 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     plan
   end
 
-  defp capability_profiles(options) do
+  defp speech_selection(_kind, :morse) do
+    %{provider: "morse", model: "morse", options: %{sample_rate: 16_000, unit_duration_ms: 20}}
+  end
+
+  defp speech_selection(:speech_to_text, :deepgram) do
     %{
-      "test-model" => %{
-        kind: :model_inference,
-        provider: Keyword.get(options, :model_provider, :req_llm),
-        options: %{model: "test:scripted"}
-      },
-      "plan-stt" => %{
-        kind: :speech_to_text,
-        provider: Flux,
-        options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
-      },
-      "plan-tts" => %{
-        kind: :text_to_speech,
-        provider: FluxTextToSpeech,
-        options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
-      },
-      "morse-stt" => %{
-        kind: :speech_to_text,
-        provider: MorseCodeSTT,
-        options: %{sample_rate: 16_000, unit_duration_ms: 20}
-      },
-      "morse-tts" => %{
-        kind: :text_to_speech,
-        provider: MorseCodeTTS,
-        options: %{sample_rate: 16_000, unit_duration_ms: 20}
-      }
+      provider: "deepgram",
+      model: "flux-general-multi",
+      options: %{encoding: "opus", sample_rate: 48_000}
+    }
+  end
+
+  defp speech_selection(:text_to_speech, :deepgram) do
+    %{
+      provider: "deepgram",
+      model: "flux-plan-voice",
+      options: %{encoding: "linear16", sample_rate: 48_000}
     }
   end
 
   defp definition_input(options) do
     speech? = Keyword.get(options, :speech?, false)
 
-    speech_profile = Keyword.get(options, :speech_profile, :hosted)
-
-    {speech_to_text_profile, text_to_speech_profile} =
-      case speech_profile do
-        :hosted -> {"plan-stt", "plan-tts"}
-        :morse -> {"morse-stt", "morse-tts"}
-      end
+    speech_provider = Keyword.get(options, :speech_provider, :deepgram)
 
     caller_capabilities =
-      if speech?, do: %{speech_to_text: speech_to_text_profile}, else: %{}
+      if speech?,
+        do: %{speech_to_text: speech_selection(:speech_to_text, speech_provider)},
+        else: %{}
 
     receiver_capabilities =
-      if speech?, do: %{text_to_speech: text_to_speech_profile}, else: %{}
+      if speech?,
+        do: %{text_to_speech: speech_selection(:text_to_speech, speech_provider)},
+        else: %{}
 
     %{
       schema_version: CallDefinition.schema_version(),
@@ -1979,7 +1996,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
           type: "agent",
           prompt: "Use the available host action.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: Map.put(receiver_capabilities, :model_inference, "test-model"),
+          capabilities:
+            Map.put(receiver_capabilities, :model_inference, %{
+              provider: "fixture",
+              model: "test:scripted"
+            }),
           tools: %{
             "get_current_time" => %{type: "host", tool: "get_current_time"}
           },
@@ -1989,7 +2010,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
           type: "agent",
           prompt: "This participant must not be started.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: %{model_inference: "test-model"},
+          capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}},
           tools: %{},
           transfers: []
         }
@@ -2126,9 +2147,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, AgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, fixture: fixture)
-      |> Keyword.put(:model_provider_label, :local_fixture)
+      |> Keyword.put(:fixture, {AgentRuntimeModelProvider, [fixture: fixture]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -2148,8 +2167,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: observer)
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: observer]})
 
     Application.put_env(
       :vxpipe_call_engine,

@@ -14,13 +14,6 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
       credential_repository: {CredentialStore, Repo},
       definition_repository: {DefinitionStore, Repo},
       registries: %{
-        capability_profiles: %{
-          "test-model" => %{
-            kind: :model_inference,
-            provider: :test,
-            options: %{model: "test"}
-          }
-        },
         host_tools: %{}
       }
     )
@@ -132,11 +125,11 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
 
   defp definition_input do
     %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       name: "Operator example",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
       participants: %{
         "caller" => %{
           type: "human",

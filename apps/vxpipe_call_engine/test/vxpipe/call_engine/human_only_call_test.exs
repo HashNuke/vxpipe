@@ -278,7 +278,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                room_id: room_id
              )
 
-    registries = %{capability_profiles: %{}, host_tools: %{}}
+    registries = %{host_tools: %{}}
     assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
     plan
   end

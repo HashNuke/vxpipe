@@ -35,8 +35,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
     encoding = Keyword.get(options, :encoding)
     sample_rate = Keyword.get(options, :sample_rate)
 
-    if valid_api_key?(api_key) and model in @models and encoding in @encodings and
-         is_integer(sample_rate) and sample_rate > 0 do
+    if valid_api_key?(api_key) and validate_options(options) == :ok do
       {:ok,
        %__MODULE__{
          api_key: api_key,
@@ -47,6 +46,18 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
     else
       {:error, :invalid_configuration}
     end
+  end
+
+  @doc false
+  def validate_options(options) do
+    model = Keyword.get(options, :model, "flux-general-en")
+    encoding = Keyword.get(options, :encoding)
+    sample_rate = Keyword.get(options, :sample_rate)
+
+    if model in @models and encoding in @encodings and
+         is_integer(sample_rate) and sample_rate > 0,
+       do: :ok,
+       else: {:error, :invalid_configuration}
   end
 
   @impl true

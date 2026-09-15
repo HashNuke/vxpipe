@@ -76,12 +76,11 @@ profile into these application settings before starting the supervision tree.
 A future tenant-aware resolver may choose a trusted profile per room; accepting
 arbitrary browser-supplied prompts is not part of this design.
 
-Credentials have a separate lifecycle. Development reads `GEMINI_API_KEY` in
-`config/runtime.exs` only when model inference is enabled and injects it into
-the ReqLLM adapter options. The key is not compiled into application code,
-accepted from the browser, copied into commands or events, or logged. An
-embedding application or future deployment-config loader can inject the same
-adapter option without using the repository's development environment overlay.
+Credentials have a separate lifecycle. Inline Google selections resolve encrypted tenant
+bindings through a host-injected credential source during capability preparation. Global
+provider environment keys are not read. The resulting private snapshot belongs to that
+activation and is excluded from prepared plans, commands, events and inspection. See
+[inline provider selections](inline-provider-selections.md) for the current contract.
 
 ## Context ownership and bounds
 

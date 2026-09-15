@@ -5,6 +5,7 @@ defmodule Vxpipe.Calls.Definitions do
 
   alias Vxpipe.Calls.{
     CallPlanCompiler,
+    DefinitionCredentials,
     DefinitionRevision,
     ParticipantRoute,
     PrivateMaterial,
@@ -59,13 +60,17 @@ defmodule Vxpipe.Calls.Definitions do
     with {:ok, repository} <- Repositories.fetch(options, :definition_repository),
          {:ok, stored} <-
            Repositories.call(repository, :fetch_revision, [tenant_key, definition_id, revision]),
-         :ok <- publishable(stored) do
-      Repositories.call(repository, :publish_revision, [
-        tenant_key,
-        definition_id,
-        revision,
-        now(options)
-      ])
+         :ok <- publishable(stored),
+         {:ok, definition} <-
+           CallDefinition.new(stored.source, resource_id: definition_id, revision: revision) do
+      DefinitionCredentials.with_active(definition, tenant_key, options, fn ->
+        Repositories.call(repository, :publish_revision, [
+          tenant_key,
+          definition_id,
+          revision,
+          now(options)
+        ])
+      end)
     end
   end
 
@@ -102,7 +107,8 @@ defmodule Vxpipe.Calls.Definitions do
     with {:ok, revision_number} <-
            Repositories.call(repository, :next_revision, [tenant_key, definition_id]),
          {:ok, definition} <-
-           CallDefinition.new(source, resource_id: definition_id, revision: revision_number) do
+           CallDefinition.new(source, resource_id: definition_id, revision: revision_number),
+         :ok <- DefinitionCredentials.check(definition, tenant_key, options) do
       validation_errors = validate_support(definition, tenant_key, options)
       routes = participant_routes(definition, tenant_key, options)
       telephony_routes = telephony_routes(definition, tenant_key)
@@ -122,7 +128,12 @@ defmodule Vxpipe.Calls.Definitions do
         inserted_at: now(options)
       }
 
-      case Repositories.call(repository, :insert_revision, [tenant_key, revision, routes]) do
+      result =
+        DefinitionCredentials.with_active(definition, tenant_key, options, fn ->
+          Repositories.call(repository, :insert_revision, [tenant_key, revision, routes])
+        end)
+
+      case result do
         {:error, :revision_conflict} ->
           attempt_save(
             repository,

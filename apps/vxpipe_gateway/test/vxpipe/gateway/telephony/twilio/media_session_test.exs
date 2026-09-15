@@ -214,7 +214,9 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{
+        capabilities: %{model_inference: %{provider: "fixture", model: "google:test-model"}}
+      },
       call_variables: %{sections: %{}},
       participants: %{
         "caller" => %{
@@ -257,13 +259,6 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "google:test-model"}
-        }
-      },
       host_tools: %{}
     }
 

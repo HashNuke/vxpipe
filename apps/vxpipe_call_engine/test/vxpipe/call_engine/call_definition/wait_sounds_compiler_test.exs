@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, Error}
 
   test "omitted slots resolve destination-specific defaults while explicit nil silences only its slot" do
-    assert CallDefinition.schema_version() == "20260914.01"
+    assert CallDefinition.schema_version() == "20260915.01"
 
     for fields <- [%{}, %{wait_sounds: %{}}] do
       plan = compile(fields)
@@ -50,12 +50,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
     refute inspect(plan) =~ "media.example.com"
   end
 
-  test "current definitions remain supported and retain their schema while rejecting new fields" do
-    plan = compile(%{schema_version: "20260913.01"})
-    assert plan.schema_version == "20260913.01"
-    assert plan.wait_sounds.transfer_joining == :cafe_bossa
-
-    assert {:error, %Error{details: %{"path" => ["wait_sounds"]}}} =
+  test "retired schema definitions require explicit conversion" do
+    assert {:error, %Error{details: %{"path" => ["schema_version"]}}} =
              input()
              |> Map.merge(%{schema_version: "20260913.01", wait_sounds: nil})
              |> CallDefinition.new(resource_id: "support", revision: 1)
@@ -98,8 +94,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
              |> CallDefinition.new(resource_id: "support", revision: 1)
   end
 
-  test "prepares previously pinned plans without rewriting their original schema or identities" do
-    plan = compile(%{schema_version: "20260913.01"})
+  test "prepares decoded current plans without rewriting their schema or identities" do
+    plan = compile(%{})
     legacy = Map.drop(plan, [:wait_sounds, :wait_sound_assets])
     encoded = :erlang.term_to_binary(legacy, [:deterministic])
     decoded = :erlang.binary_to_term(encoded, [:safe])
@@ -129,7 +125,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{},
                host_tools: %{}
              })
 

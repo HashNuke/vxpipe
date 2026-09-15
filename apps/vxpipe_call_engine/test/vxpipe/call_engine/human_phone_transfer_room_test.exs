@@ -29,8 +29,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     text_to_speech = [
       enabled: true,
@@ -297,8 +296,15 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
                      type: "agent",
                      prompt: "Route callers safely.",
                      capabilities: %{
-                       model_inference: "test-model",
-                       text_to_speech: "test-voice"
+                       model_inference: %{provider: "fixture", model: "test:scripted"},
+                       text_to_speech: %{
+                         provider: "deepgram",
+                         model: "flux-test-voice",
+                         options: %{
+                           encoding: "linear16",
+                           sample_rate: 48_000
+                         }
+                       }
                      },
                      tools: %{},
                      transfers: ["human-support"]
@@ -341,22 +347,6 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{
-                 "test-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: "test:scripted"}
-                 },
-                 "test-voice" => %{
-                   kind: :text_to_speech,
-                   provider: FluxTextToSpeech,
-                   options: %{
-                     model: "flux-test-voice",
-                     encoding: :linear16,
-                     sample_rate: 48_000
-                   }
-                 }
-               },
                host_tools: %{}
              })
 

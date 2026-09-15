@@ -260,7 +260,6 @@ defmodule Vxpipe.CallEngine.Recording.EgressPolicyReadinessTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{},
                host_tools: %{}
              })
 

@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptions do
       recording: Keyword.get(options, :recording, enabled: false)
     ]
     |> put_optional(:outbound_leg_connector, Keyword.get(options, :outbound_leg_connector))
+    |> put_optional(:credential_source, Keyword.get(options, :credential_source))
   end
 
   defp put_optional(options, _key, nil), do: options

@@ -35,8 +35,6 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
     end
 
     System.put_env("VXPIPE_DATABASE_URL", "postgres://localhost/storage_runtime_test")
-    System.put_env("VXPIPE_DEV_MODEL_FIXTURE", "true")
-    System.put_env("DEEPGRAM_API_KEY", "runtime-configuration-speech-marker")
 
     on_exit(fn ->
       Enum.each(environment, fn

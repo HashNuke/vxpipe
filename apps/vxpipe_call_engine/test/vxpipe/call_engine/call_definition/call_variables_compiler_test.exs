@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
-  @schema_version "20260913.01"
+  @schema_version "20260915.01"
 
   test "compiles partial initial values and agent permissions into typed plan state" do
     assert {:ok, definition} =
@@ -250,7 +250,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
       schema_version: @schema_version,
       entry_caller: "caller",
       entry_receiver: "reception",
-      defaults: %{capabilities: %{model_inference: "default-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "default"}}},
       call_variables: %{
         sections: %{
           "customer" => %{
@@ -303,13 +303,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "default-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{model: "default"}
-        }
-      },
       host_tools: %{}
     }
   end

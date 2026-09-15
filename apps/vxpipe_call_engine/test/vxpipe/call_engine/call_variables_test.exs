@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.TestArchiveWriter
 
-  @schema_version "20260913.01"
+  @schema_version "20260915.01"
 
   test "readiness exposes initialized bindings without values or invalidation by ordinary updates" do
     %{server: server, identity: identity} = start_variables()
@@ -512,7 +512,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
       schema_version: @schema_version,
       entry_caller: "caller",
       entry_receiver: "reception",
-      defaults: %{capabilities: %{model_inference: "default-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "default"}}},
       call_variables: %{
         sections: %{
           "customer" => %{
@@ -580,13 +580,6 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "default-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{model: "default"}
-        }
-      },
       host_tools: %{}
     }
   end

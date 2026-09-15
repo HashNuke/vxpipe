@@ -25,11 +25,21 @@ defmodule Vxpipe.Gateway.TrustedCall do
 
   @spec new(keyword()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t() | :invalid_config}
   def new(options) when is_list(options) do
-    with definition_input when is_map(definition_input) <- Keyword.get(options, :definition),
+    with true <- Keyword.keyword?(options),
+         [] <-
+           Keyword.keys(options) --
+             [
+               :definition,
+               :resource_id,
+               :revision,
+               :host_tools,
+               :initial_variables,
+               :tool_visibility,
+               :tool_visibility_overrides
+             ],
+         definition_input when is_map(definition_input) <- Keyword.get(options, :definition),
          resource_id when is_binary(resource_id) <- Keyword.get(options, :resource_id),
          revision when is_integer(revision) and revision > 0 <- Keyword.get(options, :revision),
-         capability_profiles when is_map(capability_profiles) <-
-           Keyword.get(options, :capability_profiles),
          host_tools when is_map(host_tools) <- Keyword.get(options, :host_tools),
          initial_variables when is_map(initial_variables) <-
            Keyword.get(options, :initial_variables, %{}),
@@ -42,7 +52,7 @@ defmodule Vxpipe.Gateway.TrustedCall do
       {:ok,
        %__MODULE__{
          definition: definition,
-         registries: %{capability_profiles: capability_profiles, host_tools: host_tools},
+         registries: %{host_tools: host_tools},
          initial_variables: initial_variables,
          tool_visibility_override: tool_visibility_override
        }}

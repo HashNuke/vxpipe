@@ -402,8 +402,19 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
       opening =
         case unquote(source) do
-          :file_url -> %{type: "file_url", url: "https://assets.example.test/notice.wav"}
-          :text -> %{type: "text", text: "Notice.", text_to_speech: "opening-tts"}
+          :file_url ->
+            %{type: "file_url", url: "https://assets.example.test/notice.wav"}
+
+          :text ->
+            %{
+              type: "text",
+              text: "Notice.",
+              text_to_speech: %{
+                provider: "deepgram",
+                model: "flux-opening-voice",
+                options: %{encoding: "linear16", sample_rate: 48_000}
+              }
+            }
         end
 
       plan = compile_plan(opening_audio: opening)
@@ -671,7 +682,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert :ok = TestAudioOutputSink.playback_completed(second_sink)
     assert_eventually_open(second_plan)
 
-    third_plan = compile_plan(opening_profile: "another-opening-binding")
+    third_plan = compile_plan(opening_credential_name: "another-opening-binding")
     third_caller = Map.fetch!(third_plan.participants, third_plan.entry_caller)
     assert {:ok, third_room} = CallEngine.start_call(third_plan)
     assert_receive {:test_tts_transport_started, third_tts, _connection}
@@ -1006,7 +1017,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   end
 
   defp compile_plan(options \\ []) do
-    opening_profile = Keyword.get(options, :opening_profile, "opening-tts")
+    opening_credential_name = Keyword.get(options, :opening_credential_name, "default")
 
     receiver =
       if Keyword.get(options, :receiver) == :human do
@@ -1017,8 +1028,23 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       else
         capabilities =
           if Keyword.get(options, :agent_text_to_speech, false),
-            do: %{model_inference: "test-model", text_to_speech: "plan-tts"},
-            else: %{model_inference: "test-model"}
+            do: %{
+              model_inference: %{
+                provider: "fixture",
+                model: Keyword.get(options, :model, "test:scripted")
+              },
+              text_to_speech: %{
+                provider: "deepgram",
+                model: "flux-plan-voice",
+                options: %{encoding: "linear16", sample_rate: 48_000}
+              }
+            },
+            else: %{
+              model_inference: %{
+                provider: "fixture",
+                model: Keyword.get(options, :model, "test:scripted")
+              }
+            }
 
         %{
           type: "agent",
@@ -1039,7 +1065,16 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         Keyword.get(options, :opening_audio, %{
           type: "text",
           text: "This call may be recorded.",
-          text_to_speech: opening_profile
+          text_to_speech:
+            Map.put(
+              %{
+                provider: "deepgram",
+                model: "flux-opening-voice",
+                options: %{encoding: "linear16", sample_rate: 48_000}
+              },
+              :credential_name,
+              opening_credential_name
+            )
         }),
       defaults: %{capabilities: %{}},
       call_variables: %{sections: %{}},
@@ -1047,7 +1082,13 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         "caller" => %{
           type: "human",
           connection: %{service: "web", mode: "receive", admission: "start_call"},
-          capabilities: %{speech_to_text: "plan-stt"}
+          capabilities: %{
+            speech_to_text: %{
+              provider: "deepgram",
+              model: "flux-general-multi",
+              options: %{encoding: "opus", sample_rate: 48_000}
+            }
+          }
         },
         "receiver" => receiver
       },
@@ -1071,28 +1112,6 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        opening_profile => %{
-          kind: :text_to_speech,
-          provider: FluxTextToSpeech,
-          options: %{model: "flux-opening-voice", encoding: :linear16, sample_rate: 48_000}
-        },
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: Keyword.get(options, :model, "test:scripted")}
-        },
-        "plan-stt" => %{
-          kind: :speech_to_text,
-          provider: Flux,
-          options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
-        },
-        "plan-tts" => %{
-          kind: :text_to_speech,
-          provider: FluxTextToSpeech,
-          options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
-        }
-      },
       host_tools: %{}
     }
 
@@ -1333,8 +1352,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, provider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {provider, [owner: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,

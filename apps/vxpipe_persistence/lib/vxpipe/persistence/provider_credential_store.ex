@@ -92,6 +92,57 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
       {:error, :provider_credentials_unavailable}
   end
 
+  @impl true
+  def with_active(context, tenant_key, requirements, operation) do
+    repo = Keyword.fetch!(context, :repo)
+
+    case repo.transaction(fn ->
+           requirements
+           |> Enum.sort_by(&{&1.provider, &1.name})
+           |> Enum.each(fn requirement ->
+             case lock_active(context, tenant_key, requirement) do
+               :ok ->
+                 :ok
+
+               {:error, _reason} ->
+                 repo.rollback({:provider_credential_unavailable, requirement.path})
+             end
+           end)
+
+           case operation.() do
+             {:error, reason} -> repo.rollback(reason)
+             result -> result
+           end
+         end) do
+      {:ok, result} -> result
+      {:error, _reason} = error -> error
+    end
+  rescue
+    error -> repository_error(error, __STACKTRACE__)
+  catch
+    :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
+      {:error, :provider_credentials_unavailable}
+  end
+
+  defp lock_active(context, tenant_key, requirement) do
+    repo = Keyword.fetch!(context, :repo)
+
+    with {:ok, tenant} <- tenant(repo, tenant_key),
+         query =
+           from(c in ProviderCredential,
+             where:
+               c.tenant_id == ^tenant.id and c.provider == ^requirement.provider and
+                 c.name == ^requirement.name,
+             lock: "FOR SHARE"
+           ),
+         %{status: "active"} = stored <- repo.one(query, log: false, telemetry_event: nil),
+         {:ok, _private_snapshot} <- resolve_payload(context, stored, tenant_key) do
+      :ok
+    else
+      _unavailable -> {:error, :provider_credential_unavailable}
+    end
+  end
+
   # Match the dependency boundary, not exception text or all RuntimeErrors.
   # Programmer errors elsewhere retain their original exception and stacktrace.
   defp repository_error(%DBConnection.ConnectionError{}, _trace),

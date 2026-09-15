@@ -810,7 +810,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     }
   end
 
-  defp registries, do: %{capability_profiles: %{}, host_tools: %{}}
+  defp registries, do: %{host_tools: %{}}
 
   defp issue_session(plan, room, participant_id) do
     binding = [

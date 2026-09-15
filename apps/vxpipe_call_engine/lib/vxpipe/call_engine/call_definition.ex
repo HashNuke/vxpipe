@@ -16,8 +16,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260914.01"
-  @previous_schema_version "20260913.01"
+  @schema_version "20260915.01"
   @fields [
     :schema_version,
     :name,
@@ -89,7 +88,6 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, schema_input} <-
            DefinitionValidation.fetch(input, :schema_version, code, message, []),
          :ok <- validate_schema(schema_input, code, message),
-         :ok <- validate_schema_fields(schema_input, input, code, message),
          {:ok, name} <- optional_name(input, code, message),
          {:ok, caller_input} <-
            DefinitionValidation.fetch(input, :entry_caller, code, message, []),
@@ -158,7 +156,6 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   end
 
   defp validate_schema(@schema_version, _code, _message), do: :ok
-  defp validate_schema(@previous_schema_version, _code, _message), do: :ok
 
   defp validate_schema(_value, code, message) do
     DefinitionValidation.invalid(
@@ -168,17 +165,6 @@ defmodule Vxpipe.CallEngine.CallDefinition do
       "must be a supported schema version"
     )
   end
-
-  defp validate_schema_fields(@previous_schema_version, %{wait_sounds: _value}, code, message) do
-    DefinitionValidation.invalid(
-      code,
-      message,
-      ["wait_sounds"],
-      "is not supported by this schema version"
-    )
-  end
-
-  defp validate_schema_fields(_version, _input, _code, _message), do: :ok
 
   defp optional_name(input, code, message) do
     DefinitionValidation.optional_string(

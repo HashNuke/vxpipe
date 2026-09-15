@@ -40,8 +40,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -996,7 +995,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      prompt: "Route callers safely.",
                      transfer_history: reception_transfer_history,
                      first_message: %{mode: "wait_for_input"},
-                     capabilities: agent_capabilities("test-model", text_to_speech?),
+                     capabilities: agent_capabilities("test:scripted", text_to_speech?),
                      tools: %{},
                      variable_permissions: reception_permissions,
                      transfers: ["billing"]
@@ -1007,7 +1006,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      prompt: "Handle billing requests.",
                      transfer_history: transfer_history,
                      first_message: billing_first_message,
-                     capabilities: agent_capabilities("billing-model", text_to_speech?),
+                     capabilities: agent_capabilities(billing_model, text_to_speech?),
                      tools: %{},
                      variable_permissions: billing_permissions,
                      transfers: billing_transfers
@@ -1034,38 +1033,25 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{
-                 "test-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: "test:scripted"}
-                 },
-                 "billing-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: billing_model}
-                 },
-                 "test-voice" => %{
-                   kind: :text_to_speech,
-                   provider: FluxTextToSpeech,
-                   options: %{
-                     model: "flux-test-voice",
-                     encoding: :linear16,
-                     sample_rate: 48_000
-                   }
-                 }
-               },
                host_tools: %{}
              })
 
     plan
   end
 
-  defp agent_capabilities(model_profile, true) do
-    %{model_inference: model_profile, text_to_speech: "test-voice"}
+  defp agent_capabilities(model, true) do
+    %{
+      model_inference: %{provider: "fixture", model: model},
+      text_to_speech: %{
+        provider: "deepgram",
+        model: "flux-test-voice",
+        options: %{encoding: "linear16", sample_rate: 48_000}
+      }
+    }
   end
 
-  defp agent_capabilities(model_profile, false), do: %{model_inference: model_profile}
+  defp agent_capabilities(model, false),
+    do: %{model_inference: %{provider: "fixture", model: model}}
 
   defp configure_text_to_speech(transport_options \\ []) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)

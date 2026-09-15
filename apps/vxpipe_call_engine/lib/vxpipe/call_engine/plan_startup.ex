@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   alias Vxpipe.CallEngine.{
     Error,
+    CapabilityCatalog,
+    CredentialSource,
     Id,
     ResolvedCallPlan,
     SpeechToTextRuntime,
@@ -51,9 +53,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   @spec validate(ResolvedCallPlan.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def validate(%ResolvedCallPlan{} = plan, options) when is_list(options) do
-    case entries(plan) do
-      {:ok, entries} -> supported_configuration(entries, options)
-      {:error, %Error{}} = error -> error
+    with :ok <- current_plan(plan),
+         {:ok, entries} <- entries(plan) do
+      supported_configuration(entries, options)
     end
   end
 
@@ -73,8 +75,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_model(%{kind: :human}), do: :ok
 
   defp supported_model(%{
-         capabilities: %{model_inference: %CapabilitySelection{provider: :req_llm}}
-       }),
+         capabilities: %{model_inference: %CapabilitySelection{provider: provider}}
+       })
+       when provider in ["google", "fixture"],
        do: :ok
 
   defp supported_model(participant),
@@ -87,8 +90,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       nil ->
         :ok
 
-      %CapabilitySelection{provider: provider} ->
-        with {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
+      %CapabilitySelection{} = selection ->
+        with {:ok, provider} <- CapabilityCatalog.adapter(selection),
+             {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
              true <- Keyword.get(settings, :enabled) == true do
           :ok
         else
@@ -116,7 +120,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   @spec new(ResolvedCallPlan.t(), keyword()) :: {:ok, t()} | {:error, Error.t()}
   def new(%ResolvedCallPlan{} = plan, options) when is_list(options) do
-    with {:ok, entries} <- entries(plan),
+    with :ok <- current_plan(plan),
+         {:ok, entries} <- entries(plan),
          %{caller: caller, receiver: receiver} = entries,
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
@@ -426,7 +431,12 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp speech_to_text_runtime(plan, participant, opening_audio, options) do
-    case resolve_provider(participant.capabilities.speech_to_text, options, :speech_to_text) do
+    case resolve_provider(
+           participant.capabilities.speech_to_text,
+           plan.tenant_id,
+           options,
+           :speech_to_text
+         ) do
       {:ok, nil} ->
         {:ok, nil}
 
@@ -437,7 +447,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              media_ingress when is_list(media_ingress) <-
                Keyword.get(settings, :media_ingress),
              {:ok, usage_provider} <-
-               speech_to_text_usage_provider(participant, provider_module, provider_config) do
+               speech_to_text_usage_provider(plan, participant, provider_module, provider_config) do
           {:ok,
            %SpeechToTextRuntime{
              call_id: plan.call_id,
@@ -462,13 +472,13 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp speech_to_text_usage_provider(participant, provider_module, provider_config) do
+  defp speech_to_text_usage_provider(plan, participant, provider_module, provider_config) do
     selection = participant.capabilities.speech_to_text
 
     with true <- function_exported?(provider_module, :usage_identity, 1),
          identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
       identity
-      |> Keyword.put(:integration_id, selection.profile)
+      |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
       |> ProviderContext.new()
     else
       _invalid -> {:error, :invalid_usage_identity}
@@ -510,7 +520,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp opening_text_to_speech_runtime(_plan, _caller, _options) do
     unsupported(
       ["opening_audio", "text_to_speech"],
-      "requires its own resolved text-to-speech profile"
+      "requires its own inline text-to-speech selection"
     )
   end
 
@@ -525,7 +535,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp text_to_speech_runtime(plan, selection, participant, options, path) do
-    case resolve_provider(selection, options, :text_to_speech) do
+    case resolve_provider(selection, plan.tenant_id, options, :text_to_speech) do
       {:ok, nil} ->
         {:ok, nil}
 
@@ -538,10 +548,15 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              asset_cache_identity when is_map(asset_cache_identity) <-
                provider_module.asset_cache_identity(provider_config),
              {:ok, usage_provider} <-
-               text_to_speech_usage_provider(selection, provider_module, provider_config) do
+               text_to_speech_usage_provider(plan, selection, provider_module, provider_config) do
           {:ok,
            %TextToSpeechRuntime{
-             asset_cache_identity: Map.put(asset_cache_identity, "profile", selection.profile),
+             asset_cache_identity:
+               Map.put(
+                 asset_cache_identity,
+                 "selection",
+                 CapabilitySelection.identity(selection, plan.tenant_id)
+               ),
              call_id: plan.call_id,
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
@@ -560,33 +575,35 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp text_to_speech_usage_provider(selection, provider_module, provider_config) do
+  defp text_to_speech_usage_provider(plan, selection, provider_module, provider_config) do
     with true <- function_exported?(provider_module, :usage_identity, 1),
          identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
       identity
-      |> Keyword.put(:integration_id, selection.profile)
+      |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
       |> ProviderContext.new()
     else
       _invalid -> {:error, :invalid_usage_identity}
     end
   end
 
-  defp resolve_provider(nil, _options, _kind), do: {:ok, nil}
+  defp resolve_provider(nil, _tenant_id, _options, _kind), do: {:ok, nil}
 
   defp resolve_provider(
-         %CapabilitySelection{provider: provider, options: public_options},
+         %CapabilitySelection{} = selection,
+         tenant_id,
          options,
          kind
        ) do
-    with {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
+    with {:ok, provider} <- CapabilityCatalog.adapter(selection),
+         {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
          true <- Keyword.get(settings, :enabled) == true,
-         private_options when is_list(private_options) <-
-           Keyword.get(settings, :provider_options),
-         {:ok, selected_options} <- selected_options(public_options),
+         {:ok, credential} <- CredentialSource.resolve(tenant_id, selection, options),
+         {:ok, selected_options} <- CapabilityCatalog.speech_options(selection),
+         {:ok, selected_options} <- authenticate_speech(selected_options, credential),
          true <- Code.ensure_loaded?(provider),
          true <- function_exported?(provider, :new, 1),
          {:ok, provider_config} <-
-           provider.new(Keyword.merge(private_options, selected_options)) do
+           provider.new(selected_options) do
       {:ok, {provider, provider_config}, settings}
     else
       _unsupported -> {:error, unsupported_speech_configuration_reason(kind)}
@@ -617,13 +634,63 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp provider_settings(_settings, _provider), do: {:error, :provider_not_configured}
 
-  defp selected_options(options) when is_map(options) do
-    if Enum.all?(options, fn {key, _value} -> is_atom(key) end) do
-      {:ok, Map.to_list(options)}
+  defp authenticate_speech(options, nil), do: {:ok, options}
+
+  defp authenticate_speech(options, %Vxpipe.CallEngine.ProviderCredential{
+         auth_kind: "api_key",
+         payload: %{"api_key" => api_key}
+       }),
+       do: {:ok, Keyword.put(options, :api_key, api_key)}
+
+  defp authenticate_speech(_options, _credential), do: {:error, :unsupported_provider_auth}
+
+  defp current_plan(plan) do
+    if plan.schema_version == Vxpipe.CallEngine.CallDefinition.schema_version() do
+      validate_planned_selections(plan)
     else
-      {:error, :unsupported_provider_options}
+      unsupported(["schema_version"], "must use the current inline capability schema")
     end
   end
+
+  defp validate_planned_selections(plan) do
+    selections =
+      Enum.flat_map(plan.participants, fn {ref, participant} ->
+        for kind <- [:speech_to_text, :model_inference, :text_to_speech] do
+          {Map.fetch!(participant.capabilities, kind), kind,
+           ["participants", ref, "capabilities", Atom.to_string(kind)]}
+        end
+      end)
+
+    opening =
+      case plan.opening_audio do
+        %{type: :text, text_to_speech: selection} ->
+          [{selection, :text_to_speech, ["opening_audio", "text_to_speech"]}]
+
+        _none ->
+          []
+      end
+
+    Enum.reduce_while(selections ++ opening, :ok, fn {selection, kind, path}, :ok ->
+      case valid_planned_selection(selection, kind, path) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  rescue
+    _exception -> unsupported(["capabilities"], "must contain valid inline selections")
+  end
+
+  defp valid_planned_selection(nil, _kind, _path), do: :ok
+
+  defp valid_planned_selection(%CapabilitySelection{kind: kind} = selection, kind, path) do
+    case CapabilitySelection.validate(selection, path) do
+      :ok -> :ok
+      {:error, _reason} -> unsupported(path, "must contain a valid inline selection")
+    end
+  end
+
+  defp valid_planned_selection(_selection, _kind, path),
+    do: unsupported(path, "must contain a valid inline selection")
 
   defp unsupported_speech_configuration_reason(:speech_to_text),
     do: :unsupported_speech_to_text_configuration
@@ -634,7 +701,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp unsupported_speech_configuration(participant, kind) do
     unsupported(
       ["participants", participant.definition_key, "capabilities", Atom.to_string(kind)],
-      "must select a capability profile supported by the configured runtime"
+      "must select a supported inline capability with available tenant credentials"
     )
   end
 

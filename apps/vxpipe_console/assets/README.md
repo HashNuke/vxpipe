@@ -57,8 +57,9 @@ spoken through the configured Deepgram path.
 
 ## Manual tool-call test
 
-1. Put valid `GEMINI_API_KEY` and `DEEPGRAM_API_KEY` values in the repository-root
-   `.env` file.
+1. Follow [provider credential setup](../../../docs/provider-credential-storage.md) to provision
+   Google and Deepgram for one tenant. Set `VXPIPE_DEV_TENANT` to its public key alongside the
+   platform encryption settings in the ignored repository-root `.env`.
 2. From the repository root, run `bin/dev`.
 3. Open `https://<this-machine's-tailscale-fqdn>:4000/pipecat-console`, choose **Create room**,
    and then choose **Connect** in the Pipecat console.
@@ -75,8 +76,8 @@ is a failed test.
 
 ## Manual human-transfer test
 
-1. Create and migrate the local `vxpipe_dev` database, provide valid Gemini and Deepgram
-   development keys, and start `bin/dev`.
+1. Create/migrate `vxpipe_dev`, provision the tenant’s Google and Deepgram credentials,
+   select that tenant with `VXPIPE_DEV_TENANT`, and start `bin/dev`.
 2. Open `/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
 3. Open `/transfer` in a second browser or device. Use headphones when both clients are on one
    machine so the two live microphones do not feed each other.
@@ -101,40 +102,13 @@ The transfer page is a Vxpipe development client, not an RTVI extension or a sec
 console. It uses the authenticated `vxpipe` WebRTC sideband for exact-attempt acceptance and the
 ordinary negotiated audio tracks for private briefing and active room media.
 
-## Manual provider-fixture test
+## Local provider fixtures
 
-1. Put a valid `DEEPGRAM_API_KEY` in the repository-root `.env`, set
-   `VXPIPE_DEV_MODEL_FIXTURE=true`, and omit `GEMINI_API_KEY` if it is not otherwise
-   needed.
-2. Run `bin/dev`, then open `/diagnostics` on the HTTPS development origin.
-3. Choose **Delay**, return through **Voice console**, create and connect a room, and
-   send a typed message. Verify the local response arrives after roughly 1.5 seconds
-   and the dashboard attributes first-output timing to **Local fixture**. With TTS
-   enabled, it also shows the independently measured Deepgram first-audio timing.
-4. Repeat with **Failure**. Verify no assistant text is fabricated and the dashboard
-   records a Local fixture unavailable outcome with missing first output.
-5. Repeat with **No output**. Verify the invalid empty result fails without assistant
-   content or a first-output timing. The next request returns to the configured default
-   scenario.
-
-These controls are development application state, not fields accepted from the browser's
-room creation or RTVI payloads.
-
-## Manual local Morse output test
-
-1. In the repository-root `.env`, set `VXPIPE_DEV_MODEL_FIXTURE=true` and
-   `VXPIPE_DEV_SPEECH_PROFILE=morse`. Remove the hosted provider keys if the point of the
-   check is to prove credential-free startup.
-2. Run `bin/dev`, create a room, connect, and send a typed message containing only the
-   supported Morse alphabet documented in the call-engine README.
-3. Verify one normal assistant text row appears and its audio track plays audible Morse tones.
-   The default local fixture response is valid Morse input.
-4. Do not use microphone speech as a Morse STT assertion. This browser transport supplies Opus,
-   while the deterministic decoder accepts mono little-endian linear16. Run the call-engine
-   direct-PCM room test for the local recognition and complete audio round trip.
-
-This profile changes only trusted development application configuration; it adds no browser
-control and no field that a client can use to select a provider.
+The default browser sample uses its provisioned Google/Deepgram tenant. Local model and Morse
+selections are explicit inline definition fields with host-configured adapters; environment
+profile switches are removed. See [local fixtures](../../../docs/development.md#local-fixtures)
+for the deterministic direct-PCM voice test. It verifies local STT and audible Morse output
+without provider credentials. Browser microphone RTP is Opus, while Morse STT takes linear16.
 
 From the repository root:
 

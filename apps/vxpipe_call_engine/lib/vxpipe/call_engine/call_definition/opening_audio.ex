@@ -6,13 +6,19 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
   """
 
   alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
 
   @derive {Inspect, only: [:type]}
   @enforce_keys [:type]
   defstruct [:type, :text, :url, :text_to_speech]
 
   @type t ::
-          %__MODULE__{type: :text, text: String.t(), url: nil, text_to_speech: String.t()}
+          %__MODULE__{
+            type: :text,
+            text: String.t(),
+            url: nil,
+            text_to_speech: CapabilitySelection.t()
+          }
           | %__MODULE__{type: :file_url, text: nil, url: String.t(), text_to_speech: nil}
 
   @code :invalid_call_definition
@@ -57,17 +63,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
              @path ++ ["text"],
              maximum: 4_096
            ),
-         {:ok, profile_input} <-
+         {:ok, selection_input} <-
            DefinitionValidation.fetch(input, :text_to_speech, @code, @message, @path),
-         {:ok, profile} <-
-           DefinitionValidation.string(
-             profile_input,
-             @code,
-             @message,
-             @path ++ ["text_to_speech"],
-             maximum: 128
-           ) do
-      {:ok, %__MODULE__{type: :text, text: text, url: nil, text_to_speech: profile}}
+         {:ok, selection} <-
+           CapabilitySelection.new(selection_input, :text_to_speech, @path ++ ["text_to_speech"]) do
+      {:ok, %__MODULE__{type: :text, text: text, url: nil, text_to_speech: selection}}
     end
   end
 

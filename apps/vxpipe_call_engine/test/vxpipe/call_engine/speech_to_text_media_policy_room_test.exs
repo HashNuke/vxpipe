@@ -942,7 +942,14 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
       Keyword.get(options, :media_policy, %{transcript_routes: %{}, save_transcripts: false})
 
     participants = %{
-      "caller" => human_participant(%{speech_to_text: "plan-stt"}),
+      "caller" =>
+        human_participant(%{
+          speech_to_text: %{
+            provider: "deepgram",
+            model: "flux-general-multi",
+            options: %{encoding: "opus", sample_rate: 48_000}
+          }
+        }),
       "receiver" => human_participant(%{})
     }
 
@@ -997,13 +1004,6 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "plan-stt" => %{
-          kind: :speech_to_text,
-          provider: Flux,
-          options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
-        }
-      },
       host_tools: %{}
     }
 

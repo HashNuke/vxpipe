@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy, as: ResolvedMediaPolicy
 
-  @schema_version "20260913.01"
+  @schema_version "20260915.01"
 
   test "preserves omitted fields and explicit empty route maps" do
     input =
@@ -189,7 +189,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
       entry_receiver: "reception",
       defaults: %{
         capabilities: %{
-          model_inference: "default-model"
+          model_inference: %{provider: "fixture", model: "test:scripted"}
         }
       },
       participants: %{
@@ -224,13 +224,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "default-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{}
-        }
-      },
       host_tools: %{}
     }
   end

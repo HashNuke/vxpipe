@@ -169,6 +169,11 @@ timing is claimed. Documentation/sample selection and direct-PCM limitation disc
 before milestone completion. A warnings-as-errors compile and the complete owning child suite
 pass with `136 tests, 0 failures (1 excluded)`.
 
+Current configuration note (2026-09-15): the following checkpoint records historical
+verification. The tenant-provider cutover removes its environment switches and profile branches.
+Select Morse inline and explicitly configure the host transport; the current deterministic
+round-trip command is in [development](../development.md#local-fixtures).
+
 Implementation evidence, checkpoint 9 (2026-09-09): added the opt-in development
 `VXPIPE_DEV_SPEECH_PROFILE=morse` setting. Combined with the existing local model fixture, it
 starts without Gemini or Deepgram credentials, removes STT from the browser call definition, and

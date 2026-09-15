@@ -71,16 +71,15 @@ Join tokens are introduced by the prepared-call milestone.
 
 Google and Deepgram credentials have separate encrypted tenant storage and trusted
 provision/list commands. See [provider credential storage](provider-credential-storage.md)
-for platform encryption settings, protected stdin input and metadata output. These records
-are not yet consumed by the current profile-based call flow; the tenant provider milestone
-tracks that cutover. API-key issuance and authentication above remain independent.
+for platform encryption settings, protected stdin input and metadata output. Inline definitions resolve these records at save, publication, preparation and capability
+creation. API-key issuance and authentication above remain independent.
 
 ## Save and publish call definitions
 
-Configure the application/tenant capability and host-tool catalogs before saving
-definitions that reference them. Saving validates the portable schema and records
-unsupported catalog references as `validation_errors`; a revision with errors
-cannot be published.
+Select supported providers and provider-local models inline, provision their tenant
+credentials, and configure any referenced host tools before saving. Invalid selections
+or missing credentials prevent saving. Other unsupported host references remain draft
+`validation_errors`; a revision with errors cannot be published.
 
 Save the first immutable revision from a JSON file:
 
@@ -90,8 +89,8 @@ mix vxpipe.definition.save \
   --file examples/call-definitions/development.json
 ```
 
-That tracked example uses the development capability catalog. Deployments should
-provide their own definition and matching configured catalogs.
+That tracked example selects Google Gemini inline and requires the tenant’s `google/default`
+credential. Deployments should provide their own definition and configured host tools.
 
 The output contains a generated `definition_id`, revision number, source digest,
 validation results, and draft participant route UUIDs. Draft routes are not

@@ -1,8 +1,9 @@
 # Tenant-scoped provider credentials and platform configuration
 
-Status: implementation authorized 2026-09-15; preparatory cleanup complete; checkpoint 1 in progress.
+Status: implementation authorized 2026-09-15; preparatory cleanup complete; checkpoint 1 implemented and verified.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
-Telnyx/Twilio credentials. Agent specification review is complete; implementation remains unchecked.
+Telnyx/Twilio credentials. Agent specification review is complete; final implementation review
+and the remaining checkpoint exits are open.
 
 Prerequisites: the implemented workflows in
 [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md),
@@ -112,7 +113,7 @@ since-discarded uncommitted TOML work. They identify the vertical slices’ inte
 | [PrivateMaterial](../../apps/vxpipe_calls/lib/vxpipe/calls/private_material.ex) | Rejects keys such as `credential`, `api_key`, and `token`. Add a typed non-secret reference without weakening payload rejection. |
 | [CredentialRepository](../../apps/vxpipe_calls/lib/vxpipe/calls/credential_repository.ex), [CredentialStore](../../apps/vxpipe_persistence/lib/vxpipe/persistence/credential_store.ex) | Store tenant identity and hash-only Vxpipe API keys. Provider encryption needs a separate concept and port; recoverable storage does not exist here today. |
 | [PreparedCallFactory](../../apps/vxpipe_calls/lib/vxpipe/calls/prepared_call_factory.ex), [PreparedCallRecord](../../apps/vxpipe_persistence/lib/vxpipe/persistence/prepared_call_record.ex), [ResolvedPlanCodec](../../apps/vxpipe_persistence/lib/vxpipe/persistence/resolved_plan_codec.ex) | Compile, encode and reload complete plans. Keep secrets out and explicitly handle old serialized selections at cutover. |
-| [PlanStartup](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup.ex), [AgentActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/agent_activation.ex), [AgentModelProfile](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/agent_model_profile.ex) | Merge global private options, match `:req_llm`, and use profile IDs for usage/cache identity. Replace with tenant resolution and explicit provider/model/binding identity. |
+| [PlanStartup](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup.ex), [AgentActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/agent_activation.ex), [AgentModel](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/agent_model.ex) (formerly `AgentModelProfile`) | Merge global private options, match `:req_llm`, and use profile IDs for usage/cache identity. Replace with tenant resolution and explicit provider/model/binding identity. |
 | [ServiceRegistry](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/service_registry.ex), [ConfiguredService](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/configured_service.ex) | Store secret-bearing immutable carrier configurations and fall back from tenant service to application service. Replace hosted tenant lookup with DB service/credential resolution; remove the application credential fallback. |
 | [Telnyx ServiceProfile](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/telnyx/service_profile.ex), [Twilio ServiceProfile](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/twilio/service_profile.ex) | Validate carrier-specific auth inputs and build adapter/verifier options. Retain this internal validation responsibility; obtain inputs from tenant records. These modules are not capability profiles. |
 | [TelnyxEvents](../../apps/vxpipe_gateway/lib/vxpipe/gateway/http/telnyx_events.ex), [TwilioWebhookRequest](../../apps/vxpipe_gateway/lib/vxpipe/gateway/http/twilio_webhook_request.ex), [TwilioMedia](../../apps/vxpipe_gateway/lib/vxpipe/gateway/http/twilio_media.ex) | Fetch configured service before authentication. Twilio authenticates both webhooks and the WSS upgrade. Migrate all three boundaries, preserving verify-before-dispatch and verify-before-token-consumption. |
@@ -153,8 +154,8 @@ Introduce a new schema version with inline selections. Proposed fragment:
 }
 ```
 
-This fragment illustrates the target schema; the current parser does not accept it. Verify actual
-model/option combinations against the installed adapters as each provider slice is implemented.
+The current parser accepts this shape under schema `20260915.01`. Google and Deepgram are the
+initial hosted providers; verify additional model/option combinations as each provider slice lands.
 
 - `provider` is the actual provider: `google`, `deepgram`, `openai`, etc.
   `provider: "req_llm"` and user-configurable adapter/module/transport fields are rejected.
@@ -310,30 +311,30 @@ sample inputs when changing shared structures, not at the final cleanup checkpoi
 
 Depends on the implemented prerequisites above.
 
-- [ ] Write a failing workflow test: provision tenant Google/Deepgram credentials, save an inline
+- [x] Write a failing workflow test: provision tenant Google/Deepgram credentials, save an inline
   definition, publish/prepare/join and exchange a synthetic voice turn. The same save for another
   tenant fails with no new revision/route. Test adapters observe only the expected credentials.
-- [ ] Deliver the minimum complete credential table/encryption, repository port, secret-source
+- [x] Deliver the minimum complete credential table/encryption, repository port, secret-source
   bridge and trusted provisioning/list-metadata operation required by this flow. Test ciphertext
   persistence, tenant isolation, unavailable keys and malformed payloads.
-- [ ] Introduce the inline schema and internal catalog with `google`/`deepgram`, common/provider
+- [x] Introduce the inline schema and internal catalog with `google`/`deepgram`, common/provider
   option translation, local fixture exemption, and `req_llm`/profile-string rejection.
   Update the parser, compiler, plan representation and initial STT/LLM/TTS activation together.
-- [ ] Enforce hard save and fresh publish/prepare/activation checks for this flow. Preserve safe
+- [x] Enforce hard save and fresh publish/prepare/activation checks for this flow. Preserve safe
   errors and prepared-plan secret exclusion. Keep Vxpipe API-key authentication unchanged.
-- [ ] Replace current profile-dependent consumers when changing the shared selection structure,
+- [x] Replace current profile-dependent consumers when changing the shared selection structure,
   including opening parser, usage/cache identity and trusted input. Migrate affected tests/sample
   definitions in this checkpoint so the umbrella compiles and the normal sample remains runnable.
-- [ ] Remove global/TOML/env credential reads and boot-time provider-key requirements for this
+- [x] Remove global/TOML/env credential reads and boot-time provider-key requirements for this
   delivered flow. Credentials are read after the Repo starts, through the tenant resolver.
-- [ ] Delete `VXPIPE_DEV_SPEECH_PROFILE` reads and both `speech_profile` switch branches in
+- [x] Delete `VXPIPE_DEV_SPEECH_PROFILE` reads and both `speech_profile` switch branches in
   `config/runtime.exs`, plus obsolete launcher/sample/docs/test references. Select local Morse
   through the inline definition. Test that setting the retired variable cannot change the selected
   provider or activate a legacy fallback. Removing only the line from `env.sample` is insufficient.
-- [ ] Make Console sample setup select a stable provisioned development tenant through trusted
+- [x] Make Console sample setup select a stable provisioned development tenant through trusted
   operator setup; its call-scoped API key remains server-held. No startup import of provider env
   keys or copying a global secret into automatically created tenants.
-- [ ] Demonstrate from a disposable DB: provision → save → publish → prepare/join → spoken reply,
+- [x] Demonstrate from a disposable DB: provision → save → publish → prepare/join → spoken reply,
   plus missing/wrong-tenant credential and restart cases; record focused test commands/results.
 
 Exit: one usable tenant voice call driven by inline provider/model selections and encrypted DB
@@ -594,7 +595,7 @@ Implementation boxes stay unchecked until their runnable exits and failure cases
 
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
-| 1 — Tenant voice call | Provisioning/storage implemented; inline call flow pending | 16 focused and 65 persistence tests pass; disposable DB/fresh-VM and PTY checks pass; independent review clear. Root: 1,452 tests, one native audio failure (passes isolated). See [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
+| 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
 | 2 — Opening and transfers | Not started | Pending |
 | 3 — Telnyx tenant phone flow | Not started | Pending |
 | 4 — Twilio tenant phone flow | Not started | Pending |
@@ -627,7 +628,7 @@ The explicit speech-profile reader deletion and shared artifact bucket tasks rec
 review on 2026-09-15. The review confirmed their dependency order and added missing/blank/invalid/
 retired-only bucket cases plus enablement preservation. That specification review preceded
 implementation; the shared-bucket implementation evidence is recorded above. Inline speech-profile
-deletion remains pending.
+reader deletion and conflicting-old-settings tests are implemented in checkpoint 1.
 
 Initial specification documentation checks passed: 131 relative links/anchors across this milestone and the index,
 one parsed JSON example, seven sequential checkpoints with exits, 61 unchecked tasks, and index

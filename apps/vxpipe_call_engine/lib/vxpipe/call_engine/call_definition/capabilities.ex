@@ -2,15 +2,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.Capabilities do
   @moduledoc false
 
   alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
 
   @kinds [:speech_to_text, :model_inference, :text_to_speech]
 
   defstruct speech_to_text: nil, model_inference: nil, text_to_speech: nil
 
   @type t :: %__MODULE__{
-          speech_to_text: nil | String.t(),
-          model_inference: nil | String.t(),
-          text_to_speech: nil | String.t()
+          speech_to_text: nil | CapabilitySelection.t(),
+          model_inference: nil | CapabilitySelection.t(),
+          text_to_speech: nil | CapabilitySelection.t()
         }
 
   def new(value, path) do
@@ -18,9 +19,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.Capabilities do
     message = "The call definition is invalid."
 
     with {:ok, input} <- DefinitionValidation.normalize_map(value, @kinds, code, message, path),
-         {:ok, speech_to_text} <- optional_ref(input, :speech_to_text, code, message, path),
-         {:ok, model_inference} <- optional_ref(input, :model_inference, code, message, path),
-         {:ok, text_to_speech} <- optional_ref(input, :text_to_speech, code, message, path) do
+         {:ok, speech_to_text} <- optional_selection(input, :speech_to_text, path),
+         {:ok, model_inference} <- optional_selection(input, :model_inference, path),
+         {:ok, text_to_speech} <- optional_selection(input, :text_to_speech, path) do
       {:ok,
        %__MODULE__{
          speech_to_text: speech_to_text,
@@ -34,12 +35,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.Capabilities do
   def ref(%__MODULE__{model_inference: ref}, :model_inference), do: ref
   def ref(%__MODULE__{text_to_speech: ref}, :text_to_speech), do: ref
 
-  defp optional_ref(input, key, code, message, path) do
+  defp optional_selection(input, key, path) do
     case Map.fetch(input, key) do
       {:ok, value} ->
-        DefinitionValidation.string(value, code, message, path ++ [Atom.to_string(key)],
-          maximum: 128
-        )
+        CapabilitySelection.new(value, key, path ++ [Atom.to_string(key)])
 
       :error ->
         {:ok, nil}

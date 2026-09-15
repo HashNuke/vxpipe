@@ -64,6 +64,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         |> Keyword.fetch!(:agent_runtime)
         |> Keyword.put(:startup_lifecycle, state.call_lifecycle),
       agent_request_options: Keyword.get(options, :agent_request_options, []),
+      credential_source: Keyword.get(options, :credential_source),
       mcp_integrations: Keyword.get(options, :mcp_integrations),
       opening_audio: Keyword.fetch!(options, :opening_audio),
       outbound_leg_connector: Keyword.get(options, :outbound_leg_connector),

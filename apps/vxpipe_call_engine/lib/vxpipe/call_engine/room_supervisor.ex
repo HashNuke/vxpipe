@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   alias Vxpipe.CallEngine.{
     CallLifecycle,
+    ConnectionSpeechPreparation,
     Error,
     Id,
     ParticipantAuthority,
@@ -45,6 +46,11 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   end
 
   def start_call(%ResolvedCallPlan{} = plan, options) when is_list(options) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    options =
+      Keyword.put_new(options, :credential_source, Keyword.get(settings, :credential_source))
+
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
       [] ->
         with {:ok, opening_audio} <- opening_audio_settings(),
@@ -281,7 +287,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          {:planned, runtime, participant},
          application_options
        ) do
-    case PlanStartup.connection_speech_to_text(runtime.plan, participant, runtime.startup_options) do
+    timeout = min(DateTime.diff(command.deadline, DateTime.utc_now(), :millisecond), 5_000)
+
+    case ConnectionSpeechPreparation.run(
+           runtime.plan,
+           participant,
+           runtime.startup_options,
+           timeout
+         ) do
       {:ok, selected} ->
         start_connection_speech_to_text(
           room_authority,
@@ -395,6 +408,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       incarnation_id: incarnation_id,
       start_command_id: Id.generate(:command),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
+      credential_source: Keyword.get(runtime_options, :credential_source),
       archive_handoff: archive.handoff,
       archive_source_policy: archive.source_policy,
       call_lifecycle: call_lifecycle_options(runtime_options),
@@ -478,6 +492,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       owner: self(),
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
+      credential_source: Keyword.get(runtime_options, :credential_source),
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),

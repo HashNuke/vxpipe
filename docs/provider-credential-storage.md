@@ -3,8 +3,9 @@
 Trusted operators can provision Google and Deepgram API keys in PostgreSQL and list their
 metadata. This is the first implementation chunk within the
 [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
-Call definitions and live provider activation are not connected to this store yet; checkpoint 1
-remains open until its complete voice flow passes.
+Inline Google/Deepgram definitions now resolve this store at save, publication, preparation
+and capability creation. Checkpoint 1 remains open until repository-wide acceptance and
+independent implementation review pass; see [inline selections](inline-provider-selections.md).
 
 ## Configure and provision
 
@@ -24,10 +25,8 @@ Test configuration ignores these host encryption variables and injects isolated 
 For this intermediate implementation, the current database variables remain
 `VXPIPE_DATABASE_URL` and `VXPIPE_DATABASE_POOL_SIZE`. Development defaults to the local
 `vxpipe_dev` database and pool size 10. The milestone's `VXPIPE_DB_URL` / `DATABASE_URL` and
-pool aliases will replace these names in the platform cutover. The existing development call
-setup still uses its old profiles; use `VXPIPE_DEV_MODEL_FIXTURE=true` and
-`VXPIPE_DEV_SPEECH_PROFILE=morse` to run these operator commands without upstream provider
-environment credentials during this transition.
+pool aliases will replace these names in the platform cutover. Operator commands and server
+startup do not require global provider keys or development profile switches.
 
 Follow [tenant setup](tenant-control-plane.md) to create/migrate PostgreSQL and bootstrap a
 tenant. Then provision using JSON supplied by a secret manager pipe or a protected file:
@@ -58,6 +57,15 @@ values. Secret flags and arbitrary auth-file fields are unsupported.
 These commands and `Vxpipe.Calls.ProviderCredentials` are trusted host operations. Possession of
 a tenant key alone does not authorize an untrusted user to invoke them. A future tenant-facing
 management endpoint must enforce its own authenticated tenant/admin boundary.
+
+## Run the development sample
+
+Set `VXPIPE_DEV_TENANT=TENANT_KEY` alongside the platform keyring and database settings,
+then run `bin/dev` (which loads `.env`) or `mix run --no-halt` (which uses exported variables).
+The Console saves and publishes its inline Google/Deepgram definition for that tenant,
+then issues a server-held call-scoped API key. It does not create another tenant on restart
+or copy provider keys from the environment. Without a selected tenant the managed sample
+is disabled; missing or unreadable bindings prevent sample setup and call creation.
 
 ## Storage decision
 
@@ -101,8 +109,7 @@ measurements must use explicitly projected, payload-free events.
   backup alone must not recover provider credentials.
 - A one-way provider-key hash was rejected because provider requests need the original secret.
 - An environment/global provider fallback was rejected because it defeats tenant ownership and
-  hides missing configuration. Runtime callers will use explicit tenant resolution in the
-  remaining checkpoint-1 work.
+  hides missing configuration. Runtime callers use explicit tenant resolution.
 - Interactive secret entry was rejected for this CLI: terminal echo and shell history are avoided
   by requiring protected redirected input.
 - A custom cryptographic primitive or new encryption dependency was unnecessary; OTP supplies

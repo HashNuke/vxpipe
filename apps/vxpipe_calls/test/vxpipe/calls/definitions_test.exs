@@ -76,20 +76,15 @@ defmodule Vxpipe.Calls.DefinitionsTest do
              Definitions.resolve_route(other_tenant.key, first_route.key, options)
   end
 
-  test "records unsupported feature errors and refuses publication", %{
+  test "rejects unsupported inline selections before saving", %{
     tenant: tenant,
     options: options
   } do
     unsupported =
       put_in(definition_input(), [:defaults, :capabilities, :model_inference], "missing-model")
 
-    assert {:ok, draft} = Definitions.save(tenant.key, unsupported, options)
-    assert [%{"code" => "call_definition_resolution_failed"}] = draft.validation_errors
-
-    assert {:error, {:definition_not_publishable, errors}} =
-             Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
-
-    assert errors == draft.validation_errors
+    assert {:error, %Vxpipe.CallEngine.Error{code: :invalid_call_definition}} =
+             Definitions.save(tenant.key, unsupported, options)
   end
 
   test "rejects private material instead of persisting it in a definition revision", %{
@@ -211,20 +206,17 @@ defmodule Vxpipe.Calls.DefinitionsTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "test-model" => %{kind: :model_inference, provider: :test, options: %{model: "test"}}
-      },
       host_tools: %{}
     }
   end
 
   defp definition_input do
     %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       name: "Example",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
       participants: %{
         "caller" => %{
           type: "human",

@@ -342,7 +342,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
       resource_id: "sample-call",
       revision: 1,
       definition: %{
-        schema_version: "20260913.01",
+        schema_version: "20260915.01",
         entry_caller: "caller",
         entry_receiver: "receiver",
         defaults: %{capabilities: %{}},
@@ -356,7 +356,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
             type: "agent",
             prompt: "Answer briefly.",
             first_message: %{mode: "wait_for_input"},
-            capabilities: %{model_inference: "sample-model"},
+            capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}},
             tools: %{
               "get_current_time" => %{type: "host", tool: "get_current_time"}
             },
@@ -364,13 +364,6 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
           }
         },
         limits: %{max_duration_ms: 60_000}
-      },
-      capability_profiles: %{
-        "sample-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        }
       },
       host_tools: %{
         "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime

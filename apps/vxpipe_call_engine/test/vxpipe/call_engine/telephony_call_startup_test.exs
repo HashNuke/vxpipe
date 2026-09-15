@@ -45,10 +45,12 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
 
   defp compile_plan do
     definition_input = %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{
+        capabilities: %{model_inference: %{provider: "fixture", model: "google:test-model"}}
+      },
       call_variables: %{sections: %{}},
       participants: %{
         "caller" => %{
@@ -91,13 +93,6 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "google:test-model"}
-        }
-      },
       host_tools: %{}
     }
 

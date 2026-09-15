@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallVariables.Binding
   alias Vxpipe.CallEngine.AgentRuntime.ModelContextSource
-  alias Vxpipe.CallEngine.PlanStartup.AgentModelProfile
+  alias Vxpipe.CallEngine.PlanStartup.AgentModel
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Usage.ProviderContext
@@ -17,11 +17,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
           {:ok, keyword()} | {:error, Error.t()}
   def new(%ResolvedCallPlan{} = plan, %ResolvedCallPlan.Participant{} = receiver, options)
       when is_list(options) do
-    with %CapabilitySelection{provider: :req_llm} = model_selection <-
+    with %CapabilitySelection{} = model_selection <-
            receiver.capabilities.model_inference,
          owner when is_pid(owner) <- Keyword.get(options, :owner),
          settings when is_list(settings) <- Keyword.get(options, :agent_runtime),
-         {:ok, model_profile} <- AgentModelProfile.resolve(model_selection, settings),
+         {:ok, model} <- AgentModel.resolve(model_selection, plan.tenant_id, options),
          {:ok, variable_binding} <- variable_binding(plan, receiver, options),
          {:ok, mcp_integrations} <- mcp_integrations(receiver, options),
          {:ok, activation_options} <-
@@ -29,7 +29,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
              Keyword.get(settings, :implementation, :agent_runtime),
              plan,
              receiver,
-             model_profile,
+             model,
              variable_binding,
              mcp_integrations,
              owner,
@@ -49,14 +49,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          :agent_runtime,
          plan,
          receiver,
-         %AgentModelProfile{} = model_profile,
+         %AgentModel{} = model,
          variable_binding,
          mcp_integrations,
          owner,
          options,
          settings
        ) do
-    with {:ok, usage_provider} <- model_usage_provider(receiver, model_profile.model) do
+    with {:ok, usage_provider} <- model_usage_provider(plan, receiver) do
       {:ok,
        common_options(
          plan,
@@ -69,9 +69,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
        ) ++
          [
            runtime: :agent_runtime,
-           model_provider: model_profile.provider,
-           model: model_profile.configuration,
-           provider: Keyword.get(settings, :model_provider_label, :req_llm),
+           model_provider: model.provider,
+           model: model.configuration,
+           provider: receiver.capabilities.model_inference.provider,
            usage_provider: usage_provider,
            tools: receiver.tools
          ]}
@@ -221,27 +221,20 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     end
   end
 
-  defp model_usage_provider(receiver, model) do
+  defp model_usage_provider(plan, receiver) do
     selection = receiver.capabilities.model_inference
 
     ProviderContext.new(
-      name: model_provider_name(model),
-      integration_id: selection.profile,
-      model: model
+      name: selection.provider,
+      integration_id: CapabilitySelection.identity(selection, plan.tenant_id),
+      model: selection.model
     )
-  end
-
-  defp model_provider_name(model) do
-    case String.split(model, ":", parts: 2) do
-      [provider, _model] when provider != "" -> provider
-      _other -> "req_llm"
-    end
   end
 
   defp unsupported_model(receiver) do
     unsupported(
       ["participants", receiver.definition_key, "capabilities", "model_inference"],
-      "must select a supported ReqLLM model profile"
+      "must select a supported inline model with available tenant credentials"
     )
   end
 

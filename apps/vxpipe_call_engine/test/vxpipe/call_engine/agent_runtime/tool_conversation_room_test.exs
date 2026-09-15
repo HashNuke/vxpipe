@@ -28,8 +28,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -252,7 +251,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
       if conversation_mode, do: Map.put(tool, :conversation_mode, conversation_mode), else: tool
 
     input = %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -267,7 +266,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
           type: "agent",
           prompt: "Use the available tool.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: %{model_inference: "test-model"},
+          capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}},
           tools: %{"wait_for_test" => tool},
           transfers: []
         }
@@ -294,13 +293,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        }
-      },
       host_tools: %{"wait_for_test" => TestBlockingTool}
     }
 

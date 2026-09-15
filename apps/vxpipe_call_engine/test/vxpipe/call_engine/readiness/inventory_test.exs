@@ -757,7 +757,6 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{},
                host_tools: %{}
              })
 
@@ -773,9 +772,11 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
   defp selection(kind) do
     %CapabilitySelection{
       kind: kind,
-      profile: "selected-#{kind}",
-      provider: :fixture,
-      options: %{}
+      provider: if(kind == :model_inference, do: "fixture", else: "morse"),
+      model: if(kind == :model_inference, do: "selected-model", else: "morse"),
+      credential_name: nil,
+      options: %{},
+      provider_options: %{}
     }
   end
 end

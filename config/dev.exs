@@ -35,56 +35,17 @@ asks to return to reception, use the transfer tool with the reception destinatio
 claim the transfer completed unless the tool result confirms it.
 """
 
-sample_capability_profiles = %{
-  "deepgram-flux-stt" => %{
-    kind: :speech_to_text,
-    provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
-    options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
-  },
-  "gemini-flash-lite" => %{
-    kind: :model_inference,
-    provider: :req_llm,
-    options: %{model: "google:gemini-3.5-flash-lite"}
-  },
-  "deepgram-flux-voice" => %{
-    kind: :text_to_speech,
-    provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-    options: %{model: "flux-haley-en", encoding: :linear16, sample_rate: 48_000}
-  },
-  "morse-code-stt" => %{
-    kind: :speech_to_text,
-    provider: Vxpipe.CallEngine.Provider.MorseCodeSTT,
-    options: %{
-      amplitude: 4_096,
-      frequency_hz: 700,
-      sample_rate: 16_000,
-      unit_duration_ms: 60
-    }
-  },
-  "morse-code-tts" => %{
-    kind: :text_to_speech,
-    provider: Vxpipe.CallEngine.Provider.MorseCodeTTS,
-    options: %{
-      amplitude: 4_096,
-      frequency_hz: 700,
-      sample_rate: 48_000,
-      unit_duration_ms: 60
-    }
-  }
-}
-
 sample_host_tools = %{
   "prepare_background_report" => Vxpipe.CallEngine.Tool.DelayedReport
 }
 
-config :vxpipe_calls, Vxpipe.Calls,
-  registries: %{capability_profiles: sample_capability_profiles, host_tools: sample_host_tools}
+config :vxpipe_calls, Vxpipe.Calls, registries: %{host_tools: sample_host_tools}
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  agent_runtime: [context_compaction: [enabled: true]],
   speech_to_text: [
     enabled: true,
     provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
-    provider_options: [],
     transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxSocket, []},
     media_ingress: [
       maximum_frames: 50,
@@ -95,7 +56,6 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     providers: %{
       Vxpipe.CallEngine.Provider.MorseCodeSTT => [
         enabled: true,
-        provider_options: [],
         transport: {Vxpipe.CallEngine.Provider.MorseCodeSTT.Transport, []},
         media_ingress: [
           maximum_frames: 50,
@@ -109,13 +69,11 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   text_to_speech: [
     enabled: true,
     provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-    provider_options: [],
     transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket, []},
     maximum_requests: 4,
     providers: %{
       Vxpipe.CallEngine.Provider.MorseCodeTTS => [
         enabled: true,
-        provider_options: [],
         transport: {Vxpipe.CallEngine.Provider.MorseCodeTTS.Transport, []},
         maximum_requests: 4
       ]
@@ -140,16 +98,24 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           "order" => %{"id" => "order-demo-1001"}
         },
         definition: %{
-          schema_version: "20260914.01",
+          schema_version: "20260915.01",
           wait_sounds: %{},
           name: "Development sample",
           entry_caller: "caller",
           entry_receiver: "reception",
           defaults: %{
             capabilities: %{
-              speech_to_text: "deepgram-flux-stt",
-              model_inference: "gemini-flash-lite",
-              text_to_speech: "deepgram-flux-voice"
+              speech_to_text: %{
+                provider: "deepgram",
+                model: "flux-general-en",
+                options: %{encoding: "opus", sample_rate: 48_000}
+              },
+              model_inference: %{provider: "google", model: "gemini-3.5-flash-lite"},
+              text_to_speech: %{
+                provider: "deepgram",
+                model: "flux-haley-en",
+                options: %{encoding: "linear16", sample_rate: 48_000}
+              }
             }
           },
           call_variables: %{
@@ -230,7 +196,6 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           },
           limits: %{max_duration_ms: 1_800_000}
         },
-        capability_profiles: sample_capability_profiles,
         host_tools: sample_host_tools
       ]
     ]

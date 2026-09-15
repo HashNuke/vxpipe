@@ -27,8 +27,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
       |> Keyword.put(
         :context_compaction,
         enabled: true,
@@ -122,7 +121,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
 
   defp compile_plan do
     input = %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -137,7 +136,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
           type: "agent",
           prompt: "Help the caller.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: %{model_inference: "test-model"},
+          capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}},
           tools: %{},
           transfers: []
         }
@@ -162,13 +161,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        }
-      },
       host_tools: %{}
     }
 

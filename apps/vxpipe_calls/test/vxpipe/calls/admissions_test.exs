@@ -30,7 +30,7 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     input =
       case Map.fetch(context, :wait_sounds) do
         {:ok, sounds} ->
-          Map.merge(definition_input(), %{schema_version: "20260914.01", wait_sounds: sounds})
+          Map.merge(definition_input(), %{schema_version: "20260915.01", wait_sounds: sounds})
 
         :error ->
           definition_input()
@@ -424,9 +424,6 @@ defmodule Vxpipe.Calls.AdmissionsTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "test-model" => %{kind: :model_inference, provider: :test, options: %{model: "test"}}
-      },
       host_tools: %{}
     }
   end
@@ -458,11 +455,11 @@ defmodule Vxpipe.Calls.AdmissionsTest do
       end
 
     %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       name: "Admission example",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
       call_variables: %{
         sections: %{
           "order" => %{

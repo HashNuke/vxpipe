@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, Error}
   alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
 
-  test "resolves the opening's explicit TTS profile with a human initial receiver" do
+  test "resolves the opening's explicit TTS selection with a human initial receiver" do
     input =
       definition_input()
       |> put_in([:participants, "reception"], %{
@@ -14,47 +14,40 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
       |> Map.put(:opening_audio, %{
         type: "text",
         text: "This call may be recorded.",
-        text_to_speech: "notice-voice"
+        text_to_speech: %{provider: "morse", model: "morse"}
       })
 
     assert {:ok, definition} = CallDefinition.new(input, resource_id: "support", revision: 7)
     assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries())
-    assert plan.opening_audio.text_to_speech.profile == "notice-voice"
-    assert plan.opening_audio.text_to_speech.options == %{model: "notice"}
+    assert plan.opening_audio.text_to_speech.provider == "morse"
+    assert plan.opening_audio.text_to_speech.model == "morse"
     assert Map.fetch!(plan.participants, "reception").capabilities.text_to_speech == nil
   end
 
-  test "text opening requires its own profile even when the agent has a default voice" do
+  test "text opening requires its own selection even when the agent has a default voice" do
     input =
       definition_input()
-      |> put_in([:defaults, :capabilities, :text_to_speech], "notice-voice")
+      |> put_in([:defaults, :capabilities, :text_to_speech], %{provider: "morse", model: "morse"})
       |> Map.put(:opening_audio, %{type: "text", text: "Notice"})
 
     assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
              CallDefinition.new(input, resource_id: "support", revision: 7)
   end
 
-  test "rejects missing, wrong-kind, and malformed opening profiles without inheriting defaults" do
-    for profile <- ["missing", "test-model"] do
+  test "rejects legacy, wrong-kind, and malformed opening selections without inheriting defaults" do
+    for selection <- [
+          "missing",
+          "test-model",
+          nil,
+          "",
+          false,
+          %{provider: "fixture", model: "test"}
+        ] do
       input =
         Map.put(definition_input(), :opening_audio, %{
           type: "text",
           text: "Notice",
-          text_to_speech: profile
-        })
-
-      assert {:ok, definition} = CallDefinition.new(input, resource_id: "support", revision: 7)
-
-      assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
-               DefinitionCompiler.compile(definition, invocation(), registries())
-    end
-
-    for profile <- [nil, "", %{}, false] do
-      input =
-        Map.put(definition_input(), :opening_audio, %{
-          type: "text",
-          text: "Notice",
-          text_to_speech: profile
+          text_to_speech: selection
         })
 
       assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
@@ -63,15 +56,26 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
   end
 
   test "pins supported text and HTTPS file sources into the resolved plan" do
-    assert CallDefinition.schema_version() == "20260914.01"
+    assert CallDefinition.schema_version() == "20260915.01"
 
     for {input, expected} <- [
-          {%{type: "text", text: "This call may be recorded.", text_to_speech: "notice-voice"},
+          {%{
+             type: "text",
+             text: "This call may be recorded.",
+             text_to_speech: %{provider: "morse", model: "morse"}
+           },
            %OpeningAudio{
              type: :text,
              text: "This call may be recorded.",
              url: nil,
-             text_to_speech: "notice-voice"
+             text_to_speech: %Vxpipe.CallEngine.CallDefinition.CapabilitySelection{
+               kind: :text_to_speech,
+               provider: "morse",
+               model: "morse",
+               credential_name: nil,
+               options: %{},
+               provider_options: %{}
+             }
            }},
           {%{type: "file_url", url: "https://assets.example.test/opening.wav"},
            %OpeningAudio{
@@ -106,8 +110,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
           {%{type: "file_url", url: "http://example.test/a.wav"}, ["opening_audio", "url"]},
           {%{type: "file_url", url: "https://user@example.test/a.wav"}, ["opening_audio", "url"]},
           {%{type: "file_url", url: "https://example.test/a.wav#part"}, ["opening_audio", "url"]},
-          {%{type: "file_url", url: "https://example.test/a.wav", text_to_speech: "notice-voice"},
-           ["opening_audio", "text_to_speech"]},
+          {%{
+             type: "file_url",
+             url: "https://example.test/a.wav",
+             text_to_speech: %{provider: "morse", model: "morse"}
+           }, ["opening_audio", "text_to_speech"]},
           {%{type: "unknown", text: "hello"}, ["opening_audio", "type"]}
         ] do
       assert {:error, %Error{code: :invalid_call_definition, details: %{"path" => ^path}}} =
@@ -122,7 +129,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
       schema_version: CallDefinition.schema_version(),
       entry_caller: "caller",
       entry_receiver: "reception",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
       call_variables: %{sections: %{}},
       participants: %{
         "caller" => %{
@@ -157,18 +164,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "notice-voice" => %{
-          kind: :text_to_speech,
-          provider: :test_tts,
-          options: %{model: "notice"}
-        },
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{model: "test"}
-        }
-      },
       host_tools: %{}
     }
   end

@@ -269,7 +269,6 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressPolicyTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{},
                host_tools: %{}
              })
 

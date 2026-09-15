@@ -52,7 +52,9 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260911.03`. It retains web human transfer
+The definition-driven compiler's current schema is `20260915.01`. It selects upstream
+providers and provider-local models inline, with tenant credentials supplied at capability
+creation through an injected source. See [inline selections](../../docs/inline-provider-selections.md). It retains web human transfer
 destinations alongside the normal call-wide `media_policy` and each participant's optional
 `while_present` contribution. A human transfer destination uses an exact web
 `receive`/`transfer` connection intent, may configure one fixed `transfer_notice`, and makes the
@@ -116,14 +118,14 @@ handed to an independently supervised Call Engine worker. The schema retains the
 client tool-visibility policy from the earlier `20260909.01` shape. Trusted
 hosts supply resource and tenant identity separately
 from JSON-safe definition and invocation maps. The compiler validates a closed
-one-human/one-agent web subset and pins capability profiles, host-tool bindings,
+supported participant/transport combinations and pins inline capability selections, host-tool bindings,
 typed Call Variables schemas/grants/partial initial values, runtime participant
 identities, call limits, and resolved participant-local visibility overrides into
 a `ResolvedCallPlan`. Variable schemas use the
 released closed subset and do not enforce `required` completeness. Plan startup now
 rejects valid-but-deferred features before it creates a room or provider process.
 
-Text opening audio uses the initial receiving agent's selected TTS capability. A file opening uses
+Text opening audio has its own explicit inline TTS selection. A file opening uses
 the application-configured bounded HTTPS/WAV asset pipeline and a temporary room-supervised player,
 so it does not require TTS. Both forms keep caller text and audio closed until the attached output
 sink confirms actual playout completion; required playback failure ends the room.
@@ -145,12 +147,12 @@ bounded one-for-all restart budget. A participant supervisor owns that activatio
 participant shutdown or an exhausted activation restart ends that participant subtree without
 restarting the room.
 
-A trusted model capability profile pins its ReqLLM model and may add recursively data-valued
-`generation_options`. Profile values override matching application generation defaults, while
-credentials, streaming selection, and executable/provider-transport settings remain application
-configuration. Plan startup asks the configured provider constructor to validate the merged
-settings, so a known unsupported native routing/fallback option rejects the plan before the room
-starts. Vxpipe does not add another fallback list or retry coordinator.
+An inline model capability pins its public provider, provider-local model, common options,
+provider-specific options and credential binding name. Agent Runtime translates supported
+Google selections to ReqLLM internally. A preparation worker resolves the tenant's private
+credential snapshot; global provider credentials and transport settings cannot override the
+selection. Missing/revoked credentials fail preparation. Fixtures are explicitly configured
+under `agent_runtime: [fixture: {adapter, options}]` and need no provider credential.
 
 Every model-requested host or Call Variables operation is submitted to a bounded temporary worker
 under the active agent. `Tool.Invocation` owns one attempt, result bound, and deadline. The
@@ -210,8 +212,8 @@ call definition, invocation, command, or RTVI message.
 implementations of the ordinary speech capability contracts. They encode and decode controlled
 International Morse tones; they do not recognize spoken language, run VAD, or use a hosted API.
 The application must register each implementation under the relevant speech setting's closed
-`:providers` map, and a trusted capability profile must select the same module. Existing
-top-level STT/TTS settings remain the legacy/default implementations.
+`:providers` map. The definition selects `%{provider: "morse", model: "morse"}` with
+optional public signal settings under `options`; modules never enter definition input.
 
 The direct signal format is signed 16-bit little-endian mono PCM. Supported sample rates are
 8, 16, 24, and 48 kHz. Defaults are 16 kHz, a 700 Hz tone, amplitude 4,096, a 60 ms dot unit,

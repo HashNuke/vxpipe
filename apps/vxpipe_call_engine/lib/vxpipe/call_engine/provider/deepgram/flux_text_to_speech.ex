@@ -35,8 +35,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
     encoding = Keyword.get(options, :encoding, :linear16)
     sample_rate = Keyword.get(options, :sample_rate, 48_000)
 
-    if valid_api_key?(api_key) and valid_model?(model) and encoding == :linear16 and
-         sample_rate in @sample_rates do
+    if valid_api_key?(api_key) and validate_options(options) == :ok do
       {:ok,
        %__MODULE__{
          api_key: api_key,
@@ -47,6 +46,17 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
     else
       {:error, :invalid_configuration}
     end
+  end
+
+  @doc false
+  def validate_options(options) do
+    model = Keyword.get(options, :model, "flux-haley-en")
+    encoding = Keyword.get(options, :encoding, :linear16)
+    sample_rate = Keyword.get(options, :sample_rate, 48_000)
+
+    if valid_model?(model) and encoding == :linear16 and sample_rate in @sample_rates,
+      do: :ok,
+      else: {:error, :invalid_configuration}
   end
 
   def new!(options) do

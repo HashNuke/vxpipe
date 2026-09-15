@@ -25,8 +25,7 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -113,7 +112,7 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
           type: "agent",
           prompt: "Use the available platform tools.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: %{model_inference: "test-model"},
+          capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}},
           tools: %{
             "current_time" => %{type: "platform", tool: "get_current_time"},
             "end_call" => %{type: "platform", tool: "hangup"}
@@ -141,13 +140,6 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        }
-      },
       host_tools: %{}
     }
 

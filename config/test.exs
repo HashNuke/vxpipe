@@ -29,11 +29,12 @@ config :vxpipe_persistence,
          ]
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  credential_source: {Vxpipe.CallEngine.TestSpeechCredentialSource, :synthetic},
   agent_runtime: [
     implementation: :agent_runtime,
-    model_provider: Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider,
-    model_provider_options: [fixture: Vxpipe.CallEngine.Diagnostics.ModelFixture],
-    model_provider_label: :local_fixture,
+    fixture:
+      {Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider,
+       [fixture: Vxpipe.CallEngine.Diagnostics.ModelFixture]},
     tool_invocation_timeout_ms: 30_000,
     maximum_tool_invocations: 4,
     maximum_completed_requests: 32,

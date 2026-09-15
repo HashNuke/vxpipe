@@ -34,8 +34,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -476,7 +475,13 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   defp compile_plan(max_duration_ms, options \\ []) do
     caller_capabilities =
       if Keyword.get(options, :speech_to_text?, false) do
-        %{speech_to_text: "test-stt"}
+        %{
+          speech_to_text: %{
+            provider: "deepgram",
+            model: "flux-general-multi",
+            options: %{encoding: "opus", sample_rate: 48_000}
+          }
+        }
       else
         %{}
       end
@@ -505,7 +510,12 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
           type: "agent",
           prompt: "Wait for the caller.",
           first_message: Keyword.get(options, :first_message, %{mode: "wait_for_input"}),
-          capabilities: %{model_inference: "test-model"},
+          capabilities: %{
+            model_inference: %{
+              provider: "fixture",
+              model: Keyword.get(options, :model, "test:scripted")
+            }
+          },
           tools: tools,
           transfers: []
         }
@@ -530,18 +540,6 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: Keyword.get(options, :model, "test:scripted")}
-        },
-        "test-stt" => %{
-          kind: :speech_to_text,
-          provider: Flux,
-          options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
-        }
-      },
       host_tools: %{"wait_for_test" => TestBlockingTool}
     }
 

@@ -1,4 +1,4 @@
-ExUnit.start()
+ExUnit.start(exclude: [:integration])
 
 {:ok, _supervisor} =
   Supervisor.start_link([Vxpipe.Persistence.Repo],

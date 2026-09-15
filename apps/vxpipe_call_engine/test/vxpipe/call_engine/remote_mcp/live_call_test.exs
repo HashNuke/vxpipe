@@ -27,8 +27,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     agent_runtime =
       original
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -374,18 +373,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        },
-        "test-voice" => %{
-          kind: :text_to_speech,
-          provider: FluxTextToSpeech,
-          options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
-        }
-      },
       host_tools: %{}
     }
 
@@ -401,7 +388,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     {call_variables, variable_permissions} = variables_definition(options)
 
     receiver_capabilities =
-      %{model_inference: "test-model"}
+      %{model_inference: %{provider: "fixture", model: "test:scripted"}}
       |> maybe_enable_speech(options)
 
     %{
@@ -440,7 +427,11 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
   defp maybe_enable_speech(capabilities, options) do
     if Keyword.get(options, :speech, false) do
-      Map.put(capabilities, :text_to_speech, "test-voice")
+      Map.put(capabilities, :text_to_speech, %{
+        provider: "deepgram",
+        model: "flux-plan-voice",
+        options: %{encoding: "linear16", sample_rate: 48_000}
+      })
     else
       capabilities
     end

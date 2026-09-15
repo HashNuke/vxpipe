@@ -35,8 +35,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     speech_to_text = [
       enabled: true,
@@ -1360,7 +1359,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                  fact.participant_id == support.participant_id and
                  fact.activation_id == nil and
                  fact.payload["provider"]["name"] == "deepgram" and
-                 fact.payload["provider"]["integration_id"] == "test-voice" and
+                 fact.payload["provider"]["integration_id"] ==
+                   Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                     plan.participants[plan.entry_receiver].capabilities.text_to_speech,
+                     plan.tenant_id
+                   ) and
                  fact.payload["provider"]["request_id"] == "req" and
                  fact.payload["provider"]["operation_id"] == "private-briefing"
              end)
@@ -1962,7 +1965,14 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     support =
       if Keyword.get(options, :support_stt, false),
-        do: Map.put(support, :capabilities, %{speech_to_text: "test-stt"}),
+        do:
+          Map.put(support, :capabilities, %{
+            speech_to_text: %{
+              provider: "deepgram",
+              model: "flux-general-en",
+              options: %{encoding: "opus", sample_rate: 48_000}
+            }
+          }),
         else: support
 
     support =
@@ -1997,8 +2007,15 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                      type: "agent",
                      prompt: "Route callers safely.",
                      capabilities: %{
-                       model_inference: "test-model",
-                       text_to_speech: "test-voice"
+                       model_inference: %{provider: "fixture", model: "test:scripted"},
+                       text_to_speech: %{
+                         provider: "deepgram",
+                         model: "flux-test-voice",
+                         options: %{
+                           encoding: "linear16",
+                           sample_rate: 48_000
+                         }
+                       }
                      },
                      tools: %{},
                      transfers: ["human-support"]
@@ -2031,27 +2048,6 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     assert {:ok, plan} =
              DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{
-                 "test-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: "test:scripted"}
-                 },
-                 "test-stt" => %{
-                   kind: :speech_to_text,
-                   provider: Flux,
-                   options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
-                 },
-                 "test-voice" => %{
-                   kind: :text_to_speech,
-                   provider: FluxTextToSpeech,
-                   options: %{
-                     model: "flux-test-voice",
-                     encoding: :linear16,
-                     sample_rate: 48_000
-                   }
-                 }
-               },
                host_tools: %{}
              })
 

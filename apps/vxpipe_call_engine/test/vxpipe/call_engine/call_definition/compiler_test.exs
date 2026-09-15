@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.CurrentTime
 
-  @schema_version "20260913.01"
+  @schema_version "20260915.01"
 
   test "Elixir and JSON inputs produce the same typed definition" do
     input = definition_input()
@@ -275,7 +275,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     end
   end
 
-  test "compiles a pinned plan from closed capability and host-tool registries" do
+  test "compiles a pinned plan from inline capabilities and the host-tool registry" do
     assert {:ok, definition} =
              CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
 
@@ -313,18 +313,18 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     assert %CapabilitySelection{
              kind: :speech_to_text,
-             profile: "default-stt",
-             provider: :test_stt,
-             options: %{language: "en"}
+             provider: "morse",
+             model: "morse",
+             options: %{}
            } = caller.capabilities.speech_to_text
 
     assert receiver.capabilities.speech_to_text == nil
 
     assert %CapabilitySelection{
              kind: :model_inference,
-             profile: "careful-model",
-             provider: :test_model,
-             options: %{model: "careful"}
+             provider: "fixture",
+             model: "careful",
+             options: %{}
            } = receiver.capabilities.model_inference
 
     assert %ToolBinding{
@@ -334,10 +334,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
            } = receiver.tools["get_current_time"]
 
     changed =
-      put_in(registries, [:capability_profiles, "careful-model", :options, :model], "changed")
+      put_in(
+        definition_input(),
+        [:participants, "reception", :capabilities, :model_inference, :model],
+        "changed"
+      )
 
-    assert get_in(changed, [:capability_profiles, "careful-model", :options, :model]) == "changed"
-    assert receiver.capabilities.model_inference.options == %{model: "careful"}
+    assert changed.participants["reception"].capabilities.model_inference.model == "changed"
+    assert receiver.capabilities.model_inference.model == "careful"
   end
 
   test "resolves and pins definition, tenant, application, and platform duration precedence" do
@@ -483,10 +487,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
              second.participants["reception"].activation_id
   end
 
-  test "fails safely when a profile or tool is unavailable or aliases do not match" do
+  test "fails safely when a tool is unavailable or aliases do not match" do
     cases = [
-      {put_in(definition_input(), [:defaults, :capabilities, :speech_to_text], "missing"),
-       registries(), ["defaults", "capabilities", "speech_to_text"]},
       {put_in(
          definition_input(),
          [:participants, "reception", :tools],
@@ -521,9 +523,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
       entry_receiver: "reception",
       defaults: %{
         capabilities: %{
-          speech_to_text: "default-stt",
-          model_inference: "default-model",
-          text_to_speech: "default-voice"
+          speech_to_text: %{provider: "morse", model: "morse"},
+          model_inference: %{provider: "fixture", model: "default"},
+          text_to_speech: %{provider: "morse", model: "morse"}
         }
       },
       participants: %{
@@ -541,7 +543,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
           description: "The receiving agent",
           prompt: "Answer clearly.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: %{model_inference: "careful-model"},
+          capabilities: %{model_inference: %{provider: "fixture", model: "careful"}},
           tools: %{
             "get_current_time" => %{type: "host", tool: "get_current_time"}
           },
@@ -562,28 +564,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "default-stt" => %{
-          kind: :speech_to_text,
-          provider: :test_stt,
-          options: %{language: "en"}
-        },
-        "default-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{model: "default"}
-        },
-        "careful-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{model: "careful"}
-        },
-        "default-voice" => %{
-          kind: :text_to_speech,
-          provider: :test_tts,
-          options: %{voice: "default"}
-        }
-      },
       host_tools: %{"get_current_time" => CurrentTime}
     }
   end

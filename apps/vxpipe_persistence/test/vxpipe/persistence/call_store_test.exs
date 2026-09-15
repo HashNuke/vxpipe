@@ -76,7 +76,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
         Map.put(definition_input(), :opening_audio, %{
           type: "text",
           text: "A private opening.",
-          text_to_speech: "opening-voice"
+          text_to_speech: %{provider: "morse", model: "morse"}
         })
       else
         definition_input()
@@ -141,8 +141,9 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert {:ok, reloaded} = Calls.fetch_call(context.tenant.key, @call_id, context.options)
     assert reloaded.initial_variables == variables
     assert reloaded.plan == prepared.plan
-    assert reloaded.plan.opening_audio.text_to_speech.profile == "opening-voice"
-    assert reloaded.plan.opening_audio.text_to_speech.options == %{model: "notice-voice"}
+    assert reloaded.plan.opening_audio.text_to_speech.provider == "morse"
+    assert reloaded.plan.opening_audio.text_to_speech.model == "morse"
+    assert reloaded.plan.opening_audio.text_to_speech.options == %{}
     assert reloaded.plan.wait_sounds.transfer_joining == :cafe_bossa
     assert map_size(reloaded.plan.wait_sound_assets.assets) == 3
     joining = reloaded.plan.wait_sound_assets.slots.transfer_joining
@@ -1132,29 +1133,19 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "opening-voice" => %{
-          kind: :text_to_speech,
-          provider: :test_tts,
-          options: %{model: "notice-voice"}
-        },
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        }
-      },
       host_tools: %{}
     }
   end
 
   defp definition_input do
     %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       name: "Persistence admission",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{
+        capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}}
+      },
       call_variables: %{
         sections: %{
           "order" => %{
@@ -1193,8 +1184,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     agent_runtime =
       settings
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:model_provider, Vxpipe.CallEngine.TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: owner)
+      |> Keyword.put(:fixture, {Vxpipe.CallEngine.TestAgentRuntimeModelProvider, [owner: owner]})
 
     Application.put_env(
       :vxpipe_call_engine,

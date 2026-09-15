@@ -2,7 +2,14 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, ResolvedCallPlan}
-  alias Vxpipe.Calls.{CallPlanCompiler, DefinitionRevision, PreparedCall, PublicId}
+
+  alias Vxpipe.Calls.{
+    CallPlanCompiler,
+    DefinitionCredentials,
+    DefinitionRevision,
+    PreparedCall,
+    PublicId
+  }
 
   @spec build(DefinitionRevision.t(), map(), :web | :telephony, keyword()) ::
           {:ok, PreparedCall.t()} | {:error, term()}
@@ -13,6 +20,7 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
              resource_id: revision.definition_id,
              revision: revision.revision
            ),
+         :ok <- DefinitionCredentials.check(definition, revision.tenant_key, options),
          {:ok, invocation} <- invocation(revision, initial_variables, transport, options),
          {:ok, plan} <- CallPlanCompiler.compile(definition, invocation, options),
          {:ok, plan} <- Vxpipe.CallEngine.prepare_call_audio(plan, options) do

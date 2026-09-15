@@ -41,16 +41,14 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
       )
       when is_map(registries) and is_list(options) do
     with :ok <- matching_definition(definition, invocation),
-         {:ok, capability_profiles} <- registry(registries, :capability_profiles),
          {:ok, host_tools} <- registry(registries, :host_tools),
          {:ok, opening_audio} <-
-           resolve_opening_audio(definition.opening_audio, capability_profiles),
+           resolve_opening_audio(definition.opening_audio),
          {:ok, call_variables} <-
            resolve_call_variables(definition.call_variables, invocation.initial_variables),
          {:ok, base_participants} <-
            resolve_participants(
              definition,
-             capability_profiles,
              host_tools,
              Map.get(registries, :mcp_integrations),
              invocation.tenant_id
@@ -92,14 +90,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end
   end
 
-  defp resolve_opening_audio(nil, _profiles), do: {:ok, nil}
+  defp resolve_opening_audio(nil), do: {:ok, nil}
 
-  defp resolve_opening_audio(%CallDefinition.OpeningAudio{} = source, profiles) do
+  defp resolve_opening_audio(%CallDefinition.OpeningAudio{} = source) do
     with {:ok, selection} <-
            resolve_capability(
              source.text_to_speech,
              :text_to_speech,
-             profiles,
              ["opening_audio", "text_to_speech"],
              :human
            ) do
@@ -152,7 +149,6 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   defp resolve_participants(
          definition,
-         capability_profiles,
          host_tools,
          mcp_integrations,
          tenant_id
@@ -171,7 +167,6 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
       case resolve_participant(
              participant,
              definition.default_capabilities,
-             capability_profiles,
              host_tools,
              mcp_integrations,
              tenant_id,
@@ -187,14 +182,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   defp resolve_participant(
          %CallDefinition.Participant{} = participant,
          defaults,
-         profiles,
          host_tools,
          mcp_integrations,
          tenant_id,
          identity,
          participant_ids
        ) do
-    with {:ok, capabilities} <- resolve_capabilities(participant, defaults, profiles),
+    with {:ok, capabilities} <- resolve_capabilities(participant, defaults),
          {:ok, tools} <- resolve_tools(participant, host_tools, mcp_integrations, tenant_id),
          {:ok, while_present} <-
            resolve_media_policy(
@@ -337,7 +331,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end)
   end
 
-  defp resolve_capabilities(participant, defaults, profiles) do
+  defp resolve_capabilities(participant, defaults) do
     kinds =
       if participant.kind == :human,
         do: [:speech_to_text],
@@ -346,7 +340,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     Enum.reduce_while(kinds, {:ok, %ResolvedCallPlan.Capabilities{}}, fn kind, {:ok, acc} ->
       {ref, path} = effective_ref(participant, defaults, kind)
 
-      case resolve_capability(ref, kind, profiles, path, participant.kind) do
+      case resolve_capability(ref, kind, path, participant.kind) do
         {:ok, selection} -> {:cont, {:ok, put_capability(acc, kind, selection)}}
         {:error, _error} = error -> {:halt, error}
       end
@@ -365,35 +359,25 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end
   end
 
-  defp resolve_capability(nil, :model_inference, _profiles, path, :agent) do
+  defp resolve_capability(nil, :model_inference, path, :agent) do
     invalid(path, "is required for an agent participant")
   end
 
-  defp resolve_capability(nil, _kind, _profiles, _path, _participant_kind), do: {:ok, nil}
+  defp resolve_capability(nil, _kind, _path, _participant_kind), do: {:ok, nil}
 
-  defp resolve_capability(ref, kind, profiles, path, _participant_kind) do
-    case Map.fetch(profiles, ref) do
-      {:ok, %{kind: ^kind, provider: provider, options: options}}
-      when is_atom(provider) and is_map(options) ->
-        if DefinitionValidation.private_data?(options) do
-          invalid(path, "resolves to private configuration that cannot enter a call plan")
-        else
-          {:ok,
-           %CapabilitySelection{
-             kind: kind,
-             profile: ref,
-             provider: provider,
-             options: options
-           }}
-        end
-
-      {:ok, _wrong_kind_or_shape} ->
-        invalid(path, "does not resolve to a valid #{kind} profile")
-
-      :error ->
-        invalid(path, "does not resolve to an available capability profile")
+  defp resolve_capability(
+         %CapabilitySelection{kind: kind} = selection,
+         kind,
+         path,
+         _participant_kind
+       ) do
+    with :ok <- CapabilitySelection.validate(selection, path) do
+      {:ok, selection}
     end
   end
+
+  defp resolve_capability(_selection, _kind, path, _participant_kind),
+    do: invalid(path, "must be a validated inline capability selection")
 
   defp put_capability(capabilities, :speech_to_text, selection),
     do: %{capabilities | speech_to_text: selection}

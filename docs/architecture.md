@@ -3655,7 +3655,7 @@ provider-neutral engine boundary while preserving RTVI as a gateway projection:
    affected WebRTC connection; automatic mid-turn reconnect is deferred.
 
 The repository development overlay enables this capability with
-`flux-general-en` and requires `DEEPGRAM_API_KEY` at runtime. Base configuration
+`flux-general-en` and resolves the selected tenant’s encrypted Deepgram binding at runtime. Base configuration
 leaves speech-to-text disabled, so an embedding application's environment is not
 implicitly coupled to the repository's development provider. Default tests use
 a fake transport; separately tagged live tests prove both individual 20 ms Opus
@@ -3728,7 +3728,7 @@ provider or WebRTC details in the room authority:
 
 Base configuration leaves text-to-speech disabled. The repository development
 overlay enables `flux-haley-en`, requests 48 kHz linear16, and resolves the same
-runtime `DEEPGRAM_API_KEY` used by Flux STT. Focused tests cover provider parsing,
+tenant Deepgram binding used by Flux STT. Focused tests cover provider parsing,
 bounded capability behavior, PCM framing, Opus encoding, RTP pacing, and room
 sequencing. Separately tagged live tests prove both provider PCM output and a
 complete RTVI text-to-Flux-to-Opus-to-WebRTC path. Research, Callx comparison,
@@ -3767,8 +3767,8 @@ input and output boundaries:
    protocol-neutral `AgentTurnFailed` becomes a correlated generic RTVI error
    response. A full pending queue rejects new work as retryable `agent_busy`
    before participant input events are committed.
-7. Development reads `GEMINI_API_KEY` only from runtime configuration when the hosted
-   model path is enabled. The optional local diagnostics fixture needs no model credential.
+7. Inline Google model activation resolves the selected tenant’s encrypted credential.
+   Explicitly configured local fixture selections need no model credential.
    Credentials never enter commands, events, public snapshots, JSON payloads, browser
    configuration, or logs.
 

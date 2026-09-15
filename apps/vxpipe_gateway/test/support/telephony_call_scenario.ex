@@ -2,7 +2,6 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
 
   alias Vxpipe.Gateway.Telephony.{
@@ -71,7 +70,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           participants: %{
             "caller" => %{
               type: "human",
-              capabilities: %{speech_to_text: "test-stt"},
+              capabilities: %{speech_to_text: speech_selection(provider)},
               connection: %{
                 service: "primary-phone",
                 mode: "receive",
@@ -84,8 +83,15 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
               prompt: "Route callers safely.",
               first_message: %{mode: "wait_for_input"},
               capabilities: %{
-                model_inference: "test-model",
-                text_to_speech: "test-voice"
+                model_inference: %{
+                  provider: "fixture",
+                  model: Keyword.get(options, :model, "test:scripted")
+                },
+                text_to_speech: %{
+                  provider: "deepgram",
+                  model: "flux-test-voice",
+                  options: %{encoding: "linear16", sample_rate: 48_000}
+                }
               },
               tools: %{},
               transfers: ["human-support"]
@@ -95,7 +101,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
               description: "A human support specialist",
               capabilities:
                 if(Keyword.get(options, :support_speech_to_text?, false),
-                  do: %{speech_to_text: "test-stt"},
+                  do: %{speech_to_text: speech_selection(provider)},
                   else: %{}
                 ),
               connection: %{
@@ -128,38 +134,25 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
 
     {:ok, plan} =
       DefinitionCompiler.compile(definition, invocation, %{
-        capability_profiles: %{
-          "test-stt" => %{
-            kind: :speech_to_text,
-            provider: Flux,
-            options: speech_options(provider)
-          },
-          "test-model" => %{
-            kind: :model_inference,
-            provider: :req_llm,
-            options: %{model: Keyword.get(options, :model, "test:scripted")}
-          },
-          "test-voice" => %{
-            kind: :text_to_speech,
-            provider: FluxTextToSpeech,
-            options: %{
-              model: "flux-test-voice",
-              encoding: :linear16,
-              sample_rate: 48_000
-            }
-          }
-        },
         host_tools: %{}
       })
 
     plan
   end
 
-  defp speech_options(:telnyx),
-    do: %{model: "flux-general-multi", encoding: :opus, sample_rate: 16_000}
+  defp speech_selection(:telnyx),
+    do: %{
+      provider: "deepgram",
+      model: "flux-general-multi",
+      options: %{encoding: "opus", sample_rate: 16_000}
+    }
 
-  defp speech_options(:twilio),
-    do: %{model: "flux-general-multi", encoding: :linear16, sample_rate: 8_000}
+  defp speech_selection(:twilio),
+    do: %{
+      provider: "deepgram",
+      model: "flux-general-multi",
+      options: %{encoding: "linear16", sample_rate: 8_000}
+    }
 
   defp claim(provider, plan, participant_id) do
     identity = claim_identity(provider)

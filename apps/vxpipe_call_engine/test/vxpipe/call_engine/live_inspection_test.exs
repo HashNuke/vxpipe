@@ -193,10 +193,12 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
     resource_id = "inspection-definition-#{suffix}"
 
     definition_input = %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{
+        capabilities: %{model_inference: %{provider: "fixture", model: "test:scripted"}}
+      },
       call_variables: %{
         sections: %{
           "order" => %{
@@ -249,13 +251,6 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:scripted"}
-        }
-      },
       host_tools: %{}
     }
 

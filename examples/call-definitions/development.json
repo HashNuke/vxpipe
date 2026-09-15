@@ -1,11 +1,14 @@
 {
-  "schema_version": "20260910.05",
+  "schema_version": "20260915.01",
   "name": "Development database example",
   "entry_caller": "caller",
   "entry_receiver": "assistant",
   "defaults": {
     "capabilities": {
-      "model_inference": "gemini-flash-lite"
+      "model_inference": {
+        "provider": "google",
+        "model": "gemini-3.5-flash-lite"
+      }
     }
   },
   "participants": {

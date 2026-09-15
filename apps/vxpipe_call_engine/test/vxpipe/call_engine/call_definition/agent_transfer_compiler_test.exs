@@ -364,24 +364,22 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
   test "the supervised invocation timeout encloses the total transfer budget" do
     input =
       transfer_definition()
-      |> put_in([:defaults, :capabilities], %{model_inference: "default-model"})
+      |> put_in([:defaults, :capabilities], %{
+        model_inference: %{provider: "fixture", model: "default"}
+      })
       |> Map.put(:transfer_policy, %{attempt_timeout_ms: 120_000})
 
     assert {:ok, definition} =
              CallDefinition.new(input, resource_id: "support", revision: 7)
 
-    registries =
-      put_in(registries(), [:capability_profiles, "default-model", :provider], :req_llm)
-
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries)
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries())
 
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     agent_runtime =
       settings
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
       |> Keyword.put(:tool_invocation_timeout_ms, 30_000)
 
     assert {:ok, startup} =
@@ -440,8 +438,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
       entry_receiver: "reception",
       defaults: %{
         capabilities: %{
-          model_inference: "default-model",
-          text_to_speech: "default-voice"
+          model_inference: %{provider: "fixture", model: "default"},
+          text_to_speech: %{provider: "morse", model: "morse"}
         }
       },
       participants: %{
@@ -483,18 +481,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "default-model" => %{
-          kind: :model_inference,
-          provider: :test_model,
-          options: %{model: "default"}
-        },
-        "default-voice" => %{
-          kind: :text_to_speech,
-          provider: :test_tts,
-          options: %{voice: "default"}
-        }
-      },
       host_tools: %{}
     }
   end

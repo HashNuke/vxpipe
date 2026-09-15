@@ -38,16 +38,13 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, AgentRuntimeModelProvider)
-      |> Keyword.put(:model_provider_options, fixture: fixture)
-      |> Keyword.put(:model_provider_label, :local_fixture)
+      |> Keyword.put(:fixture, {AgentRuntimeModelProvider, [fixture: fixture]})
 
     speech_to_text = [
       enabled: false,
       providers: %{
         MorseCodeSTT => [
           enabled: true,
-          provider_options: [],
           transport: {MorseCodeSTT.Transport, []},
           media_ingress: media_ingress_options()
         ]
@@ -59,7 +56,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
       providers: %{
         MorseCodeTTS => [
           enabled: true,
-          provider_options: [],
           transport: {MorseCodeTTS.Transport, [emit_interval_ms: 0]},
           maximum_requests: 2
         ]
@@ -245,28 +241,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                room_id: unique_id("room")
              )
 
-    registries = %{
-      capability_profiles: %{
-        "fixture-model" => %{
-          kind: :model_inference,
-          provider: :req_llm,
-          options: %{model: "test:fixture"}
-        },
-        "morse-stt" => %{
-          kind: :speech_to_text,
-          provider: MorseCodeSTT,
-          options: %{sample_rate: 16_000, unit_duration_ms: 20}
-        },
-        "morse-tts" => %{
-          kind: :text_to_speech,
-          provider: MorseCodeTTS,
-          options: %{sample_rate: 16_000, unit_duration_ms: 20}
-        }
-      },
-      host_tools: %{}
-    }
-
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
     plan
   end
 
@@ -278,9 +253,17 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
       entry_receiver: "assistant",
       defaults: %{
         capabilities: %{
-          speech_to_text: "morse-stt",
-          model_inference: "fixture-model",
-          text_to_speech: "morse-tts"
+          speech_to_text: %{
+            provider: "morse",
+            model: "morse",
+            options: %{sample_rate: 16_000, unit_duration_ms: 20}
+          },
+          model_inference: %{provider: "fixture", model: "local"},
+          text_to_speech: %{
+            provider: "morse",
+            model: "morse",
+            options: %{sample_rate: 16_000, unit_duration_ms: 20}
+          }
         }
       },
       call_variables: %{sections: %{}},

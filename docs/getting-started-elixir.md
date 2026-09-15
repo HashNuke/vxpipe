@@ -27,19 +27,29 @@ mix deps.get
 mix assets.setup
 ```
 
-Export your provider keys, initialize the local database, and start Vxpipe:
+Initialize the local database:
 
 ```shell
-export GEMINI_API_KEY="your-gemini-api-key"
-export DEEPGRAM_API_KEY="your-deepgram-api-key"
 mix ecto.create
 mix ecto.migrate
+```
+
+Use the visible [`env.sample`](../env.sample) to configure the encryption keyring in your
+launching shell. Follow [provider credential setup](provider-credential-storage.md#configure-and-provision)
+to bootstrap a tenant and provision its Google and Deepgram `default` bindings. Provider
+secrets are stored encrypted in PostgreSQL and are supplied to those commands through
+protected stdin.
+
+Select that tenant and start Vxpipe:
+
+```shell
+export VXPIPE_DEV_TENANT="TENANT_KEY"
 APP_HOST=localhost VXPIPE_DEV_TLS=http mix run --no-halt
 ```
 
-This command reads the keys from your shell; it does not load `.env`.
-Development uses `vxpipe_dev` on localhost by default. Set `VXPIPE_DATABASE_URL`
-only to connect to a different database.
+Direct Mix commands do not load `.env`. Development uses `vxpipe_dev` on localhost by
+default; set `VXPIPE_DATABASE_URL` to connect to a different database. The sample keeps
+its call-scoped API key on the server and reuses your tenant after a restart.
 
 Open [the voice console](http://localhost:4000/pipecat-console), select
 **Create room**, then **Connect**, and allow microphone access. You can speak or

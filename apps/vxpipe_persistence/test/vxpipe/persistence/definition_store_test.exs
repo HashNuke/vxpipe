@@ -150,20 +150,17 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
 
   defp registries do
     %{
-      capability_profiles: %{
-        "test-model" => %{kind: :model_inference, provider: :test, options: %{model: "test"}}
-      },
       host_tools: %{}
     }
   end
 
   defp definition_input do
     %{
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       name: "First",
       entry_caller: "caller",
       entry_receiver: "assistant",
-      defaults: %{capabilities: %{model_inference: "test-model"}},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
       participants: %{
         "caller" => %{
           type: "human",
