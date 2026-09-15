@@ -1,7 +1,7 @@
 # Tenant telephony service storage
 
-Status: trusted Telnyx registration and metadata lookup are implemented. The operator CLI,
-definition binding checks and Gateway live-reader migration remain pending in
+Status: trusted Telnyx registration, the operator CLI and metadata lookup are implemented.
+Definition binding checks and Gateway live-reader migration remain pending in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage).
 
 ## Ownership and identity
@@ -28,7 +28,30 @@ Base64-encoded 32-byte Ed25519 public key. It is not a credential payload.
 ## Trusted registration and lookup
 
 Run the database migrations, provision the tenant's Telnyx key, and retain its public credential
-ID. A trusted host/operator session can then register metadata through the configured Calls port:
+ID. Put the service metadata in a JSON object such as `service.json`:
+
+```json
+{
+  "name": "support-phone",
+  "ingress_key": "tenant-support-ingress",
+  "provider": "telnyx",
+  "provider_connection_id": "TELNYX_CONNECTION_ID",
+  "credential_id": "PROVISIONED_CREDENTIAL_UUID",
+  "public_key": "TELNYX_BASE64_PUBLIC_KEY"
+}
+```
+
+Replace the placeholders with the existing connection, credential ID and verification public key.
+The registration command reads this metadata once, validates it and writes the binding to PostgreSQL:
+
+```shell
+mix vxpipe.telephony_service.register --tenant TENANT_KEY --file service.json
+```
+
+The command limits input to 16 KiB and returns the public service/credential IDs, tenant, provider,
+name and ingress key. It accepts no secret flags or secret fields. This file is registration
+input; it is not a live runtime configuration source. To inspect the stored metadata or register
+from a trusted host session, use the same configured Calls port:
 
 ```elixir
 Vxpipe.Calls.TelephonyServices.register(tenant_key, %{

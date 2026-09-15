@@ -33,3 +33,22 @@
 - The focused documentation records trusted registration and metadata lookup as implemented and
   CLI/live-reader acceptance as pending. No checkpoint count changes.
 - All 181 local documentation links/anchors resolve; `git diff --check` passes.
+
+## Operator CLI checkpoint
+
+- Committed trusted storage/workflow as `947734b` before extending the operator surface.
+- Added CLI tests first; all 3 failed at the expected missing task module.
+- Implemented `mix vxpipe.telephony_service.register --tenant ... --file ...` over the existing
+  Calls registration. Input is a single metadata JSON object, bounded to 16 KiB. Output contains
+  public binding IDs/locators; invalid arguments and input do not echo supplied values.
+- CLI + service storage + runtime group passes: 11 tests, 0 failures, seed 235296. Invalid JSON,
+  secret-bearing/oversized input and secret flags leave no service registration behind.
+- Updated operator docs to show the one-time registration input and distinguish it from a live
+  configuration file. Live readers remain pending.
+- Independent GPT 6 Astra xhigh review found no blockers. Root formatting, warnings-as-errors
+  compile and strict Credo pass; Persistence passes 98 tests, 0 failures, 6 excluded.
+- Added cleanup for the CLI test temporary files after review identified the generated child
+  `tmp/` output. The files are test artifacts, not tracked service configuration.
+- Full root tests and unused-dependency verification remain pending for the ongoing turn.
+- The CLI cleanup rerun passes 3 tests; generated files are gone from status. All 156 local
+  links/anchors in the changed docs resolve and both JSON examples parse. `git diff --check` passes.

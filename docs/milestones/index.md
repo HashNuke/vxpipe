@@ -50,8 +50,10 @@ tests, 81 Calls tests and 89 Persistence tests pass. Independent review and all 
 for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296).
 Trusted Telnyx service registration and metadata lookup now pass 8 focused checks, Calls 81 and
 Persistence 95 tests (6 excluded), static root gates and independent review. The database enforces
-credential tenant/provider ownership and unique ingress keys. The CLI and live service/credential
-readers remain pending; full root verification of the service-storage chunk remains open.
+credential tenant/provider ownership and unique ingress keys. The metadata-only registration CLI
+also passes its 3 focused tests and the 98-test Persistence suite (6 excluded), with independent
+review and static gates passing. Live service/credential readers and full root verification of
+service registration remain pending.
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the
