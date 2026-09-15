@@ -6,8 +6,10 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
 
   alias Vxpipe.Calls.{ProviderAuth, ResolvedProviderCredential}
   alias Vxpipe.Calls.ProviderCredential, as: Credential
-  alias Vxpipe.Persistence.CredentialCipher
+  alias Vxpipe.Persistence.{CredentialCipher, CredentialKeyring}
   alias Vxpipe.Persistence.Schema.{ProviderCredential, Tenant}
+
+  @private_query_options [log: false, telemetry_event: nil]
 
   @impl true
   def provision(context, %Credential{} = credential, payload) do
@@ -141,6 +143,91 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
     else
       _unavailable -> {:error, :provider_credential_unavailable}
     end
+  end
+
+  @doc """
+  Re-encrypt one bounded batch with the platform's current key, preserving tenant credentials.
+
+  Busy rows are skipped and included in remaining counts. Successful batches commit atomically;
+  rerun after incomplete progress. All credential readers and writers must have the new keyring
+  before the operator retires an old key.
+  """
+  @spec reencrypt(keyword(), pos_integer()) :: {:ok, map()} | {:error, atom()}
+  def reencrypt(context, batch_size \\ 100)
+
+  def reencrypt(context, batch_size)
+      when is_list(context) and is_integer(batch_size) and batch_size in 1..500 do
+    repo = Keyword.fetch!(context, :repo)
+
+    with {:ok, current_key_id, _key} <- CredentialKeyring.current(Keyword.get(context, :keyring)) do
+      repo.transaction(
+        fn ->
+          rows =
+            repo.all(
+              from(c in ProviderCredential,
+                join: t in assoc(c, :tenant),
+                where: c.encryption_key_id != ^current_key_id,
+                order_by: c.id,
+                limit: ^batch_size,
+                select: {c, t.key},
+                lock: fragment("FOR UPDATE OF ? SKIP LOCKED", c)
+              ),
+              @private_query_options
+            )
+
+          Enum.each(rows, &reencrypt_row(context, &1))
+
+          %{
+            processed: length(rows),
+            current_key_id: current_key_id,
+            remaining_by_key: remaining_encryption_keys(repo, current_key_id)
+          }
+        end,
+        @private_query_options
+      )
+    end
+  rescue
+    error -> repository_error(error, __STACKTRACE__)
+  catch
+    :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
+      {:error, :provider_credentials_unavailable}
+  end
+
+  def reencrypt(_context, _batch_size), do: {:error, :invalid_reencryption_batch_size}
+
+  defp reencrypt_row(context, {stored, tenant_key}) do
+    repo = Keyword.fetch!(context, :repo)
+
+    with {:ok, resolved} <- resolve_payload(context, stored, tenant_key),
+         {:ok, key_id, encrypted} <-
+           CredentialCipher.encrypt(
+             Keyword.get(context, :keyring),
+             resolved.credential,
+             resolved.payload
+           ),
+         {:ok, _updated} <-
+           repo.update(
+             Ecto.Changeset.change(stored,
+               encrypted_payload: encrypted,
+               encryption_key_id: key_id
+             ),
+             @private_query_options
+           ) do
+      :ok
+    else
+      {:error, %Ecto.Changeset{}} -> repo.rollback(:provider_credential_write_failed)
+      {:error, reason} -> repo.rollback(reason)
+    end
+  end
+
+  defp remaining_encryption_keys(repo, current_key_id) do
+    from(c in ProviderCredential,
+      where: c.encryption_key_id != ^current_key_id,
+      group_by: c.encryption_key_id,
+      select: {c.encryption_key_id, count(c.id)}
+    )
+    |> repo.all(@private_query_options)
+    |> Map.new()
   end
 
   # Match the dependency boundary, not exception text or all RuntimeErrors.

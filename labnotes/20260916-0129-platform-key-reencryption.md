@@ -48,3 +48,25 @@
 - Independent design review found no further blocker after the locking and rollout corrections.
   The [durable design](../docs/platform-credential-reencryption.md) records the decision and
   rejected alternatives. This review changes no checkpoint implementation count.
+
+## Storage implementation
+
+- Started implementation from clean `d795ec1`. The previous turn made progress with Telnyx guards,
+  the Zenmux public-startup correction and verification commits. No genuine blocker prevents this
+  independently runnable platform storage checkpoint.
+- Added six focused tests before implementation. Corrected a test-helper name colliding with
+  Ecto's `update` macro, then confirmed all six fail because the re-encryption operation is absent.
+- Implemented `ProviderCredentialStore.reencrypt/2`: default batch 100, maximum 500, credential-only
+  `FOR UPDATE ... SKIP LOCKED`, existing payload validation/crypto and an atomic transaction.
+  Only payload/key ID and the ordinary update timestamp change. All six focused tests pass.
+- Added real-connection acceptance for active-reader contention and interruption after one row
+  has been rewritten. The interrupted batch also permits a concurrent new-key credential insert
+  for the same tenant, proving that re-encryption does not exclusively lock its tenant row.
+  Corrected a nonexistent `Process.fetch!` call in the test-only pause adapter to `Process.get`;
+  this was a fixture error, not a storage defect.
+- Added a third real-connection case for a concurrent status update: the batch skips the held
+  row, reports it remaining, and retry preserves its revoked state and exact plaintext.
+- Final focused group: 9 tests, zero failures. The broader Persistence suite passes 112 tests,
+  zero failures, 8 excluded before the third tagged case was added. Format, warnings-as-errors
+  compilation and strict Credo pass. Independent GPT 6 Astra xhigh code review and focused
+  re-review found no blockers. The operator CLI and fresh-VM retirement checks remain pending.

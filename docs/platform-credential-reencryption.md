@@ -1,6 +1,7 @@
 # Platform credential re-encryption
 
-Status: design reviewed; implementation and acceptance remain pending in
+Status: the bounded storage operation and focused transaction checks are implemented.
+The operator CLI and fresh-VM transition acceptance remain pending in
 [checkpoint 6](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-6--rotate-the-platform-owned-encryption-key).
 
 ## Operation and ownership
@@ -9,6 +10,12 @@ The platform operator replaces the encryption key protecting stored provider cre
 The operation preserves each tenant's actual credential value, identity, version and status.
 It uses the existing Persistence `CredentialKeyring`, `CredentialCipher` and credential store.
 No tenant credential-management API, scheduler or upstream key-rotation protocol is required.
+
+Trusted host code can invoke `Vxpipe.Persistence.ProviderCredentialStore.reencrypt(context, size)`
+using the configured `[repo: Repo, keyring: keyring]` context. The default batch size is 100;
+accepted sizes are 1–500. Success returns `{:ok, %{processed: count, current_key_id: id,
+remaining_by_key: counts}}`. An unreadable batch returns a safe error and commits no updates.
+The operator command will use this same operation; it is not implemented yet.
 
 Each operator invocation processes a bounded batch of rows encrypted with an older key.
 Validate the current key even when no rows need work. Include revoked rows so removing an old
@@ -52,7 +59,11 @@ Focused tests must cover mixed keys and tenants, revoked records, exact plaintex
 bounded retry, rollback on a later unreadable row, unavailable/wrong keys and private output.
 Tagged tests with separate database connections must cover contention, skipped-row progress and
 concurrent writes. A disposable database across fresh VMs must prove mixed-key reads during the
-transition and new-key-only reads afterward. Implementation evidence is still pending.
+transition and new-key-only reads afterward. Six focused database tests and three tagged
+transaction tests pass. The latter hold active-reader locks on separate connections, interrupt
+a batch after its first write, and provision a new-key credential for the same tenant while
+re-encryption is paused. They also verify a concurrent status update survives skipped-row retry.
+Fresh-VM and CLI evidence remain pending.
 
 Replacing key bytes under an existing ID, changing tenant credential versions, migrating only
 active rows, relying on a batch cursor, or adding another key-provider framework would violate or

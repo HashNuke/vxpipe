@@ -2,7 +2,7 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2 and 5 are complete. Of seven checkpoints, three are complete,
-two are partial and two are not started. The latest full umbrella run retains one native audio
+three are partial and one is not started. The latest full umbrella run retains one native audio
 failure; the milestone and common acceptance gates remain unchecked.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
@@ -496,11 +496,14 @@ The [reviewed batch design](../platform-credential-reencryption.md) records cred
 nonblocking locks, truthful remaining counts and the staged reader/writer key transition.
 This design review completes no implementation task.
 
-- [ ] Provide a bounded, resumable re-encryption operation that decrypts each existing payload and
+- [x] Provide a bounded, resumable re-encryption operation that decrypts each existing payload and
   encrypts the same value under the active key, preserving tenant/provider/credential identity.
   Keep secret values and ciphertext out of command output and logs.
-- [ ] Verify interruption/retry and concurrent credential writes cannot lose or misassign payloads.
+- [x] Verify interruption/retry and concurrent credential writes cannot lose or misassign payloads.
   Report safe progress and remaining key IDs so the operator can determine when an old key is unused.
+  Storage operation: six focused database tests and three tagged real-connection tests pass.
+  The operator CLI and fresh-VM retirement checks remain pending; see
+  [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md).
 - [ ] Verify a disposable DB across restart: old/new rows decrypt during transition; after complete
   re-encryption, removing the old key still permits all credential reads. Missing/wrong keys fail
   closed. Confirm the plaintext third-party credentials are unchanged.
@@ -638,8 +641,8 @@ scope, independent review, root/isolated test evidence and rendered homepage che
 
 ## Evidence ledger
 
-Current progress: **3 of 7 complete** (checkpoints 1, 2 and 5), **2 partial** (checkpoints 3 and 7),
-and **2 not started** (checkpoints 4 and 6). Implementation boxes stay unchecked until their runnable
+Current progress: **3 of 7 complete** (checkpoints 1, 2 and 5), **3 partial** (checkpoints 3, 6 and 7),
+and **1 not started** (checkpoint 4). Implementation boxes stay unchecked until their runnable
 exits and failure cases pass.
 
 | Checkpoint | Implementation | Focused/flow evidence |
@@ -649,7 +652,7 @@ exits and failure cases pass.
 | 3 — Telnyx credential readers | Encrypted provisioning and trusted service storage verified; live readers pending | Named Telnyx keys use the existing encrypted store and protected-input CLI with the existing carrier key-size limit. Focused red/green: 14 tests, zero failures after the change. Calls 81 and Persistence 89 tests pass (6 excluded); format, compile and strict Credo pass. Independent GPT 6 Astra xhigh review found no code blocker; a transitional documentation claim was corrected. All five root gates pass for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296). Trusted service registration/lookup adds 8 passing focused checks, with Calls 81 and Persistence 95 tests passing (6 excluded). The operator CLI adds 3 passing focused tests; all 98 Persistence tests pass (6 excluded). Static root gates and independent review pass. Full root run: 1,543 tests, one native WebRTC Morse-decoding failure, 33 excluded; the unchanged isolated case reproduces. Live readers and full umbrella acceptance remain pending. See [service evidence](../../labnotes/20260916-0000-tenant-telephony-services.md). See [service storage](../tenant-telephony-services.md) and [Telnyx provisioning evidence](../../labnotes/20260915-2341-telnyx-credential-provisioning.md). |
 | 4 — Twilio credential readers | Not started | Pending |
 | 5 — Existing provider credential integrations | Implemented; credential-reader exit verified | Named API-key provisioning, inline model/options translation, tenant startup resolution and native routing use the existing adapters. Agent Runtime 5, Engine constructor 5 and Persistence focused 33 tests pass (2 excluded). Independent GPT 6 Astra xhigh review found no production blocker; its application-auth fixture correction is verified by the 95-test Agent Runtime suite (4 excluded). Calls 81 and Persistence 99 tests pass (6 excluded). All static gates and unused-lock checks pass. The full root run completed 1,547 tests with one previously reproduced native Morse failure and 33 exclusions; common milestone acceptance remains open. Independent gate review confirms the focused checkpoint exit is satisfied. No new provider or auth-mode support is added. See the [inventory](../existing-provider-credentials.md) and [Zenmux evidence](../../labnotes/20260916-0033-zenmux-tenant-credentials.md). |
-| 6 — Platform encryption-key rotation | Not started | Pending |
+| 6 — Platform encryption-key rotation | Bounded storage operation implemented; CLI and restart acceptance pending | Six database tests and three tagged real-connection checks pass. Batches preserve exact tenant credentials, identity and revoked status, skip busy rows with truthful remaining counts, and roll back on corruption or interruption. A concurrent new-key insert survives an interrupted batch; a concurrent status update survives skipped-row retry. Independent implementation review and static checks pass. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md). |
 | 7 — Platform configuration and cleanup | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
 
 - [ ] Verify every credential/configuration boundary and checkpoint exit above.
