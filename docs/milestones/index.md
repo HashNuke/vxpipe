@@ -85,6 +85,12 @@ Twilio's existing Account SID/Auth Token shape now supports encrypted provisioni
 tenant service registration. Its 18 focused storage/CLI checks pass; Gateway live readers remain
 pending. This completes the common storage prerequisite for provider/account identity enforcement.
 See [Twilio storage evidence](../../labnotes/20260916-0315-provision-twilio-credentials.md).
+Incoming claims and durable duplicate/lifecycle lookup now use tenant and canonical service
+identity. Provider/account mismatches and ambiguous historical replays fail before admission.
+The focused 18-test group, including two real-connection checks, passes. A disposable database
+across fresh VMs preserves four distinct admissions for two tenants per existing carrier despite
+matching aliases/provider IDs. Gateway live identity and credential readers remain pending;
+progress stays at 4 of 7 checkpoints complete. See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

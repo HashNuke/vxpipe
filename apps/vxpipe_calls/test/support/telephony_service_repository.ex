@@ -4,8 +4,8 @@ defmodule Vxpipe.Calls.TestTelephonyServiceRepository do
   alias Vxpipe.Calls.{ProviderCredential, PublicId, ResolvedProviderCredential}
   alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyService}
 
-  def repository(tenants) do
-    bindings = Map.new(tenants, &{{&1.key, "primary-phone"}, snapshot(&1.key)})
+  def repository(tenants, provider \\ "telnyx") do
+    bindings = Map.new(tenants, &{{&1.key, "primary-phone"}, snapshot(&1.key, provider)})
     {__MODULE__, bindings}
   end
 
@@ -35,31 +35,45 @@ defmodule Vxpipe.Calls.TestTelephonyServiceRepository do
 
   defp matching_reference?(_service, _requirement), do: true
 
-  defp snapshot(tenant_key) do
+  defp snapshot(tenant_key, provider) do
+    {auth_kind, payload, account, public_key} = authentication(provider)
+
     credential = %ProviderCredential{
       id: PublicId.uuid(),
       tenant_key: tenant_key,
-      provider: "telnyx",
+      provider: provider,
       name: "phone",
-      auth_kind: "api_key"
+      auth_kind: auth_kind
     }
 
     {:ok, service} =
       TelephonyService.new(tenant_key, %{
         "name" => "primary-phone",
         "ingress_key" => "test-#{tenant_key}",
-        "provider" => "telnyx",
-        "provider_connection_id" => "connection-1",
+        "provider" => provider,
+        "provider_connection_id" => account,
         "credential_id" => credential.id,
-        "public_key" => Base.encode64(:binary.copy(<<1>>, 32))
+        "public_key" => public_key
       })
 
     %ResolvedTelephonyService{
       service: service,
       credential: %ResolvedProviderCredential{
         credential: credential,
-        payload: %{"api_key" => "fixture-phone-private-marker"}
+        payload: payload
       }
     }
+  end
+
+  defp authentication("telnyx") do
+    {"api_key", %{"api_key" => "fixture-phone-private-marker"}, "connection-1",
+     Base.encode64(:binary.copy(<<1>>, 32))}
+  end
+
+  defp authentication("twilio") do
+    account = "AC00000000000000000000000000000000"
+
+    {"account_sid_auth_token",
+     %{"account_sid" => account, "auth_token" => "fixture-phone-private-marker"}, account, nil}
   end
 end

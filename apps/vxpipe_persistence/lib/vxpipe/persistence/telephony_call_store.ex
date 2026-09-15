@@ -15,9 +15,13 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
           | {:duplicate, TelephonyAdmissionClaim.t()}
           | {:error, term()}
   def claim(repo, %TelephonyAdmissionClaim{} = claim, authorize) when is_function(authorize, 0) do
-    case existing_claim(repo, claim) do
-      :none -> insert_claim(repo, claim, authorize)
-      result -> result
+    if TelephonyAdmissionClaim.valid_service?(claim) do
+      case existing_claim(repo, claim) do
+        :none -> insert_claim(repo, claim, authorize)
+        result -> result
+      end
+    else
+      {:error, :telephony_service_mismatch}
     end
   end
 
@@ -108,6 +112,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
       call_id: call.id,
       provider: Atom.to_string(claim.provider),
       service: claim.service,
+      service_id: claim.service_id,
       provider_event_id: claim.provider_event_id,
       provider_connection_id: claim.provider_connection_id,
       provider_call_control_id: claim.provider_call_control_id,
@@ -124,8 +129,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     event_claim =
       fetch_claim(
         repo,
-        claim.provider,
-        claim.service,
+        claim,
         :provider_event_id,
         claim.provider_event_id
       )
@@ -133,13 +137,15 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     leg_claim =
       fetch_claim(
         repo,
-        claim.provider,
-        claim.service,
+        claim,
         :provider_call_leg_id,
         claim.provider_call_leg_id
       )
 
-    existing_outcome(event_claim, leg_claim, claim)
+    case existing_outcome(event_claim, leg_claim, claim) do
+      :none -> historical_collision(repo, claim)
+      result -> result
+    end
   end
 
   defp existing_after_conflict(repo, claim) do
@@ -151,16 +157,19 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
 
   defp existing_outcome(nil, nil, _claim), do: :none
 
-  defp existing_outcome(%TelephonyAdmissionClaim{} = existing, _leg, claim) do
-    if existing.provider_call_leg_id == claim.provider_call_leg_id,
+  defp existing_outcome(%TelephonyAdmissionClaim{} = existing, _leg, claim),
+    do: duplicate_outcome(existing, claim)
+
+  defp existing_outcome(nil, %TelephonyAdmissionClaim{} = existing, claim),
+    do: duplicate_outcome(existing, claim)
+
+  defp duplicate_outcome(existing, claim) do
+    if TelephonyAdmissionClaim.same_leg?(existing, claim),
       do: {:duplicate, existing},
       else: {:error, :telephony_leg_conflict}
   end
 
-  defp existing_outcome(nil, %TelephonyAdmissionClaim{} = existing, _claim),
-    do: {:duplicate, existing}
-
-  defp fetch_claim(repo, provider, service, field_name, value) do
+  defp fetch_claim(repo, claim, field_name, value) do
     query =
       from(leg in StoredTelephonyLeg,
         join: call in assoc(leg, :call),
@@ -168,7 +177,9 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
         join: revision in assoc(call, :definition_revision),
         join: definition in assoc(revision, :call_definition),
         where:
-          leg.provider == ^Atom.to_string(provider) and leg.service == ^service and
+          tenant.key == ^claim.call.tenant_key and leg.tenant_id == tenant.id and
+            leg.service_id == ^claim.service_id and
+            leg.provider == ^Atom.to_string(claim.provider) and
             field(leg, ^field_name) == ^value,
         select: {leg, call, {tenant, definition, revision}}
       )
@@ -179,7 +190,33 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     end
   end
 
+  defp historical_collision(repo, claim) do
+    query =
+      from(leg in StoredTelephonyLeg,
+        join: tenant in assoc(leg, :tenant),
+        where:
+          tenant.key == ^claim.call.tenant_key and is_nil(leg.service_id) and
+            leg.provider == ^Atom.to_string(claim.provider) and
+            leg.provider_connection_id == ^claim.provider_connection_id and
+            (leg.provider_event_id == ^claim.provider_event_id or
+               leg.provider_call_leg_id == ^claim.provider_call_leg_id),
+        select: 1,
+        limit: 1
+      )
+
+    case repo.one(query) do
+      nil -> :none
+      1 -> {:error, :legacy_telephony_claim}
+    end
+  end
+
   defp project_lifecycle(repo, claim, transition) do
+    if TelephonyAdmissionClaim.valid_service?(claim),
+      do: transition_claim(repo, claim, transition),
+      else: {:error, :telephony_service_mismatch}
+  end
+
+  defp transition_claim(repo, claim, transition) do
     repo.transaction(fn ->
       with {leg, call, selection} <- fetch_stored_claim(repo, claim),
            :ok <- matching_claim(leg, call, selection, claim),
@@ -202,7 +239,9 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
         join: revision in assoc(call, :definition_revision),
         join: definition in assoc(revision, :call_definition),
         where:
-          leg.provider == ^Atom.to_string(claim.provider) and
+          tenant.key == ^claim.call.tenant_key and leg.tenant_id == tenant.id and
+            leg.service_id == ^claim.service_id and
+            leg.provider == ^Atom.to_string(claim.provider) and
             leg.service == ^claim.service and
             leg.provider_call_leg_id == ^claim.provider_call_leg_id,
         lock: "FOR UPDATE",
@@ -268,6 +307,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
           participant_id: leg.participant_id,
           provider: stored_provider(leg.provider),
           service: leg.service,
+          service_id: leg.service_id,
           provider_event_id: leg.provider_event_id,
           provider_connection_id: leg.provider_connection_id,
           provider_call_control_id: leg.provider_call_control_id,

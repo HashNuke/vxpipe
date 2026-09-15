@@ -7,6 +7,7 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
   schema "telephony_legs" do
     field(:provider, :string)
     field(:service, :string)
+    field(:service_id, Ecto.UUID)
     field(:provider_event_id, :string)
     field(:provider_connection_id, :string)
     field(:provider_call_control_id, :string)
@@ -29,6 +30,7 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
     |> cast(attributes, [
       :provider,
       :service,
+      :service_id,
       :provider_event_id,
       :provider_connection_id,
       :provider_call_control_id,
@@ -45,6 +47,7 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
     |> validate_required([
       :provider,
       :service,
+      :service_id,
       :provider_event_id,
       :provider_connection_id,
       :provider_call_control_id,
@@ -62,10 +65,10 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
     |> foreign_key_constraint(:tenant_id)
     |> foreign_key_constraint(:call_id)
     |> unique_constraint(:provider_event_id,
-      name: :telephony_legs_provider_service_provider_event_id_index
+      name: :telephony_legs_tenant_service_event_index
     )
     |> unique_constraint(:provider_call_leg_id,
-      name: :telephony_legs_provider_service_provider_call_leg_id_index
+      name: :telephony_legs_tenant_service_leg_index
     )
   end
 

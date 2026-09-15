@@ -93,7 +93,14 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
                {:tenant, context.tenant.key},
                "primary-phone",
                twilio_incoming_event(),
-               context.options
+               Keyword.put(
+                 context.options,
+                 :telephony_service_repository,
+                 Vxpipe.Calls.TestTelephonyServiceRepository.repository(
+                   [context.tenant],
+                   "twilio"
+                 )
+               )
              )
   end
 
@@ -187,7 +194,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
       kind: :incoming,
       provider: :telnyx,
       provider_event_id: "event-incoming-1",
-      provider_connection_id: "voice-application-1",
+      provider_connection_id: "connection-1",
       provider_call_control_id: "call-control-1",
       provider_call_leg_id: "call-leg-1",
       provider_call_session_id: "call-session-1",

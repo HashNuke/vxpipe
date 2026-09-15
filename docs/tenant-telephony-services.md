@@ -1,7 +1,8 @@
 # Tenant telephony service storage
 
 Status: trusted Telnyx/Twilio registration, the operator CLI, private credential resolution,
-canonical prepared-plan bindings and definition save/publish/web/incoming write guards are implemented.
+canonical prepared-plan bindings, tenant-scoped incoming claims and definition
+save/publish/web/incoming write guards are implemented.
 Gateway live-reader migration remains pending in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
 and [checkpoint 4](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
@@ -130,9 +131,36 @@ claim in a credential transaction would leave that query inside an aborted trans
 the guard in the existing insertion transaction preserves recovery. All participating credential
 repositories must use the same Repo/dynamic transaction context as the call store.
 
-This check authorizes the database write. Tenant/canonical-service duplicate identity, comparison
-of incoming provider/account identity with the pinned entry service, fresh live-leg resolution and
-activation enforcement remain pending. These guards alone do not complete the carrier reader cutover.
+This check authorizes the database write. Fresh live-leg resolution and activation enforcement
+remain pending. These guards alone do not complete the carrier reader cutover.
+
+## Incoming identity and duplicate lookup
+
+An incoming claim carries the canonical service UUID alongside its alias. Before lookup or
+insertion, its tenant, service, provider and account must match the prepared entry participant's
+reference. Lifecycle writes also validate that reference and target the same tenant/service leg.
+The database's event and leg uniqueness keys include tenant, service UUID and provider, so two
+tenants with matching aliases and carrier IDs cannot return or update each other's calls.
+
+Retries compare account, call-control, leg and session identity. A new event ID for the same leg
+returns the original claim; a changed control/session identity returns `:telephony_leg_conflict`.
+Freshly generated call and participant IDs do not participate in duplicate identity.
+
+The identity migration adds nullable `telephony_legs.service_id` and replaces the old global
+alias indexes. Historical rows retain `NULL`: current aliases cannot establish which service
+originally admitted them. A collision with an unbound historical event or leg in the same
+tenant/provider/account returns `:legacy_telephony_claim` without admitting another call or
+adopting the old row. Stored calls remain inspectable. There is no foreign key to the current
+service row, so historical identity does not depend on service retention.
+
+Stop the old application writers before applying this migration, then start the new version.
+Mixed-version writes are unsupported: an old writer can insert a nullable identity outside the
+new uniqueness rules. New admission changesets require the UUID. Rolling back the migration
+requires resolving any cross-tenant or cross-service IDs that conflict with the old global
+indexes first; the migration never deletes calls to make rollback succeed.
+
+Gateway's live registry and authenticated ingress still need the tenant/service reader cutover.
+This durable identity boundary does not add new carrier workflows or authentication modes.
 
 ## Prepared service references
 

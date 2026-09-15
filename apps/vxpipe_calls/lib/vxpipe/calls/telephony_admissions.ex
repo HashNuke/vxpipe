@@ -41,6 +41,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
         participant_id: participant.participant_id,
         provider: event.provider,
         service: service,
+        service_id: participant.telephony_service.service_id,
         provider_event_id: event.provider_event_id,
         provider_connection_id: event.provider_connection_id,
         provider_call_control_id: event.provider_call_control_id,
@@ -55,7 +56,9 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
         end)
       end
 
-      Repositories.call(repository, :claim_incoming_telephony, [claim, authorize])
+      if TelephonyAdmissionClaim.valid_service?(claim),
+        do: Repositories.call(repository, :claim_incoming_telephony, [claim, authorize]),
+        else: {:error, :telephony_service_mismatch}
     else
       :error -> {:error, :participant_not_found}
       {:error, _reason} = error -> error

@@ -1,6 +1,8 @@
 defmodule Vxpipe.Calls.TestMemoryRepository do
   use Agent
 
+  alias Vxpipe.Calls.TelephonyAdmissionClaim
+
   def start_link(_options) do
     Agent.start_link(fn ->
       %{
@@ -248,23 +250,36 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   end
 
   def claim_incoming_telephony(agent, claim, authorize) do
+    if TelephonyAdmissionClaim.valid_service?(claim),
+      do: claim_telephony(agent, claim, authorize),
+      else: {:error, :telephony_service_mismatch}
+  end
+
+  defp claim_telephony(agent, claim, authorize) do
     Agent.get_and_update(agent, fn state ->
-      event_key = {claim.provider, claim.service, claim.provider_event_id}
-      leg_key = {claim.provider, claim.service, claim.provider_call_leg_id}
+      event_key =
+        {claim.call.tenant_key, claim.service_id, claim.provider, claim.provider_event_id}
+
+      leg_key =
+        {claim.call.tenant_key, claim.service_id, claim.provider, claim.provider_call_leg_id}
 
       case {
         Map.fetch(state.telephony_event_claims, event_key),
         Map.fetch(state.telephony_leg_claims, leg_key)
       } do
         {{:ok, existing}, _leg} ->
-          if existing.provider_call_leg_id == claim.provider_call_leg_id do
+          if TelephonyAdmissionClaim.same_leg?(existing, claim) do
             {{:duplicate, current_claim(state, existing)}, state}
           else
             {{:error, :telephony_leg_conflict}, state}
           end
 
         {:error, {:ok, existing}} ->
-          {{:duplicate, current_claim(state, existing)}, state}
+          if TelephonyAdmissionClaim.same_leg?(existing, claim) do
+            {{:duplicate, current_claim(state, existing)}, state}
+          else
+            {{:error, :telephony_leg_conflict}, state}
+          end
 
         {:error, :error} ->
           case authorize.() do
@@ -481,12 +496,22 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   end
 
   defp update_telephony_claim(agent, claim, transition) do
+    if TelephonyAdmissionClaim.valid_service?(claim),
+      do: transition_telephony_claim(agent, claim, transition),
+      else: {:error, :telephony_service_mismatch}
+  end
+
+  defp transition_telephony_claim(agent, claim, transition) do
     Agent.get_and_update(agent, fn state ->
-      event_key = {claim.provider, claim.service, claim.provider_event_id}
-      leg_key = {claim.provider, claim.service, claim.provider_call_leg_id}
+      event_key =
+        {claim.call.tenant_key, claim.service_id, claim.provider, claim.provider_event_id}
+
+      leg_key =
+        {claim.call.tenant_key, claim.service_id, claim.provider, claim.provider_call_leg_id}
 
       with {:ok, current} <- Map.fetch(state.telephony_event_claims, event_key),
            {:ok, leg_claim} <- Map.fetch(state.telephony_leg_claims, leg_key),
+           true <- TelephonyAdmissionClaim.same_leg?(current, claim),
            true <- current.call.id == claim.call.id and leg_claim.call.id == claim.call.id,
            {:ok, updated} <- transition.(current) do
         call_key = {updated.call.tenant_key, updated.call.id}

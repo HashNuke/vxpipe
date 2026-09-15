@@ -130,6 +130,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
       participant_id: "part_phone-caller",
       provider: :telnyx,
       service: "primary-phone",
+      service_id: "10000000-0000-4000-8000-000000000001",
       provider_event_id: "event-incoming-1",
       provider_connection_id: "voice-application-1",
       provider_call_control_id: "call-control-1",

@@ -292,6 +292,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
       participant_id: participant_id,
       provider: :twilio,
       service: "primary-phone",
+      service_id: "10000000-0000-4000-8000-000000000001",
       provider_event_id: "event-incoming-1",
       provider_connection_id: @account_sid,
       provider_call_control_id: @call_sid,

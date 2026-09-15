@@ -412,7 +412,7 @@ Depends on the credential store and existing Telnyx integration.
   - [x] Recheck credentials and pinned references inside the incoming call/leg insertion
     transaction. Hold locks through commit and preserve duplicate recovery after a failed insert
     transaction. Six focused checks pass, including two tagged real-connection cases.
-    Incoming provider/account identity, tenant-scoped duplicate lookup and live readers remain pending.
+    Live readers remain pending; durable incoming identity is recorded below.
     See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
 - [ ] Replace application/global service credential lookup for existing answer, dial, media and
   hangup commands. Verify the actual adapter receives only the selected tenant credential.
@@ -420,6 +420,10 @@ Depends on the credential store and existing Telnyx integration.
   signature, timestamp, provider-connection and leg checks before dispatch.
 - [ ] Keep durable and live service/leg lookup tenant-scoped when introducing tenant service
   records. Test matching aliases/provider IDs across tenants and persisted duplicate lookup.
+  - [x] Carry canonical service identity in incoming claims and stored legs; scope duplicate and
+    lifecycle lookup by tenant/service/provider, validate the prepared entry account, and reject
+    ambiguous historical collisions. Live registry and authenticated ingress remain pending.
+    See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
 - [ ] Test missing/wrong-tenant/inactive credentials and credential-source failure: no new request,
   admission or dial and no global fallback. Preserve initialized configuration for existing legs.
 - [ ] Update provisioning/configuration documentation. Reuse targeted command/webhook tests;
@@ -707,6 +711,15 @@ duplicate identity, incoming provider/account matching and live carrier readers 
 Independent review and all five root gates pass at `9026af2`: 1,575 tests, zero failures and
 38 exclusions (seed 235296).
 See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
+
+Checkpoint 3 durable-identity follow-up: tenant/service UUID/provider now scopes incoming claim
+uniqueness, duplicate lookup and lifecycle writes. Provider/account identity must match the pinned
+entry service. Conflicting control/session IDs and ambiguous historical unbound collisions reject
+admission. Eighteen focused tests pass, including the two real-connection transaction checks;
+Calls 84 and Persistence 136 tests pass (11 excluded). A fresh-VM disposable database check recovers
+four correct duplicates across two tenants per existing carrier. Independent review and static
+root gates pass. Gateway live identity/readers and the next full umbrella run remain pending.
+See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
 
 ## Specification review
 
