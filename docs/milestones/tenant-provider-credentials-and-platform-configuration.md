@@ -471,6 +471,11 @@ The common umbrella gate remains open; that failure does not add an audio requir
 credential-reader checkpoint. Final independent gate review confirmed this distinction.
 Telnyx/Twilio reader completion remains owned by checkpoints 3 and 4.
 
+Follow-up review found an outer startup gate missed by the initial constructor tests: it still
+rejected Zenmux entry agents. The gate now accepts the existing integration, and a public room-startup
+regression reproduces the original failure and verifies preparation with the named tenant key.
+See [startup correction evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
+
 Exit: existing supported provider integrations read explicit tenant credentials and retain their
 public inline selection/options contract, with no SDK ambient credential fallback.
 

@@ -77,7 +77,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_model(%{
          capabilities: %{model_inference: %CapabilitySelection{provider: provider}}
        })
-       when provider in ["google", "fixture"],
+       when provider in ["google", "zenmux", "fixture"],
        do: :ok
 
   defp supported_model(participant),

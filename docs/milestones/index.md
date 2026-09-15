@@ -25,7 +25,9 @@ only; no new provider or authentication-mode support is required.
 The [source-backed provider inventory](../existing-provider-credentials.md) identifies
 Zenmux as the remaining model integration. Its existing API-key/native-routing contract now uses
 inline selections and tenant DB credentials. Its credential-reader checkpoint is verified by focused
-tests and independent review. Static root gates and unused-lock checks pass; the full run completed
+tests and independent review. A follow-up public startup regression catches and corrects the stale
+startup gate that still rejected Zenmux entry agents; see [startup evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
+Static root gates and unused-lock checks pass; the full run completed
 1,547 tests with one previously reproduced native Morse failure and 33 exclusions. The milestone's
 common umbrella gate remains open. Existing carrier/keyring structures
 and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider

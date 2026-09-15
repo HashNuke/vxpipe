@@ -43,6 +43,12 @@ The [current translator](../apps/vxpipe_agent_runtime/lib/vxpipe/agent_runtime/p
 supports Google and Zenmux. See the [inline example](inline-provider-selections.md#provider-translation)
 and [checkpoint evidence](../labnotes/20260916-0033-zenmux-tenant-credentials.md).
 
+The [public room-startup regression](../apps/vxpipe_call_engine/test/vxpipe/call_engine/definition_driven_call_test.exs)
+also verifies that a Zenmux entry agent passes startup validation and prepares using its named
+tenant credential. Follow-up review found a stale Google-only hosted startup allowlist after the
+initial constructor checks; the [correction evidence](../labnotes/20260916-0118-zenmux-room-startup.md)
+records its expected failure and fix.
+
 `openai` and `anthropic` in these tests identify models or destinations selected by Zenmux.
 They do not establish separate OpenAI or Anthropic authentication integrations in Vxpipe.
 The caller supplies one Zenmux credential.

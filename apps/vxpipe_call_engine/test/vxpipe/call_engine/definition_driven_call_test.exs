@@ -1778,6 +1778,49 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :session) == nil
   end
 
+  test "starts an existing Zenmux entry agent with its named tenant credential" do
+    plan =
+      compile_plan(unique_id("room-zenmux-entry"),
+        definition_transform: fn source ->
+          put_in(source, [:participants, "receiver", :capabilities, :model_inference], %{
+            provider: "zenmux",
+            model: "openai/gpt-5",
+            credential_name: "router",
+            provider_options: %{
+              provider: %{fallback: "anthropic", routing: %{providers: ["openai", "anthropic"]}}
+            }
+          })
+        end
+      )
+
+    bindings = %{
+      {plan.tenant_id, "zenmux", "router"} => %{"api_key" => "zenmux-startup-private-marker"}
+    }
+
+    source = {Vxpipe.CallEngine.TestTenantCredentialSource, {self(), bindings}}
+
+    assert {:ok, _room} = CallEngine.start_call(plan, credential_source: source)
+
+    [{authority, _}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    on_exit(fn -> GenServer.stop(authority, :normal) end)
+
+    assert_receive {:tenant_credential_resolved, "tenant-test", "zenmux", "router"}, 1_000
+    Vxpipe.CallEngine.TestCallStartup.await_prepared(plan)
+
+    receiver = plan.participants["receiver"]
+
+    assert {:ok, _participant} =
+             CallEngine.participant_snapshot(
+               plan.tenant_id,
+               plan.room_id,
+               receiver.participant_id
+             )
+
+    refute :erlang.term_to_binary(plan) =~ "private-marker"
+  end
+
   test "rejects an unsupported model provider before registering a room" do
     room_id = unique_id("room-unsupported-provider")
     plan = compile_plan(room_id)
