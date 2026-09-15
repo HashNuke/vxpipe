@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.Command.{AttachConnection, JoinParticipant, SendText}
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -15,9 +15,17 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
   }
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.AgentRuntime.ModelResponse
+
+  alias Vxpipe.CallEngine.{
+    TestCallStartup,
+    TestEchoModelProvider,
+    TestTransferConnection,
+    TestTurnCall
+  }
+
   alias Vxpipe.CallEngine.TestAudioOutputSink
-  alias Vxpipe.CallEngine.TestModelInferenceProvider
+  alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
 
   setup do
@@ -25,34 +33,22 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-haley-en",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      transport: {TestTextToSpeechTransport, [observer: self()]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
+      transport: {TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
       maximum_requests: 2
     ]
 
-    model_inference = [
-      enabled: true,
-      provider: TestModelInferenceProvider,
-      provider_options: [observer: self(), streaming: true],
-      system_prompt: "Be concise.",
-      maximum_context_turns: 4,
-      maximum_pending_requests: 2,
-      maximum_output_bytes: 65_536,
-      request_timeout_ms: 1_000
-    ]
+    agent_runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:fixture, {TestEchoModelProvider, []})
 
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
       original
       |> Keyword.put(:text_to_speech, text_to_speech)
-      |> Keyword.put(:model_inference, model_inference)
+      |> Keyword.put(:agent_runtime, agent_runtime)
     )
 
     on_exit(fn ->
@@ -66,24 +62,28 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     room_id = unique_id("room")
 
-    assert {:ok, create} =
-             CreateRoom.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               agent: :model_inference,
-               deadline: future_deadline()
-             )
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
-    assert {:ok, room} = CallEngine.create_room(create)
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.update!(
+        settings,
+        :agent_runtime,
+        &Keyword.put(&1, :fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
+      )
+    )
+
+    {_plan, room, participant} = TestTurnCall.start(room_id, text_to_speech: true)
     assert_receive {:test_tts_transport_started, transport, _connection}
-    {participant, connection_id} = join_and_attach(room, "conn-stream", sink)
+    {participant, connection_id} = attach(room, participant, "conn-stream", sink)
+    TestCallStartup.await_ready(room_id)
     command = send_command(room, participant, connection_id, "turn-stream", "two sentences")
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = TestTransferConnection.send_text(command)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_stream_model_inference_request, request, _messages}
+    assert_receive {:test_agent_runtime_stream, request, _messages}
 
     emit_model_chunk(request, "First sentence. Sec")
     assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "First sentence."}}
@@ -92,7 +92,8 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     assert_receive {:test_tts_control, ^transport, _first_flush}
 
     emit_model_chunk(request, "ond sentence!")
-    send(request, {:test_model_inference_reply, :ok})
+    assert {:ok, response} = ModelResponse.new(text: "First sentence. Second sentence!")
+    send(request, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:vxpipe_event, %TextOutput{sequence: 4, text: "Second sentence!"}}
     refute_receive {:vxpipe_event, %AgentTurnCompleted{}}
 
@@ -112,41 +113,10 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     room_id = unique_id("room")
 
-    assert {:ok, create} =
-             CreateRoom.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               agent: :deterministic_text,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, room} = CallEngine.create_room(create)
+    {_plan, room, participant} = TestTurnCall.start(room_id, text_to_speech: true)
     assert_receive {:test_tts_transport_started, transport, _connection}
-
-    assert {:ok, join} =
-             JoinParticipant.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               role: :human,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, participant} = CallEngine.join_participant(join)
-
-    assert {:ok, attach} =
-             AttachConnection.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               incarnation_id: room.incarnation_id,
-               participant_id: participant.participant_id,
-               connection_id: "conn-tts",
-               deadline: future_deadline()
-             )
-
-    assert {:ok, _attachment} = CallEngine.attach_connection(attach, sink)
+    {participant, "conn-tts"} = attach(room, participant, "conn-tts", sink)
+    TestCallStartup.await_ready(room_id)
 
     assert {:ok, command} =
              SendText.new(
@@ -162,7 +132,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
                deadline: future_deadline()
              )
 
-    assert :ok = CallEngine.send_text(command)
+    assert :ok = TestTransferConnection.send_text(command)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
 
@@ -218,20 +188,28 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
 
     room_id = unique_id("room")
 
-    assert {:ok, create} =
-             CreateRoom.new(
+    {plan, room, first_participant} =
+      TestTurnCall.start(room_id, text_to_speech: true, second_human: true)
+
+    assert_receive {:test_tts_transport_started, transport, _connection}
+    {first_participant, "conn-first"} = attach(room, first_participant, "conn-first", first_sink)
+    TestCallStartup.await_ready(room_id)
+    second = Map.fetch!(plan.participants, "second")
+
+    assert {:ok, join} =
+             JoinParticipant.new(
                tenant_id: "tenant-demo",
                actor_id: "actor-demo",
                room_id: room_id,
-               agent: :deterministic_text,
+               participant_id: second.participant_id,
+               role: :human,
                deadline: future_deadline()
              )
 
-    assert {:ok, room} = CallEngine.create_room(create)
-    assert_receive {:test_tts_transport_started, transport, _connection}
+    assert {:ok, second_participant} = CallEngine.join_participant(join)
 
-    {first_participant, "conn-first"} = join_and_attach(room, "conn-first", first_sink)
-    {second_participant, "conn-second"} = join_and_attach(room, "conn-second", second_sink)
+    {second_participant, "conn-second"} =
+      attach(room, second_participant, "conn-second", second_sink)
 
     first =
       send_command(
@@ -242,7 +220,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
         "a long first answer"
       )
 
-    assert :ok = CallEngine.send_text(first)
+    assert :ok = TestTransferConnection.send_text(first)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
 
@@ -274,7 +252,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
         "change the subject"
       )
 
-    assert :ok = CallEngine.send_text(interruption)
+    assert :ok = TestTransferConnection.send_text(interruption)
     assert_receive {:test_audio_output_interrupt, ^first_sink, "turn-first", 20}
     assert_receive {:test_tts_control, ^transport, interrupt_control}
 
@@ -298,7 +276,9 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
                       played_ms: 20
                     }}
 
-    assert agent_participant_id == create.agent_participant_id
+    assert agent_participant_id ==
+             Map.fetch!(plan.participants, plan.entry_receiver).participant_id
+
     assert first_participant_id == first_participant.participant_id
     assert first_command_id == first.id
     assert second_participant_id == second_participant.participant_id
@@ -333,18 +313,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     assert_receive {:test_tts_control, ^transport, _replacement_flush}
   end
 
-  defp join_and_attach(room, connection_id, sink) do
-    assert {:ok, join} =
-             JoinParticipant.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room.room_id,
-               role: :human,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, participant} = CallEngine.join_participant(join)
-
+  defp attach(room, participant, connection_id, sink) do
     assert {:ok, attach} =
              AttachConnection.new(
                tenant_id: "tenant-demo",
@@ -356,7 +325,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(attach, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(attach, sink)
     {participant, connection_id}
   end
 
@@ -380,8 +349,8 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
   end
 
   defp emit_model_chunk(request, chunk) do
-    send(request, {:test_model_inference_chunk, chunk, self()})
-    assert_receive {:test_model_inference_chunk_result, :ok}
+    send(request, {:test_agent_runtime_delta, chunk, self()})
+    assert_receive {:test_agent_runtime_delta_result, :ok}
   end
 
   defp finish_synthesis(transport, sink, speech_id, audio) do

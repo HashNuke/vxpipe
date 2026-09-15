@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
   alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTurnCall}
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
   alias Vxpipe.Gateway.HTTP.Endpoint
@@ -255,7 +256,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
     configure_audio_capabilities(self())
 
     room_id = "room-full-duplex-#{System.unique_integer([:positive, :monotonic])}"
-    session_id = create_room_session(room_id)
+    session_id = create_audio_session(room_id)
     assert_receive {:test_tts_transport_started, tts_transport, _connection}
 
     client = start_supervised!({PeerConnection, []})
@@ -405,6 +406,36 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
            } = receive_rtvi(client, client_channel, 5_000)
   end
 
+  defp create_audio_session(room_id) do
+    options =
+      Endpoint.init(
+        cors: [],
+        room_creation: [
+          enabled: true,
+          principal: [
+            tenant_id: "tenant-development",
+            actor_id: "actor-samples",
+            scopes: ["rooms:create", "rooms:join"]
+          ],
+          trusted_call: [
+            definition: TestTurnCall.definition(speech_to_text: true, text_to_speech: true),
+            resource_id: "audio-turn-definition",
+            revision: 1,
+            host_tools: %{}
+          ]
+        ]
+      )
+
+    response =
+      :post
+      |> conn("/api/rooms", JSON.encode!(%{"room_id" => room_id}))
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(options)
+
+    assert response.status == 201
+    get_in(JSON.decode!(response.resp_body), ["session", "session_id"])
+  end
+
   defp create_room_session(room_id) do
     create_conn =
       :post
@@ -452,13 +483,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
     speech_to_text = [
       enabled: true,
       provider: Flux,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-general-en",
-        encoding: :opus,
-        sample_rate: 48_000
-      ],
-      transport: {TestSpeechToTextTransport, [observer: observer]},
+      transport: {TestSpeechToTextTransport, [observer: observer, ready_on_start: true]},
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,
@@ -470,13 +495,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
     text_to_speech = [
       enabled: true,
       provider: FluxTextToSpeech,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-haley-en",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      transport: {TestTextToSpeechTransport, [observer: observer]},
+      transport: {TestTextToSpeechTransport, [observer: observer, ready_on_start: true]},
       maximum_requests: 2
     ]
 
@@ -484,6 +503,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
       original
       |> Keyword.put(:speech_to_text, speech_to_text)
       |> Keyword.put(:text_to_speech, text_to_speech)
+      |> Keyword.update!(:agent_runtime, &Keyword.put(&1, :fixture, {TestEchoModelProvider, []}))
 
     Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
 

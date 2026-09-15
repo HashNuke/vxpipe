@@ -23,6 +23,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
     FluxTextToSpeechSocket
   }
 
+  alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTenantCredentialSource, TestTurnCall}
   alias Vxpipe.Gateway.HTTP.Endpoint
 
   @moduletag :integration
@@ -33,7 +34,13 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
                       cors: [],
                       room_creation: [
                         enabled: true,
-                        agent: :deterministic_text,
+                        trusted_call: [
+                          definition:
+                            TestTurnCall.definition(speech_to_text: true, text_to_speech: true),
+                          resource_id: "live-speech-definition",
+                          revision: 1,
+                          host_tools: %{}
+                        ],
                         principal: [
                           tenant_id: "tenant-development",
                           actor_id: "actor-samples",
@@ -49,12 +56,6 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
     speech_to_text = [
       enabled: true,
       provider: Flux,
-      provider_options: [
-        api_key: System.fetch_env!("DEEPGRAM_API_KEY"),
-        model: "flux-general-en",
-        encoding: :opus,
-        sample_rate: 48_000
-      ],
       transport: {FluxSocket, [connect_timeout: 10_000, receive_timeout: 30_000]},
       media_ingress: [
         maximum_frames: 50,
@@ -67,12 +68,6 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
     text_to_speech = [
       enabled: true,
       provider: FluxTextToSpeech,
-      provider_options: [
-        api_key: System.fetch_env!("DEEPGRAM_API_KEY"),
-        model: "flux-haley-en",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
       transport: {FluxTextToSpeechSocket, [connect_timeout: 10_000, receive_timeout: 30_000]},
       maximum_requests: 4
     ]
@@ -81,6 +76,17 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
       original_settings
       |> Keyword.put(:speech_to_text, speech_to_text)
       |> Keyword.put(:text_to_speech, text_to_speech)
+      |> Keyword.update!(:agent_runtime, &Keyword.put(&1, :fixture, {TestEchoModelProvider, []}))
+      |> Keyword.put(
+        :credential_source,
+        {TestTenantCredentialSource,
+         {self(),
+          %{
+            {"tenant-development", "deepgram", "default"} => %{
+              "api_key" => System.fetch_env!("DEEPGRAM_API_KEY")
+            }
+          }}}
+      )
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -202,10 +208,14 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     assert String.trim(final_text) != ""
 
-    assert %{"data" => %{"text" => "Echo: " <> echoed_text}} =
-             Enum.find(messages, &match?(%{"type" => "bot-output"}, &1))
+    echoed_text =
+      messages
+      |> Enum.filter(
+        &match?(%{"type" => "bot-output", "data" => %{"spoken_status" => "new"}}, &1)
+      )
+      |> Enum.map_join(" ", &get_in(&1, ["data", "text"]))
 
-    assert echoed_text == String.trim(final_text)
+    assert echoed_text == "Echo: " <> String.trim(final_text)
 
     assert %{"data" => %{"will_be_spoken" => true, "spoken_status" => "new"}} =
              Enum.find(messages, &match?(%{"type" => "bot-output"}, &1))
@@ -330,13 +340,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     assert create_conn.status == 201
 
-    session_conn =
-      :post
-      |> conn("/api/rooms/#{room_id}/sessions")
-      |> Endpoint.call(@endpoint_options)
-
-    assert session_conn.status == 201
-    get_in(JSON.decode!(session_conn.resp_body), ["session", "session_id"])
+    get_in(JSON.decode!(create_conn.resp_body), ["session", "session_id"])
   end
 
   defp patch_candidate(connection_id, %ICECandidate{} = candidate) do

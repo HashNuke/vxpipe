@@ -27,7 +27,7 @@ ingress per attached human connection. It accepts protocol-neutral Opus frames,
 streams them through the Deepgram Flux adapter, and admits normalized turn and
 replacement-transcription signals into the room authority. Only Flux
 `EndOfTurn` commits the audio turn and dispatches its final text to the
-deterministic agent. Provider I/O and raw audio remain outside the room-authority
+selected agent. Provider I/O and raw audio remain outside the room-authority
 mailbox, and the engine still contains no WebRTC or RTVI types.
 
 The output slice adds one persistent, bounded text-to-speech capability for the
@@ -37,11 +37,10 @@ opaque output sink. Raw audio still bypasses the room authority. Provider
 completion and sink playout completion are distinct; room-sequenced agent
 speaking/completion events follow sink acknowledgements.
 
-The model-inference slice adds a provider-neutral, room-scoped conversational
-capability. Development uses ReqLLM with Gemini, while the reusable base
-configuration remains disabled. A trusted application-configured system prompt
-is prepended to every request, successful user/assistant turns are retained with
-a whole-turn bound, and provider work is serialized outside the room authority.
+Inline agent definitions select a provider-neutral conversational model and prompt.
+Hosted Google selections resolve tenant credentials and use ReqLLM internally;
+local fixtures require no provider key. Agent Runtime retains bounded conversation
+history and serializes provider work outside the room authority.
 Generation errors fail only their correlated turn and leave the room available.
 Generated text reuses the existing optional TTS and completion path.
 
@@ -175,10 +174,10 @@ its worker; the invocation registry publishes ordered tool-start/completion fact
 Authority applies the effect and terminates the room. It never ends the call inline inside the
 agent/runtime process or before the tool lifecycle can be archived.
 
-The optional legacy `CreateRoom` model-inference preset remains available to embedded hosts only as
-a text-generation compatibility path. It advertises no tools and rejects an unsolicited provider
-tool response as invalid without executing it or projecting a tool lifecycle. Tool-enabled calls
-use a compiled definition and Agent Runtime.
+`CreateRoom` supports empty rooms and deterministic text. Model and speech calls use a compiled
+inline definition and `start_call`; the legacy model preset and automatic global speech readers
+have been removed. Embedded fixture/Morse selections remain available without provider credentials.
+See [credential reader boundaries](../../docs/credential-reader-boundaries.md).
 
 Terminal tool results are now leased before caller work and submitted through the Session's private
 engine-origin continuation API. Successful committed continuation acknowledges and removes the
@@ -242,8 +241,8 @@ That test compiles a real call plan, injects independently chunked linear16 `SOS
 attributed transcript, runs a local model response, collects real TTS output, and independently
 decodes it. It requires no speech credential or network access. Browser microphone audio is
 currently Opus and is outside this decoder's direct-PCM contract; no lossy-codec, acoustic echo,
-ordinary microphone, or general noise-robustness claim is made. The Console's opt-in `morse`
-development profile therefore uses typed input and 48 kHz Morse TTS only.
+ordinary microphone, or general noise-robustness claim is made. Embedded hosts select Morse
+explicitly in inline definitions; the Console has no speech-profile switch.
 
 ## Embedded telemetry consumer
 

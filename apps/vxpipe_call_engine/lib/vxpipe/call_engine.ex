@@ -128,13 +128,7 @@ defmodule Vxpipe.CallEngine do
           {:ok, ConnectionAttachment.t()} | {:error, Error.t()}
   def attach_connection(%AttachConnection{} = command, output_sink \\ nil) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
-      settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-
-      case RoomSupervisor.attach_connection(
-             command,
-             Keyword.fetch!(settings, :speech_to_text),
-             output_sink
-           ) do
+      case RoomSupervisor.attach_connection(command, output_sink) do
         {:ok, _room_authority, room_monitor, media_ingress, admission, room_audio_input_mode,
          room_audio_output_mode, transfer_attempt_id} ->
           case RoomAudioHandle.resolve(command.incarnation_id) do
@@ -182,8 +176,7 @@ defmodule Vxpipe.CallEngine do
   @spec activate_speech_to_text(AttachConnection.t()) :: {:ok, pid() | nil} | {:error, Error.t()}
   def activate_speech_to_text(%AttachConnection{} = command) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
-      settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-      RoomSupervisor.activate_speech_to_text(command, Keyword.fetch!(settings, :speech_to_text))
+      RoomSupervisor.activate_speech_to_text(command)
     else
       {:error,
        Error.new(:deadline_exceeded, "The speech-to-text activation deadline has elapsed.")}

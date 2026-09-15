@@ -75,7 +75,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           readiness_options: keyword(),
           snapshot: Snapshot.t(),
           spoken_history: SpokenHistory.t(),
-          speech_to_text_runtime: :application | map(),
+          speech_to_text_runtime: map(),
           startup: nil | map(),
           startup_ready?: boolean(),
           text_capability_required?: boolean(),
@@ -88,7 +88,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
   @spec new(
           Recorder.t(),
           Snapshot.t(),
-          :application | map(),
+          map(),
           OpeningAudio.t(),
           FirstMessage.t(),
           nil | pid(),

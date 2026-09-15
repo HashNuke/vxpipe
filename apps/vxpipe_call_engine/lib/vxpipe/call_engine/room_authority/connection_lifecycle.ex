@@ -377,9 +377,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   defp media_modes(:monitor, _state), do: {:disabled, :full_mix}
   defp media_modes(_role, _state), do: {:enabled, :mix_minus}
 
-  defp selected_speech_to_text_runtime(_participant_id, %{speech_to_text_runtime: :application}),
-    do: :application
-
   defp selected_speech_to_text_runtime(participant_id, state) do
     planned_connection_runtime(participant_id, state.participant_transfer_runtime)
   end

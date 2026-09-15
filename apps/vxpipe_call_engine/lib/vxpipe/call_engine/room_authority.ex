@@ -613,7 +613,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  defp initial_speech_to_text_runtime(%CreateRoom{}), do: :application
+  defp initial_speech_to_text_runtime(%CreateRoom{}), do: %{}
   defp initial_speech_to_text_runtime(%ResolvedCallPlan{}), do: %{}
 
   defp bind_media_policy_authority(%CreateRoom{}, _incarnation_id), do: {:ok, nil}

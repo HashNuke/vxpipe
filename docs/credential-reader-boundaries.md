@@ -32,10 +32,26 @@ under the [approved scope correction](credential-cutover-scope.md).
 | Private briefing TTS | `HumanDestinationPreparer` → transfer `Runtime.source_text_to_speech` → `PlanStartup.participant_text_to_speech` | Fresh named source binding before new transport/dial; missing binding preserves the existing source client. |
 | Source TTS replacement | `RoomTransferSupervisor.recover` → transfer `Runtime.source_text_to_speech` | Fresh lookup within the existing 750 ms budget; unavailable binding starts no transport and enters existing terminal failure handling. |
 | Hosted persistence bridge | Calls `ProviderCredentialSource` → `DefinitionCredentials` → encrypted repository | Tenant/provider/name/status/auth validation; persistence tests verify DB reads and safe errors. |
-| Legacy embedded `CreateRoom` | `Startup.start_text_capability` / `start_configured_text_to_speech`; `RoomSupervisor` application STT branch | **Pending removal:** reachable global hosted model/TTS/STT options bypass the DB source. Preserve credential-free embedded operation when removing them. |
+| Raw embedded `CreateRoom` | Empty rooms and deterministic text only | Retired global model selector and automatic TTS/STT construction removed. Hosted capabilities use inline plans; fixture/Morse selections remain credential-free. |
+
+## Raw-room cutover
+
+`CreateRoom` admits empty rooms and the credential-free deterministic text agent. Its retired
+`:model_inference` selector is rejected; a stale manually constructed command fails room startup.
+Raw-room startup and attachment no longer construct speech clients from application settings.
+Model and speech calls compile an inline definition and use `start_call`, including embedded
+fixture/Morse calls. Application settings still register adapters, transports and resource limits;
+inline selections and the tenant credential source supply provider request configuration.
+
+The turn and WebRTC tests now use that same inline boundary. Their history, streaming, queueing,
+interruption and playout assertions remain in place. The live Deepgram lane explicitly binds its
+supplied test key to its test tenant through a credential source; it requires separate live execution.
 
 ## Rejected alternatives and remaining work
 
+- Retaining an opt-in global credential fallback would preserve the bypass. A replacement
+  global local-provider option scheme is unnecessary because inline fixture/Morse calls already
+  support credential-free embedding.
 - Copying the source client's decrypted configuration into a new client skips current tenant
   credential validation. Keep its non-secret selection and resolve the selected binding again.
 - Reusing a live client during failure handling is valid. Adding database reads to media frames,
@@ -46,10 +62,9 @@ under the [approved scope correction](credential-cutover-scope.md).
   introduced. Synthetic credential changes in tests distinguish a fresh lookup from a copied
   configuration; they do not prescribe a provider credential lifecycle.
 
-Checkpoint 2 remains partial. Its remaining work includes removing the reachable legacy embedded
-global readers, covering destination-only missing credentials before definition writes, and
-finishing named destination/whole-selection boundary coverage. Carrier readers and remaining
-supported provider adapters stay in their own checkpoints.
+Checkpoint 2 remains partial. Its remaining work includes covering destination-only missing
+credentials before definition writes and finishing named destination/whole-selection boundary
+coverage. Carrier readers and remaining supported provider adapters stay in their own checkpoints.
 
 ## Verification
 
@@ -59,3 +74,7 @@ also received that cached key. Four focused cases now cover fresh available cred
 credentials for both paths. The changed code has no secret-bearing public fields or new storage.
 Full regression and independent review evidence is recorded in the
 [reader labnotes](../labnotes/20260915-2203-audit-credential-readers.md).
+
+Raw-room rejection and conflicting global speech settings are covered by focused regressions.
+Migration and final gate evidence is recorded in the
+[global-reader labnotes](../labnotes/20260915-2223-remove-global-readers.md).

@@ -3743,9 +3743,14 @@ complete RTVI text-to-Flux-to-Opus-to-WebRTC path. Research, Callx comparison,
 the rejected PCMU path, and detailed evidence are in
 [`20260904-1602-tts-capability.md`](../labnotes/20260904-1602-tts-capability.md).
 
-### Implemented Gemini model-inference slice
+### Historical Gemini model-inference slice
 
-The sixth slice replaces the repository development agent's deterministic echo
+This section records the original implementation. The tenant-credential cutover removed its
+`CreateRoom` preset and global provider readers. Current model/speech calls use inline definitions,
+Agent Runtime and the tenant credential source, including credential-free fixture/Morse embedding.
+See [credential reader boundaries](credential-reader-boundaries.md).
+
+The sixth slice replaced the repository development agent's deterministic echo
 with room-scoped conversational generation while preserving the established
 input and output boundaries:
 
@@ -3795,8 +3800,8 @@ The detailed decision and verification evidence are in
 
 This historical slice executed tools inside the old model request task. It has been superseded:
 definition-driven agents now use Agent Runtime and independently supervised invocation workers.
-The optional legacy `CreateRoom` model-inference preset remains text-only, advertises no tools,
-and rejects unsolicited provider tool calls without execution or public tool lifecycle events.
+The later tenant-credential cutover also removed the legacy `CreateRoom` model-inference preset;
+raw rooms now support empty/deterministic text operation, and model calls use inline definitions.
 The numbered behavior below records the removed slice and is not current runtime behavior.
 
 The next slice closes the first model/action/model loop without moving tool

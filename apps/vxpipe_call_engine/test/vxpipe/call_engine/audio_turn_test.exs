@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant}
+  alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.ConnectionAttachment
 
   alias Vxpipe.CallEngine.Event.{
@@ -14,7 +14,14 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
   }
 
   alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+
+  alias Vxpipe.CallEngine.{
+    TestCallStartup,
+    TestEchoModelProvider,
+    TestTransferConnection,
+    TestTurnCall
+  }
+
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
 
   setup do
@@ -24,7 +31,9 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
-      Keyword.put(application_settings, :speech_to_text, speech_to_text_settings(self()))
+      application_settings
+      |> Keyword.put(:speech_to_text, speech_to_text_settings(self()))
+      |> Keyword.update!(:agent_runtime, &Keyword.put(&1, :fixture, {TestEchoModelProvider, []}))
     )
 
     on_exit(fn ->
@@ -38,30 +47,10 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
     :ok
   end
 
-  test "routes one committed Flux turn through the room's deterministic agent" do
+  test "routes one committed Flux turn through the inline call's fixture agent" do
     room_id = unique_id("room")
 
-    assert {:ok, create_command} =
-             CreateRoom.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               agent: :deterministic_text,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, room} = CallEngine.create_room(create_command)
-
-    assert {:ok, join_command} =
-             JoinParticipant.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               role: :human,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, participant} = CallEngine.join_participant(join_command)
+    {_plan, room, participant} = TestTurnCall.start(room_id, speech_to_text: true)
 
     assert {:ok, attach_command} =
              AttachConnection.new(
@@ -78,14 +67,21 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
             %ConnectionAttachment{
               room_monitor: room_monitor,
               media_ingress: media_ingress
-            } = attachment} = CallEngine.attach_connection(attach_command)
+            } = attachment} = TestTransferConnection.attach(attach_command, nil)
+
+    TestCallStartup.await_ready(room_id)
 
     assert is_reference(room_monitor)
     assert is_pid(media_ingress)
     assert_receive {:test_stt_transport_started, transport, _connection}
 
     frame = audio_frame(room, participant, 1, <<1, 2, 3>>)
-    assert :ok = CallEngine.push_audio(attachment, frame)
+
+    assert :ok =
+             TestTransferConnection.run(attach_command, fn ->
+               CallEngine.push_audio(attachment, frame)
+             end)
+
     assert_receive {:test_stt_audio, ^transport, <<1, 2, 3>>}
 
     TestSpeechToTextTransport.deliver(transport, turn_message("StartOfTurn", 1, "hello"))
@@ -176,14 +172,8 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
   defp speech_to_text_settings(observer) do
     [
       enabled: true,
-      provider: Flux,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-general-en",
-        encoding: :opus,
-        sample_rate: 48_000
-      ],
-      transport: {TestSpeechToTextTransport, [observer: observer]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+      transport: {TestSpeechToTextTransport, [observer: observer, ready_on_start: true]},
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,
@@ -200,7 +190,7 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
       incarnation_id: room.incarnation_id,
       participant_id: participant.participant_id,
       connection_id: "conn-audio",
-      track_id: "track-audio",
+      track_id: "embedded",
       codec: :opus,
       sample_rate: 48_000,
       channels: 1,

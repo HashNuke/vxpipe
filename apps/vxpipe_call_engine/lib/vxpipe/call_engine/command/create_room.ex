@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Command.CreateRoom do
   @required_fields [:tenant_id, :actor_id, :deadline]
   @identifier_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9_-]{0,127}\z/
 
-  @agents [:deterministic_text, :model_inference]
+  @agents [:deterministic_text]
 
   @enforce_keys [
     :id,
@@ -37,7 +37,7 @@ defmodule Vxpipe.CallEngine.Command.CreateRoom do
           tenant_id: String.t(),
           actor_id: String.t(),
           room_id: String.t(),
-          agent: nil | :deterministic_text | :model_inference,
+          agent: nil | :deterministic_text,
           agent_participant_id: nil | String.t(),
           deadline: DateTime.t()
         }

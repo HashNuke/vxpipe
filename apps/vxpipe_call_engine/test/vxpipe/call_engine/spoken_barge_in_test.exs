@@ -1,8 +1,7 @@
 defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -14,7 +13,13 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     TextOutput
   }
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.{
+    TestCallStartup,
+    TestEchoModelProvider,
+    TestTransferConnection,
+    TestTurnCall
+  }
+
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
@@ -26,6 +31,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
       original
       |> Keyword.put(:speech_to_text, speech_to_text_settings(self()))
       |> Keyword.put(:text_to_speech, text_to_speech_settings(self()))
+      |> Keyword.update!(:agent_runtime, &Keyword.put(&1, :fixture, {TestEchoModelProvider, []}))
 
     Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
 
@@ -44,7 +50,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     assert_receive {:test_stt_transport_started, stt_transport, _connection}
 
     first = text_command(room, participant, "turn-first", "give me a long answer")
-    assert :ok = CallEngine.send_text(first)
+    assert :ok = TestTransferConnection.send_text(first)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
 
@@ -170,27 +176,8 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp create_attached_room(sink) do
     room_id = unique_id("room")
 
-    assert {:ok, create} =
-             CreateRoom.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               agent: :deterministic_text,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, room} = CallEngine.create_room(create)
-
-    assert {:ok, join} =
-             JoinParticipant.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               role: :human,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, participant} = CallEngine.join_participant(join)
+    {_plan, room, participant} =
+      TestTurnCall.start(room_id, speech_to_text: true, text_to_speech: true)
 
     assert {:ok, attach} =
              AttachConnection.new(
@@ -203,7 +190,8 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, attachment} = CallEngine.attach_connection(attach, sink)
+    assert {:ok, attachment} = TestTransferConnection.attach(attach, sink)
+    TestCallStartup.await_ready(room_id)
     {room, participant, attachment}
   end
 
@@ -229,14 +217,8 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp speech_to_text_settings(observer) do
     [
       enabled: true,
-      provider: Flux,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-general-en",
-        encoding: :opus,
-        sample_rate: 48_000
-      ],
-      transport: {TestSpeechToTextTransport, [observer: observer]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+      transport: {TestSpeechToTextTransport, [observer: observer, ready_on_start: true]},
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,
@@ -249,14 +231,8 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp text_to_speech_settings(observer) do
     [
       enabled: true,
-      provider: FluxTextToSpeech,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-haley-en",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      transport: {TestTextToSpeechTransport, [observer: observer]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
+      transport: {TestTextToSpeechTransport, [observer: observer, ready_on_start: true]},
       maximum_requests: 2
     ]
   end

@@ -38,8 +38,11 @@ progress/history during adopted speech loss. New briefing and replacement source
 now resolve fresh tenant credentials; four focused cases and a 66-test regression group pass.
 GPT 6 Astra xhigh reviewed this reader fix without blocking findings. All five root gates pass:
 1,513 tests, zero failures, 30 exclusions (seed 235296). The
-[reader inventory](../credential-reader-boundaries.md) keeps legacy global readers and remaining
-destination binding tests open. Earlier native timing observations remain unexplained.
+[reader inventory](../credential-reader-boundaries.md) records removal of legacy global readers.
+The deletion preserves raw empty/deterministic rooms and inline fixture/Morse embedding; existing
+model/speech/WebRTC tests now use inline definitions. Independent re-review found no remaining
+blockers and all five root gates pass: 1,517 tests, zero failures, 30 exclusions (seed 235296).
+Destination binding tests remain open; live Deepgram tests remain excluded. Earlier native timing observations remain unexplained.
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

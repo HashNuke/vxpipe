@@ -141,7 +141,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   def record_telephony_usage(_observations), do: {:error, :invalid_telephony_usage}
 
-  def attach_connection(%AttachConnection{} = command, speech_to_text_options, output_sink) do
+  def attach_connection(%AttachConnection{} = command, output_sink) do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
         room_monitor = Process.monitor(room_authority)
@@ -159,8 +159,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
                 room_authority,
                 command,
                 role,
-                selected_runtime,
-                speech_to_text_options
+                selected_runtime
               )
 
             case result do
@@ -183,16 +182,16 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
-  @spec activate_speech_to_text(AttachConnection.t(), keyword()) ::
+  @spec activate_speech_to_text(AttachConnection.t()) ::
           {:ok, pid() | nil} | {:error, Error.t()}
-  def activate_speech_to_text(%AttachConnection{} = command, options) do
+  def activate_speech_to_text(%AttachConnection{} = command) do
     with {:ok, authority} <- lookup_room(command.tenant_id, command.room_id) do
       case RoomAuthority.speech_to_text_configuration(authority, command) do
         {:ready, ingress} ->
           {:ok, ingress}
 
         {:start, role, runtime} ->
-          start_connection_speech_to_text(authority, command, role, runtime, options)
+          start_connection_speech_to_text(authority, command, role, runtime)
 
         {:error, %Error{}} = error ->
           error
@@ -221,43 +220,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          room_authority,
          command,
          :human,
-         :application,
-         options
-       ) do
-    if Keyword.fetch!(options, :enabled) do
-      provider_module = Keyword.fetch!(options, :provider)
-
-      with {:ok, provider_config} <-
-             provider_module.new(Keyword.fetch!(options, :provider_options)),
-           {:ok, capability, ingress} <-
-             RoomCapabilitySupervisor.start_speech_to_text(
-               command.incarnation_id,
-               room_authority,
-               command,
-               {provider_module, provider_config},
-               Keyword.fetch!(options, :transport),
-               Keyword.fetch!(options, :media_ingress)
-             ) do
-        bind_connection_speech_to_text(
-          room_authority,
-          command,
-          capability,
-          ingress
-        )
-      else
-        _error -> attachment_speech_to_text_failed(room_authority, command)
-      end
-    else
-      {:ok, nil}
-    end
-  end
-
-  defp start_connection_speech_to_text(
-         room_authority,
-         command,
-         :human,
-         %SpeechToTextRuntime{} = runtime,
-         _application_options
+         %SpeechToTextRuntime{} = runtime
        ) do
     with {:ok, capability, ingress} <-
            RoomCapabilitySupervisor.start_speech_to_text(
@@ -284,8 +247,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          room_authority,
          command,
          :human,
-         {:planned, runtime, participant},
-         application_options
+         {:planned, runtime, participant}
        ) do
     timeout = min(DateTime.diff(command.deadline, DateTime.utc_now(), :millisecond), 5_000)
 
@@ -300,8 +262,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
           room_authority,
           command,
           :human,
-          selected,
-          application_options
+          selected
         )
 
       {:error, _reason} ->
@@ -313,8 +274,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          _room_authority,
          _command,
          _role,
-         _selected_runtime,
-         _application_options
+         _selected_runtime
        ) do
     {:ok, nil}
   end

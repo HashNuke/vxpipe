@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Capability.{DeterministicText, ModelInference}
+  alias Vxpipe.CallEngine.Capability.DeterministicText
   alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
 
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
           {:ok, State.t()} | {:error, :agent_start_failed | :entry_start_failed}
   def start_entries(%CreateRoom{agent: nil}, _options, %State{} = state), do: {:ok, state}
 
-  def start_entries(%CreateRoom{} = command, _options, %State{} = state) do
+  def start_entries(%CreateRoom{agent: :deterministic_text} = command, _options, %State{} = state) do
     with {:ok, join_command} <-
            JoinParticipant.new(
              tenant_id: command.tenant_id,
@@ -45,12 +45,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         pid: capability
       }
 
-      state = %{state | text_capability: text_capability}
-      start_configured_text_to_speech(participant.participant_id, state)
+      {:ok, %{state | text_capability: text_capability}}
     else
       _error -> {:error, :agent_start_failed}
     end
   end
+
+  def start_entries(%CreateRoom{}, _options, %State{}), do: {:error, :agent_start_failed}
 
   def start_entries(%ResolvedCallPlan{} = plan, options, %State{} = state) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -216,64 +217,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          ) do
       {:ok, capability} -> {:ok, DeterministicText, capability}
       {:error, _reason} = error -> error
-    end
-  end
-
-  defp start_text_capability(:model_inference, participant_id, state) do
-    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-    options = Keyword.fetch!(settings, :model_inference)
-
-    if Keyword.fetch!(options, :enabled) do
-      provider_module = Keyword.fetch!(options, :provider)
-
-      with {:ok, provider_config} <-
-             provider_module.new(Keyword.fetch!(options, :provider_options)),
-           {:ok, capability} <-
-             RoomCapabilitySupervisor.start_model_inference(
-               state.snapshot.incarnation_id,
-               self(),
-               participant_id,
-               {provider_module, provider_config},
-               options
-             ) do
-        {:ok, ModelInference, capability}
-      end
-    else
-      {:error, :model_inference_disabled}
-    end
-  end
-
-  defp start_configured_text_to_speech(participant_id, state) do
-    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-    options = Keyword.fetch!(settings, :text_to_speech)
-
-    if Keyword.fetch!(options, :enabled) do
-      provider_module = Keyword.fetch!(options, :provider)
-
-      with {:ok, provider_config} <-
-             provider_module.new(Keyword.fetch!(options, :provider_options)),
-           {:ok, capability} <-
-             RoomCapabilitySupervisor.start_text_to_speech(
-               state.snapshot.incarnation_id,
-               self(),
-               participant_id,
-               {provider_module, provider_config},
-               Keyword.fetch!(options, :transport),
-               Keyword.fetch!(options, :maximum_requests)
-             ) do
-        text_to_speech_capability = %{
-          activation_id: nil,
-          monitor: Process.monitor(capability),
-          participant_id: participant_id,
-          pid: capability
-        }
-
-        {:ok, %{state | text_to_speech_capability: text_to_speech_capability}}
-      else
-        _error -> {:error, :text_to_speech_start_failed}
-      end
-    else
-      {:ok, state}
     end
   end
 

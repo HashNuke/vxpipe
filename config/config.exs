@@ -52,7 +52,6 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     request_timeout_ms: 30_000
   ],
   model_fixture: [enabled: false],
-  model_inference: [enabled: false],
   live_inspection: [maximum_pending_records: 64, maximum_retained_records: 256],
   room_mixer: [
     sample_rate: 48_000,

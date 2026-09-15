@@ -92,16 +92,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   end
 
   def connection_attached(command, state) do
-    case state.speech_to_text_runtime do
-      :application ->
-        ready(state)
-
-      runtimes when is_map(runtimes) ->
-        if Map.get(runtimes, command.participant_id) == nil do
-          ready(state)
-        else
-          {:ok, state}
-        end
+    if Map.get(state.speech_to_text_runtime, command.participant_id) == nil do
+      ready(state)
+    else
+      {:ok, state}
     end
   end
 

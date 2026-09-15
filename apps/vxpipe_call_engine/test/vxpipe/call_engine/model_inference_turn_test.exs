@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
 
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
@@ -14,28 +14,23 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     TextOutput
   }
 
-  alias Vxpipe.CallEngine.Provider.ModelInference.Message
-  alias Vxpipe.CallEngine.TestModelInferenceProvider
-  alias Vxpipe.CallEngine.Tool.Call
+  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelResponse, ToolCall}
+  alias Vxpipe.CallEngine.{TestAgentRuntimeModelProvider, TestCallStartup, TestTurnCall}
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
-    model_inference = [
-      enabled: true,
-      provider: TestModelInferenceProvider,
-      provider_options: [observer: self()],
-      system_prompt: "Answer as a compact test assistant.",
-      maximum_context_turns: 4,
-      maximum_pending_requests: 2,
-      maximum_output_bytes: 65_536,
-      request_timeout_ms: 1_000
-    ]
+    agent_runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
+      |> Keyword.put(:maximum_pending_requests, 2)
+      |> Keyword.put(:request_timeout_ms, 1_000)
 
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
-      Keyword.put(original, :model_inference, model_inference)
+      Keyword.put(original, :agent_runtime, agent_runtime)
     )
 
     on_exit(fn ->
@@ -54,13 +49,15 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
 
-    assert_receive {:test_model_inference_request, first_request,
-                    [
-                      %Message{role: :system, content: "Answer as a compact test assistant."},
-                      %Message{role: :user, content: "My name is River."}
-                    ]}
+    assert_receive {:test_agent_runtime_stream, first_request,
+                    %ModelRequest{
+                      messages: [
+                        %Message{role: :system, content: "Answer as a compact test assistant."},
+                        %Message{role: :user, content: "My name is River."}
+                      ]
+                    }}
 
-    send(first_request, {:test_model_inference_reply, {:ok, "Nice to meet you, River."}})
+    reply(first_request, "Nice to meet you, River.")
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "Nice to meet you, River."}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 4}}
@@ -70,22 +67,23 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 5}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 6}}
 
-    assert_receive {:test_model_inference_request, second_request,
-                    [
-                      %Message{role: :system, content: "Answer as a compact test assistant."},
-                      %Message{role: :user, content: "My name is River."},
-                      %Message{role: :assistant, content: "Nice to meet you, River."},
-                      %Message{role: :user, content: "What is my name?"}
-                    ]}
+    assert_receive {:test_agent_runtime_stream, second_request,
+                    %ModelRequest{
+                      messages: [
+                        %Message{role: :system, content: "Answer as a compact test assistant."},
+                        %Message{role: :user, content: "My name is River."},
+                        %Message{role: :assistant, content: "Nice to meet you, River."},
+                        %Message{role: :user, content: "What is my name?"}
+                      ]
+                    }}
 
-    send(second_request, {:test_model_inference_reply, {:ok, "Your name is River."}})
+    reply(second_request, "Your name is River.")
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 7, text: "Your name is River."}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 8}}
   end
 
   test "keeps one text turn open across streamed sentence segments" do
-    enable_streaming_provider()
     room_id = unique_id("room")
     {room, participant} = start_attached_room(room_id)
     command = send_command(room, participant, "turn-streamed", "Tell me two things.")
@@ -93,14 +91,14 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert :ok = CallEngine.send_text(command)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_stream_model_inference_request, request, _messages}
+    assert_receive {:test_agent_runtime_stream, request, _messages}
 
     emit_chunk(request, "First thing. Sec")
     assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "First thing."}}
     refute_receive {:vxpipe_event, %AgentTurnCompleted{}}
 
     emit_chunk(request, "ond thing!")
-    send(request, {:test_model_inference_reply, :ok})
+    reply(request, "First thing. Second thing!")
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 4, text: "Second thing!"}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 5}}
@@ -114,8 +112,8 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert :ok = CallEngine.send_text(failed)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_model_inference_request, request, _messages}
-    send(request, {:test_model_inference_reply, {:error, :upstream_unavailable}})
+    assert_receive {:test_agent_runtime_stream, request, _messages}
+    send(request, {:test_agent_runtime_response, {:error, :provider_unavailable}})
 
     assert_receive {:vxpipe_event,
                     %AgentTurnFailed{
@@ -129,8 +127,8 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert :ok = CallEngine.send_text(recovered)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 4}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 5}}
-    assert_receive {:test_model_inference_request, recovered_request, _messages}
-    send(recovered_request, {:test_model_inference_reply, {:ok, "Continuing."}})
+    assert_receive {:test_agent_runtime_stream, recovered_request, _messages}
+    reply(recovered_request, "Continuing.")
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 6, text: "Continuing."}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 7}}
@@ -140,14 +138,15 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     room_id = unique_id("room")
     {room, participant} = start_attached_room(room_id)
     command = send_command(room, participant, "turn-tool", "What time is it?")
-    call = %Call{id: "tool-1", name: "get_current_time", arguments: %{}}
+    call = %ToolCall{id: "tool-1", name: "get_current_time", arguments: %{}}
 
     assert :ok = CallEngine.send_text(command)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_model_inference_request, request, _messages}
+    assert_receive {:test_agent_runtime_stream, request, _messages}
 
-    send(request, {:test_model_inference_reply, {:tool_calls, [call]}})
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(request, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:vxpipe_event,
                     %AgentTurnFailed{
@@ -167,7 +166,7 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert :ok = CallEngine.send_text(current)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_model_inference_request, current_request, _messages}
+    assert_receive {:test_agent_runtime_stream, current_request, _messages}
 
     queued =
       send_command(room, participant, "turn-queued", "second", run_immediately: false)
@@ -176,43 +175,25 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 3}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 4}}
     refute_receive {:vxpipe_event, %AgentTurnInterrupted{}}
-    refute_receive {:test_model_inference_request, _request, _messages}
+    refute_receive {:test_agent_runtime_stream, _request, _messages}
 
-    send(current_request, {:test_model_inference_reply, {:ok, "first answer"}})
+    reply(current_request, "first answer")
     assert_receive {:vxpipe_event, %TextOutput{sequence: 5, correlation_id: "turn-current"}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 6}}
 
-    assert_receive {:test_model_inference_request, _queued_request,
-                    [
-                      %Message{role: :system},
-                      %Message{role: :user, content: "first"},
-                      %Message{role: :assistant, content: "first answer"},
-                      %Message{role: :user, content: "second"}
-                    ]}
+    assert_receive {:test_agent_runtime_stream, _queued_request,
+                    %ModelRequest{
+                      messages: [
+                        %Message{role: :system},
+                        %Message{role: :user, content: "first"},
+                        %Message{role: :assistant, content: "first answer"},
+                        %Message{role: :user, content: "second"}
+                      ]
+                    }}
   end
 
   defp start_attached_room(room_id) do
-    assert {:ok, create} =
-             CreateRoom.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               agent: :model_inference,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, room} = CallEngine.create_room(create)
-
-    assert {:ok, join} =
-             JoinParticipant.new(
-               tenant_id: "tenant-demo",
-               actor_id: "actor-demo",
-               room_id: room_id,
-               role: :human,
-               deadline: future_deadline()
-             )
-
-    assert {:ok, participant} = CallEngine.join_participant(join)
+    {_plan, room, participant} = TestTurnCall.start(room_id)
 
     assert {:ok, attach} =
              AttachConnection.new(
@@ -225,7 +206,8 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(attach)
+    assert {:ok, attachment} = CallEngine.attach_connection(attach)
+    TestCallStartup.await_ready(attachment)
     {room, participant}
   end
 
@@ -248,24 +230,14 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     command
   end
 
-  defp enable_streaming_provider do
-    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-
-    model_inference =
-      settings
-      |> Keyword.fetch!(:model_inference)
-      |> Keyword.update!(:provider_options, &Keyword.put(&1, :streaming, true))
-
-    Application.put_env(
-      :vxpipe_call_engine,
-      Vxpipe.CallEngine.Application,
-      Keyword.put(settings, :model_inference, model_inference)
-    )
+  defp reply(request, text) do
+    assert {:ok, response} = ModelResponse.new(text: text)
+    send(request, {:test_agent_runtime_response, {:ok, response}})
   end
 
   defp emit_chunk(request, chunk) do
-    send(request, {:test_model_inference_chunk, chunk, self()})
-    assert_receive {:test_model_inference_chunk_result, :ok}
+    send(request, {:test_agent_runtime_delta, chunk, self()})
+    assert_receive {:test_agent_runtime_delta_result, :ok}
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
