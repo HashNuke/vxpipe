@@ -364,17 +364,31 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          {:ok, connections} <- capture_connections(binding, policy.present_participant_ids),
          added = Map.drop(connections, Map.keys(prepared.connections)),
          :ok <- hold(added, scope),
-         {:ok, waits} <- reconcile_waits(prepared.waits, connections, binding, scope, request),
-         {:ok, graph} <- Preparation.run(phase.authority, candidate, remaining(scope)) do
-      {:ok,
-       %{
-         prepared
-         | binding: binding,
-           candidate: candidate,
-           connections: connections,
-           waits: waits,
-           graph: graph
-       }}
+         {:ok, waits} <- reconcile_waits(prepared.waits, connections, binding, scope, request) do
+      prepared = %{
+        prepared
+        | binding: binding,
+          candidate: candidate,
+          connections: connections,
+          waits: waits
+      }
+
+      case Preparation.run(phase.authority, candidate, remaining(scope)) do
+        {:ok, graph} ->
+          {:ok, %{prepared | graph: graph}}
+
+        {:error, reason} ->
+          cond do
+            preparation_changed?(reason) ->
+              prepare_graph(prepared, phase, request)
+
+            match?(%{kind: :media_connection, reason: :missing}, reason) ->
+              wait_for_connection(prepared, phase, request, [])
+
+            true ->
+              {:error, reason}
+          end
+      end
     else
       changed when is_boolean(changed) -> {:error, :handoff_changed}
       error -> error
@@ -404,19 +418,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
               prepare_graph(prepared, phase, request, retained)
 
             match?(%{kind: :media_connection, reason: :missing}, reason) ->
-              report_progress(phase, :preparing, [:media_connection])
-
-              receive do
-              after
-                min(remaining(scope), @readiness_check_interval_ms) ->
-                  prepare_graph(prepared, phase, request, retained)
-              end
+              wait_for_connection(prepared, phase, request, retained)
 
             true ->
               _ = PreparedConnection.discard_preparations(retained)
               {:error, reason}
           end
       end
+    end
+  end
+
+  defp wait_for_connection(prepared, phase, request, retained) do
+    report_progress(phase, :preparing, [:media])
+
+    receive do
+    after
+      min(remaining(prepared.scope), @readiness_check_interval_ms) ->
+        prepare_graph(prepared, phase, request, retained)
     end
   end
 

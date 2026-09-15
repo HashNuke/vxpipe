@@ -65,7 +65,7 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain, with complete readiness, private waits/cues and acknowledged release throughout.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -91,8 +91,8 @@ ordering or lift the packaging/retention hold.
 The [transfer readiness and participant wait sounds milestone](transfer-readiness-and-wait-sounds.md)
 was authorized on 2026-09-14 for delivery through runnable vertical checkpoints. Definition/assets,
 private playback and complete resource readiness are integrated into ordinary calls. Human web
-handoff, AI handoff and initial caller waiting are accepted slices. Local phone acceptance passes;
-live carrier audibility and changing/multiple listeners remain open.
+handoff, AI handoff, initial caller waiting and changing/multiple listeners are accepted slices.
+Local phone acceptance passes; live carrier audibility and final audit remain open.
 
 Human web acceptance covers default/URL/nil waits, private briefing and authenticated acceptance,
 whole-room readiness, ordered cues, bidirectional conversation and permitted support transcripts.
@@ -101,7 +101,7 @@ bindings, admission cleanup and spoken recovery. Existing rendered desktop/mobil
 the live sample. Recording denial excludes unneeded writers without replacing unaffected resources.
 The latest native regression reproduces a fatal recovery result caused by output-clearing status
 being mistaken for changed resource identity; the fixed case recovers and completes a subsequent
-transfer on the same caller peer. The latest root run passes all five gates: 1,433 tests, zero failures and
+transfer on the same caller peer. A preceding root run passed all five gates: 1,433 tests, zero failures and
 16 integration exclusions (seed 235296, concurrency four). The
 [recovery checkpoint](../../labnotes/20260915-0526-recovery-failure-tracing.md) records the causal
 reproduction, fixture corrections and human cleanup acceptance audit.
@@ -126,9 +126,8 @@ caller turn. Fifty Gateway checks and three phone-room checks pass. The
 [phone acceptance labnote](../../labnotes/20260915-0622-phone-handoff-parity.md) records the
 evidence and fixture corrections; production behavior and UI are unchanged.
 
-There are **8 checkpoint tasks remaining**: live carrier audibility 1, changing/multiple listeners 5,
-and final audit 2. Live provider flags, credentials, approved test numbers and public callback/media
-URLs are absent from the test environment; guarded API tests skip without placing calls. Actual
+There are **3 checkpoint tasks remaining**: live carrier audibility 1 and final audit 2. Live
+provider flags, credentials, approved test numbers and public callback/media URLs are absent from the test environment; guarded API tests skip without placing calls. Actual
 adapters and decoded synthetic-socket audio do not establish physical phone audibility.
 
 Changing-listener progress now includes a native five-participant handoff with exact independent
@@ -153,15 +152,26 @@ initial model construction is blocked: it hears waiting immediately, keeps origi
 bindings and finishes with cue-ordered permitted audio. The existing phase publishes its audience
 early and tracks construction separately from audience refresh. The
 [initial-preparation labnote](../../labnotes/20260915-0954-initial-preparation-listeners.md) records
-the regression and 52 passing focused engine checks. All five root gates pass for this checkpoint;
-post-adoption listener arrival and broader repeated-transfer/failure acceptance remain open.
+the regression and 52 passing focused engine checks. The expanded native case now also admits a
+monitor after policy adoption but before any conversational release. Missing attachment keeps the
+audience waiting and reports the requesting peer's `media` blocker; attachment refreshes the live
+inventory and requires renewed cues. The [adoption labnote](../../labnotes/20260915-1018-adopted-listener-arrival.md)
+records the missing-media/stale-inventory fix and an intermittent ordering failure whose cause
+remains unproven.
 
-Latest umbrella verification passes all five root gates: 1,435 tests, zero failures and 16
+The new native reception → billing → reception → billing sequence verifies fresh activations and
+wait episodes, monitor re-entry, retained caller/room resources and per-transfer speech, transcripts
+and recording privacy. The [repeated-transfer labnote](../../labnotes/20260915-1032-repeated-native-transfers.md)
+records the receiver fixture corrections. All three native cases and 61 focused engine checks pass.
+Combined with existing human recovery/retry, stale-policy, cancellation and partial-release evidence,
+the changing-listener slice is accepted.
+
+Latest umbrella verification passes all five root gates: 1,436 tests, zero failures and 16
 exclusions with module preloading, serialized test-file compilation, seed 235296 and concurrency
-four. This includes 653 engine and 410 Gateway checks. The earlier ordinary human-only WebRTC
-routing failure did not recur in this full run or four diagnostic module runs; no cause or fix
-was established. The [routing labnote](../../labnotes/20260915-0907-native-audio-routing.md) retains
-that evidence. The changing-listener slice still requires its remaining acceptance tasks.
+four. This includes 653 engine and 411 Gateway checks in their original modules. The earlier native
+ordering failure did not recur in isolated diagnostics, the combined native run or this full run;
+no ordering assertion, packet stream or protocol deadline was relaxed. The historical ordinary
+routing investigation remains in its [labnote](../../labnotes/20260915-0907-native-audio-routing.md).
 
 The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
 and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the

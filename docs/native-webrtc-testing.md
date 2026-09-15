@@ -258,8 +258,36 @@ removal/re-entry during that unfinished cue invalidates the old candidate. The c
 first cue and renewed waiting, then every current connection receives a subsequent cue before
 conversation. The ordering helper permits renewed waits only in this explicit replay case and
 requires another cue after each one. Original room services and surviving connection bindings
-remain after release. Repeated changing-audience transfers and remaining failure acceptance stay
-open in the milestone.
+remain after release.
+
+Finally, pause the destination's adoption acknowledgement after policy has changed but before
+conversation opens. Admit another monitor while withholding its WebRTC attachment. The requesting
+human receives the existing `preparing` phase with the `media` blocker, and the audience resumes
+waiting. Attachment refreshes the adopted resource inventory under the original deadline; every
+current connection must receive another cue before conversation. The internal `media_connection`
+resource kind is normalized to the public `media` blocker. This retry applies only while all
+conversation gates remain closed; errors after any release retain the terminal-failure contract.
+
+For repeated AI transfers with changing membership and per-transfer recording assertions:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'native repeated AI transfers'
+```
+
+A native caller transfers reception → billing → reception → billing using Morse speech and
+scripted model tool calls. Each destination model is independently blocked while both humans
+receive waiting. The monitor leaves and re-enters during the second attempt; the caller keeps its
+player/cursor, connection, recognizer and room services. Each transfer has a distinct attempt and
+new agent activation. Re-entering agents do not replay their first greeting. After every transfer,
+both peers receive the caller transcript, the monitor decodes caller speech, the caller decodes
+the active agent's reply, and new recorded chunks contain speech without wait/cue audio.
+
+Keep one Opus decoder per Morse peer across all audio-consuming helpers. Begin Morse decoding
+at the first coherent speech carrier after a verified cue; retain timing checks thereafter. For a
+short initial greeting, send `client-ready` once and observe `bot-ready` without the ordinary
+connection helper's startup-audio drain. Match scripted model requests to the active prompt and
+latest utterance because an old source continuation may still be queued in the fixture mailbox.
 
 ## Protocol boundary
 

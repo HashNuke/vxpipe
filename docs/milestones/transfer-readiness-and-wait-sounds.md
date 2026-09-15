@@ -1,18 +1,15 @@
 # Transfer readiness and participant wait sounds
 
-Status: implementation in progress (2026-09-15). Human web handoff, AI handoff and initial caller
-waiting are accepted delivery slices. Human acceptance includes native configuration/audio,
-complete readiness, policy reconciliation, private-resource cleanup, recovery and existing rendered
-sample evidence. AI acceptance includes independent model/voice/tool/MCP readiness, default/URL/nil
-waits, ordered greeting, privacy and resource retention. Initial waiting includes native audio and
-deterministic phone lifecycle acceptance. Local phone handoff acceptance passes; live carrier
-audibility and changing/multiple listeners remain open.
-Latest verification: all five root gates pass; 1,435 tests, zero failures and 16 integration
+Status: implementation in progress (2026-09-15). Human web handoff, AI handoff, initial caller
+waiting and changing/multiple listeners are accepted delivery slices. Local phone handoff
+acceptance also passes; physical carrier wait/cue/clear/recovery audibility remains open.
+Latest verification: all five root gates pass; 1,436 tests, zero failures and 16 integration
 exclusions (seed 235296, concurrency four, module preloading and serialized test-file compilation).
-The native blocked-model listener case and 52 focused transfer checks pass, alongside the
-five-participant preparation/cue membership case. The earlier
-ordinary human-only routing failure did not recur in this full run; its cause remains unproven.
-Eight checkpoint tasks remain.
+The original native module includes post-adoption listener arrival and reception → billing →
+reception → billing with real Morse audio, transcripts and recording privacy. All 61 focused
+engine transfer/player checks pass. An earlier intermittent native audio-order failure did not
+recur in isolated diagnostics, the combined native run or this full run; its cause remains unproven.
+Three checkpoint tasks remain: live carrier audibility and the two final audit gates.
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -39,17 +36,17 @@ phone, human destinations, agent destinations, and rooms with more than two part
 
 ## Current gap
 
-The original defect was completion before destination STT/main media were ready. The committed
-groundwork now supplies independent players, shared ordered output, capability readiness and
-private preparation. The missing work is completing and verifying their use in ordinary calls.
+The original defect was completion before destination STT/main media were ready. Ordinary calls
+now use independent players, shared ordered output, complete capability readiness and private
+preparation. Local delivery slices pass; remaining acceptance depends on live carrier evidence.
 
 | Area | Current boundary | Next required result |
 | --- | --- | --- |
 | Human web transfer | Accepted: complete readiness, private waits/briefing/cues, policy reconciliation, resource retention, bidirectional media/transcripts and bounded recovery pass. A reproduced output-clear race no longer turns unchanged output into fatal unavailability during recovery. | Retain this acceptance while completing the remaining slices. |
 | Phone transfer | Local Telnyx/Twilio default/URL/nil waits, delayed destination STT, withheld/replayed cue marks, bidirectional decoded audio/transcripts, privacy and spoken source recovery pass on retained media. | Verify live carrier wait/cue/clear/recovery audibility; actual adapters driven by synthetic sockets do not establish physical playout. |
-| AI transfer | Accepted: independent model, voice, MCP initialization and local-tool readiness gates, default/URL/nil waits, ordered cue/greeting, private held input and retained resources. Failure recovers spoken source conversation; fresh activations work on re-entry. | Retain this acceptance while completing phone and changing-listener slices. |
+| AI transfer | Accepted: independent model, voice, MCP initialization and local-tool readiness gates, default/URL/nil waits, ordered cue/greeting, private held input and retained resources. Failure recovers spoken source conversation; fresh activations work on re-entry. | Retain this acceptance while obtaining live carrier evidence. |
 | Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
-| Multiple listeners and failures | A native five-participant handoff verifies independent seven/three-second cursors, multiple monitor sinks and retained resources. A monitor leaves and re-enters before acceptance, during accepted preparation and during an unfinished cue. Changed cues return to waiting and replay before conversation. | Finish repeated human/AI transfers with changing membership, remaining failure/cancellation acceptance and the full root gates. |
+| Multiple listeners and failures | Accepted: native independent cursors, multiple sinks and listener changes during construction, briefing, preparation, cues and adopted preparation; repeated transfers retain speech/transcripts/recording. Cancellation and partial-release failures preserve the established boundaries. | Retain acceptance while obtaining live carrier evidence and completing the final audit. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The preceding policy-preparation
 checkpoint passed all five root gates with 1,306 tests, zero failures and 15 exclusions;
@@ -76,7 +73,7 @@ The transfer defaults above reflect the user's follow-up: AI-to-AI uses café-bo
 uses phone-ring for the caller/audience and café-bossa for the receiving human. The implementation authorization also accepts phone-ring for initial caller setup. The audible connection beep is a separate mandatory handoff action, not a wait
 sound; setting a wait slot to null does not disable readiness gates or the beep.
 
-Definition syntax in schema `20260914.01` (playback orchestration is still being implemented):
+Definition syntax in schema `20260914.01`:
 
 ```json
 {
@@ -322,7 +319,7 @@ slice demands it. There is no separate infrastructure-completion phase.
 | [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Accepted: native readiness/configuration/privacy, recovery and root gates pass |
 | [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Accepted: native configuration/audio and deterministic phone lifecycle checks pass |
 | [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local acceptance and root gates pass; live carrier audibility open |
-| [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Native five-participant monitor addition/reconnection and independent cursors pass; broader changing-audience acceptance open |
+| [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Accepted: native membership/re-entry/audio/privacy, failure boundaries and root gates pass |
 
 A checkpoint stays open until its runnable acceptance and applicable
 [common gates](index.md#common-implementation-and-verification-gates) pass. Fix regressions in
@@ -334,11 +331,11 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after human web, AI handoff, initial waiting and local phone acceptance: **8 tasks**
-in this section—live phone audibility 1, changing/multiple listeners 5, and final audit 2.
-The open acceptance/summary boxes elsewhere restate these requirements;
-they are not additional independent tasks. These tasks vary in size and do not imply a completion
-percentage. Two delivery slices still have acceptance work remaining.
+Remaining work after all local delivery slices: **3 tasks** in this section—live phone audibility
+1 and final audit 2. The final audit gates remain open until the required carrier evidence exists.
+The open acceptance/summary boxes elsewhere restate these requirements; they are not additional
+independent tasks. These tasks vary in size and do not imply a completion percentage. Phone parity
+is the only delivery slice with an outstanding external acceptance check.
 
 ### Checkpoint: human web handoff
 
@@ -720,17 +717,35 @@ cues, the caller's targeted greeting and permitted caller audio at the monitor. 
 and 52 focused engine checks pass. All five root gates pass with 1,435 tests, zero failures and
 16 exclusions. See the
 [initial-preparation listener labnote](../../labnotes/20260915-0954-initial-preparation-listeners.md).
-Repeated-transfer/failure acceptance and the broad compound tasks below remain open.
+
+Post-adoption listener arrival now exercises the final closed-media boundary. The native test
+admits a monitor after policy adoption, withholds its connection, observes the requesting peer's
+`preparing/media` status and renewed waiting, then attaches it and requires a new cue on every
+current connection. Adopted preparation retries missing media and known stale inventory under
+the original deadline; errors after actual release remain terminal. The
+[adoption labnote](../../labnotes/20260915-1018-adopted-listener-arrival.md) records the causal
+missing-media regression and the separate intermittent audio-order failure.
+
+A second native call performs reception → billing → reception → billing with monitor removal
+and re-entry during the second model delay. Every attempt has fresh activation/wait state while
+the caller's player during the attempt, connection/STT and room services persist. Every completed
+transfer verifies actual Morse speech, permitted transcripts and new recording chunks without
+private waits/cues. The [repeated-transfer labnote](../../labnotes/20260915-1032-repeated-native-transfers.md)
+records receiver fixture corrections. The three native cases pass together, and all 61 focused
+engine transfer/player checks pass. All five current root gates pass with 1,436 tests, zero failures
+and 16 exclusions, including 653 engine and 411 Gateway tests. The original native module passes
+without the temporary diagnostic prints. The earlier ordering failure has no established cause;
+no protocol deadline, packet stream or ordering assertion was relaxed to obtain these results.
 
 Implementation tasks:
 
-- [ ] Reconcile the actual whole-room audience and all required resources on membership or
+- [x] Reconcile the actual whole-room audience and all required resources on membership or
   connection changes. Support receive-only monitors and multiple authorized sinks per human
   without creating microphone permission or sharing another participant's cursor.
-- [ ] Fence each episode by incarnation, attempt, participant and connection generation. Preserve
+- [x] Fence each episode by incarnation, attempt, participant and connection generation. Preserve
   unaffected resources/cursors; refresh relevant preparation and replay cues when required by
   readiness loss or a changed candidate, within the original deadline.
-- [ ] Complete repeated transfer, receiver re-entry, disconnect and partial-release cleanup across
+- [x] Complete repeated transfer, receiver re-entry, disconnect and partial-release cleanup across
   the established human and AI paths. Retain bounded queues and exact-attempt cancellation.
 
 Acceptance and commit tasks:
@@ -739,11 +754,12 @@ Acceptance and commit tasks:
   ten-second fixture in a running call. Replace a connection and add/remove a listener during
   waiting/cue; verify independent playback, multiple-sink ordering and unchanged service identities.
   The same native call covers pre-acceptance, accepted-preparation and interrupted-cue re-entry,
-  followed by cue-ordered conversation. Other slice tasks and full umbrella acceptance remain open.
-- [ ] Exercise stale readiness, relevant/unrelated policy revisions and repeated human/AI transfers
+  followed by cue-ordered conversation. The remaining slice tasks and current umbrella gates
+  now pass as recorded below.
+- [x] Exercise stale readiness, relevant/unrelated policy revisions and repeated human/AI transfers
   with audio/transcript/recording assertions. Include a controlled partial-release failure and
   safe phase/queue diagnostics. Inspect any changed sample UI in rendered Chrome.
-- [ ] Pass focused and all five root gates, update evidence and commit the runnable slice.
+- [x] Pass focused and all five root gates, update evidence and commit the runnable slice.
 
 ### Final milestone audit
 
@@ -762,44 +778,63 @@ this delivery plan.
 
 ## Automated and manual acceptance
 
-- [ ] JSON/Elixir parity, omitted defaults versus explicit null, destination-type defaults and
+- [x] JSON/Elixir parity, omitted defaults versus explicit null, destination-type defaults and
   per-slot independence pass. Reject non-URL configured values. Cover URL fetch/format/size failure,
   bounded preparation, cache reuse, immutable active-call bytes, tenant scoping, schema compatibility
   and digest resolution at their owning boundaries. Null disables only the selected waiting sound,
   never readiness gates or the mandatory cue; whole-object null disables all waits.
-- [ ] Two listeners share one immutable ten-second fixture but are at seven and three seconds;
+- [x] Two listeners share one immutable ten-second fixture but are at seven and three seconds;
   stopping/restarting/reconnecting one does not alter the other. Default nine-second assets loop
   continuously with bounded queues and no repeat-boundary fade/silence introduced by the player.
-- [ ] A five-participant transfer holds all four audience listeners with independent cursors using
+- [x] A five-participant transfer holds all four audience listeners with independent cursors using
   the call's configured URL or default selected for the destination type.
   Joins/leaves, receive-only monitors, receiver re-entry and exact-attempt cleanup are covered.
-- [ ] Before acceptance, destination microphone/room/transcript access is denied. After acceptance,
+- [x] Before acceptance, destination microphone/room/transcript access is denied. After acceptance,
   delay each enabled capability in turn: receiver wait continues, no human hears room conversation,
   source remains recoverable and no success event is emitted. Cover a remaining participant and
   a room-level resource, not only destination STT or one provider.
-- [ ] A capability child exists but provider readiness is delayed: the barrier remains closed.
+- [x] A capability child exists but provider readiness is delayed: the barrier remains closed.
   Missing/failed/old-generation/foreign-attempt acknowledgements cannot satisfy it. A policy-denied
   unselected resource is not started just to pass readiness.
-- [ ] Unrelated membership/policy revisions and hold phases retain the exact STT/TTS/model/tool,
+- [x] Unrelated membership/policy revisions and hold phases retain the exact STT/TTS/model/tool,
   codec and room-service instances. Relevant changes affect only their required resources/queues.
-- [ ] Wait sounds, cues and briefing never enter STT, model history, other listeners or recordings.
+- [x] Wait sounds, cues and briefing never enter STT, model history, other listeners or recordings.
   Held microphone frames are discarded and never replayed. Old source output cannot cross release.
-- [ ] Delay cue completion: no room audio or success. Verify final cue frame precedes first room
+- [x] Delay cue completion: no room audio or success. Verify final cue frame precedes first room
   frame on every released sink, including under backpressure, and no wait tail follows the cue.
   Failure/readiness loss during the cue prevents release and exercises bounded recovery.
 - [x] Initial slow room setup produces caller wait audio; opening playback takes priority; wait
   resumes only if still necessary; first greeting occurs once after all startup gates finish.
-- [ ] Deadline at every phase, duplicate/early acceptance, stale readiness, disconnect, asset/player
+- [x] Deadline at every phase, duplicate/early acceptance, stale readiness, disconnect, asset/player
   failure, policy rejection and partial release leave no false completion, leaked media or orphan
   player/connector. Idle and whole-call duration clocks retain their defined behavior.
-- [ ] Safe telemetry exposes phase durations, readiness blockers by capability kind, timeout/failure,
+- [x] Safe telemetry exposes phase durations, readiness blockers by capability kind, timeout/failure,
   and player queue pressure without transcript/audio bytes, secrets or provider error payloads.
-- [ ] In rendered Chrome, use `/pipecat-console` plus mobile-sized `/transfer`: hear distinct local
-  waits, accept only after briefing, observe preparing, hear the cue, then exchange audio and
-  transcripts. Delay actual readiness deliberately so fast providers cannot hide missing states.
+- [x] Existing rendered Chrome `/pipecat-console` and mobile-sized `/transfer` checks cover
+  briefing, acceptance, preparation, decoded cues, conversation and transcripts. Deliberately
+  delayed readiness and default/URL/nil audio are verified through native peers as authorized in
+  the verification review; this does not claim physical loudspeaker volume.
 - [ ] Repeat through deterministic web/phone and phone/phone adapter fixtures. Verify real phone
   cue-before-conversation and audio clearing in the tagged, explicitly authorized provider lane;
   record any external blocker rather than claiming phone playout from a WebRTC-only result.
+
+### Acceptance evidence map
+
+The owning checks below cover the common requirements above. The passing current root run executes
+their original modules; the [native verification guide](../native-webrtc-testing.md) gives focused commands
+and distinguishes controlled providers, real WebRTC traffic and live carrier evidence.
+
+| Contract | Owning evidence |
+| --- | --- |
+| URL/null/default configuration, compatibility and immutable assets | Engine `call_definition/wait_sounds_compiler_test.exs`, `wait_sounds/assets_test.exs` and `opening_audio/asset_pipeline_test.exs` cover parsing, plan restoration, fetch limits, tenant cache isolation and pinned bytes. Native configuration matrices exercise the resulting selections. |
+| Independent cursors, shared sinks, connection changes and finite drain | Engine `wait_sounds/player_test.exs` checks exact PCM positions, loop boundaries, stale acknowledgements, retained cursors and every sink's final drain. The native changing-listener call verifies the same contract over real connections. |
+| Complete readiness and selective resource replacement | Engine `readiness/{barrier,collector,inventory}_test.exs` covers every required scope, missing/unsupported resources, stale attempts/generations and retained evidence. Native model/voice/tool/MCP, remaining-human STT and recording delays exercise the live barrier. |
+| Private audio, held input, cue ordering and unchanged media | Gateway `http/human_transfer_webrtc_test.exs` verifies received audio, transcripts, recording and retained bindings. `media/output_arbiter_test.exs` verifies one encoder/RTP clock, held generations, clear/drain and stale-output rejection under controlled backpressure. |
+| Re-entry, cancellation and partial-release failure | Engine `agent_transfer_room_test.exs` and `human_web_transfer_room_test.exs` cover fresh activations, original deadlines, exact cancellation and terminal partial release. Native human recovery/retry, release-loss cases and the three-transfer Morse call verify subsequent speech and permitted transcripts. |
+| Startup, opening priority and original call clocks | Engine `call_lifecycle_room_test.exs`, `opening_audio_room_test.exs` and `telephony_call_startup_test.exs`, plus native startup and both phone harnesses, cover delayed resources, resumed wait cursors, one greeting and cleanup before/after media attachment. |
+| Bounded, private diagnostics | Engine lifecycle/player observations, Gateway codec/output checks and Console `telemetry_reporter_test.exs` cover phase durations, blockers, worker loss, queue pressure and removal of private fields before reporter mailbox admission. |
+| Existing rendered web sample | The human-web slice records desktop/mobile-sized Chrome, live model/Deepgram, acceptance, decoded cues, speech/transcripts and recovery. Controlled readiness/configuration checks use native peers as authorized in the [verification review](#native-verification-review); this checkpoint changes no UI. |
+| Phone adapter and physical carrier boundary | Both provider harnesses pass decoded audio, transcripts, cue-mark backpressure, clearing and recovery through actual adapters. Live carrier audibility remains unverified: enable flags, credentials, approved numbers and callback/media URLs are absent. Guarded API submission tests alone would not close this item. |
 
 ## Alternatives and implications
 
@@ -1266,6 +1301,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Adopted listeners and repeated-transfer acceptance | Corrected missing-media regression fails against the prior runtime; three native cases and 61 focused engine checks pass. All five root gates pass: 1,436 tests, zero failures, 16 exclusions; seed 235296, concurrency four, preloading and serialized test-file compilation. | A monitor admitted after adoption keeps the audience waiting until attachment, then every sink receives a renewed cue. Three AI transfers retain caller/room resources with fresh activations and monitor re-entry; every stage verifies speech, transcripts and recording privacy. Existing human recovery/retry, stale-policy, cancellation and partial-release checks pass. The changing-listener slice is accepted; three checkpoint tasks remain. An earlier intermittent ordering failure did not recur; its cause is unproven. |
 | Listener arrival during destination construction | The native monitor receives no waiting with the old phase. The fixed native case and 52 focused engine checks pass. All five root gates pass: 1,435 tests, zero failures, 16 exclusions; seed 235296, concurrency four, module preloading and serialized test-file compilation. | Initial audience publication precedes blocked model/tool construction. A newly joined monitor hears waiting before the model is released; the caller player, connection, room services and deadline persist. The preparer may hold media but cannot adopt/release it. Caller greeting and the monitor's cue-ordered live caller audio complete. Post-adoption listener arrival and repeated-transfer/failure acceptance remain open; eight checkpoint tasks remain. |
 | Listener changes during preparation and cues | Native missing-wait and cue-stage admission failures reproduced before their fixes. The final native case and 61 focused engine checks pass. All five root gates pass: 1,435 tests, zero failures, 16 exclusions; seed 235296, concurrency four, module preloading and serialized test-file compilation. The prior ordinary routing failure did not recur; no cause or ordinary routing fix was established. | A monitor leaves and re-enters while accepted STT is unready and during an unfinished cue. Removed players retire, the attachment gap remains preparing, and changed cues return to waiting before replay. Every current sink receives a new cue before conversation; original room services and surviving connections remain. The five-participant demonstration is complete. Initial-construction audience changes and repeated-transfer/failure acceptance remain open; eight checkpoint tasks remain. |
 | Audience changes before acceptance | The native missing-wait regression failed before implementation. All 50 focused engine checks pass, including acceptance during refresh and linked worker loss. That checkpoint's umbrella run had 1,435 tests, one human-only routing failure and 16 exclusions; the next row above records the passing rerun. All 653 engine checks, the expanded native transfer case and the other four root gates passed. | A late monitor hears waiting before destination briefing/acceptance, leaves and re-enters on a fresh player. Every original player survives, and the same call completes exact seven/three-second cursors, monitor connection replacement and cue-before-conversation. The existing phase coalesces audience refresh and queues acceptance within the original deadline. Preparation/cue membership changes and repeated-transfer acceptance were still open at that checkpoint; nine compound tasks remained. |

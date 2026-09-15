@@ -211,6 +211,168 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = await_tone(support_client, 700, 2_000)
   end
 
+  @tag morse: true
+  test "native repeated AI transfers retain callers and recordings across listener re-entry" do
+    {wait_sounds, options} = custom_wait_configuration(48_000)
+
+    plan =
+      compile_plan(
+        morse: true,
+        agent_destination: true,
+        reception_model: "test:blocked",
+        billing_model: "test:blocked",
+        billing_transfers: ["reception"],
+        reception_first_message: %{mode: "fixed", text: "E"},
+        billing_first_message: %{mode: "fixed", text: "T"},
+        observer_policy: %{},
+        wait_sounds: Map.put(wait_sounds, :transfer_to_agent, wait_sounds.transfer_to_human)
+      )
+
+    options =
+      Keyword.put(options, :recording,
+        enabled: true,
+        targets: [:individual_tracks],
+        writer: {CallEngine.TestRecordingWriter, observer: self()},
+        maximum_pull_frames: 20
+      )
+
+    assert {:ok, room} = CallEngine.start_call(plan, options)
+    stop_room_on_exit(plan)
+    assert_receive {:test_agent_runtime_model_preparing, initial_model}, 2_000
+    caller = Map.fetch!(plan.participants, "caller")
+    observer = Map.fetch!(plan.participants, "observer")
+    reception = Map.fetch!(plan.participants, "reception")
+
+    client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+      |> Map.put(:morse_opus, Decoder.Native.create(48_000, 1))
+
+    assert :ok = send_client_ready(client)
+
+    send(initial_model, :release_test_agent_runtime_model)
+    await_sideband(client, "bot-ready", 2_000)
+    assert_morse(client, "E")
+    await_sideband(client, "bot-stopped-speaking", 2_000)
+
+    listener =
+      plan
+      |> join_native_listener(room, "observer", :monitor)
+      |> Map.put(:morse_opus, Decoder.Native.create(48_000, 1))
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    assert {:ok, original} = CallEngine.RoomAuthority.readiness_binding(authority)
+
+    initial_models = %{
+      reception.participant_id => original.participants[reception.participant_id].model_inference
+    }
+
+    {_client, _listener, attempts, _models, _last_player} =
+      Enum.reduce(
+        [{"billing", "ET"}, {"reception", "TE"}, {"billing", "SOS"}],
+        {client, listener, MapSet.new(), initial_models, nil},
+        fn {destination, spoken}, {client, listener, attempts, models, last_player} ->
+          {source_prompt, destination_prompt} =
+            if destination == "billing",
+              do: {"Route callers safely.", "Handle billing requests."},
+              else: {"Handle billing requests.", "Route callers safely."}
+
+          client = send_morse(client, spoken)
+          assert_transcript(client, caller.participant_id, spoken)
+          {provider, _request} = await_native_model_request(source_prompt, spoken)
+
+          assert {:ok, transfer} =
+                   ToolCall.new(
+                     id: "repeated-#{spoken}",
+                     name: "transfer",
+                     arguments: %{"destination" => destination}
+                   )
+
+          assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer])
+          send(provider, {:test_agent_runtime_response, {:ok, response}})
+          assert_receive {:test_agent_runtime_model_preparing, model}, 2_000
+          await_tone(client, 250, 2_000)
+          await_tone(listener, 250, 2_000)
+          {player, episode} = Map.fetch!(wait_players(room.incarnation_id), caller.participant_id)
+          refute player == last_player
+          pending = :sys.get_state(authority).pending_participant_transfer
+          refute MapSet.member?(attempts, pending.attempt_id)
+
+          listener =
+            if destination == "reception" do
+              {departing_player, _} =
+                Map.fetch!(wait_players(room.incarnation_id), observer.participant_id)
+
+              remove_native_listener(authority, room, observer, listener, departing_player)
+
+              joined =
+                plan
+                |> join_native_listener(room, "observer", :monitor)
+                |> Map.put(:morse_opus, Decoder.Native.create(48_000, 1))
+
+              await_tone(joined, 250, 2_000)
+
+              assert {^player, current} =
+                       Map.fetch!(wait_players(room.incarnation_id), caller.participant_id)
+
+              assert current.offset >= episode.offset
+              joined
+            else
+              listener
+            end
+
+          assert :sys.get_state(authority).pending_participant_transfer.deadline_ms ==
+                   pending.deadline_ms
+
+          refute_private_recording(collect_native_recording([]))
+          send(model, :release_test_agent_runtime_model)
+          assert %{"attempt_id" => attempt} = await_transfer_progress(client, "completed")
+          assert attempt == pending.attempt_id
+          await_tone(client, 1_000, 2_000)
+          await_tone(listener, 1_000, 2_000)
+
+          if map_size(models) == 1 do
+            assert_morse(client, "T")
+            await_sideband(client, "bot-stopped-speaking", 2_000)
+          else
+            refute_tone(client, 700, 250)
+          end
+
+          assert {:ok, after_transfer} = CallEngine.RoomAuthority.readiness_binding(authority)
+          assert after_transfer.room == original.room
+
+          assert after_transfer.connections[client.connection_id] ==
+                   original.connections[client.connection_id]
+
+          participant = Map.fetch!(plan.participants, destination)
+          coordinator = after_transfer.participants[participant.participant_id].model_inference
+          assert is_pid(coordinator)
+          refute coordinator == Map.get(models, participant.participant_id)
+
+          client = send_morse(client, "E")
+          assert_transcript(client, caller.participant_id, "E")
+          assert_transcript(listener, caller.participant_id, "E")
+          assert_morse(listener, "E")
+          {provider, _request} = await_native_model_request(destination_prompt, "E")
+          assert {:ok, reply} = ModelResponse.new(text: "OK")
+          send(provider, {:test_agent_runtime_response, {:ok, reply}})
+          assert_morse(client, "OK")
+          await_sideband(client, "bot-stopped-speaking", 2_000)
+          assert wait_players(room.incarnation_id) == %{}
+          recorded = collect_native_recording([])
+          assert Enum.any?(recorded, &tone?(&1.payload, 700))
+          refute_private_recording(recorded)
+
+          {client, listener, MapSet.put(attempts, attempt),
+           Map.put(models, participant.participant_id, coordinator), player}
+        end
+      )
+
+    assert MapSet.size(attempts) == 3
+    refute_private_recording(collect_native_recording([]))
+  end
+
   @tag changing_listeners: true
   test "five-participant handoff retains wait cursors through monitor addition and reconnection" do
     {wait_sounds, options} = custom_wait_configuration(480_000)
@@ -227,6 +389,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
             capabilities: %{}
           },
           "late-monitor" => %{
+            type: "human",
+            connection: %{service: "web", mode: "receive", admission: "start_call"},
+            capabilities: %{}
+          },
+          "adopted-monitor" => %{
             type: "human",
             connection: %{service: "web", mode: "receive", admission: "start_call"},
             capabilities: %{}
@@ -439,6 +606,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              GenServer.call(returned_connection, :vxpipe_connection_readiness)
 
     cue_pause = pause_first_cue(returned_media.output)
+    support_connection = Map.fetch!(refreshed.connections, support_client.connection_id).pid
+    adoption_pause = pause_native_gate(support_connection, :adopt)
 
     TestSpeechToTextTransport.deliver(
       support_stt,
@@ -457,6 +626,32 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         if peer == returned_listener, do: cue_listener, else: peer
       end)
 
+    assert_receive {:native_gate_waiting, ^adoption_pause}, 2_000
+    adopted_monitor = Map.fetch!(plan.participants, "adopted-monitor")
+
+    assert {:ok, join} =
+             CallEngine.Command.JoinParticipant.new(
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: plan.room_id,
+               participant_id: adopted_monitor.participant_id,
+               role: :monitor,
+               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+             )
+
+    assert {:ok, _participant} = CallEngine.join_participant(join)
+    send(support_connection, {:continue_native_gate, adoption_pause})
+
+    await_transfer_progress(third_client, "preparing", ["media"])
+
+    await_tone(caller_client, 250, 2_000)
+
+    adopted_client =
+      plan
+      |> issue_session(room, adopted_monitor.participant_id)
+      |> then(&connect(&1.session_id, "chat", false, :recvonly))
+
+    audience = audience ++ [adopted_client]
     await_sideband(support_client, "transfer.active", 3_000)
     await_transfer_progress(third_client, "completed")
     assert {:ok, completed} = CallEngine.RoomAuthority.readiness_binding(authority)
@@ -3736,7 +3931,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                            model_inference: "billing-model",
                            text_to_speech: "test-voice"
                          },
-                         first_message: %{mode: "fixed", text: "Billing is ready."}
+                         first_message:
+                           Keyword.get(options, :billing_first_message, %{
+                             mode: "fixed",
+                             text: "Billing is ready."
+                           }),
+                         transfers: Keyword.get(options, :billing_transfers, [])
                        },
                        "human-support" => %{
                          type: "human",
@@ -4249,6 +4449,40 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     |> Map.put(:morse_sequence, first_sequence + div(byte_size(pcm), 1_920))
   end
 
+  defp collect_native_recording(chunks) do
+    receive do
+      {:test_recording_chunk, _stream, chunk} -> collect_native_recording([chunk | chunks])
+    after
+      0 -> chunks
+    end
+  end
+
+  defp await_native_model_request(prompt, spoken) do
+    await_native_model_request(prompt, spoken, System.monotonic_time(:millisecond) + 2_000)
+  end
+
+  defp await_native_model_request(prompt, spoken, deadline) do
+    receive do
+      {:test_agent_runtime_stream, provider, request} ->
+        latest_user = Enum.find(Enum.reverse(request.messages), &(&1.role == :user))
+
+        if match?([%{content: ^prompt} | _], request.messages) and
+             match?(%{content: ^spoken}, latest_user),
+           do: {provider, request},
+           else: await_native_model_request(prompt, spoken, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("the active agent did not receive #{inspect(spoken)}")
+    end
+  end
+
+  defp refute_private_recording(chunks) do
+    for chunk <- chunks do
+      refute tone?(chunk.payload, 250), "waiting entered the recording"
+      refute tone?(chunk.payload, 1_000), "a connection cue entered the recording"
+    end
+  end
+
   defp assert_transcript(connection, participant_id, text) do
     assert_transcript(
       connection,
@@ -4294,7 +4528,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       {:ex_webrtc, ^client, {:rtp, ^track, _rid, packet}} ->
         pcm = Decoder.Native.decode_packet(opus, packet.payload)
 
-        case MorseDecoder.push(morse, pcm) do
+        result =
+          if morse.current_kind == nil and not tone?(pcm, 700),
+            do: {:ok, morse, []},
+            else: MorseDecoder.push(morse, pcm)
+
+        case result do
           {:ok, next, events} ->
             if {:final, expected} in events do
               :ok
@@ -4462,7 +4701,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp refute_tone(connection, frequency, timeout_ms) do
     refute_tone(
       connection,
-      Decoder.Native.create(48_000, 1),
+      Map.get_lazy(connection, :morse_opus, fn -> Decoder.Native.create(48_000, 1) end),
       frequency,
       System.monotonic_time(:millisecond) + timeout_ms
     )
