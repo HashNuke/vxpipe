@@ -26,10 +26,26 @@
 - Broader affected group passes: 40 tests across definition-driven calls, model construction and
   inline activation, zero failures. The new test required routine formatting. Root format,
   warnings-as-errors compilation, strict Credo and unused-lock checks pass. Independent
-  GPT 6 Astra xhigh implementation review found no blockers; a full umbrella regression is running.
+  GPT 6 Astra xhigh implementation review found no blockers.
 - Review confirms the regression reaches public startup, waits for project-owned preparation and
   preserves the unsupported-provider rejection test. It uses no live provider request.
 - Bounded review of the existing native failure establishes missing trailing audio as the symptom,
   not its cause. The test sends 48 frames; failures decode only 25–26 windows. A future diagnostic
   should compare sender/listener RTP sequence and timestamp ranges, sender lateness, and mixer/
   egress queue state for that utterance. No timeout or decoder-tolerance change is justified.
+
+## Full regression
+
+- The full root run after runtime commit `4a26fba` completes 1,555 tests, one failure and
+  33 exclusions (seed 235296, preload modules, max requires 1, max cases 4). Engine 697,
+  Calls 81 and Persistence 106 tests all pass. The only failure is the native five-participant
+  handoff at `human_transfer_webrtc_test.exs:666`: expected ordered 1,500 Hz conversation audio,
+  but the last observed phase was waiting. The earlier repeated-AI Morse assertion passes.
+- The same broad cue/conversation symptom was recorded before this correction in
+  [inline cutover evidence](20260915-1719-inline-tenant-voice.md). Its cause remains unproven;
+  neither that history nor the passing Morse case establishes a fix. The separate prior removal
+  of an unsupported transient wait-tone assertion concerns a different point in the test.
+- The unchanged isolated five-participant case passes: one test, zero failures, 67 excluded
+  with the same seed and concurrency options. No audio behavior, pacing, timeout, decoder
+  tolerance or assertion was changed for this verification. This confirms the failure is
+  intermittent; it does not resolve the cause or close the full umbrella gate.

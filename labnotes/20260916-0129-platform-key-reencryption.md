@@ -43,8 +43,8 @@
   and retry. Reuse the existing transaction test setup and keep default tests isolated.
 - Exercise a disposable DB in fresh VMs: old-key provisioning, mixed-key transition, resumed
   batches, new-key-only restart/read, missing/wrong-key rejection and cleanup.
-- Implementation has not started. The current umbrella regression belongs to the preceding
-  Zenmux startup correction and must finish before another Mix process runs.
+- Implementation has not started. This design review ran while the preceding Zenmux startup
+  correction's umbrella regression was in progress; no second Mix process ran alongside it.
 - Independent design review found no further blocker after the locking and rollout corrections.
   The [durable design](../docs/platform-credential-reencryption.md) records the decision and
   rejected alternatives. This review changes no checkpoint implementation count.

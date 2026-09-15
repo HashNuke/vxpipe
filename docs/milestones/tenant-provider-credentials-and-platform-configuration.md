@@ -2,7 +2,7 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2 and 5 are complete. Of seven checkpoints, three are complete,
-two are partial and two are not started. The latest full umbrella run retains one native Morse
+two are partial and two are not started. The latest full umbrella run retains one native audio
 failure; the milestone and common acceptance gates remain unchecked.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
@@ -474,6 +474,11 @@ Telnyx/Twilio reader completion remains owned by checkpoints 3 and 4.
 Follow-up review found an outer startup gate missed by the initial constructor tests: it still
 rejected Zenmux entry agents. The gate now accepts the existing integration, and a public room-startup
 regression reproduces the original failure and verifies preparation with the named tenant key.
+The 40-test startup group and all static/unused-lock checks pass; independent implementation
+review found no blockers. The full run after `4a26fba` completes 1,555 tests with one native
+five-participant cue/conversation failure and 33 exclusions. That case passes unchanged in
+isolation (one test, 67 excluded). The earlier Morse assertion passes in this run; neither result
+establishes the cause of the native audio observations, and common umbrella acceptance remains open.
 See [startup correction evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
 
 Exit: existing supported provider integrations read explicit tenant credentials and retain their
