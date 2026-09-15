@@ -41,9 +41,10 @@ plaintext values; it does not change a provider's API key or webhook token.
 
 ## Implications and verification
 
-The milestone contains seven checkpoints. Checkpoint 6 now covers only platform encryption-key rotation.
-One checkpoint is complete, two are partial and four are not started; changing scope does not
-count as implementation. Existing completed work and test evidence remain recorded separately.
+The milestone contains seven checkpoints. Checkpoint 6 covers only platform encryption-key rotation.
+At the scope correction, one checkpoint was complete, two were partial and four were not started;
+changing scope did not count as implementation. Current progress and test evidence are recorded
+in the milestone ledger linked below.
 
 The unfinished round-trip test fixture/server changes were discarded before further work.
 This correction changes documentation only. Review evidence and validation are in the

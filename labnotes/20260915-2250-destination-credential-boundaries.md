@@ -17,8 +17,7 @@
   Saved draft data excludes credential payloads.
 - Focused Persistence group: 18 tests, 0 failures, 2 excluded, seed 235296. Independent GPT 6
   Astra xhigh review found no blocking issues in these save checks.
-- DB activation evidence will follow separately. Checkpoint 2 remains open until the complete
-  boundary evidence and umbrella gates pass.
+- Checkpoint 2 remains open until the complete boundary evidence and umbrella gates pass.
 
 Run from `apps/vxpipe_persistence`:
 
@@ -46,3 +45,40 @@ Run from `apps/vxpipe_call_engine`:
 mix test test/vxpipe/call_engine/plan_startup/destination_credentials_test.exs test/vxpipe/call_engine/plan_startup/inline_activation_test.exs test/vxpipe/call_engine/call_definition/inline_capabilities_test.exs --seed 235296
 mix test test/vxpipe/call_engine/plan_startup/destination_credentials_test.exs --seed 235296
 ```
+
+## Database activation checkpoint
+
+- Three tagged integration cases use a persisted plan and the existing transfer boundary.
+  Replacing only synthetic encrypted payloads after entry preparation changes the actual
+  destination TTS authentication and intercepted Google request. This test-only mutation does
+  not add a provider credential lifecycle API.
+- Inactive Google/Deepgram bindings produce safe failure/history before a destination request,
+  while the source still responds. Drafts, prepared plans and event/history projections exclude
+  secret markers. The Google request uses the existing loopback SSE fixture; no live provider runs.
+- The initial attempt had three fixture failures because SendText lacked correlation_id. Adding
+  the required generated correlation and removing an unused alias corrected the fixture. The
+  tagged run passes: 3 tests, 0 failures, --include integration, seed 235296.
+- Independent GPT 6 Astra xhigh review and final bounded re-review found no blocking issues or
+  scope/evidence inconsistencies. These checks cover the remaining checkpoint 2 evidence gaps
+  alongside existing opening, connection, briefing, restoration and privacy checks.
+
+Run from `apps/vxpipe_persistence`:
+
+```shell
+mix test test/integration/destination_credential_activation_test.exs --include integration --seed 235296
+```
+
+## Umbrella verification
+
+- Initial format, warnings-as-errors compile and strict Credo gates passed. Tests reported 1,532
+  tests, 1 failure and 33 exclusions: the unchanged five-participant native WebRTC handoff timed
+  out waiting for 250 Hz caller audio after cue-time listener removal/rejoin. All credential tests
+  and other umbrella suites passed; the driver stopped before the unused-dependency gate.
+- That native case passed unchanged in isolation: 1 test, 0 failures, 67 excluded, 95.7 seconds.
+  Independent review identified an assertion requiring transient wait audio even when the
+  listener graph was already ready. The separate [native assertion correction](20260915-2317-native-readiness-assertion.md)
+  removes that unsupported timing assumption; its focused case passes. The exact scheduling of
+  the original failure remains untraced.
+- Final root gates are running with seed 235296 and the same concurrency settings. Checkpoint 2
+  remains open pending those results. All 150 local links in the four affected existing documents
+  resolved during the documentation check.

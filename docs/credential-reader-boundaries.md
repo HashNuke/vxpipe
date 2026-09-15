@@ -24,11 +24,11 @@ under the [approved scope correction](credential-cutover-scope.md).
 | Construction boundary | Credential path | Evidence/status |
 | --- | --- | --- |
 | Initial agent model | `PlanStartup.new` → `AgentActivation` → `AgentModel` → `CredentialSource` | Initial inline activation and persisted tenant voice checks. |
-| Later agent activation | `DestinationPreparer` → `PlanStartup.agent_destination` → the same model/speech resolvers | Injected startup options propagate; named destination/whole-selection coverage remains pending. |
-| Initial and destination TTS | `PlanStartup` → `resolve_provider` → `CredentialSource` | Initial inline activation checks; source briefing/restoration corrections below. |
+| Later agent activation | `DestinationPreparer` → `PlanStartup.agent_destination` → the same model/speech resolvers | Named tenant isolation, whole-selection overrides and fresh construction checks; persisted activation verifies the current DB payload reaches the Google request. |
+| Initial and destination TTS | `PlanStartup` → `resolve_provider` → `CredentialSource` | Initial inline activation and fresh destination construction checks; persisted activation verifies current Deepgram authentication. Source briefing/restoration corrections below. |
 | Independent opening TTS | `PlanStartup.opening_runtime` → `resolve_provider` | Four persisted opening cases, tenant/binding cache separation and unavailable-binding rejection. |
 | Connection STT | `ConnectionSpeechPreparation` → `PlanStartup.connection_speech_to_text` | Fresh source, bounded worker cancellation and persisted credential recheck tests. |
-| Private destination STT | `PlanStartup.human_destination` → `resolve_provider` | Resolves in destination preparation; that attempt owns the configuration used by private speech startup. |
+| Private destination STT | `PlanStartup.human_destination` → `resolve_provider` | Named tenant isolation, independent listener options and fresh construction checks; unavailable bindings fail before client startup. |
 | Private briefing TTS | `HumanDestinationPreparer` → transfer `Runtime.source_text_to_speech` → `PlanStartup.participant_text_to_speech` | Fresh named source binding before new transport/dial; missing binding preserves the existing source client. |
 | Source TTS replacement | `RoomTransferSupervisor.recover` → transfer `Runtime.source_text_to_speech` | Fresh lookup within the existing 750 ms budget; unavailable binding starts no transport and enters existing terminal failure handling. |
 | Hosted persistence bridge | Calls `ProviderCredentialSource` → `DefinitionCredentials` → encrypted repository | Tenant/provider/name/status/auth validation; persistence tests verify DB reads and safe errors. |
@@ -62,9 +62,10 @@ supplied test key to its test tenant through a credential source; it requires se
   introduced. Synthetic credential changes in tests distinguish a fresh lookup from a copied
   configuration; they do not prescribe a provider credential lifecycle.
 
-Checkpoint 2 remains partial. Its remaining work includes covering destination-only missing
-credentials before definition writes and finishing named destination/whole-selection boundary
-coverage. Carrier readers and remaining supported provider adapters stay in their own checkpoints.
+Destination boundary coverage now includes missing, other-tenant-only and inactive model/TTS/STT
+bindings before definition writes, plus named destination isolation and whole-selection overrides.
+Carrier readers and remaining supported provider adapters stay in their own checkpoints. The
+milestone ledger records checkpoint completion and umbrella gate results.
 
 ## Verification
 
@@ -78,3 +79,11 @@ Full regression and independent review evidence is recorded in the
 Raw-room rejection and conflicting global speech settings are covered by focused regressions.
 Migration and final gate evidence is recorded in the
 [global-reader labnotes](../labnotes/20260915-2223-remove-global-readers.md).
+
+Destination save and constructor checks passed against the existing implementation. A tagged
+database-backed activation test changes only synthetic encrypted payloads after entry preparation
+and observes the current values at the Google/Deepgram adapter boundaries. Inactive bindings
+instead produce existing safe failure/history, start no destination provider request, and leave
+the source able to respond. Plans, cache identity and public projections exclude secret payloads.
+Focused results and independent review are recorded in the
+[destination labnotes](../labnotes/20260915-2250-destination-credential-boundaries.md).

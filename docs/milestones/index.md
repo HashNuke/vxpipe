@@ -31,18 +31,16 @@ reader is deleted. Checkpoint 1 is implemented and verified: all five root gates
 recipient bug found during verification was fixed in a separate tested commit. Earlier intermittent
 native audio/cleanup observations remain documented; their cause is not established by this pass.
 Final independent review of the complete milestone remains open.
-Checkpoint 2 now has database-backed opening/human-entry coverage, private opening output,
-and tenant/binding cache isolation with revocation checks. A separately tested
-[policy-shutdown fix](../room-policy-failure-ownership.md) resolves missing transfer failure
-progress/history during adopted speech loss. New briefing and replacement source speech clients
-now resolve fresh tenant credentials; four focused cases and a 66-test regression group pass.
-GPT 6 Astra xhigh reviewed this reader fix without blocking findings. All five root gates pass:
-1,513 tests, zero failures, 30 exclusions (seed 235296). The
-[reader inventory](../credential-reader-boundaries.md) records removal of legacy global readers.
-The deletion preserves raw empty/deterministic rooms and inline fixture/Morse embedding; existing
-model/speech/WebRTC tests now use inline definitions. Independent re-review found no remaining
-blockers and all five root gates pass: 1,517 tests, zero failures, 30 exclusions (seed 235296).
-Destination binding tests remain open; live Deepgram tests remain excluded. Earlier native timing observations remain unexplained.
+Checkpoint 2 has verified opening, connection, destination, private-briefing and source-restoration
+credential boundaries. New speech clients resolve fresh tenant credentials and global model/speech
+readers are removed. The [reader inventory](../credential-reader-boundaries.md) records each path.
+Destination save checks pass (18 tests, 2 excluded), the Engine constructor/compiler group passes
+(15 tests), and three tagged local DB activation checks pass. Independent GPT 6 Astra xhigh review
+found no blockers. An unsupported native wait-tone assertion found by the umbrella run was corrected
+in a separate reviewed test-only checkpoint; its focused case passes. Final umbrella acceptance
+remains pending. Live provider tests remain excluded, and earlier native timing observations are
+not all explained by this correction. [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md)
+records the focused results and the final gate outcome.
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did
