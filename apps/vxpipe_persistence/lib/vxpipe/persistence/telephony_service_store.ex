@@ -165,7 +165,8 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
              service.provider,
              credential.name
            ),
-         true <- private_snapshot.credential.id == service.credential_id do
+         true <- private_snapshot.credential.id == service.credential_id,
+         true <- Service.credential_matches?(service, private_snapshot.payload) do
       {:ok, {credential.tenant_id, private_snapshot}}
     else
       _unavailable -> {:error, :provider_credential_unavailable}

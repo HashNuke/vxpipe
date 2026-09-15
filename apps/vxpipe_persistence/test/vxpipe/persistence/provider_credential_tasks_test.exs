@@ -141,6 +141,37 @@ defmodule Vxpipe.Persistence.ProviderCredentialTasksTest do
     refute_received :credential_input_read
   end
 
+  test "trusted operator provisions existing Twilio auth without echoing its payload", %{
+    tenant: tenant
+  } do
+    payload = %{
+      "account_sid" => "AC00000000000000000000000000000000",
+      "auth_token" => "twilio-operator-private-marker"
+    }
+
+    output =
+      capture_io(JSON.encode!(payload), fn ->
+        Mix.Tasks.Vxpipe.ProviderCredential.Provision.run([
+          "--tenant",
+          tenant.key,
+          "--provider",
+          "twilio",
+          "--name",
+          "phone",
+          "--auth-kind",
+          "account_sid_auth_token"
+        ])
+      end)
+
+    summary = JSON.decode!(output)
+    assert summary["provider"] == "twilio"
+    assert summary["auth_kind"] == "account_sid_auth_token"
+    refute output =~ payload["auth_token"]
+    refute output =~ payload["account_sid"]
+    assert {:ok, snapshot} = ProviderCredentials.resolve(tenant.key, "twilio", "phone")
+    assert snapshot.payload == payload
+  end
+
   test "provision and list accept generated tenant keys that begin with a dash", %{tenant: tenant} do
     tenant_key = "-AAAAAAAAAAAAAAA"
 

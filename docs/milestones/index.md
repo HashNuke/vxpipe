@@ -50,8 +50,7 @@ Destination save checks pass (18 tests, 2 excluded), the Engine constructor/comp
 (15 tests), and three tagged local DB activation checks pass. Independent GPT 6 Astra xhigh review
 found no blockers. An unsupported native wait-tone assertion found by the umbrella run was corrected
 in a separate reviewed test-only checkpoint. Checkpoint 2 passed all five root gates: 1,532 tests,
-zero failures, 33 excluded (seed 235296). Milestone 24 has **4 of 7 checkpoints complete**, two partial
-and one not started. Telnyx named API-key provisioning now uses encrypted tenant storage and
+zero failures, 33 excluded (seed 235296). Milestone 24 has **4 of 7 checkpoints complete** and three partial. Telnyx named API-key provisioning now uses encrypted tenant storage and
 protected CLI input; live carrier readers remain pending. Its 14 focused
 tests, 81 Calls tests and 89 Persistence tests pass. Independent review and all five root gates pass
 for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296).
@@ -82,6 +81,10 @@ Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the
 focused results and the final gate outcome.
+Twilio's existing Account SID/Auth Token shape now supports encrypted provisioning and matching
+tenant service registration. Its 18 focused storage/CLI checks pass; Gateway live readers remain
+pending. This completes the common storage prerequisite for provider/account identity enforcement.
+See [Twilio storage evidence](../../labnotes/20260916-0315-provision-twilio-credentials.md).
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did
@@ -461,7 +464,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
-| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: four complete, two partial and one not started. Existing carrier-reader migration and final configuration cleanup remain; platform encryption-key rotation is verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. A native audio failure keeps common umbrella acceptance open. Final independent implementation review remains pending. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: four complete and three partial. Existing carrier-reader migration and final configuration cleanup remain; platform encryption-key rotation is verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. The latest full umbrella run passes; unfinished checkpoints keep final milestone acceptance open. Final independent implementation review remains pending. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification

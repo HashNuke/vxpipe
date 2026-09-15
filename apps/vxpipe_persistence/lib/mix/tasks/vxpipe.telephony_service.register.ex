@@ -4,16 +4,17 @@ defmodule Mix.Tasks.Vxpipe.TelephonyService.Register do
   alias Vxpipe.Calls.TelephonyServices
   alias Vxpipe.Persistence.CLI
 
-  @shortdoc "Registers tenant Telnyx service metadata against a provisioned credential"
+  @shortdoc "Registers tenant carrier service metadata against a provisioned credential"
   @requirements ["app.config"]
 
   @moduledoc """
-  Registers a tenant Telnyx service through a trusted operator session.
+  Registers a tenant Telnyx or Twilio service through a trusted operator session.
 
       mix vxpipe.telephony_service.register --tenant TENANT_KEY --file service.json
 
-  The JSON object contains name, ingress_key, provider (telnyx), provider_connection_id,
-  credential_id and public_key. Optional fields are outbound_number,
+  The JSON object contains name, ingress_key, provider, provider_connection_id and credential_id.
+  Telnyx requires public_key; Twilio omits it and uses its account SID as provider_connection_id.
+  Optional fields are outbound_number,
   answering_machine_detection (disabled or detect), media_token_ttl_ms and
   webhook_tolerance_seconds. The existing provider credential must belong to the same
   tenant/provider and be active and readable. Output contains public binding IDs only.

@@ -1,10 +1,11 @@
 # Tenant provider credential storage
 
-Trusted operators can provision Google, Deepgram, Zenmux and Telnyx API keys in PostgreSQL and list their
-metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
+Trusted operators can provision Google, Deepgram, Zenmux and Telnyx API keys, plus Twilio Account
+SID/Auth Token credentials, in PostgreSQL and list their metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
 Inline Google/Deepgram/Zenmux definitions now resolve this store at save, publication, preparation
 and capability creation; see [inline selections](inline-provider-selections.md). Telnyx credential
-provisioning and trusted service registration are available; live carrier DB readers remain checkpoint 3 work.
+provisioning and trusted Telnyx/Twilio service registration are available; live carrier DB readers
+remain checkpoints 3 and 4 work.
 
 ## Configure and provision
 
@@ -39,10 +40,14 @@ mix vxpipe.provider_credential.provision \
   --tenant TENANT_KEY --provider zenmux --name router < path/to/protected-zenmux.json
 mix vxpipe.provider_credential.provision \
   --tenant TENANT_KEY --provider telnyx --name support-phone < path/to/protected-telnyx.json
+mix vxpipe.provider_credential.provision \
+  --tenant TENANT_KEY --provider twilio --name support-phone \
+  --auth-kind account_sid_auth_token < path/to/protected-twilio.json
 mix vxpipe.provider_credential.list --tenant TENANT_KEY
 ```
 
-The input shape is `{"api_key":"REPLACE_WITH_PROVIDER_KEY"}`. These providers currently support
+For Google, Deepgram, Zenmux and Telnyx the input shape is
+`{"api_key":"REPLACE_WITH_PROVIDER_KEY"}`. These providers currently support
 only `api_key` auth; additional fields, unsupported auth kinds, empty values, whitespace and
 control characters fail local validation. Telnyx keys are limited to 4,096 bytes to match the
 existing carrier configuration boundary; Google/Deepgram/Zenmux keys use an 8,192-byte limit.
@@ -51,6 +56,15 @@ Direct authentication with those providers is not implied by a Zenmux selection.
 Telnyx connection IDs and verification public keys belong to [service metadata](tenant-telephony-services.md),
 not this payload. Trusted service registration now links the public credential ID to the matching
 tenant/provider; Gateway live-reader migration remains pending.
+Twilio uses `--auth-kind account_sid_auth_token` with exactly
+`{"account_sid":"AC_REPLACE_WITH_32_HEX_DIGITS","auth_token":"REPLACE_WITH_AUTH_TOKEN"}`.
+The account SID must have the existing `AC` plus 32 hexadecimal digit shape; the token retains
+its exact UTF-8 bytes and must be nonempty and at most 4,096 bytes. Invalid UTF-8 is rejected
+before JSON serialization. Extra fields and other auth kinds
+are rejected. Its service's `provider_connection_id` must equal the encrypted account SID;
+Twilio service metadata omits `public_key`. This preserves the existing Twilio authentication
+method. It adds no API-key variant, OAuth, credential refresh or provider rotation requirement.
+
 Input is limited to 16,384 bytes. The reader uses
 Elixir `IO.read/2` with a bounded character count and a separate byte-size check. Only terminal
 detection uses OTP `:io.getopts/1`, since Elixir has no equivalent wrapper. Its `stdin` flag
@@ -151,3 +165,7 @@ Red/green results, independent review and disposable database/terminal acceptanc
 in the [provisioning labnote](../labnotes/20260915-1616-tenant-credential-provisioning.md).
 Named Telnyx provisioning, encrypted tenant isolation and CLI metadata-only output are covered by
 the [Telnyx provisioning checks](../labnotes/20260915-2341-telnyx-credential-provisioning.md).
+
+The [Twilio storage checks](../labnotes/20260916-0315-provision-twilio-credentials.md) verify
+encrypted SID/token provisioning, account/tenant/provider ownership, malformed/mixed input rejection
+and protected CLI output. Gateway reader migration remains pending.

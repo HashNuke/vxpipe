@@ -1,9 +1,10 @@
 # Tenant telephony service storage
 
-Status: trusted Telnyx registration, the operator CLI, private credential resolution,
+Status: trusted Telnyx/Twilio registration, the operator CLI, private credential resolution,
 canonical prepared-plan bindings and definition save/publish/web/incoming write guards are implemented.
 Gateway live-reader migration remains pending in
-[checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage).
+[checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
+and [checkpoint 4](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
 
 ## Ownership and identity
 
@@ -18,13 +19,16 @@ credential ID, tenant and provider, so changing one cannot select another tenant
 The alias is what a definition names; it is distinct from the canonical service identity that the
 reader cutover pins in prepared plans.
 
-Only existing Telnyx configuration is accepted here. API keys are provisioned separately through
+Existing Telnyx and Twilio configuration is accepted here. Credentials are provisioned separately through
 [encrypted provider storage](provider-credential-storage.md). Service inputs reject secret fields,
 adapter modules and public callback/media origins. Origins remain platform configuration.
 The service's optional settings retain their current defaults: machine detection disabled,
 media-token lifetime 60,000 milliseconds and webhook tolerance 300 seconds. Stored timers fit
-positive PostgreSQL integers; webhook tolerance also permits zero. The verification key is a
-Base64-encoded 32-byte Ed25519 public key. It is not a credential payload.
+positive PostgreSQL integers; webhook tolerance also permits zero. The Telnyx verification key is a
+Base64-encoded 32-byte Ed25519 public key. It is not a credential payload. Twilio omits this field
+and stores its Account SID as `provider_connection_id`; its encrypted SID/Auth Token payload
+must belong to that same account. Registration and each private resolution enforce the match.
+The database requires a public key for Telnyx and no public key for Twilio.
 
 ## Trusted registration and lookup
 
@@ -67,6 +71,24 @@ Vxpipe.Calls.TelephonyServices.register(tenant_key, %{
 Vxpipe.Calls.TelephonyServices.fetch(tenant_key, "support-phone")
 Vxpipe.Calls.TelephonyServices.fetch_by_ingress("tenant-support-ingress")
 ```
+
+For Twilio, provision `account_sid_auth_token` credentials through the existing protected-input
+command, then use the same service registration command with this metadata:
+
+```json
+{
+  "name": "support-phone",
+  "ingress_key": "tenant-twilio-ingress",
+  "provider": "twilio",
+  "provider_connection_id": "AC_REPLACE_WITH_32_HEX_DIGITS",
+  "credential_id": "PROVISIONED_CREDENTIAL_UUID"
+}
+```
+
+Run the new service-schema migration before registration. It permits Twilio's absent public key
+while preserving Telnyx's requirement. Existing Telnyx rows are unchanged. Rolling that migration
+back requires removing or otherwise resolving Twilio rows first; it cannot restore `NOT NULL`
+while they exist. Gateway's live credential readers remain pending.
 
 These are trusted host operations, not tenant-facing management APIs. Registration locks the
 matching credential row, verifies active status and decryption using the existing credential

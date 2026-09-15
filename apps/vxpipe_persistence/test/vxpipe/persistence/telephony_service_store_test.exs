@@ -176,7 +176,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStoreTest do
     stored = Repo.get_by!(Vxpipe.Persistence.Schema.TelephonyService, public_id: service.id)
     other = Repo.get_by!(ProviderCredential, public_id: data.other_credential.id)
 
-    for changed <- [[tenant_id: other.tenant_id], [provider: "google"]] do
+    for changed <- [[tenant_id: other.tenant_id], [provider: "twilio", public_key: nil]] do
       changeset =
         stored
         |> Ecto.Changeset.change(changed)

@@ -8,7 +8,8 @@ defmodule Mix.Tasks.Vxpipe.ProviderCredential.Provision do
   @requirements ["app.config"]
 
   @moduledoc """
-  Provisions Google, Deepgram or Telnyx API-key auth using a JSON object on stdin.
+  Provisions Google, Deepgram, Zenmux or Telnyx API keys, or existing Twilio Account SID/Auth
+  Token auth using a JSON object on stdin. Twilio requires --auth-kind account_sid_auth_token.
   Requires --tenant and --provider; --name defaults to default and --auth-kind to api_key.
   Output contains metadata only. Run through a trusted operator session, using a secret manager
   pipe or a protected input descriptor. No command-line secret flags are accepted.

@@ -79,7 +79,8 @@ defmodule Vxpipe.Calls.TelephonyServices do
              credential.provider,
              credential.auth_kind,
              snapshot.credential.payload
-           ) do
+           ),
+         true <- TelephonyService.credential_matches?(service, snapshot.credential.payload) do
       :ok
     else
       _invalid -> {:error, :provider_credential_unavailable}
