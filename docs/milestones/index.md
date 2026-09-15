@@ -46,7 +46,8 @@ in a separate reviewed test-only checkpoint. Checkpoint 2 passed all five root g
 zero failures, 33 excluded (seed 235296). Milestone 24 has **2 of 7 checkpoints complete**, two partial
 and three not started. Telnyx named API-key provisioning now uses encrypted tenant storage and
 protected CLI input; service bindings and live carrier readers remain pending. Its 14 focused
-tests, 81 Calls tests and 89 Persistence tests pass; independent review and static root gates pass.
+tests, 81 Calls tests and 89 Persistence tests pass. Independent review and all five root gates pass
+for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the

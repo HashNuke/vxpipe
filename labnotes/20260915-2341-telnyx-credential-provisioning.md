@@ -36,3 +36,15 @@ Run from `apps/vxpipe_persistence`:
 ```shell
 mix test test/vxpipe/persistence/provider_credential_store_test.exs test/vxpipe/persistence/provider_credential_tasks_test.exs --seed 235296
 ```
+
+## Full regression result
+
+- After committing provisioning as `9c54f39`, completed the remaining root suite and unused-lock
+  gate. All five root gates pass: 1,534 tests, 0 failures, 33 excluded, seed 235296, module
+  preloading, one test-file compilation at a time and concurrency four.
+- App totals: MCP 37, Agent Runtime 93, Engine 695, Calls 81, Gateway 413, Artifacts 20,
+  Persistence 89 and Console 106. Logs: `tmp/telnyx-provision-root-test.log` and
+  `tmp/telnyx-provision-root-unused.log`; earlier static-gate logs retain the same prefix
+  without `root-`. No runtime source changed during this run.
+- The separately committed provider inventory changes documentation only. Telnyx service
+  registration and live-reader migration remain pending; checkpoint 3 is still partial.
