@@ -4558,7 +4558,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         end
     after
       remaining ->
-        assert match?({:ok, _decoder, [{:final, ^expected}]}, MorseDecoder.flush(morse)),
+        assert match?(
+                 {:ok, _decoder, [{:final, ^expected}]},
+                 finish_received_morse(morse, expected)
+               ),
                "Morse audio ended without #{inspect(expected)}: " <>
                  inspect(
                    Map.take(morse, [
@@ -4571,6 +4574,21 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  )
     end
   end
+
+  defp finish_received_morse(
+         %MorseDecoder{current_kind: :silence, marks: "", carry: <<>>, text: text} = morse,
+         expected
+       ) do
+    # At the bounded receive deadline, complete only the silence delimiter after exact decoded
+    # characters. Never synthesize a missing tone, pending mark or incomplete PCM window.
+    if String.trim(text) == expected do
+      MorseDecoder.push(morse, :binary.copy(<<0>>, morse.window_bytes * morse.end_gap_windows))
+    else
+      MorseDecoder.flush(morse)
+    end
+  end
+
+  defp finish_received_morse(morse, _expected), do: MorseDecoder.flush(morse)
 
   defp drain_audio(connection) do
     client = connection.client

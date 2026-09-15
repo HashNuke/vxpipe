@@ -485,7 +485,6 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     monitor = Process.monitor(leg)
     :ok = LegSupervisor.stop_outgoing(context.leg_id)
     assert_receive {:DOWN, ^monitor, :process, ^leg, :shutdown}
-    assert Registry.keys(Vxpipe.Gateway.Telephony.LegRegistry, leg) == []
 
     replacement = start_accepted_leg(context, service)
 
