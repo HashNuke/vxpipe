@@ -30,13 +30,16 @@ reader is deleted. Checkpoint 1 is implemented and verified: all five root gates
 1,489 tests, zero failures and 30 exclusions (seed 235296, concurrency four). A destination-progress
 recipient bug found during verification was fixed in a separate tested commit. Earlier intermittent
 native audio/cleanup observations remain documented; their cause is not established by this pass.
-Final independent implementation review remains open after a reviewer usage limit.
+Final independent review of the complete milestone remains open.
 Checkpoint 2 now has database-backed opening/human-entry coverage, private opening output,
 and tenant/binding cache isolation with revocation checks. A separately tested
 [policy-shutdown fix](../room-policy-failure-ownership.md) resolves missing transfer failure
-progress/history during adopted speech loss. All five root gates pass: 1,510 tests, zero failures,
-30 exclusions (seed 235296). Native audio passes this run; its earlier timing cause remains
-unexplained. The remaining AI/speech credential-reader audit and focused checks are open.
+progress/history during adopted speech loss. New briefing and replacement source speech clients
+now resolve fresh tenant credentials; four focused cases and a 66-test regression group pass.
+GPT 6 Astra xhigh reviewed this reader fix without blocking findings. All five root gates pass:
+1,513 tests, zero failures, 30 exclusions (seed 235296). The
+[reader inventory](../credential-reader-boundaries.md) keeps legacy global readers and remaining
+destination binding tests open. Earlier native timing observations remain unexplained.
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

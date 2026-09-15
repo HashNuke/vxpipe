@@ -566,10 +566,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp start_recovery(pending, cause, state) do
-    source_text_to_speech =
-      if state.text_to_speech_capability == nil, do: state.text_to_speech_runtime
+    restore_speech? =
+      state.text_to_speech_capability == nil and state.text_to_speech_runtime != nil
 
-    case Vxpipe.CallEngine.RoomTransferSupervisor.recover(pending, source_text_to_speech) do
+    case Vxpipe.CallEngine.RoomTransferSupervisor.recover(
+           pending,
+           state.participant_transfer_runtime,
+           restore_speech?
+         ) do
       {:ok, task, deadline} ->
         timer =
           Process.send_after(

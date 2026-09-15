@@ -354,6 +354,10 @@ Depends on checkpoint 1.
 - [ ] Inventory the existing opening, connection STT, agent activation, destination preparation,
   private briefing and source-restoration readers. Confirm each receives the host-injected tenant
   credential source; remove any remaining profile/global/env reader or merge.
+  - [x] Record the [reader inventory](../credential-reader-boundaries.md) and independently review
+    the planned construction paths.
+  - [ ] Remove reachable legacy `CreateRoom` global model/TTS/STT credential readers while
+    preserving credential-free embedded operation.
 - [x] Verify the opening reader with persisted tenant credentials, independent selection,
   tenant/binding cache isolation and rejection of an unavailable binding.
 - [ ] Add focused tests at remaining reader/adapter boundaries for the selected tenant/provider/name,
@@ -361,6 +365,8 @@ Depends on checkpoint 1.
   later destination's missing binding blocks definition save before rows are written.
 - [ ] Verify a new activation reads the DB credential and lookup failure enters the existing
   preparation-failure path before any provider request. Reuse the existing source-failure contract.
+  - [x] Resolve fresh source speech credentials before private briefing and source replacement;
+    verify transport authentication and no new transport when the binding is unavailable.
 - [ ] Check that selections, cache identity, prepared plans and public error/history projections
   contain safe references, never credential payloads. Record the reader inventory and evidence.
 
@@ -580,7 +586,7 @@ Implementation boxes stay unchecked until their runnable exits and failure cases
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
 | 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
-| 2 — AI/speech credential readers | Opening reader verified; remaining reader audit/tests pending | Four database-backed opening checks and 23 Engine opening tests pass. The playback gate now labels all opening frames private; cache reuse is scoped to tenant/binding and cannot rescue a revoked opening credential. Tenant identifier correction is committed separately. All five root gates pass: 1,510 tests, zero failures, 30 excluded (seed 235296), after a separate [policy-shutdown fix](../room-policy-failure-ownership.md) for missing transfer failure progress/history. Native audio passes this run; its earlier timing cause remains unexplained. See [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md). |
+| 2 — AI/speech credential readers | Opening and source speech readers verified; legacy global readers and destination checks pending | Four database-backed opening checks and 23 Engine opening tests pass; cache reuse is tenant/binding-scoped and cannot rescue an unavailable credential. Briefing and replacement source speech clients now resolve fresh credentials: four focused cases and the 66-test regression group pass. Independent GPT 6 Astra xhigh review found no blocking issues in this fix. All five root gates pass: 1,513 tests, zero failures, 30 excluded (seed 235296). Earlier native timing observations remain unexplained. See [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md), [reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md) and the separate [policy-shutdown fix](../room-policy-failure-ownership.md). |
 | 3 — Telnyx credential readers | Not started | Pending |
 | 4 — Twilio credential readers | Not started | Pending |
 | 5 — Existing provider credential integrations | Not started | Pending |

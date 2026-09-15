@@ -5,6 +5,10 @@ defmodule Vxpipe.CallEngine.TestTenantCredentialSource do
   alias Vxpipe.CallEngine.ProviderCredential
 
   @impl true
+  def resolve({:store, observer, store}, tenant_id, provider, name) do
+    resolve({observer, Agent.get(store, & &1)}, tenant_id, provider, name)
+  end
+
   def resolve({:await, observer, bindings}, tenant_id, provider, name) do
     send(observer, {:tenant_credential_resolver_waiting, self()})
 

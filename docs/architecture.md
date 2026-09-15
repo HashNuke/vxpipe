@@ -1385,6 +1385,11 @@ Call Variables projection. A dedicated TTS capability uses the retained source-a
 the bounded reason and optional fixed notice only to the destination output sink. It does not reuse
 the source connection or publish the private briefing as ordinary room transcript history.
 
+The voice selection is pinned; a new briefing or replacement source speech client resolves its
+tenant credential again inside the existing preparation worker. Running clients keep their
+initialized configuration. Missing credentials fail before new client construction; see the
+[credential reader boundaries](credential-reader-boundaries.md).
+
 The protocol-neutral `ParticipantTransferControl` command accepts only `media_ready` or `accept`
 from the exact attached destination process, actor, participant, connection, room incarnation, and
 attempt. Early acceptance is remembered but cannot commit before usable media and completed output

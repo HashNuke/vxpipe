@@ -659,105 +659,153 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reply_to_next_request("The transfer could not be completed.")
   end
 
-  test "restores a lost source speech capability once after preparation fails" do
-    configure_text_to_speech()
+  for available? <- [true, false] do
+    @restoration_credential_available available?
+    test "source speech restoration rechecks credentials when available=#{@restoration_credential_available}" do
+      configure_text_to_speech()
 
-    plan =
-      compile_plan(
-        billing_model: "test:blocked-unavailable",
-        text_to_speech: true
+      binding = {"tenant-transfer", "deepgram", "default"}
+
+      credentials =
+        start_supervised!(
+          {Agent, fn -> %{binding => %{"api_key" => "source-private-marker"}} end}
+        )
+
+      plan =
+        compile_plan(
+          billing_model: "test:blocked-unavailable",
+          text_to_speech: true
+        )
+
+      caller = Map.fetch!(plan.participants, "caller")
+      reception = Map.fetch!(plan.participants, "reception")
+      billing = Map.fetch!(plan.participants, "billing")
+
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+                 archive: archive_options(),
+                 credential_source:
+                   {Vxpipe.CallEngine.TestTenantCredentialSource, {:store, self(), credentials}}
+               )
+
+      assert_receive {:test_tts_transport_started, source_transport, connection}, 2_000
+      assert connection.headers == [{"Authorization", "Token source-private-marker"}]
+
+      TestTextToSpeechTransport.deliver_control(
+        source_transport,
+        ~s({"type":"Connected","request_id":"initial-source-ready"})
       )
 
-    caller = Map.fetch!(plan.participants, "caller")
-    reception = Map.fetch!(plan.participants, "reception")
-    billing = Map.fetch!(plan.participants, "billing")
+      attach_caller(plan, room, caller)
 
-    assert {:ok, room} =
-             Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+      assert :ok =
+               CallEngine.send_text(send_command(plan, room, caller, "Please try billing."))
 
-    assert_receive {:test_tts_transport_started, source_transport, _connection}, 2_000
+      assert_receive {:test_agent_runtime_stream, source_provider, _source_request}, 2_000
 
-    TestTextToSpeechTransport.deliver_control(
-      source_transport,
-      ~s({"type":"Connected","request_id":"initial-source-ready"})
-    )
+      assert {:ok, transfer_call} =
+               ToolCall.new(
+                 id: "restore-source-after-failure",
+                 name: "transfer",
+                 arguments: %{"destination" => "billing"}
+               )
 
-    attach_caller(plan, room, caller)
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+      send(source_provider, {:test_agent_runtime_response, {:ok, response}})
 
-    assert :ok =
-             CallEngine.send_text(send_command(plan, room, caller, "Please try billing."))
+      assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
 
-    assert_receive {:test_agent_runtime_stream, source_provider, _source_request}, 2_000
+      authority = room_authority(plan)
+      %{text_to_speech_capability: %{pid: source_capability}} = :sys.get_state(authority)
+      source_monitor = Process.monitor(source_capability)
 
-    assert {:ok, transfer_call} =
-             ToolCall.new(
-               id: "restore-source-after-failure",
-               name: "transfer",
-               arguments: %{"destination" => "billing"}
-             )
+      TestTextToSpeechTransport.disconnect(source_transport, :test_disconnect)
+      assert_receive {:DOWN, ^source_monitor, :process, ^source_capability, _reason}, 2_000
+      assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
 
-    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
-    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+      authority_monitor = Process.monitor(authority)
 
-    assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
+      if @restoration_credential_available do
+        Agent.update(credentials, &Map.put(&1, binding, %{"api_key" => "current-private-marker"}))
+      else
+        Agent.update(credentials, &Map.delete(&1, binding))
+      end
 
-    authority = room_authority(plan)
-    %{text_to_speech_capability: %{pid: source_capability}} = :sys.get_state(authority)
-    source_monitor = Process.monitor(source_capability)
+      send(blocked_preparer, :release_test_agent_runtime_model)
 
-    TestTextToSpeechTransport.disconnect(source_transport, :test_disconnect)
-    assert_receive {:DOWN, ^source_monitor, :process, ^source_capability, _reason}, 2_000
-    assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
+      if @restoration_credential_available do
+        assert_receive {:test_tts_transport_started, restored_transport, restored_connection},
+                       2_000
 
-    send(blocked_preparer, :release_test_agent_runtime_model)
+        assert restored_connection.headers == [{"Authorization", "Token current-private-marker"}]
 
-    assert_receive {:test_tts_transport_started, restored_transport, _connection}, 2_000
+        refute_receive {:vxpipe_event,
+                        %ToolCallFailed{tool_call_id: "restore-source-after-failure"}},
+                       50
 
-    refute_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "restore-source-after-failure"}},
-                   50
+        TestTextToSpeechTransport.deliver_control(
+          restored_transport,
+          ~s({"type":"Connected","request_id":"restored-source"})
+        )
 
-    TestTextToSpeechTransport.deliver_control(
-      restored_transport,
-      ~s({"type":"Connected","request_id":"restored-source"})
-    )
+        assert_receive {:vxpipe_event,
+                        %ToolCallFailed{
+                          tool_call_id: "restore-source-after-failure",
+                          name: "transfer",
+                          reason: :tool_failed
+                        }},
+                       2_000
 
-    assert_receive {:vxpipe_event,
-                    %ToolCallFailed{
-                      tool_call_id: "restore-source-after-failure",
-                      name: "transfer",
-                      reason: :tool_failed
-                    }},
-                   2_000
+        assert_archived_transfer(
+          :participant_transfer_started,
+          reception,
+          caller,
+          billing,
+          "restore-source-after-failure",
+          %{}
+        )
 
-    assert_archived_transfer(
-      :participant_transfer_started,
-      reception,
-      caller,
-      billing,
-      "restore-source-after-failure",
-      %{}
-    )
+        assert_archived_transfer(
+          :participant_transfer_failed,
+          reception,
+          caller,
+          billing,
+          "restore-source-after-failure",
+          %{
+            "cause" => "destination_plan_unavailable",
+            "outcome" => "failed",
+            "restoration" => "completed"
+          }
+        )
 
-    assert_archived_transfer(
-      :participant_transfer_failed,
-      reception,
-      caller,
-      billing,
-      "restore-source-after-failure",
-      %{
-        "cause" => "destination_plan_unavailable",
-        "outcome" => "failed",
-        "restoration" => "completed"
-      }
-    )
+        %{text_to_speech_capability: %{pid: restored_capability}} = :sys.get_state(authority)
+        restored_monitor = Process.monitor(restored_capability)
+        TestTextToSpeechTransport.disconnect(restored_transport, :test_disconnect)
 
-    %{text_to_speech_capability: %{pid: restored_capability}} = :sys.get_state(authority)
-    restored_monitor = Process.monitor(restored_capability)
-    TestTextToSpeechTransport.disconnect(restored_transport, :test_disconnect)
+        assert_receive {:DOWN, ^restored_monitor, :process, ^restored_capability, _reason}, 2_000
+        assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
+        refute_receive {:test_tts_transport_started, _third_transport, _connection}, 100
+      else
+        assert_receive {:DOWN, ^authority_monitor, :process, ^authority,
+                        :handoff_recovery_failed},
+                       2_000
 
-    assert_receive {:DOWN, ^restored_monitor, :process, ^restored_capability, _reason}, 2_000
-    assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
-    refute_receive {:test_tts_transport_started, _third_transport, _connection}, 100
+        refute_receive {:test_tts_transport_started, _, _}
+
+        assert_archived_transfer(
+          :participant_transfer_failed,
+          reception,
+          caller,
+          billing,
+          "restore-source-after-failure",
+          %{
+            "cause" => "destination_plan_unavailable",
+            "outcome" => "failed",
+            "restoration" => "failed"
+          }
+        )
+      end
+    end
   end
 
   test "source restoration stays asynchronous and closes the room when required speech times out" do

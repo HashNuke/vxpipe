@@ -79,6 +79,59 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     :ok
   end
 
+  for available? <- [true, false] do
+    @briefing_credential_available available?
+    test "private briefing rechecks its source credential when available=#{@briefing_credential_available}" do
+      plan = compile_plan(speech_credential_name: "source-voice", wait_sounds: nil)
+      binding = {plan.tenant_id, "deepgram", "source-voice"}
+
+      store =
+        start_supervised!(
+          {Agent, fn -> %{binding => %{"api_key" => "source-private-marker"}} end}
+        )
+
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+                 credential_source:
+                   {Vxpipe.CallEngine.TestTenantCredentialSource, {:store, self(), store}}
+               )
+
+      assert_receive {:test_tts_transport_started, source_tts, source_connection}, 2_000
+      assert source_connection.headers == [{"Authorization", "Token source-private-marker"}]
+      assert_received {:tenant_credential_resolved, _, "deepgram", "source-voice"}
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller = Map.fetch!(plan.participants, "caller")
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", sink)
+
+      if @briefing_credential_available do
+        Agent.update(store, &Map.put(&1, binding, %{"api_key" => "current-private-marker"}))
+      else
+        Agent.update(store, &Map.delete(&1, binding))
+      end
+
+      submit_transfer(plan, room, caller, "credential-reader")
+      tenant_id = plan.tenant_id
+      assert_receive {:tenant_credential_resolved, ^tenant_id, "deepgram", "source-voice"}, 2_000
+
+      if @briefing_credential_available do
+        assert_receive {:test_tts_transport_started, _briefing, connection}, 2_000
+        assert connection.headers == [{"Authorization", "Token current-private-marker"}]
+      else
+        assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "credential-reader"}}, 2_000
+        refute_receive {:test_tts_transport_started, _, _}
+        state = :sys.get_state(room_authority(plan))
+        assert state.text_to_speech_capability != nil
+        assert state.pending_participant_transfer == nil
+      end
+    end
+  end
+
   for failure <- [:kill, :unavailable] do
     @private_speech_failure failure
     @tag capture_log: true
@@ -2075,6 +2128,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                        text_to_speech: %{
                          provider: "deepgram",
                          model: "flux-test-voice",
+                         credential_name:
+                           Keyword.get(options, :speech_credential_name, "default"),
                          options: %{
                            encoding: "linear16",
                            sample_rate: 48_000
@@ -2169,6 +2224,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
   end
 
   defp begin_transfer(plan, room, caller, tool_call_id) do
+    submit_transfer(plan, room, caller, tool_call_id)
+    await_transfer_preparation(room_authority(plan), System.monotonic_time(:millisecond) + 2_000)
+  end
+
+  defp submit_transfer(plan, room, caller, tool_call_id) do
     assert :ok =
              Vxpipe.CallEngine.TestTransferConnection.send_text(
                send_command(plan, room, caller, "Please connect me to human support.")
@@ -2188,7 +2248,6 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
-    await_transfer_preparation(room_authority(plan), System.monotonic_time(:millisecond) + 2_000)
   end
 
   defp await_transfer_preparation(authority, deadline) do

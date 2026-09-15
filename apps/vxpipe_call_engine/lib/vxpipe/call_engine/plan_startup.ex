@@ -524,6 +524,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     )
   end
 
+  @doc false
+  def participant_text_to_speech(%ResolvedCallPlan{} = plan, receiver, options) do
+    text_to_speech_runtime(plan, receiver, options)
+  end
+
   defp text_to_speech_runtime(plan, receiver, options) do
     text_to_speech_runtime(
       plan,

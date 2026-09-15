@@ -95,7 +95,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     Task.Supervisor.async(via(incarnation_id), work)
   end
 
-  def recover(pending, source_text_to_speech) do
+  def recover(pending, %Runtime{} = runtime, restore_speech?) when is_boolean(restore_speech?) do
     deadline =
       System.monotonic_time(:millisecond) + @recovery_timeout_ms
 
@@ -109,7 +109,9 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     task =
       Task.Supervisor.async_nolink(via(scope.incarnation_id), fn ->
         Phase.run(scope, fn ->
-          with {:ok, capability} <-
+          with {:ok, source_text_to_speech} <-
+                 recovery_speech(runtime, pending.request, restore_speech?),
+               {:ok, capability} <-
                  Startup.prepare_text_to_speech(
                    source_text_to_speech,
                    pending.request.source_participant_id,
@@ -126,6 +128,11 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   catch
     :exit, _reason -> {:error, :unavailable}
   end
+
+  defp recovery_speech(_runtime, _request, false), do: {:ok, nil}
+
+  defp recovery_speech(runtime, request, true),
+    do: Runtime.source_text_to_speech(runtime, request)
 
   defp via(incarnation_id) do
     {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:transfer_supervisor, incarnation_id}}}

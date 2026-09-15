@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanDestinationPr
     with %Vxpipe.CallEngine.TextToSpeechRuntime{} <- source_text_to_speech,
          {:ok, %HumanDestination{} = destination} <-
            PlanStartup.human_destination(runtime.plan, participant, runtime.startup_options),
+         {:ok, source_text_to_speech} <- Runtime.source_text_to_speech(runtime, request),
          {:ok, outbound_leg} <-
            prepare_connection(runtime, participant, request.incarnation_id, deadline_ms) do
       prepare_text_to_speech(
@@ -44,9 +45,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanDestinationPr
         outbound_leg
       )
     else
-      nil -> {:error, :destination_text_to_speech_unavailable}
-      {:error, %Vxpipe.CallEngine.Error{}} -> {:error, :destination_plan_unavailable}
-      {:error, _reason} -> {:error, :destination_connection_unavailable}
+      nil ->
+        {:error, :destination_text_to_speech_unavailable}
+
+      {:error, :source_text_to_speech_unavailable} ->
+        {:error, :destination_text_to_speech_unavailable}
+
+      {:error, %Vxpipe.CallEngine.Error{}} ->
+        {:error, :destination_plan_unavailable}
+
+      {:error, _reason} ->
+        {:error, :destination_connection_unavailable}
     end
   end
 

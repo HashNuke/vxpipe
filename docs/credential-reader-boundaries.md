@@ -1,0 +1,61 @@
+# Credential reader boundaries
+
+## Decision
+
+The call plan pins provider, model, options and credential binding name. Each new preparation
+resolves that binding through the host-injected tenant credential source. An initialized client
+keeps its configuration for its owned lifetime. Starting a separate client for private briefing
+or replacing a lost speech client requires a fresh lookup, even when the voice selection is the
+same as the source agent's.
+
+Source speech resolution uses the plan's source participant selection and the current request's
+activation ID. The latter matters when an agent has returned to the call with a new activation.
+The lookup runs inside the existing bounded preparation/restoration worker. Missing credentials
+follow existing preparation failure handling before a new speech transport or phone dial starts.
+When the source speech client is still present, recovery reuses it and performs no new lookup.
+
+This changes credential acquisition only. Existing transfer, media, readiness and recovery
+protocols retain their ownership and deadlines. It implements the
+[credential milestone](milestones/tenant-provider-credentials-and-platform-configuration.md)
+under the [approved scope correction](credential-cutover-scope.md).
+
+## Reader inventory
+
+| Construction boundary | Credential path | Evidence/status |
+| --- | --- | --- |
+| Initial agent model | `PlanStartup.new` → `AgentActivation` → `AgentModel` → `CredentialSource` | Initial inline activation and persisted tenant voice checks. |
+| Later agent activation | `DestinationPreparer` → `PlanStartup.agent_destination` → the same model/speech resolvers | Injected startup options propagate; named destination/whole-selection coverage remains pending. |
+| Initial and destination TTS | `PlanStartup` → `resolve_provider` → `CredentialSource` | Initial inline activation checks; source briefing/restoration corrections below. |
+| Independent opening TTS | `PlanStartup.opening_runtime` → `resolve_provider` | Four persisted opening cases, tenant/binding cache separation and unavailable-binding rejection. |
+| Connection STT | `ConnectionSpeechPreparation` → `PlanStartup.connection_speech_to_text` | Fresh source, bounded worker cancellation and persisted credential recheck tests. |
+| Private destination STT | `PlanStartup.human_destination` → `resolve_provider` | Resolves in destination preparation; that attempt owns the configuration used by private speech startup. |
+| Private briefing TTS | `HumanDestinationPreparer` → transfer `Runtime.source_text_to_speech` → `PlanStartup.participant_text_to_speech` | Fresh named source binding before new transport/dial; missing binding preserves the existing source client. |
+| Source TTS replacement | `RoomTransferSupervisor.recover` → transfer `Runtime.source_text_to_speech` | Fresh lookup within the existing 750 ms budget; unavailable binding starts no transport and enters existing terminal failure handling. |
+| Hosted persistence bridge | Calls `ProviderCredentialSource` → `DefinitionCredentials` → encrypted repository | Tenant/provider/name/status/auth validation; persistence tests verify DB reads and safe errors. |
+| Legacy embedded `CreateRoom` | `Startup.start_text_capability` / `start_configured_text_to_speech`; `RoomSupervisor` application STT branch | **Pending removal:** reachable global hosted model/TTS/STT options bypass the DB source. Preserve credential-free embedded operation when removing them. |
+
+## Rejected alternatives and remaining work
+
+- Copying the source client's decrypted configuration into a new client skips current tenant
+  credential validation. Keep its non-secret selection and resolve the selected binding again.
+- Reusing a live client during failure handling is valid. Adding database reads to media frames,
+  speech chunks or each use of an already prepared configuration is unnecessary.
+- Database calls in Room Authority would block control processing. Keep lookup in the existing
+  worker and retain its existing cancellation/deadline contract.
+- No upstream key rotation, verification overlap, refresh schedule or new call-flow feature is
+  introduced. Synthetic credential changes in tests distinguish a fresh lookup from a copied
+  configuration; they do not prescribe a provider credential lifecycle.
+
+Checkpoint 2 remains partial. Its remaining work includes removing the reachable legacy embedded
+global readers, covering destination-only missing credentials before definition writes, and
+finishing named destination/whole-selection boundary coverage. Carrier readers and remaining
+supported provider adapters stay in their own checkpoints.
+
+## Verification
+
+The briefing regressions first failed because no second lookup occurred and the new transport
+received the cached key. The restoration regression first failed because the replacement transport
+also received that cached key. Four focused cases now cover fresh available credentials and missing
+credentials for both paths. The changed code has no secret-bearing public fields or new storage.
+Full regression and independent review evidence is recorded in the
+[reader labnotes](../labnotes/20260915-2203-audit-credential-readers.md).
