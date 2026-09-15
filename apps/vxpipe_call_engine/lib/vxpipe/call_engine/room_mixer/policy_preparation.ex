@@ -234,14 +234,18 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
     pending = state.pending_policy
 
     if pending.monitor == monitor or
-         PreparedSubscriptions.owns_monitor?(pending.subscriptions, monitor) or
-         not PreparedSubscriptions.valid?(
-           state,
-           pending.subscriptions,
-           pending.candidate.snapshot
-         ) or not PreparedRecordings.valid?(state, pending.recordings, pending.candidate.snapshot),
-       do: fail(state),
-       else: state
+         not PreparedRecordings.valid?(state, pending.recordings, pending.candidate.snapshot) do
+      fail(state)
+    else
+      subscriptions = PreparedSubscriptions.remove_monitor(pending.subscriptions, monitor)
+      state = %{state | pending_policy: %{pending | subscriptions: subscriptions}}
+
+      if not PreparedSubscriptions.valid?(state, subscriptions, pending.candidate.snapshot) do
+        send(pending.owner, {:vxpipe_mixer_policy_failed, self(), pending.token})
+      end
+
+      state
+    end
   end
 
   defp selection(%{pending_policy: %{token: token} = pending} = state, token) do

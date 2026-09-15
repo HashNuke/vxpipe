@@ -46,7 +46,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     do: GenServer.call(server, {:validate_candidate, candidate}, timeout)
 
   @doc "Installs the exact prospective membership within the original absolute phase deadline."
-  @spec commit_candidate(GenServer.server(), Candidate.t(), integer(), [pid()]) ::
+  @spec commit_candidate(GenServer.server(), Candidate.t(), integer(), [pid() | {pid(), pid()}]) ::
           {:ok, Snapshot.t()}
           | {:error,
              :invalid_deadline
@@ -67,7 +67,16 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   @spec register_enforcer(GenServer.server(), pid(), timeout()) ::
           {:ok, Snapshot.t()} | {:error, :already_registered | :enforcement_failed}
   def register_enforcer(server, enforcer, timeout \\ @call_timeout) when is_pid(enforcer) do
-    GenServer.call(server, {:register_enforcer, enforcer}, timeout)
+    GenServer.call(server, {:register_enforcer, enforcer, nil}, timeout)
+  end
+
+  @doc "Registers an enforcer required only while its exact transport connection exists."
+  @spec register_connection_enforcer(GenServer.server(), pid(), pid(), timeout()) ::
+          {:ok, Snapshot.t()}
+          | {:error, :already_registered | :connection_unavailable | :enforcement_failed}
+  def register_connection_enforcer(server, enforcer, connection, timeout \\ @call_timeout)
+      when is_pid(enforcer) and is_pid(connection) do
+    GenServer.call(server, {:register_enforcer, enforcer, connection}, timeout)
   end
 
   @spec admit(GenServer.server(), String.t(), timeout()) ::
@@ -101,6 +110,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
          contributions: %{},
          enforcement_timeout_ms: enforcement_timeout_ms,
          enforcers: %{},
+         connection_monitors: %{},
          snapshot: %Snapshot{
            revision: 0,
            present_participant_ids: MapSet.new(),
@@ -137,18 +147,22 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     end
   end
 
-  def handle_call({:register_enforcer, enforcer}, _from, state) do
-    if Map.has_key?(state.enforcers, enforcer) do
-      {:reply, {:error, :already_registered}, state}
-    else
-      case Enforcer.apply(enforcer, state.snapshot, state.enforcement_timeout_ms) do
-        :ok ->
-          enforcers = Map.put(state.enforcers, enforcer, Process.monitor(enforcer))
-          {:reply, {:ok, state.snapshot}, %{state | enforcers: enforcers}}
+  def handle_call({:register_enforcer, enforcer, connection}, _from, state) do
+    cond do
+      Map.has_key?(state.enforcers, enforcer) ->
+        {:reply, {:error, :already_registered}, state}
 
-        {:error, _reason} ->
-          {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
-      end
+      connection != nil and not Process.alive?(connection) ->
+        {:reply, {:error, :connection_unavailable}, state}
+
+      true ->
+        case Enforcer.apply(enforcer, state.snapshot, state.enforcement_timeout_ms) do
+          :ok ->
+            {:reply, {:ok, state.snapshot}, monitor_enforcer(enforcer, connection, state)}
+
+          {:error, _reason} ->
+            {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
+        end
     end
   end
 
@@ -174,14 +188,59 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   @impl true
-  def handle_info({:DOWN, monitor, :process, enforcer, reason}, state) do
-    case Map.fetch(state.enforcers, enforcer) do
-      {:ok, ^monitor} ->
-        {:stop, {:media_policy_enforcer_unavailable, enforcer, reason}, state}
+  def handle_info({:DOWN, monitor, :process, process, reason}, state) do
+    if Map.get(state.connection_monitors, process) == monitor do
+      {:noreply, retire_connection(process, state)}
+    else
+      case Map.get(state.enforcers, process) do
+        %{monitor: ^monitor, connection: connection} ->
+          if connection != nil and not Process.alive?(connection),
+            do: {:noreply, retire_connection(connection, state)},
+            else: {:stop, {:media_policy_enforcer_unavailable, process, reason}, state}
 
-      _unknown ->
-        {:noreply, state}
+        _unknown ->
+          {:noreply, state}
+      end
     end
+  end
+
+  defp monitor_enforcer(enforcer, connection, state) do
+    if Map.has_key?(state.enforcers, enforcer) do
+      state
+    else
+      connection_monitors =
+        if connection == nil,
+          do: state.connection_monitors,
+          else:
+            Map.put_new_lazy(state.connection_monitors, connection, fn ->
+              Process.monitor(connection)
+            end)
+
+      registration = %{monitor: Process.monitor(enforcer), connection: connection}
+
+      %{
+        state
+        | enforcers: Map.put(state.enforcers, enforcer, registration),
+          connection_monitors: connection_monitors
+      }
+    end
+  end
+
+  defp retire_connection(connection, state) do
+    {monitor, connection_monitors} = Map.pop(state.connection_monitors, connection)
+    if monitor, do: Process.demonitor(monitor, [:flush])
+
+    enforcers =
+      Map.reject(state.enforcers, fn {_enforcer, registration} ->
+        if registration.connection == connection do
+          Process.demonitor(registration.monitor, [:flush])
+          true
+        else
+          false
+        end
+      end)
+
+    %{state | enforcers: enforcers, connection_monitors: connection_monitors}
   end
 
   defp install_candidate(snapshot, deadline, new_enforcers, state) do
@@ -200,7 +259,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   defp retain_candidate(enforcers, state) do
-    if Enum.all?(enforcers, &Map.has_key?(state.enforcers, &1)),
+    if Enum.all?(enforcers, &Map.has_key?(state.enforcers, enforcer_pid(&1))),
       do: {:reply, {:ok, state.snapshot}, state},
       else: {:reply, {:error, :unchanged_candidate}, state}
   end
@@ -208,19 +267,19 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   defp enforce_candidate(snapshot, deadline, remaining, new_enforcers, state) do
     timeout = min(remaining, state.enforcement_timeout_ms)
 
-    enforcers =
-      Enum.reduce(new_enforcers, state.enforcers, fn enforcer, registered ->
-        Map.put_new_lazy(registered, enforcer, fn -> Process.monitor(enforcer) end)
+    state =
+      Enum.reduce(new_enforcers, state, fn registration, state ->
+        {enforcer, connection} = enforcer_connection(registration)
+        monitor_enforcer(enforcer, connection, state)
       end)
 
-    result = Barrier.apply(enforcers, snapshot, timeout)
+    result = Barrier.apply(state.enforcers, snapshot, timeout)
 
     if result == :ok and System.monotonic_time(:millisecond) < deadline do
       contributions =
         Map.take(state.participant_policies, MapSet.to_list(snapshot.present_participant_ids))
 
-      {:reply, {:ok, snapshot},
-       %{state | contributions: contributions, snapshot: snapshot, enforcers: enforcers}}
+      {:reply, {:ok, snapshot}, %{state | contributions: contributions, snapshot: snapshot}}
     else
       # Some enforcers may have adopted already. An expired/failed commit cannot be recovered here.
       {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
@@ -228,12 +287,24 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   defp validate_enforcers(enforcers) when is_list(enforcers) do
-    if Enum.all?(enforcers, &(is_pid(&1) and &1 != self())),
+    if Enum.all?(enforcers, &valid_enforcer?/1),
       do: :ok,
       else: {:error, :invalid_enforcers}
   end
 
   defp validate_enforcers(_enforcers), do: {:error, :invalid_enforcers}
+
+  defp valid_enforcer?({enforcer, connection}),
+    do:
+      is_pid(enforcer) and enforcer != self() and is_pid(connection) and
+        Process.alive?(connection)
+
+  defp valid_enforcer?(enforcer), do: is_pid(enforcer) and enforcer != self()
+
+  defp enforcer_connection({enforcer, connection}), do: {enforcer, connection}
+  defp enforcer_connection(enforcer), do: {enforcer, nil}
+
+  defp enforcer_pid(registration), do: registration |> enforcer_connection() |> elem(0)
 
   defp commit(contributions, state) do
     present = contributions |> Map.keys() |> MapSet.new()

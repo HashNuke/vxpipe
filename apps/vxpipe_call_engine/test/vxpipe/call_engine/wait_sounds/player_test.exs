@@ -175,6 +175,36 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     assert_receive {:vxpipe_wait_playback, ^player, "cue-drain", :completed}
   end
 
+  for stage <- [:push, :playback] do
+    test "loss of one wait sink during #{stage} keeps the surviving sink on the same cursor" do
+      second = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
+      pcm = for i <- 0..9, into: <<>>, do: :binary.copy(<<i::little-signed-16>>, 960)
+
+      {player, first} =
+        start_player(asset(pcm), "surviving",
+          extra_sink: second,
+          block_output: unquote(stage) == :push
+        )
+
+      assert_receive {:test_audio_output, ^first, _}
+      assert_receive {:test_audio_output, ^second, frame}
+      assert frame.payload == :binary.copy(<<0::little-signed-16>>, 960)
+      if unquote(stage) == :playback, do: assert_receive({:test_audio_output_finish, ^first, _})
+      assert_receive {:test_audio_output_finish, ^second, _}
+      monitor = Process.monitor(first)
+      Process.exit(first, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^first, _}
+      complete(second)
+      assert_receive {:test_audio_output, ^second, next}
+      assert next.payload == :binary.copy(<<1::little-signed-16>>, 960)
+      assert_receive {:test_audio_output_finish, ^second, _}
+      Player.stop(player)
+      _ = :sys.get_state(player)
+      complete(second)
+      assert_receive {:vxpipe_wait_playback, ^player, "surviving", :stopped}
+    end
+  end
+
   defp observe_pressure do
     token = make_ref()
     owner = self()
@@ -193,7 +223,12 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
   end
 
   defp start_player(asset, episode, options \\ []) do
-    sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
+    sink =
+      start_supervised!(
+        {TestAudioOutputSink,
+         observer: self(), block_output: Keyword.get(options, :block_output, false)},
+        id: make_ref()
+      )
 
     sinks =
       case Keyword.get(options, :extra_sink) do

@@ -92,3 +92,35 @@ the room closes without reporting transfer success; it cannot retry an uncertain
 The coordinator also validates the saved room binding and policy candidate before publishing
 completion, covering a change after the worker returns. Provider probes stay outside the room
 authority. See the [release-fencing labnote](../labnotes/20260915-0203-handoff-release-fencing.md).
+
+## Connection-owned enforcers
+
+An enforcer's lifetime follows the resource it protects. Mixer, transcript router and recording
+enforcers remain critical for the room lifetime. Connection speech and media enforcers remain
+critical only while their exact transport connection exists. The authorized attachment records
+that PID; registering through a temporary helper does not change the owner. Private destination
+enforcers acquire the same connection lifetime when the candidate is committed.
+
+Policy Authority monitors connection owners and retires their registrations on departure. If an
+enforcer's DOWN arrives first, it checks the exact owner's lifetime before deciding whether the
+room must close. The enforcement barrier makes the same check before applying a policy and after
+a failed acknowledgement, so a departure during application does not prevent surviving listeners
+from installing the revision. Existing connection supervision owns media teardown. No permission
+or capability restart is requested for an unaffected connection.
+
+Treating every connection enforcer as a permanent room resource was rejected after a native
+monitor disconnect shut down the entire room. Ignoring all normal/shutdown exits was also rejected:
+an enforcer failure on a live connection must still close the room. Cleanup in transport
+`terminate/2` cannot establish this contract because it is best effort and races child shutdown.
+
+Owning regressions cover departure before and during policy application, retained live-connection
+failure handling and private adoption. Native reconnection and checkpoint evidence are recorded in
+the [listener-reconnection labnote](../labnotes/20260915-0730-transfer-listener-reconnection.md).
+
+Mixer preparation also retains unrelated subscriptions when a subscriber exits. Its missing
+selection makes readiness fail and prevents adoption until the same owner reconciles the requested
+set. Removing that selection preserves the lease token, other subscription handles and original
+deadline. A still-requested dead subscriber is rejected. Phase-owner loss, expiry and required
+recording loss still retire the whole preparation. Immediately cleaning every subscription on one
+listener's departure was rejected because it cancelled healthy private queues and prevented the
+existing transfer from refreshing its audience.

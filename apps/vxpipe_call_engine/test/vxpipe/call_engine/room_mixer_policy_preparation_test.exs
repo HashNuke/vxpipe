@@ -243,6 +243,50 @@ defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
     end
   end
 
+  for live? <- [true, false] do
+    test "reconciles a departed #{if live?, do: "live", else: "private"} subscription without replacing its peers" do
+      context = start_context()
+      subscriber = start_supervised!({Agent, fn -> :listener end}, id: :departing_listener)
+
+      departing =
+        Keyword.put(subscription_options(context, context.receiver), :subscriber, subscriber)
+
+      retained = subscription_options(context, context.joining)
+      if unquote(live?), do: assert({:ok, _} = RoomMixer.subscribe(context.mixer, departing))
+      options = Keyword.put(context.options, :subscriptions, [departing, retained])
+      assert {:ok, prepared} = RoomMixer.prepare_policy(context.mixer, context.candidate, options)
+      handle = Map.fetch!(prepared.subscriptions, context.joining)
+      assert {:ok, resource, :ready} = Subscription.readiness(handle)
+      mixer = context.mixer
+      token = prepared.token
+
+      stop_supervised!(:departing_listener)
+      assert_receive {:vxpipe_mixer_policy_failed, ^mixer, ^token}
+
+      assert {:error, :policy_not_ready} =
+               Enforcer.apply(mixer, context.candidate.snapshot, 1_000)
+
+      assert {:error, :subscriber_unavailable} =
+               RoomMixer.prepare_policy(mixer, context.candidate, options)
+
+      assert {:ok, refreshed} =
+               RoomMixer.prepare_policy(
+                 mixer,
+                 context.candidate,
+                 Keyword.put(options, :subscriptions, [retained])
+               )
+
+      assert refreshed.token == token
+      assert refreshed.subscriptions == %{context.joining => handle}
+      assert {:ok, ^resource, :ready} = Subscription.readiness(handle)
+      refute_receive {:vxpipe_room_subscription_cancelled, ^mixer, _, _}, 0
+      assert {:ok, _} = Authority.admit(context.authority, context.joining)
+      assert :ok = RoomMixer.push(mixer, frame(context, 1, 0))
+      assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 0)
+      assert {:ok, [_]} = Subscription.take(handle, 1)
+    end
+  end
+
   test "a changed output policy retains the subscription and applies privacy only at commit" do
     context = start_context(%{audio_routes: %{}})
     options = subscription_options(context, context.receiver)

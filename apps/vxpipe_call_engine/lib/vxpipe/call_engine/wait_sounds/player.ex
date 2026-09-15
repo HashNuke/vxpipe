@@ -183,9 +183,9 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
   def handle_info({:frame_timeout, correlation}, %{correlation: correlation} = state),
     do: failed(state, :timeout)
 
-  def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
+  def handle_info({:DOWN, monitor, :process, pid, _reason}, state)
       when is_map_key(state.monitors, monitor),
-      do: failed(state)
+      do: output_lost(state, pid)
 
   def handle_info(message, state) do
     response =
@@ -229,6 +229,9 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       nil ->
         {:noreply, state}
 
+      {sink, _pending, {:error, _reason}} ->
+        output_lost(state, sink)
+
       _failed ->
         failed(state)
     end
@@ -258,6 +261,19 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       {:noreply, state}
     end
   end
+
+  defp output_lost(%{loop: true, owner: owner} = state, sink) when sink != owner do
+    sinks = Map.reject(state.sinks, fn {_connection, output} -> output == sink end)
+
+    if map_size(sinks) > 0 and map_size(sinks) < map_size(state.sinks) do
+      state = reconcile_sinks(state, sinks)
+      if state.mode == :paused, do: {:noreply, state}, else: advance(state)
+    else
+      failed(state)
+    end
+  end
+
+  defp output_lost(state, _sink), do: failed(state)
 
   defp reconcile_sinks(state, sinks) do
     retained = [state.owner | Map.values(sinks)]

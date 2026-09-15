@@ -201,7 +201,7 @@ carrier socket/acknowledgements are controlled; the actual provider adapters and
 The existing guarded live API tests only establish control submission when enabled. Live carrier
 wait/cue/clear/recovery audibility remains a separate acceptance boundary.
 
-For the five-participant call and added output connection:
+For the five-participant call, added output and monitor reconnection:
 
 ```shell
 mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --only changing_listeners
@@ -215,8 +215,13 @@ input/output while the handoff worker is paused, then share the original partici
 reconciliation resumes. Existing players, room bindings and the attempt deadline remain unchanged;
 all listening connections receive cue before conversation. Monitor admission supplies the absence
 of microphone permission; SDP direction alone does not change an ordinary human's server role.
-Connection removal, pre-acceptance audience changes and repeated changing-audience transfers
-retain separate acceptance requirements in the milestone.
+
+The case then closes the first monitor's data channel from its actual native client and observes
+the server connection exit. Its second connection continues receiving waiting audio; a replacement
+connection joins the same retained player before support STT is released. The original attempt,
+deadline, room services and surviving connection bindings remain. Both monitor outputs receive
+the cue before conversation. Complete listener membership removal, pre-acceptance audience changes
+and repeated changing-audience transfers retain separate acceptance requirements in the milestone.
 
 ## Protocol boundary
 

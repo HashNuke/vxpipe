@@ -212,7 +212,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   @tag changing_listeners: true
-  test "five-participant handoff keeps one wait cursor when a human adds a receive-only sink" do
+  test "five-participant handoff retains wait cursors through monitor addition and reconnection" do
     {wait_sounds, options} = custom_wait_configuration(480_000)
 
     plan =
@@ -344,11 +344,51 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert current.asset == old.asset
     end
 
+    [{old_connection, _}] =
+      Registry.lookup(
+        Vxpipe.Gateway.WebRTC.Registry,
+        {:connection, observer_client.connection_id}
+      )
+
+    old_monitor = Process.monitor(old_connection)
+    player_monitor = Process.monitor(observer_player)
+
+    assert :ok =
+             PeerConnection.close_data_channel(
+               observer_client.client,
+               observer_client.channel_ref
+             )
+
+    assert_receive {:DOWN, ^old_monitor, :process, ^old_connection, _}, 2_000
+    drain_audio(second_sink)
+
+    await_tone(second_sink, 250, 2_000)
+    refute_receive {:DOWN, ^player_monitor, :process, ^observer_player, _}, 100
+
+    replacement =
+      plan
+      |> issue_session(room, observer.participant_id)
+      |> then(&connect(&1.session_id, "chat", false, :recvonly))
+
+    await_tone(replacement, 250, 2_000)
+
+    {retained_player, reconnected} =
+      Map.fetch!(wait_players(room.incarnation_id), observer.participant_id)
+
+    assert retained_player == observer_player
+
+    assert Enum.sort(Map.keys(reconnected.sinks)) ==
+             Enum.sort([second_sink.connection_id, replacement.connection_id])
+
+    audience =
+      Enum.map(audience, fn peer -> if peer == observer_client, do: replacement, else: peer end)
+
     assert {:ok, refreshed} = CallEngine.RoomAuthority.readiness_binding(authority)
     assert refreshed.attempt == pending.attempt
     assert refreshed.room == before.room
+    refute Map.has_key?(refreshed.connections, observer_client.connection_id)
 
-    for {id, connection} <- before.connections,
+    for {id, connection} <- Map.delete(before.connections, observer_client.connection_id),
         do: assert(refreshed.connections[id] == connection)
 
     refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 0

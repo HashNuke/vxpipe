@@ -16,9 +16,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
 
     enforcers =
       ready.receipts
-      |> Map.values()
-      |> Enum.flat_map(& &1.enforcers)
-      |> Enum.filter(&MapSet.member?(required, &1))
+      |> Enum.flat_map(fn {connection_id, receipt} ->
+        connection = Map.fetch!(state.connections, connection_id).pid
+        Enum.map(receipt.enforcers, &{&1, connection})
+      end)
+      |> Enum.filter(fn {enforcer, _connection} -> MapSet.member?(required, enforcer) end)
       |> Enum.uniq()
 
     with {:ok, snapshot} <-

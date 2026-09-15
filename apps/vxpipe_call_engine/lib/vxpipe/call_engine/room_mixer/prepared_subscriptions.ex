@@ -135,8 +135,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.PreparedSubscriptions do
     end)
   end
 
-  def owns_monitor?(prepared, monitor),
-    do: Map.has_key?(prepared.catalog.monitors, monitor)
+  def remove_monitor(prepared, monitor),
+    do: %{prepared | catalog: SubscriptionCatalog.remove_monitor(prepared.catalog, monitor)}
 
   defp merge(current, pending),
     do: %{

@@ -466,6 +466,92 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
                    1_000
   end
 
+  test "retires only a departed connection's enforcers before the next policy revision" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    connection = start_enforcer()
+    departed = start_enforcer()
+    retained = start_enforcer()
+
+    assert {:ok, _} = Authority.register_connection_enforcer(server, departed, connection)
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert_receive {:media_policy_applied, ^departed, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+
+    :ok = :sys.suspend(server)
+    monitor = Process.monitor(connection)
+    Process.exit(connection, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^connection, :killed}
+    monitor = Process.monitor(departed)
+    Process.exit(departed, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^departed, :killed}
+    :ok = :sys.resume(server)
+
+    assert {:ok, snapshot} = Authority.admit(server, "joining")
+    assert_receive {:media_policy_applied, ^retained, ^snapshot}
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  test "a connection enforcer remains critical while its connection is alive" do
+    server = start_authority(plan(%{}))
+    enforcer = start_enforcer()
+    assert {:ok, _} = Authority.register_connection_enforcer(server, enforcer, self())
+    monitor = Process.monitor(server)
+    Process.exit(enforcer, :kill)
+
+    assert_receive {:DOWN, ^monitor, :process, ^server,
+                    {:media_policy_enforcer_unavailable, ^enforcer, :killed}}
+  end
+
+  test "candidate adoption retains the destination connection's enforcer lifetime" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    connection = start_enforcer()
+    enforcer = start_enforcer()
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+    assert {:ok, _} =
+             Authority.commit_candidate(
+               server,
+               candidate,
+               System.monotonic_time(:millisecond) + 5_000,
+               [{enforcer, connection}]
+             )
+
+    assert_receive {:media_policy_applied, ^enforcer, _}
+    monitor = Process.monitor(connection)
+    Process.exit(connection, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^connection, :killed}
+    _ = :sys.get_state(server)
+    monitor = Process.monitor(enforcer)
+    Process.exit(enforcer, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^enforcer, :killed}
+    assert {:ok, _} = Authority.leave(server, "joining")
+  end
+
+  test "a departure during enforcement does not abort policy application to surviving connections" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    connection = start_enforcer()
+    departed = start_enforcer()
+    retained = start_enforcer()
+    assert {:ok, _} = Authority.register_connection_enforcer(server, departed, connection)
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert_receive {:media_policy_applied, ^departed, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+    :sys.replace_state(departed, &Map.put(&1, :mode, :manual))
+
+    admission = Task.async(fn -> Authority.admit(server, "joining") end)
+    assert_receive {:media_policy_applied, ^departed, snapshot}
+    monitor = Process.monitor(connection)
+    Process.exit(connection, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^connection, :killed}
+    monitor = Process.monitor(departed)
+    Process.exit(departed, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^departed, :killed}
+
+    assert {:ok, ^snapshot} = Task.await(admission)
+    assert_receive {:media_policy_applied, ^retained, ^snapshot}
+    assert Authority.snapshot(server) == snapshot
+  end
+
   defp start_authority(plan, overrides \\ []) do
     options = [
       plan: plan,

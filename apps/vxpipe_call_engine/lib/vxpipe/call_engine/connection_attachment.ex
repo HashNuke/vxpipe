@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.ConnectionAttachment do
   defstruct @enforce_keys ++
               [
                 admission: :main,
+                connection: nil,
                 room_audio: nil,
                 room_audio_input_mode: :disabled,
                 room_audio_output_mode: :disabled,
@@ -21,6 +22,7 @@ defmodule Vxpipe.CallEngine.ConnectionAttachment do
           room_monitor: reference(),
           media_ingress: pid() | nil,
           admission: :main | :transfer_preparation,
+          connection: pid() | nil,
           room_audio: RoomAudioHandle.t() | nil,
           room_audio_input_mode: :disabled | :enabled,
           room_audio_output_mode: :disabled | :full_mix | :mix_minus,

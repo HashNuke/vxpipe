@@ -39,10 +39,15 @@ defmodule Vxpipe.CallEngine.RoomAudioHandle do
     end
   end
 
-  @spec register_enforcer(t(), pid()) ::
+  @spec register_enforcer(t(), pid(), pid()) ::
           {:ok, Vxpipe.CallEngine.MediaPolicy.Snapshot.t()} | {:error, term()}
-  def register_enforcer(%__MODULE__{} = handle, enforcer) when is_pid(enforcer) do
-    MediaPolicyAuthority.register_enforcer(handle.media_policy_authority, enforcer)
+  def register_enforcer(%__MODULE__{} = handle, enforcer, connection)
+      when is_pid(enforcer) and is_pid(connection) do
+    MediaPolicyAuthority.register_connection_enforcer(
+      handle.media_policy_authority,
+      enforcer,
+      connection
+    )
   end
 
   @spec push(t(), NormalizedFrame.t()) :: :ok | {:error, term()}

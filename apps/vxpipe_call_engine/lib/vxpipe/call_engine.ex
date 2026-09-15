@@ -142,6 +142,7 @@ defmodule Vxpipe.CallEngine do
               {:ok,
                %ConnectionAttachment{
                  admission: admission,
+                 connection: self(),
                  room_monitor: room_monitor,
                  media_ingress: media_ingress,
                  room_audio: room_audio,
@@ -245,11 +246,11 @@ defmodule Vxpipe.CallEngine do
       do: {:error, :disabled}
 
   def register_room_audio_enforcer(
-        %ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle},
+        %ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle, connection: connection},
         enforcer
       )
       when is_pid(enforcer) do
-    RoomAudioHandle.register_enforcer(handle, enforcer)
+    RoomAudioHandle.register_enforcer(handle, enforcer, connection)
   end
 
   @spec push_room_audio(ConnectionAttachment.t(), NormalizedFrame.t()) ::

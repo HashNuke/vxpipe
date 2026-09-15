@@ -447,17 +447,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   end
 
   defp bind_with_media_policy(command, capability, ingress, state) do
-    case register_speech_to_text_enforcers(state.media_policy_authority, capability, ingress) do
+    connection = Map.fetch!(state.connections, command.connection_id).pid
+
+    case register_speech_to_text_enforcers(
+           state.media_policy_authority,
+           capability,
+           ingress,
+           connection
+         ) do
       :ok -> bind(command, capability, ingress, state)
       {:error, _reason} -> {:reply, {:error, speech_to_text_policy_unavailable()}, state}
     end
   end
 
-  defp register_speech_to_text_enforcers(nil, _capability, _ingress), do: :ok
+  defp register_speech_to_text_enforcers(nil, _capability, _ingress, _connection), do: :ok
 
-  defp register_speech_to_text_enforcers(authority, capability, ingress) do
-    with {:ok, _snapshot} <- MediaPolicyAuthority.register_enforcer(authority, ingress),
-         {:ok, _snapshot} <- MediaPolicyAuthority.register_enforcer(authority, capability) do
+  defp register_speech_to_text_enforcers(authority, capability, ingress, connection) do
+    with {:ok, _snapshot} <-
+           MediaPolicyAuthority.register_connection_enforcer(authority, ingress, connection),
+         {:ok, _snapshot} <-
+           MediaPolicyAuthority.register_connection_enforcer(authority, capability, connection) do
       :ok
     end
   end

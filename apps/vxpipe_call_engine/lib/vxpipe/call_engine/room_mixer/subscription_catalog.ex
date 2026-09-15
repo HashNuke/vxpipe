@@ -52,6 +52,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
          :ok <- present_recipient(recipient_id, snapshot),
          {:ok, mode} <- subscription_mode(Keyword.get(options, :mode), snapshot),
          subscriber when is_pid(subscriber) <- Keyword.get(options, :subscriber),
+         :ok <- if(Process.alive?(subscriber), do: :ok, else: {:error, :subscriber_unavailable}),
          :ok <- compatibility(catalog, recipient_id, mode, source_sequences),
          {:ok, entry} <- prepare_entry(catalog, id, recipient_id, mode, subscriber) do
       handle = %Subscription{
