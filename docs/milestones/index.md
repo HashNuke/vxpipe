@@ -50,7 +50,7 @@ Destination save checks pass (18 tests, 2 excluded), the Engine constructor/comp
 (15 tests), and three tagged local DB activation checks pass. Independent GPT 6 Astra xhigh review
 found no blockers. An unsupported native wait-tone assertion found by the umbrella run was corrected
 in a separate reviewed test-only checkpoint. Checkpoint 2 passed all five root gates: 1,532 tests,
-zero failures, 33 excluded (seed 235296). Milestone 24 has **3 of 7 checkpoints complete**, three partial
+zero failures, 33 excluded (seed 235296). Milestone 24 has **4 of 7 checkpoints complete**, two partial
 and one not started. Telnyx named API-key provisioning now uses encrypted tenant storage and
 protected CLI input; live carrier readers remain pending. Its 14 focused
 tests, 81 Calls tests and 89 Persistence tests pass. Independent review and all five root gates pass
@@ -75,14 +75,17 @@ The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did
 not recur; its cause remains unproven. The full milestone remains unchecked pending remaining
-credential readers, platform encryption-key rotation and configuration cleanup.
+credential readers and configuration cleanup. Platform encryption-key rotation is now verified.
 The remaining platform database contract will use `VXPIPE_DB_URL` before `DATABASE_URL` and
 `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; development needs no database env variables and
 defaults to `vxpipe_dev` with pool size 10.
 Platform re-encryption now has a bounded storage operation preserving exact tenant values,
 identity and status. Six focused database checks and three real-connection contention/interruption
-checks pass. The operator command adds three passing focused tests. Checkpoint 6 remains partial pending fresh-VM retirement
-acceptance. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md).
+checks pass. The operator command adds three passing focused tests. Checkpoint 6 is complete:
+disposable fresh VMs verify staged mixed-key reads, resumed batches, new-key-only reads after
+retirement, exact tenant value/identity preservation and safe missing/wrong-key rejection.
+Persistence 115 tests pass (9 excluded), as do independent review and static/unused-lock gates.
+The common umbrella regression remains open. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md).
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
 2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate
@@ -445,7 +448,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
-| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: three complete, three partial and one not started. Existing carrier-reader migration and platform encryption-key rotation remain; new provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. A native audio failure keeps common umbrella acceptance open. Final independent implementation review remains pending. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: four complete, two partial and one not started. Existing carrier-reader migration and final configuration cleanup remain; platform encryption-key rotation is verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. A native audio failure keeps common umbrella acceptance open. Final independent implementation review remains pending. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification

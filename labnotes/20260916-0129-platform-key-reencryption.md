@@ -90,3 +90,33 @@
 - Strict Credo and the unused-lock check pass. All 176 relative documentation links and anchors
   across the changed documents pass verification. The common full umbrella gate stays open
   pending a root run after this checkpoint; earlier native audio failures remain unresolved.
+
+## Fresh-process retirement acceptance
+
+- The operator CLI shipped as `19cde3a` before this acceptance. Ran a temporary Python harness
+  against a uniquely named, disposable PostgreSQL database; every Mix invocation starts a new VM.
+  Random platform keys stayed in subprocess environment variables; synthetic provider payloads
+  and expected identities used protected stdin. Child output was captured and checked for secret
+  markers without printing keys, payloads or bootstrap API keys.
+- Migrated the database and provisioned three old-key Google/Deepgram credentials across two
+  tenants. Staged both decrypt keys while retaining the old active key; a fresh reader verified
+  exact values, identity, version and active status for every row.
+- Switched the active key, provisioned one new-key Zenmux credential and verified mixed-key reads.
+  Separate command VMs processed batches of one and two old-key rows, reporting remaining counts
+  of two then zero. A third invocation processed zero with no remaining old-key rows.
+- Removed the old key entirely. Fresh-process reads returned all four exact values, identities,
+  versions and statuses. Metadata listing confirmed only the new encryption key ID remained,
+  with original tenant/provider/name/auth-kind/schema version and creation timestamps preserved.
+- With both key settings absent, metadata listing still worked while every credential resolution
+  and even an empty re-encryption batch failed with `credential_key_unavailable`. Supplying wrong
+  key bytes under the new ID made every fresh-process resolution fail with
+  `provider_credential_unreadable`. Wrong bytes are a negative check, not an allowed rollout step.
+- The harness passed and removed only its owned disposable database. The tagged storage suite
+  separately owns revoked-row preservation, contention, concurrent writes and interrupted rollback;
+  no provider requests, third-party credential rotation or broader backup drill were added.
+- The common full umbrella regression is running after independent storage/CLI reviews and
+  static gates. Its result remains separate from the focused encryption-key transition exit.
+- Independent GPT 6 Astra xhigh reviewed the harness and checkpoint coverage without running it;
+  it found no missing essential contract or scope expansion. Combined with the successful local
+  execution, this closes checkpoint 6. Progress is now 4 of 7 complete (1, 2, 5, 6), 2 partial
+  (3, 7), and 1 not started (4). The milestone and common umbrella gate remain unchecked.

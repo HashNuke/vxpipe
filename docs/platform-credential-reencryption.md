@@ -1,7 +1,6 @@
 # Platform credential re-encryption
 
-Status: the bounded storage operation, operator CLI and focused checks are implemented.
-Fresh-VM transition acceptance remains pending in
+Status: the bounded storage operation, operator CLI and fresh-VM transition are implemented and verified in
 [checkpoint 6](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-6--rotate-the-platform-owned-encryption-key).
 
 ## Operation and ownership
@@ -72,7 +71,11 @@ transaction tests pass. The latter hold active-reader locks on separate connecti
 a batch after its first write, and provision a new-key credential for the same tenant while
 re-encryption is paused. They also verify a concurrent status update survives skipped-row retry.
 Three operator tests verify bounded retry, safe output, rejected arguments and unavailable keys or
-storage. Fresh-VM evidence remains pending.
+storage. Disposable database acceptance across fresh Mix VMs verifies staged decrypt keys,
+mixed-key reads, new-key writes, resumed batches and new-key-only reads after old-key removal.
+Exact tenant payloads and public identities/versions/status remain unchanged. Missing/wrong-key
+reads fail safely; metadata remains available without keys. The full Persistence suite passes
+115 tests (9 excluded), and independent storage, CLI and exit reviews found no blockers.
 
 Replacing key bytes under an existing ID, changing tenant credential versions, migrating only
 active rows, relying on a batch cursor, or adding another key-provider framework would violate or

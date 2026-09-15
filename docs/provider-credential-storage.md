@@ -137,8 +137,8 @@ measurements must use explicitly projected, payload-free events.
   by requiring protected redirected input.
 - A custom cryptographic primitive or new encryption dependency was unnecessary; OTP supplies
   authenticated encryption. Platform encryption-key re-encryption reuses the existing keyring.
-  Its fresh-VM retirement acceptance remains checkpoint 6 work. Third-party key rotation/revocation workflows and
-  backup-restore drills are excluded. Existing admitted-client/leg lifetimes remain unchanged
+  Fresh-VM retirement acceptance passes in checkpoint 6. Third-party key rotation/revocation
+  workflows and backup-restore drills are excluded. Existing admitted-client/leg lifetimes remain unchanged
   while each new construction resolves its current tenant binding.
 
 ## Verification
