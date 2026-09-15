@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Progress do
       if cause == nil, do: progress, else: Map.put(progress, :reason, public_reason(cause))
 
     Enum.each(state.connections, fn {id, connection} ->
-      if id == pending.request.connection_id or
+      if id in [pending.request.connection_id, pending.destination_connection_id] or
            connection.transfer_attempt_id == pending.attempt_id do
         send(connection.pid, {:vxpipe_transfer_progress, pending.attempt_id, progress})
       end
