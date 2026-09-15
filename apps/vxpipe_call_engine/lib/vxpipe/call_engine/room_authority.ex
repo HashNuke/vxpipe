@@ -172,7 +172,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           room_mixer
         )
 
-      state = %{state | readiness_options: ReadinessBinding.options(options)}
+      policy_monitor = if media_policy_authority, do: Process.monitor(media_policy_authority)
+
+      state = %{
+        state
+        | readiness_options: ReadinessBinding.options(options),
+          media_policy_monitor: policy_monitor
+      }
 
       case Startup.start_entries(room_source, options, state) do
         {:ok, state} ->

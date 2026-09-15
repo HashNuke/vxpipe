@@ -22,6 +22,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     Progress
   }
 
+  @spec room_failed(term(), State.t()) :: State.t()
+  def room_failed(reason, %State{pending_participant_transfer: %Pending{} = pending} = state) do
+    cause = room_failure_cause(reason, pending, state)
+    Progress.publish(pending, :failed, [], state, cause)
+    state = History.failed(state, pending.request, cause, :failed)
+    GenServer.reply(pending.from, {:error, :unavailable})
+    %{state | pending_participant_transfer: nil}
+  end
+
+  def room_failed(_reason, %State{} = state), do: state
+
+  defp room_failure_cause(_reason, %Pending{handoff: %{failure: cause}}, _state), do: cause
+
+  defp room_failure_cause({:media_policy_enforcer_unavailable, enforcer, _reason}, pending, state) do
+    case Map.get(state.connections, pending.destination_connection_id) do
+      %{speech_to_text: %{capability: ^enforcer}} -> :destination_speech_to_text_unavailable
+      %{speech_to_text: %{ingress: ^enforcer}} -> :destination_speech_to_text_unavailable
+      _other -> :source_authority_changed
+    end
+  end
+
+  defp room_failure_cause(_reason, _pending, _state), do: :source_authority_changed
+
   @spec begin(Request.t(), GenServer.from(), State.t()) ::
           {:noreply, State.t()} | {:reply, {:error, :rejected | :unavailable}, State.t()}
   def begin(%Request{} = request, from, %State{pending_participant_transfer: nil} = state) do

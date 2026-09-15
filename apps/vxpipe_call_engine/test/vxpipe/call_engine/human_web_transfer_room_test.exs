@@ -789,7 +789,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         :completion_policy,
         :deadline,
         :phase_loss,
-        :speech_loss
+        :speech_loss,
+        :speech_loss_policy_first,
+        :policy_loss
       ] do
     @tag capture_log: true, invalidation: invalidation
     test "closes a partially released handoff after #{invalidation}", %{
@@ -799,7 +801,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         compile_plan(
           wait_sounds: nil,
           transfer_timeout_ms: 2_000,
-          support_stt: invalidation == :speech_loss
+          support_stt: invalidation in [:speech_loss, :speech_loss_policy_first]
         )
 
       caller = Map.fetch!(plan.participants, "caller")
@@ -849,7 +851,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                )
 
       speech_transport =
-        if invalidation == :speech_loss do
+        if invalidation in [:speech_loss, :speech_loss_policy_first] do
           assert_receive {:test_stt_transport_started, transport, _}, 1_000
 
           TestSpeechToTextTransport.deliver(
@@ -914,8 +916,33 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
             Process.exit(pending.task.pid, :kill)
             :cancelled
 
+          :policy_loss ->
+            Process.exit(PolicyAuthority.whereis(room.incarnation_id), :kill)
+            :cancelled
+
           :speech_loss ->
             TestSpeechToTextTransport.disconnect(speech_transport, :test_release_failure)
+            :cancelled
+
+          :speech_loss_policy_first ->
+            policy = PolicyAuthority.whereis(room.incarnation_id)
+            policy_monitor = Process.monitor(policy)
+            assert :ok = :sys.suspend(authority)
+
+            try do
+              TestSpeechToTextTransport.disconnect(speech_transport, :test_release_failure)
+
+              assert_receive {:DOWN, ^policy_monitor, :process, ^policy,
+                              {:media_policy_enforcer_unavailable, _enforcer, _reason}},
+                             1_000
+            after
+              try do
+                :sys.resume(authority)
+              catch
+                :exit, _already_stopped -> :ok
+              end
+            end
+
             :cancelled
         end
 
@@ -926,17 +953,27 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       assert_receive {:vxpipe_transfer_progress, ^attempt, %{phase: :failed}}, 1_000
       assert_receive {:DOWN, ^monitor, :process, ^authority, reason}, 1_000
 
-      # Loss of an adopted policy enforcer can concurrently stop the room supervisor.
-      if invalidation == :speech_loss,
+      # Either the speech failure or the policy monitor can reach RoomAuthority first.
+      if invalidation in [:speech_loss, :speech_loss_policy_first, :policy_loss],
         do: assert(reason in [:handoff_release_failed, :shutdown]),
         else: assert(reason == :handoff_release_failed)
 
       cause =
         case invalidation do
-          :deadline -> "deadline_elapsed"
-          :phase_loss -> "preparation_process_down"
-          :speech_loss -> "destination_speech_to_text_unavailable"
-          _other -> "destination_media_unavailable"
+          :deadline ->
+            "deadline_elapsed"
+
+          :phase_loss ->
+            "preparation_process_down"
+
+          :policy_loss ->
+            "source_authority_changed"
+
+          speech_loss when speech_loss in [:speech_loss, :speech_loss_policy_first] ->
+            "destination_speech_to_text_unavailable"
+
+          _other ->
+            "destination_media_unavailable"
         end
 
       assert_receive {:test_archive_fact,
@@ -1774,91 +1811,118 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _}
   end
 
-  @tag capture_log: true
-  test "a failed privacy barrier closes the room before bridge or source handoff" do
-    plan =
-      compile_plan(
-        support_while_present: %{
-          audio_routes: %{
-            "caller" => ["human-support"],
-            "human-support" => ["caller"]
-          },
-          transcript_routes: %{},
-          record_audio: false,
-          save_transcripts: false
-        }
+  for failure <- [:reject, :authority_exit] do
+    @tag capture_log: true, barrier_failure: failure
+    test "privacy barrier #{failure} closes the room before bridge or source handoff", %{
+      barrier_failure: failure
+    } do
+      plan =
+        compile_plan(
+          support_while_present: %{
+            audio_routes: %{
+              "caller" => ["human-support"],
+              "human-support" => ["caller"]
+            },
+            transcript_routes: %{},
+            record_audio: false,
+            save_transcripts: false
+          }
+        )
+
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
+      assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
       )
 
-    caller = Map.fetch!(plan.participants, "caller")
-    support = Map.fetch!(plan.participants, "human-support")
+      assert [{room_authority, _value}] =
+               Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
-    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
-    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
+      room_monitor = Process.monitor(room_authority)
 
-    TestTextToSpeechTransport.deliver_control(
-      source_tts,
-      ~s({"type":"Connected","request_id":"source-ready"})
-    )
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :policy_caller_sink)
 
-    assert [{room_authority, _value}] =
-             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :policy_support_sink)
 
-    room_monitor = Process.monitor(room_authority)
+      assert {:ok, %ConnectionAttachment{admission: :main} = caller_attachment} =
+               attach_ready(plan, room, caller, "caller-connection", caller_sink)
 
-    caller_sink =
-      start_supervised!({TestAudioOutputSink, observer: self()}, id: :policy_caller_sink)
+      begin_transfer(plan, room, caller, "policy-failed-human-transfer")
+      assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
 
-    support_sink =
-      start_supervised!({TestAudioOutputSink, observer: self()}, id: :policy_support_sink)
+      assert {:ok,
+              %ConnectionAttachment{
+                admission: :transfer_preparation,
+                transfer_attempt_id: attempt_id
+              }} = attach_ready(plan, room, support, "support-connection", support_sink)
 
-    assert {:ok, %ConnectionAttachment{admission: :main} = caller_attachment} =
-             attach_ready(plan, room, caller, "caller-connection", caller_sink)
+      enforcer =
+        start_supervised!({Vxpipe.CallEngine.TestMediaPolicyEnforcer, owner: self(), mode: :ok})
 
-    begin_transfer(plan, room, caller, "policy-failed-human-transfer")
-    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+      assert {:ok, _} =
+               TestTransferConnection.run(
+                 attachment_command(plan, room, caller, "caller-connection"),
+                 fn -> CallEngine.register_room_audio_enforcer(caller_attachment, enforcer) end
+               )
 
-    assert {:ok,
-            %ConnectionAttachment{
-              admission: :transfer_preparation,
-              transfer_attempt_id: attempt_id
-            }} = attach_ready(plan, room, support, "support-connection", support_sink)
+      assert_receive {:media_policy_applied, ^enforcer, _}
+      mode = if failure == :reject, do: {:error, :privacy_barrier_failed}, else: :manual
+      :sys.replace_state(enforcer, &%{&1 | mode: mode})
 
-    enforcer =
-      start_supervised!({Vxpipe.CallEngine.TestMediaPolicyEnforcer, owner: self(), mode: :ok})
+      assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_not_ready}} =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt_id, :accept)
+               )
 
-    assert {:ok, _} =
-             TestTransferConnection.run(
-               attachment_command(plan, room, caller, "caller-connection"),
-               fn -> CallEngine.register_room_audio_enforcer(caller_attachment, enforcer) end
-             )
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt_id, :media_ready)
+               )
 
-    assert_receive {:media_policy_applied, ^enforcer, _}
-    :sys.replace_state(enforcer, &%{&1 | mode: {:error, :privacy_barrier_failed}})
+      finish_private_briefing(briefing_tts, support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 2_000
 
-    assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_not_ready}} =
-             TestTransferConnection.control(
-               transfer_control(plan, room, support, attempt_id, :accept)
-             )
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt_id, :accept)
+               )
 
-    assert :ok =
-             TestTransferConnection.control(
-               transfer_control(plan, room, support, attempt_id, :media_ready)
-             )
+      if failure == :authority_exit do
+        assert_receive {:media_policy_applied, ^enforcer, _candidate}, 1_000
+        Process.exit(PolicyAuthority.whereis(room.incarnation_id), :kill)
+      end
 
-    finish_private_briefing(briefing_tts, support_sink)
-    assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 2_000
+      assert_receive {:vxpipe_transfer_progress, ^attempt_id, %{phase: :failed}}, 1_000
 
-    assert :ok =
-             TestTransferConnection.control(
-               transfer_control(plan, room, support, attempt_id, :accept)
-             )
+      assert_receive {:test_archive_fact,
+                      %Fact{
+                        kind: :participant_transfer_failed,
+                        tool_call_id: "policy-failed-human-transfer",
+                        payload: %{
+                          "cause" => "destination_commit_unavailable",
+                          "restoration" => "failed"
+                        }
+                      }},
+                     1_000
 
-    assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :shutdown}, 2_000
-    refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _attachment}, 50
+      assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :handoff_commit_failed},
+                     2_000
 
-    refute_receive {:vxpipe_event,
-                    %ToolCallCompleted{tool_call_id: "policy-failed-human-transfer"}},
-                   50
+      refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _attachment}, 50
+
+      refute_receive {:vxpipe_event,
+                      %ToolCallCompleted{tool_call_id: "policy-failed-human-transfer"}},
+                     50
+    end
   end
 
   defp observe_transfer_phases do

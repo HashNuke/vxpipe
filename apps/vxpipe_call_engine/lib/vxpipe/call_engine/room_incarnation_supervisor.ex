@@ -76,8 +76,13 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
   defp media_policy_child(options) do
     case Keyword.get(options, :plan) do
-      %ResolvedCallPlan{} -> [{MediaPolicyAuthority, options}]
-      nil -> []
+      %ResolvedCallPlan{} ->
+        # RoomAuthority observes policy loss and records a pending transfer's
+        # terminal result before its own significant exit closes the room.
+        [Supervisor.child_spec({MediaPolicyAuthority, options}, significant: false)]
+
+      nil ->
+        []
     end
   end
 

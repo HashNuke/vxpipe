@@ -382,6 +382,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
           _commit_failed ->
             Progress.publish(pending, :failed, [], state, :destination_commit_unavailable)
+
+            state =
+              History.failed(state, pending.request, :destination_commit_unavailable, :failed)
+
             GenServer.reply(pending.from, {:error, :unavailable})
             {:stop, :handoff_commit_failed, state}
         end

@@ -29,10 +29,12 @@ reader is deleted. Checkpoint 1 is implemented and verified: all five root gates
 recipient bug found during verification was fixed in a separate tested commit. Earlier intermittent
 native audio/cleanup observations remain documented; their cause is not established by this pass.
 Final independent implementation review remains open after a reviewer usage limit.
-Checkpoint 2 now has focused database-backed opening/human-entry coverage, private opening output,
-and tenant/binding cache isolation with revocation checks. Its latest umbrella run has 1,507 tests,
-two handoff/native-audio failures and 30 exclusions; both failures pass focused rechecks, and their
-causes remain open. Transfer and recovery acceptance remain open.
+Checkpoint 2 now has database-backed opening/human-entry coverage, private opening output,
+and tenant/binding cache isolation with revocation checks. A separately tested
+[policy-shutdown fix](../room-policy-failure-ownership.md) resolves missing transfer failure
+progress/history during adopted speech loss. All five root gates pass: 1,510 tests, zero failures,
+30 exclusions (seed 235296). Native audio passes this run; its earlier timing cause remains
+unexplained. Tenant transfer and recovery acceptance remain open.
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

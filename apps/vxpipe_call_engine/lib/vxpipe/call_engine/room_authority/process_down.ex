@@ -10,6 +10,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
     StartupReadiness
   }
 
+  def handle(monitor, reason, %{media_policy_monitor: monitor} = state)
+      when is_reference(monitor) do
+    {:stop, :shutdown, ParticipantTransfer.room_failed(reason, state)}
+  end
+
   def handle(monitor, reason, state) do
     if StartupReadiness.player_down?(monitor, state) do
       StartupReadiness.reply({:error, :wait_player_unavailable}, state)

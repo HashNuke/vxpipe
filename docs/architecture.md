@@ -1546,8 +1546,11 @@ barrier cannot apply before commit. New delivery, queued/late old output, later
 reactivation, and retrospective replay must not bypass a restricted interval.
 Source responsibility, total transfer deadline, and restoration rules remain.
 
-The implemented media-policy runtime has one significant policy authority, one significant
-`RoomMixer`, and one significant `TranscriptRouter` per planned room. The authority composes
+The implemented media-policy runtime has one temporary policy authority, one significant
+`RoomMixer`, and one significant `TranscriptRouter` per planned room. RoomAuthority monitors the
+policy authority and records any pending transfer failure before its own significant exit closes
+the incarnation; see [room policy failure ownership](room-policy-failure-ownership.md).
+The policy authority composes
 immutable effective snapshots and commits a new revision only after every registered enforcer
 installs it. Rejection, timeout, malformed acknowledgement, or enforcer loss ends the room. Both
 consumers are registered before entry participants are admitted, so startup revisions and later

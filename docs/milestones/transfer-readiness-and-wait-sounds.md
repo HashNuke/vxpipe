@@ -1091,6 +1091,17 @@ behind cancellation. Two native caller/desk cases observe failed RTVI progress a
 release cancellation and required STT loss, without activation or recovery. The new release-loss
 tests use required STT. The subsequent briefing-cleanup checkpoint below retires completed TTS.
 The previously intermittent recovery failure is not claimed fixed by this checkpoint.
+
+The tenant-credential verification subsequently reproduced a separate shutdown-ordering race:
+the policy authority could exit before RoomAuthority recorded adopted speech loss. RoomAuthority
+now monitors that policy child and records pending transfer failure before closing the incarnation.
+Deterministic policy-first speech loss and direct policy loss during release cover the ordering;
+see [policy failure ownership](../room-policy-failure-ownership.md) and its
+[checkpoint evidence](../../labnotes/20260915-2122-handoff-speech-failure.md).
+Rejected barriers and policy death during the commit request also emit their terminal failure fact.
+All five root gates pass: 1,510 tests, zero failures and 30 exclusions, seed 235296. This result does
+not establish the cause of the earlier native Morse timing failure.
+
 See the [failure-cleanup labnote](../../labnotes/20260915-0249-human-handoff-failure-cleanup.md).
 
 ### Private briefing retirement

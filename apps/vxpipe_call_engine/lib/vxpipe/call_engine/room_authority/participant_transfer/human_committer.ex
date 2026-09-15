@@ -36,6 +36,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
       {:error, :stale_candidate} = stale -> stale
       _failed -> {:error, :destination_commit_unavailable}
     end
+  catch
+    :exit, _reason -> {:error, :destination_commit_unavailable}
   end
 
   defp commit_participant(snapshot, pending, ready, state) do

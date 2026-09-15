@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
   defstruct @enforce_keys ++
               [
                 startup: nil,
+                media_policy_monitor: nil,
                 connection_monitors: %{},
                 connections: %{},
                 participant_transfer_runtime: nil,
@@ -55,6 +56,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           connections: map(),
           first_message: FirstMessage.t(),
           media_policy_authority: nil | pid(),
+          media_policy_monitor: nil | reference(),
           agent_turns: map(),
           background_tool_calls: map(),
           next_sequence: pos_integer(),
