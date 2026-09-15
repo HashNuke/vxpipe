@@ -91,4 +91,6 @@ boundaries. The ingress key is a locator, not authentication.
 
 The [checkpoint labnotes](../labnotes/20260916-0000-tenant-telephony-services.md) record focused
 red/green tests, direct database ownership checks, runtime composition and independent review.
+The 11 focused checks and 98-test Persistence suite pass. Full umbrella acceptance remains open:
+one existing native WebRTC Morse-decoding case failed in the 1,543-test run and reproduced in isolation.
 The existing Telnyx call-flow milestone remains the owner of full carrier/audio acceptance.

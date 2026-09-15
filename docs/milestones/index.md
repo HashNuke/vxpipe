@@ -52,8 +52,9 @@ Trusted Telnyx service registration and metadata lookup now pass 8 focused check
 Persistence 95 tests (6 excluded), static root gates and independent review. The database enforces
 credential tenant/provider ownership and unique ingress keys. The metadata-only registration CLI
 also passes its 3 focused tests and the 98-test Persistence suite (6 excluded), with independent
-review and static gates passing. Live service/credential readers and full root verification of
-service registration remain pending.
+review and static gates passing. The full root run completed 1,543 tests with one native WebRTC
+Morse-decoding failure (33 excluded); its unchanged isolated case reproduces. Live service/credential
+readers and full umbrella acceptance remain pending. See [service evidence](../../labnotes/20260916-0000-tenant-telephony-services.md).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the
