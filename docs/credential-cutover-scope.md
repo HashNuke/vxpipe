@@ -39,6 +39,26 @@ plaintext values; it does not change a provider's API key or webhook token.
 - An SDK's installed adapter list does not create new provider feature commitments. Preserve
   Vxpipe's existing supported provider/auth behavior while changing the credential source.
 
+## Follow-up audit — existing support only
+
+The user reiterated that this milestone must not add authentication for providers Vxpipe does
+not support. Move the credentials of existing integrations to the tenant DB. Determine those
+integrations from pre-cutover Vxpipe source and project tests; SDK catalogs and website logos do
+not establish implementation support. Unsupported provider/auth combinations remain rejected.
+There is no Bedrock implementation task or new authentication-mode project in this milestone.
+
+Use existing carrier options and private leg/reservation configuration when changing carrier
+readers. A new service-policy or authentication-lease subsystem is unnecessary. Tenant/service
+identity and authentication-before-token-consumption remain required by the existing boundaries.
+
+Reuse the current keyring for platform re-encryption. Reuse valid checkpoint verification for
+the final audit and add focused checks only for changed or uncovered boundaries. Launcher/UI
+checks apply to changed wiring; final configuration acceptance needs a provider-construction
+smoke check after restart, not another full transfer/recovery/audio demonstration.
+
+The [follow-up audit](../labnotes/20260915-2333-remaining-credential-scope.md) records the source
+evidence and independent review. These scope corrections do not advance implementation counts.
+
 ## Implications and verification
 
 The milestone contains seven checkpoints. Checkpoint 6 covers only platform encryption-key rotation.

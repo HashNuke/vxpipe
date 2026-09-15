@@ -4,8 +4,8 @@ Status: credential/configuration cutover authorized; scope corrected on 2026-09-
 Preparatory cleanup and checkpoints 1 and 2 are complete. Of seven checkpoints, two are complete,
 one is partial and four are not started.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
-Telnyx/Twilio credentials. The initial specification was independently reviewed; the scope correction
-below has local review. Final independent implementation review and the remaining checkpoints are open.
+Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
+reviewed. Final independent implementation review and the remaining checkpoints are open.
 
 Prerequisites: the implemented workflows in
 [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md),
@@ -38,6 +38,10 @@ seven checkpoints was complete, two were partial and four were not started. Curr
 recorded in the evidence ledger; the scope correction itself counted as no implementation progress.
 See [the scope decision](../credential-cutover-scope.md).
 
+The follow-up scope audit below limits provider migration to integrations supported before this
+cutover. Reuse existing keyring, leg/reservation and acceptance-test foundations. SDK catalogs,
+website logos and historical review findings do not create new feature requirements.
+
 ## Outcome and configuration ownership
 
 A tenant provisions an encrypted provider credential, then saves and runs a definition that
@@ -53,11 +57,12 @@ variables. There is no runtime TOML file or capability-profile lookup.
 | Telnyx API key; Twilio account SID and auth token | Tenant provider records; secret payloads encrypted |
 | Carrier account/connection identity, verification configuration, ingress key, originating number | Tenant telephony service binding in PostgreSQL, linked to its tenant credential |
 | Database URL/pool, S3 credentials/bucket/region/endpoint, deployment HTTP/TLS and callback origin | Platform environment settings read in `config/runtime.exs` |
-| Credential encryption key/key-provider configuration | Platform secret supplied outside PostgreSQL |
+| Credential encryption keyring | Platform secret supplied outside PostgreSQL |
 | ReqLLM, provider modules, transport modules | Internal implementation selected by closed code-owned catalogs |
 
-Amazon Bedrock credentials are tenant credentials even when platform S3 also uses AWS credentials.
-An absent Bedrock credential must never fall through to the platform's AWS environment.
+Existing provider integrations use tenant credentials. Missing tenant credentials must never
+fall through to platform storage settings or SDK credential discovery. Adding providers or
+authentication modes that Vxpipe does not already support is outside this milestone.
 Telnyx's webhook public key is verification metadata, not a private signing key; associate it with
 the tenant service and version it with the authentication configuration.
 
@@ -137,7 +142,7 @@ since-discarded uncommitted TOML work. They identify the vertical slices’ inte
 | [TelnyxEvents](../../apps/vxpipe_gateway/lib/vxpipe/gateway/http/telnyx_events.ex), [TwilioWebhookRequest](../../apps/vxpipe_gateway/lib/vxpipe/gateway/http/twilio_webhook_request.ex), [TwilioMedia](../../apps/vxpipe_gateway/lib/vxpipe/gateway/http/twilio_media.ex) | Fetch configured service before authentication. Twilio authenticates both webhooks and the WSS upgrade. Migrate all three boundaries, preserving verify-before-dispatch and verify-before-token-consumption. |
 | [OutgoingLegConnector](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/outgoing_leg_connector.ex), [TelephonyAdmissions](../../apps/vxpipe_calls/lib/vxpipe/calls/telephony_admissions.ex) | Outbound selection has trusted tenant identity; inbound route lookup happens after verification. Both need tenant service validation without moving Repo into Gateway/Engine. |
 | [TelephonyCallStore](../../apps/vxpipe_persistence/lib/vxpipe/persistence/telephony_call_store.ex), [telephony leg migration](../../apps/vxpipe_persistence/priv/repo/migrations/20260911103000_create_telephony_legs.exs) | Durable duplicate lookup/indexes use provider/service alias/event or leg ID without tenant. Scope queries and constraints to tenant and canonical service identity, not just live registries. |
-| [MediaAdmission](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/media_admission.ex) | Token lookup currently consumes an entry or installs a waiter. Add bounded, non-consuming private auth-lease discovery before Twilio signature verification, including pending outbound reservations. |
+| [MediaAdmission](../../apps/vxpipe_gateway/lib/vxpipe/gateway/telephony/media_admission.ex) | Token lookup currently consumes an entry or installs a waiter. Add bounded, non-consuming access to the existing leg's private initialized configuration before Twilio signature verification, including pending outbound reservations. |
 | [TrustedCall](../../apps/vxpipe_gateway/lib/vxpipe/gateway/trusted_call.ex), [SampleCallBackend](../../apps/vxpipe_console/lib/vxpipe/console/sample_call_backend.ex), [dev.exs](../../config/dev.exs) | Supply profiles and bootstrap a fresh sample tenant. Remove profile inputs and make credential provisioning target the actual sample tenant before save. |
 | [runtime.exs](../../config/runtime.exs) | Loads TOML into provider/global settings. Currently reads `VXPIPE_DATABASE_URL`, with a development URL from `dev.exs` and pool default 10. Replace that name/TOML pool input with the approved platform alias pairs and preserve env-free development. |
 
@@ -205,8 +210,9 @@ and ingress binding; it is not an AI capability profile. Carriers do not acquire
 
 Add tenant telephony service records and a Calls repository port. Each binds a stable service ID,
 unique ingress key, `provider: "telnyx"` or `"twilio"`, exact account/connection identity,
-credential reference, optional originating number and allowed service policy. Credentials and
-service must belong to the same tenant and provider; enforce that at the database boundary.
+credential reference, optional originating number and the existing carrier options needed by
+current adapters. No new service-policy framework is required. Credentials and service must
+belong to the same tenant and provider; enforce that at the database boundary.
 The service references the stable credential identity; a new leg resolves its current active
 version and supplies it to the existing leg configuration.
 Public callback/media origins remain platform settings, with routes derived from the stored binding.
@@ -294,11 +300,13 @@ unverified `AccountSid`, destination phone number, connection ID or arbitrary te
 - Twilio: verify form webhooks and media upgrade signatures against the exact configured public
   URL using that service's auth token; then check Account SID and call/stream identity. Signature
   failure must not consume a media token or dispatch a normalized event.
-  Media reservations must retain an auth-lease reference before provider call binding completes.
-  A bounded lookup by ingress key/token may locate that private pinned lease without consuming,
-  extending expiry or registering a waiter. Verify first, then atomically consume against the
-  same expected lease/binding. Expired, replaced or mismatched leases fail closed; unauthenticated
-  callers cannot reserve/consume admission state or receive its private authentication material.
+  Media reservations must retain access to the leg's initialized configuration before provider
+  call binding completes. Use the existing leg/admission records; no separate authentication-lease
+  subsystem is required. A bounded lookup by ingress key/token may locate that private
+  configuration without consuming, extending expiry or registering a waiter. Verify first, then
+  atomically consume against the same expected leg/service binding. Expired, replaced or
+  mismatched bindings fail closed; unauthenticated callers cannot reserve/consume admission state
+  or receive its private authentication material.
 - For existing legs, unsigned correlation may only locate a candidate within the already selected
   service; verify its exact pinned credential/identity before dispatch. Never scan all tenant keys.
 - Preserve duplicate/out-of-order handling, single-use media admission and existing no-redial
@@ -409,7 +417,8 @@ Depends on the common tenant service boundary from checkpoint 3 and the existing
   Preserve the configured public signature URL and account/call/stream identity checks.
 - [ ] Migrate WSS media authentication. Locate the existing leg/reservation's private configuration
   without consuming its token or installing a waiter before signature verification. Keep pending
-  outbound reservations and exact token/binding consumption working with the selected tenant auth.
+  outbound reservations and exact token/binding consumption working with the selected tenant auth;
+  extend existing leg/admission records instead of adding a separate authentication-lease subsystem.
 - [ ] Test the actual signature and command boundaries with two tenants, missing/inactive bindings,
   wrong tokens/accounts and unavailable credential storage. Failed authentication consumes no token;
   no request uses application/global credentials.
@@ -423,17 +432,19 @@ The original Twilio milestone's live-provider audibility gate remains separate.
 
 Depends on the shared credential source; keep changes in small provider-specific commits.
 
-- [ ] Inventory Vxpipe's existing advertised providers and previously supported auth/option paths
-  against installed source. An installed SDK adapter alone does not create a new provider feature
-  requirement. Preserve supported behavior while replacing its credential source.
-- [ ] Supply each supported adapter's expected auth shape from the selected tenant record,
-  including existing non-API-key integrations. Validate malformed/mixed inputs before requests;
-  no OAuth onboarding/refresh or arbitrary credential-file discovery is added.
+- [ ] Inventory provider/auth/option paths supported by pre-cutover Vxpipe source and project
+  tests. Neither installed SDK adapters nor website logos create new provider commitments.
+  The interim Google-first catalog also does not justify dropping previously supported paths.
+  Preserve demonstrated integrations and correct unsupported documentation claims.
+- [ ] Supply each existing adapter's current auth shape from the selected tenant record.
+  Validate malformed/mixed inputs before requests. New provider/auth-mode support, OAuth
+  onboarding/refresh and arbitrary credential-file discovery are outside this checkpoint.
 - [ ] Verify actual adapter request construction with focused doubles: tenant/provider/name,
   model/options, nested options and existing router model paths. Preserve current validation,
   provider identity and protected transport settings.
-- [ ] Seed conflicting ambient credentials and prove they are never used. Bedrock tenant auth
-  must not fall through to platform S3 AWS settings.
+- [ ] Seed conflicting ambient credentials for the existing integrations and prove they are
+  never used. Unsupported provider/auth combinations remain rejected; no new integration is
+  required to exercise this isolation rule.
 - [ ] Update affected provider setup pages and option links. Mark genuinely unsupported
   combinations honestly; do not expand model/provider functionality as part of this cutover.
 
@@ -444,9 +455,11 @@ public inline selection/options contract, with no SDK ambient credential fallbac
 
 Depends on the encrypted credential store from checkpoint 1. The platform operator controls the
 encryption key; tenant/provider API-key values are unchanged by this operation.
+Reuse the existing `CredentialKeyring` and `CredentialCipher`: they already select an externally
+supplied active write key and locate decrypt keys by stored key ID. New writes keep using the
+active key, and no key is stored in PostgreSQL. This checkpoint adds the re-encryption operation
+and its transition evidence, not another key-provider framework.
 
-- [ ] Support an operator-supplied active encryption key and the old keys needed to decrypt stored
-  rows during transition. New writes use the active key; no encryption key is stored in PostgreSQL.
 - [ ] Provide a bounded, resumable re-encryption operation that decrypts each existing payload and
   encrypts the same value under the active key, preserving tenant/provider/credential identity.
   Keep secret values and ciphertext out of command output and logs.
@@ -464,6 +477,8 @@ the old key after verified re-encryption, without changing any third-party crede
 ### Checkpoint 7 — Finish platform configuration and remove old readers
 
 Depends on the credential-reader checkpoints above. This is the final operational cutover and acceptance slice.
+Audit existing checkpoint evidence against the final source. Reuse valid privacy, no-fallback,
+isolation and restart checks; add focused tests only for changed or uncovered boundaries.
 
 - [ ] Verify startup/configuration loading with platform env settings and pre-provisioned tenant
   credentials. A provider construction smoke check proves the DB source after restart; do not
@@ -485,7 +500,7 @@ Depends on the credential-reader checkpoints above. This is the final operationa
 - [ ] Restore and catalog platform database/pool, S3, listener/TLS, callback origin and encryption
   settings in `config/runtime.exs` and `env.sample` (keep `.env.example` synchronized or retire
   the duplicate). Add concise comments, mandatory placeholders, and commented optional variables.
-  Exercise launcher/Console/Astro wiring;
+  Verify launcher/Console/Astro wiring only where this configuration cutover changes it;
   no provider secret is required before tenant DB provisioning.
 - [x] Configure recordings and call-details publication from the same `STORAGE_BUCKET`,
   `AWS_REGION`, `AWS_ENDPOINT` and AWS credential settings. Remove both old S3 setting families and their fallback rules from
@@ -509,8 +524,9 @@ Depends on the credential-reader checkpoints above. This is the final operationa
   JSON call definitions remain. Preserve embedded fixture/local-provider use without Ecto.
 - [ ] Obtain the requested independent agent review of the final implementation, fix findings,
   then run all five common root gates once the reviewed checkpoint is ready. Record exact results.
-- [ ] Verify two-tenant persistence, unavailable/wrong encryption keys, safe failure projections
-  and restart at the credential/configuration boundary. Platform encryption-key rotation is
+- [ ] Confirm existing evidence covers two-tenant persistence, unavailable/wrong encryption keys,
+  safe failure projections and restart at the final credential/configuration boundary; fill only
+  uncovered gaps. Platform encryption-key rotation is
   covered in checkpoint 6; upstream credential rotation, backup drills and full carrier audibility
   acceptance are outside this milestone.
 - [ ] Validate source-development/macOS boot now. Verify packaged/container boot only after the
@@ -518,14 +534,16 @@ Depends on the credential-reader checkpoints above. This is the final operationa
 - [ ] Update the checkpoint evidence ledger, milestone index and labnotes. Leave this milestone
   unchecked for any unresolved acceptance gate; no commits unless requested.
 
-Exit: documented setup and restart produce a working tenant call with env-backed platform storage,
-encrypted provider/carrier auth and inline definitions, with all obsolete live configuration
-paths removed. Container publishing remains governed by its separate milestone.
+Exit: documented setup and restart load platform env settings and construct tenant-bound providers
+from encrypted storage using inline selections, with all obsolete live configuration paths removed.
+The existing tenant-call evidence remains valid; another full call demonstration is not required.
+Container publishing remains governed by its separate milestone.
 
 ## Acceptance matrix
 
 Each row verifies a changed credential/configuration boundary. Existing call-flow regression tests
 remain part of the umbrella suite; this matrix does not create a second call-flow milestone.
+Map rows to existing valid evidence before adding tests or manual demonstrations.
 
 | Boundary | Required evidence |
 | --- | --- |
@@ -569,7 +587,8 @@ remain part of the umbrella suite; this matrix does not create a second call-flo
 - [x] Review the dirty worktree before implementation and discard the superseded TOML/global
   provider additions with their dependencies and tests; preserve unrelated website work.
 - [x] Independently review cleanup with GPT 6 Astra xhigh. The auth additions also allowed local
-  credential-file paths and mixed Bedrock auth; preserve those findings as future regression cases.
+  credential-file paths and mixed Bedrock auth. Retain those findings as historical evidence;
+  add regression cases only if they apply to an integration retained by checkpoint 5's inventory.
 - [x] Run the restored umbrella gates and record baseline results in the cleanup labnote.
   Static root gates and launcher/build checks pass. The full suite ran 1,436 tests with one
   existing native human-handoff timeout; that exact case passed in isolation without source
@@ -604,6 +623,15 @@ exits and failure cases pass.
 
 ## Specification review
 
+Follow-up scope audit (2026-09-15): independent GPT 6 Astra xhigh and local source review found
+remaining overbreadth in unconditional provider/auth examples, prescribed carrier machinery and
+duplicate acceptance work. Restricted checkpoint 5 to demonstrated pre-cutover support; retained
+existing carrier options/private leg configuration and the existing keyring; narrowed final checks
+to changed or uncovered boundaries. Tenant/service isolation, authentication-before-consumption,
+encryption-key re-encryption and configuration cleanup remain required. This documentation change
+completes no checkpoint; progress remains 2 complete, 1 partial and 4 not started. See the
+[audit evidence](../../labnotes/20260915-2333-remaining-credential-scope.md).
+
 Scope correction (2026-09-15): local review traced the user's DB-reader clarification against every
 checkpoint. Removed third-party credential lifecycle feature work, narrowed existing-flow acceptance
 to credential boundaries and retained tenant isolation/authentication/no-fallback requirements.
@@ -618,8 +646,8 @@ leg resolution and sample bootstrap. This review changed the draft from layer-ba
 complete call/operator flows and added tenant telephony service lookup before ingress verification.
 
 Agent review by Lorentz on 2026-09-15 identified three missing telephony contracts: durable
-tenant-scoped deduplication, non-consuming Twilio auth-lease discovery, and separate credential
-versus admission-storage outage tests. Each is now specified in the carrier contracts, owning
+tenant-scoped deduplication, non-consuming access to Twilio's initialized leg authentication, and
+separate credential versus admission-storage outage tests. Each is now specified in the carrier contracts, owning
 checkpoints and acceptance matrix. Bounded re-review reported no remaining blocking findings
 or vertical-order contradiction. This is specification review, not runtime implementation approval.
 The later explicit-deletion clarification and platform removal/negative-test tasks also
