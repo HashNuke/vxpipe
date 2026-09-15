@@ -78,3 +78,12 @@
   follows this reviewed checkpoint; its previously reproduced native Morse failure stays open.
 - Strict Credo and unused-lock checks pass. The final cold-process cleanup check passes one test
   (9 excluded) and leaves no encoded plan artifacts in the worktree.
+
+## Final umbrella verification
+
+- At `5c82864`, the full umbrella run passes 1,571 tests, zero failures and 36 exclusions
+  (`--preload-modules --max-requires 1 --max-cases 4 --seed 235296`). All five root gates pass.
+- Gateway's 413 tests pass. The previously observed native Morse and five-participant audio
+  failures did not recur; this pass does not establish their cause. No audio behavior was changed.
+- The milestone remains four of seven checkpoints complete. Incoming final insertion, live
+  carrier readers and the other recorded unfinished work still prevent full milestone acceptance.

@@ -27,12 +27,11 @@ Zenmux as the remaining model integration. Its existing API-key/native-routing c
 inline selections and tenant DB credentials. Its credential-reader checkpoint is verified by focused
 tests and independent review. A follow-up public startup regression catches and corrects the stale
 startup gate that still rejected Zenmux entry agents; see [startup evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
-Static root gates and unused-lock checks pass; the latest full run after the encryption-key
-checkpoint completed 1,564 tests with one previously reproduced native Morse-audio failure and
-36 exclusions. The preceding run's five-participant cue/conversation case passes this time.
-The cause of the native observations remains unresolved. The milestone's
-common umbrella gate remains open. Existing carrier/keyring structures
-and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider
+Static root gates and unused-lock checks pass. The latest full run after canonical phone-service
+bindings passes 1,571 tests with zero failures and 36 exclusions (seed 235296). The previously
+observed native Morse and five-participant audio failures did not recur; this pass does not
+establish their cause. Final milestone acceptance remains open for the unfinished checkpoints.
+Existing carrier/keyring structures and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider
 configuration paths must be deleted, not retained as optional or
 legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
 checkpoint 1 now integrates encrypted Google/Deepgram provisioning, inline selections, transactional

@@ -2,8 +2,8 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2, 5 and 6 are complete. Of seven checkpoints, four are complete,
-two are partial and one is not started. The latest completed full umbrella run retains one native audio
-failure; the milestone and common acceptance gates remain unchecked.
+two are partial and one is not started. The latest full umbrella run passes 1,571 tests with zero
+failures and 36 exclusions; final milestone acceptance remains open for the unfinished checkpoints.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
 reviewed. Final independent implementation review and the remaining checkpoints are open.
@@ -686,7 +686,9 @@ Checkpoint 3 canonical-binding follow-up: hosted compilation now pins safe servi
 the plan digest, and the final web write compares every reference under existing locks. Three Calls
 checks and ten focused Persistence checks pass, including post-compile account/service/credential
 rebinding, duplicate-reference mismatch, stored identity/digest/privacy and legacy inspection.
-Broad suites pass 84 Calls and 119 Persistence tests (9 excluded). Incoming final insertion,
+Broad suites pass 84 Calls and 119 Persistence tests (9 excluded). All five root gates pass at
+`5c82864`: 1,571 tests, zero failures, 36 excluded (seed 235296). Previously observed native audio
+failures did not recur; their cause remains unresolved. Incoming final insertion,
 live activation/reference enforcement and tenant-scoped carrier readers remain pending.
 See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
 
