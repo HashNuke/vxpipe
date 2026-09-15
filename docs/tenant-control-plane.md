@@ -72,10 +72,12 @@ Join tokens are introduced by the prepared-call milestone.
 
 ## Provision upstream provider credentials
 
-Google and Deepgram credentials have separate encrypted tenant storage and trusted
+Google, Deepgram and Telnyx credentials have separate encrypted tenant storage and trusted
 provision/list commands. See [provider credential storage](provider-credential-storage.md)
-for platform encryption settings, protected stdin input and metadata output. Inline definitions resolve these records at save, publication, preparation and capability
-creation. API-key issuance and authentication above remain independent.
+for platform encryption settings, protected stdin input and metadata output. Inline Google/Deepgram
+definitions resolve these records at save, publication, preparation and capability creation.
+Telnyx service bindings and live carrier DB readers remain in progress. API-key issuance and
+authentication above remain independent.
 
 ## Save and publish call definitions
 

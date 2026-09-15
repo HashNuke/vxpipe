@@ -1,12 +1,12 @@
 defmodule Vxpipe.Calls.ProviderAuth do
   @moduledoc "Closed, local validation of supported provider credential payloads."
 
-  @providers ["google", "deepgram"]
+  @providers ["google", "deepgram", "telnyx"]
 
   @spec validate(term(), term(), term()) :: :ok | {:error, :invalid_provider_auth}
   def validate(provider, "api_key", %{"api_key" => key} = payload)
       when provider in @providers and map_size(payload) == 1 and is_binary(key) do
-    if byte_size(key) <= 8192 and Regex.match?(~r/\A[\x21-\x7E]+\z/, key),
+    if byte_size(key) <= maximum_key_bytes(provider) and Regex.match?(~r/\A[\x21-\x7E]+\z/, key),
       do: :ok,
       else: {:error, :invalid_provider_auth}
   end
@@ -31,4 +31,7 @@ defmodule Vxpipe.Calls.ProviderAuth do
       do: :ok,
       else: {:error, :invalid_tenant_key}
   end
+
+  defp maximum_key_bytes("telnyx"), do: 4_096
+  defp maximum_key_bytes(_provider), do: 8_192
 end

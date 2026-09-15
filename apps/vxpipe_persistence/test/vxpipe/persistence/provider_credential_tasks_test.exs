@@ -93,6 +93,37 @@ defmodule Vxpipe.Persistence.ProviderCredentialTasksTest do
     assert {:ok, []} = ProviderCredentials.list(tenant.key)
   end
 
+  test "trusted operator provisions a named Telnyx key through protected input", %{tenant: tenant} do
+    output =
+      capture_io(~s({"api_key":"telnyx-operator-private-marker"}), fn ->
+        Mix.Tasks.Vxpipe.ProviderCredential.Provision.run([
+          "--tenant",
+          tenant.key,
+          "--provider",
+          "telnyx",
+          "--name",
+          "support-phone"
+        ])
+      end)
+
+    summary = JSON.decode!(output)
+    assert summary["tenant_key"] == tenant.key
+    assert summary["provider"] == "telnyx"
+    assert summary["name"] == "support-phone"
+    assert summary["auth_kind"] == "api_key"
+    assert summary["status"] == "active"
+    refute output =~ "private-marker"
+
+    listed =
+      capture_io(fn -> Mix.Tasks.Vxpipe.ProviderCredential.List.run(["--tenant", tenant.key]) end)
+
+    assert JSON.decode!(listed) == [summary]
+    refute listed =~ "private-marker"
+
+    assert {:ok, resolved} = ProviderCredentials.resolve(tenant.key, "telnyx", "support-phone")
+    assert resolved.payload == %{"api_key" => "telnyx-operator-private-marker"}
+  end
+
   test "terminal stdin is rejected before the credential payload is read" do
     terminal = start_supervised!({Vxpipe.Persistence.Test.ProviderCredentialInput, owner: self()})
     previous = Process.group_leader()

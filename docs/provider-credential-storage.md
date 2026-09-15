@@ -1,11 +1,10 @@
 # Tenant provider credential storage
 
-Trusted operators can provision Google and Deepgram API keys in PostgreSQL and list their
-metadata. This is the first implementation chunk within the
-[tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
+Trusted operators can provision Google, Deepgram and Telnyx API keys in PostgreSQL and list their
+metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
 Inline Google/Deepgram definitions now resolve this store at save, publication, preparation
-and capability creation. Checkpoint 1 remains open until repository-wide acceptance and
-independent implementation review pass; see [inline selections](inline-provider-selections.md).
+and capability creation; see [inline selections](inline-provider-selections.md). Telnyx credential
+provisioning is available; tenant service bindings and live carrier DB readers remain checkpoint 3 work.
 
 ## Configure and provision
 
@@ -36,12 +35,17 @@ mix vxpipe.provider_credential.provision \
   --tenant TENANT_KEY --provider google < path/to/protected-google.json
 mix vxpipe.provider_credential.provision \
   --tenant TENANT_KEY --provider deepgram < path/to/protected-deepgram.json
+mix vxpipe.provider_credential.provision \
+  --tenant TENANT_KEY --provider telnyx --name support-phone < path/to/protected-telnyx.json
 mix vxpipe.provider_credential.list --tenant TENANT_KEY
 ```
 
-The input shape is `{"api_key":"REPLACE_WITH_PROVIDER_KEY"}`. Both providers currently support
+The input shape is `{"api_key":"REPLACE_WITH_PROVIDER_KEY"}`. These providers currently support
 only `api_key` auth; additional fields, unsupported auth kinds, empty values, whitespace and
-control characters fail local validation. Input is limited to 16,384 bytes. The reader uses
+control characters fail local validation. Telnyx keys are limited to 4,096 bytes to match the
+existing carrier configuration boundary; Google/Deepgram keys retain their 8,192-byte limit.
+Telnyx connection IDs and verification public keys belong to service metadata, not this payload.
+Input is limited to 16,384 bytes. The reader uses
 Elixir `IO.read/2` with a bounded character count and a separate byte-size check. Only terminal
 detection uses OTP `:io.getopts/1`, since Elixir has no equivalent wrapper. Its `stdin` flag
 describes the input stream; `terminal` describes stdout, which can still be a terminal when
@@ -113,9 +117,10 @@ measurements must use explicitly projected, payload-free events.
 - Interactive secret entry was rejected for this CLI: terminal echo and shell history are avoided
   by requiring protected redirected input.
 - A custom cryptographic primitive or new encryption dependency was unnecessary; OTP supplies
-  authenticated encryption. Key rotation/re-encryption tooling, revocation operations, admitted
-  call/leg lifetimes and backup-restore acceptance remain checkpoint 6 work. Retaining older
-  key IDs in this store does not claim those operational workflows are complete.
+  authenticated encryption. Platform encryption-key re-encryption tooling remains checkpoint 6
+  work and reuses the existing keyring. Third-party key rotation/revocation workflows and
+  backup-restore drills are excluded. Existing admitted-client/leg lifetimes remain unchanged
+  while each new construction resolves its current tenant binding.
 
 ## Verification
 
@@ -125,3 +130,5 @@ listing, query telemetry suppression, repository termination/recovery and CLI in
 Runtime tests cover explicit key injection, absent keys and sanitized startup errors.
 Red/green results, independent review and disposable database/terminal acceptance are recorded
 in the [provisioning labnote](../labnotes/20260915-1616-tenant-credential-provisioning.md).
+Named Telnyx provisioning, encrypted tenant isolation and CLI metadata-only output are covered by
+the [Telnyx provisioning checks](../labnotes/20260915-2341-telnyx-credential-provisioning.md).

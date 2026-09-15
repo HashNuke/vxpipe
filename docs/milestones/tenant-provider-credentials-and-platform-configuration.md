@@ -2,7 +2,7 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1 and 2 are complete. Of seven checkpoints, two are complete,
-one is partial and four are not started.
+two are partial and three are not started.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
 reviewed. Final independent implementation review and the remaining checkpoints are open.
@@ -390,6 +390,8 @@ Depends on the credential store and existing Telnyx integration.
 - [ ] Add the tenant service record/port and trusted registration needed to locate existing Telnyx
   configuration. Bind tenant, provider, account/connection, ingress key and credential reference.
   Validate ownership and unique ingress keys; keep public callback/media origins platform-owned.
+  - [x] Provision named Telnyx API keys through the encrypted tenant store and protected-input
+    operator CLI; verify tenant isolation, metadata-only output and invalid-payload rejection.
 - [ ] Resolve matching tenant service credentials during definition save/publish/prepare and
   existing leg construction. Pin safe service identity so an old plan cannot change accounts.
 - [ ] Replace application/global service credential lookup for existing answer, dial, media and
@@ -602,15 +604,15 @@ scope, independent review, root/isolated test evidence and rendered homepage che
 
 ## Evidence ledger
 
-Current progress: **2 of 7 complete** (checkpoints 1 and 2), **1 partial** (checkpoint 7),
-and **4 not started** (checkpoints 3–6). Implementation boxes stay unchecked until their runnable
+Current progress: **2 of 7 complete** (checkpoints 1 and 2), **2 partial** (checkpoints 3 and 7),
+and **3 not started** (checkpoints 4–6). Implementation boxes stay unchecked until their runnable
 exits and failure cases pass.
 
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
 | 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
 | 2 — AI/speech credential readers | Implemented and verified | Opening, connection, briefing and source-restoration readers use fresh tenant resolution; legacy global readers are removed. Destination save validation covers missing/wrong-tenant/inactive model/TTS/STT bindings before writes; the Persistence group passes 18 tests (2 excluded). Named tenant isolation, whole-selection overrides and fresh construction pass 15 Engine tests. Three tagged local DB activation tests verify current Google/Deepgram authentication and safe failure before requests. Independent GPT 6 Astra xhigh review found no blockers. All five root gates pass: 1,532 tests, zero failures, 33 excluded (seed 235296). A native test assertion found in the initial run was corrected in a separate reviewed commit; its focused case and the full Gateway suite pass. Live provider checks remain excluded. See the [reader inventory](../credential-reader-boundaries.md), [destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md), [native assertion correction](../../labnotes/20260915-2317-native-readiness-assertion.md), [global-reader evidence](../../labnotes/20260915-2223-remove-global-readers.md), [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md) and [source-reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md). |
-| 3 — Telnyx credential readers | Not started | Pending |
+| 3 — Telnyx credential readers | Encrypted credential provisioning verified; service bindings and live readers pending | Named Telnyx keys use the existing encrypted store and protected-input CLI with the existing carrier key-size limit. Focused red/green: 14 tests, zero failures after the change. Calls 81 and Persistence 89 tests pass (6 excluded); format, compile and strict Credo pass. Independent GPT 6 Astra xhigh review found no code blocker; a transitional documentation claim was corrected. Full umbrella/unused-dependency checks remain pending for this checkpoint. See [Telnyx provisioning evidence](../../labnotes/20260915-2341-telnyx-credential-provisioning.md). |
 | 4 — Twilio credential readers | Not started | Pending |
 | 5 — Existing provider credential integrations | Not started | Pending |
 | 6 — Platform encryption-key rotation | Not started | Pending |
@@ -629,7 +631,7 @@ duplicate acceptance work. Restricted checkpoint 5 to demonstrated pre-cutover s
 existing carrier options/private leg configuration and the existing keyring; narrowed final checks
 to changed or uncovered boundaries. Tenant/service isolation, authentication-before-consumption,
 encryption-key re-encryption and configuration cleanup remain required. This documentation change
-completes no checkpoint; progress remains 2 complete, 1 partial and 4 not started. See the
+completed no checkpoint; at that audit, progress was 2 complete, 1 partial and 4 not started. See the
 [audit evidence](../../labnotes/20260915-2333-remaining-credential-scope.md).
 
 Scope correction (2026-09-15): local review traced the user's DB-reader clarification against every

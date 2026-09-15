@@ -82,7 +82,14 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
   test "rejects malformed auth and unsupported providers before persisting a binding", data do
     for {provider, kind, payload} <- [
           {"req_llm", "api_key", %{"api_key" => "secret"}},
+          {"bedrock", "api_key", %{"api_key" => "secret"}},
           {"google", "oauth", %{"api_key" => "secret"}},
+          {"telnyx", "oauth", %{"api_key" => "secret"}},
+          {"telnyx", "api_key", %{"api_key" => " "}},
+          {"telnyx", "api_key", %{"api_key" => "secret\r\nheader"}},
+          {"telnyx", "api_key", %{"api_key" => String.duplicate("x", 4_097)}},
+          {"telnyx", "api_key", %{"api_key" => "secret", "auth_token" => "mixed"}},
+          {"telnyx", "api_key", %{"api_key" => "secret", "public_key" => "service-metadata"}},
           {"deepgram", "api_key", %{"api_key" => " "}},
           {"google", "api_key", %{"api_key" => "secret\r\nheader"}},
           {"google", "api_key", %{"api_key" => "secret", "auth_file" => "local.json"}},
@@ -101,6 +108,41 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
     end
 
     assert {:ok, []} = ProviderCredentials.list(data.tenant.key, data.options)
+  end
+
+  test "provisions encrypted named Telnyx credentials independently for each tenant", data do
+    for tenant <- [data.tenant, data.other] do
+      secret = "telnyx-#{tenant.key}-private-marker"
+
+      assert {:ok, metadata} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 "telnyx",
+                 "support-phone",
+                 "api_key",
+                 %{"api_key" => secret},
+                 data.options
+               )
+
+      stored = Repo.get_by!(ProviderCredential, public_id: metadata.id)
+      assert stored.provider == "telnyx"
+      assert stored.encryption_key_id == "key-v1"
+      refute stored.encrypted_payload =~ secret
+
+      assert {:ok, resolved} =
+               ProviderCredentials.resolve(tenant.key, "telnyx", "support-phone", data.options)
+
+      assert resolved.credential == metadata
+      assert resolved.payload == %{"api_key" => secret}
+      assert {:ok, [^metadata]} = ProviderCredentials.list(tenant.key, data.options)
+      refute inspect({metadata, resolved}) =~ "private-marker"
+    end
+
+    assert {:error, :provider_credential_not_found} =
+             ProviderCredentials.resolve(data.tenant.key, "telnyx", "default", data.options)
+
+    assert {:error, :provider_credential_not_found} =
+             ProviderCredentials.resolve(data.tenant.key, "google", "support-phone", data.options)
   end
 
   test "enforces binding uniqueness per tenant/provider without replacing existing secrets",
