@@ -92,6 +92,19 @@ turn-taking centerpiece.
   badge beside speech-to-text for a compact caller card. Verified render,
   3/3 tests. (Note: pseudo-wire text never existed in docs/apps — it came
   from the original brief; the :4321 afterimage is the stale dev server.)
+- Follow-up: hero tagline trimmed to one line; capability cloud added
+  (Telephony, AI Providers, Multi-Agent Orchestration, MCP Tools, Participant
+  Policies, Compliance Friendly, Call Variables, Call Recording, Call
+  Diagnostics; duplicate multi-agent entry merged, Elixir&OTP folded into the
+  trust badge). Cloud leads into the room visual as hero art. New
+  `test/homepage-structure.test.mjs`, render verified, suite 4/4.
+- Follow-up: hero rewritten for newcomers and experts alike — intent-led
+  title, jargon-free subline (per feedback, no exact-copy test for this).
+  Structure test kept to structural checks, render verified, suite 4/4.
+- Hero copy approved as final, then retitled to "Voice agents made easy."
+- Follow-up: feature tags moved above the CTAs — hero actions pulled out of
+  frontmatter into content `LinkButton`s (cloud, CTAs, visual). Caught and
+  removed a duplicated visual render. Suite 4/4, render verified.
 - Docs-only change: umbrella `mix` suite not applicable; pre-existing worktree
   changes (call engine/gateway) untouched.
 - Follow-up: deck cascades down-right from top-left front (16px steps),

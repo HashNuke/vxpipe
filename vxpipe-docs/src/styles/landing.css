@@ -1,12 +1,37 @@
-.trust-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.625rem;
+/* SaaS hero: airy, centered, clear of the site header. */
+.sl-container > div.hero {
+  padding-block: clamp(4rem, 9vw, 6.5rem) clamp(2rem, 4vw, 3rem);
 }
 
-.trust-row {
+.sl-container > div.hero .hero-info {
+  align-items: center;
+  max-width: 58rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.sl-container > div.hero .tagline {
+  max-width: 46rem;
+}
+
+.sl-container > div.hero .actions {
   justify-content: center;
-  margin-block: 0 4rem;
+}
+
+.capability-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-block: 1.25rem 0;
+}
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin-block: 1.75rem 0;
 }
 
 .provider-groups {

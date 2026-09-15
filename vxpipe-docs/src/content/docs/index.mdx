@@ -3,22 +3,15 @@ title: VxPipe
 description: The open-source engine for real-time voice AI.
 template: splash
 hero:
-  title: Own your voice AI stack.
-  tagline: The open-source engine for real-time voice AI. Build browser and phone agents with transport, speech, model orchestration, tools, and human handoff in one self-hosted Elixir system.
-  actions:
-    - text: Get started
-      link: /en/docs/getting-started/
-      icon: right-arrow
-    - text: View on GitHub
-      link: https://github.com/HashNuke/vxpipe
-      icon: github
-      variant: secondary
+  title: Voice agents made easy.
+  tagline: VxPipe runs the whole call — audio, speech, answers, tools, and handoff — on your infrastructure, without stitching services together or locking into one provider.
 ---
 
 import {
   Badge,
   Card,
   CardGrid,
+  LinkButton,
   LinkCard,
   Steps,
 } from '@astrojs/starlight/components';
@@ -44,10 +37,28 @@ import TwilioLogo from '../../assets/logos/twilio.svg';
 import CallRoomVisual from '../../components/CallRoomVisual';
 import '../../styles/landing.css';
 
-<div className="trust-row" aria-label="Project attributes">
-  <Badge text="Apache 2.0" variant="success" size="large" />
-  <Badge text="Self-hostable" variant="note" size="large" />
-  <Badge text="Built on Elixir" variant="tip" size="large" />
+<div className="capability-cloud" aria-label="Platform capabilities">
+  <Badge text="Telephony" />
+  <Badge text="AI Providers" />
+  <Badge text="Multi-Agent Orchestration" />
+  <Badge text="MCP Tools" />
+  <Badge text="Participant Policies" />
+  <Badge text="Compliance Friendly" />
+  <Badge text="Call Variables" />
+  <Badge text="Call Recording" />
+  <Badge text="Call Diagnostics" />
+  <Badge text="Apache 2.0" variant="success" />
+  <Badge text="Self-hostable" variant="note" />
+  <Badge text="Built on Elixir & OTP" variant="tip" />
+</div>
+
+<div className="hero-cta">
+  <LinkButton href="/en/docs/getting-started/" icon="right-arrow">
+    Get started
+  </LinkButton>
+  <LinkButton href="https://github.com/HashNuke/vxpipe" variant="secondary" icon="github">
+    View on GitHub
+  </LinkButton>
 </div>
 
 <CallRoomVisual />
