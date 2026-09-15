@@ -128,7 +128,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) 4.5rem minmax(0, 1.2fr);
   gap: clamp(0.75rem, 2.5vw, 1.25rem);
-  align-items: stretch;
+  align-items: center;
 }
 
 .crv-participant {
@@ -144,7 +144,7 @@
 
 .crv-participant--caller {
   border-top: 2px solid var(--crv-caller-line);
-  align-self: start;
+  align-self: center;
 }
 
 .crv-p-head {
@@ -242,8 +242,12 @@
 
 .crv-cap--tel {
   white-space: nowrap;
-  font-size: 0.68rem;
+  letter-spacing: 0;
   padding: 0.25rem 0.55rem;
+}
+
+.crv-tel-number {
+  font-size: inherit;
 }
 
 .crv-cap--mini {
@@ -265,7 +269,8 @@
 
 .crv-lane {
   position: relative;
-  min-height: 100%;
+  align-self: stretch;
+  min-height: 8rem;
 }
 
 .crv-lane-track {
@@ -363,6 +368,12 @@
   background: rgb(0 0 0 / 0.55);
   padding: 0.55rem 0.7rem;
   color: var(--crv-muted);
+  --dim: 0;
+}
+
+.crv-profile .crv-cap {
+  filter: grayscale(var(--dim));
+  opacity: calc(1 - var(--dim));
 }
 
 .crv-profile--a {
@@ -378,6 +389,7 @@
   animation: crv-deck-slot var(--crv-cycle) ease-in-out infinite;
   transform: translate(16px, 16px) scale(0.98);
   filter: blur(0.5px);
+  --dim: 1;
   z-index: 2;
 }
 
@@ -385,6 +397,7 @@
   animation: crv-deck-slot var(--crv-cycle) ease-in-out infinite;
   transform: translate(32px, 32px) scale(0.96);
   filter: blur(1.5px);
+  --dim: 1;
   z-index: 1;
 }
 
@@ -440,24 +453,27 @@
     color: var(--crv-agent);
     opacity: 1;
     filter: none;
+    --dim: 0;
     z-index: 3;
   }
   36%, 63% {
-    transform: translate(16px, 19px) scale(0.98);
+    transform: translate(16px, 16px) scale(0.98);
     border-color: var(--crv-hairline);
     background-color: rgb(0 0 0 / 0.55);
     box-shadow: none;
     color: var(--crv-muted);
     filter: blur(0.5px);
+    --dim: 1;
     z-index: 2;
   }
   69%, 96% {
-    transform: translate(32px, 38px) scale(0.96);
+    transform: translate(32px, 32px) scale(0.96);
     border-color: var(--crv-hairline);
     background-color: rgb(0 0 0 / 0.55);
     box-shadow: none;
     color: var(--crv-muted);
     filter: blur(1.5px);
+    --dim: 1;
     z-index: 1;
   }
   100% {
@@ -468,6 +484,7 @@
     color: var(--crv-agent);
     opacity: 1;
     filter: none;
+    --dim: 0;
     z-index: 3;
   }
 }

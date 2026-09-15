@@ -117,8 +117,48 @@ test('homepage renders a static React call-room visual built on room terminology
   );
   assert.match(
     css,
-    /36%, 63%\s*\{[^}]*filter:\s*blur/s,
-    'inactive cards must blur instead of fading',
+    /grayscale\(var\(--dim\)\)/,
+    'inactive badges must grey out via shared dim state',
+  );
+  assert.match(
+    css,
+    /\.crv-profile\s+\.crv-cap\s*\{[^}]*opacity:\s*calc\(1\s*-\s*var\(--dim/,
+    'inactive badges must hide via shared dim state',
+  );
+  assert.match(
+    css,
+    /\.crv-grid\s*\{[^}]*align-items:\s*center/s,
+    'desktop grid must center participants so the mixer sits mid-row',
+  );
+  assert.doesNotMatch(
+    css,
+    /\.crv-lane\s*\{[^}]*min-height:\s*100%/s,
+    'lane must not use a circular 100% min-height that shifts it down',
+  );
+  assert.match(
+    css,
+    /\.crv-lane\s*\{[^}]*align-self:\s*stretch/s,
+    'lane must stretch the centered row so the mixer stays mid-row',
+  );
+  assert.match(
+    css,
+    /\.crv-mixer\s*\{[^}]*top:\s*50%/s,
+    'mixer must sit at the vertical middle of the lane',
+  );
+  assert.match(
+    css,
+    /\.crv-tel-number\s*\{[^}]*font-size:\s*inherit/s,
+    'phone number must inherit the chip size instead of Starlight body copy',
+  );
+  assert.doesNotMatch(
+    css,
+    /\.crv-cap--tel\s*\{[^}]*font-size:\s*0\.625rem/s,
+    'phone chip must not shrink below the speech-to-text size',
+  );
+  assert.match(
+    css,
+    /69%, 96%\s*\{[^}]*--dim:\s*1/s,
+    'back slot must mark itself dim',
   );
   assert.doesNotMatch(css, /crv-caps-reveal/, 'deck cards must keep full content');
   assert.match(
