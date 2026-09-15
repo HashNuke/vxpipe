@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   @behaviour Vxpipe.Console.SampleCallBackend
 
   alias Vxpipe.Calls.{DefinitionRevision, IssuedApiKey, IssuedJoinToken, ParticipantRoute}
-  alias Vxpipe.Calls.{Principal, Tenant}
+  alias Vxpipe.Calls.Principal
 
   @api_key "vxp_test-only-sample-backend-key"
   @tenant_key "BBBBBBBBBBBBBBBB"
@@ -16,7 +16,8 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   def start_link(options) do
     Agent.start_link(fn ->
       %{
-        bootstrap_exception?: Keyword.get(options, :bootstrap_exception?, false),
+        authorization_exception?: Keyword.get(options, :authorization_exception?, false),
+        save_error?: Keyword.get(options, :save_error?, false),
         initial_variables: Keyword.fetch!(options, :initial_variables),
         observer: Keyword.fetch!(options, :observer),
         operations: []
@@ -27,30 +28,28 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   def backend(agent), do: {__MODULE__, agent}
   def operations(agent), do: Agent.get(agent, &Enum.reverse(&1.operations))
 
-  def bootstrap(agent, name) do
-    operation(agent, {:bootstrap, name})
-    state = Agent.get(agent, & &1)
-
-    if state.bootstrap_exception? do
-      raise "synthetic backend exception"
-    end
-
-    inserted_at = ~U[2026-09-09 13:00:00.000000Z]
-
-    {:ok, %Tenant{key: @tenant_key, name: name, inserted_at: inserted_at},
-     %IssuedApiKey{
-       id: "40000000-0000-4000-8000-000000000004",
-       tenant_key: @tenant_key,
-       name: "bootstrap",
-       scopes: MapSet.new([:calls]),
-       secret: @api_key,
-       inserted_at: inserted_at
-     }}
-  end
-
   def save_definition(agent, tenant_key, definition) do
     operation(agent, {:save_definition, tenant_key, definition})
-    {:ok, revision(definition, [])}
+
+    if Agent.get(agent, & &1.save_error?),
+      do: {:error, :provider_credential_unavailable},
+      else: {:ok, revision(definition, [])}
+  end
+
+  def issue_api_key(agent, tenant_key) do
+    operation(agent, {:issue_api_key, tenant_key})
+    state = Agent.get(agent, & &1)
+    if state.authorization_exception?, do: raise("synthetic backend exception")
+
+    {:ok,
+     %IssuedApiKey{
+       id: "40000000-0000-4000-8000-000000000004",
+       tenant_key: tenant_key,
+       name: "development-sample",
+       scopes: MapSet.new([:calls]),
+       secret: @api_key,
+       inserted_at: ~U[2026-09-09 13:00:00.000000Z]
+     }}
   end
 
   def publish_definition(agent, tenant_key, definition_id, revision) do
@@ -147,7 +146,7 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
       tenant_key: @tenant_key,
       definition_id: @definition_id,
       revision: 1,
-      schema_version: "20260913.01",
+      schema_version: "20260915.01",
       source: source,
       source_digest: "test-digest",
       compiled_metadata: %{"entry_caller" => "caller"},

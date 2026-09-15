@@ -341,12 +341,13 @@ if config_env() == :dev do
   if database_url do
     room_creation = Keyword.fetch!(gateway_http, :room_creation)
     trusted_call = Keyword.fetch!(room_creation, :trusted_call)
+    sample_tenant = nonempty_env.("VXPIPE_DEV_TENANT")
 
     config :vxpipe_console, :sample_call,
-      enabled: true,
+      enabled: not is_nil(sample_tenant),
       definition: Keyword.fetch!(trusted_call, :definition),
       initial_variables: Keyword.fetch!(trusted_call, :initial_variables),
-      tenant_name: "Vxpipe development sample",
+      tenant_key: sample_tenant,
       transfer_participant: "human-support"
   end
 

@@ -79,7 +79,7 @@ defmodule Vxpipe.Console.EndpointTest do
            "entry_receiver" => "assistant"
          },
          initial_variables: initial_variables,
-         tenant_name: "Endpoint sample"},
+         tenant_key: TestSampleCallBackend.tenant_key()},
         id: :endpoint_sample_call
       )
 
@@ -127,7 +127,7 @@ defmodule Vxpipe.Console.EndpointTest do
            "entry_receiver" => "assistant"
          },
          initial_variables: initial_variables,
-         tenant_name: "Endpoint transfer sample",
+         tenant_key: TestSampleCallBackend.tenant_key(),
          transfer_participant: "human-support"},
         id: :endpoint_sample_transfer_call
       )

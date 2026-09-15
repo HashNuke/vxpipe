@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.SampleCallBackend do
 
   alias Vxpipe.Calls
 
-  @callback bootstrap(term(), String.t()) :: {:ok, struct(), struct()} | {:error, term()}
+  @callback issue_api_key(term(), String.t()) :: {:ok, struct()} | {:error, term()}
   @callback save_definition(term(), String.t(), map()) :: {:ok, struct()} | {:error, term()}
   @callback publish_definition(term(), String.t(), String.t(), pos_integer()) ::
               {:ok, struct()} | {:error, term()}
@@ -13,7 +13,8 @@ defmodule Vxpipe.Console.SampleCallBackend do
   @callback issue_join_token(term(), struct(), String.t(), String.t()) ::
               {:ok, struct()} | {:error, term()}
 
-  def bootstrap(options, name), do: Calls.bootstrap_tenant(name, [:calls], options)
+  def issue_api_key(options, tenant_key),
+    do: Calls.issue_api_key(tenant_key, "development-sample", [:calls], options)
 
   def save_definition(options, tenant_key, definition),
     do: Calls.save_definition(tenant_key, definition, options)

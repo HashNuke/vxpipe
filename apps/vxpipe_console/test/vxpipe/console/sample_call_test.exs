@@ -5,12 +5,12 @@ defmodule Vxpipe.Console.SampleCallTest do
 
   @initial_variables %{"order" => %{"id" => "private-order-sentinel"}}
   @definition %{
-    "schema_version" => "20260913.01",
+    "schema_version" => "20260915.01",
     "entry_caller" => "caller",
     "entry_receiver" => "assistant"
   }
 
-  test "provisions once and prepares through its private API key" do
+  test "uses the selected provisioned tenant and prepares through its private API key" do
     backend =
       start_supervised!(
         {TestSampleCallBackend, initial_variables: @initial_variables, observer: self()}
@@ -23,7 +23,7 @@ defmodule Vxpipe.Console.SampleCallTest do
          backend: TestSampleCallBackend.backend(backend),
          definition: @definition,
          initial_variables: @initial_variables,
-         tenant_name: "Vxpipe test sample"}
+         tenant_key: TestSampleCallBackend.tenant_key()}
       )
 
     assert {:ok, token} = SampleCall.prepare(sample)
@@ -34,9 +34,9 @@ defmodule Vxpipe.Console.SampleCallTest do
     assert call_id == TestSampleCallBackend.call_id()
 
     assert [
-             {:bootstrap, "Vxpipe test sample"},
              {:save_definition, tenant_key, @definition},
              {:publish_definition, tenant_key, _definition_id, 1},
+             {:issue_api_key, tenant_key},
              {:authenticate, tenant_key, api_key},
              {:prepare_call, tenant_key, participant_key, @initial_variables}
            ] = TestSampleCallBackend.operations(backend)
@@ -54,7 +54,7 @@ defmodule Vxpipe.Console.SampleCallTest do
     assert 1 ==
              backend
              |> TestSampleCallBackend.operations()
-             |> Enum.count(&match?({:bootstrap, _name}, &1))
+             |> Enum.count(&match?({:issue_api_key, _tenant}, &1))
   end
 
   test "issues a transfer-destination token only after a sample call is prepared" do
@@ -71,7 +71,7 @@ defmodule Vxpipe.Console.SampleCallTest do
          backend: TestSampleCallBackend.backend(backend),
          definition: @definition,
          initial_variables: @initial_variables,
-         tenant_name: "Vxpipe transfer sample",
+         tenant_key: TestSampleCallBackend.tenant_key(),
          transfer_participant: "human-support"}
       )
 
@@ -86,7 +86,7 @@ defmodule Vxpipe.Console.SampleCallTest do
     assert 1 ==
              backend
              |> TestSampleCallBackend.operations()
-             |> Enum.count(&match?({:bootstrap, _name}, &1))
+             |> Enum.count(&match?({:issue_api_key, _tenant}, &1))
   end
 
   test "reports a disabled sample without exiting the caller" do
@@ -97,7 +97,7 @@ defmodule Vxpipe.Console.SampleCallTest do
     backend =
       start_supervised!(
         {TestSampleCallBackend,
-         initial_variables: @initial_variables, observer: self(), bootstrap_exception?: true},
+         initial_variables: @initial_variables, observer: self(), authorization_exception?: true},
         id: :failing_sample_backend
       )
 
@@ -108,13 +108,62 @@ defmodule Vxpipe.Console.SampleCallTest do
          backend: TestSampleCallBackend.backend(backend),
          definition: @definition,
          initial_variables: @initial_variables,
-         tenant_name: "Unavailable sample"},
+         tenant_key: TestSampleCallBackend.tenant_key()},
         restart: :temporary
       )
 
     sample = start_supervised!(child)
 
     assert {:error, :unavailable} = SampleCall.prepare(sample)
-    assert Process.alive?(sample)
+    assert %{status: {:failed, :backend_unavailable}} = :sys.get_state(sample)
+  end
+
+  test "restart keeps the selected tenant and never creates a replacement tenant" do
+    backend =
+      start_supervised!(
+        {TestSampleCallBackend, initial_variables: @initial_variables, observer: self()}
+      )
+
+    options = [
+      name: nil,
+      backend: TestSampleCallBackend.backend(backend),
+      definition: @definition,
+      initial_variables: @initial_variables,
+      tenant_key: TestSampleCallBackend.tenant_key()
+    ]
+
+    first = start_supervised!({SampleCall, options}, id: :first_sample)
+    assert {:ok, first_token} = SampleCall.prepare(first)
+    stop_supervised!(:first_sample)
+    second = start_supervised!({SampleCall, options}, id: :second_sample)
+    assert {:ok, second_token} = SampleCall.prepare(second)
+    assert second_token.tenant_key == first_token.tenant_key
+    refute Enum.any?(TestSampleCallBackend.operations(backend), &match?({:bootstrap, _}, &1))
+  end
+
+  test "a failed definition save does not issue a call key or create another tenant" do
+    backend =
+      start_supervised!(
+        {TestSampleCallBackend,
+         initial_variables: @initial_variables, observer: self(), save_error?: true}
+      )
+
+    sample =
+      start_supervised!(
+        {SampleCall,
+         name: nil,
+         backend: TestSampleCallBackend.backend(backend),
+         definition: @definition,
+         initial_variables: @initial_variables,
+         tenant_key: TestSampleCallBackend.tenant_key()}
+      )
+
+    assert {:error, :unavailable} = SampleCall.prepare(sample)
+    assert {:error, :unavailable} = SampleCall.prepare(sample)
+
+    assert Enum.all?(
+             TestSampleCallBackend.operations(backend),
+             &match?({:save_definition, _, _}, &1)
+           )
   end
 end

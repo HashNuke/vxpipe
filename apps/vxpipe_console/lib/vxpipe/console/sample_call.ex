@@ -14,7 +14,7 @@ defmodule Vxpipe.Console.SampleCall do
         definition: nil,
         initial_variables: %{},
         name: __MODULE__,
-        tenant_name: "Vxpipe development sample",
+        tenant_key: nil,
         transfer_participant: nil
       )
 
@@ -31,11 +31,11 @@ defmodule Vxpipe.Console.SampleCall do
   def init(options) do
     definition = Keyword.fetch!(options, :definition)
     initial_variables = Keyword.fetch!(options, :initial_variables)
-    tenant_name = Keyword.fetch!(options, :tenant_name)
+    tenant_key = Keyword.fetch!(options, :tenant_key)
     transfer_participant = Keyword.fetch!(options, :transfer_participant)
 
-    unless is_map(definition) and is_map(initial_variables) and is_binary(tenant_name) and
-             byte_size(String.trim(tenant_name)) > 0 and
+    unless is_map(definition) and is_map(initial_variables) and is_binary(tenant_key) and
+             byte_size(String.trim(tenant_key)) > 0 and
              valid_transfer_participant?(transfer_participant) do
       raise ArgumentError, "invalid trusted sample-call configuration"
     end
@@ -44,13 +44,12 @@ defmodule Vxpipe.Console.SampleCall do
       backend: Keyword.fetch!(options, :backend),
       definition: definition,
       initial_variables: initial_variables,
-      tenant_name: tenant_name,
+      tenant_key: tenant_key,
       transfer_participant: transfer_participant,
       status: :provisioning,
       api_key: nil,
       call_id: nil,
       participant_key: nil,
-      tenant_key: nil,
       transfer_participant_key: nil
     }
 
@@ -95,16 +94,19 @@ defmodule Vxpipe.Console.SampleCall do
   defp provision(%SampleCallState{status: :ready} = state), do: state
 
   defp provision(%SampleCallState{} = state) do
-    with {:ok, tenant, api_key} <- backend(state, :bootstrap, [state.tenant_name]),
-         {:ok, draft} <- backend(state, :save_definition, [tenant.key, state.definition]),
+    with {:ok, draft} <- backend(state, :save_definition, [state.tenant_key, state.definition]),
          {:ok, published} <-
-           backend(state, :publish_definition, [tenant.key, draft.definition_id, draft.revision]),
+           backend(state, :publish_definition, [
+             state.tenant_key,
+             draft.definition_id,
+             draft.revision
+           ]),
          {:ok, participant_key} <- entry_caller_route(published),
-         {:ok, transfer_participant_key} <- transfer_participant_route(published, state) do
+         {:ok, transfer_participant_key} <- transfer_participant_route(published, state),
+         {:ok, api_key} <- backend(state, :issue_api_key, [state.tenant_key]) do
       %SampleCallState{
         state
         | status: :ready,
-          tenant_key: tenant.key,
           participant_key: participant_key,
           transfer_participant_key: transfer_participant_key,
           api_key: api_key

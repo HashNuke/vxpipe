@@ -6,12 +6,12 @@ defmodule Vxpipe.Console.SampleCallState do
     :backend,
     :definition,
     :initial_variables,
-    :tenant_name,
+    :tenant_key,
     :transfer_participant,
     :status
   ]
   defstruct @enforce_keys ++
-              [:api_key, :call_id, :participant_key, :tenant_key, :transfer_participant_key]
+              [:api_key, :call_id, :participant_key, :transfer_participant_key]
 
   @type status :: :provisioning | :ready | {:failed, term()}
 
@@ -19,13 +19,12 @@ defmodule Vxpipe.Console.SampleCallState do
           backend: {module(), term()},
           definition: map(),
           initial_variables: map(),
-          tenant_name: String.t(),
           transfer_participant: nil | String.t(),
           status: status(),
           api_key: nil | Vxpipe.Calls.IssuedApiKey.t(),
           call_id: nil | String.t(),
           participant_key: nil | String.t(),
-          tenant_key: nil | String.t(),
+          tenant_key: String.t(),
           transfer_participant_key: nil | String.t()
         }
 end

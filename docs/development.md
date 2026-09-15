@@ -153,14 +153,17 @@ parent shell.
 
 Development defaults to `postgres://localhost/vxpipe_dev` in `config/dev.exs`.
 `VXPIPE_DATABASE_URL` is an optional runtime override for a different database.
-The Console provisions a fresh private sample tenant, API key, and published definition
-when the BEAM starts. PostgreSQL retains only the API-key digest; the plaintext key
-and configured initial variables stay inside the supervised Console sample process.
+The Console reuses the provisioned tenant selected by `VXPIPE_DEV_TENANT` across BEAM
+restarts. It saves/publishes the sample definition, then issues a call-scoped API key.
+PostgreSQL retains only that key’s digest; the plaintext key and configured initial
+variables stay inside the supervised Console sample process. Failed definition setup
+does not create tenants or issue keys.
 Each **Create room** action then prepares a new durable call and obtains its
 participant-bound join token through the public Calls workflows.
 
-The Repo and managed caller/transfer sample start without any database environment
-variable. PostgreSQL must be running and the database migrated before `bin/dev`.
+The development Repo starts with the local database default. The managed caller/transfer
+sample is enabled only when `VXPIPE_DEV_TENANT` selects a provisioned tenant. PostgreSQL
+must be running and the database migrated before `bin/dev`.
 Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
 definition publication are documented in
 [Tenant control-plane operations](tenant-control-plane.md).
