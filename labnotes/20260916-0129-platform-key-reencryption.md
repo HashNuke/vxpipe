@@ -70,3 +70,23 @@
   zero failures, 8 excluded before the third tagged case was added. Format, warnings-as-errors
   compilation and strict Credo pass. Independent GPT 6 Astra xhigh code review and focused
   re-review found no blockers. The operator CLI and fresh-VM retirement checks remain pending.
+
+## Operator command
+
+- Storage shipped separately as `7c61680` before adding the CLI. The command runs one bounded
+  batch using the configured store/keyring and prints only progress counts and key IDs.
+- Added three focused operator tests first and confirmed all fail because the task is absent.
+  Implemented the strict sanitized argument parser and command; all three then pass. Tests cover
+  resumption, preserved payloads, invalid secret/batch arguments and unavailable keys or storage.
+- Independent GPT 6 Astra xhigh review found no blockers. The command introduces no provider
+  authentication support; the latest user clarification remains consistent with the closed
+  existing-provider inventory and milestone exclusions.
+- The full Persistence suite passes 115 tests, zero failures, 9 excluded. Formatting and
+  warnings-as-errors compilation pass. The task's help lookup initially used the old development
+  build and could not find the new command; after compilation, the help output is available and
+  matches the documented arguments and operator rollout order.
+- Operator documentation now includes the command, bounded retry, remaining-count completion
+  rule and staged reader/writer transition. Fresh-VM retirement acceptance remains pending.
+- Strict Credo and the unused-lock check pass. All 176 relative documentation links and anchors
+  across the changed documents pass verification. The common full umbrella gate stays open
+  pending a root run after this checkpoint; earlier native audio failures remain unresolved.

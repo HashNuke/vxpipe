@@ -1,7 +1,7 @@
 # Platform credential re-encryption
 
-Status: the bounded storage operation and focused transaction checks are implemented.
-The operator CLI and fresh-VM transition acceptance remain pending in
+Status: the bounded storage operation, operator CLI and focused checks are implemented.
+Fresh-VM transition acceptance remains pending in
 [checkpoint 6](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-6--rotate-the-platform-owned-encryption-key).
 
 ## Operation and ownership
@@ -15,7 +15,15 @@ Trusted host code can invoke `Vxpipe.Persistence.ProviderCredentialStore.reencry
 using the configured `[repo: Repo, keyring: keyring]` context. The default batch size is 100;
 accepted sizes are 1–500. Success returns `{:ok, %{processed: count, current_key_id: id,
 remaining_by_key: counts}}`. An unreadable batch returns a safe error and commits no updates.
-The operator command will use this same operation; it is not implemented yet.
+The operator command uses this same operation and the configured platform keyring:
+
+```shell
+mix vxpipe.provider_credential.reencrypt --batch-size 100
+```
+
+It prints JSON containing only `processed`, `current_key_id` and `remaining_by_key`.
+Repeat until `remaining_by_key` is empty; a busy batch may process zero rows while work remains.
+Invalid arguments fail without echoing their values. Supply no provider credentials to this command.
 
 Each operator invocation processes a bounded batch of rows encrypted with an older key.
 Validate the current key even when no rows need work. Include revoked rows so removing an old
@@ -63,7 +71,8 @@ transition and new-key-only reads afterward. Six focused database tests and thre
 transaction tests pass. The latter hold active-reader locks on separate connections, interrupt
 a batch after its first write, and provision a new-key credential for the same tenant while
 re-encryption is paused. They also verify a concurrent status update survives skipped-row retry.
-Fresh-VM and CLI evidence remain pending.
+Three operator tests verify bounded retry, safe output, rejected arguments and unavailable keys or
+storage. Fresh-VM evidence remains pending.
 
 Replacing key bytes under an existing ID, changing tenant credential versions, migrating only
 active rows, relying on a batch cursor, or adding another key-provider framework would violate or

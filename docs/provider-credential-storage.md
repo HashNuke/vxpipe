@@ -77,6 +77,19 @@ then issues a server-held call-scoped API key. It does not create another tenant
 or copy provider keys from the environment. Without a selected tenant the managed sample
 is disabled; missing or unreadable bindings prevent sample setup and call creation.
 
+## Replace the platform encryption key
+
+Use the existing `VXPIPE_CREDENTIAL_KEY_ID` and `VXPIPE_CREDENTIAL_KEYS` settings. Stage the
+new decrypt key on every reader, then switch every writer to that new active key while retaining
+both keys. Run `mix vxpipe.provider_credential.reencrypt --batch-size 100` repeatedly until
+`remaining_by_key` is empty. The accepted batch size is 1–500; the default is 100.
+
+A failed batch commits no updates; successful earlier batches remain committed. Busy rows remain
+in the reported counts, so zero processed rows alone does not mean completion. Once all writers
+use the new key and no old-key rows remain, remove the old key and restart. Each tenant's actual
+provider credential, identity, version and status stays unchanged. See the
+[operator transition](platform-credential-reencryption.md#operator-transition) for rollout details.
+
 ## Storage decision
 
 `vxpipe_calls` owns validation, metadata, workflows and the repository port.
@@ -123,8 +136,8 @@ measurements must use explicitly projected, payload-free events.
 - Interactive secret entry was rejected for this CLI: terminal echo and shell history are avoided
   by requiring protected redirected input.
 - A custom cryptographic primitive or new encryption dependency was unnecessary; OTP supplies
-  authenticated encryption. Platform encryption-key re-encryption tooling remains checkpoint 6
-  work and reuses the existing keyring. Third-party key rotation/revocation workflows and
+  authenticated encryption. Platform encryption-key re-encryption reuses the existing keyring.
+  Its fresh-VM retirement acceptance remains checkpoint 6 work. Third-party key rotation/revocation workflows and
   backup-restore drills are excluded. Existing admitted-client/leg lifetimes remain unchanged
   while each new construction resolves its current tenant binding.
 

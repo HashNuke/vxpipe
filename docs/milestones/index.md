@@ -81,7 +81,7 @@ The remaining platform database contract will use `VXPIPE_DB_URL` before `DATABA
 defaults to `vxpipe_dev` with pool size 10.
 Platform re-encryption now has a bounded storage operation preserving exact tenant values,
 identity and status. Six focused database checks and three real-connection contention/interruption
-checks pass. Checkpoint 6 remains partial pending its operator command and fresh-VM retirement
+checks pass. The operator command adds three passing focused tests. Checkpoint 6 remains partial pending fresh-VM retirement
 acceptance. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md).
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
