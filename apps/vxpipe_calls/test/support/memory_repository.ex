@@ -247,7 +247,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     Agent.get(agent, fn state -> Map.fetch(state.calls, {tenant_key, call_id}) end)
   end
 
-  def claim_incoming_telephony(agent, claim) do
+  def claim_incoming_telephony(agent, claim, authorize) do
     Agent.get_and_update(agent, fn state ->
       event_key = {claim.provider, claim.service, claim.provider_event_id}
       leg_key = {claim.provider, claim.service, claim.provider_call_leg_id}
@@ -267,7 +267,10 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
           {{:duplicate, current_claim(state, existing)}, state}
 
         {:error, :error} ->
-          insert_incoming_claim(state, event_key, leg_key, claim)
+          case authorize.() do
+            {:ok, :authorized} -> insert_incoming_claim(state, event_key, leg_key, claim)
+            {:error, _reason} = error -> {error, state}
+          end
       end
     end)
   end

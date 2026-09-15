@@ -120,8 +120,8 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   @impl true
-  def claim_incoming_telephony(repo, %TelephonyAdmissionClaim{} = claim) do
-    TelephonyCallStore.claim(repo, claim)
+  def claim_incoming_telephony(repo, %TelephonyAdmissionClaim{} = claim, authorize) do
+    TelephonyCallStore.claim(repo, claim, authorize)
   end
 
   @impl true

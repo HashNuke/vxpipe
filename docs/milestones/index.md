@@ -31,7 +31,8 @@ Static root gates and unused-lock checks pass. The latest full run after canonic
 bindings passes 1,571 tests with zero failures and 36 exclusions (seed 235296). The previously
 observed native Morse and five-participant audio failures did not recur; this pass does not
 establish their cause. Final milestone acceptance remains open for the unfinished checkpoints.
-Existing carrier/keyring structures and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider
+Existing carrier/keyring structures and valid acceptance evidence are reused. ReqLLM adapter
+selection stays internal. Superseded provider
 configuration paths must be deleted, not retained as optional or
 legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
 checkpoint 1 now integrates encrypted Google/Deepgram provisioning, inline selections, transactional
@@ -69,8 +70,13 @@ native Morse assertion failure and 33 exclusions; unused-lock checks pass. See [
 Canonical service/account/credential references now enter hosted plans before their digest
 and are compared under final web-write locks. Focused checks pass for rebinding, duplicate
 references, privacy and historical inspection; broad Calls 84 and Persistence 119 tests pass
-(9 excluded). Live activation enforcement and incoming final insertion remain pending.
+(9 excluded). Live activation enforcement remains pending; the incoming guard follows below.
 See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
+The incoming final-write guard now passes four database tests and two tagged real-connection
+checks: post-compile credential/binding changes prevent insertion, locks survive through commit,
+and concurrent duplicate recovery remains outside the failed transaction. Incoming identity,
+tenant-scoped duplicate lookup and live readers remain pending; checkpoint 3 stays partial.
+See [incoming evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the

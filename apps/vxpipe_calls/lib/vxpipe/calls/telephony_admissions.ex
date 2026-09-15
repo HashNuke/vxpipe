@@ -4,6 +4,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
   alias Vxpipe.CallEngine.Telephony.Event
 
   alias Vxpipe.Calls.{
+    DefinitionCredentials,
     Definitions,
     PreparedCallFactory,
     Repositories,
@@ -48,7 +49,13 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
         accepted_at: now(options)
       }
 
-      Repositories.call(repository, :claim_incoming_telephony, [claim])
+      authorize = fn ->
+        DefinitionCredentials.with_active(revision, call.plan, options, fn ->
+          {:ok, :authorized}
+        end)
+      end
+
+      Repositories.call(repository, :claim_incoming_telephony, [claim, authorize])
     else
       :error -> {:error, :participant_not_found}
       {:error, _reason} = error -> error

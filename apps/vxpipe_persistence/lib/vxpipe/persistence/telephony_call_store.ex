@@ -10,13 +10,13 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
   alias Vxpipe.Persistence.Schema.DefinitionRevision, as: StoredRevision
   alias Vxpipe.Persistence.Schema.TelephonyLeg, as: StoredTelephonyLeg
 
-  @spec claim(module(), TelephonyAdmissionClaim.t()) ::
+  @spec claim(module(), TelephonyAdmissionClaim.t(), (-> {:ok, :authorized} | {:error, term()})) ::
           {:ok, TelephonyAdmissionClaim.t()}
           | {:duplicate, TelephonyAdmissionClaim.t()}
           | {:error, term()}
-  def claim(repo, %TelephonyAdmissionClaim{} = claim) do
+  def claim(repo, %TelephonyAdmissionClaim{} = claim, authorize) when is_function(authorize, 0) do
     case existing_claim(repo, claim) do
-      :none -> insert_claim(repo, claim)
+      :none -> insert_claim(repo, claim, authorize)
       result -> result
     end
   end
@@ -43,7 +43,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     end)
   end
 
-  defp insert_claim(repo, claim) do
+  defp insert_claim(repo, claim, authorize) do
     call = claim.call
 
     multi =
@@ -51,6 +51,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
       |> Multi.run(:selection, fn repo, _changes ->
         fetch_selection(repo, call.tenant_key, call.definition_id, call.definition_revision)
       end)
+      |> Multi.run(:credentials, fn _repo, _changes -> authorize.() end)
       |> Multi.insert(:call, fn %{selection: {tenant, _definition, revision}} ->
         PreparedCallRecord.changeset(call, tenant, revision)
       end)

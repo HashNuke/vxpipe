@@ -31,7 +31,18 @@ defmodule Vxpipe.Calls.CallRepository do
   @callback mark_call_failed(context(), AdmissionClaim.t(), atom(), DateTime.t()) ::
               {:ok, PreparedCall.t()} | {:error, term()}
 
-  @callback claim_incoming_telephony(context(), TelephonyAdmissionClaim.t()) ::
+  @doc """
+  Inserts an incoming call and initial leg atomically after invoking `authorize` inside
+  that transaction. Its credential repositories must share the same Repo/dynamic transaction
+  context so their locks remain held through insertion and commit. Propagate authorization
+  errors without inserting. Existing duplicates do not invoke this new-write callback;
+  recover insertion conflicts only after the failed transaction has ended.
+  """
+  @callback claim_incoming_telephony(
+              context(),
+              TelephonyAdmissionClaim.t(),
+              (-> {:ok, :authorized} | {:error, term()})
+            ) ::
               {:ok, TelephonyAdmissionClaim.t()}
               | {:duplicate, TelephonyAdmissionClaim.t()}
               | {:error, term()}

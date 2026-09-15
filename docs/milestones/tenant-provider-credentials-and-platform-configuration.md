@@ -401,14 +401,19 @@ Depends on the credential store and existing Telnyx integration.
   existing leg construction. Pin safe service identity so an old plan cannot change accounts.
   - [x] Resolve the exact active service credential privately; check every phone destination at
     save/publish/web preparation and hold the binding through the final database write. Incoming
-    preparation shares preflight; its final insert guard and live leg
-    construction remain pending. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+    preparation initially shared preflight; its final insert guard is now complete below. Live leg
+    construction remains pending. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
   - [x] Pin canonical tenant/service/provider/account/credential identity in prepared plans.
     Resolve each alias once per host compile, include the metadata in the existing digest, and
     compare every participant's reference under final web-write locks. Post-compile rebinding
     fails before insertion. Embedded Engine compilation remains independent; historical plans
     remain inspectable without repinning. Live activation/reference enforcement is still pending.
     See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
+  - [x] Recheck credentials and pinned references inside the incoming call/leg insertion
+    transaction. Hold locks through commit and preserve duplicate recovery after a failed insert
+    transaction. Six focused checks pass, including two tagged real-connection cases.
+    Incoming provider/account identity, tenant-scoped duplicate lookup and live readers remain pending.
+    See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
 - [ ] Replace application/global service credential lookup for existing answer, dial, media and
   hangup commands. Verify the actual adapter receives only the selected tenant credential.
 - [ ] Resolve webhook verification metadata from the stored ingress binding. Preserve raw-body,
@@ -688,9 +693,16 @@ checks and ten focused Persistence checks pass, including post-compile account/s
 rebinding, duplicate-reference mismatch, stored identity/digest/privacy and legacy inspection.
 Broad suites pass 84 Calls and 119 Persistence tests (9 excluded). All five root gates pass at
 `5c82864`: 1,571 tests, zero failures, 36 excluded (seed 235296). Previously observed native audio
-failures did not recur; their cause remains unresolved. Incoming final insertion,
-live activation/reference enforcement and tenant-scoped carrier readers remain pending.
+failures did not recur; their cause remains unresolved. At that checkpoint, incoming final insertion,
+live activation/reference enforcement and tenant-scoped carrier readers remained pending.
 See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
+
+Checkpoint 3 incoming-write follow-up: the existing credential/reference guard now runs inside the
+call/leg insertion transaction. Four database tests and two tagged real-connection checks pass:
+post-compile binding/revocation/corruption failures write neither row, locks remain held through
+commit, and a racing duplicate recovers after its failed insert transaction ends. Tenant-scoped
+duplicate identity, incoming provider/account matching and live carrier readers remain pending.
+See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
 
 ## Specification review
 

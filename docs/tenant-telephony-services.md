@@ -1,8 +1,8 @@
 # Tenant telephony service storage
 
 Status: trusted Telnyx registration, the operator CLI, private credential resolution,
-canonical prepared-plan bindings and definition save/publish/web-preparation guards are implemented.
-The incoming admission's final write guard and Gateway live-reader migration remain pending in
+canonical prepared-plan bindings and definition save/publish/web/incoming write guards are implemented.
+Gateway live-reader migration remains pending in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage).
 
 ## Ownership and identity
@@ -95,10 +95,22 @@ the guarded operation must share its transaction context. Existing write errors,
 duplicate call IDs, retain their original meaning. Credential-free web definitions need no service
 repository.
 
-Incoming preparation shares the preflight check and canonical plan binding. Its final insert
-guard remains pending: that change must preserve duplicate-event recovery outside an aborted
-insert transaction. Fresh live-leg resolution and activation enforcement remain pending. These
-guards alone do not complete the carrier reader cutover.
+Incoming preparation shares the preflight check and canonical plan binding. Calls supplies its
+existing active-credential/reference guard as a mandatory repository callback. Persistence runs
+it inside the call/leg insertion transaction, before either write, and retains the service and
+credential locks until commit. Only an authorization marker enters the transaction's results.
+Revocation, unreadable credentials or a service/account/credential rebind after compilation
+prevent both rows. The same final check covers model/speech credentials required by the definition.
+
+Already stored duplicates skip this new-write callback. If two events race past duplicate lookup,
+the losing insert rolls back before the existing duplicate-recovery query runs. Wrapping the whole
+claim in a credential transaction would leave that query inside an aborted transaction; placing
+the guard in the existing insertion transaction preserves recovery. All participating credential
+repositories must use the same Repo/dynamic transaction context as the call store.
+
+This check authorizes the database write. Tenant/canonical-service duplicate identity, comparison
+of incoming provider/account identity with the pinned entry service, fresh live-leg resolution and
+activation enforcement remain pending. These guards alone do not complete the carrier reader cutover.
 
 ## Prepared service references
 
@@ -108,8 +120,8 @@ into an Engine-owned `Telephony.ServiceReference`. Participants sharing an alias
 reference. The existing prepared-plan digest includes this metadata; neither a credential value,
 credential version nor encryption-key ID is pinned.
 
-The final web-preparation write compares every participant's reference with the currently locked
-service. A service/account/credential rebind between compile and insertion rejects the write.
+The final web-preparation and incoming-admission writes compare every participant's reference
+with the currently locked service. A service/account/credential rebind between compile and insertion rejects the write.
 Repeated aliases reuse one locked snapshot, but every reference is compared before the callback;
 a differing second reference cannot disappear through deduplication. Missing or wrong-tenant
 references also reject before a write.
@@ -154,3 +166,8 @@ The existing Telnyx call-flow milestone remains the owner of full carrier/audio 
 The [definition-guard evidence](../labnotes/20260916-0057-telephony-credential-gates.md) records
 13 passing focused database tests, 81 Calls tests and 106 Persistence tests (6 excluded), plus
 independent implementation review. Format, warnings-as-errors compilation and strict Credo pass.
+
+The [incoming-guard evidence](../labnotes/20260916-0249-guard-incoming-credentials.md) records
+four focused database tests and two tagged real-connection checks. They cover post-compile service
+rebinding, revoked/unreadable carrier credentials, revoked model credentials, lock lifetime through
+commit, and concurrent duplicate recovery after a losing insertion rolls back.
