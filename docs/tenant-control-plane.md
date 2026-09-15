@@ -41,6 +41,9 @@ only once. Move it directly into the integrating backend's secret store; do not
 put it in source control, screenshots, tickets, shell tracing, or application
 logs. Vxpipe stores only its SHA-256 digest and cannot recover a lost key.
 
+Tenant keys use the complete URL-safe Base64 alphabet, including a possible leading `_` or `-`.
+Pass the exact key through preparation and Engine commands; do not rewrite or add a prefix.
+
 `admin` and `calls` are independent grants. Neither implies the other.
 
 ## Rotate or revoke a key

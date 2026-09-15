@@ -71,7 +71,10 @@ defmodule Vxpipe.CallEngine.Command.JoinParticipant do
   end
 
   defp validate_identifier(field, value) when is_binary(value) do
-    if Regex.match?(@identifier_pattern, value) do
+    pattern =
+      if field == :tenant_id, do: ~r/\A[A-Za-z0-9_-]{1,128}\z/, else: @identifier_pattern
+
+    if Regex.match?(pattern, value) do
       {:ok, value}
     else
       invalid(field, "must contain 1-128 URL-safe identifier characters")
