@@ -617,8 +617,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert await_paused_cursor(cue_player, 1_000) == 1_920
     await_tone(caller_client, 1_000, 2_000)
     remove_native_listener(authority, room, late, returned_listener, cue_player)
+
+    # A ready listener graph can replay cues before any resumed wait tone is audible.
     cue_listener = join_native_listener(plan, room, "late-monitor", :monitor)
-    await_tone(caller_client, 250, 2_000)
 
     audience =
       Enum.map(audience, fn peer ->
