@@ -27,10 +27,10 @@ Zenmux as the remaining model integration. Its existing API-key/native-routing c
 inline selections and tenant DB credentials. Its credential-reader checkpoint is verified by focused
 tests and independent review. A follow-up public startup regression catches and corrects the stale
 startup gate that still rejected Zenmux entry agents; see [startup evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
-Static root gates and unused-lock checks pass; the latest full run completed
-1,555 tests with one native five-participant cue/conversation failure and 33 exclusions. The case
-passes unchanged in isolation (one test, 67 excluded), and the earlier Morse assertion passes in
-the full run. The cause of the native observations remains unresolved. The milestone's
+Static root gates and unused-lock checks pass; the latest full run after the encryption-key
+checkpoint completed 1,564 tests with one previously reproduced native Morse-audio failure and
+36 exclusions. The preceding run's five-participant cue/conversation case passes this time.
+The cause of the native observations remains unresolved. The milestone's
 common umbrella gate remains open. Existing carrier/keyring structures
 and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider
 configuration paths must be deleted, not retained as optional or
@@ -85,7 +85,9 @@ checks pass. The operator command adds three passing focused tests. Checkpoint 6
 disposable fresh VMs verify staged mixed-key reads, resumed batches, new-key-only reads after
 retirement, exact tenant value/identity preservation and safe missing/wrong-key rejection.
 Persistence 115 tests pass (9 excluded), as do independent review and static/unused-lock gates.
-The common umbrella regression remains open. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md).
+The full root run completes 1,564 tests with one previously reproduced native Morse-audio failure
+and 36 exclusions. Common umbrella acceptance remains open.
+See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md).
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
 2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate

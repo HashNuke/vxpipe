@@ -120,3 +120,23 @@
   it found no missing essential contract or scope expansion. Combined with the successful local
   execution, this closes checkpoint 6. Progress is now 4 of 7 complete (1, 2, 5, 6), 2 partial
   (3, 7), and 1 not started (4). The milestone and common umbrella gate remain unchecked.
+
+## Full umbrella result
+
+- Full root regression after `19cde3a`, with preloaded modules, maximum requires 1, concurrency 4
+  and seed 235296: 1,564 tests, one failure, 36 excluded. MCP 37, Agent Runtime 95, Engine 697,
+  Calls 81, Artifacts 20, Persistence 115 and Console 106 all pass. Gateway completes 413 tests
+  with one failure in the existing native repeated-AI-transfer case at
+  `human_transfer_webrtc_test.exs:214`, its listener assertion at line 355.
+- The failed assertion again decoded `E ` but observed only 24 trailing-silence windows
+  (26 windows total), matching the already reproduced observation in earlier credential runs.
+  No audio/timing/assertion change was made in this checkpoint. The preceding full run's
+  five-participant cue/conversation failure does not recur; that does not establish its cause.
+- Format, warnings-as-errors compile, strict Credo and unused-lock checks pass. The shared
+  umbrella gate stays open. Existing isolated reproduction already covers this unchanged failure;
+  another identical isolated run would add no evidence about the credential command.
+- A final production-source scope scan finds no direct OpenAI/Anthropic/OpenRouter credential
+  readers, cloud/OAuth additions or old speech-profile/global-config switch readers. Existing
+  Telnyx/Twilio live-reader cutover and final platform cleanup remain the authorized pending work.
+- Sent the requested push notification with 4/7 complete, two partial and one not started.
+  The CLI and retirement evidence shipped separately as `19cde3a` and `0933098`.
