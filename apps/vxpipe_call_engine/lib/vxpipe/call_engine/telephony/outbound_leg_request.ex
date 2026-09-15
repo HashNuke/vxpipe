@@ -23,7 +23,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
     :service_id,
     :to
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [service_reference: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
           incarnation_id: String.t(),
           participant_id: String.t(),
           service_id: String.t(),
+          service_reference: Vxpipe.CallEngine.Telephony.ServiceReference.t() | nil,
           to: String.t()
         }
 

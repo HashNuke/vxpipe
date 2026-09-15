@@ -59,6 +59,25 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
     :ok
   end
 
+  test "the outbound request preserves the host's exact prepared service reference" do
+    plan = compile_plan()
+    support = Map.fetch!(plan.participants, "human-support")
+
+    reference = %Vxpipe.CallEngine.Telephony.ServiceReference{
+      tenant_id: plan.tenant_id,
+      service_id: "10000000-0000-4000-8000-000000000001",
+      name: support.connection.service,
+      provider: "telnyx",
+      provider_connection_id: "connection-1",
+      credential_id: "20000000-0000-4000-8000-000000000002"
+    }
+
+    support = %{support | telephony_service: reference}
+
+    assert {:ok, %{service_reference: ^reference}} =
+             OutboundLegRequestResolver.resolve(plan, support, "rinc-probe")
+  end
+
   test "a protected phone destination opens one exact outbound leg before private handoff" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")

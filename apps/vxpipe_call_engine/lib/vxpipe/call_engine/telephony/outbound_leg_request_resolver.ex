@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequestResolver do
         incarnation_id: incarnation_id,
         participant_id: participant.participant_id,
         service_id: service,
+        service_reference: participant.telephony_service,
         to: number
       }
 
