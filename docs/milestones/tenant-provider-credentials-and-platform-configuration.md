@@ -2,8 +2,8 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2, 5 and 6 are complete. Of seven checkpoints, four are complete,
-two are partial and one is not started. The latest full umbrella run passes 1,571 tests with zero
-failures and 36 exclusions; final milestone acceptance remains open for the unfinished checkpoints.
+two are partial and one is not started. The latest full umbrella run passes 1,575 tests with zero
+failures and 38 exclusions; final milestone acceptance remains open for the unfinished checkpoints.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
 reviewed. Final independent implementation review and the remaining checkpoints are open.
@@ -702,6 +702,8 @@ call/leg insertion transaction. Four database tests and two tagged real-connecti
 post-compile binding/revocation/corruption failures write neither row, locks remain held through
 commit, and a racing duplicate recovers after its failed insert transaction ends. Tenant-scoped
 duplicate identity, incoming provider/account matching and live carrier readers remain pending.
+Independent review and all five root gates pass at `9026af2`: 1,575 tests, zero failures and
+38 exclusions (seed 235296).
 See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
 
 ## Specification review

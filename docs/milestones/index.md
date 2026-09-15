@@ -27,8 +27,8 @@ Zenmux as the remaining model integration. Its existing API-key/native-routing c
 inline selections and tenant DB credentials. Its credential-reader checkpoint is verified by focused
 tests and independent review. A follow-up public startup regression catches and corrects the stale
 startup gate that still rejected Zenmux entry agents; see [startup evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
-Static root gates and unused-lock checks pass. The latest full run after canonical phone-service
-bindings passes 1,571 tests with zero failures and 36 exclusions (seed 235296). The previously
+Static root gates and unused-lock checks pass. The latest full run after the incoming credential
+guard passes 1,575 tests with zero failures and 38 exclusions (seed 235296). The previously
 observed native Morse and five-participant audio failures did not recur; this pass does not
 establish their cause. Final milestone acceptance remains open for the unfinished checkpoints.
 Existing carrier/keyring structures and valid acceptance evidence are reused. ReqLLM adapter
@@ -76,6 +76,7 @@ The incoming final-write guard now passes four database tests and two tagged rea
 checks: post-compile credential/binding changes prevent insertion, locks survive through commit,
 and concurrent duplicate recovery remains outside the failed transaction. Incoming identity,
 tenant-scoped duplicate lookup and live readers remain pending; checkpoint 3 stays partial.
+All five root gates pass at `9026af2`: 1,575 tests, zero failures, 38 excluded (seed 235296).
 See [incoming evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.

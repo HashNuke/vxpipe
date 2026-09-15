@@ -55,3 +55,12 @@
   Format, warnings-as-errors compilation, strict Credo and unused-lock checks pass; all 176
   relative documentation links/anchors pass. Removed incidental formatter changes to unrelated
   functions before staging. The shared umbrella regression follows this focused checkpoint.
+
+## Final umbrella verification
+
+- Committed the focused implementation as `9026af2`, with a clean worktree afterward.
+- All five root gates pass. The full umbrella run completes 1,575 tests, zero failures and
+  38 exclusions (`--preload-modules --max-requires 1 --max-cases 4 --seed 235296`). Gateway's
+  413 tests pass; the previous native audio failures did not recur. No audio code was changed.
+- The milestone remains four of seven checkpoints complete. Telnyx is still partial until its
+  remaining identity and live-reader contracts pass. The progress update was sent via pushnotify.
