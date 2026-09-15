@@ -598,7 +598,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert {:ok, scope} = Phase.scope(preparation_task.pid)
     assert scope.authority == authority
-    worker_monitor = Process.monitor(scope.worker.pid)
+    worker_monitor = Process.monitor(scope.preparer.pid)
     send(blocked_preparer, :release_test_agent_runtime_model)
     assert_receive {:DOWN, ^worker_monitor, :process, _worker, :normal}, 2_000
 

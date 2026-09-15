@@ -9,7 +9,8 @@ deterministic phone lifecycle acceptance. Local phone handoff acceptance passes;
 audibility and changing/multiple listeners remain open.
 Latest verification: all five root gates pass; 1,435 tests, zero failures and 16 integration
 exclusions (seed 235296, concurrency four, module preloading and serialized test-file compilation).
-The expanded native preparation/cue membership case and 61 focused engine checks pass. The earlier
+The native blocked-model listener case and 52 focused transfer checks pass, alongside the
+five-participant preparation/cue membership case. The earlier
 ordinary human-only routing failure did not recur in this full run; its cause remains unproven.
 Eight checkpoint tasks remain.
 Full milestone acceptance remains open.
@@ -708,9 +709,18 @@ after final release. The final native case and 61 owning engine checks pass. The
 [preparation/cue labnote](../../labnotes/20260915-0913-preparing-listener-changes.md) records the
 regressions and fixture refinement. All five root gates now pass: 1,435 tests, zero failures and
 16 exclusions, including 653 engine and 410 Gateway checks. The prior ordinary routing failure
-did not recur; this passing run does not establish its cause. Broader audience reconciliation
-still needs the listener-arrival boundary during blocked initial destination construction, and
-repeated-transfer/failure acceptance remains open.
+did not recur; this passing run does not establish its cause.
+
+The native AI model/voice case now also admits a monitor while initial destination construction
+is blocked. It receives waiting immediately on the same attempt/deadline, while the caller keeps
+its original player, connection and room services. Construction and audience refresh use separate
+linked tasks under the existing transfer supervisor. Gateway permits the preparer to hold media;
+adoption/release remain authorized only for the handoff worker. The call finishes with ordered
+cues, the caller's targeted greeting and permitted caller audio at the monitor. The native case
+and 52 focused engine checks pass. All five root gates pass with 1,435 tests, zero failures and
+16 exclusions. See the
+[initial-preparation listener labnote](../../labnotes/20260915-0954-initial-preparation-listeners.md).
+Repeated-transfer/failure acceptance and the broad compound tasks below remain open.
 
 Implementation tasks:
 
@@ -865,6 +875,20 @@ unaffected provider. The general preparation caller retains immediate cleanup on
 processes, broader failure retries and longer deadlines were rejected; the existing owner/deadline
 protocol is sufficient. This closes an initial graph gap without changing milestone order or scope.
 See [incremental media policy](../incremental-media-policy.md) for the decision and implications.
+
+### Audience refresh during destination construction review
+
+Expensive model/tool initialization must not prevent a newly attached listener from hearing its
+private wait. Publish the initial audience before construction returns, then let the existing
+phase coalesce audience changes independently. Keep both linked tasks within the existing
+supervisor limit and original deadline; identify results by their distinct task references.
+Acceptance still waits for an in-flight audience refresh before starting the handoff worker.
+Gateway grants the preparer only the initial hold operation, with the existing incarnation,
+attempt and deadline checks. Sharing a single blocked worker, moving preparation into the room
+authority, and adding a new coordinator/supervisor were rejected. This fills an existing audience
+contract and does not add a call-definition field or change milestone order. The native blocked
+model regression and owning transfer checks provide verification; the checkpoint labnote records
+fixture corrections and full-root results separately from this design review.
 
 ## Implementation evidence
 
@@ -1242,6 +1266,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Listener arrival during destination construction | The native monitor receives no waiting with the old phase. The fixed native case and 52 focused engine checks pass. All five root gates pass: 1,435 tests, zero failures, 16 exclusions; seed 235296, concurrency four, module preloading and serialized test-file compilation. | Initial audience publication precedes blocked model/tool construction. A newly joined monitor hears waiting before the model is released; the caller player, connection, room services and deadline persist. The preparer may hold media but cannot adopt/release it. Caller greeting and the monitor's cue-ordered live caller audio complete. Post-adoption listener arrival and repeated-transfer/failure acceptance remain open; eight checkpoint tasks remain. |
 | Listener changes during preparation and cues | Native missing-wait and cue-stage admission failures reproduced before their fixes. The final native case and 61 focused engine checks pass. All five root gates pass: 1,435 tests, zero failures, 16 exclusions; seed 235296, concurrency four, module preloading and serialized test-file compilation. The prior ordinary routing failure did not recur; no cause or ordinary routing fix was established. | A monitor leaves and re-enters while accepted STT is unready and during an unfinished cue. Removed players retire, the attachment gap remains preparing, and changed cues return to waiting before replay. Every current sink receives a new cue before conversation; original room services and surviving connections remain. The five-participant demonstration is complete. Initial-construction audience changes and repeated-transfer/failure acceptance remain open; eight checkpoint tasks remain. |
 | Audience changes before acceptance | The native missing-wait regression failed before implementation. All 50 focused engine checks pass, including acceptance during refresh and linked worker loss. That checkpoint's umbrella run had 1,435 tests, one human-only routing failure and 16 exclusions; the next row above records the passing rerun. All 653 engine checks, the expanded native transfer case and the other four root gates passed. | A late monitor hears waiting before destination briefing/acceptance, leaves and re-enters on a fresh player. Every original player survives, and the same call completes exact seven/three-second cursors, monitor connection replacement and cue-before-conversation. The existing phase coalesces audience refresh and queues acceptance within the original deadline. Preparation/cue membership changes and repeated-transfer acceptance were still open at that checkpoint; nine compound tasks remained. |
 | Monitor connection loss and replacement | Two player, four policy and two mixer regressions were run red before their fixes. The 75-test engine group and 13 mixer checks pass. The original native module passes in all five root gates: 1,433 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Closing an actual monitor data channel retains waiting on its second connection. A replacement shares the same player; both receive cue before conversation on the original attempt/deadline and retained room/media bindings. Connection enforcers retire with their owner, while required live enforcers remain critical. Mixer refresh retains healthy subscriptions and its lease after removing the departed selection. Complete listener removal/re-entry and repeated-transfer acceptance remain open; nine compound tasks remain. |

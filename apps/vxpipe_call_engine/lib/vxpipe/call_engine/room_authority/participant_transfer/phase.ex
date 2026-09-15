@@ -89,12 +89,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
                  :audience,
                  scope,
                  request
-               ),
-             {:ok, preparation} <- prepare.(),
-             do: {:ok, {audience, preparation}}
+               ) do
+          # Membership can change while model/tool construction is still blocked.
+          send(scope.owner, {:vxpipe_transfer_audience_prepared, self(), audience})
+          prepare.()
+        end
       end)
 
-    await_completion(Map.merge(scope, %{worker: task, stage: :destination_preparation}), monitor)
+    await_completion(Map.put(scope, :preparer, task), monitor)
   end
 
   defp start_preparation(scope, prepare, monitor) do
@@ -130,11 +132,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
         {:vxpipe_transfer_audience_changed, authority} when authority == scope.authority ->
           refresh_audience(scope, monitor)
 
+        {:vxpipe_transfer_audience_prepared, preparer, audience} ->
+          if match?(%Task{pid: ^preparer}, Map.get(scope, :preparer)),
+            do: continue_audience(replace_audience(scope, audience), monitor),
+            else: await_completion(scope, monitor)
+
         {reference, result} when is_reference(reference) ->
-          case Map.get(scope, :worker) do
-            %Task{ref: ^reference} ->
+          case {Map.get(scope, :worker), Map.get(scope, :preparer)} do
+            {%Task{ref: ^reference}, _preparer} ->
               Process.demonitor(reference, [:flush])
               worker_result(scope, result, monitor)
+
+            {_worker, %Task{ref: ^reference}} ->
+              Process.demonitor(reference, [:flush])
+              preparation_result(Map.delete(scope, :preparer), result, monitor)
 
             _stale ->
               await_completion(scope, monitor)
@@ -187,19 +198,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
     await_completion(Map.merge(scope, %{worker: task, stage: stage}), monitor)
   end
 
-  defp worker_result(
-         %{stage: :destination_preparation} = scope,
-         {:ok, {audience, preparation}},
-         monitor
-       ) do
-    scope = replace_audience(scope, audience)
-
+  defp preparation_result(scope, {:ok, preparation}, monitor) do
     send(scope.authority, {:vxpipe_transfer_prepared, scope.reference, preparation})
-
-    continue_audience(Map.drop(scope, [:worker, :stage]), monitor)
+    await_completion(scope, monitor)
   end
 
-  defp worker_result(%{stage: :destination_preparation}, error, _monitor), do: error
+  defp preparation_result(_scope, error, _monitor), do: error
 
   defp worker_result(%{stage: :refresh_audience} = scope, {:ok, audience}, monitor) do
     scope = scope |> Map.drop([:worker, :stage]) |> replace_audience(audience)

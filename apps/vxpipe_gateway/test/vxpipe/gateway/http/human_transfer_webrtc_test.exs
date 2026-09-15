@@ -849,9 +849,18 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   test "AI handoff waits independently for model and voice readiness before cues and greeting" do
-    plan = compile_plan(agent_destination: true, billing_model: "test:blocked")
+    {wait_sounds, options} = custom_wait_configuration(48_000)
+
+    plan =
+      compile_plan(
+        agent_destination: true,
+        billing_model: "test:blocked",
+        observer_policy: %{},
+        wait_sounds: Map.put(wait_sounds, :transfer_to_agent, wait_sounds.transfer_to_human)
+      )
+
     caller = Map.fetch!(plan.participants, "caller")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = CallEngine.start_call(plan, options)
     stop_room_on_exit(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
     source_monitor = Process.monitor(source_tts)
@@ -879,6 +888,26 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
     await_transfer_progress(client, "preparing")
     assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+
+    [{authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    pending = :sys.get_state(authority).pending_participant_transfer
+    assert {:ok, before} = CallEngine.RoomAuthority.readiness_binding(authority)
+    {caller_player, _} = Map.fetch!(wait_players(room.incarnation_id), caller.participant_id)
+    monitor_client = join_native_listener(plan, room, "observer", :monitor)
+    await_tone(monitor_client, 250, 2_000)
+
+    assert {^caller_player, _} =
+             Map.fetch!(wait_players(room.incarnation_id), caller.participant_id)
+
+    assert :sys.get_state(authority).pending_participant_transfer.deadline_ms ==
+             pending.deadline_ms
+
+    assert {:ok, joined} = CallEngine.RoomAuthority.readiness_binding(authority)
+    assert joined.attempt == before.attempt
+    assert joined.room == before.room
+    assert joined.connections[client.connection_id] == before.connections[client.connection_id]
     assert :ok = send_rtvi_text(client, "held-during-model-preparation")
 
     assert %{"id" => "held-during-model-preparation"} =
@@ -941,6 +970,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     )
 
     assert :ok = await_tone(client, 1_500, 2_000)
+    send_tone(client, 500, 1)
+    assert_handoff_audio_order(monitor_client, 500, 250)
     assert :ok = send_rtvi_text(client, "talk-to-billing")
 
     assert_receive {:test_agent_runtime_stream, _provider,

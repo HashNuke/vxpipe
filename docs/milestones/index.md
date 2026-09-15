@@ -148,8 +148,13 @@ records this checkpoint. The same native call now also removes and readmits the 
 accepted preparation and an unfinished cue, retains room services and surviving bindings, then
 replays cues before conversation. The five-participant playback demonstration is complete; the
 [preparation/cue labnote](../../labnotes/20260915-0913-preparing-listener-changes.md) records its red
-cases and 61 passing focused engine checks. Listener arrival during blocked initial destination
-construction and broader repeated-transfer/failure acceptance remain open.
+cases and 61 passing focused engine checks. The native AI call now also admits a monitor while
+initial model construction is blocked: it hears waiting immediately, keeps original caller/room
+bindings and finishes with cue-ordered permitted audio. The existing phase publishes its audience
+early and tracks construction separately from audience refresh. The
+[initial-preparation labnote](../../labnotes/20260915-0954-initial-preparation-listeners.md) records
+the regression and 52 passing focused engine checks. All five root gates pass for this checkpoint;
+post-adoption listener arrival and broader repeated-transfer/failure acceptance remain open.
 
 Latest umbrella verification passes all five root gates: 1,435 tests, zero failures and 16
 exclusions with module preloading, serialized test-file compilation, seed 235296 and concurrency

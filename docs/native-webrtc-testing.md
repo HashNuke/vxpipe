@@ -134,6 +134,13 @@ mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
   --name-pattern 'AI handoff|agent_model loss'
 ```
 
+The model/voice case admits a planned receive-only monitor while model construction is blocked.
+It decodes that listener's waiting audio before releasing the model and retains the original
+caller player, connection, room services and deadline. Both listeners later receive their cues;
+the caller receives the targeted AI greeting, and the monitor receives permitted live caller
+audio. This checks audience refresh during construction through actual WebRTC, without creating
+microphone permission for the monitor.
+
 These delay model initialization and TTS readiness independently. Four additional cases delay
 scoped MCP initialization and the local tool registry's readiness reply with default, URL,
 per-slot nil and whole-object nil waits. Local bindings use ordinary compilation; readiness

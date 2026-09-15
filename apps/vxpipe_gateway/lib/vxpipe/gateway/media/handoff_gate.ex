@@ -68,7 +68,9 @@ defmodule Vxpipe.Gateway.Media.HandoffGate do
     with {:ok, phase} <- Phase.scope(scope.owner),
          true <- phase.attempt_id == scope.attempt_id and phase.deadline_ms == scope.deadline_ms,
          true <- phase.incarnation_id == state.attach_command.incarnation_id,
-         %Task{pid: ^caller} <- Map.get(phase, :worker),
+         true <-
+           match?(%Task{pid: ^caller}, Map.get(phase, :worker)) or
+             (action == :hold and match?(%Task{pid: ^caller}, Map.get(phase, :preparer))),
          true <- scope.deadline_ms > System.monotonic_time(:millisecond) do
       apply_control(action, scope, phase, state)
     else
