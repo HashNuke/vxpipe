@@ -18,3 +18,7 @@ Independent GPT 6 Astra xhigh review found no blocker. Format, warnings-as-error
 strict Credo and unused-lock checks pass for the integrated final changes. The last full carrier
 checkpoint at b90845e passes 1,615 tests with zero failures and 39 exclusions; final root verification
 will also cover this deletion. Database alias work is tracked separately in the platform labnote.
+
+Final integrated verification at `58d7b34` passes all five root gates: 1,622 tests, zero failures,
+39 excluded (seed 235296). All seven credential/configuration checkpoints are complete; see the
+[final platform evidence](20260916-0509-finish-platform-configuration.md#final-acceptance-and-closure).

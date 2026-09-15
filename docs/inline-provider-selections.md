@@ -162,7 +162,8 @@ Fixture/example migration is complete. The original checkpoint-1 run passed **1,
 zero failures, 30 exclusions** (seed 235296), with all five root gates passing. Its initial reviewer
 follow-up hit a usage limit; that is historical evidence, not the current review status. Subsequent
 independent reviews cover the implemented reader checkpoints and final configuration changes.
-The carrier checkpoint at `b90845e` passes **1,615 tests, zero failures, 39 exclusions** and all five
-root gates. Earlier intermittent native audio observations remain recorded; a passing run does not
-establish their cause. See the [current milestone ledger](milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger)
+The final reviewed source at `58d7b34` passes **1,622 tests, zero failures, 39 exclusions** and all five
+root gates; all seven credential/configuration checkpoints are complete. Earlier intermittent native
+audio observations remain recorded; a passing run does not establish their cause.
+See the [current milestone ledger](milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger)
 and [original checkpoint labnotes](../labnotes/20260915-1719-inline-tenant-voice.md).

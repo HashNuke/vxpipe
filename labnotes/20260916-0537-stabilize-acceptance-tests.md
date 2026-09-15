@@ -34,3 +34,7 @@ The corrected native Morse group passes both existing tests (66 excluded). Indep
 xhigh review found no blocker and confirmed exact-text and incomplete-audio rejection remain.
 Format, warnings-as-errors compilation, strict Credo (911 files) and unused-lock checks pass.
 The next complete root regression will cover this focused test-only checkpoint.
+
+Final integrated verification at `58d7b34` passes all five root gates: 1,622 tests, zero failures,
+39 excluded (seed 235296). All seven credential/configuration checkpoints are complete; see the
+[final platform evidence](20260916-0509-finish-platform-configuration.md#final-acceptance-and-closure).

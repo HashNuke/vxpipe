@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 26 milestone specifications: 21 complete and 5 incomplete. Milestone 17, Telnyx calls and
+Status: 26 milestone specifications: 22 complete and 4 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -15,15 +15,16 @@ bounded private summaries, provider-native routing, truthful usage, and runnable
 acceptance. The platform is now at its pre-delivery review hold. Milestone 23 proposes transfer
 readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 25 and 26 remain unimplemented until the user has exercised the
 working platform and decided to proceed with packaging and retention.
-Milestone 24 records the 2026-09-15 provider-credential change plan: inline upstream
+Milestone 24 implements the 2026-09-15 provider-credential decision: inline upstream
 provider/model selections, no capability profiles, encrypted tenant AI/speech and Telnyx/Twilio
 credentials, and platform environment settings. The user's scope correction limits the work to
 existing credential readers and their focused integration checks. Third-party API-key rotation
 is excluded; platform-owned encryption-key rotation remains included. Existing transfer/recovery
 and carrier workflows are reused. Provider credential migration covers existing Vxpipe integrations
 only; no new provider or authentication-mode support is required.
-Milestone 24 has **6 of 7 checkpoints complete**: tenant voice provisioning, AI/speech readers,
-Telnyx readers, Twilio readers, existing provider integrations and platform encryption-key rotation.
+Milestone 24 has **7 of 7 checkpoints complete**: tenant voice provisioning, AI/speech readers,
+Telnyx readers, Twilio readers, existing provider integrations, platform encryption-key rotation,
+and platform configuration/obsolete-reader cleanup.
 The [provider inventory](../existing-provider-credentials.md) bounds support to Google Gemini,
 Deepgram, Zenmux and the existing two carriers; local Morse/fixtures need no credentials.
 The [reader inventory](../credential-reader-boundaries.md) records the migrated paths.
@@ -35,18 +36,19 @@ pass, along with the 62-test reader/HTTP group, 26 existing signed outage checks
 carrier/activation group and the final 16-test outgoing group. Independent GPT 6 Astra xhigh review
 found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md).
 
-Checkpoint 7 implementation and focused acceptance are complete; its final root suite remains
-pending. The shared bucket uses `STORAGE_BUCKET` and standard AWS settings. The visible env.sample
+Checkpoint 7 is complete, including source boot/restart and final root acceptance.
+The shared bucket uses `STORAGE_BUCKET` and standard AWS settings. The visible env.sample
 includes the public carrier origin and approved DB aliases: `VXPIPE_DB_URL` before `DATABASE_URL`,
 `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`. Default macOS source boot/provision/prepare and
-fresh-VM tenant provider construction pass with no DB variables, using vxpipe_dev and pool 10.
+fresh-VM tenant provider construction pass with all four DB aliases unset, using vxpipe_dev and pool 10.
 The obsolete carrier application scopes and hidden sample are removed. Independent review found
 no blocker. See [platform evidence](../../labnotes/20260916-0509-finish-platform-configuration.md).
 
-All five root gates pass at the carrier-reader checkpoint `b90845e`: **1,615 tests, zero failures,
-39 excluded** (seed 235296). The earlier native Morse failure did not recur; its cause remains
-unestablished. Final milestone acceptance still requires the remaining configuration work,
-independent review and common gates on the final implementation.
+All five root gates pass on the final reviewed source at `58d7b34`: **1,622 tests, zero failures,
+39 excluded** (seed 235296). The final run includes the reviewed native-audio and retired-owner
+assertion corrections. Earlier failed runs remain recorded in the milestone evidence; this passing
+run does not establish the transport cause of earlier incomplete silence tails. All seven checkpoint
+exits, final independent review and milestone acceptance are complete.
 
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -99,7 +101,7 @@ progress without claiming the entire milestone is complete.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
-24. [ ] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Move existing provider credential readers to tenant DB storage, retain inline selections, rotate the platform encryption key and remove obsolete configuration paths.
+24. [x] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Move existing provider credential readers to tenant DB storage, retain inline selections, rotate the platform encryption key and remove obsolete configuration paths.
 25. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 26. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -410,7 +412,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
-| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: six complete and the final configuration checkpoint partial. Carrier readers and platform encryption-key rotation are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. The carrier checkpoint passes all five root gates; final configuration acceptance remains open. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Complete; specification, scope and final implementation independently reviewed | All seven credential/configuration checkpoints and all five final root gates pass. Existing provider readers, platform encryption-key rotation and configuration cleanup are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. Final root: 1,622 tests, zero failures, 39 excluded at `58d7b34`. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification

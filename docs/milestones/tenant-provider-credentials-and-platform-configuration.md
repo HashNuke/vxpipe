@@ -1,14 +1,12 @@
 # Tenant-scoped provider credentials and platform configuration
 
-Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
-Preparatory cleanup and checkpoints 1, 2, 5 and 6 are complete. Of seven checkpoints, four are complete,
-three are partial. The latest full umbrella run at `ba83192` ran 1,599 tests with one failure
-and 38 exclusions. The failure is the previously recorded native repeated-transfer listener Morse
-assertion. It passes in isolation without a source change; the full-suite failure remains unexplained.
-Common umbrella acceptance and the unfinished checkpoints remain open.
-The user approved removing capability profiles, keeping ReqLLM internal, and including
-Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
-reviewed. Final independent implementation review and the remaining checkpoints are open.
+Status: complete — all seven checkpoints and common acceptance gates pass. Independent
+GPT 6 Astra xhigh implementation review found no remaining blocker. The final root run at
+`58d7b34` completed 1,622 tests with zero failures and 39 exclusions (seed 235296); formatting,
+warnings-as-errors compilation, strict Credo and unused-lock checks also pass.
+Scope is limited to existing Google, Deepgram, Zenmux, Telnyx and Twilio integrations, inline
+selections, tenant credential storage and platform configuration/encryption-key rotation.
+Local providers remain credential-free. No new provider authentication support is required.
 
 Prerequisites: the implemented workflows in
 [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md),
@@ -123,15 +121,15 @@ recording still requires its explicit enable flag and must fail safely if its bu
 Treat unset/blank `STORAGE_BUCKET` as absent. Validate an active destination and reject malformed
 endpoint configuration without printing secrets. Retired-only settings supply no destination;
 they must neither enable publication nor rescue explicitly enabled recording without a new bucket.
-The user requested this configuration change on 2026-09-15; it can ship as a separate coherent
-commit before the remaining provider-reader work, while checkpoint 7's platform cutover remains open.
+The user requested this configuration change on 2026-09-15. It shipped as a separate coherent
+checkpoint; its implementation and verification evidence appear in the ledger below.
 
 ## Code review baseline and change map
 
 These planning observations were captured before the preparatory cleanup, including the
 since-discarded uncommitted TOML work. They identify the vertical slices’ integration boundaries.
 
-| Reviewed code | Current behavior and required change |
+| Reviewed code | Pre-cutover behavior and planned change |
 | --- | --- |
 | [Capabilities](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_definition/capabilities.ex), [OpeningAudio](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_definition/opening_audio.ex) | Parse profile strings. Replace them with inline selections in defaults, participant overrides and independent opening TTS. |
 | [DefinitionCompiler](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/definition_compiler.ex), [CapabilitySelection](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_definition/capability_selection.ex) | Resolve a required `capability_profiles` registry and retain `profile`. Remove that lookup/field and separate public provider identity from adapter identity. |
@@ -151,7 +149,7 @@ since-discarded uncommitted TOML work. They identify the vertical slices’ inte
 
 ## Definition contract: upstream providers, no capability profiles
 
-Introduce a new schema version with inline selections. Proposed fragment:
+Schema `20260915.01` uses inline selections. Example:
 
 ```json
 {
@@ -180,8 +178,8 @@ Introduce a new schema version with inline selections. Proposed fragment:
 }
 ```
 
-The current parser accepts this shape under schema `20260915.01`. Google and Deepgram are the
-initial hosted providers; verify additional model/option combinations as each provider slice lands.
+The hosted AI/speech catalog supports Google and Zenmux model inference and Deepgram STT/TTS,
+with the existing model/options contracts recorded in the provider inventory.
 
 - `provider` is the actual supported provider, such as `google` or `deepgram`.
   `provider: "req_llm"` and user-configurable adapter/module/transport fields are rejected.
@@ -488,9 +486,9 @@ The remaining model integration is implemented and its credential-reader exit is
 Independent implementation review found no production blocker; its application-auth fixture
 correction is verified. The full root run completed 1,547 tests with one previously reproduced
 native Morse failure and 33 exclusions. Format, compile, strict Credo and unused-lock checks pass.
-The common umbrella gate remains open; that failure does not add an audio requirement to this
-credential-reader checkpoint. Final independent gate review confirmed this distinction.
-Telnyx/Twilio reader completion remains owned by checkpoints 3 and 4.
+At that checkpoint the common umbrella gate remained open; that failure did not add an audio
+requirement to this credential-reader checkpoint. Independent gate review confirmed this distinction.
+Telnyx/Twilio reader completion is recorded separately in checkpoints 3 and 4.
 
 Follow-up review found an outer startup gate missed by the initial constructor tests: it still
 rejected Zenmux entry agents. The gate now accepts the existing integration, and a public room-startup
@@ -499,7 +497,8 @@ The 40-test startup group and all static/unused-lock checks pass; independent im
 review found no blockers. The full run after `4a26fba` completes 1,555 tests with one native
 five-participant cue/conversation failure and 33 exclusions. That case passes unchanged in
 isolation (one test, 67 excluded). The earlier Morse assertion passes in this run; neither result
-establishes the cause of the native audio observations, and common umbrella acceptance remains open.
+establishes the cause of the native audio observations. Common umbrella acceptance remained open
+at that checkpoint; the ledger records subsequent results.
 See [startup correction evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
 
 Exit: existing supported provider integrations read explicit tenant credentials and retain their
@@ -536,8 +535,8 @@ staged mixed-key reads, new-key provisioning, resumed batches, new-key-only read
 unchanged tenant values/identities/status and safe missing/wrong-key rejection. Independent review
 found no missing checkpoint contract. The full Persistence suite passes 115 tests (9 excluded),
 and all static/unused-lock gates pass. The full root run completes 1,564 tests with one previously
-reproduced native Morse-audio failure and 36 exclusions. Common umbrella acceptance remains open;
-that shared gate remains separate from this focused storage exit.
+reproduced native Morse-audio failure and 36 exclusions. Common umbrella acceptance remained open
+at that checkpoint; the ledger records subsequent results separately from this focused storage exit.
 
 Exit: the platform operator can replace the encryption key protecting stored secrets and retire
 the old key after verified re-encryption, without changing any third-party credential.
@@ -590,7 +589,7 @@ isolation and restart checks; add focused tests only for changed or uncovered bo
 - [x] Update architecture, tenant operations, developer/provider docs and the container delivery
   specification. Environment plus tenant DB replaces the proposed deployment JSON/TOML loader;
   JSON call definitions remain. Preserve embedded fixture/local-provider use without Ecto.
-- [ ] Obtain the requested independent agent review of the final implementation, fix findings,
+- [x] Obtain the requested independent agent review of the final implementation, fix findings,
   then run all five common root gates once the reviewed checkpoint is ready. Record exact results.
 - [x] Confirm existing evidence covers two-tenant persistence, unavailable/wrong encryption keys,
   safe failure projections and restart at the final credential/configuration boundary; fill only
@@ -599,7 +598,7 @@ isolation and restart checks; add focused tests only for changed or uncovered bo
   acceptance are outside this milestone.
 - [x] Validate source-development/macOS boot now. Verify packaged/container boot only after the
   separate delivery milestone's hold is released; do not claim or require a not-yet-built image.
-- [ ] Update the checkpoint evidence ledger, milestone index and labnotes. Leave this milestone
+- [x] Update the checkpoint evidence ledger, milestone index and labnotes. Leave this milestone
   unchecked for any unresolved acceptance gate; no commits unless requested.
 
 Exit: documented setup and restart load platform env settings and construct tenant-bound providers
@@ -618,7 +617,7 @@ Map rows to existing valid evidence before adding tests or manual demonstrations
 | Inline selection | Actual provider/model and supported options select internal adapters; retired profiles/public adapter fields reject. |
 | Save/publish/prepare | Every effective requirement, including later destinations, resolves for the tenant before a write; missing/wrong-tenant/inactive bindings fail safely. |
 | AI/speech construction | Opening, connection, agent, destination, briefing and restoration readers use the injected DB source; actual adapters receive the exact selected credential. |
-| Telnyx | Existing commands and webhook verification use matching tenant credentials/metadata; invalid auth or unavailable credentials produce no dispatch/request. |
+| Telnyx | Existing commands and webhook verification use matching tenant credentials/metadata. Invalid authentication never dispatches; unavailable credentials block fresh construction/admission before provider work. Initialized legs retain their existing owned lifetime. |
 | Twilio | Existing REST, webhook and WSS boundaries use matching tenant auth; failed authentication consumes no media token or waiter. |
 | Tenant service isolation | Live and persisted lookups cannot cross tenants with matching aliases or provider event/leg IDs. |
 | Reader failure | Missing/undecryptable/inactive credentials fail before new provider work; existing initialized clients retain their normal owned lifetime. |
@@ -660,42 +659,47 @@ Map rows to existing valid evidence before adding tests or manual demonstrations
 - [x] Run the restored umbrella gates and record baseline results in the cleanup labnote.
   Static root gates and launcher/build checks pass. The full suite ran 1,436 tests with one
   existing native human-handoff timeout; that exact case passed in isolation without source
-  changes. The cause remains unresolved and final umbrella acceptance remains unchecked.
-  The docs suite also retains a pre-existing badge assertion mismatch.
+  changes. The cause remained unresolved and umbrella acceptance was unchecked at that checkpoint.
+  The docs suite also had a pre-existing badge assertion mismatch.
 
-This restores the committed runtime as the implementation baseline. Its old provider env/profile
-paths remain to be replaced by the owning vertical slices; cleanup alone completes no call flow.
+This restored the committed runtime as the implementation baseline. Its old provider env/profile
+paths were subsequently replaced by the owning vertical slices; cleanup alone completed no call flow.
 The [cleanup labnote](../../labnotes/20260915-1600-tenant-credential-storage.md) records exact
 scope, independent review, root/isolated test evidence and rendered homepage checks.
 
 ## Evidence ledger
 
-Current progress: **6 of 7 complete** (checkpoints 1–6); **checkpoint 7 is partial**.
-Implementation boxes stay unchecked until their runnable
-exits and failure cases pass.
+Current progress: **7 of 7 complete**. Every checkpoint exit, independent implementation review
+and all five common root gates pass on the final source at `58d7b34`: **1,622 tests, zero failures,
+39 excluded** (seed 235296). Earlier checkpoint-specific gate results below remain historical evidence.
 
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
-| 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
+| 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. The initial reviewer usage limit is historical; subsequent independent final implementation review found no remaining gap. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
 | 2 — AI/speech credential readers | Implemented and verified | Opening, connection, briefing and source-restoration readers use fresh tenant resolution; legacy global readers are removed. Destination save validation covers missing/wrong-tenant/inactive model/TTS/STT bindings before writes; the Persistence group passes 18 tests (2 excluded). Named tenant isolation, whole-selection overrides and fresh construction pass 15 Engine tests. Three tagged local DB activation tests verify current Google/Deepgram authentication and safe failure before requests. Independent GPT 6 Astra xhigh review found no blockers. All five root gates pass: 1,532 tests, zero failures, 33 excluded (seed 235296). A native test assertion found in the initial run was corrected in a separate reviewed commit; its focused case and the full Gateway suite pass. Live provider checks remain excluded. See the [reader inventory](../credential-reader-boundaries.md), [destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md), [native assertion correction](../../labnotes/20260915-2317-native-readiness-assertion.md), [global-reader evidence](../../labnotes/20260915-2223-remove-global-readers.md), [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md) and [source-reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md). |
-| 3 — Telnyx credential readers | Implemented; reader exit verified | Encrypted provisioning, canonical durable/live identity, final write guards and fresh Gateway readers are complete. Two-tenant encoded REST and real encrypted DB-to-HTTP signature checks pass. Existing signed outage callbacks, cleanup, retired-owner dispatch and fresh-credential failures pass. Independent GPT 6 Astra xhigh review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [service storage](../tenant-telephony-services.md). Full umbrella acceptance remains open. |
-| 4 — Twilio credential readers | Implemented; reader exit verified | Existing encrypted SID/Auth Token records now supply REST, voice/status and initialized WSS authentication. The same two-tenant source/signature, outage, owner and failure checks cover Twilio; prior media checks verify authentication before token consumption and safe process loss. Independent review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md). Full umbrella acceptance remains open. |
-| 5 — Existing provider credential integrations | Implemented; credential-reader exit verified | Named API-key provisioning, inline model/options translation, tenant startup resolution and native routing use the existing adapters. Agent Runtime 5, Engine constructor 5 and Persistence focused 33 tests pass (2 excluded). Independent GPT 6 Astra xhigh review found no production blocker; its application-auth fixture correction is verified by the 95-test Agent Runtime suite (4 excluded). Calls 81 and Persistence 99 tests pass (6 excluded). All static gates and unused-lock checks pass. The full root run completed 1,547 tests with one previously reproduced native Morse failure and 33 exclusions; common milestone acceptance remains open. Independent gate review confirms the focused checkpoint exit is satisfied. No new provider or auth-mode support is added. See the [inventory](../existing-provider-credentials.md) and [Zenmux evidence](../../labnotes/20260916-0033-zenmux-tenant-credentials.md). |
-| 6 — Platform encryption-key rotation | Implemented and verified | Six database tests, three tagged real-connection checks and three operator CLI tests pass. Batches preserve exact tenant credentials, identity and revoked status, skip busy rows with truthful remaining counts, and roll back on corruption or interruption. Concurrent new-key insertion and status updates survive interrupted/skipped batches. Disposable fresh VMs verify mixed-key reads, resumed batches, retirement of the old key and safe missing/wrong-key rejection. Persistence 115 tests pass (9 excluded); independent review and static/unused-lock gates pass. Full root run: 1,564 tests, one previously reproduced native Morse-audio failure, 36 excluded; common umbrella acceptance remains open. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md). |
-| 7 — Platform configuration and cleanup | Implementation and focused/source-boot checks complete; final root gates pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
+| 3 — Telnyx credential readers | Implemented; reader exit verified | Encrypted provisioning, canonical durable/live identity, final write guards and fresh Gateway readers are complete. Two-tenant encoded REST and real encrypted DB-to-HTTP signature checks pass. Existing signed outage callbacks, cleanup, retired-owner dispatch and fresh-credential failures pass. Independent GPT 6 Astra xhigh review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [service storage](../tenant-telephony-services.md). All five carrier-checkpoint root gates pass at `b90845e`: 1,615 tests, zero failures, 39 excluded. |
+| 4 — Twilio credential readers | Implemented; reader exit verified | Existing encrypted SID/Auth Token records now supply REST, voice/status and initialized WSS authentication. The same two-tenant source/signature, outage, owner and failure checks cover Twilio; prior media checks verify authentication before token consumption and safe process loss. Independent review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md). All five carrier-checkpoint root gates pass at `b90845e`: 1,615 tests, zero failures, 39 excluded. |
+| 5 — Existing provider credential integrations | Implemented; credential-reader exit verified | Named API-key provisioning, inline model/options translation, tenant startup resolution and native routing use the existing adapters. Agent Runtime 5, Engine constructor 5 and Persistence focused 33 tests pass (2 excluded). Independent GPT 6 Astra xhigh review found no production blocker; its application-auth fixture correction is verified by the 95-test Agent Runtime suite (4 excluded). Calls 81 and Persistence 99 tests pass (6 excluded). All static gates and unused-lock checks pass. The full root run completed 1,547 tests with one previously reproduced native Morse failure and 33 exclusions; common milestone acceptance was open at that checkpoint. Independent gate review confirms the focused checkpoint exit is satisfied. No new provider or auth-mode support is added. See the [inventory](../existing-provider-credentials.md) and [Zenmux evidence](../../labnotes/20260916-0033-zenmux-tenant-credentials.md). |
+| 6 — Platform encryption-key rotation | Implemented and verified | Six database tests, three tagged real-connection checks and three operator CLI tests pass. Batches preserve exact tenant credentials, identity and revoked status, skip busy rows with truthful remaining counts, and roll back on corruption or interruption. Concurrent new-key insertion and status updates survive interrupted/skipped batches. Disposable fresh VMs verify mixed-key reads, resumed batches, retirement of the old key and safe missing/wrong-key rejection. Persistence 115 tests pass (9 excluded); independent review and static/unused-lock gates pass. Full root run: 1,564 tests, one previously reproduced native Morse-audio failure, 36 excluded; common umbrella acceptance was open at that checkpoint. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md). |
+| 7 — Platform configuration and cleanup | Implemented and verified | Both artifact writers share the unprefixed storage settings; retired values cannot override or rescue them. Five DB alias/default/validation/isolation checks pass; effective Ecto pool precedence is verified. Console configuration 15, carrier scope Gateway 38/Calls 13/Persistence 10 and legacy-file 5 checks pass. Default macOS source boot/provision/prepare and fresh-VM Google/Deepgram construction pass using exact persisted tenant credentials. The hidden sample and obsolete readers are removed; visible `env.sample` catalogs platform settings. Independent implementation review and all five final root gates pass: 1,622 tests, zero failures, 39 excluded. See [platform evidence](../../labnotes/20260916-0509-finish-platform-configuration.md) and [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
 
-- [ ] Verify every credential/configuration boundary and checkpoint exit above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates)
+- [x] Verify every credential/configuration boundary and checkpoint exit above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates)
   after independent implementation review.
-- [ ] Update this milestone, index and related documentation with actual implementation evidence.
+- [x] Update this milestone, index and related documentation with actual implementation evidence.
+
+### Earlier checkpoint evidence (historical)
+
+The pending work and gate results below describe each recorded checkpoint at the time. The current
+ledger and final implementation review supersede their progress and review status.
 
 Checkpoint 3 definition-guard follow-up: private exact service resolution and final
 save/publish/web-preparation guards pass 13 focused database tests, Calls 81 and Persistence 106
 tests (6 excluded), root static gates and independent GPT 6 Astra xhigh review. Incoming admission
 shared preflight only at that checkpoint; its final insert guard, canonical plan references and
-live readers remained pending. Checkpoint 3 stays partial. The full root run at `a21ba3f` completes 1,554 tests with the
+live readers remained pending. Checkpoint 3 was partial. The full root run at `a21ba3f` completed 1,554 tests with the
 same native Morse assertion failure and 33 exclusions; unused-lock checks pass. Common umbrella
-acceptance remains open. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+acceptance remained open. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
 
 Checkpoint 3 canonical-binding follow-up: hosted compilation now pins safe service identity before
 the plan digest, and the final web write compares every reference under existing locks. Three Calls
@@ -711,7 +715,7 @@ Checkpoint 3 incoming-write follow-up: the existing credential/reference guard n
 call/leg insertion transaction. Four database tests and two tagged real-connection checks pass:
 post-compile binding/revocation/corruption failures write neither row, locks remain held through
 commit, and a racing duplicate recovers after its failed insert transaction ends. Tenant-scoped
-duplicate identity, incoming provider/account matching and live carrier readers remain pending.
+duplicate identity, incoming provider/account matching and live carrier readers remained pending.
 Independent review and all five root gates pass at `9026af2`: 1,575 tests, zero failures and
 38 exclusions (seed 235296).
 See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
@@ -724,7 +728,7 @@ Calls 84 and Persistence 136 tests pass (11 excluded). A fresh-VM disposable dat
 four correct duplicates across two tenants per existing carrier. Independent review and static
 root gates pass. The full root run after the fixture correction completes 1,588 tests with
 one native five-participant WebRTC timeout and 38 exclusions. Gateway live identity/readers
-and common acceptance remain pending.
+and common acceptance remained pending.
 See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
 
 Checkpoints 3/4 live-reader completion: static credential lists and application fallback are removed.
@@ -732,18 +736,38 @@ The 62-test combined reader/HTTP/owner group passes, as do 26 existing signed ca
 checks, the 46-test carrier/activation group and the tagged encrypted DB-to-HTTP composition check.
 The final corrected outgoing group passes 16 tests. Public-origin configuration passes 5 tests;
 Engine request propagation passes 4 tests. Independent review accepts the bounded reader exits.
-The final common umbrella run remains separate from these focused checkpoint exits.
+All five root gates subsequently pass at `b90845e`: 1,615 tests, zero failures and 39 exclusions.
+
+### Final configuration evidence
 
 Checkpoint 7 implementation: approved DB aliases, safe validation/defaults and dedicated test
 isolation pass 5 new red/green checks. The effective Ecto pool cannot be overridden by a URL query.
 The combined Console configuration group passes 15 tests; carrier scope cleanup passes Gateway 38,
-Calls 13 and Persistence 10. The legacy-file regression passes 5. Actual macOS source boot with all DB
-variables unset uses vxpipe_dev/pool 10, provisions and prepares a synthetic tenant call, then a fresh
-VM constructs Google/Deepgram from the persisted values. Only the owned records are removed.
+Calls 13 and Persistence 10. The legacy-file regression passes 5. Actual macOS source boot with the
+four approved DB aliases and both retired names unset uses vxpipe_dev/pool 10, provisions and
+prepares a synthetic tenant call, then a fresh VM constructs Google/Deepgram from the persisted
+values. Only the owned records are removed.
 The stale hidden sample is retired; visible env.sample catalogs the platform settings. Independent
 review found no blocker. Format, compile, strict Credo and unused-lock checks pass. The final root
-suite remains pending, so checkpoint 7 and the milestone index remain unchecked. See
-[platform evidence](../../labnotes/20260916-0509-finish-platform-configuration.md).
+suite at `58d7b34` passes 1,622 tests with zero failures and 39 exclusions; checkpoint 7 and the
+milestone index are complete. See [platform evidence](../../labnotes/20260916-0509-finish-platform-configuration.md).
+
+The preceding run at `004028b` had two Gateway assertion failures; both passed unchanged in
+isolation. Reviewed test-only corrections remove a Registry cleanup race and finalize only an
+already-decoded exact Morse message's silence delimiter. The corrected native group passes two
+tests (66 excluded), and all 16 outgoing-leg tests pass. The subsequent full root run above is
+also green. This does not establish the transport cause of earlier incomplete silence tails.
+See [assertion evidence](../../labnotes/20260916-0537-stabilize-acceptance-tests.md).
+
+### Final implementation review
+
+Independent GPT 6 Astra xhigh review on 2026-09-16 found no remaining implementation or focused
+acceptance gap. It verified the existing supported provider catalog, removal of superseded readers
+and application-scope carrier fallbacks, exact persisted credentials after source boot/restart,
+tenant isolation/privacy and platform-key re-encryption that preserves upstream credentials.
+Its final documentation findings and the two test-assertion findings are corrected and reviewed.
+All five final root gates pass at `58d7b34`; this milestone, the index and labnotes are synchronized.
+This review supersedes the initial checkpoint-1 reviewer usage-limit status.
 
 ## Specification review
 
@@ -762,7 +786,8 @@ to credential boundaries and retained tenant isolation/authentication/no-fallbac
 A subsequent user clarification explicitly retains platform-owned encryption-key rotation.
 The seven-checkpoint count remains; scope and implementation evidence are distinct. No new runtime
 code is included in this scope commit. The independent review history below applies to the earlier
-specification; final independent implementation review remains pending after the reviewer usage limit.
+specification. The initial checkpoint-1 implementation follow-up hit a reviewer usage limit;
+subsequent independent implementation reviews are recorded separately above.
 
 Local source review on 2026-09-15 traced profile selection, provider startup, prepared-plan
 encoding, tenant administration, carrier service fallback, webhook/WSS authentication, outbound

@@ -67,4 +67,41 @@ fresh preparation; historical plans remain intact and invalid old activations re
 
 Final format, warnings-as-errors compile, strict Credo and unused-lock checks pass. Independent
 GPT 6 Astra xhigh review found no production/test blocker; its two remaining documentation
-clarifications are corrected. Final complete-milestone root regression remains to run.
+clarifications are corrected. The final root results and milestone closure are recorded below.
+
+## Final acceptance and closure
+
+The first final run at `004028b` completed 1,622 tests with two Gateway assertion failures and
+39 exclusions. Both cases passed unchanged in isolation. The separately reviewed test-only
+correction at `58d7b34` removes the Registry cleanup timing assumption and completes only an exact
+already-decoded Morse message's silence delimiter; it changes no production behavior. Focused
+checks pass (16 outgoing-leg tests and 2 native Morse tests, with 66 excluded).
+
+All five final root gates pass on `58d7b34`:
+
+- `mix format --check-formatted`
+- `mix compile --warnings-as-errors`
+- `mix credo --strict` — 911 source files, no issues.
+- `mix test --preload-modules --max-requires 1 --max-cases 4 --seed 235296` — 1,622 tests,
+  zero failures, 39 excluded.
+- `mix deps.unlock --check-unused`
+
+| Application | Tests | Failures | Excluded |
+| --- | ---: | ---: | ---: |
+| MCP | 37 | 0 | 3 |
+| Agent Runtime | 95 | 0 | 4 |
+| Call Engine | 698 | 0 | 12 |
+| Calls | 85 | 0 | 0 |
+| Gateway | 438 | 0 | 7 |
+| Artifacts | 20 | 0 | 1 |
+| Persistence | 136 | 0 | 11 |
+| Console | 113 | 0 | 1 |
+
+Log: `tmp/platform-closure-root-test.log`. Independent final implementation and documentation
+reviews found no remaining blocker. The milestone is 7/7 complete; the index is 22/26 complete.
+The original live Twilio acceptance and packaging/retention holds remain in their own milestones.
+No additional provider authentication support or third-party credential lifecycle work is included.
+
+Closure documentation checks validate 184 relative links/anchors and all JSON examples across the
+six changed Markdown files. Seven sequential checkpoints have no unfinished task boxes; the index's
+22/26 count matches its actual checkboxes. `git diff --check` passes.
