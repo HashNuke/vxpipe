@@ -61,7 +61,8 @@ readers and full umbrella acceptance remain pending. See [service evidence](../.
 Private Telnyx service resolution and transactional definition save/publish/web-preparation guards
 now pass 13 focused checks, Calls 81 and Persistence 106 tests (6 excluded), static gates and
 independent review. Incoming final insertion, canonical plan references and live readers remain
-pending; checkpoint 3 is still partial. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+pending; checkpoint 3 is still partial. The full root run completes 1,554 tests with the same
+native Morse assertion failure and 33 exclusions; unused-lock checks pass. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the

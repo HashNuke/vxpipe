@@ -35,3 +35,8 @@
 - Rechecked the user's provider-scope clarification against the milestone and source inventory:
   only existing Google, Deepgram, Zenmux, Telnyx and Twilio integrations are included. No speculative
   provider/auth implementation was found in the current checklist or this slice.
+- Full root verification at `a21ba3f`: 1,554 tests, one failure, 33 excluded (seed 235296,
+  preload modules, max requires 1, max cases 4). The existing native repeated-AI-transfer Morse
+  assertion fails again at `human_transfer_webrtc_test.exs:355`, with decoded `E ` and only 24
+  trailing silence windows. No changed credential test fails. Unused-lock check passes; combined
+  with the prior static run, four of five root gates pass. The native cause remains unresolved.

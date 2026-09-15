@@ -648,7 +648,9 @@ Checkpoint 3 definition-guard follow-up: private exact service resolution and fi
 save/publish/web-preparation guards pass 13 focused database tests, Calls 81 and Persistence 106
 tests (6 excluded), root static gates and independent GPT 6 Astra xhigh review. Incoming admission
 shares preflight only; its final insert guard, canonical plan references and live readers remain
-pending. Checkpoint 3 stays partial. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+pending. Checkpoint 3 stays partial. The full root run at `a21ba3f` completes 1,554 tests with the
+same native Morse assertion failure and 33 exclusions; unused-lock checks pass. Common umbrella
+acceptance remains open. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
 
 ## Specification review
 
