@@ -211,6 +211,163 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = await_tone(support_client, 700, 2_000)
   end
 
+  @tag changing_listeners: true
+  test "five-participant handoff keeps one wait cursor when a human adds a receive-only sink" do
+    {wait_sounds, options} = custom_wait_configuration(480_000)
+
+    plan =
+      compile_plan(
+        wait_sounds: wait_sounds,
+        observer_policy: %{},
+        restriction_policy: %{},
+        extra_participants: %{
+          "monitor" => %{
+            type: "human",
+            connection: %{service: "web", mode: "receive", admission: "start_call"},
+            capabilities: %{}
+          }
+        }
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    observer = Map.fetch!(plan.participants, "observer")
+    assert {:ok, room} = CallEngine.start_call(plan, options)
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+    source_monitor = Process.monitor(source_tts)
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    caller_client =
+      plan |> issue_session(room, caller.participant_id) |> then(&connect(&1.session_id, "chat"))
+
+    observer_client = join_native_listener(plan, room, "observer", :monitor)
+    third_client = join_native_listener(plan, room, "recording-restriction", :human)
+    monitor_client = join_native_listener(plan, room, "monitor", :monitor)
+    audience = [caller_client, observer_client, third_client, monitor_client]
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    assert MapSet.size(:sys.get_state(authority).participant_ids) == 5
+    assert {:ok, before} = CallEngine.RoomAuthority.readiness_binding(authority)
+
+    assert :ok = send_rtvi_text(third_client, "transfer-from-another-human", true)
+    assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "multiple-listener-handoff",
+               name: "transfer",
+               arguments: %{"destination" => "human-support", "reason" => "Connect support."}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+    for peer <- audience, do: await_tone(peer, 250, 2_000)
+    original_players = wait_players(room.incarnation_id)
+    assert map_size(original_players) == 4
+    {caller_player, _} = Map.fetch!(original_players, caller.participant_id)
+    {observer_player, _} = Map.fetch!(original_players, observer.participant_id)
+    pause_wait_at(caller_player, 350)
+    pause_wait_at(observer_player, 150)
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    %{"data" => %{"attempt_id" => attempt}} =
+      await_sideband(support_client, "transfer.preparation", 2_000)
+
+    assert_receive {:test_tts_control, ^briefing_tts, _speak}, 2_000
+    assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
+    deliver_voice_tone(briefing_tts, "multiple-listener-briefing", 2_000)
+    await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+    assert :ok = send_acceptance(support_client, "accept-multiple-listeners", attempt)
+    assert_receive {:test_stt_transport_started, support_stt, _}, 2_000
+    await_transfer_progress(third_client, "preparing", ["speech_to_text"])
+    assert {:ok, pending} = CallEngine.RoomAuthority.readiness_binding(authority)
+    assert await_paused_cursor(observer_player, 8_000) == 288_000
+    assert await_paused_cursor(caller_player, 8_000) == 672_000
+
+    phase = :sys.get_state(authority).pending_participant_transfer.task.pid
+
+    assert {:ok, %{worker: %Task{pid: worker}}} =
+             CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(phase)
+
+    assert :erlang.suspend_process(worker)
+
+    second_sink =
+      try do
+        peer =
+          plan
+          |> issue_session(room, observer.participant_id)
+          |> then(&connect(&1.session_id, "chat", false, :recvonly))
+
+        [{connection, _}] =
+          Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, peer.connection_id})
+
+        gate = Map.get(:sys.get_state(connection), :handoff_gate)
+        assert match?(%{held?: true}, gate)
+        assert {:ok, media} = GenServer.call(connection, :vxpipe_connection_readiness)
+        assert :ok = Vxpipe.Gateway.Media.OutputArbiter.confirm_hold(media.output, 1)
+        peer
+      after
+        :erlang.resume_process(worker)
+      end
+
+    assert :sys.get_state(observer_player).offset == 288_000
+    assert :sys.get_state(caller_player).offset == 672_000
+    CallEngine.WaitSounds.Player.resume(observer_player)
+    CallEngine.WaitSounds.Player.resume(caller_player)
+    await_tone(second_sink, 250, 2_000)
+    players = wait_players(room.incarnation_id)
+    assert map_size(players) == 5
+
+    assert {:error, :unavailable} =
+             Vxpipe.Gateway.WebRTC.Connection.input_track(second_sink.connection_id)
+
+    {observer_player, _state} = Map.fetch!(original_players, observer.participant_id)
+    {current_player, observer_wait} = Map.fetch!(players, observer.participant_id)
+    assert current_player == observer_player
+
+    assert Map.keys(observer_wait.sinks) |> Enum.sort() ==
+             Enum.sort([observer_client.connection_id, second_sink.connection_id])
+
+    for {participant, {player, old}} <- original_players do
+      {current_player, current} = Map.fetch!(players, participant)
+      assert current_player == player
+      assert current.offset >= old.offset
+      assert current.asset == old.asset
+    end
+
+    assert {:ok, refreshed} = CallEngine.RoomAuthority.readiness_binding(authority)
+    assert refreshed.attempt == pending.attempt
+    assert refreshed.room == before.room
+
+    for {id, connection} <- before.connections,
+        do: assert(refreshed.connections[id] == connection)
+
+    refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 0
+
+    TestSpeechToTextTransport.deliver(
+      support_stt,
+      ~s({"type":"Connected","request_id":"multiple-support-ready","sequence_id":0})
+    )
+
+    await_sideband(support_client, "transfer.active", 3_000)
+    await_transfer_progress(third_client, "completed")
+    send_tone(support_client, 1_500, 1)
+    for peer <- audience ++ [second_sink], do: assert_handoff_audio_order(peer, 1_500, 250)
+    send_tone(caller_client, 500, 1)
+    assert_handoff_audio_order(support_client, 500, 250)
+    assert wait_players(room.incarnation_id) == %{}
+    assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
+  end
+
   test "native startup diagnostics follow independent STT and TTS acknowledgements" do
     handler = {__MODULE__, self(), make_ref()}
 
@@ -2040,7 +2197,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           {:ok, phase} =
             CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(pending.task.pid)
 
-          [player] = phase.audience.waits
+          [player] = Map.values(phase.audience.waits)
           Process.exit(player, :kill)
       end
 
@@ -3338,13 +3495,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
      [wait_sound_settings: [cache: cache, fetcher: {CallEngine.OpeningAudio.ReqFetcher, []}]]}
   end
 
-  defp wait_configuration(:custom_url) do
+  defp wait_configuration(:custom_url), do: custom_wait_configuration(9_600)
+
+  defp custom_wait_configuration(sample_count) do
     cache =
       start_supervised!(
         {CallEngine.OpeningAudio.AssetCache, maximum_entries: 8, maximum_bytes: 8_388_608}
       )
 
-    wave = tone_wave(250)
+    wave = tone_wave(250, sample_count)
     url = "https://media.example.com/handoff.wav"
 
     {%{transfer_to_human: url, transfer_joining: url},
@@ -3392,81 +3551,88 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  transfer_policy: %{
                    attempt_timeout_ms: Keyword.get(options, :transfer_timeout_ms, 30_000)
                  },
-                 participants: %{
-                   "caller" => %{
-                     type: "human",
-                     capabilities:
-                       if(
-                         Keyword.get(options, :morse, false) or
-                           Keyword.get(options, :caller_speech_to_text?, false),
-                         do: %{speech_to_text: "test-stt"},
-                         else: %{}
-                       ),
-                     connection: %{
-                       service: "web",
-                       mode: "receive",
-                       admission: "start_call"
-                     }
-                   },
-                   "reception" => %{
-                     type: "agent",
-                     prompt: "Route callers safely.",
-                     first_message:
-                       Keyword.get(options, :reception_first_message, %{mode: "wait_for_input"}),
-                     capabilities: %{
-                       model_inference: "test-model",
-                       text_to_speech: "test-voice"
+                 participants:
+                   Map.merge(
+                     %{
+                       "caller" => %{
+                         type: "human",
+                         capabilities:
+                           if(
+                             Keyword.get(options, :morse, false) or
+                               Keyword.get(options, :caller_speech_to_text?, false),
+                             do: %{speech_to_text: "test-stt"},
+                             else: %{}
+                           ),
+                         connection: %{
+                           service: "web",
+                           mode: "receive",
+                           admission: "start_call"
+                         }
+                       },
+                       "reception" => %{
+                         type: "agent",
+                         prompt: "Route callers safely.",
+                         first_message:
+                           Keyword.get(options, :reception_first_message, %{
+                             mode: "wait_for_input"
+                           }),
+                         capabilities: %{
+                           model_inference: "test-model",
+                           text_to_speech: "test-voice"
+                         },
+                         tools: %{},
+                         transfers:
+                           if(Keyword.get(options, :agent_destination),
+                             do: ["billing"],
+                             else: ["human-support"]
+                           )
+                       },
+                       "billing" => %{
+                         type: "agent",
+                         prompt: "Handle billing requests.",
+                         tools: Keyword.get(options, :billing_tools, %{}),
+                         transfer_history:
+                           Keyword.get(options, :billing_history, %{mode: "fresh"}),
+                         capabilities: %{
+                           model_inference: "billing-model",
+                           text_to_speech: "test-voice"
+                         },
+                         first_message: %{mode: "fixed", text: "Billing is ready."}
+                       },
+                       "human-support" => %{
+                         type: "human",
+                         description: "A human support specialist",
+                         while_present: Keyword.get(options, :support_policy, %{}),
+                         capabilities: %{speech_to_text: "test-stt"},
+                         connection: %{
+                           service: "web",
+                           mode: "receive",
+                           admission: "transfer"
+                         },
+                         transfer_notice:
+                           Keyword.get(options, :transfer_notice, "This call is recorded.")
+                       },
+                       "observer" => %{
+                         type: "human",
+                         connection: %{service: "web", mode: "receive", admission: "start_call"},
+                         capabilities:
+                           if(Keyword.get(options, :observer_speech_to_text?, false),
+                             do: %{speech_to_text: "test-stt"},
+                             else: %{}
+                           ),
+                         while_present:
+                           Keyword.get(options, :observer_policy, %{save_transcripts: false})
+                       },
+                       "recording-restriction" => %{
+                         type: "human",
+                         connection: %{service: "web", mode: "receive", admission: "start_call"},
+                         capabilities: %{},
+                         while_present:
+                           Keyword.get(options, :restriction_policy, %{record_audio: false})
+                       }
                      },
-                     tools: %{},
-                     transfers:
-                       if(Keyword.get(options, :agent_destination),
-                         do: ["billing"],
-                         else: ["human-support"]
-                       )
-                   },
-                   "billing" => %{
-                     type: "agent",
-                     prompt: "Handle billing requests.",
-                     tools: Keyword.get(options, :billing_tools, %{}),
-                     transfer_history: Keyword.get(options, :billing_history, %{mode: "fresh"}),
-                     capabilities: %{
-                       model_inference: "billing-model",
-                       text_to_speech: "test-voice"
-                     },
-                     first_message: %{mode: "fixed", text: "Billing is ready."}
-                   },
-                   "human-support" => %{
-                     type: "human",
-                     description: "A human support specialist",
-                     while_present: Keyword.get(options, :support_policy, %{}),
-                     capabilities: %{speech_to_text: "test-stt"},
-                     connection: %{
-                       service: "web",
-                       mode: "receive",
-                       admission: "transfer"
-                     },
-                     transfer_notice:
-                       Keyword.get(options, :transfer_notice, "This call is recorded.")
-                   },
-                   "observer" => %{
-                     type: "human",
-                     connection: %{service: "web", mode: "receive", admission: "start_call"},
-                     capabilities:
-                       if(Keyword.get(options, :observer_speech_to_text?, false),
-                         do: %{speech_to_text: "test-stt"},
-                         else: %{}
-                       ),
-                     while_present:
-                       Keyword.get(options, :observer_policy, %{save_transcripts: false})
-                   },
-                   "recording-restriction" => %{
-                     type: "human",
-                     connection: %{service: "web", mode: "receive", admission: "start_call"},
-                     capabilities: %{},
-                     while_present:
-                       Keyword.get(options, :restriction_policy, %{record_audio: false})
-                   }
-                 },
+                     Keyword.get(options, :extra_participants, %{})
+                   ),
                  limits: %{max_duration_ms: 60_000}
                },
                resource_id: resource_id,
@@ -3545,7 +3711,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     session
   end
 
-  defp connect(session_id, channel_label, ready? \\ true) do
+  defp connect(session_id, channel_label, ready? \\ true, direction \\ :sendrecv) do
     client_id = unique_id("client")
     child_spec = Supervisor.child_spec({PeerConnection, []}, id: {PeerConnection, client_id})
     client = start_supervised!(child_spec)
@@ -3555,7 +3721,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     input_track = MediaStreamTrack.new(:audio)
 
     assert {:ok, _transceiver} =
-             PeerConnection.add_transceiver(client, input_track, direction: :sendrecv)
+             PeerConnection.add_transceiver(client, input_track, direction: direction)
 
     assert {:ok, offer} = PeerConnection.create_offer(client)
     :ok = PeerConnection.set_local_description(client, offer)
@@ -3608,6 +3774,86 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     }
 
     if ready? and channel_label == "chat", do: await_call_ready(connection), else: connection
+  end
+
+  defp join_native_listener(plan, room, key, role) do
+    participant = Map.fetch!(plan.participants, key)
+
+    assert {:ok, command} =
+             CallEngine.Command.JoinParticipant.new(
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: plan.room_id,
+               participant_id: participant.participant_id,
+               role: role,
+               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+             )
+
+    assert {:ok, _participant} = CallEngine.join_participant(command)
+    direction = if role == :monitor, do: :recvonly, else: :sendrecv
+
+    plan
+    |> issue_session(room, participant.participant_id)
+    |> then(&connect(&1.session_id, "chat", false, direction))
+  end
+
+  defp pause_wait_at(player, frame_count) do
+    token = make_ref()
+    target = ":#{frame_count - 2}"
+
+    assert :ok =
+             :sys.install(player, {token,
+              fn
+                :done, _event, _process ->
+                  :done
+
+                state,
+                {:in, {:vxpipe_audio_playback, _sink, correlation, {:completed, _}}},
+                _process ->
+                  if String.ends_with?(correlation, target) do
+                    # The next frame is submitted by handle_continue before this cast.
+                    # Pause then drains exactly that frame through the native output.
+                    CallEngine.WaitSounds.Player.pause(self())
+                    :done
+                  else
+                    state
+                  end
+
+                state, _event, _process ->
+                  state
+              end, nil})
+  end
+
+  defp await_paused_cursor(player, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    await_paused_cursor_at(player, deadline)
+  end
+
+  defp await_paused_cursor_at(player, deadline) do
+    case :sys.get_state(player) do
+      %{mode: :paused, offset: offset} ->
+        offset
+
+      _playing ->
+        assert System.monotonic_time(:millisecond) < deadline, "wait cursor did not pause"
+
+        receive do
+        after
+          10 -> await_paused_cursor_at(player, deadline)
+        end
+    end
+  end
+
+  defp wait_players(incarnation) do
+    [{supervisor, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {:capability_supervisor, incarnation})
+
+    for {_, player, _, [CallEngine.WaitSounds.Player]} <-
+          DynamicSupervisor.which_children(supervisor),
+        state = :sys.get_state(player),
+        state.loop,
+        into: %{},
+        do: {state.participant_id, {player, state}}
   end
 
   defp create_channel(_client, nil), do: nil

@@ -181,7 +181,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
            await_preparation(prepared, collector, phase, request, {phase, :preparing, nil}),
          :ok <- stop_waits(ready.waits, ready.scope),
          :ok <- clear(ready.connections) do
-      cue_release(%{ready | waits: []}, collector, phase, request)
+      cue_release(%{ready | waits: %{}}, collector, phase, request)
     end
   end
 
@@ -249,7 +249,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
         {:error, reason}
 
       {:DOWN, _monitor, :process, player, _reason} ->
-        if player in prepared.waits,
+        if player in Map.values(prepared.waits),
           do: {:error, :playback_unavailable},
           else: await_preparation(prepared, collector, phase, request, progress)
     after
@@ -315,7 +315,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          {:ok, connections} <- capture_connections(binding, policy.present_participant_ids),
          added = Map.drop(connections, Map.keys(prepared.connections)),
          :ok <- hold(added, scope),
-         {:ok, waits} <- play(added, binding, scope, request, :wait),
+         {:ok, waits} <- reconcile_waits(prepared.waits, connections, binding, scope, request),
          {:ok, graph} <- Preparation.run(phase.authority, candidate, remaining(scope)) do
       {:ok,
        %{
@@ -323,7 +323,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          | binding: binding,
            candidate: candidate,
            connections: connections,
-           waits: prepared.waits ++ waits,
+           waits: waits,
            graph: graph
        }}
     else
@@ -338,8 +338,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     with {:ok, media} <- prepare_media(phase, request, scope),
          added = Map.drop(media.connections, Map.keys(prepared.connections)),
          :ok <- hold(added, scope),
-         {:ok, waits} <- play(added, media.binding, scope, request, :wait) do
-      prepared = prepared |> Map.merge(media) |> Map.put(:waits, prepared.waits ++ waits)
+         {:ok, waits} <-
+           reconcile_waits(prepared.waits, media.connections, media.binding, scope, request) do
+      prepared = prepared |> Map.merge(media) |> Map.put(:waits, waits)
 
       case Preparation.prepare_candidate(phase.authority, media.candidate, Map.to_list(scope)) do
         {:ok, graph} ->
@@ -478,7 +479,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
 
     connections
     |> Enum.group_by(fn {_id, connection} -> connection.identity.participant_id end)
-    |> Enum.reduce_while({:ok, []}, fn {participant, outputs}, {:ok, players} ->
+    |> Enum.reduce_while({:ok, %{}}, fn {participant, outputs}, {:ok, players} ->
       destination = Map.fetch!(binding.plan.participants, request.destination_definition_key)
 
       slot =
@@ -512,7 +513,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
         case RoomCapabilitySupervisor.start_wait_audio(binding.identity.incarnation_id, options) do
           {:ok, player} ->
             if owner == self(), do: Process.monitor(player)
-            {:cont, {:ok, [player | players]}}
+            {:cont, {:ok, Map.put(players, participant, player)}}
 
           error ->
             {:halt, error}
@@ -523,12 +524,41 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     end)
   end
 
+  defp reconcile_waits(players, connections, binding, scope, request) do
+    outputs =
+      Enum.group_by(connections, fn {_id, connection} -> connection.identity.participant_id end)
+
+    retained = Map.take(players, Map.keys(outputs))
+    removed = Map.drop(players, Map.keys(outputs))
+
+    with :ok <- stop_waits(removed, scope),
+         :ok <-
+           each(retained, fn {participant, player} ->
+             sinks =
+               Map.new(Map.fetch!(outputs, participant), fn {id, connection} ->
+                 {id, connection.output}
+               end)
+
+             Player.reconcile(player, scope, sinks)
+           end),
+         added =
+           Map.reject(connections, fn {_id, connection} ->
+             Map.has_key?(retained, connection.identity.participant_id)
+           end),
+         {:ok, started} <- play(added, binding, scope, request, :wait) do
+      {:ok, Map.merge(retained, started)}
+    end
+  end
+
   defp stop_waits(players, scope) do
-    Enum.each(players, &Player.stop/1)
+    Enum.each(Map.values(players), &Player.stop/1)
     await_players(players, :stopped, scope)
   end
 
   defp await_players(players, status, scope, collector \\ nil, inventory \\ nil)
+
+  defp await_players(players, status, scope, collector, inventory) when is_map(players),
+    do: await_players(Map.values(players), status, scope, collector, inventory)
 
   defp await_players([], _status, _scope, _collector, _inventory), do: :ok
 

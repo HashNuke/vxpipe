@@ -91,7 +91,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
             {:handled, other}
         end
       else
-        {:handled, {:reply, {:error, rejected_control()}, state}}
+        if MapSet.member?(state.participant_ids, command.participant_id) and
+             not pending_destination?(command, pending) do
+          :unhandled
+        else
+          {:handled, {:reply, {:error, rejected_control()}, state}}
+        end
       end
     else
       :unhandled

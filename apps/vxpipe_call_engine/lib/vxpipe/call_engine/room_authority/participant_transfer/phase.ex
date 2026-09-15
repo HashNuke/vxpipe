@@ -180,7 +180,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
          {:ok, {audience, preparation}},
          monitor
        ) do
-    scope = Map.put(scope, :player_monitors, Map.new(audience.waits, &{Process.monitor(&1), &1}))
+    scope =
+      Map.put(
+        scope,
+        :player_monitors,
+        Map.new(Map.values(audience.waits), &{Process.monitor(&1), &1})
+      )
+
     send(scope.authority, {:vxpipe_transfer_prepared, scope.reference, preparation})
 
     await_completion(

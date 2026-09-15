@@ -51,6 +51,9 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
   def resume(player), do: GenServer.cast(player, :resume)
   def stop(player), do: GenServer.cast(player, :stop)
 
+  def reconcile(player, scope, sinks),
+    do: GenServer.call(player, {:reconcile, scope, sinks}, 1_000)
+
   @impl true
   def init(options) do
     state = struct!(__MODULE__, Keyword.take(options, @fields ++ [:loop, :output_generation]))
@@ -123,6 +126,29 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
          }}
     end
   end
+
+  @impl true
+  def handle_call(
+        {:reconcile, %{attempt_id: attempt, generation: generation}, sinks},
+        _from,
+        %{attempt_id: attempt, connection_generation: generation, loop: true} = state
+      )
+      when is_map(sinks) and map_size(sinks) > 0 do
+    if Enum.all?(sinks, fn {id, sink} -> is_binary(id) and is_pid(sink) end) do
+      state = reconcile_sinks(state, sinks)
+
+      case if(state.mode == :paused, do: {:noreply, state}, else: advance(state)) do
+        {:noreply, state} -> {:reply, :ok, state}
+        {:noreply, state, continuation} -> {:reply, :ok, state, continuation}
+        {:stop, reason, state} -> {:stop, reason, :ok, state}
+      end
+    else
+      {:reply, {:error, :invalid_sinks}, state}
+    end
+  end
+
+  def handle_call({:reconcile, _scope, _sinks}, _from, state),
+    do: {:reply, {:error, :stale_episode}, state}
 
   @impl true
   def handle_cast(:pause, %{mode: :playing} = state), do: {:noreply, %{state | mode: :pausing}}
@@ -231,6 +257,37 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
     else
       {:noreply, state}
     end
+  end
+
+  defp reconcile_sinks(state, sinks) do
+    retained = [state.owner | Map.values(sinks)]
+
+    monitors =
+      Map.filter(state.monitors, fn {reference, pid} ->
+        if pid in retained do
+          true
+        else
+          Process.demonitor(reference, [:flush])
+          false
+        end
+      end)
+
+    monitors =
+      Enum.reduce(retained -- Map.values(monitors), monitors, fn pid, monitors ->
+        Map.put(monitors, Process.monitor(pid), pid)
+      end)
+
+    pending =
+      Map.filter(state.pending, fn {sink, pending} ->
+        if sink in Map.values(sinks) do
+          true
+        else
+          if pending.id, do: :gen_server.receive_response(pending.id, 0)
+          false
+        end
+      end)
+
+    %{state | sinks: sinks, monitors: monitors, pending: pending}
   end
 
   defp frame(state, connection, correlation, payload) do

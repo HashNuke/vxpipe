@@ -253,6 +253,21 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   @impl true
   def handle_info(
+        {:vxpipe_transfer_pending, monitor, authority, attempt_id},
+        %{room_monitor: monitor} = state
+      ) do
+    case Vxpipe.Gateway.Media.HandoffGate.pending(
+           state,
+           authority,
+           attempt_id,
+           state.audio_egress
+         ) do
+      {:ok, state} -> {:noreply, state}
+      {:error, _reason} -> {:stop, :shutdown, state}
+    end
+  end
+
+  def handle_info(
         {:ex_webrtc, peer_connection, {:track, %MediaStreamTrack{kind: :audio} = track}},
         %{peer_connection: peer_connection} = state
       ) do

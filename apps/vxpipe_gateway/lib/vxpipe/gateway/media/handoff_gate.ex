@@ -5,6 +5,25 @@ defmodule Vxpipe.Gateway.Media.HandoffGate do
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
   alias Vxpipe.Gateway.Media.RoomAudioEgress
 
+  def pending(state, authority, attempt_id, output) do
+    if Map.get(state, :handoff_gate) do
+      {:ok, state}
+    else
+      # A new output starts at generation zero. Hold it before negotiation/input
+      # can run; the handoff worker later installs the attempt's actual generation.
+      with :ok <- OutputSink.hold(output, 1) do
+        gate = %{
+          scope: %{attempt_id: attempt_id},
+          monitor: Process.monitor(authority),
+          held?: true,
+          pending?: true
+        }
+
+        {:ok, Map.put(state, :handoff_gate, gate)}
+      end
+    end
+  end
+
   def hold(binding, scope) do
     gate_output(binding, scope, :hold)
   end
@@ -65,6 +84,11 @@ defmodule Vxpipe.Gateway.Media.HandoffGate do
 
       %{scope: ^scope, held?: true} ->
         {:ok, state}
+
+      %{pending?: true, scope: %{attempt_id: attempt}, monitor: monitor}
+      when attempt == scope.attempt_id ->
+        Process.demonitor(monitor, [:flush])
+        apply_control(:hold, scope, phase, Map.put(state, :handoff_gate, nil))
 
       _other ->
         {:error, :stale_handoff}

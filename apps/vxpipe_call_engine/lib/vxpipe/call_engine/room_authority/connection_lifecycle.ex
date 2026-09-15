@@ -303,11 +303,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
     archive_recorder = ArchiveRecorder.connection_attached(state.archive_recorder, command, role)
     state = %{state | archive_recorder: archive_recorder}
+    state = hold_new_connection(state, connection)
     if state.startup_ready?, do: send(subscriber, {:vxpipe_call_ready, room_monitor})
     runtime = selected_speech_to_text_runtime(command.participant_id, state)
 
     {input_mode, output_mode} = media_modes(role, state)
     {:reply, {:ok, role, runtime, :main, input_mode, output_mode, nil}, state}
+  end
+
+  defp hold_new_connection(%{pending_participant_transfer: nil} = state, _connection), do: state
+
+  defp hold_new_connection(state, connection) do
+    send(connection.pid, {
+      :vxpipe_transfer_pending,
+      connection.room_monitor,
+      self(),
+      state.pending_participant_transfer.attempt_id
+    })
+
+    %{
+      state
+      | held_participant_ids: MapSet.put(state.held_participant_ids, connection.participant_id)
+    }
   end
 
   defp bind_recording_egress(_connection_id, nil, _room_mixer), do: :ok

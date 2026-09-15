@@ -101,7 +101,7 @@ bindings, admission cleanup and spoken recovery. Existing rendered desktop/mobil
 the live sample. Recording denial excludes unneeded writers without replacing unaffected resources.
 The latest native regression reproduces a fatal recovery result caused by output-clearing status
 being mistaken for changed resource identity; the fixed case recovers and completes a subsequent
-transfer on the same caller peer. The latest root run passes all five gates: 1,423 tests, zero failures and
+transfer on the same caller peer. The latest root run passes all five gates: 1,425 tests, zero failures and
 16 integration exclusions (seed 235296, concurrency four). The
 [recovery checkpoint](../../labnotes/20260915-0526-recovery-failure-tracing.md) records the causal
 reproduction, fixture corrections and human cleanup acceptance audit.
@@ -130,6 +130,15 @@ There are **9 checkpoint tasks remaining**: live carrier audibility 1, changing/
 and final audit 2. Live provider flags, credentials, approved test numbers and public callback/media
 URLs are absent from the test environment; guarded API tests skip without placing calls. Actual
 adapters and decoded synthetic-socket audio do not establish physical phone audibility.
+
+Changing-listener progress now includes a native five-participant handoff with exact independent
+seven/three-second cursors on a shared ten-second asset. An existing monitor adds another output
+without replacing its player; attachment holds input/output before the handoff worker reconciles
+the connection, then all listeners receive cue before conversation. The
+[changing-listener labnote](../../labnotes/20260915-0656-changing-transfer-listeners.md) records
+the regressions and evidence. Pre-acceptance audience changes, removal/reconnection and repeated
+changing-audience transfer requirements remain open; this does not reduce the nine compound tasks.
+
 The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
 and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the
 implementation boundaries, exact check results and links to checkpoint labnotes. Full milestone

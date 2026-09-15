@@ -103,6 +103,52 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     assert_receive {:player_pressure, ^player, %{depth: 0, limit: 2}, %{status: :stopped}}
   end
 
+  test "adding and replacing sinks retains the participant cursor and ignores retired acknowledgements" do
+    asset = asset(for i <- 0..499, into: <<>>, do: :binary.copy(<<i::little-signed-16>>, 960))
+    {player, first} = start_player(asset, "changing")
+    advance(first, 149)
+    pause_after_frame(player, first)
+    assert_receive {:vxpipe_wait_playback, ^player, "changing", {:paused, 144_000}}
+    second = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
+    sinks = %{"connection-changing" => first, "second" => second}
+
+    assert {:error, :stale_episode} =
+             Player.reconcile(player, %{attempt_id: "old-attempt", generation: 1}, sinks)
+
+    assert {:error, :stale_episode} =
+             Player.reconcile(player, %{attempt_id: "attempt", generation: 2}, sinks)
+
+    assert :ok = Player.reconcile(player, %{attempt_id: "attempt", generation: 1}, sinks)
+    Player.resume(player)
+    assert_receive {:test_audio_output, ^first, old_frame}
+    assert_receive {:test_audio_output, ^second, frame}
+    assert frame.payload == :binary.copy(<<150::little-signed-16>>, 960)
+    assert frame.payload == old_frame.payload
+    assert frame.correlation_id == old_frame.correlation_id
+    assert_receive {:test_audio_output_finish, ^first, _}
+    assert_receive {:test_audio_output_finish, ^second, _}
+
+    replacement = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
+    sinks = %{"connection-changing" => replacement, "second" => second}
+    assert :ok = Player.reconcile(player, %{attempt_id: "attempt", generation: 1}, sinks)
+    complete(first)
+    refute_receive {:test_audio_output, ^replacement, _}, 0
+    complete(second)
+    assert_receive {:test_audio_output, ^replacement, replaced_frame}
+    assert_receive {:test_audio_output, ^second, retained_frame}
+    assert replaced_frame.payload == :binary.copy(<<151::little-signed-16>>, 960)
+    assert replaced_frame.payload == retained_frame.payload
+    assert replaced_frame.correlation_id == retained_frame.correlation_id
+    refute_receive {:test_audio_output, ^first, _}, 0
+    assert_receive {:test_audio_output_finish, ^replacement, _}
+    assert_receive {:test_audio_output_finish, ^second, _}
+    Player.stop(player)
+    _ = :sys.get_state(player)
+    complete(replacement)
+    complete(second)
+    assert_receive {:vxpipe_wait_playback, ^player, "changing", :stopped}
+  end
+
   test "finite cues await final drain on every output and carry the held generation" do
     second =
       start_supervised!({TestAudioOutputSink, observer: self(), defer_drain: true},

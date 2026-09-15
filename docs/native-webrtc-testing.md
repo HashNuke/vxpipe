@@ -201,6 +201,23 @@ carrier socket/acknowledgements are controlled; the actual provider adapters and
 The existing guarded live API tests only establish control submission when enabled. Live carrier
 wait/cue/clear/recovery audibility remains a separate acceptance boundary.
 
+For the five-participant call and added output connection:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --only changing_listeners
+```
+
+Four existing listeners, including humans admitted with the monitor role, receive a shared
+ten-second URL asset through native WebRTC. Two actual players pause at seven and three seconds
+after their native output acknowledges the selected frames. An existing monitor adds another
+receive-only connection while support STT remains unready. The new connection must already hold
+input/output while the handoff worker is paused, then share the original participant cursor when
+reconciliation resumes. Existing players, room bindings and the attempt deadline remain unchanged;
+all listening connections receive cue before conversation. Monitor admission supplies the absence
+of microphone permission; SDP direction alone does not change an ordinary human's server role.
+Connection removal, pre-acceptance audience changes and repeated changing-audience transfers
+retain separate acceptance requirements in the milestone.
+
 ## Protocol boundary
 
 The caller's `chat` data channel carries RTVI 2.1 messages with `label: "rtvi-ai"`, including

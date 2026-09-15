@@ -238,6 +238,21 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   def handle_info(
+        {:vxpipe_transfer_pending, monitor, authority, attempt_id},
+        %{attachment: %{room_monitor: monitor}} = state
+      ) do
+    case Vxpipe.Gateway.Media.HandoffGate.pending(
+           state,
+           authority,
+           attempt_id,
+           state.audio_output
+         ) do
+      {:ok, state} -> {:noreply, state}
+      {:error, _reason} -> {:stop, :shutdown, state}
+    end
+  end
+
+  def handle_info(
         {:vxpipe_startup_speech, monitor},
         %{attachment: %{room_monitor: monitor}} = state
       ) do
