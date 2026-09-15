@@ -57,6 +57,9 @@ if database_url do
     provider_credential_repository:
       {Vxpipe.Persistence.ProviderCredentialStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    telephony_service_repository:
+      {Vxpipe.Persistence.TelephonyServiceStore,
+       [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
     definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo},
     call_details_inspection_repository:

@@ -41,6 +41,10 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
 
     assert Keyword.fetch!(context, :repo) == Repo
     assert {:ok, "v1", ^key} = CredentialKeyring.current(Keyword.fetch!(context, :keyring))
+
+    assert {Vxpipe.Persistence.TelephonyServiceStore, ^context} =
+             Keyword.fetch!(calls, :telephony_service_repository)
+
     refute inspect(config) =~ Base.encode64(key)
     refute Keyword.has_key?(config, :req_llm)
   end

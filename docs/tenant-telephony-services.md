@@ -1,0 +1,71 @@
+# Tenant telephony service storage
+
+Status: trusted Telnyx registration and metadata lookup are implemented. The operator CLI,
+definition binding checks and Gateway live-reader migration remain pending in
+[checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage).
+
+## Ownership and identity
+
+Calls owns the data-only `TelephonyService` record, trusted `TelephonyServices` workflow and
+repository port. Persistence owns its PostgreSQL schema, constraints and transactions. Gateway
+continues to own carrier command/signature protocols. No new dependency crosses these boundaries.
+
+A service stores a canonical public UUID, tenant-local name, globally unique ingress key,
+provider connection ID, public verification key, optional originating number and existing carrier
+options. It references the credential's stable public UUID. The database foreign key includes
+credential ID, tenant and provider, so changing one cannot select another tenant/provider's key.
+The alias is what a definition names; it is distinct from the canonical service identity that the
+reader cutover must pin. This storage slice does not yet add that prepared-plan binding.
+
+Only existing Telnyx configuration is accepted here. API keys are provisioned separately through
+[encrypted provider storage](provider-credential-storage.md). Service inputs reject secret fields,
+adapter modules and public callback/media origins. Origins remain platform configuration.
+The service's optional settings retain their current defaults: machine detection disabled,
+media-token lifetime 60,000 milliseconds and webhook tolerance 300 seconds. Stored timers fit
+positive PostgreSQL integers; webhook tolerance also permits zero. The verification key is a
+Base64-encoded 32-byte Ed25519 public key. It is not a credential payload.
+
+## Trusted registration and lookup
+
+Run the database migrations, provision the tenant's Telnyx key, and retain its public credential
+ID. A trusted host/operator session can then register metadata through the configured Calls port:
+
+```elixir
+Vxpipe.Calls.TelephonyServices.register(tenant_key, %{
+  "name" => "support-phone",
+  "ingress_key" => "tenant-support-ingress",
+  "provider" => "telnyx",
+  "provider_connection_id" => telnyx_connection_id,
+  "credential_id" => provisioned_credential_id,
+  "public_key" => telnyx_verification_public_key
+})
+
+Vxpipe.Calls.TelephonyServices.fetch(tenant_key, "support-phone")
+Vxpipe.Calls.TelephonyServices.fetch_by_ingress("tenant-support-ingress")
+```
+
+These are trusted host operations, not tenant-facing management APIs. Registration locks the
+matching credential row, verifies active status and decryption using the existing credential
+adapter, and inserts the service in that same transaction. A conflicting alias or ingress key
+returns an error without replacing a binding. There is no update/rebind operation in this slice.
+
+Lookups return metadata without reading or decrypting credential payloads. They can therefore
+inspect a registered binding when an encryption key is unavailable. Lookup success does not
+authorize a provider request or authenticate a webhook. The following live-reader slice must
+resolve current private authentication and check the exact pinned service/account at those
+boundaries. The ingress key is a locator, not authentication.
+
+## Alternatives and verification
+
+- Referencing only a credential name could silently select a replacement binding. Store the
+  stable ID and enforce ownership in PostgreSQL.
+- Storing secrets in services would duplicate encrypted credential ownership and expose them to
+  metadata readers. Services contain no private payload.
+- Reusing global carrier configuration would retain the source this milestone must remove.
+  Live-reader removal is still pending; this storage work alone does not claim carrier cutover.
+- A new carrier policy or authentication-lease subsystem is unnecessary. Retain existing options
+  and leg/reservation ownership when migrating the readers.
+
+The [checkpoint labnotes](../labnotes/20260916-0000-tenant-telephony-services.md) record focused
+red/green tests, direct database ownership checks, runtime composition and independent review.
+The existing Telnyx call-flow milestone remains the owner of full carrier/audio acceptance.

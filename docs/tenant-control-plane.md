@@ -76,8 +76,9 @@ Google, Deepgram and Telnyx credentials have separate encrypted tenant storage a
 provision/list commands. See [provider credential storage](provider-credential-storage.md)
 for platform encryption settings, protected stdin input and metadata output. Inline Google/Deepgram
 definitions resolve these records at save, publication, preparation and capability creation.
-Telnyx service bindings and live carrier DB readers remain in progress. API-key issuance and
-authentication above remain independent.
+Trusted [Telnyx service registration](tenant-telephony-services.md) links connection/verification
+metadata to the matching tenant credential. Live carrier DB readers remain in progress.
+API-key issuance and authentication above remain independent.
 
 ## Save and publish call definitions
 

@@ -4,7 +4,7 @@ Trusted operators can provision Google, Deepgram and Telnyx API keys in PostgreS
 metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
 Inline Google/Deepgram definitions now resolve this store at save, publication, preparation
 and capability creation; see [inline selections](inline-provider-selections.md). Telnyx credential
-provisioning is available; tenant service bindings and live carrier DB readers remain checkpoint 3 work.
+provisioning and trusted service registration are available; live carrier DB readers remain checkpoint 3 work.
 
 ## Configure and provision
 
@@ -44,7 +44,9 @@ The input shape is `{"api_key":"REPLACE_WITH_PROVIDER_KEY"}`. These providers cu
 only `api_key` auth; additional fields, unsupported auth kinds, empty values, whitespace and
 control characters fail local validation. Telnyx keys are limited to 4,096 bytes to match the
 existing carrier configuration boundary; Google/Deepgram keys retain their 8,192-byte limit.
-Telnyx connection IDs and verification public keys belong to service metadata, not this payload.
+Telnyx connection IDs and verification public keys belong to [service metadata](tenant-telephony-services.md),
+not this payload. Trusted service registration now links the public credential ID to the matching
+tenant/provider; Gateway live-reader migration remains pending.
 Input is limited to 16,384 bytes. The reader uses
 Elixir `IO.read/2` with a bounded character count and a separate byte-size check. Only terminal
 detection uses OTP `:io.getopts/1`, since Elixir has no equivalent wrapper. Its `stdin` flag

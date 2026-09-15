@@ -1,0 +1,45 @@
+defmodule Vxpipe.Persistence.Schema.TelephonyService do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  schema "telephony_services" do
+    field(:public_id, Ecto.UUID)
+    field(:name, :string)
+    field(:ingress_key, :string)
+    field(:provider, :string)
+    field(:provider_connection_id, :string)
+    field(:credential_id, Ecto.UUID)
+    field(:public_key, :string)
+    field(:outbound_number, :string, redact: true)
+    field(:answering_machine_detection, :string)
+    field(:media_token_ttl_ms, :integer)
+    field(:webhook_tolerance_seconds, :integer)
+    belongs_to(:tenant, Vxpipe.Persistence.Schema.Tenant)
+    timestamps(type: :utc_datetime_usec)
+  end
+
+  def changeset(service, attributes) do
+    required = [
+      :public_id,
+      :tenant_id,
+      :name,
+      :ingress_key,
+      :provider,
+      :provider_connection_id,
+      :credential_id,
+      :public_key,
+      :answering_machine_detection,
+      :media_token_ttl_ms,
+      :webhook_tolerance_seconds
+    ]
+
+    service
+    |> cast(attributes, [:outbound_number | required])
+    |> validate_required(required)
+    |> foreign_key_constraint(:tenant_id)
+    |> foreign_key_constraint(:credential_id, name: :telephony_services_credential_owner_fkey)
+    |> unique_constraint(:public_id)
+    |> unique_constraint(:name, name: :telephony_services_tenant_id_name_index)
+    |> unique_constraint(:ingress_key)
+  end
+end

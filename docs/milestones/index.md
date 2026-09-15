@@ -45,9 +45,13 @@ found no blockers. An unsupported native wait-tone assertion found by the umbrel
 in a separate reviewed test-only checkpoint. Checkpoint 2 passed all five root gates: 1,532 tests,
 zero failures, 33 excluded (seed 235296). Milestone 24 has **2 of 7 checkpoints complete**, two partial
 and three not started. Telnyx named API-key provisioning now uses encrypted tenant storage and
-protected CLI input; service bindings and live carrier readers remain pending. Its 14 focused
+protected CLI input; live carrier readers remain pending. Its 14 focused
 tests, 81 Calls tests and 89 Persistence tests pass. Independent review and all five root gates pass
 for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296).
+Trusted Telnyx service registration and metadata lookup now pass 8 focused checks, Calls 81 and
+Persistence 95 tests (6 excluded), static root gates and independent review. The database enforces
+credential tenant/provider ownership and unique ingress keys. The CLI and live service/credential
+readers remain pending; full root verification of the service-storage chunk remains open.
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the
