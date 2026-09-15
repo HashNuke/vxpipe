@@ -27,8 +27,8 @@ Zenmux as the remaining model integration. Its existing API-key/native-routing c
 inline selections and tenant DB credentials. Its credential-reader checkpoint is verified by focused
 tests and independent review. A follow-up public startup regression catches and corrects the stale
 startup gate that still rejected Zenmux entry agents; see [startup evidence](../../labnotes/20260916-0118-zenmux-room-startup.md).
-Static root gates and unused-lock checks pass. The latest full run after the incoming credential
-guard passes 1,575 tests with zero failures and 38 exclusions (seed 235296). The previously
+Static root gates and unused-lock checks pass. The incoming credential
+guard run passed 1,575 tests with zero failures and 38 exclusions (seed 235296). The previously
 observed native Morse and five-participant audio failures did not recur; this pass does not
 establish their cause. Final milestone acceptance remains open for the unfinished checkpoints.
 Existing carrier/keyring structures and valid acceptance evidence are reused. ReqLLM adapter
@@ -91,6 +91,10 @@ The focused 18-test group, including two real-connection checks, passes. A dispo
 across fresh VMs preserves four distinct admissions for two tenants per existing carrier despite
 matching aliases/provider IDs. Gateway live identity and credential readers remain pending;
 progress stays at 4 of 7 checkpoints complete. See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
+The root run at `68989dd` completed 1,588 tests with 89 failures and 38 exclusions. A missed dynamic
+claim fixture constructor caused carrier setup failures and leaked test configuration into later
+cases. The correction passes all 26 carrier harness tests; full umbrella verification is rerunning.
+See [fixture evidence](../../labnotes/20260916-0344-repair-carrier-claim-fixture.md).
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

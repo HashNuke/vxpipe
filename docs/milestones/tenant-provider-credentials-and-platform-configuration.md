@@ -2,8 +2,10 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2, 5 and 6 are complete. Of seven checkpoints, four are complete,
-three are partial. The latest full umbrella run passes 1,575 tests with zero
-failures and 38 exclusions; final milestone acceptance remains open for the unfinished checkpoints.
+three are partial. The latest full umbrella run at `68989dd` ran 1,588 tests with 89 failures
+and 38 exclusions: a missed Gateway claim fixture constructor caused setup failures and leaked
+test configuration. The fixture correction passes its 26 carrier harness tests; the corrected
+root run and final milestone acceptance remain open.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently
 reviewed. Final independent implementation review and the remaining checkpoints are open.

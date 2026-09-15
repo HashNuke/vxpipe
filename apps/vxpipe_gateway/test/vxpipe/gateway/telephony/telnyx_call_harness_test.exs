@@ -36,6 +36,10 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
   setup context do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+
     agent_runtime =
       original
       |> Keyword.fetch!(:agent_runtime)
@@ -135,7 +139,6 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       stop_room(scenario.plan.tenant_id, scenario.plan.room_id)
       LegSupervisor.stop(:telnyx, "primary-phone", "inbound-call-leg")
       LegSupervisor.stop_outgoing(@outgoing_leg_id)
-      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
     end)
 
     %{

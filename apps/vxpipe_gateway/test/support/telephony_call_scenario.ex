@@ -185,7 +185,8 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
         call: call,
         participant_id: participant_id,
         participant_ref: "caller",
-        service: "primary-phone"
+        service: "primary-phone",
+        service_id: "10000000-0000-4000-8000-000000000001"
       })
     )
   end

@@ -59,3 +59,8 @@
 - The full umbrella run follows this reviewed, focused checkpoint commit and will cover both
   the preceding Twilio storage slice and this identity slice. Current milestone progress stays
   at four of seven complete, three partial; Gateway readers and final platform cleanup remain.
+
+The root run at `68989dd` subsequently completed 1,588 tests with 89 failures and 38 exclusions.
+A missed dynamic Gateway claim constructor caused setup failures and leaked test configuration;
+see the [fixture correction](20260916-0344-repair-carrier-claim-fixture.md). The corrected umbrella
+run remains pending; the focused identity evidence above does not imply root acceptance.
