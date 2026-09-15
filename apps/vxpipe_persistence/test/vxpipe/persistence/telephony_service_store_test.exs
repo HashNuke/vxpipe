@@ -109,6 +109,32 @@ defmodule Vxpipe.Persistence.TelephonyServiceStoreTest do
              TelephonyServices.fetch(data.other.key, "support", data.options)
   end
 
+  test "resolves a private snapshot for the exact service credential and tenant", data do
+    assert {:ok, service} =
+             TelephonyServices.register(
+               data.tenant.key,
+               attributes(data.credential),
+               data.options
+             )
+
+    assert {:ok, snapshot} = TelephonyServices.resolve(data.tenant.key, "support", data.options)
+    assert snapshot.service == service
+    assert snapshot.credential.credential.id == service.credential_id
+    assert snapshot.credential.credential.tenant_key == service.tenant_key
+    assert snapshot.credential.credential.provider == service.provider
+    assert snapshot.credential.payload == %{"api_key" => "private-key-marker"}
+    refute inspect(snapshot) =~ "private-key-marker"
+
+    assert {:error, _reason} = TelephonyServices.resolve(data.other.key, "support", data.options)
+
+    Repo.update_all(from(c in ProviderCredential, where: c.public_id == ^data.credential.id),
+      set: [status: "revoked"]
+    )
+
+    assert {:error, _reason} = TelephonyServices.resolve(data.tenant.key, "support", data.options)
+    assert {:ok, ^service} = TelephonyServices.fetch(data.tenant.key, "support", data.options)
+  end
+
   test "registration requires a readable active credential in the same tenant and provider",
        data do
     {:ok, google} = provision(data.tenant.key, "google", data.options)
@@ -222,6 +248,19 @@ defmodule Vxpipe.Persistence.TelephonyServiceStoreTest do
 
       assert {:error, :telephony_services_unavailable} =
                TelephonyServices.fetch_by_ingress("support-ingress", data.options)
+
+      assert {:error, :provider_credential_unavailable} =
+               TelephonyServices.resolve(data.tenant.key, "support", data.options)
+
+      assert {:error, :telephony_services_unavailable} =
+               TelephonyServices.with_active(
+                 data.tenant.key,
+                 [%{name: "support", path: ["service"]}],
+                 data.options,
+                 fn -> send(self(), :unauthorized_callback) end
+               )
+
+      refute_received :unauthorized_callback
     after
       Repo.put_dynamic_repo(previous)
     end

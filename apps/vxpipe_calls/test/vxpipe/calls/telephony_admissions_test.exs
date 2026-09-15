@@ -26,6 +26,13 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
     assert {:ok, tenant, _issued} =
              Administration.bootstrap_tenant("Example tenant", [:admin], options)
 
+    options =
+      Keyword.put(
+        options,
+        :telephony_service_repository,
+        Vxpipe.Calls.TestTelephonyServiceRepository.repository([tenant])
+      )
+
     assert {:ok, draft} = Calls.save_definition(tenant.key, definition_input(), options)
 
     assert {:ok, _published} =

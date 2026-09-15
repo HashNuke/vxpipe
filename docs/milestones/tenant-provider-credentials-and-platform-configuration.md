@@ -399,6 +399,10 @@ Depends on the credential store and existing Telnyx integration.
     operator CLI; verify tenant isolation, metadata-only output and invalid-payload rejection.
 - [ ] Resolve matching tenant service credentials during definition save/publish/prepare and
   existing leg construction. Pin safe service identity so an old plan cannot change accounts.
+  - [x] Resolve the exact active service credential privately; check every phone destination at
+    save/publish/web preparation and hold the binding through the final database write. Incoming
+    preparation shares preflight; its final insert guard, canonical plan binding and live leg
+    construction remain pending. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
 - [ ] Replace application/global service credential lookup for existing answer, dial, media and
   hangup commands. Verify the actual adapter receives only the selected tenant credential.
 - [ ] Resolve webhook verification metadata from the stored ingress binding. Preserve raw-body,
@@ -639,6 +643,12 @@ exits and failure cases pass.
 - [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates)
   after independent implementation review.
 - [ ] Update this milestone, index and related documentation with actual implementation evidence.
+
+Checkpoint 3 definition-guard follow-up: private exact service resolution and final
+save/publish/web-preparation guards pass 13 focused database tests, Calls 81 and Persistence 106
+tests (6 excluded), root static gates and independent GPT 6 Astra xhigh review. Incoming admission
+shares preflight only; its final insert guard, canonical plan references and live readers remain
+pending. Checkpoint 3 stays partial. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
 
 ## Specification review
 

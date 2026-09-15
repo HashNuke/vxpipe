@@ -5,6 +5,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.TelephonyService, as: Service
+  alias Vxpipe.Calls.ResolvedTelephonyService
   alias Vxpipe.Persistence.ProviderCredentialStore
   alias Vxpipe.Persistence.Schema.{ProviderCredential, TelephonyService}
 
@@ -15,7 +16,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
     with :ok <- Service.validate(service) do
       with_repository(context, fn repo ->
         repo.transaction(fn ->
-          with {:ok, tenant_id} <- lock_credential(context, service),
+          with {:ok, {tenant_id, _private_snapshot}} <- lock_credential(context, service),
                {:ok, stored} <-
                  repo.insert(
                    TelephonyService.changeset(
@@ -62,6 +63,65 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
     end)
   end
 
+  @impl true
+  def resolve(context, tenant_key, name) do
+    with_repository(context, fn repo ->
+      transaction(repo, fn -> resolve_locked(context, tenant_key, name) end)
+    end)
+  end
+
+  @impl true
+  def with_active(context, tenant_key, requirements, operation) do
+    with_repository(context, fn repo ->
+      transaction(repo, fn ->
+        requirements
+        |> Enum.sort_by(&{&1.name, &1.path})
+        |> Enum.uniq_by(& &1.name)
+        |> Enum.each(fn requirement ->
+          case resolve_locked(context, tenant_key, requirement.name) do
+            {:ok, _private_snapshot} ->
+              :ok
+
+            {:error, _reason} ->
+              repo.rollback({:provider_credential_unavailable, requirement.path})
+          end
+        end)
+
+        operation.()
+      end)
+    end)
+  end
+
+  defp resolve_locked(context, tenant_key, name) do
+    repo = Keyword.fetch!(context, :repo)
+
+    query =
+      from(s in TelephonyService,
+        join: t in assoc(s, :tenant),
+        where: t.key == ^tenant_key and s.name == ^name,
+        select: {s, t.key},
+        lock: "FOR SHARE"
+      )
+
+    with {:ok, service} <- fetch_metadata(repo, query),
+         :ok <- Service.validate(service),
+         {:ok, {_tenant_id, credential}} <- lock_credential(context, service) do
+      {:ok, %ResolvedTelephonyService{service: service, credential: credential}}
+    end
+  end
+
+  defp transaction(repo, operation) do
+    case repo.transaction(fn ->
+           case operation.() do
+             {:error, reason} -> repo.rollback(reason)
+             result -> result
+           end
+         end) do
+      {:ok, result} -> result
+      {:error, _reason} = error -> error
+    end
+  end
+
   defp lock_credential(context, service) do
     repo = Keyword.fetch!(context, :repo)
 
@@ -75,14 +135,15 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
       )
 
     with %{status: "active"} = credential <- repo.one(query, @query_options),
-         {:ok, _private_snapshot} <-
+         {:ok, private_snapshot} <-
            ProviderCredentialStore.resolve(
              context,
              service.tenant_key,
              service.provider,
              credential.name
-           ) do
-      {:ok, credential.tenant_id}
+           ),
+         true <- private_snapshot.credential.id == service.credential_id do
+      {:ok, {credential.tenant_id, private_snapshot}}
     else
       _unavailable -> {:error, :provider_credential_unavailable}
     end

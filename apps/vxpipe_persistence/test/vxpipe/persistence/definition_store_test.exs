@@ -27,6 +27,13 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     assert {:ok, tenant, _issued} =
              Administration.bootstrap_tenant("Example tenant", [:admin], options)
 
+    options =
+      Keyword.put(
+        options,
+        :telephony_service_repository,
+        Vxpipe.Calls.TestTelephonyServiceRepository.repository([tenant])
+      )
+
     [tenant: tenant, options: options]
   end
 

@@ -9,7 +9,8 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     ProviderAuth,
     ProviderCredentials,
     Repositories,
-    ResolvedProviderCredential
+    ResolvedProviderCredential,
+    TelephonyServices
   }
 
   def with_active(%DefinitionRevision{} = revision, options, operation) do
@@ -23,6 +24,12 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
   end
 
   def with_active(%CallDefinition{} = definition, tenant_key, options, operation) do
+    with_active_capabilities(definition, tenant_key, options, fn ->
+      with_active_services(definition, tenant_key, options, operation)
+    end)
+  end
+
+  defp with_active_capabilities(definition, tenant_key, options, operation) do
     requirements =
       definition
       |> CapabilityRequirements.credentials()
@@ -49,6 +56,19 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
   end
 
   def check(%CallDefinition{} = definition, tenant_key, options) do
+    with :ok <- check_capabilities(definition, tenant_key, options) do
+      definition
+      |> service_requirements()
+      |> Enum.reduce_while(:ok, fn requirement, :ok ->
+        case TelephonyServices.resolve(tenant_key, requirement.name, options) do
+          {:ok, _private_snapshot} -> {:cont, :ok}
+          {:error, _reason} -> {:halt, unavailable(requirement.path)}
+        end
+      end)
+    end
+  end
+
+  defp check_capabilities(definition, tenant_key, options) do
     definition
     |> CapabilityRequirements.credentials()
     |> Enum.reduce_while(:ok, fn {selection, path}, :ok ->
@@ -57,6 +77,39 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
         {:error, _reason} -> {:halt, unavailable(path)}
       end
     end)
+  end
+
+  defp with_active_services(definition, tenant_key, options, operation) do
+    case service_requirements(definition) do
+      [] ->
+        operation.()
+
+      [first | _] = requirements ->
+        case TelephonyServices.with_active(tenant_key, requirements, options, operation) do
+          {:error, {:provider_credential_unavailable, path}} ->
+            unavailable(path)
+
+          {:error, reason}
+          when reason in [:repository_unavailable, :telephony_services_unavailable] ->
+            unavailable(first.path)
+
+          result ->
+            result
+        end
+    end
+  end
+
+  defp service_requirements(definition) do
+    definition.participants
+    |> Enum.flat_map(fn
+      {ref, %{connection: %{service: service}}} when is_binary(service) ->
+        [%{name: service, path: ["participants", ref, "connection", "service"]}]
+
+      _local ->
+        []
+    end)
+    |> Enum.sort_by(&{&1.name, &1.path})
+    |> Enum.uniq_by(& &1.name)
   end
 
   def resolve(tenant_key, selection, options) do

@@ -1,7 +1,8 @@
 # Tenant telephony service storage
 
-Status: trusted Telnyx registration, the operator CLI and metadata lookup are implemented.
-Definition binding checks and Gateway live-reader migration remain pending in
+Status: trusted Telnyx registration, the operator CLI, private credential resolution and
+definition save/publish/web-preparation guards are implemented. Canonical prepared-plan bindings,
+the incoming admission's final write guard and Gateway live-reader migration remain pending in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage).
 
 ## Ownership and identity
@@ -72,11 +73,32 @@ matching credential row, verifies active status and decryption using the existin
 adapter, and inserts the service in that same transaction. A conflicting alias or ingress key
 returns an error without replacing a binding. There is no update/rebind operation in this slice.
 
-Lookups return metadata without reading or decrypting credential payloads. They can therefore
+`fetch` and `fetch_by_ingress` return metadata without reading or decrypting credential payloads. They can therefore
 inspect a registered binding when an encryption key is unavailable. Lookup success does not
 authorize a provider request or authenticate a webhook. The following live-reader slice must
 resolve current private authentication and check the exact pinned service/account at those
 boundaries. The ingress key is a locator, not authentication.
+
+## Private resolution and definition checks
+
+`TelephonyServices.resolve(tenant_key, name)` returns a private snapshot of the service and its
+exact linked credential. It locks both rows, checks tenant/provider/active status and decrypts
+the credential using the existing authenticated store. A same-name credential with a different
+public ID is not an equivalent binding. The snapshot's inspection hides private authentication;
+definitions and prepared plans never retain its payload.
+
+Definition save, publish and web preparation check every phone service, including later transfer
+destinations. Missing, other-tenant, inactive or undecryptable credentials return a safe error at
+the participant's service path. The final database write runs under the active service/credential
+locks; revocation between preflight and that write prevents persistence. Repositories called by
+the guarded operation must share its transaction context. Existing write errors, including
+duplicate call IDs, retain their original meaning. Credential-free web definitions need no service
+repository.
+
+Incoming preparation shares the preflight check. Its final insert guard remains pending: that
+change must preserve duplicate-event recovery outside an aborted insert transaction. Canonical
+service/account references and fresh live-leg resolution are also still pending. These guards
+alone do not complete the carrier reader cutover.
 
 ## Alternatives and verification
 
@@ -94,3 +116,7 @@ red/green tests, direct database ownership checks, runtime composition and indep
 The 11 focused checks and 98-test Persistence suite pass. Full umbrella acceptance remains open:
 one existing native WebRTC Morse-decoding case failed in the 1,543-test run and reproduced in isolation.
 The existing Telnyx call-flow milestone remains the owner of full carrier/audio acceptance.
+
+The [definition-guard evidence](../labnotes/20260916-0057-telephony-credential-gates.md) records
+13 passing focused database tests, 81 Calls tests and 106 Persistence tests (6 excluded), plus
+independent implementation review. Format, warnings-as-errors compilation and strict Credo pass.

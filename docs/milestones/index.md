@@ -58,6 +58,10 @@ also passes its 3 focused tests and the 98-test Persistence suite (6 excluded), 
 review and static gates passing. The full root run completed 1,543 tests with one native WebRTC
 Morse-decoding failure (33 excluded); its unchanged isolated case reproduces. Live service/credential
 readers and full umbrella acceptance remain pending. See [service evidence](../../labnotes/20260916-0000-tenant-telephony-services.md).
+Private Telnyx service resolution and transactional definition save/publish/web-preparation guards
+now pass 13 focused checks, Calls 81 and Persistence 106 tests (6 excluded), static gates and
+independent review. Incoming final insertion, canonical plan references and live readers remain
+pending; checkpoint 3 is still partial. See [guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
 Live provider tests remain excluded,
 and earlier native timing observations are not all explained by this correction.
 [Destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md) records the
