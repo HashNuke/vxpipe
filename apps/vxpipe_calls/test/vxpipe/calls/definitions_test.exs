@@ -4,6 +4,11 @@ defmodule Vxpipe.Calls.DefinitionsTest do
   alias Vxpipe.Calls.{Administration, Definitions}
   alias Vxpipe.Calls.TestMemoryRepository
 
+  test "rejects application-wide carrier routing before repository lookup" do
+    assert {:error, :invalid_telephony_route} =
+             Definitions.resolve_telephony_route(:application, "phone", "+15550001000", [])
+  end
+
   setup do
     repository = start_supervised!(TestMemoryRepository)
 
@@ -154,7 +159,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
 
     assert {:error, :route_unavailable} =
              Definitions.resolve_telephony_route(
-               :application,
+               {:tenant, tenant.key},
                "primary-phone",
                "+15550001000",
                options
@@ -174,7 +179,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     assert resolved.definition_id == draft.definition_id
     assert resolved.definition_revision == draft.revision
 
-    assert {:ok, ^resolved} =
+    assert {:error, :invalid_telephony_route} =
              Definitions.resolve_telephony_route(
                :application,
                "primary-phone",
@@ -192,9 +197,9 @@ defmodule Vxpipe.Calls.DefinitionsTest do
                options
              )
 
-    assert {:error, :route_unavailable} =
+    assert {:ok, ^resolved} =
              Definitions.resolve_telephony_route(
-               :application,
+               {:tenant, tenant.key},
                "primary-phone",
                "+15550001000",
                options

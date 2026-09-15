@@ -12,7 +12,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
   }
 
   @spec claim_incoming(
-          :application | {:tenant, String.t()},
+          {:tenant, String.t()},
           String.t(),
           Event.t(),
           keyword()

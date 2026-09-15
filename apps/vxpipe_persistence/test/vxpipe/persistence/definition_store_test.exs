@@ -115,7 +115,7 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
 
     assert {:error, :route_unavailable} =
              Definitions.resolve_telephony_route(
-               :application,
+               {:tenant, tenant.key},
                route.service,
                route.number,
                options
@@ -135,7 +135,7 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     assert resolved.participant_ref == "caller"
     assert resolved.definition_revision == draft.revision
 
-    assert {:ok, ^resolved} =
+    assert {:error, :invalid_telephony_route} =
              Definitions.resolve_telephony_route(
                :application,
                route.service,

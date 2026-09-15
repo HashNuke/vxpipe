@@ -104,7 +104,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
   test "rolls back a new call when an event identifier conflicts with another leg", context do
     assert {:ok, _claim} =
              Calls.claim_incoming_telephony(
-               :application,
+               {:tenant, context.tenant.key},
                "primary-phone",
                incoming_event(),
                context.options
@@ -114,7 +114,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
 
     assert {:error, :telephony_leg_conflict} =
              Calls.claim_incoming_telephony(
-               :application,
+               {:tenant, context.tenant.key},
                "primary-phone",
                conflicting,
                Keyword.put(context.options, :call_id_generator, fn ->

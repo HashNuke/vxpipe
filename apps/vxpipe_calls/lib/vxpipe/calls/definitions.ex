@@ -83,7 +83,7 @@ defmodule Vxpipe.Calls.Definitions do
   end
 
   @spec resolve_telephony_route(
-          :application | {:tenant, String.t()},
+          {:tenant, String.t()},
           String.t(),
           String.t(),
           keyword()
@@ -220,7 +220,6 @@ defmodule Vxpipe.Calls.Definitions do
 
   defp inbound_telephony?(_connection), do: false
 
-  defp telephony_scope(:application), do: :ok
   defp telephony_scope({:tenant, tenant_key}) when is_binary(tenant_key), do: :ok
   defp telephony_scope(_invalid), do: {:error, :invalid_telephony_route}
 

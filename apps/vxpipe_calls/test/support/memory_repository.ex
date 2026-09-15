@@ -30,7 +30,9 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
         {{:error, :tenant_key_conflict}, state}
       else
         keys = Map.put(state.keys, {tenant.key, api_key.id}, api_key)
-        {{:ok, {tenant, api_key}}, %{state | tenants: Map.put(state.tenants, tenant.key, tenant), keys: keys}}
+
+        {{:ok, {tenant, api_key}},
+         %{state | tenants: Map.put(state.tenants, tenant.key, tenant), keys: keys}}
       end
     end)
   end
@@ -69,7 +71,9 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
       case Map.fetch(state.keys, {tenant_key, api_key_id}) do
         {:ok, api_key} ->
           revoked = %{api_key | revoked_at: api_key.revoked_at || revoked_at}
-          {{:ok, revoked}, %{state | keys: Map.put(state.keys, {tenant_key, api_key_id}, revoked)}}
+
+          {{:ok, revoked},
+           %{state | keys: Map.put(state.keys, {tenant_key, api_key_id}, revoked)}}
 
         :error ->
           {{:error, :not_found}, state}
@@ -92,7 +96,8 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
       if Map.has_key?(revisions, revision.revision) do
         {{:error, :revision_conflict}, state}
       else
-        definitions = Map.put(state.definitions, key, Map.put(revisions, revision.revision, revision))
+        definitions =
+          Map.put(state.definitions, key, Map.put(revisions, revision.revision, revision))
 
         route_records =
           Map.new(routes, fn route ->
@@ -115,6 +120,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
       with {:ok, revisions} <- Map.fetch(state.definitions, {tenant_key, definition_id}),
            {:ok, revision} <- Map.fetch(revisions, revision_number) do
         routes = routes_for(state, tenant_key, definition_id, revision_number)
+
         telephony_routes =
           telephony_routes_for(state, tenant_key, definition_id, revision_number)
 
@@ -167,8 +173,16 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
           end)
 
         published = %{revision | published_at: revision.published_at || published_at}
-        definitions = Map.put(state.definitions, {tenant_key, definition_id}, Map.put(revisions, revision_number, published))
-        result_routes = routes_for(%{state | routes: routes}, tenant_key, definition_id, revision_number)
+
+        definitions =
+          Map.put(
+            state.definitions,
+            {tenant_key, definition_id},
+            Map.put(revisions, revision_number, published)
+          )
+
+        result_routes =
+          routes_for(%{state | routes: routes}, tenant_key, definition_id, revision_number)
 
         result_telephony_routes =
           telephony_routes_for(
@@ -463,14 +477,13 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     |> Enum.sort_by(& &1.participant_ref)
   end
 
-  defp match_scope?(_route, :application), do: true
   defp match_scope?(route, {:tenant, tenant_key}), do: route.tenant_key == tenant_key
 
   defp token_binding(token, tenant_key, call_id, participant_key, participant_ref) do
     if token.tenant_key == tenant_key and token.call_id == call_id and
          token.participant_key == participant_key and token.participant_ref == participant_ref,
-      do: :ok,
-      else: {:error, :token_scope_mismatch}
+       do: :ok,
+       else: {:error, :token_scope_mismatch}
   end
 
   defp insert_incoming_claim(state, event_key, leg_key, claim) do
@@ -534,8 +547,8 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   defp expected_scope(token, expected_scope) do
     if token.tenant_key == expected_scope.tenant_key and token.call_id == expected_scope.call_id and
          token.participant_key == expected_scope.participant_key,
-      do: :ok,
-      else: {:error, :token_scope_mismatch}
+       do: :ok,
+       else: {:error, :token_scope_mismatch}
   end
 
   defp token_available(%{consumed_at: %DateTime{}}, _now),

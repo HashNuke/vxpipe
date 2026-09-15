@@ -78,7 +78,6 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
     end
   end
 
-  defp matching_scope?(:application, _tenant_id), do: true
   defp matching_scope?({:tenant, tenant_id}, tenant_id), do: true
   defp matching_scope?(_scope, _tenant_id), do: false
 

@@ -107,7 +107,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
   test "fails closed when an event identifier and provider leg disagree", context do
     assert {:ok, _claim} =
              Calls.claim_incoming_telephony(
-               :application,
+               {:tenant, context.tenant.key},
                "primary-phone",
                incoming_event(),
                context.options
@@ -117,7 +117,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
 
     assert {:error, :telephony_leg_conflict} =
              Calls.claim_incoming_telephony(
-               :application,
+               {:tenant, context.tenant.key},
                "primary-phone",
                conflicting,
                context.options

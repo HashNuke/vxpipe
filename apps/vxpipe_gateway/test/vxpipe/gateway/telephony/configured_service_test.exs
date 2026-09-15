@@ -5,6 +5,13 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
   alias Vxpipe.Gateway.Telephony.Telnyx.Adapter
   alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
 
+  test "rejects application-scoped carrier credentials" do
+    for options <- [valid_options(), valid_twilio_options()] do
+      assert {:error, :invalid_telephony_service_configuration} =
+               ConfiguredService.new(Keyword.put(options, :scope, :application))
+    end
+  end
+
   test "pins a complete Telnyx command and public callback configuration" do
     assert {:ok, service} = ConfiguredService.new(valid_options())
 

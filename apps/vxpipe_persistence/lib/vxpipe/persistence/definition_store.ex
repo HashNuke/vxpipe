@@ -374,8 +374,6 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     }
   end
 
-  defp scope_telephony_routes(query, :application), do: query
-
   defp scope_telephony_routes(query, {:tenant, tenant_key}) do
     from([_route, tenant, _revision, _definition] in query,
       where: tenant.key == ^tenant_key

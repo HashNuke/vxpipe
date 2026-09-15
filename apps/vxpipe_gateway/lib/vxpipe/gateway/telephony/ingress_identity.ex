@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.IngressIdentity do
   @enforce_keys [:service_id, :ingress_key, :scope, :provider, :provider_connection_id]
   defstruct @enforce_keys ++ [service_reference: nil]
 
-  @type scope :: :application | {:tenant, String.t()}
+  @type scope :: {:tenant, String.t()}
 
   @type t :: %__MODULE__{
           service_id: String.t(),

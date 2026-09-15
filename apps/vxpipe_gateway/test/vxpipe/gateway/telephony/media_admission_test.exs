@@ -211,6 +211,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
 
   test "protects bound Twilio tokens and rejects incompatible configuration", context do
     service = twilio_service()
+    invalid_scope = %{service | identity: %{service.identity | scope: :application}}
     binding = twilio_binding(context)
 
     assert {:error, :invalid_media_binding} =
@@ -221,7 +222,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
                context.server,
                binding,
                60_000,
-               twilio_service(scope: :application)
+               invalid_scope
              )
 
     assert {:error, :invalid_media_reservation} =
@@ -230,7 +231,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
                "ingress-primary",
                context.leg,
                60_000,
-               twilio_service(scope: :application)
+               invalid_scope
              )
 
     assert {:error, :invalid_media_binding} =

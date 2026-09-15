@@ -136,8 +136,6 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
     end
   end
 
-  defp scope(:application), do: {:ok, :application}
-
   defp scope({:tenant, tenant_key}) do
     with {:ok, tenant_key} <- bounded_string(tenant_key, @maximum_identifier_bytes),
          true <- Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, tenant_key) do

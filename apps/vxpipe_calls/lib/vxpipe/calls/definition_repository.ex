@@ -21,7 +21,7 @@ defmodule Vxpipe.Calls.DefinitionRepository do
               {:ok, ParticipantRoute.t()} | {:error, :route_unavailable}
   @callback resolve_telephony_route(
               context(),
-              :application | {:tenant, String.t()},
+              {:tenant, String.t()},
               String.t(),
               String.t()
             ) :: {:ok, TelephonyRoute.t()} | {:error, :route_unavailable}

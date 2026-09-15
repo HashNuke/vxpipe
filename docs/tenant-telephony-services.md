@@ -235,8 +235,8 @@ Missing or conflicting registry configuration cannot supply or replace authentic
 boundary. The WebSocket receives the binding and clock, not the private configuration.
 
 Protected Twilio admissions require an explicit tenant scope. Application-scoped configuration
-cannot establish tenant ownership and is rejected during issuance/reservation, even though the
-transitional configuration constructor still accepts it for other callers. Binding compares
+cannot establish tenant ownership and is rejected by construction, activation, dial and media
+admission. Calls also rejects application-wide carrier route lookup. Binding compares
 tenant, provider, service alias, ingress and account; the token remains owned by its exact leg.
 Repeated issue/reserve inputs reuse a token only when the retained configuration is identical.
 
