@@ -75,6 +75,24 @@
         "value": "3.25rem",
         "createdAt": "2026-09-13T00:20:05.608Z",
         "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f22f46",
+        "files": [
+          "vxpipe-docs/src/styles/landing.css"
+        ],
+        "createdAt": "2026-09-15T03:23:45.995Z",
+        "reason": "Agent review: existing Twilio provider-logo artwork uses its brand color; the console UI palette does not govern third-party logos."
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#13ef93",
+        "files": [
+          "vxpipe-docs/src/styles/landing.css"
+        ],
+        "createdAt": "2026-09-15T03:23:46.535Z",
+        "reason": "Agent review: existing Deepgram provider-logo artwork uses its brand color; the console UI palette does not govern third-party logos."
       }
     ]
   }
