@@ -17,7 +17,7 @@
   Saved draft data excludes credential payloads.
 - Focused Persistence group: 18 tests, 0 failures, 2 excluded, seed 235296. Independent GPT 6
   Astra xhigh review found no blocking issues in these save checks.
-- Checkpoint 2 remains open until the complete boundary evidence and umbrella gates pass.
+- Save validation alone did not complete checkpoint 2; final acceptance is recorded below.
 
 Run from `apps/vxpipe_persistence`:
 
@@ -79,6 +79,27 @@ mix test test/integration/destination_credential_activation_test.exs --include i
   listener graph was already ready. The separate [native assertion correction](20260915-2317-native-readiness-assertion.md)
   removes that unsupported timing assumption; its focused case passes. The exact scheduling of
   the original failure remains untraced.
-- Final root gates are running with seed 235296 and the same concurrency settings. Checkpoint 2
-  remains open pending those results. All 150 local links in the four affected existing documents
-  resolved during the documentation check.
+- Final root gates all pass: format, warnings-as-errors compile, strict Credo, tests and unused
+  dependencies. The umbrella test run reports 1,532 tests, 0 failures and 33 exclusions, seed
+  235296. This includes 695 Engine, 413 Gateway and 87 Persistence tests. The three new tagged
+  DB integration cases passed separately; live providers were not exercised.
+- Checkpoint 2 is complete. The milestone now has 2 of 7 complete, 1 partial and 4 not started;
+  the overall milestone remains unchecked. Telnyx credential readers are next.
+- Work was committed in separate reviewed chunks: save validation (`75ad08f`), constructors
+  (`a593662`) and DB activation (`a6a4b7d`). The native assertion correction is `61d7a2b`.
+- Final documentation verification passes: all 153 local links across the four related documents
+  and two labnotes resolve. Checkpoint 2 has all eight task boxes checked; the overall milestone's
+  index entry remains unchecked. Parsed test totals match the recorded evidence.
+- Final independent acceptance review caught an old checkpoint count in the index's specification
+  review table; updated it to match the live ledger. Historical scope-correction counts remain
+  explicitly qualified.
+
+Final root commands:
+
+```shell
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix credo --strict
+mix test --preload-modules --max-requires 1 --max-cases 4 --seed 235296
+mix deps.unlock --check-unused
+```

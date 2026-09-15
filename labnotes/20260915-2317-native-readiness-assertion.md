@@ -25,8 +25,10 @@
   unused-dependency check.
 - Unchanged isolated case: 1 test, 0 failures (67 excluded), 95.7 seconds. This demonstrated
   intermittency and did not establish a production defect.
-- Corrected focused case: 1 test, 0 failures (67 excluded), seed 235296, 88.1 seconds. Final
-  root gates are running with the same seed and concurrency settings as the initial run.
+- Corrected focused case: 1 test, 0 failures (67 excluded), seed 235296, 88.1 seconds. All five
+  final root gates pass with the same seed and concurrency settings as the initial run:
+  1,532 tests, 0 failures, 33 excluded, including 413 Gateway tests. This does not establish the
+  cause of unrelated earlier native timing observations.
 
 Run the focused case from `apps/vxpipe_gateway`:
 

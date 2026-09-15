@@ -1,7 +1,8 @@
 # Tenant-scoped provider credentials and platform configuration
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
-Preparatory cleanup and checkpoint 1 are complete.
+Preparatory cleanup and checkpoints 1 and 2 are complete. Of seven checkpoints, two are complete,
+one is partial and four are not started.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification was independently reviewed; the scope correction
 below has local review. Final independent implementation review and the remaining checkpoints are open.
@@ -352,7 +353,7 @@ credentials. Google is the public provider name. Implementation, tests and setup
 
 Depends on checkpoint 1.
 
-- [ ] Inventory the existing opening, connection STT, agent activation, destination preparation,
+- [x] Inventory the existing opening, connection STT, agent activation, destination preparation,
   private briefing and source-restoration readers. Confirm each receives the host-injected tenant
   credential source; remove any remaining profile/global/env reader or merge.
   - [x] Record the [reader inventory](../credential-reader-boundaries.md) and independently review
@@ -361,14 +362,14 @@ Depends on checkpoint 1.
     preserving credential-free embedded operation.
 - [x] Verify the opening reader with persisted tenant credentials, independent selection,
   tenant/binding cache isolation and rejection of an unavailable binding.
-- [ ] Add focused tests at remaining reader/adapter boundaries for the selected tenant/provider/name,
+- [x] Add focused tests at remaining reader/adapter boundaries for the selected tenant/provider/name,
   whole-selection overrides and missing/wrong-tenant/inactive credential failure. Check that a
   later destination's missing binding blocks definition save before rows are written.
-- [ ] Verify a new activation reads the DB credential and lookup failure enters the existing
+- [x] Verify a new activation reads the DB credential and lookup failure enters the existing
   preparation-failure path before any provider request. Reuse the existing source-failure contract.
   - [x] Resolve fresh source speech credentials before private briefing and source replacement;
     verify transport authentication and no new transport when the binding is unavailable.
-- [ ] Check that selections, cache identity, prepared plans and public error/history projections
+- [x] Check that selections, cache identity, prepared plans and public error/history projections
   contain safe references, never credential payloads. Record the reader inventory and evidence.
 
 Exit: every existing AI/speech construction path reads tenant DB credentials through the shared
@@ -582,12 +583,14 @@ scope, independent review, root/isolated test evidence and rendered homepage che
 
 ## Evidence ledger
 
-Implementation boxes stay unchecked until their runnable exits and failure cases pass.
+Current progress: **2 of 7 complete** (checkpoints 1 and 2), **1 partial** (checkpoint 7),
+and **4 not started** (checkpoints 3–6). Implementation boxes stay unchecked until their runnable
+exits and failure cases pass.
 
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
 | 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
-| 2 — AI/speech credential readers | Reader implementation and focused boundary evidence verified; final umbrella gates pending | Opening, connection, briefing and source-restoration readers use fresh tenant resolution; legacy global readers are removed. Destination save validation covers missing/wrong-tenant/inactive model/TTS/STT bindings before writes; the Persistence group passes 18 tests (2 excluded). Named tenant isolation, whole-selection overrides and fresh construction pass 15 Engine tests. Three tagged local DB activation tests verify current Google/Deepgram authentication and safe failure before requests. Independent GPT 6 Astra xhigh review found no blockers. The initial root run had one native audio assertion failure; the separately reviewed test correction passes its focused case and the final root run is pending. Live provider checks remain excluded. See the [reader inventory](../credential-reader-boundaries.md), [destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md), [native assertion correction](../../labnotes/20260915-2317-native-readiness-assertion.md), [global-reader evidence](../../labnotes/20260915-2223-remove-global-readers.md), [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md) and [source-reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md). |
+| 2 — AI/speech credential readers | Implemented and verified | Opening, connection, briefing and source-restoration readers use fresh tenant resolution; legacy global readers are removed. Destination save validation covers missing/wrong-tenant/inactive model/TTS/STT bindings before writes; the Persistence group passes 18 tests (2 excluded). Named tenant isolation, whole-selection overrides and fresh construction pass 15 Engine tests. Three tagged local DB activation tests verify current Google/Deepgram authentication and safe failure before requests. Independent GPT 6 Astra xhigh review found no blockers. All five root gates pass: 1,532 tests, zero failures, 33 excluded (seed 235296). A native test assertion found in the initial run was corrected in a separate reviewed commit; its focused case and the full Gateway suite pass. Live provider checks remain excluded. See the [reader inventory](../credential-reader-boundaries.md), [destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md), [native assertion correction](../../labnotes/20260915-2317-native-readiness-assertion.md), [global-reader evidence](../../labnotes/20260915-2223-remove-global-readers.md), [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md) and [source-reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md). |
 | 3 — Telnyx credential readers | Not started | Pending |
 | 4 — Twilio credential readers | Not started | Pending |
 | 5 — Existing provider credential integrations | Not started | Pending |
