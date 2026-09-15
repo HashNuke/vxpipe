@@ -2496,8 +2496,8 @@ revision validation is repeated at mixer admission, so a transition race fails c
 audio cannot be replayed after relaxation. Private transfer-preparation output never receives the
 main-room handoff.
 
-Development runtime settings use `VXPIPE_RECORDING_ENABLED`, `VXPIPE_RECORDING_S3_BUCKET`, and
-optional `VXPIPE_RECORDING_S3_REGION` / `VXPIPE_RECORDING_S3_ENDPOINT`. The endpoint parser accepts
+Development recording uses `VXPIPE_RECORDING_ENABLED` and the shared `STORAGE_BUCKET`, with
+optional `AWS_REGION` / `AWS_ENDPOINT`. Call-details documents use the same destination. The endpoint parser accepts
 only root HTTP(S) origins and forces S3 path-style requests for compatible local stores. Credentials
 remain in ExAws's standard provider chain; Console does not copy them into a call definition,
 prepared-call record, client response, or inspectable recording state. An embedding host can supply
@@ -3074,13 +3074,22 @@ is best effort after the owning write: failure cannot reinterpret committed evid
 The repository runtime enables this policy only when PostgreSQL and a call-details S3-compatible
 bucket are both configured. It injects the persistence source/repository and the artifacts-owned
 conditional JSON writer into Calls, and supervises oldest-first pending-revision recovery after the
-Repo. `VXPIPE_CALL_DETAILS_S3_BUCKET` selects the document bucket; optional
-`VXPIPE_CALL_DETAILS_S3_REGION` and `VXPIPE_CALL_DETAILS_S3_ENDPOINT` select its request target. If
-the dedicated values are absent, the corresponding `VXPIPE_RECORDING_S3_*` values are reused so a
-single call-artifact bucket is sufficient. The endpoint accepts only a root HTTP(S) origin and uses
-path-style access. ExAws retains credential discovery/signing; no credential enters a call plan,
+Repo. `STORAGE_BUCKET` selects the single bucket shared with recordings; optional `AWS_REGION`
+and `AWS_ENDPOINT` select the shared request target. Separate per-artifact bucket settings and
+fallbacks are removed. Unset/blank `STORAGE_BUCKET` disables automatic publication; it cannot
+satisfy explicitly enabled recording. The endpoint accepts only a root HTTP(S) origin and uses
+path-style access. ExAws retains credential discovery/signing using `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY` or its role chain. Runtime maps optional `AWS_SESSION_TOKEN` to ExAws's
+S3 security-token source without copying the token into writer options. No credential enters a call plan,
 publication row, object reference, or log. Configuring this document target neither enables nor
 grants recording.
+
+The shared-bucket cutover does not relocate artifacts. Existing recording references keep object
+keys/ETags and read the bucket/endpoint from current configuration, so a rename must preserve the
+existing location. Deployments with previously separate stores require explicit consolidation
+with object keys preserved and stored ETags preserved or reconciled before changing destinations.
+Verify playback after copying: the reader sends the stored ETag as `If-Match`. No historical-location
+fallback is added.
 
 Operator retrieval uses a separate Calls-owned read workflow and repository port rather than the
 delivery-worker write port. A `calls`-scoped tenant principal can page bounded revision summaries

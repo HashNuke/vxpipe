@@ -93,18 +93,19 @@ defmodule Vxpipe.Console.RecordingConfiguration do
   end
 
   defp parse_endpoint(value) do
-    case URI.parse(value) do
-      %URI{
-        scheme: scheme,
-        host: host,
-        port: port,
-        path: path,
-        query: nil,
-        fragment: nil,
-        userinfo: nil
-      }
+    case URI.new(value) do
+      {:ok,
+       %URI{
+         scheme: scheme,
+         host: host,
+         port: port,
+         path: path,
+         query: nil,
+         fragment: nil,
+         userinfo: nil
+       }}
       when scheme in ["http", "https"] and is_binary(host) and host != "" and
-             is_integer(port) and path in [nil, "", "/"] ->
+             port in 1..65_535 and path in [nil, "", "/"] ->
         {:ok,
          [
            scheme: scheme <> "://",

@@ -8,8 +8,10 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
     "VXPIPE_CREDENTIAL_KEYS",
     "VXPIPE_DATABASE_URL",
     "VXPIPE_DATABASE_POOL_SIZE",
-    "VXPIPE_CALL_DETAILS_S3_BUCKET",
-    "VXPIPE_RECORDING_S3_BUCKET"
+    "STORAGE_BUCKET",
+    "AWS_REGION",
+    "AWS_ENDPOINT",
+    "AWS_SESSION_TOKEN"
   ]
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
 

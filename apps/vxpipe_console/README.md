@@ -31,43 +31,52 @@ start their owning umbrella applications.
 ## Development recording composition
 
 Recording is disabled by default. To select the implemented multipart S3-compatible
-writer for repository development, configure PostgreSQL and enable the trusted host
-profile:
+writer for repository development, configure PostgreSQL and enable recording:
 
 ```shell
 VXPIPE_DATABASE_URL=postgres://user:password@database/vxpipe
 VXPIPE_RECORDING_ENABLED=true
-VXPIPE_RECORDING_S3_BUCKET=vxpipe-call-artifacts
-VXPIPE_RECORDING_S3_REGION=us-east-1
-# VXPIPE_RECORDING_S3_ENDPOINT=http://127.0.0.1:9000
+STORAGE_BUCKET=vxpipe-call-artifacts
+AWS_REGION=us-east-1
+# AWS_ENDPOINT=http://127.0.0.1:9000
 ```
 
 The endpoint is optional and must be a root HTTP(S) origin; it enables path-style
 requests for a compatible local object store. ExAws obtains credentials from its
 standard provider chain, including `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+For supplied temporary credentials, also set `AWS_SESSION_TOKEN`; ordinary long-lived keys
+leave it unset. See the visible root [`env.sample`](../../env.sample) for all platform settings.
 Do not put credentials, bucket settings, or endpoint settings in call definitions or
 client requests.
 
 ## Call-details publication composition
 
 When PostgreSQL is configured, the repository host can publish immutable post-call JSON revisions
-to the same S3-compatible call-artifact bucket or a dedicated bucket:
+to the same S3-compatible bucket used for recordings:
 
 ```shell
 VXPIPE_DATABASE_URL=postgres://user:password@database/vxpipe
-VXPIPE_CALL_DETAILS_S3_BUCKET=vxpipe-call-details
-VXPIPE_CALL_DETAILS_S3_REGION=us-east-1
-# VXPIPE_CALL_DETAILS_S3_ENDPOINT=http://127.0.0.1:9000
+STORAGE_BUCKET=vxpipe-call-artifacts
+AWS_REGION=us-east-1
+# AWS_ENDPOINT=http://127.0.0.1:9000
 ```
 
-If a dedicated value is absent, each `VXPIPE_CALL_DETAILS_S3_*` setting falls back to its matching
-`VXPIPE_RECORDING_S3_*` setting. A configured database and resulting bucket enable post-commit
+Both writers and recording playback use `STORAGE_BUCKET`, `AWS_REGION` and `AWS_ENDPOINT`.
+The former per-artifact S3 variables are removed and ignored. A configured database and bucket enable post-commit
 finalization plus pending-revision recovery; without either one, automatic publication remains
 disabled. The endpoint accepts only a root HTTP(S) origin and uses path-style access. ExAws obtains
 credentials from its standard provider chain. These settings do not enable recording, and none of
 the bucket, endpoint, or credentials belong in a definition or browser request.
 
-The development profile captures the live full mix and all individual tracks only
+Renaming variables does not move stored objects. Set the new bucket and endpoint to the existing
+artifact location to preserve recording playback: stored recording references contain object keys,
+not their original bucket/endpoint. Deployments that used separate recording and call-details
+stores must explicitly consolidate their existing objects into the shared destination before
+switching configuration. Preserve object keys and referenced ETags, or reconcile stored ETag
+references after copying; playback sends `If-Match` and a changed ETag can prevent retrieval.
+Verify playback before switching. There is no automatic object migration or old-location fallback.
+
+The development recorder captures the live full mix and all individual tracks only
 for intervals permitted by the effective room media policy. Raw PCM objects and
 terminal metadata are internal at this checkpoint; authenticated operator playback
 is still pending in the streaming-recordings milestone.

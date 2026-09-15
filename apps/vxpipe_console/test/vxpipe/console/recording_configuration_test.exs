@@ -114,4 +114,18 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
     assert {:error, :invalid_recording_enabled} =
              RecordingConfiguration.build(enabled: "sometimes")
   end
+
+  test "recording and playback reject invalid endpoint ports before opening storage" do
+    for port <- ["bad", "-1", "0", "65536", "99999"] do
+      settings = [
+        enabled: true,
+        persistence_enabled: true,
+        bucket: "call-artifacts",
+        endpoint: "http://objects.example.test:" <> port
+      ]
+
+      assert {:error, :invalid_recording_endpoint} = RecordingConfiguration.build(settings)
+      assert {:error, :invalid_recording_endpoint} = RecordingConfiguration.playback(settings)
+    end
+  end
 end

@@ -497,7 +497,7 @@ Depends on checkpoints 1–6. This is the final operational cutover and acceptan
   the duplicate). Add concise comments, mandatory placeholders, and commented optional variables.
   Exercise launcher/Console/Astro wiring;
   no provider secret is required before tenant DB provisioning.
-- [ ] Configure recordings and call-details publication from the same `STORAGE_BUCKET`,
+- [x] Configure recordings and call-details publication from the same `STORAGE_BUCKET`,
   `AWS_REGION`, `AWS_ENDPOINT` and AWS credential settings. Remove both old S3 setting families and their fallback rules from
   runtime, samples and current operational docs. Test that both writers use the same bucket,
   region and endpoint, and that conflicting retired values cannot select another destination.
@@ -600,7 +600,7 @@ Implementation boxes stay unchecked until their runnable exits and failure cases
 | 4 — Twilio tenant phone flow | Not started | Pending |
 | 5 — Remaining provider requests | Not started | Pending |
 | 6 — Live credential rotation | Not started | Pending |
-| 7 — Platform restart and cutover | Not started | Pending |
+| 7 — Platform restart and cutover | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
 
 - [ ] Demonstrate all runnable exits and acceptance cases.
 - [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates)
@@ -625,10 +625,11 @@ The database alias/default contract and its checkpoint 7 tasks received bounded 
 against current runtime/development/test configuration, with no blocking findings or order change.
 The explicit speech-profile reader deletion and shared artifact bucket tasks received independent
 review on 2026-09-15. The review confirmed their dependency order and added missing/blank/invalid/
-retired-only bucket cases plus enablement preservation. This is specification review; the bucket
-cutover and inline speech-profile deletion remain implementation tasks.
+retired-only bucket cases plus enablement preservation. That specification review preceded
+implementation; the shared-bucket implementation evidence is recorded above. Inline speech-profile
+deletion remains pending.
 
-Documentation checks passed: 131 relative links/anchors across this milestone and the index,
+Initial specification documentation checks passed: 131 relative links/anchors across this milestone and the index,
 one parsed JSON example, seven sequential checkpoints with exits, 61 unchecked tasks, and index
 counts of 26 entries/21 implemented. `git diff --check` passed. No full test suite was run for
-this documentation-only change; implementation review and test evidence remain future gates.
+that documentation-only change; subsequent implementation evidence is recorded in the ledger.

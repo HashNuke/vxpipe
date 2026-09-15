@@ -66,23 +66,27 @@ if database_url do
       {Vxpipe.Persistence.CallDetailsPublicationStore, Vxpipe.Persistence.Repo}
 end
 
-call_details_bucket =
-  nonempty_env.("VXPIPE_CALL_DETAILS_S3_BUCKET") ||
-    nonempty_env.("VXPIPE_RECORDING_S3_BUCKET")
+storage_bucket = nonempty_env.("STORAGE_BUCKET")
 
-if database_url && call_details_bucket do
-  call_details_storage = [
-    bucket: call_details_bucket,
-    region:
-      nonempty_env.("VXPIPE_CALL_DETAILS_S3_REGION") ||
-        nonempty_env.("VXPIPE_RECORDING_S3_REGION"),
-    endpoint:
-      nonempty_env.("VXPIPE_CALL_DETAILS_S3_ENDPOINT") ||
-        nonempty_env.("VXPIPE_RECORDING_S3_ENDPOINT")
-  ]
+artifact_storage = [
+  bucket: storage_bucket,
+  region: nonempty_env.("AWS_REGION"),
+  endpoint: nonempty_env.("AWS_ENDPOINT")
+]
 
-  {:ok, document_store_options} =
-    Vxpipe.Artifacts.S3DocumentConfiguration.build(call_details_storage)
+if nonempty_env.("AWS_SESSION_TOKEN") do
+  config :ex_aws, :s3, security_token: {:system, "AWS_SESSION_TOKEN"}
+end
+
+if database_url && storage_bucket do
+  document_store_options =
+    case Vxpipe.Artifacts.S3DocumentConfiguration.build(artifact_storage) do
+      {:ok, options} ->
+        options
+
+      {:error, _reason} ->
+        raise "invalid STORAGE_BUCKET / AWS_REGION / AWS_ENDPOINT configuration"
+    end
 
   publication_writer =
     {Vxpipe.Artifacts.CallDetailsWriter, [document_store_options: document_store_options]}
@@ -99,12 +103,12 @@ if database_url && call_details_bucket do
 end
 
 if config_env() == :dev do
-  config :vxpipe_console, :recording,
-    enabled: System.get_env("VXPIPE_RECORDING_ENABLED"),
-    persistence_enabled: not is_nil(database_url),
-    bucket: System.get_env("VXPIPE_RECORDING_S3_BUCKET"),
-    region: System.get_env("VXPIPE_RECORDING_S3_REGION"),
-    endpoint: System.get_env("VXPIPE_RECORDING_S3_ENDPOINT")
+  config :vxpipe_console,
+         :recording,
+         [
+           enabled: System.get_env("VXPIPE_RECORDING_ENABLED"),
+           persistence_enabled: not is_nil(database_url)
+         ] ++ artifact_storage
 
   call_engine_settings =
     Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)

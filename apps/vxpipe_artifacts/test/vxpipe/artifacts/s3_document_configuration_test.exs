@@ -42,4 +42,14 @@ defmodule Vxpipe.Artifacts.S3DocumentConfigurationTest do
     assert {:ok, [bucket: "call-artifacts", client_options: [request_options: []]]} =
              S3DocumentConfiguration.build(bucket: "call-artifacts")
   end
+
+  test "rejects invalid endpoint ports before a document request can start" do
+    for port <- ["bad", "-1", "0", "65536", "99999"] do
+      assert {:error, :invalid_document_endpoint} =
+               S3DocumentConfiguration.build(
+                 bucket: "call-artifacts",
+                 endpoint: "http://objects.example.test:" <> port
+               )
+    end
+  end
 end

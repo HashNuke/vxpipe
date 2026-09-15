@@ -23,8 +23,11 @@ internal. Superseded provider configuration paths must be deleted, not retained 
 legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
 checkpoint 1 now has encrypted Google/Deepgram provisioning and metadata listing, with passing
 focused and disposable-database checks. Inline definition and live-call integration remain pending.
-The latest umbrella run has one intermittent native transfer-audio failure that passes in isolation;
-final umbrella acceptance remains open. Implementation remains unchecked.
+The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
+playback and call-details publication. Its independent review and all five root checks pass:
+1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did
+not recur; its cause remains unproven. The full milestone remains unchecked pending its call flows
+and remaining configuration cutover.
 The platform database contract uses `VXPIPE_DB_URL` before `DATABASE_URL` and
 `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; development needs no database env variables and
 defaults to `vxpipe_dev` with pool size 10.
