@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 25 milestone specifications: 21 complete and 4 incomplete. Milestone 17, Telnyx calls and
+Status: 26 milestone specifications: 21 complete and 5 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -13,8 +13,17 @@ call-details publications, is complete, including immutable late revisions and p
 retrieval. Milestone 22, context compaction and supported LLM fallback, is complete, including
 bounded private summaries, provider-native routing, truthful usage, and runnable HTTPS/WebRTC
 acceptance. The platform is now at its pre-delivery review hold. Milestone 23 proposes transfer
-readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 24 and 25 remain unimplemented until the user has exercised the
+readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 25 and 26 remain unimplemented until the user has exercised the
 working platform and decided to proceed with packaging and retention.
+Milestone 24 records the 2026-09-15 provider-credential change plan: inline upstream
+provider/model selections, no capability profiles, encrypted tenant AI/speech and Telnyx/Twilio
+credentials, and platform environment settings. Its checkpoints deliver runnable call flows,
+including carrier ingress authentication, transfers and cleanup. ReqLLM adapter selection stays
+internal. Superseded provider configuration paths must be deleted, not retained as optional or
+legacy fallbacks; acceptance includes conflicting-old-settings tests. Implementation remains unchecked.
+The platform database contract uses `VXPIPE_DB_URL` before `DATABASE_URL` and
+`VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; development needs no database env variables and
+defaults to `vxpipe_dev` with pool size 10.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
 2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate
@@ -66,8 +75,9 @@ progress without claiming the entire milestone is complete.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
-24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+24. [ ] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Deliver inline upstream provider/model calls and tenant-authenticated Telnyx/Twilio calls through vertical checkpoints; validate encrypted tenant credentials before save and keep platform infrastructure env-backed.
+25. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+26. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
@@ -77,7 +87,7 @@ provider, transfer, media, recording, inspection, publication, and fallback path
 system. Record any discovered fixes or approved design changes in their owning milestone before
 release work begins.
 
-Do not start milestone 24 (Docker/container packaging) or milestone 25 (retention/deletion) until
+Do not start milestone 25 (Docker/container packaging) or milestone 26 (retention/deletion) until
 that review is complete and the user explicitly chooses to proceed. This is a sequencing hold,
 not a change to either milestone's approved scope or completion state. Retention/deletion remains
 the final milestone.
@@ -336,6 +346,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Whole-call retention and deletion**: G5; R19–R21.
 - **Context compaction and supported LLM fallback**: G13; R47, R48, R50.
 - **Transfer readiness and participant wait sounds**: user-requested pre-delivery refinement of G7/G8/G9; all required resources ready, independent local playback, URL/null/default configuration and cue-before-bridge completion.
+- **Tenant-scoped provider credentials and platform configuration**: user-requested replacement of capability profiles/TOML with inline upstream provider/model selections and encrypted tenant credentials, including Telnyx/Twilio control/webhook/media authentication; runnable vertical checkpoints, no application credential fallback, platform infrastructure env-backed and ReqLLM internal.
 - **Embedded and JSON-configured container delivery**: Container/OTP boundary; complete approved scope.
 
 ## Specification review evidence
@@ -375,6 +386,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Specification source-reviewed and agent-reviewed | Lorentz identified durable tenant deduplication, non-consuming Twilio auth-lease discovery and distinct credential-outage checks; corrected and re-reviewed without remaining blockers. Seven vertical checkpoints; implementation remains unchecked. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification
