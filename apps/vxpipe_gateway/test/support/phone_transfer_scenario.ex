@@ -14,15 +14,14 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
     LegSupervisor,
     MediaAdmission,
     MediaSupervisor,
-    OutgoingLegConnector,
-    ServiceRegistry
+    OutgoingLegConnector
   }
 
   @twilio_account_sid "AC00000000000000000000000000000000"
   @twilio_call_sid "CA00000000000000000000000000000001"
   @twilio_stream_sid "MZ00000000000000000000000000000001"
 
-  def compile_plan do
+  def compile_plan(provider \\ :telnyx) do
     {:ok, definition} =
       CallDefinition.new(
         %{
@@ -82,7 +81,7 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
           initial_variables: %{},
           transport: %{type: "web"}
         },
-        tenant_id: "tenant-outbound-phone",
+        tenant_id: "outboundphoneten",
         actor_id: "actor-outbound-phone",
         call_id: unique_id("call"),
         room_id: unique_id("room")
@@ -93,12 +92,15 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
         host_tools: %{}
       })
 
-    plan
+    Vxpipe.Gateway.TestTelephonyServiceRepository.pin_plan(
+      plan,
+      service(provider, plan.tenant_id, self(), [])
+    )
   end
 
   def connector(provider, tenant_id, observer, leg_id, service_overrides \\ []) do
     registry =
-      ServiceRegistry.init!(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
         enabled: true,
         services: [service(provider, tenant_id, observer, service_overrides)]
       )

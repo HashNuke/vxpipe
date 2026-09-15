@@ -20,7 +20,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
     service_options = service_options()
 
     endpoint =
-      Endpoint.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
         telephony: [
           enabled: true,
           services: [service_options],
@@ -75,7 +75,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
 
     for services <- [[conflicting], []] do
       endpoint =
-        Endpoint.init(
+        Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
           telephony: [
             enabled: true,
             media_admission: context.admission,
@@ -105,7 +105,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
     assert unsigned.status == 404
 
     disabled =
-      Endpoint.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
         telephony: [enabled: false, media_admission: context.admission, clock: context.clock]
       )
 
@@ -206,7 +206,9 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
     end
 
     endpoint =
-      Endpoint.init(telephony: [enabled: true, media_admission: context.admission, clock: clock])
+      Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
+        telephony: [enabled: true, media_admission: context.admission, clock: clock]
+      )
 
     url = PublicEndpoint.media_url(context.service, token)
     assert request(%{context | endpoint: endpoint}, token, signature(url)).status == 503

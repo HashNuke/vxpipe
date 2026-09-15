@@ -81,7 +81,7 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     alias Vxpipe.CallEngine.RoomMixer
     alias Vxpipe.Gateway.Telephony.MediaSession
 
-    plan = PhoneTransferScenario.compile_plan()
+    plan = PhoneTransferScenario.compile_plan(provider)
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
     leg_id = PhoneTransferScenario.unique_id("private-phone")
@@ -207,7 +207,7 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   end
 
   defp assert_private_transfer(provider) when provider in [:telnyx, :twilio] do
-    plan = PhoneTransferScenario.compile_plan()
+    plan = PhoneTransferScenario.compile_plan(provider)
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
     leg_id = PhoneTransferScenario.unique_id("outbound-leg")
@@ -373,7 +373,7 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   end
 
   defp assert_machine_transfer_failure(provider) when provider in [:telnyx, :twilio] do
-    plan = PhoneTransferScenario.compile_plan()
+    plan = PhoneTransferScenario.compile_plan(provider)
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
     leg_id = PhoneTransferScenario.unique_id("outbound-machine-leg")

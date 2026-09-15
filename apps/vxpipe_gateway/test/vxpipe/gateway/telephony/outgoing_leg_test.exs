@@ -138,13 +138,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     mismatched = %{outgoing_event(context.leg_id) | to: "+15550001002"}
 
     assert {:error, :telephony_leg_mismatch} =
-             CallIngress.handle_event([], service.identity, mismatched)
+             CallIngress.handle_event([], service, mismatched, {:outgoing, leg})
 
     event = outgoing_event(context.leg_id)
-    assert :ok = CallIngress.handle_event([], service.identity, event)
+    assert :ok = CallIngress.handle_event([], service, event, {:outgoing, leg})
 
     assert {:ok, ^leg} =
-             LegSupervisor.lookup(:telnyx, "telnyx-primary", "outbound-call-leg")
+             LegSupervisor.lookup(service.identity, "outbound-call-leg")
 
     assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.leg == leg
@@ -174,11 +174,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert_receive {:test_twilio_dial, dial}
 
     event = twilio_answered_event(context.leg_id)
-    assert :ok = CallIngress.handle_event([], service.identity, event)
+    assert :ok = CallIngress.handle_event([], service, event, {:outgoing, leg})
     refute_receive {:test_twilio_dial, _duplicate}
 
     assert {:ok, ^leg} =
-             LegSupervisor.lookup(:twilio, "twilio-primary", event.provider_call_leg_id)
+             LegSupervisor.lookup(service.identity, event.provider_call_leg_id)
 
     assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.leg == leg
@@ -189,7 +189,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
 
   test "the engine connector resolves the tenant service and starts one supervised leg",
        context do
-    registry = ServiceRegistry.init!(enabled: true, services: [service_options(self())])
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options(self())]
+      )
 
     connector = [
       leg_id: fn -> context.leg_id end,
@@ -369,7 +373,15 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
   end
 
   test "connector cleanup ends a known exact carrier leg before retiring it", context do
-    registry = ServiceRegistry.init!(enabled: true, services: [service_options(self())])
+    availability = :atomics.new(1, [])
+    :atomics.put(availability, 1, 1)
+
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options(self())],
+        service_availability: fn -> :atomics.get(availability, 1) == 1 end
+      )
 
     connector = [
       leg_id: fn -> context.leg_id end,
@@ -383,6 +395,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
 
     assert_receive {:test_telephony_dial, _dial}
     monitor = Process.monitor(leg)
+    :atomics.put(availability, 1, 0)
 
     assert :ok = OutgoingLegConnector.disconnect(connector, reference)
 
@@ -400,6 +413,123 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     refute_receive {:test_telephony_end_leg, _duplicate}
   end
 
+  test "failed fresh credentials create no leg, media reservation or dial", context do
+    repository = Vxpipe.Gateway.TestTelephonyServiceRepository
+    snapshot = repository.snapshot(service_options(self()))
+
+    revoked = %{
+      snapshot
+      | credential: %{
+          snapshot.credential
+          | credential: %{snapshot.credential.credential | status: :revoked}
+        }
+    }
+
+    media_before = :sys.get_state(context.media_admission)
+
+    for result <- [
+          {:error, :service_not_found},
+          {:error, :repository_unavailable},
+          {:ok, revoked}
+        ] do
+      registry =
+        ServiceRegistry.init!(
+          enabled: true,
+          public_base_url: "https://voice.example.test/voice",
+          telephony_service_repository: {repository, fn :resolve, _arguments -> result end}
+        )
+
+      connector = [
+        service_registry: registry,
+        media_admission: context.media_admission,
+        leg_id: fn ->
+          send(self(), :unexpected_leg_allocation)
+          context.leg_id
+        end
+      ]
+
+      assert {:error, :outbound_connection_unavailable} =
+               OutgoingLegConnector.connect(connector, request(), 1_000)
+
+      assert {:error, :leg_not_found} = LegSupervisor.lookup_outgoing(context.leg_id)
+      assert :sys.get_state(context.media_admission) == media_before
+      refute_receive :unexpected_leg_allocation
+      refute_receive {:test_telephony_dial, _request}
+    end
+  end
+
+  test "a verified retired owner cannot deliver to a replacement leg", context do
+    service = service(self(), [])
+    leg = start_accepted_leg(context, service)
+    registry = ServiceRegistry.init!(enabled: true)
+
+    body =
+      JSON.encode!(%{
+        "data" => %{
+          "payload" => %{
+            "connection_id" => service.identity.provider_connection_id,
+            "call_leg_id" => "outbound-call-leg",
+            "client_state" => Vxpipe.Gateway.Telephony.Telnyx.ClientState.encode(context.leg_id)
+          }
+        }
+      })
+
+    assert {:ok, ^service, {:outgoing, ^leg} = owner} =
+             Vxpipe.Gateway.Telephony.WebhookService.select(
+               registry,
+               :telnyx,
+               service.identity.ingress_key,
+               body
+             )
+
+    monitor = Process.monitor(leg)
+    :ok = LegSupervisor.stop_outgoing(context.leg_id)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :shutdown}
+    assert Registry.keys(Vxpipe.Gateway.Telephony.LegRegistry, leg) == []
+
+    replacement = start_accepted_leg(context, service)
+
+    assert {:error, :telephony_leg_mismatch} =
+             CallIngress.handle_event([], service, ended_event(:hangup), owner)
+
+    assert {:ok, ^replacement} = LegSupervisor.lookup_outgoing(context.leg_id)
+    assert :ok = OutgoingLeg.await(replacement, 1_000)
+    refute_receive {:test_telephony_end_leg, _request}
+  end
+
+  test "credential lookup cannot start a dial after the connector deadline", context do
+    repository = Vxpipe.Gateway.TestTelephonyServiceRepository
+    snapshot = repository.snapshot(service_options(self()))
+    clock = :atomics.new(1, [])
+
+    registry =
+      ServiceRegistry.init!(
+        enabled: true,
+        public_base_url: "https://voice.example.test/voice",
+        adapters: %{telnyx: Vxpipe.Gateway.TestTelephonyAdapter},
+        telephony_service_repository:
+          {repository,
+           fn :resolve, _arguments ->
+             :atomics.put(clock, 1, 100)
+             {:ok, snapshot}
+           end}
+      )
+
+    connector = [
+      leg_id: fn -> context.leg_id end,
+      leg_supervisor: LegSupervisor,
+      media_admission: context.media_admission,
+      service_registry: registry,
+      monotonic_clock: fn -> :atomics.get(clock, 1) end
+    ]
+
+    assert {:error, :outbound_connection_unavailable} =
+             OutgoingLegConnector.connect(connector, request(), 50)
+
+    assert {:error, :leg_not_found} = LegSupervisor.lookup_outgoing(context.leg_id)
+    refute_receive {:test_telephony_dial, _request}
+  end
+
   defp request do
     %OutboundLegRequest{
       tenant_id: "tenantkey1234567",
@@ -409,6 +539,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       incarnation_id: "rinc-outbound",
       participant_id: "participant-support",
       service_id: "telnyx-primary",
+      service_reference:
+        Vxpipe.Gateway.TestTelephonyServiceRepository.reference(service_options(self())),
       to: "+15550001001"
     }
   end
@@ -417,7 +549,16 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert {:ok, service} =
              ConfiguredService.new(service_options(observer, overrides))
 
-    service
+    %{
+      service
+      | identity: %{
+          service.identity
+          | service_reference:
+              Vxpipe.Gateway.TestTelephonyServiceRepository.reference(
+                service_options(observer, overrides)
+              )
+        }
+    }
   end
 
   defp service_options(observer, overrides \\ []) do
@@ -456,7 +597,14 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       )
 
     assert {:ok, service} = ConfiguredService.new(options)
-    service
+
+    %{
+      service
+      | identity: %{
+          service.identity
+          | service_reference: Vxpipe.Gateway.TestTelephonyServiceRepository.reference(options)
+        }
+    }
   end
 
   defp start_accepted_leg(context, service) do

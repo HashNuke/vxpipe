@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocketTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Telephony.Event
-  alias Vxpipe.Gateway.Telephony.{IngressIdentity, LegSupervisor, MediaBinding}
+  alias Vxpipe.Gateway.Telephony.{LegSupervisor, MediaBinding}
   alias Vxpipe.Gateway.Telephony.Telnyx.MediaSocket
   alias Vxpipe.Gateway.TestTelephonyCallBackend
 
@@ -21,7 +21,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocketTest do
              )
 
     assert :ok = Vxpipe.Gateway.Telephony.Leg.await(leg, 1_000)
-    on_exit(fn -> LegSupervisor.stop(:telnyx, "primary-phone", "call-leg-1") end)
+    on_exit(fn -> LegSupervisor.stop(identity.identity, "call-leg-1") end)
 
     binding = media_binding(leg)
     assert {:ok, socket} = MediaSocket.init(%{binding: binding})
@@ -266,13 +266,16 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocketTest do
   end
 
   defp identity do
-    %IngressIdentity{
-      service_id: "primary-phone",
+    Vxpipe.Gateway.TestTelephonyServiceRepository.configured(
+      id: "primary-phone",
       ingress_key: "ingress-primary",
       scope: {:tenant, "AAAAAAAAAAAAAAAA"},
       provider: :telnyx,
-      provider_connection_id: "voice-application-1"
-    }
+      provider_connection_id: "voice-application-1",
+      public_key: Base.encode64(:binary.copy(<<1>>, 32)),
+      api_key: "test-key",
+      public_base_url: "https://voice.example.test"
+    )
   end
 
   defp incoming_event do

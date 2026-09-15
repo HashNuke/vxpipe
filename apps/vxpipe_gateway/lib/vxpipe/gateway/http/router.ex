@@ -191,9 +191,11 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   def call(conn, _options), do: send_resp(conn, 404, "not found")
 
   defp telephony_options!(options) do
-    Keyword.validate!(options, [
+    validate_options!(options, [
       :enabled,
-      :services,
+      :public_base_url,
+      :telephony_service_repository,
+      :adapters,
       :handler,
       :clock,
       :maximum_body_bytes,
@@ -208,7 +210,9 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   defp event_options(telephony) do
     Keyword.take(telephony, [
       :enabled,
-      :services,
+      :public_base_url,
+      :telephony_service_repository,
+      :adapters,
       :handler,
       :media_admission,
       :clock,
@@ -234,5 +238,12 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       end
 
     Keyword.put(options, :backend, backend)
+  end
+
+  defp validate_options!(options, allowed) do
+    case Keyword.validate(options, allowed) do
+      {:ok, options} -> options
+      {:error, _keys} -> raise ArgumentError, "invalid telephony configuration"
+    end
   end
 end

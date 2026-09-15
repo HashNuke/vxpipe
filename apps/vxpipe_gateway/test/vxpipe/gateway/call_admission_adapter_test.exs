@@ -19,7 +19,6 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
 
   alias Vxpipe.Gateway.Telephony.{
     IncomingLegActivationResult,
-    IngressIdentity,
     MediaAdmission,
     ServiceRegistry
   }
@@ -113,13 +112,82 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {tenant_id, room_id}) == []
   end
 
+  test "rejects an unbound hosted incoming plan before starting its room" do
+    backend = start_supervised!({TestTelephonyCallBackend, observer: self()})
+    claim = TestTelephonyCallBackend.claim(backend)
+
+    options = [
+      id: claim.service,
+      ingress_key: "incoming-pin-test",
+      provider: :telnyx,
+      scope: {:tenant, claim.call.tenant_key},
+      provider_connection_id: claim.provider_connection_id,
+      public_key: Base.encode64(:binary.copy(<<1>>, 32)),
+      api_key: "test-key"
+    ]
+
+    snapshot = Vxpipe.Gateway.TestTelephonyServiceRepository.snapshot(options)
+
+    {:ok, service} =
+      Vxpipe.Gateway.Telephony.ConfiguredService.from_snapshot(
+        snapshot,
+        "https://voice.example.test"
+      )
+
+    assert {:error, :telephony_service_mismatch} =
+             CallAdmission.start_incoming([], claim, service)
+
+    assert Registry.lookup(CallEngine.RoomRegistry, {claim.call.tenant_key, claim.call.room_id}) ==
+             []
+  end
+
+  test "web startup rejects unbound or stale later phone destinations before creating a room" do
+    for failure <- [:unbound, :stale] do
+      plan = Vxpipe.Gateway.PhoneTransferScenario.compile_plan()
+      phone = Map.fetch!(plan.participants, "human-support")
+      caller = Map.fetch!(plan.participants, "caller")
+      phone = if failure == :unbound, do: %{phone | telephony_service: nil}, else: phone
+      plan = %{plan | participants: Map.put(plan.participants, "human-support", phone)}
+      observer = self()
+
+      registry =
+        ServiceRegistry.init!(
+          enabled: true,
+          telephony_service_repository:
+            {Vxpipe.Gateway.TestTelephonyServiceRepository,
+             fn :resolve, _arguments ->
+               send(observer, :fresh_phone_lookup)
+               {:error, :provider_credential_unavailable}
+             end}
+        )
+
+      claim = %AdmissionClaim{
+        call: prepared_call(plan, nil, nil, :prepared),
+        token_id: unique_id("token"),
+        participant_key: unique_id("route"),
+        participant_ref: "caller",
+        participant_id: caller.participant_id,
+        accepted_at: DateTime.utc_now()
+      }
+
+      assert {:error, :room_start_failed} =
+               CallAdmission.start_call([service_registry: registry], claim)
+
+      assert Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) == []
+
+      if failure == :stale,
+        do: assert_receive(:fresh_phone_lookup),
+        else: refute_receive(:fresh_phone_lookup)
+    end
+  end
+
   test "activates an incoming leg through its configured service" do
     backend = start_supervised!({TestTelephonyCallBackend, observer: self()})
     admission = start_supervised!({MediaAdmission, name: nil})
     leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
 
     registry =
-      ServiceRegistry.init!(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
         enabled: true,
         services: [
           [
@@ -136,13 +204,12 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
         ]
       )
 
-    identity = %IngressIdentity{
-      service_id: "primary-phone",
-      ingress_key: "ingress_telnyx_primary",
-      scope: {:tenant, "AAAAAAAAAAAAAAAA"},
-      provider: :telnyx,
-      provider_connection_id: "voice-application-1"
-    }
+    {:ok, service} = ServiceRegistry.fetch(registry, "ingress_telnyx_primary")
+    reference = service.identity.service_reference
+    original = TestTelephonyCallBackend.claim(backend)
+    participant = %{participant_id: original.participant_id, telephony_service: reference}
+    plan = %{original.call.plan | participants: %{"caller" => participant}}
+    claim = %{original | call: %{original.call | plan: plan}, service_id: reference.service_id}
 
     room = %RoomSnapshot{
       tenant_id: "AAAAAAAAAAAAAAAA",
@@ -164,8 +231,8 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
                  media_admission: admission,
                  telephony_leg_id: fn -> "tleg-incoming-default" end
                ],
-               identity,
-               TestTelephonyCallBackend.claim(backend),
+               service,
+               claim,
                room,
                leg
              )

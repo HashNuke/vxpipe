@@ -63,6 +63,11 @@ the rest of the stack on Ctrl-C. Use `--tailscale` for HTTPS access over Tailsca
 Unlike `bin/dev`, direct `mix` commands do not load `.env`; export the platform settings
 in the launching shell or inject them through your secret manager.
 
+For existing Telnyx/Twilio calls, provision a tenant carrier credential and register its service
+as described in [tenant telephony setup](tenant-telephony-services.md#trusted-registration-and-lookup).
+Set `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` to the public HTTPS origin and mounted path. Provider
+credentials come from PostgreSQL; the callback-origin setting only configures public routes.
+
 ## Local fixtures
 
 Local calls select `%{provider: "fixture", model: "test:scripted"}` for model inference

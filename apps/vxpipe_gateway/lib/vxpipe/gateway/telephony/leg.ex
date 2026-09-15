@@ -6,21 +6,27 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.Telephony.{Adapter, EndLeg, Event, LegReference}
   alias Vxpipe.Calls.TelephonyAdmissionClaim
-  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IncomingLegActivationResult, LegUsage}
+
+  alias Vxpipe.Gateway.Telephony.{
+    ConfiguredService,
+    IncomingLegActivationResult,
+    IngressIdentity,
+    LegUsage
+  }
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) do
-    identity = Keyword.fetch!(options, :identity)
+    service = Keyword.fetch!(options, :service)
     event = Keyword.fetch!(options, :event)
-    GenServer.start_link(__MODULE__, options, name: via(identity, event))
+    GenServer.start_link(__MODULE__, options, name: via(service, event))
   end
 
   def child_spec(options) do
-    identity = Keyword.fetch!(options, :identity)
+    service = Keyword.fetch!(options, :service)
     event = Keyword.fetch!(options, :event)
 
     %{
-      id: {__MODULE__, key(identity, event)},
+      id: {__MODULE__, key(service.identity, event)},
       start: {__MODULE__, :start_link, [options]},
       restart: :temporary
     }
@@ -29,6 +35,12 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   @spec await(pid(), timeout()) :: :ok | {:ok, term()} | {:error, term()}
   def await(leg, timeout) when is_pid(leg) do
     GenServer.call(leg, :await, timeout)
+  catch
+    :exit, _reason -> {:error, :telephony_leg_unavailable}
+  end
+
+  def await(leg, %ConfiguredService{} = service, %Event{} = event, timeout) do
+    GenServer.call(leg, {:await_incoming, service, event}, timeout)
   catch
     :exit, _reason -> {:error, :telephony_leg_unavailable}
   end
@@ -46,12 +58,23 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   @impl true
   def init(options) do
+    service = Keyword.fetch!(options, :service)
+    event = Keyword.fetch!(options, :event)
+
+    {:ok, _} =
+      Registry.register(
+        Vxpipe.Gateway.Telephony.LegRegistry,
+        IngressIdentity.ingress_key(service.identity, event.provider_call_leg_id),
+        {:incoming, service}
+      )
+
     state = %{
       activation: nil,
       backend: Keyword.fetch!(options, :backend),
       claim: nil,
       clock: Keyword.fetch!(options, :clock),
-      identity: Keyword.fetch!(options, :identity),
+      identity: service.identity,
+      service: service,
       initial_event: Keyword.fetch!(options, :event),
       incarnation_id: nil,
       room_monitor: nil,
@@ -91,6 +114,23 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   @impl true
+  def handle_call({:await_incoming, service, event}, from, state) do
+    fields = [
+      :provider,
+      :provider_connection_id,
+      :provider_call_control_id,
+      :provider_call_leg_id,
+      :provider_call_session_id
+    ]
+
+    if state.service == service and
+         Map.take(event, fields) == Map.take(state.initial_event, fields) do
+      handle_call(:await, from, state)
+    else
+      {:reply, {:error, :telephony_leg_mismatch}, state}
+    end
+  end
+
   def handle_call(:await, _from, %{result: result} = state) when not is_nil(result) do
     {:reply, result, state}
   end
@@ -216,7 +256,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   defp start_call(state) do
-    case call_backend(state.backend, :start_incoming, [state.claim]) do
+    case call_backend(state.backend, :start_incoming, [state.claim, state.service]) do
       {:ok, %RoomSnapshot{} = room} ->
         activate_call(state, room)
 
@@ -236,7 +276,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   defp activate_call(state, %RoomSnapshot{incarnation_id: incarnation_id} = room) do
     case call_backend(state.backend, :activate_incoming, [
-           state.identity,
+           state.service,
            state.claim,
            room,
            self()
@@ -313,9 +353,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     _kind, _reason -> {:error, :telephony_call_backend_failed}
   end
 
-  defp via(identity, event) do
-    {:via, Registry, {Vxpipe.Gateway.Telephony.LegRegistry, key(identity, event)}}
+  defp via(service, event) do
+    {:via, Registry,
+     {Vxpipe.Gateway.Telephony.LegRegistry, key(service.identity, event), {:incoming, service}}}
   end
 
-  defp key(identity, event), do: {event.provider, identity.service_id, event.provider_call_leg_id}
+  defp key(identity, event), do: IngressIdentity.leg_key(identity, event.provider_call_leg_id)
 end

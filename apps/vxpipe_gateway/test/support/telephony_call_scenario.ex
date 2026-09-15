@@ -7,8 +7,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   alias Vxpipe.Gateway.Telephony.{
     LegSupervisor,
     MediaSupervisor,
-    OutgoingLegConnector,
-    ServiceRegistry
+    OutgoingLegConnector
   }
 
   @twilio_account_sid "AC00000000000000000000000000000000"
@@ -25,9 +24,15 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
       )
       when provider in [:telnyx, :twilio] and is_pid(observer) do
     plan = compile_plan(provider, options)
-    caller = Map.fetch!(plan.participants, "caller")
     service_options = service_options(provider, plan.tenant_id, credential, observer)
-    registry = ServiceRegistry.init!(enabled: true, services: [service_options])
+    plan = Vxpipe.Gateway.TestTelephonyServiceRepository.pin_plan(plan, service_options)
+    caller = Map.fetch!(plan.participants, "caller")
+
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options]
+      )
 
     connector =
       {OutgoingLegConnector,
@@ -126,7 +131,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           initial_variables: %{},
           transport: %{type: "telephony"}
         },
-        tenant_id: "tenant-telephony-harness",
+        tenant_id: "telephonyharness",
         actor_id: "actor-telephony-harness",
         call_id: "call-telephony-harness-#{id}",
         room_id: "room-telephony-harness-#{id}"
@@ -186,7 +191,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
         participant_id: participant_id,
         participant_ref: "caller",
         service: "primary-phone",
-        service_id: "10000000-0000-4000-8000-000000000001"
+        service_id: Map.fetch!(plan.participants, "caller").telephony_service.service_id
       })
     )
   end

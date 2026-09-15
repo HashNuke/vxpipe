@@ -9,7 +9,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
 
   alias Vxpipe.Gateway.Telephony.{
     IngressHandler,
-    ServiceRegistry
+    WebhookService
   }
 
   alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookVerifier}
@@ -25,15 +25,23 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
 
   @spec handle(Plug.Conn.t(), map(), String.t()) :: Plug.Conn.t()
   def handle(conn, options, ingress_key) do
-    with {:ok, service} <- ServiceRegistry.fetch(options.registry, ingress_key),
+    with true <- options.registry.enabled?,
          :ok <- json_content_type(conn),
          {:ok, body, conn} <- RawBody.read(conn, options.maximum_body_bytes),
+         {:ok, service, owner} <-
+           WebhookService.select(options.registry, :telnyx, ingress_key, body),
          {:ok, headers} <- authentication_headers(conn),
          {:ok, received_at} <- received_at(options.clock),
          webhook = %Webhook{headers: headers, body: body, received_at: received_at},
          :ok <- WebhookVerifier.verify(webhook, service.verifier_options) do
-      handle_verified(conn, options.handler, service, webhook)
+      handle_verified(conn, options.handler, service, webhook, owner)
     else
+      false ->
+        send_resp(conn, 404, "not found")
+
+      {:error, :wrong_provider} ->
+        send_resp(conn, 404, "not found")
+
       {:error, :disabled} ->
         send_resp(conn, 404, "not found")
 
@@ -63,17 +71,17 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
     end
   end
 
-  defp handle_verified(conn, handler, service, webhook) do
+  defp handle_verified(conn, handler, service, webhook, owner) do
     case WebhookDecoder.decode(webhook) do
-      {:ok, %Event{} = event} -> dispatch(conn, handler, service, event)
+      {:ok, %Event{} = event} -> dispatch(conn, handler, service, event, owner)
       :ignore -> send_resp(conn, 200, "ok")
       {:error, :invalid_telnyx_webhook} -> send_resp(conn, 400, "invalid webhook")
     end
   end
 
-  defp dispatch(conn, handler, service, event) do
+  defp dispatch(conn, handler, service, event, owner) do
     if event.provider_connection_id == service.identity.provider_connection_id do
-      case IngressHandler.dispatch(handler, service.identity, event) do
+      case IngressHandler.dispatch(handler, service, event, owner) do
         :ok -> send_resp(conn, 200, "ok")
         {:ok, _result} -> send_resp(conn, 200, "ok")
         {:error, _reason} -> send_resp(conn, 503, "webhook processing unavailable")

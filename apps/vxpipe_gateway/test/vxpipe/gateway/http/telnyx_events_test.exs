@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
 
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Gateway.CallAdmission
-  alias Vxpipe.Gateway.HTTP.{Endpoint, TelephonyIngressConfig}
+  alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.Telephony.{CallIngress, IngressIdentity, ServiceRegistry}
   alias Vxpipe.Gateway.TestTelephonyIngress
 
@@ -17,7 +17,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     {public_key, private_key} = :crypto.generate_key(:eddsa, :ed25519)
 
     endpoint =
-      Endpoint.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
         telephony: [
           enabled: true,
           clock: fn -> @received_at end,
@@ -132,7 +132,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     media_admission = self()
 
     options =
-      TelephonyIngressConfig.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.ingress(
         enabled: true,
         media_admission: media_admission,
         services: [

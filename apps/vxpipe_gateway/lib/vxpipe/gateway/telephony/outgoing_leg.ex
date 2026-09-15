@@ -12,13 +12,15 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     LegUsage,
     OutgoingLegDialer,
     OutgoingLegIdentity,
+    IngressIdentity,
     OutgoingLegLifecycle
   }
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) do
     leg_id = Keyword.fetch!(options, :leg_id)
-    GenServer.start_link(__MODULE__, options, name: via(leg_id))
+    service = Keyword.fetch!(options, :service)
+    GenServer.start_link(__MODULE__, options, name: via(leg_id, service))
   end
 
   def child_spec(options) do
@@ -59,6 +61,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        leg_id: Keyword.fetch!(options, :leg_id),
        request: Keyword.fetch!(options, :request),
        service: Keyword.fetch!(options, :service),
+       deadline_ms: Keyword.get(options, :deadline_ms),
+       monotonic_clock: Keyword.fetch!(options, :monotonic_clock),
        media_admission: Keyword.fetch!(options, :media_admission),
        media_supervisor: Keyword.get(options, :media_supervisor, MediaSupervisor),
        binding: nil,
@@ -77,6 +81,12 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   @impl true
   def handle_continue(:dial, state) do
+    if is_integer(state.deadline_ms) and state.monotonic_clock.() >= state.deadline_ms,
+      do: {:noreply, fail(state, :outbound_connection_unavailable, :failed)},
+      else: submit_dial(state)
+  end
+
+  defp submit_dial(state) do
     case OutgoingLegDialer.dial(
            state.leg_id,
            state.request,
@@ -308,11 +318,25 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   end
 
   defp register_and_bind(state, %MediaBinding{} = binding) do
-    key = {binding.provider, binding.service_id, binding.provider_call_leg_id}
+    key = IngressIdentity.leg_key(state.service.identity, binding.provider_call_leg_id)
 
-    case Registry.register(Vxpipe.Gateway.Telephony.LegRegistry, key, :outgoing) do
+    case Registry.register(Vxpipe.Gateway.Telephony.LegRegistry, key, {:outgoing, state.service}) do
       {:ok, _owner} ->
-        bind_registered(state, key, binding)
+        ingress_key =
+          IngressIdentity.ingress_key(state.service.identity, binding.provider_call_leg_id)
+
+        case Registry.register(
+               Vxpipe.Gateway.Telephony.LegRegistry,
+               ingress_key,
+               {:outgoing, state.service}
+             ) do
+          {:ok, _} ->
+            bind_registered(state, [key, ingress_key], binding)
+
+          {:error, _reason} ->
+            Registry.unregister(Vxpipe.Gateway.Telephony.LegRegistry, key)
+            {:error, :telephony_leg_already_owned}
+        end
 
       {:error, {:already_registered, _owner}} ->
         {:error, :telephony_leg_already_owned}
@@ -333,13 +357,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     end
   end
 
-  defp bind_registered(state, key, binding) do
+  defp bind_registered(state, keys, binding) do
     case MediaAdmission.bind(state.media_admission, binding) do
       :ok ->
         :ok
 
       {:error, reason} ->
-        Registry.unregister(Vxpipe.Gateway.Telephony.LegRegistry, key)
+        Enum.each(keys, &Registry.unregister(Vxpipe.Gateway.Telephony.LegRegistry, &1))
         {:error, reason}
     end
   end
@@ -355,7 +379,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     %{state | usage: LegUsage.fail(state.usage, outcome)}
   end
 
-  defp via(leg_id) do
-    {:via, Registry, {Vxpipe.Gateway.Telephony.LegRegistry, {:outgoing, leg_id}}}
+  defp via(leg_id, service) do
+    {:via, Registry,
+     {Vxpipe.Gateway.Telephony.LegRegistry, {:outgoing, leg_id}, {:outgoing, service}}}
   end
 end

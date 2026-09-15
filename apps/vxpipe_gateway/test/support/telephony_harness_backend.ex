@@ -12,6 +12,7 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
 
   alias Vxpipe.Gateway.Telephony.{
     IncomingLegActivationResult,
+    ConfiguredService,
     IngressIdentity,
     MediaBinding
   }
@@ -29,6 +30,8 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   end
 
   def backend(agent), do: {__MODULE__, agent}
+
+  def available?(agent), do: Agent.get(agent, & &1.available?)
 
   def operations(agent) do
     Agent.get(agent, &Enum.reverse(&1.operations))
@@ -60,21 +63,21 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   end
 
   @impl true
-  def start_incoming(agent, %TelephonyAdmissionClaim{} = claim) do
+  def start_incoming(agent, %TelephonyAdmissionClaim{} = claim, %ConfiguredService{} = service) do
     runtime_options = operation(agent, {:start_incoming, claim.call.id})
-    CallAdmission.start_incoming(runtime_options, claim)
+    CallAdmission.start_incoming(runtime_options, claim, service)
   end
 
   @impl true
   def activate_incoming(
         agent,
-        %IngressIdentity{} = identity,
+        %ConfiguredService{} = service,
         %TelephonyAdmissionClaim{} = claim,
         %RoomSnapshot{} = room,
         leg
       ) do
     runtime_options = operation(agent, {:activate_incoming, claim.call.id, leg})
-    CallAdmission.activate_incoming(runtime_options, identity, claim, room, leg)
+    CallAdmission.activate_incoming(runtime_options, service, claim, room, leg)
   end
 
   @impl true

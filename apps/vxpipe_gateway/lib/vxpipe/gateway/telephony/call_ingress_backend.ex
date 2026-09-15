@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls.TelephonyAdmissionClaim
-  alias Vxpipe.Gateway.Telephony.IngressIdentity
+  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IngressIdentity}
 
   @type context :: term()
 
@@ -13,12 +13,12 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
               | {:duplicate, TelephonyAdmissionClaim.t()}
               | {:error, term()}
 
-  @callback start_incoming(context(), TelephonyAdmissionClaim.t()) ::
+  @callback start_incoming(context(), TelephonyAdmissionClaim.t(), ConfiguredService.t()) ::
               {:ok, RoomSnapshot.t()} | {:error, term()}
 
   @callback activate_incoming(
               context(),
-              IngressIdentity.t(),
+              ConfiguredService.t(),
               TelephonyAdmissionClaim.t(),
               RoomSnapshot.t(),
               pid()

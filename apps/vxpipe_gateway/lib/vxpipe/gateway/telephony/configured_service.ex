@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
   @moduledoc false
 
   alias Vxpipe.Gateway.Telephony.{ConfiguredServiceProfile, IngressIdentity}
+  alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyServices}
 
   @identifier ~r/\A[A-Za-z0-9][A-Za-z0-9_-]*\z/
   @maximum_identifier_bytes 128
@@ -58,7 +59,8 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
          {:ok, profile} <- ConfiguredServiceProfile.new(options),
          {:ok, outbound_number} <-
            optional_phone_number(Keyword.fetch!(options, :outbound_number)),
-         {:ok, public_base_url} <- public_base_url(Keyword.fetch!(options, :public_base_url)),
+         {:ok, public_base_url} <-
+           normalize_public_base_url(Keyword.fetch!(options, :public_base_url)),
          {:ok, answering_machine_detection} <-
            answering_machine_detection(Keyword.fetch!(options, :answering_machine_detection)),
          {:ok, media_token_ttl_ms} <-
@@ -87,6 +89,44 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
 
   def new(_invalid), do: {:error, :invalid_telephony_service_configuration}
 
+  def from_snapshot(%ResolvedTelephonyService{} = snapshot, public_base_url, adapters \\ %{}) do
+    stored = snapshot.service
+    payload = snapshot.credential.payload
+
+    {provider, authentication} =
+      case stored.provider do
+        "telnyx" ->
+          {:telnyx, [api_key: Map.fetch!(payload, "api_key")]}
+
+        "twilio" ->
+          {:twilio,
+           [
+             account_sid: Map.fetch!(payload, "account_sid"),
+             auth_token: Map.fetch!(payload, "auth_token")
+           ]}
+      end
+
+    options = [
+      id: stored.name,
+      ingress_key: stored.ingress_key,
+      scope: {:tenant, stored.tenant_key},
+      provider: provider,
+      provider_connection_id: if(provider == :telnyx, do: stored.provider_connection_id),
+      public_key: stored.public_key,
+      outbound_number: stored.outbound_number,
+      public_base_url: public_base_url,
+      answering_machine_detection: stored.answering_machine_detection,
+      media_token_ttl_ms: stored.media_token_ttl_ms,
+      webhook_tolerance_seconds: stored.webhook_tolerance_seconds,
+      adapter: Map.get(adapters, provider)
+    ]
+
+    with {:ok, service} <- new(options ++ authentication) do
+      identity = %{service.identity | service_reference: TelephonyServices.reference(stored)}
+      {:ok, %{service | identity: identity}}
+    end
+  end
+
   defp identifier(value) do
     with {:ok, value} <- bounded_string(value, @maximum_identifier_bytes),
          true <- Regex.match?(@identifier, value) do
@@ -99,8 +139,11 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
   defp scope(:application), do: {:ok, :application}
 
   defp scope({:tenant, tenant_key}) do
-    with {:ok, tenant_key} <- identifier(tenant_key) do
+    with {:ok, tenant_key} <- bounded_string(tenant_key, @maximum_identifier_bytes),
+         true <- Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, tenant_key) do
       {:ok, {:tenant, tenant_key}}
+    else
+      _invalid -> :error
     end
   end
 
@@ -120,7 +163,8 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
 
   defp optional_phone_number(_invalid), do: :error
 
-  defp public_base_url(value) do
+  @doc false
+  def normalize_public_base_url(value) do
     with {:ok, value} <- bounded_string(value, @maximum_public_url_bytes),
          %URI{
            scheme: "https",

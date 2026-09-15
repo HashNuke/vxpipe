@@ -224,3 +224,23 @@ if config_env() == :dev do
 
   config :vxpipe_console, Vxpipe.Console.Endpoint, [url: console_url] ++ console_listener
 end
+
+telephony_public_base_url =
+  case nonempty_env.("VXPIPE_TELEPHONY_PUBLIC_BASE_URL") do
+    nil ->
+      nil
+
+    value ->
+      case Vxpipe.Gateway.Telephony.ConfiguredService.normalize_public_base_url(value) do
+        {:ok, origin} -> origin
+        _invalid -> raise "invalid VXPIPE_TELEPHONY_PUBLIC_BASE_URL configuration"
+      end
+  end
+
+config :vxpipe_gateway, Vxpipe.Gateway.Application,
+  http: [
+    telephony: [
+      enabled: not is_nil(telephony_public_base_url),
+      public_base_url: telephony_public_base_url
+    ]
+  ]

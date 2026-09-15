@@ -3,7 +3,7 @@
 Status: trusted Telnyx/Twilio registration, the operator CLI, private credential resolution,
 canonical prepared-plan bindings, tenant-scoped incoming claims and definition
 save/publish/web/incoming write guards are implemented. Twilio media authentication retains
-the initialized leg configuration. Gateway's initial DB-backed service readers remain pending in
+the initialized leg configuration. Gateway now resolves new Telnyx/Twilio legs from tenant storage in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
 and [checkpoint 4](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
 
@@ -89,7 +89,7 @@ command, then use the same service registration command with this metadata:
 Run the new service-schema migration before registration. It permits Twilio's absent public key
 while preserving Telnyx's requirement. Existing Telnyx rows are unchanged. Rolling that migration
 back requires removing or otherwise resolving Twilio rows first; it cannot restore `NOT NULL`
-while they exist. Gateway's live credential readers remain pending.
+while they exist.
 
 These are trusted host operations, not tenant-facing management APIs. Registration locks the
 matching credential row, verifies active status and decryption using the existing credential
@@ -98,9 +98,9 @@ returns an error without replacing a binding. There is no update/rebind operatio
 
 `fetch` and `fetch_by_ingress` return metadata without reading or decrypting credential payloads. They can therefore
 inspect a registered binding when an encryption key is unavailable. Lookup success does not
-authorize a provider request or authenticate a webhook. The following live-reader slice must
-resolve current private authentication and check the exact pinned service/account at those
-boundaries. The ingress key is a locator, not authentication.
+authorize a provider request or authenticate a webhook. The live reader resolves current private
+authentication and checks the exact pinned service/account at those boundaries. The ingress key
+is a locator, not authentication.
 
 ## Private resolution and definition checks
 
@@ -131,8 +131,8 @@ claim in a credential transaction would leave that query inside an aborted trans
 the guard in the existing insertion transaction preserves recovery. All participating credential
 repositories must use the same Repo/dynamic transaction context as the call store.
 
-This check authorizes the database write. Fresh live-leg resolution and activation enforcement
-remain pending. These guards alone do not complete the carrier reader cutover.
+This check authorizes the database write. Fresh live-leg construction and hosted startup also
+check the pinned references, as described below.
 
 ## Incoming identity and duplicate lookup
 
@@ -159,8 +159,8 @@ new uniqueness rules. New admission changesets require the UUID. Rolling back th
 requires resolving any cross-tenant or cross-service IDs that conflict with the old global
 indexes first; the migration never deletes calls to make rollback succeed.
 
-Gateway's live registry and authenticated ingress still need the tenant/service reader cutover.
-This durable identity boundary does not add new carrier workflows or authentication modes.
+Gateway's live registry also includes tenant and canonical service identity. This boundary adds
+no new carrier workflows or authentication modes.
 
 ## Prepared service references
 
@@ -180,8 +180,9 @@ Public connection JSON still accepts only the existing intent fields; callers ca
 canonical pins. Raw embedded Engine compilation remains independent of the host's database and
 leaves the optional reference empty. Historical serialized plans lacking the field remain
 decodable for inspection without silently inserting a new binding. The new write guard rejects
-such unbound phone plans. Live activation and outbound-request enforcement of these references
-remain the next reader slice; this change alone does not reject every old hosted plan at startup.
+such unbound phone plans. Hosted startup rejects unbound or stale phone references, including
+later destinations in a web-entry plan. Outbound requests carry the complete reference and
+resolve it freshly before a leg or provider request is created.
 
 Cold-process verification exposed an existing safe-decoding dependency on previously loaded plan
 atoms. The codec now asks the Engine plan type to load its fixed data and enum owners before
@@ -195,6 +196,34 @@ Keeping only an alias would permit account changes after preparation. Storing pr
 would leak credentials into immutable history, and pinning encryption-key IDs would couple calls
 to platform re-encryption. Stable non-secret identity avoids those problems while leaving fresh
 credential resolution at the owning live-reader boundary.
+
+## Live readers and platform callback origin
+
+Set optional `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` to the public HTTPS origin and mounted path,
+for example `https://voice.example.test/voice`. Setting it enables the existing telephony routes;
+the existing Console/Gateway listener still serves them. Use the externally visible URL because
+Twilio signatures include the exact URL. The setting rejects userinfo, query strings, fragments
+and non-HTTPS URLs. It contains no provider credentials. `env.sample` documents it.
+
+New incoming legs resolve the stored ingress binding, then its exact tenant service and encrypted
+credential. The reader compares the canonical reference and ingress across both reads. Outbound
+legs resolve the prepared participant's reference before starting. Lookup time consumes the
+existing connection deadline. Missing, inactive, unreadable or changed bindings fail before dial.
+
+The incoming HTTP boundary passes the verified private configuration to the same leg and its
+activation. It does not reread credentials between verification and answer. Existing incoming and
+outgoing owners retain this configuration in private, owner-bound registry entries, available even
+while admission or dial is busy. Registry ownership retires those entries with the leg.
+
+A webhook's untrusted account/leg identifiers may only locate an existing owner. The normal
+raw-body/signature/timestamp/account checks still authenticate the request. Dispatch uses that
+same PID; retirement cannot redirect an authenticated event to a replacement. Existing-owner
+signature failure never retries with DB credentials. Callbacks, media authentication and cleanup
+continue with initialized credentials during storage loss. New legs require fresh resolution.
+
+Embedding uses the Calls repository port plus `public_base_url`; the removed `services:` option
+is rejected with a sanitized configuration error. Gateway owns carrier protocols, while Persistence
+owns database and encryption access. No Repo dependency is added to Gateway.
 
 ## Initialized Twilio media authentication
 
@@ -216,8 +245,8 @@ reservation also cannot later deliver a Twilio binding to an unsigned waiting co
 revoked and replaced tokens cannot select a later leg. Loss of the admission process during lookup
 or consumption returns a sanitized 503 response.
 
-This removes the WSS registry credential reader, but initial leg construction still needs its
-DB-backed reader cutover. It adds no credential refresh protocol, provider or authentication mode.
+Initial leg construction supplies this configuration from the tenant DB reader. This adds no
+credential refresh protocol, provider or authentication mode.
 The existing admission entry owns this state; a separate authentication lease would duplicate
 its token, expiry and leg lifecycle.
 
@@ -232,7 +261,7 @@ pending authorization, conflicting registry settings and admission-process loss.
 - Storing secrets in services would duplicate encrypted credential ownership and expose them to
   metadata readers. Services contain no private payload.
 - Reusing global carrier configuration would retain the source this milestone must remove.
-  Live-reader removal is still pending; this storage work alone does not claim carrier cutover.
+  The live registry no longer accepts static credential lists or application-scope fallback.
 - A new carrier policy or authentication-lease subsystem is unnecessary. Retain existing options
   and leg/reservation ownership when migrating the readers.
 
@@ -250,3 +279,7 @@ The [incoming-guard evidence](../labnotes/20260916-0249-guard-incoming-credentia
 four focused database tests and two tagged real-connection checks. They cover post-compile service
 rebinding, revoked/unreadable carrier credentials, revoked model credentials, lock lifetime through
 commit, and concurrent duplicate recovery after a losing insertion rolls back.
+
+The [carrier-reader evidence](../labnotes/20260916-0424-migrate-carrier-readers.md) records
+the final live cutover, two-tenant encoded REST requests, real encrypted DB-to-HTTP signature
+checks, retained callbacks during storage outage, owner retirement and hosted startup guards.

@@ -32,6 +32,9 @@ under the [approved scope correction](credential-cutover-scope.md).
 | Private briefing TTS | `HumanDestinationPreparer` → transfer `Runtime.source_text_to_speech` → `PlanStartup.participant_text_to_speech` | Fresh named source binding before new transport/dial; missing binding preserves the existing source client. |
 | Source TTS replacement | `RoomTransferSupervisor.recover` → transfer `Runtime.source_text_to_speech` | Fresh lookup within the existing 750 ms budget; unavailable binding starts no transport and enters existing terminal failure handling. |
 | Hosted persistence bridge | Calls `ProviderCredentialSource` → `DefinitionCredentials` → encrypted repository | Tenant/provider/name/status/auth validation; persistence tests verify DB reads and safe errors. |
+| New incoming carrier leg | Stored ingress → `TelephonyServices.resolve` → private `ConfiguredService` → verification and activation | Telnyx/Twilio encrypted DB-to-HTTP and two-tenant signature checks. |
+| New outbound carrier leg | Pinned `ServiceReference` → `ServiceRegistry.fetch_for_tenant` → existing connector/adapter | Exact tenant REST auth, missing/revoked source and deadline checks. |
+| Existing carrier callbacks/media/cleanup | Initialized leg/admission configuration | Storage-outage callbacks, retained Twilio WSS auth and exact-owner retirement checks. |
 | Raw embedded `CreateRoom` | Empty rooms and deterministic text only | Retired global model selector and automatic TTS/STT construction removed. Hosted capabilities use inline plans; fixture/Morse selections remain credential-free. |
 
 ## Raw-room cutover
@@ -64,8 +67,8 @@ supplied test key to its test tenant through a credential source; it requires se
 
 Destination boundary coverage now includes missing, other-tenant-only and inactive model/TTS/STT
 bindings before definition writes, plus named destination isolation and whole-selection overrides.
-Carrier readers and remaining supported provider adapters stay in their own checkpoints. The
-milestone ledger records checkpoint completion and umbrella gate results.
+Carrier readers and the existing Zenmux adapter are also migrated. The milestone ledger records
+checkpoint completion and umbrella gate results; final platform configuration remains separate.
 
 ## Verification
 
@@ -87,3 +90,6 @@ instead produce existing safe failure/history, start no destination provider req
 the source able to respond. Plans, cache identity and public projections exclude secret payloads.
 Focused results and independent review are recorded in the
 [destination labnotes](../labnotes/20260915-2250-destination-credential-boundaries.md).
+
+Carrier ownership, removed static options and exact public-origin behavior are documented in
+[tenant telephony services](tenant-telephony-services.md#live-readers-and-platform-callback-origin).

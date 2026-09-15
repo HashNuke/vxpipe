@@ -10,7 +10,6 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
   }
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
-  alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.TestTelephonySocket
 
   alias Vxpipe.Gateway.Telephony.{
@@ -127,19 +126,25 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       )
 
     endpoint =
-      Endpoint.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
         telephony: [
           enabled: true,
           clock: fn -> @received_at end,
           handler: {CallIngress, backend: TelephonyHarnessBackend.backend(backend)},
           media_admission: admission,
-          services: [scenario.service_options]
+          services: [scenario.service_options],
+          service_availability: fn -> TelephonyHarnessBackend.available?(backend) end
         ]
       )
 
     on_exit(fn ->
       stop_room(scenario.plan.tenant_id, scenario.plan.room_id)
-      LegSupervisor.stop(:twilio, "primary-phone", @incoming_call_sid)
+
+      LegSupervisor.stop(
+        Vxpipe.Gateway.TestTelephonyServiceRepository.configured(scenario.service_options).identity,
+        @incoming_call_sid
+      )
+
       LegSupervisor.stop_outgoing(@outgoing_leg_id)
     end)
 
@@ -147,6 +152,8 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       backend: backend,
       endpoint: endpoint,
       plan: scenario.plan,
+      service_identity:
+        Vxpipe.Gateway.TestTelephonyServiceRepository.configured(scenario.service_options).identity,
       service_options: scenario.service_options
     }
   end
@@ -263,11 +270,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       assert post_voice(context).status == 200
       assert_receive {:test_twilio_answer, _answer}, 2_000
 
-      [{leg, _}] =
-        Registry.lookup(
-          Vxpipe.Gateway.Telephony.LegRegistry,
-          {:twilio, "primary-phone", @incoming_call_sid}
-        )
+      assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, @incoming_call_sid)
 
       monitor = Process.monitor(leg)
       assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}

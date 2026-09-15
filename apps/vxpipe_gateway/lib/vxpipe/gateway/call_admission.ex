@@ -6,11 +6,19 @@ defmodule Vxpipe.Gateway.CallAdmission do
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.{AdmissionClaim, PreparedCall, TelephonyAdmissionClaim}
+
+  alias Vxpipe.Calls.{
+    AdmissionClaim,
+    PreparedCall,
+    TelephonyAdmissionClaim,
+    TelephonyPlanBindings
+  }
+
   alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
 
   alias Vxpipe.Gateway.Telephony.{
     CallIngressBackend,
+    ConfiguredService,
     IncomingLegActivation,
     IncomingLegActivationResult,
     IngressIdentity,
@@ -101,21 +109,23 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
-  def start_incoming(options, %TelephonyAdmissionClaim{} = claim) do
-    CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options))
+  def start_incoming(options, %TelephonyAdmissionClaim{} = claim, %ConfiguredService{} = service) do
+    with :ok <- matching_incoming_service(service, claim),
+         :ok <- validate_phone_plan(claim.call.plan, options) do
+      CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options))
+    end
   end
 
   @impl CallIngressBackend
   def activate_incoming(
         options,
-        %IngressIdentity{} = identity,
+        %ConfiguredService{} = service,
         %TelephonyAdmissionClaim{} = claim,
         %RoomSnapshot{} = room,
         leg
       )
       when is_pid(leg) do
-    with {:ok, %ServiceRegistry{} = registry} <- Keyword.fetch(options, :service_registry),
-         {:ok, service} <- ServiceRegistry.fetch(registry, identity.ingress_key),
+    with :ok <- matching_incoming_service(service, claim),
          {:ok, %IncomingLegActivationResult{} = activation} <-
            IncomingLegActivation.activate(
              service,
@@ -189,7 +199,11 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp start_prepared_call(options, claim) do
-    case CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options)) do
+    result =
+      with :ok <- validate_phone_plan(claim.call.plan, options),
+           do: CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options))
+
+    case result do
       {:ok, room} ->
         case CallEngine.participant_snapshot(
                claim.call.tenant_key,
@@ -203,6 +217,34 @@ defmodule Vxpipe.Gateway.CallAdmission do
       {:error, _reason} ->
         {:error, :room_start_failed}
     end
+  end
+
+  defp matching_incoming_service(service, claim) do
+    reference = service.identity.service_reference
+
+    case Map.get(claim.call.plan.participants, claim.participant_ref) do
+      %{telephony_service: ^reference} when not is_nil(reference) ->
+        if TelephonyAdmissionClaim.valid_service?(claim) and
+             service.identity.scope == {:tenant, claim.call.tenant_key} and
+             service.identity.service_id == claim.service and
+             service.identity.provider == claim.provider and
+             service.identity.provider_connection_id == claim.provider_connection_id,
+           do: :ok,
+           else: {:error, :telephony_service_mismatch}
+
+      _unbound ->
+        {:error, :telephony_service_mismatch}
+    end
+  end
+
+  defp validate_phone_plan(plan, options) do
+    repository_options =
+      case Keyword.get(options, :service_registry) do
+        %ServiceRegistry{} = registry -> Keyword.merge(options, registry.repository_options)
+        _missing -> options
+      end
+
+    TelephonyPlanBindings.with_active(plan, repository_options, fn -> :ok end)
   end
 
   defp join_running_participant(%PreparedCall{} = call, participant) do

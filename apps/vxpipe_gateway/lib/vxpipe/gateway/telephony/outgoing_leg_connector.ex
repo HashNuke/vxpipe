@@ -19,12 +19,22 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   @impl true
   def connect(options, %OutboundLegRequest{} = request, timeout)
       when is_list(options) and is_integer(timeout) and timeout > 0 do
+    clock = Keyword.get(options, :monotonic_clock, fn -> System.monotonic_time(:millisecond) end)
+    deadline = clock.() + timeout
+
     with {:ok, registry} <- service_registry(options),
          {:ok, service} <-
-           ServiceRegistry.fetch_for_tenant(registry, request.service_id, request.tenant_id),
+           ServiceRegistry.fetch_for_tenant(
+             registry,
+             request.service_id,
+             request.tenant_id,
+             request.service_reference
+           ),
+         true <- clock.() < deadline,
          {:ok, leg_id} <- generate_leg_id(options) do
-      start_leg(options, request, service, leg_id, timeout)
+      start_leg(options, request, service, leg_id, deadline, clock)
     else
+      false -> {:error, :outbound_connection_unavailable}
       {:error, _reason} -> {:error, :outbound_connection_unavailable}
     end
   catch
@@ -61,10 +71,14 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
     end
   end
 
-  defp start_leg(options, request, service, leg_id, timeout) do
+  defp start_leg(options, request, service, leg_id, deadline, clock) do
     supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
     media_admission = Keyword.get(options, :media_admission, MediaAdmission)
-    runtime_options = Keyword.take(options, [:media_supervisor, :usage_clock, :usage_reporter])
+
+    runtime_options =
+      options
+      |> Keyword.take([:media_supervisor, :usage_clock, :usage_reporter])
+      |> Keyword.merge(deadline_ms: deadline, monotonic_clock: clock)
 
     case LegSupervisor.start_outgoing(
            supervisor,
@@ -74,9 +88,14 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
            media_admission,
            runtime_options
          ) do
-      {:ok, leg} -> await_leg(supervisor, leg, leg_id, timeout)
+      {:ok, leg} -> await_leg(supervisor, leg, leg_id, max(deadline - clock.(), 0))
       {:error, _reason} -> {:error, :outbound_connection_unavailable}
     end
+  end
+
+  defp await_leg(supervisor, leg, _leg_id, 0) do
+    _ = DynamicSupervisor.terminate_child(supervisor, leg)
+    {:error, :outbound_connection_unavailable}
   end
 
   defp await_leg(supervisor, leg, leg_id, timeout) do

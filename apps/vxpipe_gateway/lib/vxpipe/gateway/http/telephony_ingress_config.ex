@@ -14,9 +14,11 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
   @spec init(keyword()) :: map()
   def init(options) do
     options =
-      Keyword.validate!(options,
+      validate_options!(options,
         enabled: false,
-        services: [],
+        public_base_url: nil,
+        telephony_service_repository: nil,
+        adapters: %{},
         handler: {CallIngress, []},
         media_admission: MediaAdmission,
         clock: &__MODULE__.system_time_seconds/0,
@@ -26,7 +28,9 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
     registry =
       ServiceRegistry.init!(
         enabled: Keyword.fetch!(options, :enabled),
-        services: Keyword.fetch!(options, :services)
+        public_base_url: Keyword.fetch!(options, :public_base_url),
+        telephony_service_repository: Keyword.fetch!(options, :telephony_service_repository),
+        adapters: Keyword.fetch!(options, :adapters)
       )
 
     handler =
@@ -77,4 +81,11 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
 
   defp maximum_body_bytes!(_invalid),
     do: raise(ArgumentError, "telephony maximum_body_bytes must be a positive integer")
+
+  defp validate_options!(options, allowed) do
+    case Keyword.validate(options, allowed) do
+      {:ok, options} -> options
+      {:error, _keys} -> raise ArgumentError, "invalid telephony configuration"
+    end
+  end
 end

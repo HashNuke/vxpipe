@@ -2,12 +2,11 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyRuntimeTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Gateway.CallAdmission
-  alias Vxpipe.Gateway.HTTP.Router
   alias Vxpipe.Gateway.Telephony.{MediaAdmission, OutgoingLegConnector, ServiceRegistry}
 
   test "mounting configured telephony gives the default call backend an outbound connector" do
     options =
-      Router.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.router(
         call_admission: [enabled: true],
         telephony: [
           enabled: true,
@@ -34,7 +33,7 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyRuntimeTest do
     [
       id: "telnyx-primary",
       ingress_key: "outbound_ingress",
-      scope: :application,
+      scope: {:tenant, "AAAAAAAAAAAAAAAA"},
       provider: :telnyx,
       provider_connection_id: "voice-application-1",
       public_key: Base.encode64(:binary.copy(<<1>>, 32)),

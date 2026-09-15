@@ -44,7 +44,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   end
 
   @impl true
-  def start_incoming(agent, claim) do
+  def start_incoming(agent, claim, _service) do
     operation(agent, {:start_incoming, claim.call.id})
 
     if Agent.get(agent, & &1.start_failure?) do

@@ -396,39 +396,37 @@ Depends on the credential store and existing Telnyx integration.
   configuration. Bind tenant, provider, account/connection, ingress key and credential reference.
   Validate ownership and unique ingress keys; keep public callback/media origins platform-owned.
   Trusted OTP/CLI registration and metadata lookup are implemented; see [service storage](../tenant-telephony-services.md).
-  Live credential readers remain pending.
   - [x] Provision named Telnyx API keys through the encrypted tenant store and protected-input
     operator CLI; verify tenant isolation, metadata-only output and invalid-payload rejection.
-- [ ] Resolve matching tenant service credentials during definition save/publish/prepare and
+- [x] Resolve matching tenant service credentials during definition save/publish/prepare and
   existing leg construction. Pin safe service identity so an old plan cannot change accounts.
   - [x] Resolve the exact active service credential privately; check every phone destination at
     save/publish/web preparation and hold the binding through the final database write. Incoming
-    preparation initially shared preflight; its final insert guard is now complete below. Live leg
-    construction remains pending. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+    preparation initially shared preflight; its final insert guard and live construction are now complete. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
   - [x] Pin canonical tenant/service/provider/account/credential identity in prepared plans.
     Resolve each alias once per host compile, include the metadata in the existing digest, and
     compare every participant's reference under final web-write locks. Post-compile rebinding
     fails before insertion. Embedded Engine compilation remains independent; historical plans
-    remain inspectable without repinning. Live activation/reference enforcement is still pending.
+    remain inspectable without repinning. Hosted activation and outbound requests enforce these references.
     See [binding evidence](../../labnotes/20260916-0211-pin-tenant-phone-services.md).
   - [x] Recheck credentials and pinned references inside the incoming call/leg insertion
     transaction. Hold locks through commit and preserve duplicate recovery after a failed insert
     transaction. Six focused checks pass, including two tagged real-connection cases.
-    Live readers remain pending; durable incoming identity is recorded below.
+    Durable incoming identity and live readers are also complete.
     See [incoming-guard evidence](../../labnotes/20260916-0249-guard-incoming-credentials.md).
-- [ ] Replace application/global service credential lookup for existing answer, dial, media and
+- [x] Replace application/global service credential lookup for existing answer, dial, media and
   hangup commands. Verify the actual adapter receives only the selected tenant credential.
-- [ ] Resolve webhook verification metadata from the stored ingress binding. Preserve raw-body,
+- [x] Resolve webhook verification metadata from the stored ingress binding. Preserve raw-body,
   signature, timestamp, provider-connection and leg checks before dispatch.
-- [ ] Keep durable and live service/leg lookup tenant-scoped when introducing tenant service
+- [x] Keep durable and live service/leg lookup tenant-scoped when introducing tenant service
   records. Test matching aliases/provider IDs across tenants and persisted duplicate lookup.
   - [x] Carry canonical service identity in incoming claims and stored legs; scope duplicate and
     lifecycle lookup by tenant/service/provider, validate the prepared entry account, and reject
-    ambiguous historical collisions. Live registry and authenticated ingress remain pending.
+    ambiguous historical collisions. Live registry and authenticated ingress now preserve the same scope.
     See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
-- [ ] Test missing/wrong-tenant/inactive credentials and credential-source failure: no new request,
+- [x] Test missing/wrong-tenant/inactive credentials and credential-source failure: no new request,
   admission or dial and no global fallback. Preserve initialized configuration for existing legs.
-- [ ] Update provisioning/configuration documentation. Reuse targeted command/webhook tests;
+- [x] Update provisioning/configuration documentation. Reuse targeted command/webhook tests;
   complete dialing, briefing, press-1, bridging and live audibility scenarios belong to the
   existing Telnyx milestone.
 
@@ -441,11 +439,10 @@ Depends on the common tenant service boundary from checkpoint 3 and the existing
 
 - [x] Add validated Twilio account SID/auth-token provisioning to the common service workflow.
   Reject wrong-provider, mixed auth fields and account/service mismatch. Protected-input CLI
-  provisioning, encrypted storage and trusted service registration are implemented; live readers
-  remain pending. See [storage evidence](../../labnotes/20260916-0315-provision-twilio-credentials.md).
-- [ ] Migrate voice/status webhook and REST dial/hangup credential reads to the tenant records.
+  provisioning, encrypted storage, trusted service registration and live readers are implemented. See [storage evidence](../../labnotes/20260916-0315-provision-twilio-credentials.md).
+- [x] Migrate voice/status webhook and REST dial/hangup credential reads to the tenant records.
   Preserve the configured public signature URL and account/call/stream identity checks.
-- [ ] Migrate WSS media authentication. Locate the existing leg/reservation's private configuration
+- [x] Migrate WSS media authentication. Locate the existing leg/reservation's private configuration
   without consuming its token or installing a waiter before signature verification. Keep pending
   outbound reservations and exact token/binding consumption working with the selected tenant auth;
   extend existing leg/admission records instead of adding a separate authentication-lease subsystem.
@@ -453,11 +450,11 @@ Depends on the common tenant service boundary from checkpoint 3 and the existing
     The WSS registry reader is removed; generic token consumption cannot bypass Twilio verification.
     All 39 focused media/admission/activation/outgoing checks pass, including two tenants and process
     loss. Independent review found no blocker. See [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md).
-  - [ ] Supply that initialized configuration from the new DB-backed leg readers.
-- [ ] Test the actual signature and command boundaries with two tenants, missing/inactive bindings,
+  - [x] Supply that initialized configuration from the new DB-backed leg readers.
+- [x] Test the actual signature and command boundaries with two tenants, missing/inactive bindings,
   wrong tokens/accounts and unavailable credential storage. Failed authentication consumes no token;
   no request uses application/global credentials.
-- [ ] Verify tenant scope in durable/live duplicate lookup and preserve initialized configuration
+- [x] Verify tenant scope in durable/live duplicate lookup and preserve initialized configuration
   for existing legs. Reuse focused carrier tests and update setup documentation.
 
 Exit: existing Twilio command, webhook and media-authentication readers use tenant DB credentials.
@@ -673,7 +670,7 @@ scope, independent review, root/isolated test evidence and rendered homepage che
 
 ## Evidence ledger
 
-Current progress: **4 of 7 complete** (checkpoints 1, 2, 5 and 6) and **3 partial** (checkpoints 3, 4 and 7).
+Current progress: **6 of 7 complete** (checkpoints 1–6); **checkpoint 7 is partial**.
 Implementation boxes stay unchecked until their runnable
 exits and failure cases pass.
 
@@ -681,8 +678,8 @@ exits and failure cases pass.
 | --- | --- | --- |
 | 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
 | 2 — AI/speech credential readers | Implemented and verified | Opening, connection, briefing and source-restoration readers use fresh tenant resolution; legacy global readers are removed. Destination save validation covers missing/wrong-tenant/inactive model/TTS/STT bindings before writes; the Persistence group passes 18 tests (2 excluded). Named tenant isolation, whole-selection overrides and fresh construction pass 15 Engine tests. Three tagged local DB activation tests verify current Google/Deepgram authentication and safe failure before requests. Independent GPT 6 Astra xhigh review found no blockers. All five root gates pass: 1,532 tests, zero failures, 33 excluded (seed 235296). A native test assertion found in the initial run was corrected in a separate reviewed commit; its focused case and the full Gateway suite pass. Live provider checks remain excluded. See the [reader inventory](../credential-reader-boundaries.md), [destination evidence](../../labnotes/20260915-2250-destination-credential-boundaries.md), [native assertion correction](../../labnotes/20260915-2317-native-readiness-assertion.md), [global-reader evidence](../../labnotes/20260915-2223-remove-global-readers.md), [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md) and [source-reader evidence](../../labnotes/20260915-2203-audit-credential-readers.md). |
-| 3 — Telnyx credential readers | Encrypted provisioning and trusted service storage verified; live readers pending | Named Telnyx keys use the existing encrypted store and protected-input CLI with the existing carrier key-size limit. Focused red/green: 14 tests, zero failures after the change. Calls 81 and Persistence 89 tests pass (6 excluded); format, compile and strict Credo pass. Independent GPT 6 Astra xhigh review found no code blocker; a transitional documentation claim was corrected. All five root gates pass for provisioning: 1,534 tests, zero failures, 33 excluded (seed 235296). Trusted service registration/lookup adds 8 passing focused checks, with Calls 81 and Persistence 95 tests passing (6 excluded). The operator CLI adds 3 passing focused tests; all 98 Persistence tests pass (6 excluded). Static root gates and independent review pass. Full root run: 1,543 tests, one native WebRTC Morse-decoding failure, 33 excluded; the unchanged isolated case reproduces. Live readers and full umbrella acceptance remain pending. See [service evidence](../../labnotes/20260916-0000-tenant-telephony-services.md). See [service storage](../tenant-telephony-services.md) and [Telnyx provisioning evidence](../../labnotes/20260915-2341-telnyx-credential-provisioning.md). |
-| 4 — Twilio credential readers | Storage and retained WSS authentication implemented; initial DB-backed readers pending | Existing Account SID/Auth Token validation, encrypted payloads, account/tenant/provider matching and protected CLI output are covered by 18 passing focused checks. WSS authentication now uses private initialized leg/reservation configuration with verification before token consumption; 39 focused checks pass and independent review found no blocker. Initial DB-backed construction and webhook/REST readers remain pending. See [storage evidence](../../labnotes/20260916-0315-provision-twilio-credentials.md) and [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md). |
+| 3 — Telnyx credential readers | Implemented; reader exit verified | Encrypted provisioning, canonical durable/live identity, final write guards and fresh Gateway readers are complete. Two-tenant encoded REST and real encrypted DB-to-HTTP signature checks pass. Existing signed outage callbacks, cleanup, retired-owner dispatch and fresh-credential failures pass. Independent GPT 6 Astra xhigh review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [service storage](../tenant-telephony-services.md). Full umbrella acceptance remains open. |
+| 4 — Twilio credential readers | Implemented; reader exit verified | Existing encrypted SID/Auth Token records now supply REST, voice/status and initialized WSS authentication. The same two-tenant source/signature, outage, owner and failure checks cover Twilio; prior media checks verify authentication before token consumption and safe process loss. Independent review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md). Full umbrella acceptance remains open. |
 | 5 — Existing provider credential integrations | Implemented; credential-reader exit verified | Named API-key provisioning, inline model/options translation, tenant startup resolution and native routing use the existing adapters. Agent Runtime 5, Engine constructor 5 and Persistence focused 33 tests pass (2 excluded). Independent GPT 6 Astra xhigh review found no production blocker; its application-auth fixture correction is verified by the 95-test Agent Runtime suite (4 excluded). Calls 81 and Persistence 99 tests pass (6 excluded). All static gates and unused-lock checks pass. The full root run completed 1,547 tests with one previously reproduced native Morse failure and 33 exclusions; common milestone acceptance remains open. Independent gate review confirms the focused checkpoint exit is satisfied. No new provider or auth-mode support is added. See the [inventory](../existing-provider-credentials.md) and [Zenmux evidence](../../labnotes/20260916-0033-zenmux-tenant-credentials.md). |
 | 6 — Platform encryption-key rotation | Implemented and verified | Six database tests, three tagged real-connection checks and three operator CLI tests pass. Batches preserve exact tenant credentials, identity and revoked status, skip busy rows with truthful remaining counts, and roll back on corruption or interruption. Concurrent new-key insertion and status updates survive interrupted/skipped batches. Disposable fresh VMs verify mixed-key reads, resumed batches, retirement of the old key and safe missing/wrong-key rejection. Persistence 115 tests pass (9 excluded); independent review and static/unused-lock gates pass. Full root run: 1,564 tests, one previously reproduced native Morse-audio failure, 36 excluded; common umbrella acceptance remains open. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md). |
 | 7 — Platform configuration and cleanup | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
@@ -729,6 +726,13 @@ root gates pass. The full root run after the fixture correction completes 1,588 
 one native five-participant WebRTC timeout and 38 exclusions. Gateway live identity/readers
 and common acceptance remain pending.
 See [identity evidence](../../labnotes/20260916-0312-scope-telephony-admissions.md).
+
+Checkpoints 3/4 live-reader completion: static credential lists and application fallback are removed.
+The 62-test combined reader/HTTP/owner group passes, as do 26 existing signed carrier outage
+checks, the 46-test carrier/activation group and the tagged encrypted DB-to-HTTP composition check.
+The final corrected outgoing group passes 16 tests. Public-origin configuration passes 5 tests;
+Engine request propagation passes 4 tests. Independent review accepts the bounded reader exits.
+The final common umbrella run remains separate from these focused checkpoint exits.
 
 ## Specification review
 

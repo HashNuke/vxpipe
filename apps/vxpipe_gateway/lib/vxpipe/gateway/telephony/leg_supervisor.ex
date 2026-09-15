@@ -20,14 +20,14 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
   @impl true
   def init(:ok), do: DynamicSupervisor.init(strategy: :one_for_one)
 
-  @spec start(module(), IngressIdentity.t(), Event.t(), {module(), term()}, function()) ::
+  @spec start(module(), ConfiguredService.t(), Event.t(), {module(), term()}, function()) ::
           {:ok, pid()} | {:error, term()}
-  def start(supervisor \\ __MODULE__, identity, event, backend, clock) do
-    options = [identity: identity, event: event, backend: backend, clock: clock]
+  def start(supervisor \\ __MODULE__, service, event, backend, clock) do
+    options = [service: service, event: event, backend: backend, clock: clock]
 
     case DynamicSupervisor.start_child(supervisor, {Leg, options}) do
       {:ok, leg} -> {:ok, leg}
-      {:error, {:already_started, leg}} -> {:ok, leg}
+      {:error, {:already_started, leg}} -> existing_owner(leg, service)
       {:error, reason} -> {:error, reason}
     end
   end
@@ -67,6 +67,11 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
       request: request,
       service: service,
       media_admission: media_admission,
+      deadline_ms: Keyword.get(runtime_options, :deadline_ms),
+      monotonic_clock:
+        Keyword.get(runtime_options, :monotonic_clock, fn ->
+          System.monotonic_time(:millisecond)
+        end),
       media_supervisor: Keyword.get(runtime_options, :media_supervisor, MediaSupervisor),
       usage_clock:
         Keyword.get(runtime_options, :usage_clock, fn -> DateTime.utc_now(:millisecond) end),
@@ -75,14 +80,14 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
 
     case DynamicSupervisor.start_child(supervisor, {OutgoingLeg, options}) do
       {:ok, leg} -> {:ok, leg}
-      {:error, {:already_started, leg}} -> {:ok, leg}
+      {:error, {:already_started, leg}} -> existing_owner(leg, service)
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec lookup(atom(), String.t(), String.t()) :: {:ok, pid()} | {:error, :leg_not_found}
-  def lookup(provider, service, provider_call_leg_id) do
-    case lookup_entry(provider, service, provider_call_leg_id) do
+  @spec lookup(IngressIdentity.t(), String.t()) :: {:ok, pid()} | {:error, :leg_not_found}
+  def lookup(identity, provider_call_leg_id) do
+    case lookup_entry(identity, provider_call_leg_id) do
       {:ok, leg, _kind} -> {:ok, leg}
       {:error, :leg_not_found} = error -> error
     end
@@ -96,24 +101,23 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
     end
   end
 
-  @spec dispatch(String.t(), Event.t(), timeout()) :: :ok | {:error, term()}
-  def dispatch(_service, %Event{kind: :outgoing} = event, timeout) do
+  @spec dispatch(IngressIdentity.t(), Event.t(), timeout()) :: :ok | {:error, term()}
+  def dispatch(identity, %Event{kind: :outgoing} = event, timeout) do
     with {:ok, leg} <- lookup_outgoing(event.leg_id) do
-      OutgoingLeg.dispatch(leg, event, timeout)
+      dispatch_owner({:outgoing, leg}, identity, event, timeout)
     end
   end
 
-  def dispatch(service, %Event{} = event, timeout) do
-    case lookup_entry(event.provider, service, event.provider_call_leg_id) do
-      {:ok, leg, :outgoing} -> OutgoingLeg.dispatch(leg, event, timeout)
-      {:ok, leg, _incoming} -> Leg.dispatch(leg, event, timeout)
-      {:error, :leg_not_found} -> dispatch_unbound_outgoing(event, timeout)
+  def dispatch(identity, %Event{} = event, timeout) do
+    case lookup_entry(identity, event.provider_call_leg_id) do
+      {:ok, leg, kind} -> dispatch_owner({kind, leg}, identity, event, timeout)
+      {:error, :leg_not_found} -> dispatch_unbound_outgoing(identity, event, timeout)
     end
   end
 
-  @spec stop(atom(), String.t(), String.t()) :: :ok
-  def stop(provider, service, provider_call_leg_id) do
-    case lookup(provider, service, provider_call_leg_id) do
+  @spec stop(IngressIdentity.t(), String.t()) :: :ok
+  def stop(identity, provider_call_leg_id) do
+    case lookup(identity, provider_call_leg_id) do
       {:ok, leg} ->
         _result = DynamicSupervisor.terminate_child(__MODULE__, leg)
         :ok
@@ -135,23 +139,50 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
     end
   end
 
-  defp lookup_entry(provider, service, provider_call_leg_id) do
-    case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, {
-           provider,
-           service,
-           provider_call_leg_id
-         }) do
-      [{leg, kind}] -> {:ok, leg, kind}
+  defp lookup_entry(identity, provider_call_leg_id) do
+    case Registry.lookup(
+           Vxpipe.Gateway.Telephony.LegRegistry,
+           IngressIdentity.leg_key(identity, provider_call_leg_id)
+         ) do
+      [{leg, {kind, _service}}] -> {:ok, leg, kind}
       [] -> {:error, :leg_not_found}
     end
   end
 
-  defp dispatch_unbound_outgoing(%Event{leg_id: leg_id} = event, timeout)
+  defp dispatch_unbound_outgoing(identity, %Event{leg_id: leg_id} = event, timeout)
        when is_binary(leg_id) do
     with {:ok, leg} <- lookup_outgoing(leg_id) do
-      OutgoingLeg.dispatch(leg, event, timeout)
+      dispatch_owner({:outgoing, leg}, identity, event, timeout)
     end
   end
 
-  defp dispatch_unbound_outgoing(%Event{}, _timeout), do: {:error, :leg_not_found}
+  defp dispatch_unbound_outgoing(_identity, %Event{}, _timeout), do: {:error, :leg_not_found}
+
+  def dispatch_owner({kind, leg}, identity, event, timeout) do
+    if owner_matches?(leg, &(&1.identity == identity)) do
+      case kind do
+        :incoming -> Leg.dispatch(leg, event, timeout)
+        :outgoing -> OutgoingLeg.dispatch(leg, event, timeout)
+      end
+    else
+      {:error, :telephony_leg_mismatch}
+    end
+  end
+
+  defp existing_owner(leg, service) do
+    if owner_matches?(leg, &(&1 == service)),
+      do: {:ok, leg},
+      else: {:error, :telephony_leg_mismatch}
+  end
+
+  defp owner_matches?(leg, matches?) do
+    Vxpipe.Gateway.Telephony.LegRegistry
+    |> Registry.keys(leg)
+    |> Enum.any?(fn key ->
+      case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, key) do
+        [{^leg, {_kind, %ConfiguredService{} = service}}] -> matches?.(service)
+        _missing -> false
+      end
+    end)
+  end
 end

@@ -5,7 +5,8 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   @development Path.expand("../../../../../config/dev.exs", __DIR__)
   @variables ~w(VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID
     VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_DEV_SPEECH_PROFILE
-    VXPIPE_DEV_MODEL_FIXTURE VXPIPE_DEV_TENANT DEEPGRAM_API_KEY GEMINI_API_KEY APP_HOST PORT VXPIPE_DEV_TLS)
+    VXPIPE_DEV_MODEL_FIXTURE VXPIPE_DEV_TENANT DEEPGRAM_API_KEY GEMINI_API_KEY APP_HOST PORT VXPIPE_DEV_TLS
+    VXPIPE_TELEPHONY_PUBLIC_BASE_URL)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -70,6 +71,39 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
     assert Keyword.fetch!(sample, :enabled)
     assert Keyword.fetch!(sample, :tenant_key) == "BBBBBBBBBBBBBBBB"
     refute Keyword.has_key?(sample, :tenant_name)
+  end
+
+  test "platform callback origin enables tenant telephony without static credentials" do
+    System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "https://voice.example.test/voice/")
+    configuration = Config.Reader.read!(@runtime, env: :dev)
+
+    http =
+      configuration
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+      |> Keyword.fetch!(:http)
+
+    assert Keyword.fetch!(http, :telephony) == [
+             enabled: true,
+             public_base_url: "https://voice.example.test/voice"
+           ]
+
+    System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "   ")
+    configuration = Config.Reader.read!(@runtime, env: :dev)
+
+    http =
+      configuration
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+      |> Keyword.fetch!(:http)
+
+    assert Keyword.fetch!(http, :telephony) == [enabled: false, public_base_url: nil]
+  end
+
+  test "an invalid callback origin fails without echoing embedded credentials" do
+    System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "https://private-value@example.test")
+    error = assert_raise RuntimeError, fn -> Config.Reader.read!(@runtime, env: :dev) end
+    refute Exception.message(error) =~ "private-value"
   end
 
   defp assert_inline_sample(configuration) do

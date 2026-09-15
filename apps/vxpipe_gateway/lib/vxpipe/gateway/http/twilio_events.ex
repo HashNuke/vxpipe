@@ -27,9 +27,9 @@ defmodule Vxpipe.Gateway.HTTP.TwilioEvents do
   def handle_voice(conn, options, ingress_key) do
     endpoint = fn service -> {PublicEndpoint.voice_url(service), %{}} end
 
-    with {:ok, conn, service, %Event{kind: :incoming} = event} <-
+    with {:ok, conn, service, %Event{kind: :incoming} = event, owner} <-
            TwilioWebhookRequest.ingest(conn, options, ingress_key, endpoint),
-         {:ok, media_url} <- IngressHandler.dispatch(options.handler, service.identity, event),
+         {:ok, media_url} <- IngressHandler.dispatch(options.handler, service, event, owner),
          {:ok, twiml} <- TwiML.connect_stream(media_url) do
       conn
       |> put_resp_content_type("application/xml")
@@ -48,9 +48,9 @@ defmodule Vxpipe.Gateway.HTTP.TwilioEvents do
       {PublicEndpoint.event_url(service, leg_id), %{"leg_id" => leg_id}}
     end
 
-    with {:ok, conn, service, %Event{} = event} <-
-           TwilioWebhookRequest.ingest(conn, options, ingress_key, endpoint),
-         result <- IngressHandler.dispatch(options.handler, service.identity, event) do
+    with {:ok, conn, service, %Event{} = event, owner} <-
+           TwilioWebhookRequest.ingest(conn, options, ingress_key, endpoint, leg_id),
+         result <- IngressHandler.dispatch(options.handler, service, event, owner) do
       callback_response(conn, result)
     else
       {:ignore, conn} -> send_resp(conn, 200, "ok")

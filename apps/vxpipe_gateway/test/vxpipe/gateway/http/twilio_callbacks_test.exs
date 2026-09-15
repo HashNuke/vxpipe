@@ -29,7 +29,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioCallbacksTest do
     ]
 
     endpoint =
-      Endpoint.init(
+      Vxpipe.Gateway.TestTelephonyServiceRepository.endpoint(
         telephony: [
           enabled: true,
           clock: fn -> @received_at end,
