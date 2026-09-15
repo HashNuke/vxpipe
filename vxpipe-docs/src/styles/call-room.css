@@ -128,7 +128,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) 4.5rem minmax(0, 1.2fr);
   gap: clamp(0.75rem, 2.5vw, 1.25rem);
-  align-items: center;
+  align-items: start;
 }
 
 .crv-participant {
@@ -144,7 +144,7 @@
 
 .crv-participant--caller {
   border-top: 2px solid var(--crv-caller-line);
-  align-self: center;
+  align-self: start;
 }
 
 .crv-p-head {
@@ -261,7 +261,8 @@
 /* Starlight content styles space out list items; the visual sets its own rhythm. */
 .crv .crv-managed-list > li,
 .crv .crv-caps > li,
-.crv .crv-profiles > li {
+.crv .crv-profiles > li,
+.crv .crv-grid > * {
   margin: 0;
 }
 
@@ -269,8 +270,9 @@
 
 .crv-lane {
   position: relative;
-  align-self: stretch;
-  min-height: 8rem;
+  /* Keep the audio path by the card headers, independent of the deck height. */
+  align-self: start;
+  min-height: 4rem;
 }
 
 .crv-lane-track {

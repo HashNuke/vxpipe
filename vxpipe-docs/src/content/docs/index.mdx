@@ -9,8 +9,8 @@ hero:
 
 import {
   Badge,
-  Card,
   CardGrid,
+  Icon,
   LinkButton,
   LinkCard,
   Steps,
@@ -37,24 +37,18 @@ import TwilioLogo from '../../assets/logos/twilio.svg';
 import CallRoomVisual from '../../components/CallRoomVisual';
 import '../../styles/landing.css';
 
-<div className="capability-cloud" aria-label="Platform capabilities">
-  <Badge text="Telephony" />
-  <Badge text="AI Providers" />
-  <Badge text="Multi-Agent Orchestration" />
-  <Badge text="MCP Tools" />
-  <Badge text="Participant Policies" />
-  <Badge text="Compliance Friendly" />
-  <Badge text="Call Variables" />
-  <Badge text="Call Recording" />
-  <Badge text="Call Diagnostics" />
+<div className="trust-cloud" aria-label="Project highlights">
   <Badge text="Apache 2.0" variant="success" />
   <Badge text="Self-hostable" variant="note" />
   <Badge text="Built on Elixir & OTP" variant="tip" />
 </div>
 
 <div className="hero-cta">
-  <LinkButton href="/en/docs/getting-started/" icon="right-arrow">
+  <LinkButton href="#quickstart" icon="right-arrow">
     Get started
+  </LinkButton>
+  <LinkButton href="/en/docs/" variant="secondary" icon="open-book">
+    Documentation
   </LinkButton>
   <LinkButton href="https://github.com/HashNuke/vxpipe" variant="secondary" icon="github">
     View on GitHub
@@ -63,30 +57,64 @@ import '../../styles/landing.css';
 
 <CallRoomVisual />
 
-## Transport and pipeline, together
+## Features
 
-VxPipe gives a voice agent one runtime from the caller's first word to the
-agent's response. Keep the audio path, model loop, tools, and handoffs in one
-place instead of coordinating separate real-time systems.
-
-<CardGrid>
-  <Card title="Meet callers anywhere" icon="phone">
-    Serve conversations in the browser or over the phone through a shared call
-    engine.
-  </Card>
-  <Card title="Compose the full agent loop" icon="random">
-    Connect streaming speech, model inference, tools, and audio output with
-    clear, replaceable provider boundaries.
-  </Card>
-  <Card title="Keep control of the runtime" icon="server">
-    Run VxPipe on your infrastructure and choose the services that fit your
-    product.
-  </Card>
-  <Card title="Bring in the right person" icon="comment">
-    Build transfers and human handoff into the same conversation flow as your
-    agents.
-  </Card>
-</CardGrid>
+<div className="features">
+  <CardGrid>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="phone" class="feature-card-icon" /><h3>Telephony</h3></div>
+      <p>Connect to and configure telephony providers for calls.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="window" class="feature-card-icon" /><h3>WebRTC</h3></div>
+      <p>Setup calls via web, without telephony.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="rocket" class="feature-card-icon" /><h3>AI Providers</h3></div>
+      <p>Use AI models and providers of your choice for Text-to-Speech, Speech-to-Text and LLMs.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="random" class="feature-card-icon" /><h3>Multi-Agent Orchestration</h3></div>
+      <p>Setup agents with different goals and transfer calls between agents.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="puzzle" class="feature-card-icon" /><h3>MCP Tools</h3></div>
+      <p>Provide your voice agents with MCP tools to access various services.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="list-format" class="feature-card-icon" /><h3>Call Variables</h3></div>
+      <p>Collect information from the user, just like filling out a form.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="padlock" class="feature-card-icon" /><h3>Call Policies</h3></div>
+      <p>Specify rules for calls when participants enter or exit the call.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="database" class="feature-card-icon" /><h3>Call Recording</h3></div>
+      <p>Record calls, and stream them directly to your S3 compatible storage buckets.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="analytics" class="feature-card-icon" /><h3>Call Diagnostics</h3></div>
+      <p>Ships with tools to help you inspect and diagnose calls and voice agent issues.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="approve-check-circle" class="feature-card-icon" /><h3>Compliance friendly</h3></div>
+      <p>Play recording notices and AI disclosures before the conversation begins.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="code-branch" class="feature-card-icon" /><h3>Extendable</h3></div>
+      <p>Extend VxPipe with your own providers, tools, and integrations.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="server" class="feature-card-icon" /><h3>Self-hostable</h3></div>
+      <p>Run VxPipe on your own infrastructure. Detailed instructions are available.</p>
+    </article>
+    <article className="card feature-card">
+      <div className="feature-card-title"><Icon name="seti:elixir" class="feature-card-icon" /><h3>Built on Elixir &amp; OTP</h3></div>
+      <p>We build on tools with good abstractions so you can have a good night's sleep.</p>
+    </article>
+  </CardGrid>
+</div>
 
 ## Quickstart
 
@@ -104,6 +132,10 @@ Run VxPipe locally with Docker.
 
    Visit [localhost:4000/start](http://localhost:4000/start).
 </Steps>
+
+<div className="quickstart-cta">
+  <LinkButton href="/en/docs/" icon="open-book">View documentation</LinkButton>
+</div>
 
 <div className="provider-groups">
   <section className="provider-group" aria-labelledby="ai-providers">

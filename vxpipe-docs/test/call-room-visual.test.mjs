@@ -127,8 +127,18 @@ test('homepage renders a static React call-room visual built on room terminology
   );
   assert.match(
     css,
-    /\.crv-grid\s*\{[^}]*align-items:\s*center/s,
-    'desktop grid must center participants so the mixer sits mid-row',
+    /\.crv-grid\s*\{[^}]*align-items:\s*start/s,
+    'desktop grid must top-align cards so caller meets the active agent card',
+  );
+  assert.match(
+    css,
+    /\.crv-participant--caller\s*\{[^}]*align-self:\s*start/s,
+    'caller card must pin to the row top beside the active agent card',
+  );
+  assert.match(
+    css,
+    /\.crv-grid\s*>\s*\*[\s\S]{0,80}?margin:\s*0/s,
+    'grid children must reset Starlight sibling margins so tops align',
   );
   assert.doesNotMatch(
     css,
@@ -137,8 +147,13 @@ test('homepage renders a static React call-room visual built on room terminology
   );
   assert.match(
     css,
-    /\.crv-lane\s*\{[^}]*align-self:\s*stretch/s,
-    'lane must stretch the centered row so the mixer stays mid-row',
+    /\.crv-lane\s*\{[^}]*align-self:\s*start/s,
+    'media lane must stay by the card headers instead of stretching with the deck',
+  );
+  assert.match(
+    css,
+    /\.crv-lane\s*\{[^}]*min-height:\s*4rem/s,
+    'desktop lane must keep the mixer and audio path near the card tops',
   );
   assert.match(
     css,
