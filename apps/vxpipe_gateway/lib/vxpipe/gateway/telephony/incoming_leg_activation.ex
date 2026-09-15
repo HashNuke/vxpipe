@@ -31,7 +31,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
          {:ok, client_state_leg_id} <- generate_leg_id(leg_id),
          binding <- binding(service, claim, incarnation_id, client_state_leg_id, leg),
          {:ok, token} <-
-           MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms),
+           MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms, service),
          media_url <- ProviderEndpoint.media_url(service, token),
          request <- answer_request(binding, media_url) do
       usage = LegUsage.start_incoming(binding, options)

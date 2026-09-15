@@ -41,7 +41,9 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
   end
 
   test "authenticates the exact WSS URL before consuming its media token", context do
-    assert {:ok, token} = MediaAdmission.issue(context.admission, context.binding, 60_000)
+    assert {:ok, token} =
+             MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
     url = PublicEndpoint.media_url(context.service, token)
 
     rejected = request(context, token, signature(url <> "/"))
@@ -63,9 +65,156 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
     assert reused.resp_body == "media socket not found"
   end
 
-  defp request(context, token, signature) do
+  test "uses initialized leg auth and URL with conflicting or absent registry configuration",
+       context do
+    conflicting =
+      Keyword.merge(service_options(),
+        auth_token: "wrong-auth",
+        public_base_url: "https://wrong.example.test"
+      )
+
+    for services <- [[conflicting], []] do
+      endpoint =
+        Endpoint.init(
+          telephony: [
+            enabled: true,
+            media_admission: context.admission,
+            clock: context.clock,
+            services: services
+          ]
+        )
+
+      assert {:ok, token} =
+               MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
+      url = PublicEndpoint.media_url(context.service, token)
+      assert request(%{context | endpoint: endpoint}, token, signature(url)).status == 101
+    end
+  end
+
+  test "rejects the unsigned carrier route and disabled ingress without consuming", context do
+    assert {:ok, token} =
+             MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
+    unsigned =
+      :get
+      |> conn("/api/telephony/telnyx/#{@ingress_key}/media/#{token}")
+      |> websocket_headers()
+      |> Endpoint.call(context.endpoint)
+
+    assert unsigned.status == 404
+
+    disabled =
+      Endpoint.init(
+        telephony: [enabled: false, media_admission: context.admission, clock: context.clock]
+      )
+
+    url = PublicEndpoint.media_url(context.service, token)
+    assert request(%{context | endpoint: disabled}, token, signature(url)).status == 404
+    assert request(context, token, signature(url)).status == 101
+  end
+
+  test "invalid signatures cannot reserve a pending token's consumer slot", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(
+               context.admission,
+               @ingress_key,
+               context.binding.leg,
+               60_000,
+               context.service
+             )
+
+    url = PublicEndpoint.media_url(context.service, token)
+    assert request(context, token, signature(url <> "/wrong")).status == 401
+    supervisor = start_supervised!({Task.Supervisor, name: nil})
+
+    upgrade =
+      Task.Supervisor.async_nolink(supervisor, fn -> request(context, token, signature(url)) end)
+
+    assert Task.yield(upgrade, 50) == nil
+    assert :ok = MediaAdmission.bind(context.admission, context.binding)
+    assert {:ok, response} = Task.yield(upgrade, 1_000)
+    assert response.status == 101
+  end
+
+  test "a configured registry cannot supply auth to an unconfigured reservation", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(context.admission, @ingress_key, context.binding.leg, 60_000)
+
+    url = PublicEndpoint.media_url(context.service, token)
+    assert request(context, token, signature(url)).status == 404
+
+    assert {:error, :media_binding_mismatch} =
+             MediaAdmission.bind(context.admission, context.binding)
+  end
+
+  test "matching aliases and accounts cannot select another tenant's media auth", context do
+    other_ingress = "ingress-other"
+    other_auth = "other-tenant-private-auth"
+    other_tenant = "another-tenant"
+    other_leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end}, id: :other_leg)
+
+    {:ok, other_service} =
+      ConfiguredService.new(
+        Keyword.merge(service_options(),
+          ingress_key: other_ingress,
+          scope: {:tenant, other_tenant},
+          auth_token: other_auth
+        )
+      )
+
+    other_binding = %{
+      context.binding
+      | ingress_key: other_ingress,
+        tenant_id: other_tenant,
+        leg: other_leg
+    }
+
+    assert {:ok, own_token} =
+             MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
+    assert {:ok, other_token} =
+             MediaAdmission.issue(context.admission, other_binding, 60_000, other_service)
+
+    own_url = PublicEndpoint.media_url(context.service, own_token)
+    other_url = PublicEndpoint.media_url(other_service, other_token)
+    assert request(context, own_token, signature(own_url, other_auth)).status == 401
+    assert request(context, other_token, signature(other_url, other_auth)).status == 404
+
+    assert request(context, other_token, signature(other_url, other_auth), other_ingress).status ==
+             101
+
+    assert request(context, own_token, signature(own_url)).status == 101
+  end
+
+  test "an unavailable admission process returns a bounded media error", context do
+    assert {:ok, token} =
+             MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
+    assert :ok = stop_supervised(MediaAdmission)
+    url = PublicEndpoint.media_url(context.service, token)
+    assert request(context, token, signature(url)).status == 503
+  end
+
+  test "admission loss after private lookup returns a safe error before upgrade", context do
+    assert {:ok, token} =
+             MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
+    clock = fn ->
+      assert :ok = stop_supervised(MediaAdmission)
+      context.clock.()
+    end
+
+    endpoint =
+      Endpoint.init(telephony: [enabled: true, media_admission: context.admission, clock: clock])
+
+    url = PublicEndpoint.media_url(context.service, token)
+    assert request(%{context | endpoint: endpoint}, token, signature(url)).status == 503
+  end
+
+  defp request(context, token, signature, ingress_key \\ @ingress_key) do
     :get
-    |> conn("/api/telephony/twilio/#{@ingress_key}/media/#{token}")
+    |> conn("/api/telephony/twilio/#{ingress_key}/media/#{token}")
     |> websocket_headers()
     |> put_req_header("x-twilio-signature", signature)
     |> Endpoint.call(context.endpoint)
@@ -112,8 +261,8 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
     }
   end
 
-  defp signature(url) do
-    :crypto.mac(:hmac, :sha, @auth_token, url)
+  defp signature(url, auth_token \\ @auth_token) do
+    :crypto.mac(:hmac, :sha, auth_token, url)
     |> Base.encode64()
   end
 end

@@ -2,8 +2,8 @@
 
 Status: trusted Telnyx/Twilio registration, the operator CLI, private credential resolution,
 canonical prepared-plan bindings, tenant-scoped incoming claims and definition
-save/publish/web/incoming write guards are implemented.
-Gateway live-reader migration remains pending in
+save/publish/web/incoming write guards are implemented. Twilio media authentication retains
+the initialized leg configuration. Gateway's initial DB-backed service readers remain pending in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
 and [checkpoint 4](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
 
@@ -195,6 +195,35 @@ Keeping only an alias would permit account changes after preparation. Storing pr
 would leak credentials into immutable history, and pinning encryption-key IDs would couple calls
 to platform re-encryption. Stable non-secret identity avoids those problems while leaving fresh
 credential resolution at the owning live-reader boundary.
+
+## Initialized Twilio media authentication
+
+Incoming activation and outbound reservation retain the private initialized Twilio configuration
+in the existing media admission entry. WSS authentication reads that exact configuration without
+consuming the token, installing a waiting consumer or extending expiry. It verifies the existing
+signature against the retained public WSS URL before consuming with the same configuration.
+Missing or conflicting registry configuration cannot supply or replace authentication at this
+boundary. The WebSocket receives the binding and clock, not the private configuration.
+
+Protected Twilio admissions require an explicit tenant scope. Application-scoped configuration
+cannot establish tenant ownership and is rejected during issuance/reservation, even though the
+transitional configuration constructor still accepts it for other callers. Binding compares
+tenant, provider, service alias, ingress and account; the token remains owned by its exact leg.
+Repeated issue/reserve inputs reuse a token only when the retained configuration is identical.
+
+The unsigned Telnyx media route cannot consume a protected Twilio token. A generic pending
+reservation also cannot later deliver a Twilio binding to an unsigned waiting consumer. Expired,
+revoked and replaced tokens cannot select a later leg. Loss of the admission process during lookup
+or consumption returns a sanitized 503 response.
+
+This removes the WSS registry credential reader, but initial leg construction still needs its
+DB-backed reader cutover. It adds no credential refresh protocol, provider or authentication mode.
+The existing admission entry owns this state; a separate authentication lease would duplicate
+its token, expiry and leg lifecycle.
+
+The [media-auth evidence](../labnotes/20260916-0401-retain-leg-media-auth.md) records 39 passing
+focused admission, HTTP, activation and outgoing-leg checks, including two-tenant isolation,
+pending authorization, conflicting registry settings and admission-process loss.
 
 ## Alternatives and verification
 

@@ -97,6 +97,11 @@ the remaining failure is an unchanged five-participant WebRTC audio timeout, whi
 isolation without a source change. All 136 Persistence
 and 106 Console tests pass. Common acceptance remains open.
 See [fixture evidence](../../labnotes/20260916-0344-repair-carrier-claim-fixture.md).
+Twilio WSS now authenticates using private initialized leg/reservation configuration before
+consuming a media token. Two-tenant, pending-token, registry-conflict and admission-process-loss
+checks pass in the 39-test focused group; independent review found no blocker. Initial DB-backed
+leg construction and the remaining carrier readers are still pending, so progress stays at 4 of 7.
+See [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md).
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

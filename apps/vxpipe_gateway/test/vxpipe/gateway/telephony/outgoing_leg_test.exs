@@ -58,7 +58,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert dial.callback_url ==
              "https://voice.example.test/voice/api/telephony/telnyx/outbound_ingress/events"
 
-    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url)
+    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.leg == leg
     assert binding.client_state_leg_id == context.leg_id
     assert binding.tenant_id == request.tenant_id
@@ -95,7 +95,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert dial.callback_url ==
              "https://voice.example.test/voice/api/telephony/twilio/outbound_ingress/events/#{context.leg_id}"
 
-    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url)
+    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.provider == :twilio
     assert binding.leg == leg
     assert binding.provider_call_control_id == "CA00000000000000000000000000000001"
@@ -146,7 +146,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert {:ok, ^leg} =
              LegSupervisor.lookup(:telnyx, "telnyx-primary", "outbound-call-leg")
 
-    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url)
+    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.leg == leg
     assert binding.provider_call_control_id == event.provider_call_control_id
     assert binding.provider_call_leg_id == event.provider_call_leg_id
@@ -180,7 +180,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert {:ok, ^leg} =
              LegSupervisor.lookup(:twilio, "twilio-primary", event.provider_call_leg_id)
 
-    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url)
+    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.leg == leg
     assert binding.provider_call_control_id == event.provider_call_control_id
     assert binding.provider_call_leg_id == event.provider_call_leg_id
@@ -541,9 +541,12 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     }
   end
 
-  defp consume_media(media_admission, media_url) do
+  defp consume_media(media_admission, media_url, service) do
     %URI{path: path} = URI.parse(media_url)
     [token | _rest] = path |> String.split("/", trim: true) |> Enum.reverse()
-    MediaAdmission.consume(media_admission, "outbound_ingress", token)
+
+    if service.identity.provider == :twilio,
+      do: MediaAdmission.consume(media_admission, "outbound_ingress", token, service),
+      else: MediaAdmission.consume(media_admission, "outbound_ingress", token)
   end
 end

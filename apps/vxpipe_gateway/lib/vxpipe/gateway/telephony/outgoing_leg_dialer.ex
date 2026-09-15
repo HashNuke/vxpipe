@@ -26,7 +26,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
              media_admission,
              service.identity.ingress_key,
              leg,
-             service.media_token_ttl_ms
+             service.media_token_ttl_ms,
+             service
            ),
          dial <- dial_request(leg_id, request, service, token) do
       usage = LegUsage.start_outgoing(request, service, leg_id, usage_options)

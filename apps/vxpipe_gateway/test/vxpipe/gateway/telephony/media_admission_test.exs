@@ -1,7 +1,7 @@
 defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.Gateway.Telephony.{MediaAdmission, MediaBinding}
+  alias Vxpipe.Gateway.Telephony.{ConfiguredService, MediaAdmission, MediaBinding}
 
   setup do
     clock = :atomics.new(1, [])
@@ -135,6 +135,203 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
              MediaAdmission.bind(context.server, context.binding)
 
     assert {:ok, {:error, :invalid_media_token}} == Task.yield(consumer, 1_000)
+  end
+
+  test "looks up pending private auth without consuming, waiting or extending expiry", context do
+    service = twilio_service()
+
+    assert {:ok, token} =
+             MediaAdmission.reserve(
+               context.server,
+               "ingress-primary",
+               context.leg,
+               10_000,
+               service
+             )
+
+    assert {:ok, ^token} =
+             MediaAdmission.reserve(
+               context.server,
+               "ingress-primary",
+               context.leg,
+               10_000,
+               service
+             )
+
+    assert {:error, :leg_already_bound} =
+             MediaAdmission.reserve(
+               context.server,
+               "ingress-primary",
+               context.leg,
+               10_000,
+               twilio_service(auth_token: "changed-private-auth")
+             )
+
+    original = :sys.get_state(context.server)
+
+    assert {:ok, ^service} =
+             MediaAdmission.lookup_service(context.server, "ingress-primary", token)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.lookup_service(context.server, "wrong-ingress", token)
+
+    assert :sys.get_state(context.server) == original
+    refute inspect(original) =~ "retained-private-auth"
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.consume(context.server, "ingress-primary", token)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.consume(
+               context.server,
+               "ingress-primary",
+               token,
+               twilio_service(auth_token: "wrong-private-auth")
+             )
+
+    assert :sys.get_state(context.server) == original
+
+    consumer =
+      Task.Supervisor.async_nolink(context.task_supervisor, fn ->
+        MediaAdmission.consume(context.server, "ingress-primary", token, service)
+      end)
+
+    assert Task.yield(consumer, 50) == nil
+    binding = twilio_binding(context)
+
+    assert {:error, :media_binding_mismatch} =
+             MediaAdmission.bind(context.server, %{binding | tenant_id: "another-tenant"})
+
+    assert :ok = MediaAdmission.bind(context.server, binding)
+    assert {:ok, {:ok, ^binding}} = Task.yield(consumer, 1_000)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.lookup_service(context.server, "ingress-primary", token)
+  end
+
+  test "protects bound Twilio tokens and rejects incompatible configuration", context do
+    service = twilio_service()
+    binding = twilio_binding(context)
+
+    assert {:error, :invalid_media_binding} =
+             MediaAdmission.issue(context.server, binding, 60_000)
+
+    assert {:error, :invalid_media_binding} =
+             MediaAdmission.issue(
+               context.server,
+               binding,
+               60_000,
+               twilio_service(scope: :application)
+             )
+
+    assert {:error, :invalid_media_reservation} =
+             MediaAdmission.reserve(
+               context.server,
+               "ingress-primary",
+               context.leg,
+               60_000,
+               twilio_service(scope: :application)
+             )
+
+    assert {:error, :invalid_media_binding} =
+             MediaAdmission.issue(
+               context.server,
+               %{binding | tenant_id: "another-tenant"},
+               60_000,
+               service
+             )
+
+    assert {:ok, token} = MediaAdmission.issue(context.server, binding, 60_000, service)
+    assert {:ok, ^token} = MediaAdmission.issue(context.server, binding, 60_000, service)
+
+    assert {:error, :leg_already_bound} =
+             MediaAdmission.issue(
+               context.server,
+               binding,
+               60_000,
+               twilio_service(auth_token: "changed-private-auth")
+             )
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.consume(context.server, "ingress-primary", token)
+
+    assert {:ok, ^binding} =
+             MediaAdmission.consume(context.server, "ingress-primary", token, service)
+  end
+
+  test "an unsigned pending consumer cannot be given a Twilio binding", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(context.server, "ingress-primary", context.leg, 60_000)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.lookup_service(context.server, "ingress-primary", token)
+
+    consumer =
+      Task.Supervisor.async_nolink(context.task_supervisor, fn ->
+        MediaAdmission.consume(context.server, "ingress-primary", token)
+      end)
+
+    assert Task.yield(consumer, 50) == nil
+
+    assert {:error, :media_binding_mismatch} =
+             MediaAdmission.bind(context.server, twilio_binding(context))
+
+    assert :ok = MediaAdmission.bind(context.server, context.binding)
+    assert {:ok, {:ok, context.binding}} == Task.yield(consumer, 1_000)
+  end
+
+  test "private lookup honors expiry and revocation without adopting a replacement token",
+       context do
+    service = twilio_service()
+    binding = twilio_binding(context)
+    assert {:ok, expired} = MediaAdmission.issue(context.server, binding, 10_000, service)
+    :atomics.put(context.clock, 1, 20_000)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.lookup_service(context.server, "ingress-primary", expired)
+
+    assert {:ok, replaced} = MediaAdmission.issue(context.server, binding, 10_000, service)
+    refute replaced == expired
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.consume(context.server, "ingress-primary", expired, service)
+
+    assert {:ok, ^service} =
+             MediaAdmission.lookup_service(context.server, "ingress-primary", replaced)
+
+    assert :ok = MediaAdmission.revoke(context.server, context.leg)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.lookup_service(context.server, "ingress-primary", replaced)
+  end
+
+  defp twilio_binding(context) do
+    %{
+      context.binding
+      | provider: :twilio,
+        provider_connection_id: "AC00000000000000000000000000000000",
+        provider_call_session_id: nil
+    }
+  end
+
+  defp twilio_service(overrides \\ []) do
+    {:ok, service} =
+      ConfiguredService.new(
+        Keyword.merge(
+          [
+            id: "primary-phone",
+            ingress_key: "ingress-primary",
+            scope: {:tenant, "tenant-demo"},
+            provider: :twilio,
+            account_sid: "AC00000000000000000000000000000000",
+            auth_token: "retained-private-auth",
+            public_base_url: "https://voice.example.test/voice"
+          ],
+          overrides
+        )
+      )
+
+    service
   end
 
   defp media_binding(leg) do

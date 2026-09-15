@@ -97,7 +97,12 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
              String.split(path, "/")
 
     assert {:ok, ^binding} =
-             MediaAdmission.consume(context.admission, "ingress_twilio_primary", token)
+             MediaAdmission.consume(
+               context.admission,
+               "ingress_twilio_primary",
+               token,
+               twilio_service()
+             )
   end
 
   test "revokes media admission when the carrier rejects the answer", context do

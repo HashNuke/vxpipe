@@ -9,8 +9,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMedia do
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
     MediaAdmission,
-    MediaBinding,
-    ServiceRegistry
+    MediaBinding
   }
 
   alias Vxpipe.Gateway.Telephony.Twilio.{MediaSocket, PublicEndpoint, WebhookVerifier}
@@ -38,7 +37,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMedia do
           Keyword.get(options, :maximum_media_message_bytes, @default_maximum_message_bytes),
           :maximum_media_message_bytes
         ),
-      registry: Keyword.fetch!(options, :registry),
+      enabled?: Keyword.fetch!(options, :registry).enabled?,
       socket: Keyword.get(options, :twilio_media_socket, MediaSocket),
       timeout_ms:
         positive_integer(
@@ -50,13 +49,16 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMedia do
 
   @spec upgrade(Plug.Conn.t(), map(), String.t(), String.t()) :: Plug.Conn.t()
   def upgrade(conn, options, ingress_key, token) do
-    with :ok <- valid_token_shape(token),
+    with :ok <- enabled(options),
+         :ok <- valid_token_shape(token),
          :ok <- validate_upgrade(conn),
-         {:ok, service} <- ServiceRegistry.fetch(options.registry, ingress_key),
+         {:ok, service} <-
+           lookup_admission_service(options.media_admission, ingress_key, token),
          :ok <- twilio_service(service),
          {:ok, signature} <- TwilioRequestSignature.fetch(conn),
          :ok <- authenticate(service, token, signature, options.clock),
-         {:ok, binding} <- MediaAdmission.consume(options.media_admission, ingress_key, token),
+         {:ok, binding} <-
+           consume_admission(options.media_admission, ingress_key, token, service),
          :ok <- matching_binding(binding, service) do
       conn
       |> WebSockAdapter.upgrade(
@@ -70,6 +72,21 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMedia do
     else
       {:error, reason} -> error_response(conn, reason)
     end
+  end
+
+  defp enabled(%{enabled?: true}), do: :ok
+  defp enabled(_options), do: {:error, :disabled}
+
+  defp lookup_admission_service(server, ingress_key, token) do
+    MediaAdmission.lookup_service(server, ingress_key, token)
+  catch
+    :exit, _reason -> {:error, :media_admission_unavailable}
+  end
+
+  defp consume_admission(server, ingress_key, token, service) do
+    MediaAdmission.consume(server, ingress_key, token, service)
+  catch
+    :exit, _reason -> {:error, :media_admission_unavailable}
   end
 
   defp authenticate(service, token, signature, clock) do
@@ -87,6 +104,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMedia do
     identity = service.identity
 
     if MediaBinding.valid?(binding) and binding.provider == :twilio and
+         identity.scope == {:tenant, binding.tenant_id} and
          binding.service_id == identity.service_id and binding.ingress_key == identity.ingress_key and
          binding.provider_connection_id == identity.provider_connection_id,
        do: :ok,

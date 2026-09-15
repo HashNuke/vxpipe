@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
 
   use GenServer
 
-  alias Vxpipe.Gateway.Telephony.MediaBinding
+  alias Vxpipe.Gateway.Telephony.{ConfiguredService, MediaBinding}
 
   @consume_timeout 30_000
   @token_bytes 32
@@ -24,22 +24,31 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
 
   @spec issue(GenServer.server(), MediaBinding.t(), pos_integer()) ::
           {:ok, String.t()} | {:error, atom()}
-  def issue(server, %MediaBinding{} = binding, ttl_ms)
+  def issue(server, binding, ttl_ms), do: issue(server, binding, ttl_ms, nil)
+
+  @spec issue(GenServer.server(), MediaBinding.t(), pos_integer(), ConfiguredService.t() | nil) ::
+          {:ok, String.t()} | {:error, atom()}
+  def issue(server, %MediaBinding{} = binding, ttl_ms, service)
       when is_integer(ttl_ms) and ttl_ms > 0 do
-    GenServer.call(server, {:issue, binding, ttl_ms})
+    GenServer.call(server, {:issue, binding, ttl_ms, service})
   end
 
-  def issue(_server, _binding, _ttl_ms), do: {:error, :invalid_media_binding}
+  def issue(_server, _binding, _ttl_ms, _service), do: {:error, :invalid_media_binding}
 
   @spec reserve(GenServer.server(), String.t(), pid(), pos_integer()) ::
           {:ok, String.t()} | {:error, atom()}
-  def reserve(server, ingress_key, leg, ttl_ms)
+  def reserve(server, ingress_key, leg, ttl_ms),
+    do: reserve(server, ingress_key, leg, ttl_ms, nil)
+
+  @spec reserve(GenServer.server(), String.t(), pid(), pos_integer(), ConfiguredService.t() | nil) ::
+          {:ok, String.t()} | {:error, atom()}
+  def reserve(server, ingress_key, leg, ttl_ms, service)
       when is_binary(ingress_key) and byte_size(ingress_key) > 0 and is_pid(leg) and
              is_integer(ttl_ms) and ttl_ms > 0 do
-    GenServer.call(server, {:reserve, ingress_key, leg, ttl_ms})
+    GenServer.call(server, {:reserve, ingress_key, leg, ttl_ms, service})
   end
 
-  def reserve(_server, _ingress_key, _leg, _ttl_ms),
+  def reserve(_server, _ingress_key, _leg, _ttl_ms, _service),
     do: {:error, :invalid_media_reservation}
 
   @spec bind(GenServer.server(), MediaBinding.t()) :: :ok | {:error, atom()}
@@ -51,11 +60,27 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
 
   @spec consume(GenServer.server(), String.t(), String.t()) ::
           {:ok, MediaBinding.t()} | {:error, :invalid_media_token}
-  def consume(server, ingress_key, token) when is_binary(ingress_key) and is_binary(token) do
-    GenServer.call(server, {:consume, ingress_key, token}, @consume_timeout)
+  def consume(server, ingress_key, token), do: consume(server, ingress_key, token, nil)
+
+  @doc "Consumes only against the exact private configuration used to authenticate the request."
+  @spec consume(GenServer.server(), String.t(), String.t(), ConfiguredService.t() | nil) ::
+          {:ok, MediaBinding.t()} | {:error, :invalid_media_token}
+  def consume(server, ingress_key, token, expected_service)
+      when is_binary(ingress_key) and is_binary(token) do
+    GenServer.call(server, {:consume, ingress_key, token, expected_service}, @consume_timeout)
   end
 
-  def consume(_server, _ingress_key, _token), do: {:error, :invalid_media_token}
+  def consume(_server, _ingress_key, _token, _service), do: {:error, :invalid_media_token}
+
+  @doc "Returns private initialized Twilio auth without consuming, waiting or extending expiry."
+  @spec lookup_service(GenServer.server(), String.t(), String.t()) ::
+          {:ok, ConfiguredService.t()} | {:error, :invalid_media_token}
+  def lookup_service(server, ingress_key, token)
+      when is_binary(ingress_key) and is_binary(token) do
+    GenServer.call(server, {:lookup_service, ingress_key, token}, 5_000)
+  end
+
+  def lookup_service(_server, _ingress_key, _token), do: {:error, :invalid_media_token}
 
   @spec revoke(pid()) :: :ok
   def revoke(leg) when is_pid(leg), do: revoke(__MODULE__, leg)
@@ -77,27 +102,46 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
   end
 
   @impl true
-  def handle_call({:issue, binding, ttl_ms}, _from, state) do
-    if MediaBinding.valid?(binding) do
-      issue_binding(binding, ttl_ms, state)
+  def handle_call({:issue, binding, ttl_ms, service}, _from, state) do
+    with {:ok, authentication} <- authentication_service(service),
+         true <- MediaBinding.valid?(binding) and matching_service?(binding, authentication) do
+      issue_binding(binding, ttl_ms, authentication, state)
     else
-      {:reply, {:error, :invalid_media_binding}, state}
+      _invalid -> {:reply, {:error, :invalid_media_binding}, state}
     end
   end
 
-  def handle_call({:reserve, ingress_key, leg, ttl_ms}, _from, state) do
-    reserve_leg(ingress_key, leg, ttl_ms, state)
+  def handle_call({:reserve, ingress_key, leg, ttl_ms, service}, _from, state) do
+    with {:ok, authentication} <- authentication_service(service),
+         true <- is_nil(authentication) or authentication.identity.ingress_key == ingress_key do
+      reserve_leg(ingress_key, leg, ttl_ms, authentication, state)
+    else
+      _invalid -> {:reply, {:error, :invalid_media_reservation}, state}
+    end
   end
 
   def handle_call({:bind, binding}, _from, state) do
     bind_entry(binding, state)
   end
 
-  def handle_call({:consume, ingress_key, token}, from, state) do
+  def handle_call({:consume, ingress_key, token, expected_service}, from, state) do
     case Map.fetch(state.entries, token) do
-      {:ok, entry} -> consume_entry(ingress_key, token, entry, from, state)
+      {:ok, entry} -> consume_entry(ingress_key, token, entry, expected_service, from, state)
       :error -> {:reply, {:error, :invalid_media_token}, state}
     end
+  end
+
+  def handle_call({:lookup_service, ingress_key, token}, _from, state) do
+    result =
+      with {:ok, %{service: %ConfiguredService{} = service} = entry} <-
+             Map.fetch(state.entries, token),
+           true <- entry.ingress_key == ingress_key and entry.expires_at > state.clock.() do
+        {:ok, service}
+      else
+        _unavailable -> {:error, :invalid_media_token}
+      end
+
+    {:reply, result, state}
   end
 
   def handle_call({:revoke, leg}, _from, state) do
@@ -122,10 +166,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
     end
   end
 
-  defp issue_binding(binding, ttl_ms, state) do
+  defp issue_binding(binding, ttl_ms, service, state) do
     now = state.clock.()
 
-    case existing_entry(binding, now, state) do
+    case existing_entry(binding, service, now, state) do
       {:ok, token} ->
         {:reply, {:ok, token}, state}
 
@@ -136,26 +180,28 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
         state = drop_expired_leg_entry(state, binding.leg, now)
 
         {token, state} =
-          put_entry(state, binding.ingress_key, binding.leg, binding, ttl_ms, now)
+          put_entry(state, binding.ingress_key, binding.leg, binding, service, ttl_ms, now)
 
         {:reply, {:ok, token}, state}
     end
   end
 
-  defp existing_entry(binding, now, state) do
+  defp existing_entry(binding, service, now, state) do
     with {:ok, token} <- Map.fetch(state.tokens_by_leg, binding.leg),
          {:ok, entry} <- Map.fetch(state.entries, token),
          true <- entry.expires_at > now do
-      if entry.binding == binding, do: {:ok, token}, else: {:error, :leg_already_bound}
+      if entry.binding == binding and entry.service == service,
+        do: {:ok, token},
+        else: {:error, :leg_already_bound}
     else
       _missing_or_expired -> :new
     end
   end
 
-  defp reserve_leg(ingress_key, leg, ttl_ms, state) do
+  defp reserve_leg(ingress_key, leg, ttl_ms, service, state) do
     now = state.clock.()
 
-    case existing_reservation(ingress_key, leg, now, state) do
+    case existing_reservation(ingress_key, leg, service, now, state) do
       {:ok, token} ->
         {:reply, {:ok, token}, state}
 
@@ -164,16 +210,16 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
 
       :new ->
         state = drop_expired_leg_entry(state, leg, now)
-        {token, state} = put_entry(state, ingress_key, leg, nil, ttl_ms, now)
+        {token, state} = put_entry(state, ingress_key, leg, nil, service, ttl_ms, now)
         {:reply, {:ok, token}, state}
     end
   end
 
-  defp existing_reservation(ingress_key, leg, now, state) do
+  defp existing_reservation(ingress_key, leg, service, now, state) do
     with {:ok, token} <- Map.fetch(state.tokens_by_leg, leg),
          {:ok, entry} <- Map.fetch(state.entries, token),
          true <- entry.expires_at > now do
-      if entry.ingress_key == ingress_key and is_nil(entry.binding),
+      if entry.ingress_key == ingress_key and is_nil(entry.binding) and entry.service == service,
         do: {:ok, token},
         else: {:error, :leg_already_bound}
     else
@@ -181,13 +227,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
     end
   end
 
-  defp put_entry(state, ingress_key, leg, binding, ttl_ms, now) do
+  defp put_entry(state, ingress_key, leg, binding, service, ttl_ms, now) do
     token = Base.url_encode64(:crypto.strong_rand_bytes(@token_bytes), padding: false)
     monitor = Process.monitor(leg)
     timer = Process.send_after(self(), {:expire, token}, ttl_ms)
 
     entry = %{
       binding: binding,
+      service: service,
       ingress_key: ingress_key,
       leg: leg,
       expires_at: now + ttl_ms,
@@ -223,7 +270,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
         entry.expires_at <= state.clock.() ->
           {:reply, {:error, :media_admission_not_found}, drop_entry(state, token)}
 
-        entry.ingress_key != binding.ingress_key or entry.leg != binding.leg ->
+        entry.ingress_key != binding.ingress_key or entry.leg != binding.leg or
+            not matching_service?(binding, entry.service) ->
           {:reply, {:error, :media_binding_mismatch}, state}
 
         true ->
@@ -261,8 +309,11 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
     end
   end
 
-  defp consume_entry(ingress_key, token, entry, from, state) do
+  defp consume_entry(ingress_key, token, entry, expected_service, from, state) do
     cond do
+      entry.service != expected_service ->
+        {:reply, {:error, :invalid_media_token}, state}
+
       entry.expires_at <= state.clock.() ->
         {:reply, {:error, :invalid_media_token}, drop_entry(state, token)}
 
@@ -280,6 +331,31 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
         {:reply, {:ok, entry.binding}, drop_entry(state, token)}
     end
   end
+
+  defp authentication_service(nil), do: {:ok, nil}
+  defp authentication_service(%ConfiguredService{identity: %{provider: :telnyx}}), do: {:ok, nil}
+
+  defp authentication_service(
+         %ConfiguredService{identity: %{provider: :twilio, scope: {:tenant, tenant}}} = service
+       )
+       when is_binary(tenant) and byte_size(tenant) > 0, do: {:ok, service}
+
+  defp authentication_service(_invalid), do: :error
+
+  defp matching_service?(%MediaBinding{provider: :telnyx}, nil), do: true
+
+  defp matching_service?(
+         %MediaBinding{provider: :twilio} = binding,
+         %ConfiguredService{} = service
+       ) do
+    identity = service.identity
+
+    identity.provider == :twilio and identity.scope == {:tenant, binding.tenant_id} and
+      identity.service_id == binding.service_id and identity.ingress_key == binding.ingress_key and
+      identity.provider_connection_id == binding.provider_connection_id
+  end
+
+  defp matching_service?(_binding, _service), do: false
 
   defp drop_entry(state, token, options \\ []) do
     case Map.pop(state.entries, token) do
