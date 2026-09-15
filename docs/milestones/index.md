@@ -102,6 +102,9 @@ consuming a media token. Two-tenant, pending-token, registry-conflict and admiss
 checks pass in the 39-test focused group; independent review found no blocker. Initial DB-backed
 leg construction and the remaining carrier readers are still pending, so progress stays at 4 of 7.
 See [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md).
+The full root run at `ba83192` completes 1,599 tests with one previously recorded native
+repeated-transfer listener Morse assertion failure and 38 exclusions. The unchanged isolated case
+passes; this does not establish the cause of the full-suite failure. Common acceptance stays open.
 The shared artifact bucket now uses unprefixed `STORAGE_BUCKET` and AWS settings for recording,
 playback and call-details publication. Its independent review and all five root checks pass:
 1,459 tests, zero failures, 16 excluded. The earlier intermittent native transfer-audio failure did

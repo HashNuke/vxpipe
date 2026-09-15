@@ -2,10 +2,9 @@
 
 Status: credential/configuration cutover authorized; scope corrected on 2026-09-15.
 Preparatory cleanup and checkpoints 1, 2, 5 and 6 are complete. Of seven checkpoints, four are complete,
-three are partial. The latest full umbrella run at `d2fbbd7` ran 1,588 tests with one failure
-and 38 exclusions. The carrier fixture correction removed the setup/configuration failure
-cascade; the remaining failure is the unchanged five-participant WebRTC audio timeout.
-That case passes in isolation; the full-suite timeout remains unexplained.
+three are partial. The latest full umbrella run at `ba83192` ran 1,599 tests with one failure
+and 38 exclusions. The failure is the previously recorded native repeated-transfer listener Morse
+assertion. It passes in isolation without a source change; the full-suite failure remains unexplained.
 Common umbrella acceptance and the unfinished checkpoints remain open.
 The user approved removing capability profiles, keeping ReqLLM internal, and including
 Telnyx/Twilio credentials. The initial specification and follow-up scope audit were independently

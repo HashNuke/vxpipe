@@ -53,3 +53,19 @@
   zero failures (`tmp/retained-media-auth-carrier-focused.log`). Format check, compilation with
   warnings as errors, strict Credo and unused-lock check pass. Full umbrella run follows this
   small reviewed checkpoint; the previous full run's native audio timeout remains recorded.
+
+## Full umbrella verification
+
+- At `ba83192`, the root suite completes 1,599 tests, one failure and 38 exclusions with seed
+  235296, module preloading, one require and four cases. Gateway has 424 tests/one failure;
+  MCP 37, Agent Runtime 95, Engine 697, Calls 84, Artifacts 20, Persistence 136 and Console 106 pass.
+- The failure is `HumanTransferWebRTCTest`'s repeated-transfer listener assertion at line 355
+  (test declared at 214). It expected Morse `E`; the final flush held text `E `, 25 total windows,
+  23 silence windows and no pending marks. The identical state was already recorded in
+  `20260916-0000-tenant-telephony-services.md`; no native test source changed in this slice.
+- The unchanged isolated case passes with the same seed/preload/concurrency settings: one test,
+  zero failures, 67 excluded, 112.7 seconds. This does not establish the full-suite cause.
+- Logs: `tmp/retained-media-auth-root-test.log` and
+  `tmp/retained-media-auth-native-isolated.log`. The new carrier-reader tests were written while
+  the existing root process ran, then separately confirmed red; this root evidence is for the
+  committed `ba83192` implementation. Full milestone acceptance remains open.
