@@ -84,40 +84,20 @@ native routing/fallback object accepted by a provider such as Zenmux passes
 through unchanged. The same object presented to a provider that does not expose
 that option is rejected before network I/O.
 
-The pinned model capability profile may supply validated `generation_options`
-beside its `model`. These are merged over application-level generation defaults;
-matching profile values win. Credentials, streaming selection, and other
-runtime-only provider constructor settings remain application-owned. The
-profile layer accepts recursively data-valued generation settings rather than
-executable hooks or transport tuples. The selected provider constructor then
-validates the merged configuration during plan startup, so a known unsupported
-model/provider option combination rejects the plan before a room is registered.
+The credential cutover replaces capability profiles and application-level provider
+settings with [inline selections](inline-provider-selections.md) and tenant DB
+credentials. The current inline catalog supports Google model inference. Zenmux
+native routing remains implemented and tested in the internal ReqLLM adapter;
+its inline selection and tenant-credential migration are still pending in
+[checkpoint 5](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-5--preserve-existing-provider-credential-integrations).
 
-For example, trusted Elixir capability-profile configuration can select Zenmux
-native routing without carrying its credential:
-
-```elixir
-%{
-  kind: :model_inference,
-  provider: :req_llm,
-  options: %{
-    model: "zenmux:openai/gpt-5",
-    generation_options: [
-      provider_options: [
-        provider: %{
-          fallback: "anthropic",
-          routing: %{type: "priority", providers: ["openai", "anthropic"]}
-        }
-      ]
-    ]
-  }
-}
-```
-
-The application supplies the API key through Agent Runtime
-`model_provider_options`. JSON configuration translation belongs to the later
-container-delivery milestone; it must produce this same trusted profile shape
-rather than introduce a second fallback schema.
+The pre-cutover Engine activation test verified `zenmux:openai/gpt-5`, nested
+`provider_options.provider` routing data and ordinary generation options. The
+inline migration must preserve that existing contract while rejecting executable
+hooks and protected transport/authentication fields. `openai` and `anthropic`
+inside that routing data are Zenmux destinations; they do not require separate
+Vxpipe credentials. The [provider inventory](existing-provider-credentials.md)
+records the source evidence and current migration limits.
 
 Vxpipe does not define a fallback list, retry coordinator, alternate credential
 selector, or cross-provider replay policy. Native routing does not resubmit MCP

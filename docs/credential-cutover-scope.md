@@ -46,6 +46,8 @@ not support. Move the credentials of existing integrations to the tenant DB. Det
 integrations from pre-cutover Vxpipe source and project tests; SDK catalogs and website logos do
 not establish implementation support. Unsupported provider/auth combinations remain rejected.
 There is no Bedrock implementation task or new authentication-mode project in this milestone.
+The [source-backed inventory](existing-provider-credentials.md) fixes the migration list to
+Google, Deepgram, Zenmux, Telnyx and Twilio with their existing authentication shapes.
 
 Use existing carrier options and private leg/reservation configuration when changing carrier
 readers. A new service-policy or authentication-lease subsystem is unnecessary. Tenant/service

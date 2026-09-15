@@ -21,7 +21,10 @@ credentials, and platform environment settings. The user's scope correction limi
 existing credential readers and their focused integration checks. Third-party API-key rotation
 is excluded; platform-owned encryption-key rotation remains included. Existing transfer/recovery
 and carrier workflows are reused. Provider credential migration covers existing Vxpipe integrations
-only; no new provider or authentication-mode support is required. Existing carrier/keyring structures
+only; no new provider or authentication-mode support is required.
+The [source-backed provider inventory](../existing-provider-credentials.md) identifies
+Zenmux as the remaining model integration, using its existing API-key and native-routing contract;
+that inventory does not advance implementation counts. Existing carrier/keyring structures
 and valid acceptance evidence are reused. ReqLLM adapter selection stays internal. Superseded provider
 configuration paths must be deleted, not retained as optional or
 legacy fallbacks; acceptance includes conflicting-old-settings tests. Preparatory cleanup is complete;
