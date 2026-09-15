@@ -91,6 +91,74 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     refute inspect(error) =~ "inline-private-marker"
   end
 
+  for {kind, provider} <- [
+        model_inference: "google",
+        text_to_speech: "deepgram",
+        speech_to_text: "deepgram"
+      ],
+      unavailable <- [:missing, :other_tenant, :inactive] do
+    @destination_kind kind
+    @destination_provider provider
+    @unavailable unavailable
+
+    test "rejects #{@unavailable} destination-only #{@destination_kind} binding before saving rows",
+         ctx do
+      if @unavailable != :missing do
+        tenant = if @unavailable == :other_tenant, do: ctx.other, else: ctx.tenant
+
+        assert {:ok, credential} =
+                 ProviderCredentials.provision(
+                   tenant.key,
+                   @destination_provider,
+                   "destination",
+                   "api_key",
+                   %{"api_key" => "destination-private-marker"},
+                   ctx.options
+                 )
+
+        if @unavailable == :inactive do
+          assert {1, _} =
+                   Repo.update_all(
+                     from(c in Vxpipe.Persistence.Schema.ProviderCredential,
+                       where: c.public_id == ^credential.id
+                     ),
+                     set: [status: "revoked"]
+                   )
+        end
+      end
+
+      before = row_counts()
+
+      assert {:error, error} =
+               Calls.save_definition(
+                 ctx.tenant.key,
+                 destination_source(@destination_kind),
+                 ctx.options
+               )
+
+      assert error.code == :provider_credential_unavailable
+
+      assert error.details["path"] ==
+               ["participants", "destination", "capabilities", Atom.to_string(@destination_kind)]
+
+      assert row_counts() == before
+      refute JSON.encode!(Vxpipe.CallEngine.Error.to_public(error)) =~ "private-marker"
+    end
+  end
+
+  test "saves a whole-selection override without requiring the unused default binding", ctx do
+    input =
+      source()
+      |> put_in([:defaults, :capabilities, :model_inference, :credential_name], "unused")
+      |> put_in([:participants, "assistant", :capabilities], %{
+        model_inference: %{provider: "fixture", model: "local"}
+      })
+
+    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, input, ctx.options)
+    assert draft.validation_errors == []
+    refute :erlang.term_to_binary(draft) =~ "private-marker"
+  end
+
   test "a credential revoked after preflight cannot authorize a revision write", ctx do
     {ProviderCredentialStore, context} =
       Keyword.fetch!(ctx.options, :provider_credential_repository)
@@ -515,5 +583,34 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
         }
       }
     }
+  end
+
+  defp destination_source(kind) do
+    input = source()
+
+    selection =
+      input.defaults.capabilities |> Map.fetch!(kind) |> Map.put(:credential_name, "destination")
+
+    destination =
+      if kind == :speech_to_text do
+        %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "transfer"},
+          capabilities: %{speech_to_text: selection}
+        }
+      else
+        %{
+          type: "agent",
+          prompt: "Handle the destination request.",
+          first_message: %{mode: "wait_for_input"},
+          capabilities: %{kind => selection},
+          tools: %{},
+          transfers: []
+        }
+      end
+
+    input
+    |> put_in([:participants, "assistant", :transfers], ["destination"])
+    |> put_in([:participants, "destination"], destination)
   end
 end
