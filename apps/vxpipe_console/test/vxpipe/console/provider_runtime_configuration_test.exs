@@ -3,10 +3,10 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
 
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
   @development Path.expand("../../../../../config/dev.exs", __DIR__)
-  @variables ~w(VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID
+  @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID
     VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_DEV_SPEECH_PROFILE
     VXPIPE_DEV_MODEL_FIXTURE VXPIPE_DEV_TENANT DEEPGRAM_API_KEY GEMINI_API_KEY APP_HOST PORT VXPIPE_DEV_TLS
-    VXPIPE_TELEPHONY_PUBLIC_BASE_URL)
+    VXPIPE_TELEPHONY_PUBLIC_BASE_URL VXPIPE_CONFIG)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -29,7 +29,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
       Application.put_env(app, key, merged |> Keyword.fetch!(app) |> Keyword.fetch!(key))
     end
 
-    System.put_env("VXPIPE_DATABASE_URL", "postgres://localhost/provider_runtime_test")
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/provider_runtime_test")
 
     on_exit(fn ->
       Enum.each(environment, fn
@@ -49,7 +49,12 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
     assert_inline_sample(context.development)
   end
 
-  test "retired speech and model switches cannot change the inline providers", context do
+  @tag :tmp_dir
+  test "retired provider settings and a legacy file cannot change the inline providers",
+       context do
+    legacy = Path.join(context.tmp_dir, "vxpipe.toml")
+    File.write!(legacy, "[malformed legacy-private-marker")
+    System.put_env("VXPIPE_CONFIG", legacy)
     System.put_env("VXPIPE_DEV_SPEECH_PROFILE", "morse")
     System.put_env("VXPIPE_DEV_MODEL_FIXTURE", "true")
     System.put_env("DEEPGRAM_API_KEY", "retired-private-marker")
@@ -57,6 +62,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
 
     configuration = Config.Reader.read!(@runtime, env: :dev)
     refute inspect(configuration) =~ "retired-private-marker"
+    refute inspect(configuration) =~ "legacy-private-marker"
     assert_inline_sample(Config.Reader.merge(context.development, configuration))
   end
 

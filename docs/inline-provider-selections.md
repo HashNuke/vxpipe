@@ -1,8 +1,7 @@
 # Inline provider selections
 
-Status: checkpoint 1 is implemented and verified. The synthetic tenant voice flow and all five
-umbrella completion gates pass. Final independent implementation review remains open.
-This document records the implementation decision, not deployment readiness.
+Status: inline tenant selections and all existing provider readers are implemented and independently
+reviewed. Final configuration acceptance is tracked in the [milestone ledger](milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger).
 
 ## Ownership and representation
 
@@ -88,8 +87,21 @@ This choice belongs to the adapter; it does not add a public transport switch.
 
 Selection identity hashes tenant, provider, model, options and credential binding name for usage
 and TTS caching. Runtime rejects old schema plans and malformed selections instead of restoring
-profile support. Stored revision conversion and prepared-call draining remain explicit final-cutover
-operations from the milestone.
+profile support. Replace old definitions and prepare fresh calls through the existing administration
+workflow below; no profile-conversion or call-draining subsystem is required.
+
+## Replace old definitions and prepared calls
+
+1. Provision each required tenant provider binding through [credential setup](provider-credential-storage.md).
+   Register any phone services through [tenant telephony setup](tenant-telephony-services.md).
+2. Author a current `20260915.01` definition with inline selections, replacing old profile references.
+   Save it as a new immutable revision and publish it through the existing
+   [definition administration](tenant-control-plane.md). Missing credentials reject the write.
+3. Prepare new calls from the published routes. Hosted preparation pins safe carrier service
+   identity, and activation resolves current tenant credentials.
+4. Preserve old revisions and call history. Old-schema or unbound hosted phone plans cannot start;
+   do not rewrite their serialized history or infer new bindings for them. Existing initialized
+   clients keep their normal owned lifetime; starting a new client requires fresh resolution.
 
 ## Rejected alternatives
 
@@ -146,11 +158,11 @@ The Console uses `VXPIPE_DEV_TENANT` to reuse an explicitly provisioned tenant a
 call key server-side. An isolated browser check prepared calls before and after restart with
 one tenant, and inspected desktop/mobile rendering. It did not use live provider credentials.
 
-Fixture/example migration is complete. The umbrella passes **1,489 tests, zero failures,
-30 exclusions**, seed 235296, with module preloading, serialized test-file compilation and
-concurrency four. Formatting, warnings-as-errors compilation, strict Credo and the unused-lock
-check pass. Earlier intermittent native audio/cleanup observations are recorded in the labnotes;
-this green run does not establish their cause. Final independent implementation review remains
-open. The requested reviewer supplied an initial source review; its follow-up was
-blocked by a usage limit, so no final independent approval is claimed. See the [milestone](milestones/tenant-provider-credentials-and-platform-configuration.md)
-and [checkpoint labnotes](../labnotes/20260915-1719-inline-tenant-voice.md).
+Fixture/example migration is complete. The original checkpoint-1 run passed **1,489 tests,
+zero failures, 30 exclusions** (seed 235296), with all five root gates passing. Its initial reviewer
+follow-up hit a usage limit; that is historical evidence, not the current review status. Subsequent
+independent reviews cover the implemented reader checkpoints and final configuration changes.
+The carrier checkpoint at `b90845e` passes **1,615 tests, zero failures, 39 exclusions** and all five
+root gates. Earlier intermittent native audio observations remain recorded; a passing run does not
+establish their cause. See the [current milestone ledger](milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger)
+and [original checkpoint labnotes](../labnotes/20260915-1719-inline-tenant-voice.md).

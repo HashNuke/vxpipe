@@ -4,6 +4,10 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
   alias Vxpipe.Persistence.{CredentialKeyring, ProviderCredentialStore, Repo}
 
   @variables [
+    "VXPIPE_DB_URL",
+    "DATABASE_URL",
+    "VXPIPE_DB_POOL_SIZE",
+    "DB_POOL_SIZE",
     "VXPIPE_CREDENTIAL_KEY_ID",
     "VXPIPE_CREDENTIAL_KEYS",
     "VXPIPE_DATABASE_URL",
@@ -18,7 +22,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
   setup do
     previous = Map.new(@variables, &{&1, System.get_env(&1)})
     Enum.each(@variables, &System.delete_env/1)
-    System.put_env("VXPIPE_DATABASE_URL", "postgres://localhost/credential_runtime_test")
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/credential_runtime_test")
 
     on_exit(fn ->
       Enum.each(previous, fn

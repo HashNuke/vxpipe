@@ -22,11 +22,11 @@ needed key. Partial or invalid configuration fails startup with variable names o
 replace key bytes under an existing ID. Losing the keys makes encrypted rows unrecoverable.
 Test configuration ignores these host encryption variables and injects isolated test keys.
 
-For this intermediate implementation, the current database variables remain
-`VXPIPE_DATABASE_URL` and `VXPIPE_DATABASE_POOL_SIZE`. Development defaults to the local
-`vxpipe_dev` database and pool size 10. The milestone's `VXPIPE_DB_URL` / `DATABASE_URL` and
-pool aliases will replace these names in the platform cutover. Operator commands and server
-startup do not require global provider keys or development profile switches.
+Database configuration uses `VXPIPE_DB_URL` before `DATABASE_URL`, and `VXPIPE_DB_POOL_SIZE`
+before `DB_POOL_SIZE`. Blank values are absent; invalid selected values fail without printing the
+URL. Development defaults to local `vxpipe_dev` and pool size 10. Pool settings override any URL
+`pool_size` query. Normal aliases cannot override the dedicated test database. Operator commands
+and server startup require no global provider keys or development profile switches.
 
 Follow [tenant setup](tenant-control-plane.md) to create/migrate PostgreSQL and bootstrap a
 tenant. Then provision using JSON supplied by a secret manager pipe or a protected file:
@@ -55,7 +55,7 @@ Zenmux uses one API key even when its model path or native routing names downstr
 Direct authentication with those providers is not implied by a Zenmux selection.
 Telnyx connection IDs and verification public keys belong to [service metadata](tenant-telephony-services.md),
 not this payload. Trusted service registration now links the public credential ID to the matching
-tenant/provider; Gateway live-reader migration remains pending.
+tenant/provider. Gateway resolves these records for new legs and retains initialized auth for existing legs.
 Twilio uses `--auth-kind account_sid_auth_token` with exactly
 `{"account_sid":"AC_REPLACE_WITH_32_HEX_DIGITS","auth_token":"REPLACE_WITH_AUTH_TOKEN"}`.
 The account SID must have the existing `AC` plus 32 hexadecimal digit shape; the token retains
@@ -168,4 +168,4 @@ the [Telnyx provisioning checks](../labnotes/20260915-2341-telnyx-credential-pro
 
 The [Twilio storage checks](../labnotes/20260916-0315-provision-twilio-credentials.md) verify
 encrypted SID/token provisioning, account/tenant/provider ownership, malformed/mixed input rejection
-and protected CLI output. Gateway reader migration remains pending.
+and protected CLI output. The Gateway reader cutover is verified in the carrier checkpoint.

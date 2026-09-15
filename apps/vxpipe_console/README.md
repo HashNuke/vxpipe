@@ -34,7 +34,7 @@ Recording is disabled by default. To select the implemented multipart S3-compati
 writer for repository development, configure PostgreSQL and enable recording:
 
 ```shell
-VXPIPE_DATABASE_URL=postgres://user:password@database/vxpipe
+VXPIPE_DB_URL=postgres://user:password@database/vxpipe
 VXPIPE_RECORDING_ENABLED=true
 STORAGE_BUCKET=vxpipe-call-artifacts
 AWS_REGION=us-east-1
@@ -55,7 +55,7 @@ When PostgreSQL is configured, the repository host can publish immutable post-ca
 to the same S3-compatible bucket used for recordings:
 
 ```shell
-VXPIPE_DATABASE_URL=postgres://user:password@database/vxpipe
+VXPIPE_DB_URL=postgres://user:password@database/vxpipe
 STORAGE_BUCKET=vxpipe-call-artifacts
 AWS_REGION=us-east-1
 # AWS_ENDPOINT=http://127.0.0.1:9000

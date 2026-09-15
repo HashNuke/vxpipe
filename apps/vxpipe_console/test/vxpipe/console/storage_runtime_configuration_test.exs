@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
 
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
   @development Path.expand("../../../../../config/dev.exs", __DIR__)
-  @variables ~w(STORAGE_BUCKET AWS_REGION AWS_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE STORAGE_BUCKET AWS_REGION AWS_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN VXPIPE_RECORDING_ENABLED VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE
     VXPIPE_RECORDING_S3_BUCKET VXPIPE_RECORDING_S3_REGION VXPIPE_RECORDING_S3_ENDPOINT
     VXPIPE_CALL_DETAILS_S3_BUCKET VXPIPE_CALL_DETAILS_S3_REGION VXPIPE_CALL_DETAILS_S3_ENDPOINT
@@ -34,7 +34,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
       Application.put_env(app, key, merged |> Keyword.fetch!(app) |> Keyword.fetch!(key))
     end
 
-    System.put_env("VXPIPE_DATABASE_URL", "postgres://localhost/storage_runtime_test")
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/storage_runtime_test")
 
     on_exit(fn ->
       Enum.each(environment, fn

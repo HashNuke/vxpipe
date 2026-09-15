@@ -8,12 +8,16 @@ query the Repo directly.
 
 ## Configure and migrate PostgreSQL
 
-Set `VXPIPE_DATABASE_URL` through the deployment's secret/configuration boundary.
-Repository development defaults to `postgres://localhost/vxpipe_dev`; the variable
-is an optional override there. Outside development, when it is absent, the
-persistence application starts without a Repo and the
-existing embedded/static call-engine mode remains database-free. An optional
-`VXPIPE_DATABASE_POOL_SIZE` sets the connection-pool size and defaults to 10.
+Set `VXPIPE_DB_URL` or its lower-priority alias `DATABASE_URL` through the deployment's
+secret/configuration boundary. Development defaults to `postgres://localhost/vxpipe_dev`.
+Outside development, absence of both leaves persistence disabled for explicit embedded use;
+hosted tenant admission requires PostgreSQL.
+
+`VXPIPE_DB_POOL_SIZE` takes precedence over `DB_POOL_SIZE`, with default 10. Both settings
+are independent: URL `pool_size` query values cannot override the selected pool. Unset/empty/
+whitespace-only values are absent; an invalid selected value fails safely instead of falling
+through to another alias. Test mode preserves its dedicated database and Sandbox configuration.
+The retired `VXPIPE_DATABASE_URL` and `VXPIPE_DATABASE_POOL_SIZE` are ignored.
 
 Create and migrate the configured database before using the operator commands:
 

@@ -1,7 +1,5 @@
 import Config
 
-config :vxpipe_persistence, Vxpipe.Persistence.Repo, url: "postgres://localhost/vxpipe_dev"
-
 sample_reception_prompt = """
 You are a concise, helpful reception voice assistant. Respond naturally in plain text.
 Keep replies brief unless the user asks for detail. Do not use Markdown because

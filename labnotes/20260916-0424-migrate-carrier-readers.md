@@ -83,3 +83,8 @@ its cause. The current reader slice's final static checks and full root run are 
 Final format, warnings-as-errors compile, strict Credo and unused-lock checks all pass.
 The reviewed reader checkpoint is committed before the slower full umbrella run; its result will
 be recorded separately. Checkpoints 3/4 close on their focused exits; common acceptance stays open.
+
+Full umbrella at `b90845e`: **1,615 tests, zero failures, 39 excluded**, seed 235296,
+preloaded modules, one require worker and four cases. All eight application lanes pass.
+The earlier native Morse failure did not recur; this run does not establish its cause.
+Together with the prior static/unused-lock checks, all five root gates pass for this checkpoint.

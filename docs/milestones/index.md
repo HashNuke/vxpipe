@@ -35,18 +35,18 @@ pass, along with the 62-test reader/HTTP group, 26 existing signed outage checks
 carrier/activation group and the final 16-test outgoing group. Independent GPT 6 Astra xhigh review
 found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md).
 
-Checkpoint 7 remains partial: the shared artifact bucket is implemented with `STORAGE_BUCKET`
-and standard AWS settings, and the public carrier origin is documented in `env.sample`.
-Database aliases, the final obsolete-reader/configuration audit and source boot verification remain.
-Use `VXPIPE_DB_URL` before `DATABASE_URL` and `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE` in
-that pending change; development must need no database environment variables and default to
-`vxpipe_dev` with pool size 10.
+Checkpoint 7 implementation and focused acceptance are complete; its final root suite remains
+pending. The shared bucket uses `STORAGE_BUCKET` and standard AWS settings. The visible env.sample
+includes the public carrier origin and approved DB aliases: `VXPIPE_DB_URL` before `DATABASE_URL`,
+`VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`. Default macOS source boot/provision/prepare and
+fresh-VM tenant provider construction pass with no DB variables, using vxpipe_dev and pool 10.
+The obsolete carrier application scopes and hidden sample are removed. Independent review found
+no blocker. See [platform evidence](../../labnotes/20260916-0509-finish-platform-configuration.md).
 
-Common umbrella acceptance remains open. The last full run at `ba83192` completed 1,599 tests
-with one previously recorded native repeated-transfer Morse assertion failure and 38 exclusions.
-The unchanged isolated case passed; that does not establish the failure's cause. Earlier full green
-runs and platform-key re-encryption/restart evidence remain in the milestone's checkpoint ledger.
-Final acceptance requires the remaining configuration work, review and all common gates.
+All five root gates pass at the carrier-reader checkpoint `b90845e`: **1,615 tests, zero failures,
+39 excluded** (seed 235296). The earlier native Morse failure did not recur; its cause remains
+unestablished. Final milestone acceptance still requires the remaining configuration work,
+independent review and common gates on the final implementation.
 
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -410,7 +410,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
-| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: six complete and the final configuration checkpoint partial. Carrier readers and platform encryption-key rotation are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. The current umbrella run and final configuration acceptance remain open. |
+| [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Initial specification and follow-up scope audit independently reviewed | Seven credential/configuration checkpoints: six complete and the final configuration checkpoint partial. Carrier readers and platform encryption-key rotation are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. The carrier checkpoint passes all five root gates; final configuration acceptance remains open. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification

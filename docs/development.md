@@ -139,8 +139,10 @@ parent shell.
 
 ## PostgreSQL storage
 
-Development defaults to `postgres://localhost/vxpipe_dev` in `config/dev.exs`.
-`VXPIPE_DATABASE_URL` is an optional runtime override for a different database.
+Development defaults to `postgres://localhost/vxpipe_dev` in `config/runtime.exs`.
+`VXPIPE_DB_URL` or its lower-priority alias `DATABASE_URL` overrides the database.
+`VXPIPE_DB_POOL_SIZE` or `DB_POOL_SIZE` overrides the default pool of 10. Blank values are
+absent; invalid selected values fail. These aliases never replace the dedicated test database.
 The Console reuses the provisioned tenant selected by `VXPIPE_DEV_TENANT` across BEAM
 restarts. It saves/publishes the sample definition, then issues a call-scoped API key.
 PostgreSQL retains only that key’s digest; the plaintext key and configured initial

@@ -21,23 +21,52 @@ credential_keyring =
     end
   end
 
-database_url =
-  case {config_env(), nonempty_env.("VXPIPE_DATABASE_URL")} do
-    {:dev, nil} ->
-      Keyword.fetch!(Application.fetch_env!(:vxpipe_persistence, Vxpipe.Persistence.Repo), :url)
+{database_url, database_pool_size} =
+  if config_env() == :test do
+    {nil, nil}
+  else
+    pool_input = nonempty_env.("VXPIPE_DB_POOL_SIZE") || nonempty_env.("DB_POOL_SIZE") || "10"
 
-    {_env, url} ->
-      url
+    pool_size =
+      case Integer.parse(pool_input) do
+        {size, ""} when size > 0 -> size
+        _invalid -> raise "invalid VXPIPE_DB_POOL_SIZE / DB_POOL_SIZE configuration"
+      end
+
+    url =
+      nonempty_env.("VXPIPE_DB_URL") || nonempty_env.("DATABASE_URL") ||
+        if(config_env() == :dev, do: "postgres://localhost/vxpipe_dev")
+
+    url =
+      if url do
+        try do
+          {:ok, %URI{scheme: scheme, host: host, fragment: nil} = uri} = URI.new(url)
+          true = scheme in ["postgres", "postgresql"] and is_binary(host) and host != ""
+
+          # Ecto merges URL options last. The independent pool setting owns pool_size.
+          query =
+            (uri.query || "")
+            |> URI.query_decoder()
+            |> Enum.reject(fn {key, _value} -> key == "pool_size" end)
+            |> URI.encode_query()
+
+          normalized = URI.to_string(%{uri | query: if(query == "", do: nil, else: query)})
+          _validated = Ecto.Repo.Supervisor.parse_url(normalized)
+          normalized
+        rescue
+          _invalid -> raise "invalid VXPIPE_DB_URL / DATABASE_URL configuration"
+        end
+      end
+
+    {url, pool_size}
   end
 
 if database_url do
-  pool_size =
-    "VXPIPE_DATABASE_POOL_SIZE"
-    |> System.get_env("10")
-    |> String.to_integer()
-
   config :vxpipe_persistence, :enabled, true
-  config :vxpipe_persistence, Vxpipe.Persistence.Repo, url: database_url, pool_size: pool_size
+
+  config :vxpipe_persistence, Vxpipe.Persistence.Repo,
+    url: database_url,
+    pool_size: database_pool_size
 
   config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     credential_source: {Vxpipe.Calls.ProviderCredentialSource, :configured}

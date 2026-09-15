@@ -54,8 +54,8 @@ Reception prepares a human web destination. That person privately hears permitte
 
 ## Manual verification
 
-1. Configure and migrate `VXPIPE_DATABASE_URL`, provide valid Gemini and Deepgram development
-   keys, then start `bin/dev`.
+1. Configure and migrate `VXPIPE_DB_URL`, provision tenant Google/Deepgram credentials using
+   [credential setup](../provider-credential-storage.md), set `VXPIPE_DEV_TENANT`, then start `bin/dev`.
 2. Open `/pipecat-console`, create a room, connect the Pipecat caller console, and ask to be
    transferred to human support with a concise purpose.
 3. Open `/transfer` in a second browser/device and connect within the 30-second attempt deadline.

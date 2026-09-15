@@ -48,7 +48,7 @@ APP_HOST=localhost VXPIPE_DEV_TLS=http mix run --no-halt
 ```
 
 Direct Mix commands do not load `.env`. Development uses `vxpipe_dev` on localhost by
-default; set `VXPIPE_DATABASE_URL` to connect to a different database. The sample keeps
+default; set `VXPIPE_DB_URL` to connect to a different database. The sample keeps
 its call-scoped API key on the server and reuses your tenant after a restart.
 
 Open [the voice console](http://localhost:4000/pipecat-console), select

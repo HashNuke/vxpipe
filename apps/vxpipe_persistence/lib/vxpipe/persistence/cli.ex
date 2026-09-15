@@ -13,7 +13,7 @@ defmodule Vxpipe.Persistence.CLI do
     end
 
     if Process.whereis(Repo) == nil do
-      Mix.raise("database persistence is not configured; set VXPIPE_DATABASE_URL")
+      Mix.raise("database persistence is not configured; set VXPIPE_DB_URL or DATABASE_URL")
     end
   end
 

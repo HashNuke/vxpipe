@@ -548,24 +548,24 @@ Depends on the credential-reader checkpoints above. This is the final operationa
 Audit existing checkpoint evidence against the final source. Reuse valid privacy, no-fallback,
 isolation and restart checks; add focused tests only for changed or uncovered boundaries.
 
-- [ ] Verify startup/configuration loading with platform env settings and pre-provisioned tenant
+- [x] Verify startup/configuration loading with platform env settings and pre-provisioned tenant
   credentials. A provider construction smoke check proves the DB source after restart; do not
   repeat complete voice/phone/artifact lifecycle scenarios from other milestones.
-- [ ] Remove remaining TOML loader/`VXPIPE_CONFIG`, `vxpipe.toml.sample`, global provider
+- [x] Remove remaining TOML loader/`VXPIPE_CONFIG`, `vxpipe.toml.sample`, global provider
   credential configuration and unused `apps/vxpipe_config`/TOML dependencies. Update exact child
   dependencies and lockfile entries. Runtime normalization needed by adapters stays with its owner.
   The user deleted the uncommitted app before implementation; the preparatory cleanup removes
-  its dangling consumers now. Final acceptance must still audit their absence. ReqLLM’s
+  its dangling consumers. The final source audit confirms their absence. ReqLLM’s
   `llm_db` dependency requires its own TOML parser; it is not a platform config loader.
-- [ ] Audit and delete every superseded provider configuration entry point, reader, merge and
+- [x] Audit and delete every superseded provider configuration entry point, reader, merge and
   fallback branch, including `provider_api_key_environment`, global provider model/options and
   application-scope carrier configuration. Remove obsolete settings from docs/examples and
   reject removed public configuration fields; retain no compatibility switch or dormant path.
-- [ ] Prove absence of fallback: populate conflicting old provider env/application settings and a
+- [x] Prove absence of fallback: populate conflicting old provider env/application settings and a
   legacy config file in isolated tests. Without an active tenant DB credential, save/preparation/
   activation must fail with no provider request. With one, only that credential and the definition
   options are used; the old file is never read and SDK ambient discovery is never invoked.
-- [ ] Restore and catalog platform database/pool, S3, listener/TLS, callback origin and encryption
+- [x] Restore and catalog platform database/pool, S3, listener/TLS, callback origin and encryption
   settings in `config/runtime.exs` and `env.sample` (keep `.env.example` synchronized or retire
   the duplicate). Add concise comments, mandatory placeholders, and commented optional variables.
   Verify launcher/Console/Astro wiring only where this configuration cutover changes it;
@@ -576,28 +576,28 @@ isolation and restart checks; add focused tests only for changed or uncovered bo
   region and endpoint, and that conflicting retired values cannot select another destination.
   Cover unset, blank, invalid and retired-only settings, preserving independent recording enablement
   and current publication enablement. An enabled writer cannot silently lose its required bucket.
-- [ ] Implement the database contract: `VXPIPE_DB_URL` before `DATABASE_URL`, and
+- [x] Implement the database contract: `VXPIPE_DB_URL` before `DATABASE_URL`, and
   `VXPIPE_DB_POOL_SIZE` before `DB_POOL_SIZE`; default development to `vxpipe_dev` and pool 10
   without database env requirements. Retire `VXPIPE_DATABASE_URL` and update CLI diagnostics,
   setup/provider-operation docs, examples and affected configuration/launcher tests together.
-- [ ] Add focused runtime-configuration cases for each alias alone, both with conflicting values,
+- [x] Add focused runtime-configuration cases for each alias alone, both with conflicting values,
   unset/blank values, invalid selected URL/pool values, the retired name alone and test-database
   isolation. Demonstrate development boot/provision/prepare using the default local database/pool
   with all four database env vars unset; verify non-development never defaults to `vxpipe_dev`.
-- [ ] Document replacement of old profile-based definitions/prepared calls using existing
+- [x] Document replacement of old profile-based definitions/prepared calls using existing
   administration. Keep old-plan activation rejected and immutable history intact. Add a migration
   only for a demonstrated persisted-data requirement; no generic profile-conversion framework.
-- [ ] Update architecture, tenant operations, developer/provider docs and the container delivery
+- [x] Update architecture, tenant operations, developer/provider docs and the container delivery
   specification. Environment plus tenant DB replaces the proposed deployment JSON/TOML loader;
   JSON call definitions remain. Preserve embedded fixture/local-provider use without Ecto.
 - [ ] Obtain the requested independent agent review of the final implementation, fix findings,
   then run all five common root gates once the reviewed checkpoint is ready. Record exact results.
-- [ ] Confirm existing evidence covers two-tenant persistence, unavailable/wrong encryption keys,
+- [x] Confirm existing evidence covers two-tenant persistence, unavailable/wrong encryption keys,
   safe failure projections and restart at the final credential/configuration boundary; fill only
   uncovered gaps. Platform encryption-key rotation is
   covered in checkpoint 6; upstream credential rotation, backup drills and full carrier audibility
   acceptance are outside this milestone.
-- [ ] Validate source-development/macOS boot now. Verify packaged/container boot only after the
+- [x] Validate source-development/macOS boot now. Verify packaged/container boot only after the
   separate delivery milestone's hold is released; do not claim or require a not-yet-built image.
 - [ ] Update the checkpoint evidence ledger, milestone index and labnotes. Leave this milestone
   unchecked for any unresolved acceptance gate; no commits unless requested.
@@ -682,7 +682,7 @@ exits and failure cases pass.
 | 4 — Twilio credential readers | Implemented; reader exit verified | Existing encrypted SID/Auth Token records now supply REST, voice/status and initialized WSS authentication. The same two-tenant source/signature, outage, owner and failure checks cover Twilio; prior media checks verify authentication before token consumption and safe process loss. Independent review found no remaining blocker. See [carrier reader evidence](../../labnotes/20260916-0424-migrate-carrier-readers.md) and [media evidence](../../labnotes/20260916-0401-retain-leg-media-auth.md). Full umbrella acceptance remains open. |
 | 5 — Existing provider credential integrations | Implemented; credential-reader exit verified | Named API-key provisioning, inline model/options translation, tenant startup resolution and native routing use the existing adapters. Agent Runtime 5, Engine constructor 5 and Persistence focused 33 tests pass (2 excluded). Independent GPT 6 Astra xhigh review found no production blocker; its application-auth fixture correction is verified by the 95-test Agent Runtime suite (4 excluded). Calls 81 and Persistence 99 tests pass (6 excluded). All static gates and unused-lock checks pass. The full root run completed 1,547 tests with one previously reproduced native Morse failure and 33 exclusions; common milestone acceptance remains open. Independent gate review confirms the focused checkpoint exit is satisfied. No new provider or auth-mode support is added. See the [inventory](../existing-provider-credentials.md) and [Zenmux evidence](../../labnotes/20260916-0033-zenmux-tenant-credentials.md). |
 | 6 — Platform encryption-key rotation | Implemented and verified | Six database tests, three tagged real-connection checks and three operator CLI tests pass. Batches preserve exact tenant credentials, identity and revoked status, skip busy rows with truthful remaining counts, and roll back on corruption or interruption. Concurrent new-key insertion and status updates survive interrupted/skipped batches. Disposable fresh VMs verify mixed-key reads, resumed batches, retirement of the old key and safe missing/wrong-key rejection. Persistence 115 tests pass (9 excluded); independent review and static/unused-lock gates pass. Full root run: 1,564 tests, one previously reproduced native Morse-audio failure, 36 excluded; common umbrella acceptance remains open. See [batch evidence](../../labnotes/20260916-0129-platform-key-reencryption.md). |
-| 7 — Platform configuration and cleanup | Shared artifact bucket implemented; remaining cutover pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
+| 7 — Platform configuration and cleanup | Implementation and focused/source-boot checks complete; final root gates pending | Both writers, playback and recovery share the unprefixed storage settings; retired settings cannot override or rescue them. Focused red/green, temporary-credential resolution and independent review pass. All five root gates pass: 1,459 tests, 0 failures, 16 excluded. See [shared-bucket evidence](../../labnotes/20260915-1656-shared-artifact-bucket.md). |
 
 - [ ] Verify every credential/configuration boundary and checkpoint exit above.
 - [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates)
@@ -733,6 +733,17 @@ checks, the 46-test carrier/activation group and the tagged encrypted DB-to-HTTP
 The final corrected outgoing group passes 16 tests. Public-origin configuration passes 5 tests;
 Engine request propagation passes 4 tests. Independent review accepts the bounded reader exits.
 The final common umbrella run remains separate from these focused checkpoint exits.
+
+Checkpoint 7 implementation: approved DB aliases, safe validation/defaults and dedicated test
+isolation pass 5 new red/green checks. The effective Ecto pool cannot be overridden by a URL query.
+The combined Console configuration group passes 15 tests; carrier scope cleanup passes Gateway 38,
+Calls 13 and Persistence 10. The legacy-file regression passes 5. Actual macOS source boot with all DB
+variables unset uses vxpipe_dev/pool 10, provisions and prepares a synthetic tenant call, then a fresh
+VM constructs Google/Deepgram from the persisted values. Only the owned records are removed.
+The stale hidden sample is retired; visible env.sample catalogs the platform settings. Independent
+review found no blocker. Format, compile, strict Credo and unused-lock checks pass. The final root
+suite remains pending, so checkpoint 7 and the milestone index remain unchecked. See
+[platform evidence](../../labnotes/20260916-0509-finish-platform-configuration.md).
 
 ## Specification review
 
