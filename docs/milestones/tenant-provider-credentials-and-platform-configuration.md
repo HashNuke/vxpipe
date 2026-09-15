@@ -487,6 +487,9 @@ Reuse the existing `CredentialKeyring` and `CredentialCipher`: they already sele
 supplied active write key and locate decrypt keys by stored key ID. New writes keep using the
 active key, and no key is stored in PostgreSQL. This checkpoint adds the re-encryption operation
 and its transition evidence, not another key-provider framework.
+The [reviewed batch design](../platform-credential-reencryption.md) records credential-only
+nonblocking locks, truthful remaining counts and the staged reader/writer key transition.
+This design review completes no implementation task.
 
 - [ ] Provide a bounded, resumable re-encryption operation that decrypts each existing payload and
   encrypts the same value under the active key, preserving tenant/provider/credential identity.
