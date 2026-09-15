@@ -64,6 +64,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
              )
 
     monitor = Process.monitor(worker)
+    _ = :sys.get_state(worker)
     send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_tool_invocation_finished, ^worker,
