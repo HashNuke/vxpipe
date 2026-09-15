@@ -225,6 +225,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
             type: "human",
             connection: %{service: "web", mode: "receive", admission: "start_call"},
             capabilities: %{}
+          },
+          "late-monitor" => %{
+            type: "human",
+            connection: %{service: "web", mode: "receive", admission: "start_call"},
+            capabilities: %{}
           }
         }
       )
@@ -273,6 +278,44 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     {observer_player, _} = Map.fetch!(original_players, observer.participant_id)
     pause_wait_at(caller_player, 350)
     pause_wait_at(observer_player, 150)
+
+    late = Map.fetch!(plan.participants, "late-monitor")
+    late_client = join_native_listener(plan, room, "late-monitor", :monitor)
+    await_tone(late_client, 250, 2_000)
+    {late_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
+    pause_wait_at(late_player, 100)
+    assert await_paused_cursor(late_player, 3_000) == 192_000
+    late_player_monitor = Process.monitor(late_player)
+
+    [{late_connection, _}] =
+      Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, late_client.connection_id})
+
+    late_connection_monitor = Process.monitor(late_connection)
+
+    participant_supervisor =
+      Map.fetch!(:sys.get_state(authority).participant_supervisors, late.participant_id)
+
+    assert :ok =
+             CallEngine.RoomParticipantSupervisor.stop_participant(
+               room.incarnation_id,
+               participant_supervisor
+             )
+
+    assert_receive {:DOWN, ^late_connection_monitor, :process, ^late_connection, _}, 2_000
+    assert_receive {:DOWN, ^late_player_monitor, :process, ^late_player, _}, 2_000
+
+    for {participant, {player, _}} <- original_players do
+      assert {^player, _} = Map.fetch!(wait_players(room.incarnation_id), participant)
+    end
+
+    late_client = join_native_listener(plan, room, "late-monitor", :monitor)
+    await_tone(late_client, 250, 2_000)
+    {reentered_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
+    refute reentered_player == late_player
+    pause_wait_at(reentered_player, 25)
+    assert await_paused_cursor(reentered_player, 2_000) == 48_000
+    CallEngine.WaitSounds.Player.resume(reentered_player)
+    audience = audience ++ [late_client]
 
     support_client =
       plan
@@ -325,7 +368,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     CallEngine.WaitSounds.Player.resume(caller_player)
     await_tone(second_sink, 250, 2_000)
     players = wait_players(room.incarnation_id)
-    assert map_size(players) == 5
+    assert map_size(players) == 6
 
     assert {:error, :unavailable} =
              Vxpipe.Gateway.WebRTC.Connection.input_track(second_sink.connection_id)

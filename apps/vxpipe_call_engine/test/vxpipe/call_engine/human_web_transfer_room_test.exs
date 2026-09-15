@@ -324,6 +324,111 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:test_stt_transport_started, _, _}
   end
 
+  for refresh <- [:complete, :worker_loss] do
+    @tag capture_log: true
+    test "acceptance during audience refresh handles #{refresh}" do
+      plan = compile_plan(transfer_timeout_ms: 10_000)
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :refresh_caller)
+
+      second_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :refresh_added)
+
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :refresh_support)
+
+      assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
+      begin_transfer(plan, room, caller, "refresh-race")
+      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+      assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt}} =
+               attach_ready(plan, room, support, "support-connection", support_sink)
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :media_ready)
+               )
+
+      finish_private_briefing(briefing, support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt}, 2_000
+
+      connection =
+        TestTransferConnection.run(
+          attachment_command(plan, room, caller, "caller-connection"),
+          fn -> self() end
+        )
+
+      observer = self()
+      token = make_ref()
+
+      :ok =
+        :sys.install(
+          connection,
+          {token,
+           fn
+             :done, _event, _process ->
+               :done
+
+             nil, {:in, {:"$gen_call", {worker, _}, :vxpipe_connection_readiness}}, _process ->
+               send(observer, {:audience_readiness_paused, worker})
+
+               receive do
+                 {:resume_audience_readiness, ^token} -> :done
+               after
+                 2_000 -> :done
+               end
+
+             state, _event, _process ->
+               state
+           end, nil}
+        )
+
+      assert {:ok, _} =
+               attach_ready(plan, room, caller, "additional-caller-connection", second_sink)
+
+      assert_receive {:audience_readiness_paused, worker}, 1_000
+
+      pending = :sys.get_state(room_authority(plan)).pending_participant_transfer
+
+      assert {:ok, %{stage: :refresh_audience, worker: %Task{pid: ^worker}}} =
+               Phase.scope(pending.task.pid)
+
+      assert pending.deadline_ms - System.monotonic_time(:millisecond) > 5_000
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :accept)
+               )
+
+      if unquote(refresh) == :worker_loss do
+        monitor = Process.monitor(worker)
+        Process.exit(worker, :kill)
+        assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}
+      end
+
+      send(connection, {:resume_audience_readiness, token})
+
+      if unquote(refresh) == :complete do
+        assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "refresh-race"}}, 2_000
+        assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
+        refute_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "refresh-race"}}, 0
+      else
+        assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "refresh-race"}}, 2_000
+        refute_receive {:vxpipe_transfer_active, ^attempt}, 0
+        refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "refresh-race"}}, 0
+      end
+    end
+  end
+
   test "the prepared phase retains its scope and owner loss discards the private destination" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")

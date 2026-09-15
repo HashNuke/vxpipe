@@ -139,9 +139,20 @@ the connection, then all listeners receive cue before conversation. The
 the regressions and evidence. The native monitor now also closes one connection, retains waiting
 on its second connection and adds a replacement on the original player before ordered handoff.
 The [reconnection labnote](../../labnotes/20260915-0730-transfer-listener-reconnection.md) records
-the connection-enforcer and mixer-subscription lifetime fixes. Pre-acceptance audience changes,
-complete listener removal/re-entry and repeated changing-audience transfer requirements remain
-open; this does not reduce the nine compound tasks.
+the connection-enforcer and mixer-subscription lifetime fixes. Native coverage now also adds a
+monitor before destination briefing/acceptance, removes its complete membership and readmits it
+with a fresh player while retaining every original player. Acceptance waits for an in-flight
+audience refresh; losing that worker fails the attempt. The
+[pre-acceptance listener labnote](../../labnotes/20260915-0815-preacceptance-listener-changes.md)
+records this checkpoint. Membership changes during preparation/cues and repeated changing-audience
+transfers remain open; this does not reduce the nine compound tasks.
+
+Latest umbrella verification has 1,435 tests, one failure and 16 exclusions with module preloading,
+seed 235296 and concurrency four. The engine's 653 checks and expanded native transfer case pass.
+The failure is an ordinary human-only WebRTC routing case; it passes alone but fails in its complete
+owning module, including once before any restrictive membership change. Keep the root test gate
+open while investigating that media path. Formatting, compilation, strict Credo and unused-dependency
+checks pass. The listener changes are committed implementation progress, not slice acceptance.
 
 The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
 and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the

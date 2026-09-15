@@ -239,6 +239,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     if human_pending?(pending, state) and pending.destination_connection_id == connection_id do
       {:handled, fail(pending, :destination_connection_unavailable, state)}
     else
+      :ok = Phase.audience_changed(pending.task.pid)
       :unhandled
     end
   end

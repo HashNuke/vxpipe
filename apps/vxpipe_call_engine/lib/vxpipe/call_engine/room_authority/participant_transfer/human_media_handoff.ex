@@ -29,7 +29,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
         _failure -> :failed
       end
 
-    Telemetry.transfer_phase_stop(started_at, stage, outcome)
+    observation_stage = if stage == :refresh_audience, do: :audience, else: stage
+    Telemetry.transfer_phase_stop(started_at, observation_stage, outcome)
     result
   end
 
@@ -87,6 +88,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     else
       false -> {:error, :source_unavailable}
       error -> error
+    end
+  end
+
+  defp execute(:refresh_audience, phase, audience) do
+    with {:ok, binding} <- RoomAuthority.readiness_binding(phase.authority),
+         policy = Authority.snapshot(binding.policy_authority),
+         {:ok, connections} <- capture_connections(binding, policy.present_participant_ids),
+         :ok <- hold(Map.drop(connections, Map.keys(audience.connections)), audience.scope),
+         {:ok, waits} <-
+           reconcile_waits(
+             audience.waits,
+             connections,
+             binding,
+             audience.scope,
+             phase.audience_request,
+             phase.owner
+           ) do
+      {:ok, %{audience | connections: connections, waits: waits}}
     end
   end
 
@@ -524,14 +543,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     end)
   end
 
-  defp reconcile_waits(players, connections, binding, scope, request) do
+  defp reconcile_waits(players, connections, binding, scope, request, owner \\ self()) do
     outputs =
       Enum.group_by(connections, fn {_id, connection} -> connection.identity.participant_id end)
 
     retained = Map.take(players, Map.keys(outputs))
     removed = Map.drop(players, Map.keys(outputs))
 
-    with :ok <- stop_waits(removed, scope),
+    with :ok <- retire_waits(removed, scope),
          :ok <-
            each(retained, fn {participant, player} ->
              sinks =
@@ -545,8 +564,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
            Map.reject(connections, fn {_id, connection} ->
              Map.has_key?(retained, connection.identity.participant_id)
            end),
-         {:ok, started} <- play(added, binding, scope, request, :wait) do
+         {:ok, started} <- play(added, binding, scope, request, :wait, owner) do
       {:ok, Map.merge(retained, started)}
+    end
+  end
+
+  defp retire_waits(players, scope) do
+    monitors = Map.new(Map.values(players), &{Process.monitor(&1), &1})
+    Enum.each(Map.values(players), &Player.stop/1)
+
+    try do
+      await_retired(monitors, scope)
+    after
+      Enum.each(Map.keys(monitors), &Process.demonitor(&1, [:flush]))
+    end
+  end
+
+  defp await_retired(monitors, _scope) when map_size(monitors) == 0, do: :ok
+
+  defp await_retired(monitors, scope) do
+    receive do
+      {:DOWN, reference, :process, _player, _reason} when is_map_key(monitors, reference) ->
+        await_retired(Map.delete(monitors, reference), scope)
+    after
+      remaining(scope) -> {:error, :deadline_elapsed}
     end
   end
 

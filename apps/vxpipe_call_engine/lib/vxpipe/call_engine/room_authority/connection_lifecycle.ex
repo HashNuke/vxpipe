@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomMixer}
   alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, StartupReadiness, State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   @spec attach(struct(), pid(), pid(), pid() | nil, reference(), State.t()) ::
           {:reply, {:ok, atom(), term()} | {:error, Error.t()}, State.t()}
@@ -320,6 +321,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       self(),
       state.pending_participant_transfer.attempt_id
     })
+
+    :ok = Phase.audience_changed(state.pending_participant_transfer.task.pid)
 
     %{
       state

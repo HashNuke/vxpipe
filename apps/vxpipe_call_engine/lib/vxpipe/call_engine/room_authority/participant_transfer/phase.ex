@@ -21,6 +21,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
       Map.merge(scope, %{
         owner: self(),
         player_monitors: %{},
+        audience_dirty?: false,
+        audience_handed_off?: false,
+        pending_handoff: nil,
         started_at_ms: System.monotonic_time(:millisecond)
       })
 
@@ -44,6 +47,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
 
   def handoff(phase, stage, payload) do
     send(phase, {:vxpipe_transfer_handoff, self(), stage, payload})
+    :ok
+  end
+
+  def audience_changed(phase) do
+    send(phase, {:vxpipe_transfer_audience_changed, self()})
     :ok
   end
 
@@ -117,11 +125,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
 
         {:vxpipe_transfer_handoff, authority, stage, payload}
         when authority == scope.authority ->
-          if Map.get(scope, :worker) do
-            {:error, :handoff_already_running}
-          else
-            start_handoff(scope, stage, payload, monitor)
-          end
+          request_handoff(scope, stage, payload, monitor)
+
+        {:vxpipe_transfer_audience_changed, authority} when authority == scope.authority ->
+          refresh_audience(scope, monitor)
 
         {reference, result} when is_reference(reference) ->
           case Map.get(scope, :worker) do
@@ -133,8 +140,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
               await_completion(scope, monitor)
           end
 
-        {:vxpipe_wait_playback, _player, _episode, {:failed, _reason}} ->
-          {:error, :wait_playback_failed}
+        {:vxpipe_wait_playback, player, _episode, {:failed, _reason}} = message ->
+          player_failed(scope, player, message, monitor)
 
         {:vxpipe_wait_playback, player, _episode, status} = message ->
           scope =
@@ -143,9 +150,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
           if worker = Map.get(scope, :worker), do: send(worker.pid, message)
           await_completion(scope, monitor)
 
-        {:DOWN, reference, :process, _player, _reason}
+        {:DOWN, reference, :process, player, _reason} = message
         when is_map_key(scope.player_monitors, reference) ->
-          {:error, :wait_playback_failed}
+          player_failed(scope, player, message, monitor)
 
         {:vxpipe_transfer_phase, _caller, reply, :scope} ->
           send(reply, {reply, {:ok, scope}})
@@ -163,6 +170,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
   end
 
   defp start_handoff(scope, stage, payload, monitor) do
+    scope =
+      if stage == :refresh_audience,
+        do: %{scope | audience_dirty?: false},
+        else: %{scope | audience_handed_off?: true}
+
     task =
       RoomTransferSupervisor.handoff(scope.incarnation_id, fn ->
         Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff.run(
@@ -180,22 +192,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
          {:ok, {audience, preparation}},
          monitor
        ) do
-    scope =
-      Map.put(
-        scope,
-        :player_monitors,
-        Map.new(Map.values(audience.waits), &{Process.monitor(&1), &1})
-      )
+    scope = replace_audience(scope, audience)
 
     send(scope.authority, {:vxpipe_transfer_prepared, scope.reference, preparation})
 
-    await_completion(
-      scope |> Map.drop([:worker, :stage]) |> Map.put(:audience, audience),
-      monitor
-    )
+    continue_audience(Map.drop(scope, [:worker, :stage]), monitor)
   end
 
   defp worker_result(%{stage: :destination_preparation}, error, _monitor), do: error
+
+  defp worker_result(%{stage: :refresh_audience} = scope, {:ok, audience}, monitor) do
+    scope = scope |> Map.drop([:worker, :stage]) |> replace_audience(audience)
+    continue_audience(scope, monitor)
+  end
+
+  defp worker_result(%{stage: :refresh_audience}, error, _monitor), do: error
 
   defp worker_result(scope, result, monitor) do
     send(scope.authority, {:vxpipe_transfer_handoff_result, scope.reference, scope.stage, result})
@@ -215,6 +226,56 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
 
     %{scope | player_monitors: monitors}
   end
+
+  defp request_handoff(
+         %{stage: :refresh_audience, pending_handoff: nil} = scope,
+         stage,
+         payload,
+         monitor
+       ),
+       do: await_completion(%{scope | pending_handoff: {stage, payload}}, monitor)
+
+  defp request_handoff(scope, stage, payload, monitor) do
+    if Map.get(scope, :worker),
+      do: {:error, :handoff_already_running},
+      else: start_handoff(scope, stage, payload, monitor)
+  end
+
+  defp refresh_audience(%{audience_handed_off?: true} = scope, monitor),
+    do: await_completion(scope, monitor)
+
+  defp refresh_audience(scope, monitor) do
+    scope = %{scope | audience_dirty?: true}
+
+    if Map.get(scope, :worker) == nil and Map.has_key?(scope, :audience),
+      do: continue_audience(scope, monitor),
+      else: await_completion(scope, monitor)
+  end
+
+  defp continue_audience(%{audience_dirty?: true} = scope, monitor),
+    do: start_handoff(scope, :refresh_audience, scope.audience, monitor)
+
+  defp continue_audience(%{pending_handoff: {stage, payload}} = scope, monitor),
+    do: start_handoff(%{scope | pending_handoff: nil}, stage, payload, monitor)
+
+  defp continue_audience(scope, monitor), do: await_completion(scope, monitor)
+
+  defp replace_audience(scope, audience) do
+    players = Map.values(audience.waits)
+    removed = Map.values(scope.player_monitors) -- players
+    scope = Enum.reduce(removed, scope, &settle_player(&2, &1))
+    added = players -- Map.values(scope.player_monitors)
+    monitors = Enum.reduce(added, scope.player_monitors, &Map.put(&2, Process.monitor(&1), &1))
+    scope |> Map.put(:audience, audience) |> Map.put(:player_monitors, monitors)
+  end
+
+  defp player_failed(%{audience_handed_off?: true} = scope, player, message, monitor) do
+    if worker = Map.get(scope, :worker), do: send(worker.pid, message)
+    await_completion(settle_player(scope, player), monitor)
+  end
+
+  defp player_failed(scope, player, _message, monitor),
+    do: refresh_audience(settle_player(scope, player), monitor)
 
   defp complete_request(scope, monitor, caller, reply) do
     cond do

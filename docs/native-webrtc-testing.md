@@ -13,6 +13,19 @@ cd apps/vxpipe_gateway
 mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs
 ```
 
+From the umbrella root, verify the full suite on a shared host with:
+
+```shell
+mix test --preload-modules --seed 235296 --max-cases 4
+```
+
+Module preloading keeps first-use dependency loading outside the tests' bounded
+media calls. A captured full-suite timeout had the mixer waiting in the code
+loader during PCM mixing; the same recording checks passed independently.
+This option preserves the runtime deadlines and integration exclusions. See the
+[verification labnote](../labnotes/20260915-0815-preacceptance-listener-changes.md)
+for the original failure, diagnostic stack and subsequent results.
+
 For human wait configurations, cue/conversation ordering and private model-history isolation,
 including a real public HTTPS WAV download:
 
@@ -201,7 +214,7 @@ carrier socket/acknowledgements are controlled; the actual provider adapters and
 The existing guarded live API tests only establish control submission when enabled. Live carrier
 wait/cue/clear/recovery audibility remains a separate acceptance boundary.
 
-For the five-participant call, added output and monitor reconnection:
+For the five-participant call, listener re-entry, added output and monitor reconnection:
 
 ```shell
 mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --only changing_listeners
@@ -220,7 +233,13 @@ The case then closes the first monitor's data channel from its actual native cli
 the server connection exit. Its second connection continues receiving waiting audio; a replacement
 connection joins the same retained player before support STT is released. The original attempt,
 deadline, room services and surviving connection bindings remain. Both monitor outputs receive
-the cue before conversation. Complete listener membership removal, pre-acceptance audience changes
+the cue before conversation.
+
+Before destination briefing/acceptance, the same case also admits a late monitor and requires
+received waiting audio. It pauses that player's cursor at two seconds, removes the participant
+through its owning supervisor and observes both connection and player termination. Re-entry creates
+a fresh player, paused at half a second, without replacing any original player's instance. That
+listener joins the later cue/conversation assertions. Membership changes during preparation/cues
 and repeated changing-audience transfers retain separate acceptance requirements in the milestone.
 
 ## Protocol boundary
