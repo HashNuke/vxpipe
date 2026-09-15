@@ -4557,7 +4557,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         end
     after
       remaining ->
-        assert {:ok, _decoder, [{:final, ^expected}]} = MorseDecoder.flush(morse),
+        assert match?({:ok, _decoder, [{:final, ^expected}]}, MorseDecoder.flush(morse)),
                "Morse audio ended without #{inspect(expected)}: " <>
                  inspect(
                    Map.take(morse, [

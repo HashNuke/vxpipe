@@ -346,6 +346,9 @@ Depends on checkpoint 1.
 
 - [ ] Write failing end-to-end cases for independent opening TTS, human entry, agent transfer,
   human transfer/briefing and source recovery with tenant credentials and whole-selection overrides.
+  - [x] Verify persisted human entry with an independent opening credential, private playback,
+    tenant/binding cache isolation and revocation before a new activation.
+  - [ ] Verify the agent/human transfer and source-recovery flows with tenant credentials.
 - [ ] Complete credential resolution for opening TTS, caller connection STT, destination model/
   speech construction, private briefing and subsequent participant activation. Preserve deadlines,
   waits/readiness, cue-before-conversation, source continuity and local Morse operation.
@@ -596,7 +599,7 @@ Implementation boxes stay unchecked until their runnable exits and failure cases
 | Checkpoint | Implementation | Focused/flow evidence |
 | --- | --- | --- |
 | 1 — Tenant voice call | Implemented and verified; inline schema/runtime cutover ships with its consumers and fixtures | 19 focused database/integration checks pass, including a synthetic Google/Deepgram reply and transaction ordering. Browser preparation/restart checks pass. All five root gates pass: 1,489 tests, zero failures, 30 excluded (seed 235296). A discovered destination-progress bug was fixed separately. Earlier intermittent native audio/cleanup observations remain documented; this green run does not establish their cause. Final independent review remains open after a reviewer usage limit. See [inline evidence](../../labnotes/20260915-1719-inline-tenant-voice.md) and [provisioning evidence](../../labnotes/20260915-1616-tenant-credential-provisioning.md). |
-| 2 — Opening and transfers | Not started | Pending |
+| 2 — Opening and transfers | Opening/human-entry slice implemented; transfers pending | Four database-backed opening checks and 23 Engine opening tests pass. The playback gate now labels all opening frames private; cache reuse is scoped to tenant/binding and cannot rescue a revoked opening credential. Tenant identifier correction is committed separately. Latest umbrella: 1,507 tests, two existing handoff/native-audio failures, 30 excluded; both failures pass direct rechecks but their causes remain open. Static checks pass. See [opening evidence](../../labnotes/20260915-2039-tenant-opening-credentials.md). |
 | 3 — Telnyx tenant phone flow | Not started | Pending |
 | 4 — Twilio tenant phone flow | Not started | Pending |
 | 5 — Remaining provider requests | Not started | Pending |

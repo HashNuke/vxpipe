@@ -8,6 +8,10 @@ Sources: [Current opening-audio contract](../opening-audio-contract.md); [greeti
 
 A caller hears optional configured opening audio before normal conversation. The agent then follows its greeting mode, can use current time/hangup tools, and respects readiness, idle, and whole-call duration rules.
 
+The tenant-credential milestone supersedes this milestone's historical profile representation with
+inline selections in schema `20260915.01`. Its current definition/authentication contract is in
+[Opening audio](../opening-audio-contract.md); lifecycle and playout acceptance below remain in force.
+
 ## Specification
 
 - Optional call-level opening_audio accepts a supported file URL or fixed text with its own required `text_to_speech` capability-profile reference (schema `20260913.01`). Resolve and supervise opening TTS independently of every participant/default voice; an initial human receiver works without any agent. No LLM-generated notice, variable interpolation, or fallback voice. Cache by exact text/output settings/provider/model/voice and tenant/profile binding without secrets.

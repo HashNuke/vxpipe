@@ -275,7 +275,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     do:
       unsupported(
         ["opening_audio", "text_to_speech"],
-        "requires its own resolved text-to-speech profile"
+        "requires its own inline text-to-speech selection"
       )
 
   defp supported_receiver(%ResolvedCallPlan.Participant{kind: :agent} = receiver) do

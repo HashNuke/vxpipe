@@ -1,18 +1,27 @@
 # Opening audio contract
 
 Status: fixed-text and HTTPS-file playback, bounded reusable-asset caching, and input gating are
-implemented. The 2026-09-14 update gives text openings an explicit, independent TTS profile and
-closes the room-recording path during opening playback. Opening preparation now runs independently
-of the initial agent, and coordinates with the caller setup wait sound.
+implemented. Schema `20260915.01` gives text openings an independent inline TTS selection and
+resolves its named credential from the tenant database. Opening preparation runs independently
+of the initial agent and coordinates with the caller setup wait sound. The room-recording path
+stays closed during opening playback, and all opening output is labeled private.
 
 ## Decision
 
-Call-definition schemas `20260913.01` and `20260914.01` support one optional call-level
-`opening_audio` value. The newer schema adds wait sounds without changing the opening contract.
-Fixed text requires its own TTS capability-profile reference:
+Call-definition schema `20260915.01` supports one optional call-level `opening_audio` value.
+Fixed text requires its own inline TTS selection:
 
 ```json
-{"type": "text", "text": "This call may be recorded.", "text_to_speech": "opening-voice"}
+{
+  "type": "text",
+  "text": "This call may be recorded.",
+  "text_to_speech": {
+    "provider": "deepgram",
+    "model": "flux-haley-en",
+    "credential_name": "opening",
+    "options": {"encoding": "linear16", "sample_rate": 48000}
+  }
+}
 ```
 
 or a remotely fetched file:
@@ -21,14 +30,16 @@ or a remotely fetched file:
 {"type": "file_url", "url": "https://assets.example.test/opening.wav"}
 ```
 
-`opening-voice` names a `text_to_speech` entry in the existing capability-profile registry.
-That profile supplies the provider and public voice/model/output settings; credentials and
-transport configuration stay in the application's provider configuration. The compiler resolves
-and pins this selection independently of every participant's capabilities and defaults. It works
-with an initial human receiver and needs no agent activation to obtain a voice.
+The selection owns its provider, model and public output settings. `credential_name` selects the
+exact tenant/provider binding; omission selects `default`. It supplies no model or voice settings.
+The compiler pins the public selection independently of participant capabilities and defaults.
+Opening preparation resolves current credentials through the tenant source before starting its
+TTS capability. It works with an initial human receiver and needs no agent activation or global
+provider credentials. Missing opening credentials block definition save even when caller speech
+is fully configured. A cached asset cannot bypass credential validation for a new activation.
 
-The object is closed. A text source must contain a nonempty `text_to_speech` profile reference;
-missing/null/unknown/wrong-kind profiles fail explicitly. File sources reject that field and
+The object is closed. A text source must contain a supported `text_to_speech` selection;
+missing/null/unsupported selections and retired profile strings fail explicitly. File sources reject that field and
 require no TTS. Text and URL cannot be mixed, unknown types and keys fail, text is a
 non-empty UTF-8 value of at most 4096 bytes, and URLs are HTTPS values of at most 2048 bytes
 with a host and without user information or fragments. Query strings remain syntactically
@@ -65,7 +76,9 @@ Room mixing and both full-mix and individual-track recording obey the same openi
 The mixer starts closed for a pinned call; confirmed opening playout completion and complete
 initial resource readiness open it before ordinary input/greeting admission. Frames timestamped
 before that boundary are discarded even when decoding or delivery finishes afterward. Recording workers may initialize
-earlier, but receive no held caller audio. Private opening output does not enter room recordings.
+earlier, but receive no held caller audio. Private opening output does not enter room recordings. The opening playback gate labels both
+its first buffered frame and subsequent streamed frames `audio_scope: :private`, including file
+and cached playback, so downstream recording acceptance can exclude them.
 Opening completion does not revise privacy policy or restart warmed capabilities. The original
 startup-readiness deadline includes this completion; idle and whole-call timers keep their existing
 owners and activity rules. Readiness and maximum-duration expiry reject late readiness completion.
@@ -79,12 +92,16 @@ receipt does not imply conversational readiness.
 
 ## Migration
 
-This replaces the previous schema's inherited initial-agent voice. Publish definitions using
-`20260913.01` and add `opening_audio.text_to_speech` to every text opening. There is no fallback
-to participant capabilities, call defaults, another agent, or an invented voice. Versions older than `20260913.01`
-are not accepted as newly authored definitions; `20260914.01` retains the explicit opening profile. Reprepare unstarted calls from an updated
-definition instead of silently supplying a voice to an old pinned plan. Historical definitions
-and completed-call plans remain immutable. Omitted openings and file URLs need no TTS reference.
+Earlier schemas introduced independent opening profiles after the initial inherited-agent voice.
+Current schema `20260915.01` replaces those profiles with inline selections and tenant credential
+names. Provision the selected tenant credential and supply `opening_audio.text_to_speech` for every
+text opening. There is no fallback to participant capabilities, call defaults, another agent,
+application provider settings or an invented voice.
+
+Old profile-based definitions and prepared plans cannot run through the current parser/runtime.
+The milestone's explicit stored-revision conversion and prepared-call drain remain a final-cutover
+requirement before deployment over existing data. Historical revisions and completed-call plans
+remain immutable. Omitted openings and file URLs need no TTS selection.
 
 ## File asset profile
 
@@ -114,9 +131,8 @@ credentials are retained in keys or routine inspection. A different tenant, URL,
 cannot reuse the entry. Download/preparation failures are not cached.
 
 Fixed-text synthesis uses the same bounded cache and asset-size/duration limits. Its digest covers
-the public tenant key, exact text, selected capability-profile reference, provider identity,
-voice/model, encoding, sample rate, and a
-render-profile revision. Provider implementations expose only output-affecting identity; API keys
+the public tenant key, exact text, complete inline selection and non-secret credential binding,
+provider identity, voice/model, encoding, sample rate, and a render-profile revision. Provider implementations expose only output-affecting identity; API keys
 and transport credentials are excluded. On a miss, a temporary supervised sink forwards provider
 PCM to the caller while collecting at most the configured bounds, then inserts only a complete,
 supported linear16 asset. On a hit, the ordinary temporary playback worker supplies that asset to
@@ -129,7 +145,7 @@ only the destination sink's correlated playout-completion acknowledgement does t
 - Accepting both text and URL and choosing one by precedence hides definition mistakes.
 - LLM-generated notices are nondeterministic and can change the meaning of a fixed opening.
 - Inheriting the initial agent's TTS couples call-level playback to an optional participant.
-  Requiring a dedicated profile makes human entry work and prevents implicit voice selection.
+  Requiring an independent inline selection makes human entry work and prevents implicit voice selection.
 - Releasing input on synthesis or enqueue completion is too early; the caller may still be
   hearing the opening.
 - Buffering caller media during the opening would later submit speech uttered before consent
@@ -145,6 +161,17 @@ while a temporary sink owns bounded collection. `RoomAuthority` owns only the op
 correlated outcome decision; it does not fetch, decode, cache, synthesize, or push opening media.
 
 ## Verification
+
+The tenant-opening checkpoint exercises real encrypted provisioning, save/publish/prepare/claim,
+and in-process Deepgram speech adapters for a human-entry call. It checks the independent opening
+key and caller STT key, exact private PCM on initial and subsequent frames, actual playout gating,
+opening capability cleanup, cache reuse, tenant/binding cache isolation, and rejection of a revoked
+opening credential even with a populated cache. Existing Engine tests cover synthesized, cached
+and file openings while retaining conversation scope for the later agent greeting. See the
+[tenant-opening labnotes](../labnotes/20260915-2039-tenant-opening-credentials.md) for results.
+
+The following evidence predates the inline-schema migration and describes the earlier profile
+representation; its lifecycle and privacy requirements still apply.
 
 The independent-opening checkpoint adds native WebRTC regressions with model construction held:
 a delayed file fetch and a separately prepared opening voice both produce decoded wait → notice →

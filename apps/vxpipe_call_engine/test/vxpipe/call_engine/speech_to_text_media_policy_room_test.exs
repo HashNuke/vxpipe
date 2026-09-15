@@ -890,6 +890,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     _receiver_attachment = attach(plan, room, receiver, "conn-live-receiver")
     TestSpeechToTextTransport.deliver(transport, connected_message())
     Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
+    assert CallEngine.RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :open
 
     assert :ok =
              CallEngine.push_audio(

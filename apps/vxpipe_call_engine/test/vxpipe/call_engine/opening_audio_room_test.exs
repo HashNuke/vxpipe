@@ -539,7 +539,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     )
 
     TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
-    assert_receive {:test_audio_output, ^sink, _frame}
+    assert_receive {:test_audio_output, ^sink, frame}
+    assert frame.audio_scope == :private
 
     TestTextToSpeechTransport.deliver_control(
       tts_transport,
@@ -675,6 +676,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert {:ok, _attachment} = TestTransferConnection.attach(second_command, second_sink)
     assert_receive {:test_audio_output, ^second_sink, frame}
     assert frame.payload == <<1, 0, 2, 0>>
+    assert frame.audio_scope == :private
     assert_receive {:test_audio_output_finish, ^second_sink, _correlation_id}
     refute_receive {:test_tts_control, ^second_tts, _payload}
 
@@ -757,6 +759,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert frame.participant_id == caller.participant_id
     assert frame.connection_id == "conn-file-opening"
     assert frame.payload == <<1, 0, 2, 0>>
+    assert frame.audio_scope == :private
     assert_receive {:test_audio_output_finish, ^sink, correlation_id}
 
     assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
@@ -925,7 +928,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_tts_control, ^agent_tts, greeting_speak}
     assert JSON.decode!(greeting_speak) == %{"text" => "Welcome.", "type" => "Speak"}
     assert_receive {:test_tts_control, ^agent_tts, _greeting_flush}
-    complete_speech(agent_tts, sink, "fixed-greeting")
+    complete_speech(agent_tts, sink, "fixed-greeting", :conversation)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
 
     assert :ok =
@@ -1175,14 +1178,15 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :open
   end
 
-  defp complete_speech(tts_transport, sink, speech_id) do
+  defp complete_speech(tts_transport, sink, speech_id, scope \\ :private) do
     TestTextToSpeechTransport.deliver_control(
       tts_transport,
       JSON.encode!(%{"type" => "SpeechStarted", "request_id" => "req", "speech_id" => speech_id})
     )
 
     TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
-    assert_receive {:test_audio_output, ^sink, _frame}
+    assert_receive {:test_audio_output, ^sink, frame}
+    assert frame.audio_scope == scope
 
     TestTextToSpeechTransport.deliver_control(
       tts_transport,

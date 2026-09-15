@@ -48,7 +48,7 @@ defmodule Vxpipe.CallEngine.OpeningAudio.PlaybackGate do
   end
 
   def handle_call(:release, {owner, _tag}, %{owner: owner, pending: {from, frame}} = state) do
-    result = OutputSink.push(state.sink, %{frame | reply_to: self()})
+    result = OutputSink.push(state.sink, %{frame | audio_scope: :private, reply_to: self()})
     GenServer.reply(from, result)
     {:reply, result, %{state | pending: nil, released?: true}}
   end
@@ -60,7 +60,8 @@ defmodule Vxpipe.CallEngine.OpeningAudio.PlaybackGate do
       )
       when frame.connection_id == state.connection_id and frame.correlation_id == state.turn and
              frame.reply_to == state.callback do
-    {:reply, OutputSink.push(state.sink, %{frame | reply_to: self()}), state}
+    {:reply, OutputSink.push(state.sink, %{frame | audio_scope: :private, reply_to: self()}),
+     state}
   end
 
   def handle_call({:vxpipe_audio_output_finish, turn, callback}, _from, state)
