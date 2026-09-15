@@ -285,24 +285,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     {late_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
     pause_wait_at(late_player, 100)
     assert await_paused_cursor(late_player, 3_000) == 192_000
-    late_player_monitor = Process.monitor(late_player)
-
-    [{late_connection, _}] =
-      Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, late_client.connection_id})
-
-    late_connection_monitor = Process.monitor(late_connection)
-
-    participant_supervisor =
-      Map.fetch!(:sys.get_state(authority).participant_supervisors, late.participant_id)
-
-    assert :ok =
-             CallEngine.RoomParticipantSupervisor.stop_participant(
-               room.incarnation_id,
-               participant_supervisor
-             )
-
-    assert_receive {:DOWN, ^late_connection_monitor, :process, ^late_connection, _}, 2_000
-    assert_receive {:DOWN, ^late_player_monitor, :process, ^late_player, _}, 2_000
+    remove_native_listener(authority, room, late, late_client, late_player)
 
     for {participant, {player, _}} <- original_players do
       assert {^player, _} = Map.fetch!(wait_players(room.incarnation_id), participant)
@@ -426,6 +409,20 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     audience =
       Enum.map(audience, fn peer -> if peer == observer_client, do: replacement, else: peer end)
 
+    {departing_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
+    remove_native_listener(authority, room, late, late_client, departing_player)
+    returned_listener = join_native_listener(plan, room, "late-monitor", :monitor)
+    await_tone(returned_listener, 250, 2_000)
+    {returned_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
+    refute returned_player == departing_player
+
+    audience =
+      Enum.map(audience, fn peer -> if peer == late_client, do: returned_listener, else: peer end)
+
+    for {participant, {player, _}} <- original_players do
+      assert {^player, _} = Map.fetch!(wait_players(room.incarnation_id), participant)
+    end
+
     assert {:ok, refreshed} = CallEngine.RoomAuthority.readiness_binding(authority)
     assert refreshed.attempt == pending.attempt
     assert refreshed.room == before.room
@@ -436,17 +433,45 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 0
 
+    returned_connection = Map.fetch!(refreshed.connections, returned_listener.connection_id).pid
+
+    assert {:ok, returned_media} =
+             GenServer.call(returned_connection, :vxpipe_connection_readiness)
+
+    cue_pause = pause_first_cue(returned_media.output)
+
     TestSpeechToTextTransport.deliver(
       support_stt,
       ~s({"type":"Connected","request_id":"multiple-support-ready","sequence_id":0})
     )
 
+    assert_receive {:native_cue_paused, ^cue_pause, cue_player}, 2_000
+    assert await_paused_cursor(cue_player, 1_000) == 1_920
+    await_tone(caller_client, 1_000, 2_000)
+    remove_native_listener(authority, room, late, returned_listener, cue_player)
+    cue_listener = join_native_listener(plan, room, "late-monitor", :monitor)
+    await_tone(caller_client, 250, 2_000)
+
+    audience =
+      Enum.map(audience, fn peer ->
+        if peer == returned_listener, do: cue_listener, else: peer
+      end)
+
     await_sideband(support_client, "transfer.active", 3_000)
     await_transfer_progress(third_client, "completed")
+    assert {:ok, completed} = CallEngine.RoomAuthority.readiness_binding(authority)
+    assert completed.room == before.room
+
+    for {id, connection} <- Map.delete(before.connections, observer_client.connection_id),
+        do: assert(completed.connections[id] == connection)
+
     send_tone(support_client, 1_500, 1)
-    for peer <- audience ++ [second_sink], do: assert_handoff_audio_order(peer, 1_500, 250)
+
+    for peer <- audience ++ [second_sink],
+        do: assert_handoff_audio_order(peer, 1_500, 250, true)
+
     send_tone(caller_client, 500, 1)
-    assert_handoff_audio_order(support_client, 500, 250)
+    assert_handoff_audio_order(support_client, 500, 250, true)
     assert wait_players(room.incarnation_id) == %{}
     assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
   end
@@ -3907,6 +3932,59 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
               end, nil})
   end
 
+  defp remove_native_listener(authority, room, participant, peer, player) do
+    [{connection, _}] =
+      Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, peer.connection_id})
+
+    connection_monitor = Process.monitor(connection)
+    player_monitor = Process.monitor(player)
+
+    supervisor =
+      Map.fetch!(:sys.get_state(authority).participant_supervisors, participant.participant_id)
+
+    assert :ok =
+             CallEngine.RoomParticipantSupervisor.stop_participant(
+               room.incarnation_id,
+               supervisor
+             )
+
+    assert_receive {:DOWN, ^connection_monitor, :process, ^connection, _}, 2_000
+    assert_receive {:DOWN, ^player_monitor, :process, ^player, _}, 2_000
+  end
+
+  defp pause_first_cue(output) do
+    token = make_ref()
+    observer = self()
+
+    assert :ok =
+             :sys.install(
+               output,
+               {token,
+                fn
+                  :done, _event, _process ->
+                    :done
+
+                  state,
+                  {:in,
+                   {:"$gen_call", {player, _},
+                    {:vxpipe_audio_output, %CallEngine.Media.AudioOutputFrame{} = frame}}},
+                  _process ->
+                    if String.contains?(frame.command_id, ":cue:") do
+                      CallEngine.WaitSounds.Player.pause(player)
+                      send(observer, {:native_cue_paused, token, player})
+                      :done
+                    else
+                      state
+                    end
+
+                  state, _event, _process ->
+                    state
+                end, nil}
+             )
+
+    token
+  end
+
   defp await_paused_cursor(player, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
     await_paused_cursor_at(player, deadline)
@@ -4269,11 +4347,16 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  defp assert_handoff_audio_order(connection, conversation_frequency, wait_frequency) do
+  defp assert_handoff_audio_order(
+         connection,
+         conversation_frequency,
+         wait_frequency,
+         replay? \\ false
+       ) do
     receive_handoff_audio(
       connection,
       Decoder.Native.create(48_000, 1),
-      {conversation_frequency, wait_frequency},
+      {conversation_frequency, wait_frequency, replay?},
       :waiting,
       System.monotonic_time(:millisecond) + 5_000
     )
@@ -4282,7 +4365,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp receive_handoff_audio(connection, decoder, frequencies, phase, deadline) do
     client = connection.client
     track = connection.output_track_id
-    {conversation_frequency, wait_frequency} = frequencies
+    {conversation_frequency, wait_frequency, replay?} = frequencies
 
     receive do
       {:ex_webrtc, ^client, {:rtp, ^track, _rid, %Packet{} = packet}} ->
@@ -4299,8 +4382,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
               :conversation
 
             wait_frequency != nil and tone?(pcm, wait_frequency) ->
-              assert phase == :waiting, "wait audio followed the connection cue"
-              phase
+              assert phase == :waiting or (phase == :cue and replay?),
+                     "wait audio followed #{phase} (cue replay allowed: #{replay?})"
+
+              :waiting
 
             true ->
               phase

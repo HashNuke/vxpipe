@@ -126,7 +126,7 @@ caller turn. Fifty Gateway checks and three phone-room checks pass. The
 [phone acceptance labnote](../../labnotes/20260915-0622-phone-handoff-parity.md) records the
 evidence and fixture corrections; production behavior and UI are unchanged.
 
-There are **9 checkpoint tasks remaining**: live carrier audibility 1, changing/multiple listeners 6,
+There are **8 checkpoint tasks remaining**: live carrier audibility 1, changing/multiple listeners 5,
 and final audit 2. Live provider flags, credentials, approved test numbers and public callback/media
 URLs are absent from the test environment; guarded API tests skip without placing calls. Actual
 adapters and decoded synthetic-socket audio do not establish physical phone audibility.
@@ -144,15 +144,19 @@ monitor before destination briefing/acceptance, removes its complete membership 
 with a fresh player while retaining every original player. Acceptance waits for an in-flight
 audience refresh; losing that worker fails the attempt. The
 [pre-acceptance listener labnote](../../labnotes/20260915-0815-preacceptance-listener-changes.md)
-records this checkpoint. Membership changes during preparation/cues and repeated changing-audience
-transfers remain open; this does not reduce the nine compound tasks.
+records this checkpoint. The same native call now also removes and readmits the monitor during
+accepted preparation and an unfinished cue, retains room services and surviving bindings, then
+replays cues before conversation. The five-participant playback demonstration is complete; the
+[preparation/cue labnote](../../labnotes/20260915-0913-preparing-listener-changes.md) records its red
+cases and 61 passing focused engine checks. Listener arrival during blocked initial destination
+construction and broader repeated-transfer/failure acceptance remain open.
 
-Latest umbrella verification has 1,435 tests, one failure and 16 exclusions with module preloading,
-seed 235296 and concurrency four. The engine's 653 checks and expanded native transfer case pass.
-The failure is an ordinary human-only WebRTC routing case; it passes alone but fails in its complete
-owning module, including once before any restrictive membership change. Keep the root test gate
-open while investigating that media path. Formatting, compilation, strict Credo and unused-dependency
-checks pass. The listener changes are committed implementation progress, not slice acceptance.
+Latest umbrella verification passes all five root gates: 1,435 tests, zero failures and 16
+exclusions with module preloading, serialized test-file compilation, seed 235296 and concurrency
+four. This includes 653 engine and 410 Gateway checks. The earlier ordinary human-only WebRTC
+routing failure did not recur in this full run or four diagnostic module runs; no cause or fix
+was established. The [routing labnote](../../labnotes/20260915-0907-native-audio-routing.md) retains
+that evidence. The changing-listener slice still requires its remaining acceptance tasks.
 
 The milestone's [current checkpoints](transfer-readiness-and-wait-sounds.md#implementation-checkpoints)
 and [verification ledger](transfer-readiness-and-wait-sounds.md#verification-ledger) retain the

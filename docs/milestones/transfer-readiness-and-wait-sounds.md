@@ -7,11 +7,11 @@ sample evidence. AI acceptance includes independent model/voice/tool/MCP readine
 waits, ordered greeting, privacy and resource retention. Initial waiting includes native audio and
 deterministic phone lifecycle acceptance. Local phone handoff acceptance passes; live carrier
 audibility and changing/multiple listeners remain open.
-Latest verification: 1,435 tests, one failure and 16 integration exclusions (seed 235296,
-concurrency four, module preloading). The engine's 653 checks and the expanded native transfer
-case pass. An existing human-only routing test times out receiving audio; its complete owning
-module recheck also fails, so the root test gate remains open. Formatting, compilation, strict
-Credo and unused-dependency checks pass. Nine checkpoint tasks remain.
+Latest verification: all five root gates pass; 1,435 tests, zero failures and 16 integration
+exclusions (seed 235296, concurrency four, module preloading and serialized test-file compilation).
+The expanded native preparation/cue membership case and 61 focused engine checks pass. The earlier
+ordinary human-only routing failure did not recur in this full run; its cause remains unproven.
+Eight checkpoint tasks remain.
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -48,7 +48,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Phone transfer | Local Telnyx/Twilio default/URL/nil waits, delayed destination STT, withheld/replayed cue marks, bidirectional decoded audio/transcripts, privacy and spoken source recovery pass on retained media. | Verify live carrier wait/cue/clear/recovery audibility; actual adapters driven by synthetic sockets do not establish physical playout. |
 | AI transfer | Accepted: independent model, voice, MCP initialization and local-tool readiness gates, default/URL/nil waits, ordered cue/greeting, private held input and retained resources. Failure recovers spoken source conversation; fresh activations work on re-entry. | Retain this acceptance while completing phone and changing-listener slices. |
 | Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
-| Multiple listeners and failures | A native five-participant handoff verifies independent seven/three-second cursors, an added monitor sink, actual connection loss and replacement on the retained player. A monitor also joins, leaves and re-enters before acceptance without replacing original players. New connections hold immediately, before graph reconciliation. | Finish membership changes during preparation/cues, repeated transfers and partial-release failures in running calls. |
+| Multiple listeners and failures | A native five-participant handoff verifies independent seven/three-second cursors, multiple monitor sinks and retained resources. A monitor leaves and re-enters before acceptance, during accepted preparation and during an unfinished cue. Changed cues return to waiting and replay before conversation. | Finish repeated human/AI transfers with changing membership, remaining failure/cancellation acceptance and the full root gates. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The preceding policy-preparation
 checkpoint passed all five root gates with 1,306 tests, zero failures and 15 exclusions;
@@ -333,8 +333,8 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after human web, AI handoff, initial waiting and local phone acceptance: **9 tasks**
-in this section—live phone audibility 1, changing/multiple listeners 6, and final audit 2.
+Remaining work after human web, AI handoff, initial waiting and local phone acceptance: **8 tasks**
+in this section—live phone audibility 1, changing/multiple listeners 5, and final audit 2.
 The open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
 percentage. Two delivery slices still have acceptance work remaining.
@@ -690,12 +690,27 @@ its existing supervised worker. One acceptance arriving during refresh waits for
 worker loss uses the established attempt failure path. Two focused acceptance-race checks pass.
 The [pre-acceptance listener labnote](../../labnotes/20260915-0815-preacceptance-listener-changes.md)
 records the native regression, telemetry compatibility correction and verification boundaries.
-The compound tasks remain open for membership changes during preparation/cues and repeated
-changing-audience transfers. The latest umbrella run has 1,435 tests and one existing human-only
-audio-routing failure. That case passes alone but fails in its six-test owning module, including
-once before the restrictive participant joins. The transfer checks pass; the full root test gate
-remains open pending investigation of that ordinary media path. These are implementation-progress
-commits, not acceptance of the changing-listener slice.
+That checkpoint's umbrella run had 1,435 tests and one ordinary human-only audio-routing failure.
+The case passed alone but failed in its six-test owning module, including once before the
+restrictive participant joined. Four subsequent diagnostic module runs passed without capturing
+a failure. Temporary diagnostics were removed; no ordinary routing behavior or deadline changed.
+The [routing investigation](../../labnotes/20260915-0907-native-audio-routing.md) records the
+unproven hypotheses and evidence. The preparation/cue checkpoint below supersedes that root result.
+
+Native membership acceptance now also removes and readmits that monitor while accepted support
+STT remains unready and during the first acknowledged frame of its connection cue. Departure
+reconciles away only an unneeded player; the brief membership-to-attachment gap remains preparing
+within the original deadline. A changed cue audience cancels old cue players, clears current live
+outputs, refreshes preparation and replays cues. The caller receives cue → wait → cue → conversation;
+other connections also require a new cue after any renewed wait. Ordinary handoffs retain the
+stricter single-sequence assertion. Original room services and surviving connection bindings remain
+after final release. The final native case and 61 owning engine checks pass. The
+[preparation/cue labnote](../../labnotes/20260915-0913-preparing-listener-changes.md) records the
+regressions and fixture refinement. All five root gates now pass: 1,435 tests, zero failures and
+16 exclusions, including 653 engine and 410 Gateway checks. The prior ordinary routing failure
+did not recur; this passing run does not establish its cause. Broader audience reconciliation
+still needs the listener-arrival boundary during blocked initial destination construction, and
+repeated-transfer/failure acceptance remains open.
 
 Implementation tasks:
 
@@ -710,9 +725,11 @@ Implementation tasks:
 
 Acceptance and commit tasks:
 
-- [ ] Demonstrate the five-participant hold and two listeners at seven/three seconds of one shared
+- [x] Demonstrate the five-participant hold and two listeners at seven/three seconds of one shared
   ten-second fixture in a running call. Replace a connection and add/remove a listener during
   waiting/cue; verify independent playback, multiple-sink ordering and unchanged service identities.
+  The same native call covers pre-acceptance, accepted-preparation and interrupted-cue re-entry,
+  followed by cue-ordered conversation. Other slice tasks and full umbrella acceptance remain open.
 - [ ] Exercise stale readiness, relevant/unrelated policy revisions and repeated human/AI transfers
   with audio/transcript/recording assertions. Include a controlled partial-release failure and
   safe phase/queue diagnostics. Inspect any changed sample UI in rendered Chrome.
@@ -1225,7 +1242,8 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
-| Audience changes before acceptance | The native missing-wait regression failed before implementation. All 50 focused engine checks pass, including acceptance during refresh and linked worker loss. Latest umbrella: 1,435 tests, one human-only routing failure, 16 exclusions; seed 235296, concurrency four, module preloading. All 653 engine checks and the expanded native transfer case pass. The ordinary routing case passes alone but fails in its complete six-test module; the root test gate remains open. Other four root gates pass. | A late monitor hears waiting before destination briefing/acceptance, leaves and re-enters on a fresh player. Every original player survives, and the same call completes exact seven/three-second cursors, monitor connection replacement and cue-before-conversation. The existing phase coalesces audience refresh and queues acceptance within the original deadline. Preparation/cue membership changes and repeated-transfer acceptance remain open; nine compound tasks remain. |
+| Listener changes during preparation and cues | Native missing-wait and cue-stage admission failures reproduced before their fixes. The final native case and 61 focused engine checks pass. All five root gates pass: 1,435 tests, zero failures, 16 exclusions; seed 235296, concurrency four, module preloading and serialized test-file compilation. The prior ordinary routing failure did not recur; no cause or ordinary routing fix was established. | A monitor leaves and re-enters while accepted STT is unready and during an unfinished cue. Removed players retire, the attachment gap remains preparing, and changed cues return to waiting before replay. Every current sink receives a new cue before conversation; original room services and surviving connections remain. The five-participant demonstration is complete. Initial-construction audience changes and repeated-transfer/failure acceptance remain open; eight checkpoint tasks remain. |
+| Audience changes before acceptance | The native missing-wait regression failed before implementation. All 50 focused engine checks pass, including acceptance during refresh and linked worker loss. That checkpoint's umbrella run had 1,435 tests, one human-only routing failure and 16 exclusions; the next row above records the passing rerun. All 653 engine checks, the expanded native transfer case and the other four root gates passed. | A late monitor hears waiting before destination briefing/acceptance, leaves and re-enters on a fresh player. Every original player survives, and the same call completes exact seven/three-second cursors, monitor connection replacement and cue-before-conversation. The existing phase coalesces audience refresh and queues acceptance within the original deadline. Preparation/cue membership changes and repeated-transfer acceptance were still open at that checkpoint; nine compound tasks remained. |
 | Monitor connection loss and replacement | Two player, four policy and two mixer regressions were run red before their fixes. The 75-test engine group and 13 mixer checks pass. The original native module passes in all five root gates: 1,433 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Closing an actual monitor data channel retains waiting on its second connection. A replacement shares the same player; both receive cue before conversation on the original attempt/deadline and retained room/media bindings. Connection enforcers retire with their owner, while required live enforcers remain critical. Mixer refresh retains healthy subscriptions and its lease after removing the departed selection. Complete listener removal/re-entry and repeated-transfer acceptance remain open; nine compound tasks remain. |
 | Five-participant cursors and added monitor sink | Native admission and missing initial-hold regressions reproduced before fixes; the player reconciliation contract failed before implementation. The 46-test engine group and completed native flow pass. All five root gates pass: 1,425 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Four initial audience listeners retain independent players; two stop at exact seven/three-second positions of one ten-second asset. An added monitor connection starts held even while the worker is paused, then shares the original cursor and receives cue before conversation. Existing resources and deadline persist. Broader membership/removal/re-entry acceptance remains open; nine compound checkpoint tasks remain. |
 | Local phone handoff acceptance | Six configured handoffs and four preparation/cue disconnect recoveries pass in the 50-test Gateway regression group; three owning phone-room checks pass. All five root gates pass: 1,423 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Actual Telnyx Opus/Twilio PCMU adapters preserve waits/cue/conversation ordering, private recordings, selected STT and retained resources. Replayed marks cannot release a held cue; exact drain permits bidirectional audio and transcripts. Socket loss restores spoken source conversation and another caller turn. Provider API guards skip safely; physical carrier audibility stays open. Nine checkpoint tasks remain. |

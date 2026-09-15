@@ -16,15 +16,19 @@ mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs
 From the umbrella root, verify the full suite on a shared host with:
 
 ```shell
-mix test --preload-modules --seed 235296 --max-cases 4
+mix test --preload-modules --max-requires 1 --seed 235296 --max-cases 4
 ```
 
 Module preloading keeps first-use dependency loading outside the tests' bounded
 media calls. A captured full-suite timeout had the mixer waiting in the code
 loader during PCM mixing; the same recording checks passed independently.
-This option preserves the runtime deadlines and integration exclusions. See the
+Serializing test-file compilation also limits compilation contention while four
+async test modules can still run. These options preserve runtime deadlines and
+integration exclusions. See the
 [verification labnote](../labnotes/20260915-0815-preacceptance-listener-changes.md)
-for the original failure, diagnostic stack and subsequent results.
+for the original failure and diagnostic stack, and the
+[preparation/cue labnote](../labnotes/20260915-0913-preparing-listener-changes.md)
+for the current passing full run.
 
 For human wait configurations, cue/conversation ordering and private model-history isolation,
 including a real public HTTPS WAV download:
@@ -239,8 +243,16 @@ Before destination briefing/acceptance, the same case also admits a late monitor
 received waiting audio. It pauses that player's cursor at two seconds, removes the participant
 through its owning supervisor and observes both connection and player termination. Re-entry creates
 a fresh player, paused at half a second, without replacing any original player's instance. That
-listener joins the later cue/conversation assertions. Membership changes during preparation/cues
-and repeated changing-audience transfers retain separate acceptance requirements in the milestone.
+listener joins the later cue/conversation assertions.
+
+The monitor also leaves and re-enters while accepted support STT remains unready. A one-shot
+output callback then pauses its actual cue player after the first acknowledged 20 ms frame;
+removal/re-entry during that unfinished cue invalidates the old candidate. The caller receives the
+first cue and renewed waiting, then every current connection receives a subsequent cue before
+conversation. The ordering helper permits renewed waits only in this explicit replay case and
+requires another cue after each one. Original room services and surviving connection bindings
+remain after release. Repeated changing-audience transfers and remaining failure acceptance stay
+open in the milestone.
 
 ## Protocol boundary
 
