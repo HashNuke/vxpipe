@@ -639,7 +639,7 @@
 .vx-timeline-tool {
   margin: 0 0 20px 44px;
   border-left: 2px solid var(--vx-violet);
-  background: color-mix(in oklch, var(--vx-violet) 7%, var(--vx-panel));
+  background: var(--vx-panel);
   overflow: hidden;
 }
 .vx-tool-summary {
