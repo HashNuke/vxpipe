@@ -717,6 +717,9 @@ button.vx-tool-summary:hover {
 }
 .vx-tool-detail-tabs button {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 7px 10px 8px;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -730,10 +733,23 @@ button.vx-tool-summary:hover {
   color: var(--vx-ink);
 }
 .vx-tool-http-status {
-  display: inline-block;
-  margin-bottom: 10px;
-  color: var(--vx-ink);
-  font: 600 12px var(--vx-mono);
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--vx-line);
+  border-radius: 999px;
+  background: var(--vx-soft);
+  color: var(--vx-muted);
+  font: 600 10px/1 var(--vx-mono);
+}
+.vx-tool-http-success {
+  border-color: var(--vx-green);
+  color: var(--vx-green);
+}
+.vx-tool-http-error {
+  border-color: var(--vx-red);
+  color: var(--vx-red);
 }
 .vx-tool-details pre {
   max-height: 240px;

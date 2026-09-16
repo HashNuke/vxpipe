@@ -202,11 +202,27 @@ function ToolRow({ tool }: { tool: ToolCall }) {
               <button
                 id={`${detailsId}-response-tab`}
                 role="tab"
+                aria-label="Response"
                 aria-selected={detail === "response"}
                 aria-controls={`${detailsId}-panel`}
                 onClick={() => setDetail("response")}
               >
                 Response
+                {tool.responseStatus !== undefined && (
+                  <span
+                    className={`vx-tool-http-status ${
+                      tool.responseStatus >= 200 && tool.responseStatus < 400
+                        ? "vx-tool-http-success"
+                        : tool.responseStatus >= 400
+                          ? "vx-tool-http-error"
+                          : ""
+                    }`}
+                    aria-hidden="true"
+                    title={`HTTP ${tool.responseStatus}`}
+                  >
+                    {tool.responseStatus}
+                  </span>
+                )}
               </button>
             )}
           </div>
@@ -215,9 +231,6 @@ function ToolRow({ tool }: { tool: ToolCall }) {
             role="tabpanel"
             aria-labelledby={`${detailsId}-${detail}-tab`}
           >
-            {detail === "response" && tool.responseStatus !== undefined && (
-              <span className="vx-tool-http-status">HTTP {tool.responseStatus}</span>
-            )}
             {detail === "request" &&
               (tool.request === null ? (
                 <p className="vx-tool-empty">No request arguments.</p>

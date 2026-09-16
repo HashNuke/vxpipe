@@ -82,12 +82,17 @@ test("tool calls disclose optional request and response details", () => {
     "aria-selected",
     "true",
   );
-  expect(completedDetails.getByRole("tab", { name: "Response" })).toBeVisible();
+  const completedResponseTab = completedDetails.getByRole("tab", {
+    name: "Response",
+  });
+  expect(within(completedResponseTab).getByText("200")).toBeVisible();
   expect(
     completedDetails.getByText(/"requested_date": "2026-09-18"/),
   ).toBeVisible();
-  fireEvent.click(completedDetails.getByRole("tab", { name: "Response" }));
-  expect(completedDetails.getByText("HTTP 200")).toBeVisible();
+  fireEvent.click(completedResponseTab);
+  expect(
+    within(completedDetails.getByRole("tabpanel")).queryByText("HTTP 200"),
+  ).not.toBeInTheDocument();
   expect(completedDetails.getByText(/"updated": true/)).toBeVisible();
 
   fireEvent.click(
@@ -103,8 +108,9 @@ test("tool calls disclose optional request and response details", () => {
   const failedDetails = within(
     failedDisclosure.closest(".vx-timeline-tool") as HTMLElement,
   );
-  fireEvent.click(failedDetails.getByRole("tab", { name: "Response" }));
-  expect(failedDetails.getByText("HTTP 503")).toBeVisible();
+  const failedResponseTab = failedDetails.getByRole("tab", { name: "Response" });
+  expect(within(failedResponseTab).getByText("503")).toBeVisible();
+  fireEvent.click(failedResponseTab);
   expect(failedDetails.getByText(/"error": "Service unavailable"/)).toBeVisible();
 
   const emptyDisclosure = screen.getByRole("button", {
@@ -115,8 +121,9 @@ test("tool calls disclose optional request and response details", () => {
     emptyDisclosure.closest(".vx-timeline-tool") as HTMLElement,
   );
   expect(emptyDetails.getByText("No request arguments.")).toBeVisible();
-  fireEvent.click(emptyDetails.getByRole("tab", { name: "Response" }));
-  expect(emptyDetails.getByText("HTTP 204")).toBeVisible();
+  const emptyResponseTab = emptyDetails.getByRole("tab", { name: "Response" });
+  expect(within(emptyResponseTab).getByText("204")).toBeVisible();
+  fireEvent.click(emptyResponseTab);
   expect(emptyDetails.getByText("No response body.")).toBeVisible();
 });
 
