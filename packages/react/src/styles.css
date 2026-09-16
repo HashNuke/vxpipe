@@ -21,7 +21,8 @@
     system-ui,
     sans-serif;
   min-width: 0;
-  min-height: 760px;
+  height: 760px;
+  max-height: 100dvh;
   border: 1px solid var(--vx-line);
   border-radius: 8px;
   overflow: hidden;
@@ -169,12 +170,16 @@
   display: grid;
   grid-template-columns: 228px minmax(0, 1fr);
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .vx-participants {
   background: var(--vx-panel);
   border-right: 1px solid var(--vx-line);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 24px 20px;
 }
 .vx-section-title {
@@ -195,6 +200,8 @@
   margin: 24px 0;
   padding: 0;
   list-style: none;
+  min-height: 0;
+  overflow-y: auto;
 }
 .vx-participants li {
   margin-bottom: 28px;
@@ -316,8 +323,12 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .vx-participant-details {
+  flex: 1;
+  min-height: 0;
   padding: 32px;
   overflow: auto;
 }
@@ -415,6 +426,7 @@
   padding: 0 28px;
   border-bottom: 1px solid var(--vx-line);
   min-height: 54px;
+  flex: 0 0 auto;
 }
 .vx-tabs button {
   border: 0;
@@ -438,6 +450,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 .vx-timeline-filters {
   display: flex;
@@ -446,6 +460,7 @@
   padding: 10px 32px;
   border-bottom: 1px solid var(--vx-line);
   overflow-x: auto;
+  flex: 0 0 auto;
 }
 .vx-timeline-filters button {
   display: inline-flex;
@@ -482,8 +497,7 @@
 .vx-transcript {
   flex: 1;
   padding: 24px 32px;
-  max-height: 480px;
-  min-height: 300px;
+  min-height: 0;
   overflow: auto;
 }
 .vx-message {
@@ -798,7 +812,7 @@ button.vx-tool-summary:hover {
 }
 .vx-variables {
   flex: 1;
-  min-height: 420px;
+  min-height: 0;
   padding: 24px 32px 40px;
   overflow: auto;
 }
@@ -882,6 +896,7 @@ button.vx-tool-summary:hover {
   }
 }
 .vx-composer {
+  flex: 0 0 auto;
   padding: 20px 28px 12px;
   border-top: 1px solid var(--vx-line);
 }
@@ -1091,8 +1106,9 @@ button.vx-tool-summary:hover {
 }
 .vx-metrics {
   padding: 28px;
-  min-height: 398px;
+  min-height: 0;
   flex: 1;
+  overflow: auto;
 }
 .vx-metric-scope + .vx-metric-scope {
   margin-top: 32px;
@@ -1238,7 +1254,7 @@ button.vx-tool-summary:hover {
     border-radius: 0;
     border-right: 0;
     border-left: 0;
-    min-height: 100vh;
+    height: 100dvh;
   }
   .vx-call-header {
     padding: 16px;
@@ -1255,9 +1271,13 @@ button.vx-tool-summary:hover {
     flex-direction: column;
   }
   .vx-participants {
+    flex: 0 0 auto;
     padding: 12px 16px;
     border-right: 0;
     border-bottom: 1px solid var(--vx-line);
+  }
+  .vx-main {
+    flex: 1;
   }
   .vx-section-title {
     display: none;
@@ -1266,7 +1286,8 @@ button.vx-tool-summary:hover {
     display: flex;
     gap: 20px;
     margin: 0;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   .vx-participants li {
     margin: 0;
@@ -1289,7 +1310,6 @@ button.vx-tool-summary:hover {
   }
   .vx-transcript {
     padding: 20px 16px;
-    min-height: 290px;
   }
   .vx-message {
     gap: 10px;

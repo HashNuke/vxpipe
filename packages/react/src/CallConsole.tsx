@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import type { VxpipeClient } from "@vxpipe/core";
 import { PhoneCall, PhoneOff } from "lucide-react";
 import { Participants } from "./Participants.js";
@@ -14,12 +14,14 @@ export interface CallConsoleProps {
   client: VxpipeClient;
   initialTab?: Tab;
   theme?: "light" | "dark";
+  maxHeight?: CSSProperties["maxHeight"];
 }
 
 export function CallConsole({
   client,
   initialTab = "chat",
   theme = "dark",
+  maxHeight,
 }: CallConsoleProps) {
   const snapshot = useSyncExternalStore(
     client.subscribe,
@@ -61,7 +63,11 @@ export function CallConsole({
     }
   };
   return (
-    <div className="vx-console" data-vx-theme={theme}>
+    <div
+      className="vx-console"
+      data-vx-theme={theme}
+      style={{ maxHeight }}
+    >
       <header className="vx-call-header">
         <div className="vx-call-actions">
           <span className={`vx-call-state vx-state-${snapshot.state}`}>

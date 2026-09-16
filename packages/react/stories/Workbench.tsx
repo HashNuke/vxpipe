@@ -111,6 +111,7 @@ export function Workbench({
             key={`${run}-${selectedScenario}`}
             client={client}
             initialTab={initialTab}
+            maxHeight="calc(100dvh - 132px)"
             theme={theme}
           />
         </div>

@@ -9,6 +9,17 @@ import { expect, test } from "vitest";
 import { CallConsole } from "../src/index.js";
 import { createFixtureClient } from "../stories/fixtureClient.js";
 
+test("the host can bound the console height", () => {
+  const { container } = render(
+    <CallConsole
+      client={createFixtureClient("conversation")}
+      maxHeight="640px"
+    />,
+  );
+
+  expect(container.firstElementChild).toHaveStyle({ maxHeight: "640px" });
+});
+
 test("a denied microphone still allows typed input in the same conversation", async () => {
   const client = createFixtureClient("microphone-denied");
   render(<CallConsole client={client} />);
