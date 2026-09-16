@@ -137,13 +137,16 @@ test("Metrics keeps measurement explanations in a tooltip", async () => {
     />,
   );
 
-  expect(screen.queryByText("Final transcription latency")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Final transcript received after input audio ended"),
+  ).not.toBeInTheDocument();
   fireEvent.focus(
-    screen.getByRole("button", { name: "Explain Speech recognition" }),
+    screen.getByRole("button", { name: "Explain Final transcript latency" }),
   );
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
-    "Final transcription latency",
+    "Final transcript received after input audio ended",
   );
+  expect(screen.queryByText("Remote playback")).not.toBeInTheDocument();
 });
 
 test("a message time exposes its correlated turn metrics on focus", async () => {
@@ -155,22 +158,38 @@ test("a message time exposes its correlated turn metrics on focus", async () => 
     }),
   );
 
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("TTFT312 ms");
-  expect(screen.getByRole("heading", { name: "Turn" })).toBeVisible();
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("TTFT284 ms");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("Time to first audio88 ms");
+  expect(screen.queryByRole("heading", { name: "Turn" })).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "LLM" })).toBeVisible();
   expect(screen.getByRole("heading", { name: "TTS" })).toBeVisible();
 });
 
-test("metric-enabled turns reserve the metrics action before the time", () => {
+test("completed turns show final metrics only with authoritative inputs", async () => {
   render(<CallConsole client={createFixtureClient("conversation")} />);
 
   const completedTurn = screen
     .getByText(/Hi! I can help you arrange a delivery/)
     .closest("article");
   expect(completedTurn).not.toBeNull();
+  const completedMetrics = within(completedTurn!).getByRole("button", {
+    name: "View metrics for Assistant at 00:02",
+  });
+  fireEvent.focus(completedMetrics);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    "Turn duration3,240 ms",
+  );
+  expect(screen.getByRole("tooltip")).toHaveTextContent("TPOT28 ms");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("RTF0.72 ×");
+  fireEvent.blur(completedMetrics);
+
+  const callerTurn = screen
+    .getByText("I'd like to reschedule my delivery.")
+    .closest("article");
+  expect(callerTurn).not.toBeNull();
   expect(
-    within(completedTurn!).getByRole("button", {
-      name: "Metrics unavailable for Assistant at 00:02",
+    within(callerTurn!).getByRole("button", {
+      name: "Metrics unavailable for You at 00:08",
     }),
   ).toBeDisabled();
 

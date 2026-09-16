@@ -25,11 +25,19 @@ client support without assigning aggregate or unrelated measurements to a call.
 - Browser WebRTC RTT is meaningful but needs a bounded client media-adapter `getStats()` poller.
   Neither that nor server output-sink acceptance proves remote playback.
 - Guardrail metric groups remain absent until those capabilities exist.
+- Independent xhigh review found that model telemetry spans an agent-session request while usage
+  attempts identify individual provider generations. Those measurements cannot be joined. Some
+  provider output-token totals also include hidden reasoning tokens, so visible-text timing cannot
+  derive TPOT/TPS without a matching provider token population.
+- `ParticipantTurnCompleted` follows final STT and omits endpointing/recognition latency from A2FA.
+  Real A2FA needs an authoritative speech-end position; `AgentSpeechStarted` is server egress.
+- Greetings and tool continuations need explicit trigger/origin identity for whole-turn metrics.
+  Final duration/rate values must be absent from a still-streaming turn.
 
 ## Decisions
 
 - Keep useful target metrics in the design even when backend projection work remains.
-- Define TTS time to first audio separately from end-to-end A2FA.
+- Define TTS time to first audio separately from speech-end-to-server-egress A2FA.
 - Remove remote playback as a metric; expose actual network/jitter measurements by their own names.
 - Add call-scoped metric observations separately from billing usage and retain existing aggregate
   operational telemetry.
@@ -42,3 +50,5 @@ client support without assigning aggregate or unrelated measurements to a call.
   events, archive facts, live inspection, the RTVI codec, Core/React contracts and ReqLLM telemetry.
 - Durable findings and formulas are recorded in `docs/debug-console-metrics.md` and linked from the
   call-debug-console milestone.
+- GPT-6 Astra xhigh independently reviewed each metric and the relevant model/STT/TTS/WebRTC paths;
+  its boundary, token-semantics, backpressure, aggregation, and fixture corrections were applied.

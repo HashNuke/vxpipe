@@ -60,9 +60,9 @@ when the call ends. The same console will run Getting Started examples.
   audio-to-first-audio measurements where they make sense; omit absent groups and values rather
   than synthesizing them. Label source/units/unknowns and respect clock domains.
 - Treat TTS request-to-first-decoded-audio as time to first audio, not audio-to-first-audio. A2FA
-  spans committed audio input to correlated output playback start and does not claim remote
-  audibility. Recognized-audio duration is STT usage, not transcription latency. The approved
-  boundaries, formulas, current evidence and implementation gaps are in
+  spans authoritative speech end to correlated server audio egress and does not claim browser
+  playback or remote audibility. Recognized-audio duration is STT usage, not transcription latency.
+  The approved boundaries, formulas, current evidence and implementation gaps are in
   [debug-console metrics](../debug-console-metrics.md).
 - Conversation is one ordered timeline with icon filters for messages, semantic events, tool calls
   and raw logs. Messages, events and tool calls are enabled by default; raw logs are disabled, and
@@ -145,13 +145,16 @@ Exit: a developer can follow who is in the call and who spoke across existing ha
   inspector, plus the read-only definition view. Reuse available timing/usage and bounded browser
   statistics; raw Logs items include only RTVI events.
   Link to existing authorized history for durable facts instead of inventing another log store.
-- [ ] Red-test and implement call-scoped metric observations for model duration/first output, TTS
-  duration/first audio, whole-turn duration/A2FA and STT final-transcript latency. Preserve call,
-  participant, turn, capability-attempt, outcome, provenance and clock boundaries; keep existing
-  identity-free operational telemetry in parallel.
+- [ ] Red-test and implement call-scoped metric observations for model-attempt duration/first
+  visible text, TTS duration/first audio, whole-turn duration/A2FA and STT final-transcript latency.
+  Preserve call,
+  participant, turn trigger/origin, capability-attempt, outcome, provenance and clock boundaries;
+  keep existing identity-free operational telemetry in parallel. Do not relabel agent-session
+  request telemetry as provider-attempt timing.
 - [ ] Red-test the authorized live/history metric projection and versioned debug-seat transport.
   Ordinary participants must not receive private metric or usage facts. Join existing attributed
-  token/audio usage only by exact attempt/turn identity, then derive TPOT, TPS and RTF.
+  token/audio usage only by exact attempt/turn identity and matching semantics, then derive TPOT,
+  TPS and RTF where their required inputs are compatible.
 - [ ] Red-test bounded browser WebRTC-stat polling, selected-connection changes and cleanup. Label
   RTT/jitter/loss as browser transport measurements and never present them as remote audibility.
 - [ ] Test populated/partial/unavailable metrics, sources/units/clock differences, bounded log
