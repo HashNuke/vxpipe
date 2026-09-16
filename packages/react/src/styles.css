@@ -116,6 +116,7 @@
 .vx-call-state i,
 .vx-presence i {
   display: inline-block;
+  flex: 0 0 6px;
   background: currentColor;
   width: 6px;
   height: 6px;
@@ -237,6 +238,13 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+.vx-avatar-shell {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+}
 .vx-avatar {
   display: inline-grid;
   place-items: center;
@@ -248,6 +256,37 @@
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
+}
+.vx-avatar-audiogram {
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 26px;
+  height: 11px;
+  padding: 2px 3px;
+  border: 1px solid var(--vx-line);
+  border-radius: 6px;
+  background: var(--vx-panel);
+  color: var(--vx-green);
+  transform: translateX(-50%);
+}
+.vx-avatar-audiogram i {
+  width: 2px;
+  height: 5px;
+  border-radius: 4px;
+  background: currentColor;
+  animation: vx-audiogram 0.9s ease-in-out infinite alternate;
+}
+.vx-avatar-audiogram i:nth-child(2),
+.vx-avatar-audiogram i:nth-child(4) {
+  animation-delay: -0.3s;
+}
+.vx-avatar-audiogram i:nth-child(3) {
+  animation-delay: -0.6s;
 }
 .vx-avatar.vx-agent {
   color: var(--vx-violet);
@@ -261,12 +300,13 @@
 .vx-presence {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--vx-muted);
   font-size: 12px;
   text-transform: capitalize;
+  white-space: nowrap;
 }
-.vx-presence.vx-speaking {
+.vx-presence.vx-connected {
   color: var(--vx-green);
   padding: 0;
   border: 0;
@@ -295,13 +335,13 @@
 }
 .vx-participant-detail-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
 }
 .vx-participant-detail-header p,
 .vx-participant-empty {
   margin: 4px 0 0;
   color: var(--vx-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 .vx-participant-detail-section {
   padding: 24px 0;
@@ -312,7 +352,7 @@
 }
 .vx-participant-detail-section h3 {
   margin: 0 0 14px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .vx-capability-grid {
   display: grid;
@@ -332,7 +372,7 @@
 .vx-capability-grid strong,
 .vx-participant-detail-list strong,
 .vx-participant-detail-list code {
-  font-size: 13px;
+  font-size: 14px;
 }
 .vx-capability-grid span,
 .vx-participant-detail-list span {
@@ -647,24 +687,39 @@ button.vx-tool-summary:hover {
   color: var(--vx-red);
 }
 .vx-tool-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 1px;
   border-top: 1px solid var(--vx-line);
-  background: var(--vx-line);
+  background: var(--vx-panel);
 }
 .vx-tool-details section {
   min-width: 0;
   padding: 14px;
-  background: var(--vx-panel);
 }
-.vx-tool-details h3 {
-  margin: 0 0 8px;
+.vx-tool-detail-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--vx-line);
+}
+.vx-tool-detail-tabs button {
+  appearance: none;
+  padding: 7px 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: var(--vx-muted);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+}
+.vx-tool-detail-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--vx-blue);
+  color: var(--vx-ink);
+}
+.vx-tool-http-status {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--vx-ink);
+  font: 600 12px var(--vx-mono);
 }
 .vx-tool-details pre {
   max-height: 240px;
@@ -674,6 +729,10 @@ button.vx-tool-summary:hover {
   font: 12px/1.6 var(--vx-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.vx-tool-empty {
+  color: var(--vx-muted);
+  font-size: 12px;
 }
 @keyframes vx-tool-spin {
   to {
@@ -804,44 +863,23 @@ button.vx-tool-summary:hover {
     transform: translateY(-4px);
   }
 }
+@keyframes vx-audiogram {
+  from {
+    transform: scaleY(0.45);
+  }
+  to {
+    transform: scaleY(1.35);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .vx-streaming i,
+  .vx-avatar-audiogram i,
   .vx-tool-pending svg {
     animation: none;
   }
   .vx-tool-chevron {
     transition: none;
   }
-}
-.vx-speaking {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 32px;
-  border-top: 1px solid var(--vx-line);
-  background: var(--vx-panel);
-  font-size: 12px;
-}
-.vx-speaking > strong {
-  font-weight: 500;
-}
-.vx-speaking > span {
-  color: var(--vx-muted);
-  margin-left: auto;
-  font-size: 12px;
-}
-.vx-audio-bars {
-  height: 24px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--vx-green);
-}
-.vx-audio-bars i {
-  display: block;
-  width: 2px;
-  background: currentColor;
-  border-radius: 4px;
 }
 .vx-composer {
   padding: 20px 28px 12px;
@@ -1258,14 +1296,6 @@ button.vx-tool-summary:hover {
   }
   .vx-message p {
     font-size: 14px;
-  }
-  .vx-speaking {
-    padding: 12px 16px;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .vx-speaking > span {
-    margin-left: 0;
   }
   .vx-composer {
     padding: 16px;

@@ -65,23 +65,62 @@ test("tool calls disclose optional request and response details", () => {
   ).not.toBeInTheDocument();
 
   fireEvent.click(disclosure);
-  expect(screen.getByText("Request")).toBeVisible();
-  expect(screen.getByText("Response")).toBeVisible();
+  const completedTool = disclosure.closest(".vx-timeline-tool") as HTMLElement;
+  const completedDetails = within(completedTool);
+  expect(completedDetails.getByRole("tab", { name: "Request" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(completedDetails.getByRole("tab", { name: "Response" })).toBeVisible();
   expect(
-    screen.getByText(/"requested_date": "2026-09-18"/),
+    completedDetails.getByText(/"requested_date": "2026-09-18"/),
   ).toBeVisible();
+  fireEvent.click(completedDetails.getByRole("tab", { name: "Response" }));
+  expect(completedDetails.getByText("HTTP 200")).toBeVisible();
+  expect(completedDetails.getByText(/"updated": true/)).toBeVisible();
 
   fireEvent.click(
     screen.getByRole("button", {
       name: "Hide details for update_variables",
     }),
   );
-  expect(screen.queryByText("Request")).not.toBeInTheDocument();
+
+  const failedDisclosure = screen.getByRole("button", {
+    name: "Show details for notify_customer",
+  });
+  fireEvent.click(failedDisclosure);
+  const failedDetails = within(
+    failedDisclosure.closest(".vx-timeline-tool") as HTMLElement,
+  );
+  fireEvent.click(failedDetails.getByRole("tab", { name: "Response" }));
+  expect(failedDetails.getByText("HTTP 503")).toBeVisible();
+  expect(failedDetails.getByText(/"error": "Service unavailable"/)).toBeVisible();
+
+  const emptyDisclosure = screen.getByRole("button", {
+    name: "Show details for refresh_cache",
+  });
+  fireEvent.click(emptyDisclosure);
+  const emptyDetails = within(
+    emptyDisclosure.closest(".vx-timeline-tool") as HTMLElement,
+  );
+  expect(emptyDetails.getByText("No request arguments.")).toBeVisible();
+  fireEvent.click(emptyDetails.getByRole("tab", { name: "Response" }));
+  expect(emptyDetails.getByText("HTTP 204")).toBeVisible();
+  expect(emptyDetails.getByText("No response body.")).toBeVisible();
 });
 
-test("unsupported alignment shows a speaking state without word highlighting", () => {
+test("speaking activity moves to the participant avatar", () => {
   render(<CallConsole client={createFixtureClient("no-alignment")} />);
-  expect(screen.getByText("Word timing unavailable")).toBeVisible();
+
+  const assistant = screen.getByRole("button", {
+    name: "View Assistant details",
+  });
+  expect(assistant).toHaveTextContent("connected");
+  expect(assistant).not.toHaveTextContent("speaking");
+  expect(
+    within(assistant).getByLabelText("Assistant is speaking"),
+  ).toBeVisible();
+  expect(screen.queryByText("Assistant is speaking")).not.toBeInTheDocument();
   expect(document.querySelector("mark")).toBeNull();
 });
 

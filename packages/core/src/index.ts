@@ -68,9 +68,11 @@ export interface ToolCall {
   time: string;
   name: string;
   status: "pending" | "completed" | "failed";
-  /** Display-safe payloads supplied only when tool detail capture is enabled. */
+  /** Display-safe payloads supplied only when capture is enabled; null means empty. */
   request?: JsonValue;
   response?: JsonValue;
+  /** HTTP status captured by an HTTP-backed tool adapter, when applicable. */
+  responseStatus?: number;
 }
 
 export interface Metric {

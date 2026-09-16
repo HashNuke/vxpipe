@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type {
   ActivityEvent,
   CallSnapshot,
@@ -130,7 +130,14 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
 
 function ToolRow({ tool }: { tool: ToolCall }) {
   const [expanded, setExpanded] = useState(false);
-  const hasDetails = tool.request !== undefined || tool.response !== undefined;
+  const requestAvailable = tool.request !== undefined;
+  const responseAvailable =
+    tool.response !== undefined || tool.responseStatus !== undefined;
+  const hasDetails = requestAvailable || responseAvailable;
+  const [detail, setDetail] = useState<"request" | "response">(
+    requestAvailable ? "request" : "response",
+  );
+  const detailsId = useId();
   const statusLabel =
     tool.status === "pending"
       ? "Pending"
@@ -179,18 +186,51 @@ function ToolRow({ tool }: { tool: ToolCall }) {
       )}
       {hasDetails && expanded && (
         <div className="vx-tool-details">
-          {tool.request !== undefined && (
-            <section>
-              <h3>Request</h3>
-              <pre>{JSON.stringify(tool.request, null, 2)}</pre>
-            </section>
-          )}
-          {tool.response !== undefined && (
-            <section>
-              <h3>Response</h3>
-              <pre>{JSON.stringify(tool.response, null, 2)}</pre>
-            </section>
-          )}
+          <div className="vx-tool-detail-tabs" role="tablist" aria-label={`${tool.name} details`}>
+            {requestAvailable && (
+              <button
+                id={`${detailsId}-request-tab`}
+                role="tab"
+                aria-selected={detail === "request"}
+                aria-controls={`${detailsId}-panel`}
+                onClick={() => setDetail("request")}
+              >
+                Request
+              </button>
+            )}
+            {responseAvailable && (
+              <button
+                id={`${detailsId}-response-tab`}
+                role="tab"
+                aria-selected={detail === "response"}
+                aria-controls={`${detailsId}-panel`}
+                onClick={() => setDetail("response")}
+              >
+                Response
+              </button>
+            )}
+          </div>
+          <section
+            id={`${detailsId}-panel`}
+            role="tabpanel"
+            aria-labelledby={`${detailsId}-${detail}-tab`}
+          >
+            {detail === "response" && tool.responseStatus !== undefined && (
+              <span className="vx-tool-http-status">HTTP {tool.responseStatus}</span>
+            )}
+            {detail === "request" &&
+              (tool.request === null ? (
+                <p className="vx-tool-empty">No request arguments.</p>
+              ) : (
+                <pre>{JSON.stringify(tool.request, null, 2)}</pre>
+              ))}
+            {detail === "response" &&
+              (tool.response === null || tool.response === undefined ? (
+                <p className="vx-tool-empty">No response body.</p>
+              ) : (
+                <pre>{JSON.stringify(tool.response, null, 2)}</pre>
+              ))}
+          </section>
         </div>
       )}
     </div>
@@ -274,9 +314,6 @@ export function Conversation({
   theme?: "light" | "dark";
 }) {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
-  const speaking = snapshot.participants.find(
-    (person) => person.role === "agent" && person.state === "speaking",
-  );
   const items = timeline(snapshot, filters);
   const toggle = (filter: Filter) =>
     setFilters((current) => ({ ...current, [filter]: !current[filter] }));
@@ -338,21 +375,6 @@ export function Conversation({
           return <LogRow key={`log-${item.id}`} event={item.value} />;
         })}
       </div>
-      {speaking && (
-        <div className="vx-speaking" role="status">
-          <div className="vx-audio-bars" aria-hidden="true">
-            {[8, 17, 12, 23, 14, 20, 8].map((height, i) => (
-              <i key={i} style={{ height }} />
-            ))}
-          </div>
-          <strong>{speaking.name} is speaking</strong>
-          <span>
-            {snapshot.alignment === "unavailable"
-              ? "Word timing unavailable"
-              : `${snapshot.alignment === "word" ? "Word" : "Segment"} timing available`}
-          </span>
-        </div>
-      )}
     </section>
   );
 }
