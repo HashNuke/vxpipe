@@ -21,3 +21,11 @@
   and synchronized the debug-console milestone. Verification for this documentation checkpoint is
   Markdown/link inspection; reducer and rendered-equivalence tests belong to the implementation
   checkpoint.
+- Clarified the source model after review: the authorized remote endpoint supplies baseline and
+  accumulated history for ongoing as well as ended calls. RTVI is only the low-latency live edge
+  when this browser is attached. An ongoing inspection can remain read-only without joining RTVI,
+  and an ended inspection has no RTVI dependency.
+- Chose an injected controller boundary: the Console host performs authorized fetches, supplies the
+  initial call-details snapshot, and injects refresh/pagination callbacks. Core owns normalization
+  and reconciliation; React renders the read-only store; neither reusable package knows endpoint
+  URLs or authentication.

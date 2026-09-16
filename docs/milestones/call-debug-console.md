@@ -31,11 +31,14 @@ when the call ends. The same console will run Getting Started examples.
   Keep RTVI/Vxpipe decoding and WebRTC integration behind distinct adapter contracts. The
   existing Pipecat client-js/Small WebRTC pair is sufficient; no new real adapter is required.
 - Keep the serializable call-details record, its incremental update reducer, and browser-local
-  media/command state separate. Live RTVI, authorized live inspection and cursor-paginated persisted
-  inspection feed the same normalized Core store. Stable entity IDs plus increasing revisions own
-  replacement; explicit tombstones own removal. Reject stale-incarnation updates, expose known
-  sequence/archive gaps, and resynchronize from an authoritative baseline after unsafe continuity.
-  A read-only historical source renders the same tabs without fabricating live controls.
+  media/command state separate. The Console host fetches authorized baseline/history payloads for
+  ongoing and ended calls and hands them to the normalized Core store through an initial snapshot
+  and injected refresh/pagination callbacks. Core/React do not fetch tenant endpoints. An attached
+  RTVI session contributes only the ongoing call's live edge. Stable entity IDs plus increasing
+  revisions own replacement; explicit tombstones own removal. Reject stale-incarnation updates,
+  expose known sequence/archive gaps, and request a fresh host-supplied baseline after unsafe
+  continuity. A read-only ongoing or ended source renders the same tabs without fabricating live
+  controls or requiring the operator to join the call.
 - React components use only the public Vxpipe client API and injected host data/actions. No
   direct RTVI decoding, RTCPeerConnection, Pipecat-specific React hooks/types, tenant API fetches
   or Console imports. Client has no React/Phoenix/app dependency; shared public types belong
@@ -122,10 +125,11 @@ when the call ends. The same console will run Getting Started examples.
   upserts, duplicate/stale revisions, tombstones, call-incarnation rejection, deterministic order,
   cursor-page overlap, completeness/gaps, and reconnect baseline replacement. Keep raw RTVI receipt
   logs append-only and keep local device/control state outside the serializable call record.
-- [ ] Feed equivalent live-update and historical fixtures through that store and render the same
-  Conversation, Variables, Metrics, and Participants data. Historical loading uses the authorized
-  Calls inspection cursor and optional immutable call-details publication; unavailable or redacted
-  data stays distinguishable from captured empty values.
+- [ ] Feed equivalent remote ongoing, attached-live and remote ended fixtures through that store
+  and render the same Conversation, Variables, Metrics, and Participants data. The Console host
+  fetches with the authorized Calls inspection cursor and optional immutable call-details
+  publication, then injects those payloads and loading callbacks; RTVI contributes only attached-
+  live updates. Unavailable or redacted data stays distinguishable from captured empty values.
 - [ ] Before adding more components, migrate the prototype from its monolithic selector stylesheet
   to Tailwind v4 utilities plus semantic theme tokens. Build npm CSS from the same source and prove
   one clean shadcn-registry fixture installation; do not maintain two component implementations.

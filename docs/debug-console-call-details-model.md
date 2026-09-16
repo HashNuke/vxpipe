@@ -17,10 +17,12 @@ arrays. That is acceptable fixture data, but it is not the production storage or
 ## Decision
 
 Core owns a normalized, serializable call-details model and derives immutable React snapshots from
-it. Live RTVI, Calls live inspection, and Calls persisted inspection are adapters into that model;
-React components do not distinguish which adapter supplied a fact. Commands and local media state
-are separate optional inputs, so a historical call uses the same viewer without pretending it has
-a microphone, an active transport, or callable actions.
+it. The Console host fetches an authorized call-details payload and hands it to Core for both
+ongoing and ended calls. Core and React do not know the endpoint, authentication, or tenant API.
+RTVI supplies only the live edge while this browser is attached to a live call. React components
+do not distinguish which source supplied a normalized fact. Commands and local media state are
+separate optional inputs, so a historical call uses the same viewer without pretending it has a
+microphone, an active transport, or callable actions.
 
 The public concepts are:
 
@@ -41,8 +43,14 @@ interface CallDetailsSnapshot {
 interface CallDetailsStore {
   getSnapshot(): CallDetailsSnapshot;
   subscribe(listener: () => void): () => void;
-  loadOlder?(): Promise<void>;
-  refresh?(): Promise<void>;
+  replaceBaseline(snapshot: CallDetailsSnapshot): void;
+  mergePage(page: CallDetailsPage): void;
+  apply(update: CallDetailsUpdate): void;
+}
+
+interface CallDetailsLoader {
+  refresh(signal: AbortSignal): Promise<CallDetailsSnapshot>;
+  loadOlder(cursor: string, signal: AbortSignal): Promise<CallDetailsPage>;
 }
 
 interface LiveCallControls {
@@ -54,6 +62,28 @@ interface LiveCallControls {
   // microphone, speaker, and device commands
 }
 ```
+
+The host composition is deliberately small:
+
+```ts
+const initialDetails = await callsApi.fetchDetails(callId);
+const store = createCallDetailsStore(initialDetails);
+const rtvi = debugSeat ? createRtviSession(debugSeat) : undefined;
+
+const controller = createCallConsoleController({
+  store,
+  loader: {
+    refresh: (signal) => callsApi.fetchDetails(callId, { signal }),
+    loadOlder: (cursor, signal) => callsApi.fetchHistory(callId, { cursor, signal }),
+  },
+  liveUpdates: rtvi?.updates,
+  liveControls: rtvi?.controls,
+});
+```
+
+`@vxpipe/react` receives `controller`; it never receives `callsApi`. A host that already loaded the
+entire ended call may omit the loader. Storybook supplies an in-memory loader and the same data
+shape.
 
 `Available<T>` distinguishes a value from `unavailable`, with bounded reasons such as not loaded,
 not captured, not authorized, unsupported, or lost through a known gap. An absent tool response is
@@ -96,20 +126,30 @@ when the Logs filter is enabled.
 
 ## Loading and reconciling a call
 
-A historical adapter loads the newest authorized Calls inspection page first and follows its
-opaque `next_cursor` when the user requests older history. Overlapping pages are safe because Core
-deduplicates by entity ID and revision. The adapter may also read the selected immutable
-call-details publication for authorized participant configuration, tools, transfers, usage,
-variables, and artifacts. It must retain the server's completeness and archive-gap information;
-loading a page never implies that the whole call is complete.
+The Console host is the data owner for every existing call, including one that is still ongoing.
+It fetches the newest authorized Calls inspection payload, creates the Core store with that initial
+snapshot, and injects endpoint-specific `refresh` and `loadOlder` callbacks. When the viewer requests
+older history, the host callback follows the opaque `next_cursor` and returns the page to Core.
+Overlapping pages are safe because Core deduplicates by entity ID and revision. The host may also
+compose the selected immutable call-details publication into the supplied snapshot for authorized
+participant configuration, tools, transfers, usage, variables, and artifacts. It passes through
+the server's completeness and archive-gap information; loading a page never implies that the whole
+call is complete.
 
-A live adapter establishes a baseline before applying updates. It combines participant-visible
-RTVI facts with the tenant-authorized live inspection projection only at the authorized Console
-boundary. The live projection's fact sequence, variable revision, dropped-record count, rejected-
-record count, room ID, and incarnation ID make loss and stale updates visible. If a reconnect,
-sequence gap, changed incarnation, or bounded-buffer drop prevents safe continuation, the adapter
-refreshes an authoritative snapshot instead of guessing a patch. Updates received during the
-refresh are buffered and applied only after the baseline revision they follow.
+For an ongoing call, the host can refresh newer accumulated history and include the tenant-
+authorized bounded live-inspection projection in the supplied payload. Opening an ongoing call does
+not require the operator to join its RTVI session. If this browser does attach as a live debug seat,
+the RTVI adapter applies low-latency updates after the supplied baseline. The live projection's fact
+sequence, variable revision, dropped-record count, rejected-record count, room ID, and incarnation
+ID make loss and stale updates visible. If a reconnect, sequence gap, changed incarnation, or
+bounded-buffer drop prevents safe continuation, Core invokes the injected refresh callback instead
+of guessing a patch. Updates received during the refresh are buffered and applied only after the
+baseline revision they follow.
+
+Once a call ends, Core has no RTVI dependency. The host fetches its durable timeline and final
+details and hands that payload to the same store. RTVI receipts seen only by an attached browser are
+available in a later remote view only if the platform deliberately captured and authorized those
+receipts; their absence is reported as unavailable and is not confused with an empty log.
 
 Persisted history can replace equivalent live entities when it has the same stable source identity.
 If two sources cannot prove that identity, Core preserves both facts and their provenance instead
@@ -118,11 +158,12 @@ of merging them heuristically. The final archive status remains `complete`, `inc
 
 ## React boundary
 
-`CallConsole` consumes the read-only `CallDetailsStore` and accepts `LiveCallControls` only when the
-current page owns a live debug seat. Conversation, Variables, Metrics, and Participants render from
-the store in both modes. The composer, call button, and device controls render from the optional
-live controls. Starting a new call creates a new store/incarnation rather than clearing a remotely
-loaded historical record in place.
+`CallConsole` consumes the read-only side of `CallDetailsStore` and receives controller actions that
+wrap the injected loading callbacks. It accepts `LiveCallControls` only when the current page owns a
+live debug seat. Conversation, Variables, Metrics, and Participants render from the supplied store
+in both modes. The composer, call button, and device controls render from the optional live
+controls. Starting a new call creates a new store/incarnation rather than clearing a remotely loaded
+historical record in place.
 
 Selectors build the current presentation rows from normalized entities. This keeps update,
 pagination, deduplication, authorization availability, and resynchronization logic out of React
@@ -133,8 +174,9 @@ know whether the change came from RTVI, a live-inspection refresh, or a historic
 
 - One ever-growing `CallSnapshot` containing device state, remote history, and commands: it cannot
   represent a read-only historical call cleanly and encourages whole-array replacement.
-- Rendering RTVI packets directly: private participant configuration and durable history do not
-  belong to ordinary RTVI, and reconnect gaps cannot be repaired from a packet stream alone.
+- Rendering RTVI packets directly: RTVI is the live transport, while private participant
+  configuration and durable history come from the remote Calls endpoint. Reconnect gaps and ended
+  calls cannot be reconstructed from a browser packet stream alone.
 - Generic JSON patches: partial omission, redaction, and explicit empty values have different
   meanings, so unconstrained deep merging can retain stale or unauthorized data.
 - Ordering by receipt time: reconnection, batching, and remote pagination can reorder receipts.
@@ -145,8 +187,8 @@ know whether the change came from RTVI, a live-inspection refresh, or a historic
 
 Migrate in a focused Core checkpoint before connecting a real transport:
 
-1. Define the serializable types, normalized reducer, selectors, data-store interface, and separate
-   live-control interface.
+1. Define the serializable types, normalized reducer, selectors, injected loader/store interfaces,
+   and separate live-control interface.
 2. Adapt the existing Storybook fixture through the store so the current UI remains reviewable.
 3. Prove newer/duplicate/stale revisions, tombstones, out-of-order updates, incarnation rejection,
    variable replacement, page overlap, deterministic ordering, and known gaps in Core tests.
