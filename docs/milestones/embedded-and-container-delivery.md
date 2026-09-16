@@ -1,7 +1,7 @@
 # Embedded and container delivery
 
 Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
-Prerequisites: [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
+Prerequisites: [Getting Started/example calls](getting-started-and-example-calls.md), including its debug-console and platform-bootstrap prerequisites; [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
 Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical definition boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](../gateway-console-boundary.md).
 
@@ -27,6 +27,11 @@ user explicitly releases that hold.
   `HashNuke/vxpipe`; image naming does not require a GitHub repository transfer.
   Select and verify the concrete release tag and registry publishing setup during
   packaging implementation; the planned name is not evidence of a published image.
+- Build one production artifact that defaults to production behavior. Verify the same image
+  with demo mode off and with `VXPIPE_DEMO=1`: only the latter exposes the authenticated setup
+  checklist/example catalog. The flag changes no build/runtime environment, database selection,
+  TLS or credential protections, and grants no operator access. Disabling demo preserves saved
+  resources and already admitted calls. Follow the [first-use contract](../developer-console-and-onboarding.md#first-use-flow).
 - Keep the root GitHub README focused on the product and a short Docker quick
   start as the primary installation path. Include verified image/run commands and
   the minimum configuration, secrets, and networking needed to reach a first call.
@@ -67,6 +72,8 @@ user explicitly releases that hold.
   consumption with a runnable host example. Keep the source-development quick
   start in the development guide once the Docker quick start replaces it.
 - [ ] Smoke-test embedded inline engine and full durable container admission through the same definition fixture.
+- [ ] Verify one image in both production-default and explicit demo modes, including direct demo
+  endpoint denial when disabled and the authenticated setup-to-debug-console flow when enabled.
 - [ ] Smoke-test gateway-only host mounting and its optional standalone listener without
   Phoenix/console dependencies; verify the console-enabled release serves built React
   assets and mounts the same gateway with a single configured ingress owner.
@@ -152,3 +159,10 @@ The approved credential milestone supersedes the deployment JSON-loader proposal
 platform env plus encrypted tenant credentials; JSON remains call-definition data. The prerequisite
 now includes that configuration cutover. The packaging hold, embedded library boundary and delivery
 acceptance remain unchanged. This is a specification correction, not implemented container support.
+
+### Developer setup prerequisite review (2026-09-16)
+
+Local review places the debug console, platform bootstrap and Getting Started slices before
+delivery. The image acceptance now covers production-default behavior and explicit demo opt-in
+using the same build. Existing embedded boundaries and the pre-delivery user review hold remain
+in force. This follow-up adds prerequisite/mode checks, not implementation or image verification.

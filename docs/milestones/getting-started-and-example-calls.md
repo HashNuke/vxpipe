@@ -1,0 +1,134 @@
+# Getting Started and example calls
+
+Status: planned, not implemented. Requested 2026-09-16; local specification review recorded below.
+Prerequisites: [Call debug console](call-debug-console.md),
+[Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md), and the existing
+[Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md).
+Sources: [First-use design](../developer-console-and-onboarding.md#first-use-flow),
+[Operator's Bench](../../DESIGN.md), [Inline definitions](../inline-provider-selections.md).
+
+## Runnable outcome
+
+A first-time developer opens `/`, establishes platform access, creates/adopts the demo tenant,
+saves speech/model credentials, installs three working examples, and chooses one to run in the
+Vxpipe debug console. A returning developer immediately sees ready examples and current setup
+requirements. Refresh, partial failure and restart preserve completed work.
+
+## Contracts
+
+- Replace the current Vxpipe directory at `/`. The user confirmed a persistent setup checklist
+  plus sample links, with production behavior by default and explicit demo opt-in on the same image.
+- Proposed switch: `VXPIPE_DEMO=1`; unset/blank/`0` disables it in every environment. Other
+  non-empty values fail safely. Use only `config/runtime.exs` and document the optional setting
+  in visible `env.sample`. This does not switch `MIX_ENV` or weaken production settings.
+- Demo off: `/` is a minimal Vxpipe production home without setup/catalog/resource metadata.
+  Demo-specific setup/install/launch endpoints reject even direct requests; no hidden anonymous
+  sample path survives. Normal authenticated administration/call APIs and separately configured
+  inspection/diagnostics keep their own contracts. The flag grants no authority.
+- Turning demo mode off retains saved resources and already admitted calls, while disabling new
+  demo actions. The same production-built assets support both modes, without seeding on boot.
+- Without a platform session, show only the bootstrap/sign-in guidance. Access alone never issues
+  a key, claims ownership, creates a tenant, writes credentials or starts a provider call.
+- Once authenticated, `/` always shows durable setup state: platform access, demo tenant, three
+  capability requirements and per-example installation. Each example's Try action depends on
+  its own current prerequisites, not a global wizard-complete boolean. Distinguish missing,
+  configured and temporarily unavailable; revalidate authority/readiness when launching.
+  Show the next fix action without automatically replacing resources or hiding completed steps.
+- Group credential input by provider. Deepgram STT/TTS share one saved binding; Google is the
+  default model provider, with existing Zenmux as an explicit supported alternative. Show
+  provider/name metadata and capability coverage, not saved secret values. Failed input remains
+  locally recoverable without echoing secrets into errors/logs; clear secret fields after submit.
+- Distinguish “Saved / ready to try” from “Successfully used in a call”. Do not add a speculative
+  provider validation API. A first-call provider rejection links back to the relevant setup step.
+- Catalog entries have stable IDs/version/content digests, purpose, participants, requirement
+  metadata and a checked-in inline definition. Supported selections use the current schema and
+  existing provider catalog; no provider keys, route IDs or tenant IDs live in portable templates.
+- Initial catalog: voice conversation; agent-to-agent handoff; human handoff with an explicit
+  support seat. These reuse implemented flows. First call needs no S3, telephony, external MCP
+  endpoint or newly supported provider. Optional prerequisites never masquerade as mandatory.
+- Installation is explicit and idempotent per tenant/example/version. Save/publish through Calls,
+  store the installed revision/route mapping, and report per-example success/failure. Concurrency
+  and lost responses do not duplicate revisions/routes. Preserve user edits; offer an explicit
+  new version/copy action instead of overwriting or silently republishing an edited definition.
+- Replace the old managed SampleCall auto-provisioning path for these examples. Reuse/adopt the
+  intended development tenant; do not leave a second startup seeder issuing keys/revisions.
+  Explicit embedded fixtures stay separate, never an anonymous fallback for hosted setup failure.
+- Choosing an example opens its safe published route in the debug console. Actual preparation,
+  microphone consent and provider work happen only on the explicit Start action. All preparation
+  and secondary-seat actions retain platform/tenant/call authorization; no token goes into URLs.
+
+## Checkpoint 1 — Complete setup through the home page
+
+- [ ] Review the setup composition inside the existing design system: compact progress checklist,
+  one next action, grouped provider forms and clear enabled/disabled/authentication states.
+- [ ] Red-test unset/blank/0/1/invalid demo settings, production-default root behavior and blocked
+  direct demo endpoints, unauthenticated guidance, authenticated resumable state, unavailable
+  database/keyring, existing demo adoption and partial provider-setup errors.
+- [ ] Replace the directory home with setup-state presentation and the existing platform session/
+  demo workflows. Show three capability requirements while avoiding duplicate Deepgram key input.
+- [ ] Add `VXPIPE_DEMO` runtime handling and optional commented `env.sample` documentation.
+  Prove the same source/build toggles surfaces without changing runtime environment, database,
+  auth or saved resources; never ship a default platform or provider secret.
+- [ ] Verify the browser can finish credential setup, reload and restart without losing progress
+  or creating a second tenant/key. Inspect desktop/mobile, keyboard and secret handling.
+
+Exit: a new developer completes the existing setup workflows through an understandable `/`.
+
+## Checkpoint 2 — Install a small reliable example catalog
+
+- [ ] Define/review the three entries and their requirement manifests against current schema,
+  provider bindings and existing agent/human-transfer APIs. Use only allowlisted local tools.
+- [ ] Red-test first installation, repeat/concurrent installation, partial failure, response loss,
+  explicit version updates, edited installed definitions and foreign-tenant route substitution.
+- [ ] Implement installation through existing save/publish workflows with durable version/revision
+  mapping. Expose per-example status and safe fix/retry actions; never treat a draft as callable.
+- [ ] Remove the competing managed-sample startup provisioning path, and update old sample routes
+  to an authorized delegate or explicit retired response. No hosted DB/provider failure may reach
+  the anonymous in-memory sample fallback. Preserve separately configured library/fixture use.
+- [ ] Verify installation and publication survive restart with stable definitions/routes; exercise
+  each example's required existing flow using controlled adapters and the tagged browser lane.
+
+Exit: the demo tenant has three discoverable, published examples that can be installed safely again.
+
+## Checkpoint 3 — Choose an example and complete a first call
+
+- [ ] Build the persistent checklist/gallery with purpose, participant summary, current requirement
+  state and one clear action per example. An individually ready example is runnable while another
+  remains blocked; temporary lookup failure is unavailable, not permission to reseed anything.
+- [ ] Deep-link into the existing debug console with a preselected safe definition/route.
+  Preview does not start media/provider work, and missing requirements link back to their fix.
+- [ ] Show useful loading, empty, blocked, provider-rejected and unavailable states; after the
+  run preserve results and offer another example or a fresh run without reseeding anything.
+- [ ] Prove first-install-to-first-call and returning-user paths on a disposable database;
+  restart between setup and call, then verify the exact saved tenant credentials are used.
+- [ ] Inspect 360/768/1440 px, light/dark, keyboard/focus, reduced motion, long labels and all
+  important states using `agent-browser`. Keep browser tests fixture-backed; real upstream
+  interoperability is explicit/tagged and not a new carrier acceptance requirement.
+- [ ] Update source-development/docs links and the later container quick-start plan to this
+  verified flow. This does not build/publish an image or release the packaging hold.
+
+Exit: the home page teaches a new developer enough to run and understand their first example.
+
+## Acceptance and completion
+
+- [ ] One setup survives refresh/restart/retry without duplicate keys, tenants or revisions.
+- [ ] Three capability requirements are satisfied using current supported tenant credentials;
+  STT/TTS reuse a binding and no unsupported-provider authentication is introduced.
+- [ ] The three real catalog definitions publish, render meaningful previews and run through
+  the same debug console; human acceptance uses the existing separately authorized seat.
+- [ ] Demo off is the default; same-build on/off behavior and direct-route denial pass. Disabling
+  preserves resources/admitted calls. Unauthorized/cross-tenant requests cannot configure or run
+  the managed sample; enabled demo mode never enables diagnostic access implicitly.
+- [ ] Secrets, missing prerequisites and upstream failures are handled without exposing values,
+  claiming unperformed verification or causing implicit provider calls.
+- [ ] Focused owning-child tests, frontend checks, common root gates and rendered-browser checks pass.
+- [ ] Update this checklist, the index, user-facing setup docs and checkpoint labnotes in small commits.
+
+## Specification review
+
+Local review, 2026-09-16: the new home depends on a functioning debug console and platform setup;
+credential entry reuses encrypted tenant storage; manifest-driven installation preserves immutable
+history and user changes; conditional routing also guards writes. Shared setup/example components
+inherit the existing visual system. The user's follow-up confirms persistent setup tracking,
+per-example readiness and production-default/demo-opt-in behavior on one image; `VXPIPE_DEMO=1`
+is the proposed concrete switch. All implementation/acceptance boxes remain unchecked.

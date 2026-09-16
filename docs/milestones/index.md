@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 26 milestone specifications: 22 complete and 4 incomplete. Milestone 17, Telnyx calls and
+Status: 29 milestone specifications: 22 complete and 7 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -13,7 +13,7 @@ call-details publications, is complete, including immutable late revisions and p
 retrieval. Milestone 22, context compaction and supported LLM fallback, is complete, including
 bounded private summaries, provider-native routing, truthful usage, and runnable HTTPS/WebRTC
 acceptance. The platform is now at its pre-delivery review hold. Milestone 23 proposes transfer
-readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 25 and 26 remain unimplemented until the user has exercised the
+readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 28 and 29 remain unimplemented until the user has exercised the
 working platform and decided to proceed with packaging and retention.
 Milestone 24 implements the 2026-09-15 provider-credential decision: inline upstream
 provider/model selections, no capability profiles, encrypted tenant AI/speech and Telnyx/Twilio
@@ -49,6 +49,17 @@ All five root gates pass on the final reviewed source at `58d7b34`: **1,622 test
 assertion corrections. Earlier failed runs remain recorded in the milestone evidence; this passing
 run does not establish the transport cause of earlier incomplete silence tails. All seven checkpoint
 exits, final independent review and milestone acceptance are complete.
+
+The 2026-09-16 [developer experience plan](../developer-console-and-onboarding.md) adds three
+**planned, unimplemented** milestones before delivery: debug console, platform bootstrap/demo
+tenant, then Getting Started/examples. The console builds on current tenant admission and RTVI/
+Vxpipe extensions, so it does not wait for platform keys. The home retains setup tracking and
+per-example readiness; the same image defaults to production behavior, with proposed
+`VXPIPE_DEMO=1` opt-in. Demo mode grants no authority and does not relax credentials or TLS.
+The debug console must isolate framework-neutral client JS from React components for later package
+extraction; RTVI and WebRTC sit behind protocol/media adapters. Logs show RTVI events only.
+These specifications have local design/dependency review only; they add no completed milestone,
+release no packaging/retention hold, and do not require new provider authentication support.
 
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -102,8 +113,11 @@ progress without claiming the entire milestone is complete.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [x] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Move existing provider credential readers to tenant DB storage, retain inline selections, rotate the platform encryption key and remove obsolete configuration paths.
-25. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-26. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+25. [ ] [Call debug console](call-debug-console.md) — Isolate future client-JS/React packages; run chat/voice, streaming text/audio, supported spoken highlighting, participants, metrics, RTVI event logs and device controls over pluggable protocol/media boundaries, initially RTVI/WebRTC.
+26. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key authority, one stable demo tenant and resumable tenant credential setup.
+27. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default.
+28. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+29. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
@@ -113,7 +127,7 @@ provider, transfer, media, recording, inspection, publication, and fallback path
 system. Record any discovered fixes or approved design changes in their owning milestone before
 release work begins.
 
-Do not start milestone 25 (Docker/container packaging) or milestone 26 (retention/deletion) until
+Do not start milestone 28 (Docker/container packaging) or milestone 29 (retention/deletion) until
 that review is complete and the user explicitly chooses to proceed. This is a sequencing hold,
 not a change to either milestone's approved scope or completion state. Retention/deletion remains
 the final milestone.
@@ -373,6 +387,9 @@ This is a coverage map, not another approval or implementation checklist.
 - **Context compaction and supported LLM fallback**: G13; R47, R48, R50.
 - **Transfer readiness and participant wait sounds**: user-requested pre-delivery refinement of G7/G8/G9; all required resources ready, independent local playback, URL/null/default configuration and cue-before-bridge completion.
 - **Tenant-scoped provider credentials and platform configuration**: replace capability profiles/TOML with inline upstream selections and encrypted tenant credential readers, including existing Telnyx/Twilio control/webhook/media authentication; no application credential fallback, platform infrastructure env-backed and ReqLLM internal. The [scope correction](../credential-cutover-scope.md) excludes third-party API-key rotation and broad call-flow feature work, while retaining platform encryption-key rotation.
+- **Call debug console**: user-requested chat/voice workbench with metrics, RTVI-only event logs, devices, streaming and supported spoken text; isolated future client-JS/React packages over pluggable protocol/media boundaries, initially RTVI/WebRTC. Reuse tenant admission and existing authorized history links; no new call engine or SDK fork.
+- **Platform bootstrap and demo tenant**: explicit hash-only platform key authority and durable demo binding, preserving tenant boundaries and encrypted provider storage.
+- **Getting Started and example calls**: production-default runtime, explicit demo mode, persistent `/` setup checklist and per-example readiness, three versioned examples and safe debug-console launch.
 - **Embedded and container delivery**: Container/OTP boundary; complete approved scope.
 
 ## Specification review evidence
@@ -413,7 +430,10 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
 | [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Complete; specification, scope and final implementation independently reviewed | All seven credential/configuration checkpoints and all five final root gates pass. Existing provider readers, platform encryption-key rotation and configuration cleanup are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. Final root: 1,622 tests, zero failures, 39 excluded at `58d7b34`. |
-| [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
+| [Call debug console](call-debug-console.md#specification-review) | Planned; locally reviewed 2026-09-16 | Isolates client-JS/React source boundaries and pluggable protocol/media adapters; specifies chat/voice, streaming/spoken text, metrics/devices, RTVI-only event logs and missing roster/output attribution. Existing authorized history stays separate. No implementation or visual approval claimed. |
+| [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | Planned; locally reviewed 2026-09-16 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity; no tenant-key promotion or third-party credential lifecycle. |
+| [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Planned; locally reviewed 2026-09-16 | Confirmed persistent checklist/sample links and production-default/demo-opt-in behavior; per-example readiness, idempotent catalog publication and existing debug-console launch. |
+| [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The packaging hold remains. |
 
 ## Planning verification
 
