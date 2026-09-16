@@ -127,9 +127,25 @@ when the call ends. The same console will run Getting Started examples.
   logs append-only and keep local device/control state outside the serializable call record.
 - [x] Feed equivalent remote ongoing, attached-live and remote ended fixtures through that store
   and render the same Conversation, Variables, Metrics, and Participants data. The Console host
-  fetches with the authorized Calls inspection cursor and optional immutable call-details
-  publication, then injects those payloads and loading callbacks; RTVI contributes only attached-
-  live updates. Unavailable or redacted data stays distinguishable from captured empty values.
+  fetches with the authorized Calls inspection cursor and selected immutable database definition
+  revision, then injects those payloads and loading callbacks; RTVI contributes only attached-live
+  updates. Unavailable or redacted data stays distinguishable from captured empty values.
+- [ ] Add one operator-authorized `GET /calls/:call_id/inspection` JSON resource for the Core
+  baseline and older-history pages. Assemble it from PostgreSQL-backed Calls inspection, usage,
+  and immutable definition-revision reads only; do not read call-detail publications or recordings
+  from object storage and do not inspect a live room process.
+- [ ] Keep database loading and wire conversion separate: a cohesive inspection query assembles
+  the authorized database records, while a pure presenter converts that result into the versioned
+  snake-case response contract. Reuse those modules from any later HTML or API representation
+  instead of creating another inspection data path.
+- [ ] Red-test the presenter contract for lifecycle, configured participants, messages, activity,
+  tool-call state/details, variables, usage metrics, completeness, timestamps and opaque history
+  cursors. Preserve unavailable versus empty data and expose no secrets or unapproved definition
+  fields.
+- [ ] Red-test the authenticated endpoint for current and older pages, ongoing database state,
+  ended calls, cross-tenant/not-found collapse, backend failure, JSON-only negotiation and
+  `private, no-store` caching. Prove that the endpoint performs no live-room, S3 publication, or
+  recording read.
 - [ ] Before adding more components, migrate the prototype from its monolithic selector stylesheet
   to Tailwind v4 utilities plus semantic theme tokens. Build npm CSS from the same source and prove
   one clean shadcn-registry fixture installation; do not maintain two component implementations.

@@ -127,14 +127,15 @@ when the Logs filter is enabled.
 ## Loading and reconciling a call
 
 The Console host is the data owner for every existing call, including one that is still ongoing.
-It fetches the newest authorized Calls inspection payload, creates the Core store with that initial
-snapshot, and injects endpoint-specific `refresh` and `loadOlder` callbacks. When the viewer requests
-older history, the host callback follows the opaque `next_cursor` and returns the page to Core.
-Overlapping pages are safe because Core deduplicates by entity ID and revision. The host may also
-compose the selected immutable call-details publication into the supplied snapshot for authorized
-participant configuration, tools, transfers, usage, variables, and artifacts. It passes through
-the server's completeness and archive-gap information; loading a page never implies that the whole
-call is complete.
+It fetches the newest authorized database-backed Calls inspection payload, creates the Core store
+with that initial snapshot, and injects endpoint-specific `refresh` and `loadOlder` callbacks. When
+the viewer requests older history, the host callback follows the opaque `next_cursor` and returns
+the page to Core. Overlapping pages are safe because Core deduplicates by entity ID and revision.
+The server composes the selected immutable database definition revision and persisted usage into
+the response for authorized participant configuration, tools, transfers and metrics. The debug
+console endpoint does not load call-details publications or other object-storage artifacts. It
+passes through the server's completeness and archive-gap information; loading a page never implies
+that the whole call is complete.
 
 For an ongoing call, the host can refresh newer accumulated history and include the tenant-
 authorized bounded live-inspection projection in the supplied payload. Opening an ongoing call does
@@ -146,8 +147,8 @@ bounded-buffer drop prevents safe continuation, Core invokes the injected refres
 of guessing a patch. Updates received during the refresh are buffered and applied only after the
 baseline revision they follow.
 
-Once a call ends, Core has no RTVI dependency. The host fetches its durable timeline and final
-details and hands that payload to the same store. RTVI receipts seen only by an attached browser are
+Once a call ends, Core has no RTVI dependency. The host fetches its durable database timeline and
+definition/usage projection and hands that payload to the same store. RTVI receipts seen only by an attached browser are
 available in a later remote view only if the platform deliberately captured and authorized those
 receipts; their absence is reported as unavailable and is not confused with an empty log.
 
@@ -181,7 +182,7 @@ know whether the change came from RTVI, a live-inspection refresh, or a historic
   meanings, so unconstrained deep merging can retain stale or unauthorized data.
 - Ordering by receipt time: reconnection, batching, and remote pagination can reorder receipts.
 - Rebuilding a second browser history store: Calls already owns authorized pagination,
-  completeness, archive gaps, variable revisions, and immutable call-details publications.
+  completeness, archive gaps, variable revisions, definitions and persisted usage.
 
 ## Implementation and verification
 
