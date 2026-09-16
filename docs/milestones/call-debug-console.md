@@ -9,6 +9,7 @@ Pending live-carrier acceptance is not required to build this browser surface.
 Sources: [Developer console design](../developer-console-and-onboarding.md),
 [RTVI call-variable projection](../rtvi-call-variable-projection.md),
 [debug-console metrics](../debug-console-metrics.md),
+[call-details model](../debug-console-call-details-model.md),
 [Gateway/Console boundary](../gateway-console-boundary.md), [Operator's Bench](../../DESIGN.md).
 
 ## Runnable outcome
@@ -29,6 +30,12 @@ when the call ends. The same console will run Getting Started examples.
   protocol/media capabilities, device controls, metrics, protocol-event records and spoken progress.
   Keep RTVI/Vxpipe decoding and WebRTC integration behind distinct adapter contracts. The
   existing Pipecat client-js/Small WebRTC pair is sufficient; no new real adapter is required.
+- Keep the serializable call-details record, its incremental update reducer, and browser-local
+  media/command state separate. Live RTVI, authorized live inspection and cursor-paginated persisted
+  inspection feed the same normalized Core store. Stable entity IDs plus increasing revisions own
+  replacement; explicit tombstones own removal. Reject stale-incarnation updates, expose known
+  sequence/archive gaps, and resynchronize from an authoritative baseline after unsafe continuity.
+  A read-only historical source renders the same tabs without fabricating live controls.
 - React components use only the public Vxpipe client API and injected host data/actions. No
   direct RTVI decoding, RTCPeerConnection, Pipecat-specific React hooks/types, tenant API fetches
   or Console imports. Client has no React/Phoenix/app dependency; shared public types belong
@@ -111,6 +118,14 @@ when the call ends. The same console will run Getting Started examples.
 - [ ] Record/review the client public API, separate protocol/media adapters, capabilities and
   import rules, plus the safe tenant route-selection/preparation boundary. Keep source isolated
   in the confirmed Core/React workspaces without introducing package publishing now.
+- [ ] Red-test and implement the normalized call-details store before a real adapter: live semantic
+  upserts, duplicate/stale revisions, tombstones, call-incarnation rejection, deterministic order,
+  cursor-page overlap, completeness/gaps, and reconnect baseline replacement. Keep raw RTVI receipt
+  logs append-only and keep local device/control state outside the serializable call record.
+- [ ] Feed equivalent live-update and historical fixtures through that store and render the same
+  Conversation, Variables, Metrics, and Participants data. Historical loading uses the authorized
+  Calls inspection cursor and optional immutable call-details publication; unavailable or redacted
+  data stays distinguishable from captured empty values.
 - [ ] Before adding more components, migrate the prototype from its monolithic selector stylesheet
   to Tailwind v4 utilities plus semantic theme tokens. Build npm CSS from the same source and prove
   one clean shadcn-registry fixture installation; do not maintain two component implementations.
