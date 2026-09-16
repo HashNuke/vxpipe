@@ -463,29 +463,35 @@
 .vx-timeline-tool > svg {
   color: var(--vx-violet);
 }
-.vx-timeline-tool > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
 .vx-timeline-tool strong {
   color: var(--vx-ink);
   font: 12px var(--vx-mono);
   overflow-wrap: anywhere;
 }
-.vx-timeline-tool > div span {
-  margin-top: 2px;
-}
 .vx-tool-status {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
   color: var(--vx-muted);
-  font-size: 12px;
-  text-transform: capitalize;
+}
+.vx-tool-status svg {
+  width: 16px;
+  height: 16px;
+}
+.vx-tool-pending svg {
+  animation: vx-tool-spin 1s linear infinite;
 }
 .vx-tool-completed {
   color: var(--vx-green);
 }
 .vx-tool-failed {
   color: var(--vx-red);
+}
+@keyframes vx-tool-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .vx-timeline-log {
   margin: 0 0 10px 44px;
@@ -612,7 +618,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vx-streaming i {
+  .vx-streaming i,
+  .vx-tool-pending svg {
     animation: none;
   }
 }

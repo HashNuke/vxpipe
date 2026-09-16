@@ -5,6 +5,7 @@ export type Scenario =
   | "conversation"
   | "handoff"
   | "human-handoff"
+  | "tool-states"
   | "microphone-denied"
   | "no-alignment"
   | "ended"
@@ -103,7 +104,6 @@ const initial: CallSnapshot = {
       time: "00:09",
       name: "update_variables",
       status: "completed",
-      summary: "Updated intake",
     },
   ],
   events: [
@@ -274,6 +274,30 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       ...snapshot,
       alignment: "unavailable",
       devices: { ...snapshot.devices, outputSelection: false },
+    };
+  if (scenario === "tool-states")
+    snapshot = {
+      ...snapshot,
+      toolCalls: [
+        {
+          id: "tool-1",
+          time: "00:09",
+          name: "lookup_delivery",
+          status: "pending",
+        },
+        {
+          id: "tool-2",
+          time: "00:10",
+          name: "update_variables",
+          status: "completed",
+        },
+        {
+          id: "tool-3",
+          time: "00:11",
+          name: "notify_customer",
+          status: "failed",
+        },
+      ],
     };
   if (scenario === "ended" || scenario === "failed")
     snapshot = {

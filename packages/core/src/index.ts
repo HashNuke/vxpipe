@@ -41,8 +41,7 @@ export interface ToolCall {
   id: string;
   time: string;
   name: string;
-  status: "running" | "completed" | "failed";
-  summary: string;
+  status: "pending" | "completed" | "failed";
 }
 
 export interface Metric {

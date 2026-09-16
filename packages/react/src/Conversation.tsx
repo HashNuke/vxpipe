@@ -6,6 +6,7 @@ import type {
   ProtocolEvent,
   ToolCall,
 } from "@vxpipe/core";
+import { CircleAlert, CircleCheck, LoaderCircle, Wrench } from "lucide-react";
 import { Icon } from "./Icon.js";
 import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
 
@@ -27,7 +28,6 @@ const filterIcons = {
   messages: "message",
   logs: "log",
   events: "event",
-  tools: "tool",
 } as const;
 
 function MessageText({
@@ -113,15 +113,32 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
 }
 
 function ToolRow({ tool }: { tool: ToolCall }) {
+  const statusLabel =
+    tool.status === "pending"
+      ? "Pending"
+      : tool.status === "completed"
+        ? "Completed"
+        : "Error";
+  const StatusIcon =
+    tool.status === "pending"
+      ? LoaderCircle
+      : tool.status === "completed"
+        ? CircleCheck
+        : CircleAlert;
+
   return (
     <div className="vx-timeline-tool">
-      <Icon name="tool" />
-      <div>
-        <strong>{tool.name}</strong>
-        <span>{tool.summary}</span>
-      </div>
-      <span className={`vx-tool-status vx-tool-${tool.status}`}>{tool.status}</span>
+      <Wrench aria-hidden="true" />
+      <strong>{tool.name}</strong>
       <time>{tool.time}</time>
+      <span
+        className={`vx-tool-status vx-tool-${tool.status}`}
+        role="img"
+        aria-label={statusLabel}
+        title={statusLabel}
+      >
+        <StatusIcon aria-hidden="true" />
+      </span>
     </div>
   );
 }
@@ -222,7 +239,11 @@ export function Conversation({
             title={filterLabels[filter]}
             onClick={() => toggle(filter)}
           >
-            <Icon name={filterIcons[filter]} />
+            {filter === "tools" ? (
+              <Wrench aria-hidden="true" />
+            ) : (
+              <Icon name={filterIcons[filter]} />
+            )}
             <span>{filterLabels[filter]}</span>
           </button>
         ))}
