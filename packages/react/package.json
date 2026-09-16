@@ -25,7 +25,8 @@
   "dependencies": {
     "@floating-ui/react": "^0.27.20",
     "@radix-ui/react-select": "^2.3.7",
-    "@vxpipe/core": "0.1.0"
+    "@vxpipe/core": "0.1.0",
+    "lucide-react": "^1.46.0"
   },
   "peerDependencies": {
     "react": "^19.2.0",

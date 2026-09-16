@@ -1,12 +1,12 @@
 import { useState, useSyncExternalStore } from "react";
 import type { VxpipeClient } from "@vxpipe/core";
+import { PhoneCall, PhoneOff } from "lucide-react";
 import { Participants } from "./Participants.js";
 import { Conversation } from "./Conversation.js";
 import { Composer } from "./Composer.js";
 import { DeviceControls } from "./DeviceControls.js";
 import { Metrics } from "./Metrics.js";
 import { Variables } from "./Variables.js";
-import { Icon } from "./Icon.js";
 
 type Tab = "chat" | "variables" | "metrics";
 export interface CallConsoleProps {
@@ -65,7 +65,11 @@ export function CallConsole({
               disabled={pending}
               onClick={() => void act()}
             >
-              {connected && <Icon name="phone" />}
+              {connected ? (
+                <PhoneOff aria-hidden="true" />
+              ) : (
+                <PhoneCall aria-hidden="true" />
+              )}
               {pending
                 ? "Please wait"
                 : connected
