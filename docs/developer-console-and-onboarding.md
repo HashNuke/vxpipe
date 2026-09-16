@@ -144,7 +144,7 @@ packages/core/src/         → @vxpipe/core
 packages/react/src/        → @vxpipe/react
   index.ts                public provider/hooks and components
   components/             conversation timeline, composer, variables, metrics, devices
-  styles/                 component-scoped styles and theme contract
+  styles/                 semantic tokens, base rules and exceptional CSS only
 packages/react/stories/    → fixture client and app-specific prototype compositions
 apps/vxpipe_console/       → production Console application; integration remains planned
   setup, auth, examples, routing, admission/inspection API adapters
@@ -201,7 +201,8 @@ The [Storybook prototype](../packages/README.md) demonstrates the component cont
 data. The user selected dark by default, with preview states in Storybook Controls. The canvas
 omits the redundant debug-console heading, prototype banner, tenant labels on the call page,
 protocol/transport badge, revision subtitle, session divider and bottom call-ID/audio-text bar.
-Before a call starts, show “No call active” and no placeholder participants. Those preferences guide implementation.
+Before a call starts, show “No call active” while keeping the configured participant roster visible
+with inactive styling. Those preferences guide implementation.
 This does not prove real media, wire interoperability, platform authentication or durable setup.
 
 ## Protocol and authority contracts
@@ -350,23 +351,22 @@ idempotent setup and dependency order. The debug console can
 ship before platform bootstrap; Getting Started depends on both. Each milestone below has its own
 runnable checkpoints and failure/browser checks. Planning alone completes none of them.
 
-## Shadcn distribution follow-up
+## React styling and shadcn distribution
 
-The device-control review requested an assessment of shadcn/ui and source-installable Vxpipe
-components. The [official registry model](https://ui.shadcn.com/docs/registry) supports custom
-components, hooks and other files; it works alongside the existing npm workspace layout.
-Keep `@vxpipe/core` as the framework-neutral client package. A subsequent focused package
-checkpoint can use shadcn primitives inside `@vxpipe/react` and generate registry items from
-that same React source, so consumers can either import the package or own editable components.
-No separate UI implementation, third package, or fork of the protocol client is needed.
+The [React component styling decision](react-component-styling.md) replaces the prototype's
+package-wide handwritten stylesheet with Tailwind v4 utilities colocated in component TSX and a
+small semantic-token stylesheet. The [official registry model](https://ui.shadcn.com/docs/registry)
+supports custom components, dependencies, variables and CSS additions alongside the npm workspace.
+Keep `@vxpipe/core` framework-neutral and generate npm and registry distributions from the same
+React source. No third UI package or separate implementation is needed.
 
 The device selectors now use an exported, shadcn-style compositional
 [Select](https://ui.shadcn.com/docs/components/select) backed by Radix UI. This replaces the
 browser-owned native popup with package-owned trigger, popup, option, selected and focus states
-in light and dark themes. The package remains independent of Tailwind. A public shadcn registry
-is still separate distribution work: verify registry installation into a small consumer and its
-imports/styles before publishing it. Avoid adding unrelated shadcn components merely to introduce
-that distribution path. Public registry hosting and npm publication remain separate release work.
+in light and dark themes. Migrate it with the rest of the prototype before expanding the component
+set. A public shadcn registry remains separate distribution work: first verify installation into a
+clean Tailwind v4 consumer and verify npm imports/precompiled CSS independently. Public registry
+hosting and npm publication remain separate release work.
 
 The accepted call toolbar has right-aligned call actions above a device row. Each device group
 is a mute icon beside a bordered dropdown; input and output groups have distinct spacing.

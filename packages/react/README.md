@@ -14,6 +14,11 @@ Dark mode is the default. Pass `theme="light"` for a light surface. The host own
 creation and disposal; components subscribe/unsubscribe without taking ownership of its lifetime.
 The public component contract remains provisional while the UI is prototyped.
 
+The current prefixed stylesheet is prototype debt. The approved
+[styling contract](../../docs/react-component-styling.md) migrates component rules to Tailwind v4
+utilities colocated with TSX, retaining a small semantic-token stylesheet and generated npm CSS.
+Complete that migration before adding more components or publishing a shadcn registry.
+
 Exports include `CallConsole`, `Conversation`, `Composer`, `Participants`, `DeviceControls`,
 `Variables`, `Metrics`, and the composable `Select` primitives. Device selection uses the
 shadcn Select pattern backed by Radix UI, so the trigger and popup share package-owned styling,

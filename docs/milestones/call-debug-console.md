@@ -32,7 +32,9 @@ when the call ends. The same console will run Getting Started examples.
 - React components use only the public Vxpipe client API and injected host data/actions. No
   direct RTVI decoding, RTCPeerConnection, Pipecat-specific React hooks/types, tenant API fetches
   or Console imports. Client has no React/Phoenix/app dependency; shared public types belong
-  to client exports. Component styles/theme must work outside the current application shell.
+  to client exports. Author component styling with Tailwind v4 utilities and semantic CSS
+  variables under the [React styling contract](../react-component-styling.md). The npm build emits
+  compiled CSS; shadcn registry items install the same editable TSX source and required tokens.
 - Console provides admission/inspection through adapters/callbacks. Neither reusable boundary
   hard-codes sample/setup URLs or requires platform/tenant/provider keys. Ephemeral admission
   credentials never enter public snapshots/logs. Cleanup is client-owned, not dependent on
@@ -80,6 +82,9 @@ when the call ends. The same console will run Getting Started examples.
   inspection records and the separate transfer sideband. Filter by event type/direction and
   available identity; retain observed order and repeated traffic, with safe event details.
   Client-owned protocol-event records keep RTVI decoding out of the reusable React viewer.
+- Tool calls disclose captured request and response data through tabs in one responsive panel.
+  An HTTP-backed tool may include its response status for completed or failed calls. Preserve the
+  difference between unavailable capture and an explicitly empty argument/body payload.
 - Device controls include input/output choice where supported, microphone/speaker mute and
   activity/connection state. Unsupported speaker selection has a clear system-device fallback.
 - Keep standard RTVI and existing versioned `vxpipe.turn`/`vxpipe.transfer` envelopes compatible.
@@ -106,6 +111,9 @@ when the call ends. The same console will run Getting Started examples.
 - [ ] Record/review the client public API, separate protocol/media adapters, capabilities and
   import rules, plus the safe tenant route-selection/preparation boundary. Keep source isolated
   in the confirmed Core/React workspaces without introducing package publishing now.
+- [ ] Before adding more components, migrate the prototype from its monolithic selector stylesheet
+  to Tailwind v4 utilities plus semantic theme tokens. Build npm CSS from the same source and prove
+  one clean shadcn-registry fixture installation; do not maintain two component implementations.
 - [ ] Red-test client lifecycle/events without React and components against a fake public client.
   Enforce dependency/import boundaries; substitute a fake adapter without changing components.
   Review the initial rendered composition within Operator's Bench.
