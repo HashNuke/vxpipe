@@ -111,7 +111,7 @@ export function CallConsole({
           </nav>
           {tab === "chat" && <Conversation snapshot={snapshot} theme={theme} />}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
-          {tab === "metrics" && <Metrics snapshot={snapshot} />}
+          {tab === "metrics" && <Metrics snapshot={snapshot} theme={theme} />}
           {tab === "chat" && <Composer client={client} disabled={!connected} />}
         </main>
       </div>

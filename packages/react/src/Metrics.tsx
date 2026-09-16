@@ -1,4 +1,5 @@
 import type { CallSnapshot, Metric, MetricScope } from "@vxpipe/core";
+import { MetricDescriptionTooltip } from "./MetricDescriptionTooltip.js";
 
 const scopeOrder: readonly MetricScope["kind"][] = [
   "room",
@@ -13,7 +14,13 @@ const scopeLabels: Record<MetricScope["kind"], string> = {
   "participant-capability": "Participant capability",
 };
 
-function MetricRows({ metrics }: { metrics: readonly Metric[] }) {
+function MetricRows({
+  metrics,
+  theme,
+}: {
+  metrics: readonly Metric[];
+  theme: "light" | "dark";
+}) {
   return (
     <div className="vx-metric-table">
       <div className="vx-metric-head">
@@ -23,10 +30,11 @@ function MetricRows({ metrics }: { metrics: readonly Metric[] }) {
       </div>
       {metrics.map((metric) => (
         <div className="vx-metric-row" key={metric.label}>
-          <div>
-            <strong>{metric.label}</strong>
-            <p>{metric.description}</p>
-          </div>
+          <MetricDescriptionTooltip
+            label={metric.label}
+            description={metric.description}
+            theme={theme}
+          />
           <span className="vx-metric-value">
             {metric.value === null ? (
               "Unavailable"
@@ -65,7 +73,13 @@ function groupByLabel(metrics: readonly Metric[], snapshot: CallSnapshot) {
   return [...groups.entries()];
 }
 
-export function Metrics({ snapshot }: { snapshot: CallSnapshot }) {
+export function Metrics({
+  snapshot,
+  theme,
+}: {
+  snapshot: CallSnapshot;
+  theme: "light" | "dark";
+}) {
   return (
     <section className="vx-metrics" aria-label="Call metrics">
       {scopeOrder.map((kind) => {
@@ -79,7 +93,7 @@ export function Metrics({ snapshot }: { snapshot: CallSnapshot }) {
             {groupByLabel(metrics, snapshot).map(([label, scoped]) => (
               <div className="vx-metric-group" key={label || kind}>
                 {label && <h3>{label}</h3>}
-                <MetricRows metrics={scoped} />
+                <MetricRows metrics={scoped} theme={theme} />
               </div>
             ))}
           </section>

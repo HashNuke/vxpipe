@@ -358,7 +358,7 @@
   font: 12px var(--vx-mono);
   color: var(--vx-muted);
 }
-.vx-turn-metrics-button {
+.vx-console .vx-turn-metrics-button {
   display: inline-grid;
   width: 24px;
   height: 24px;
@@ -367,14 +367,17 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
+  color: var(--vx-blue);
+}
+.vx-console .vx-turn-metrics-button:disabled {
   color: var(--vx-muted);
 }
-.vx-turn-metrics-button:hover:not(:disabled),
-.vx-turn-metrics-button:focus-visible {
-  background: var(--vx-soft);
-  color: var(--vx-ink);
+.vx-console .vx-turn-metrics-button:hover:not(:disabled),
+.vx-console .vx-turn-metrics-button:focus-visible {
+  background: var(--vx-blue-soft);
+  color: var(--vx-blue);
 }
-.vx-turn-metrics-button svg {
+.vx-console .vx-turn-metrics-button svg {
   width: 15px;
   height: 15px;
 }
@@ -976,10 +979,45 @@ button.vx-tool-summary:hover {
   font-size: 14px;
   font-weight: 500;
 }
-.vx-metric-row p {
-  font-size: 12px;
+.vx-metric-explanation {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.vx-metric-explanation svg {
+  width: 13px;
+  height: 13px;
   color: var(--vx-muted);
-  margin-top: 4px;
+}
+.vx-metric-explanation:hover,
+.vx-metric-explanation:focus-visible {
+  color: var(--vx-blue);
+}
+.vx-metric-explanation:hover svg,
+.vx-metric-explanation:focus-visible svg {
+  color: var(--vx-blue);
+}
+.vx-metric-description-tooltip {
+  z-index: 80;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid oklch(0.92 0.004 286.32);
+  border-radius: 6px;
+  background: oklch(1 0 0);
+  color: oklch(0.21 0.006 285.885);
+  box-shadow: 0 10px 24px color-mix(in oklch, oklch(0.21 0.006 285.885) 16%, transparent);
+  font: 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.vx-metric-description-tooltip[data-vx-theme="dark"] {
+  border-color: oklch(0.35 0.006 286);
+  background: oklch(0.235 0.006 285.885);
+  color: oklch(0.985 0 0);
+  color-scheme: dark;
 }
 .vx-metric-value {
   font: 14px var(--vx-mono);

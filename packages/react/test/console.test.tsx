@@ -129,6 +129,23 @@ test("Metrics groups measurements by their authoritative scope", () => {
   ).toBeVisible();
 });
 
+test("Metrics keeps measurement explanations in a tooltip", async () => {
+  render(
+    <CallConsole
+      client={createFixtureClient("conversation")}
+      initialTab="metrics"
+    />,
+  );
+
+  expect(screen.queryByText("Final transcription latency")).not.toBeInTheDocument();
+  fireEvent.focus(
+    screen.getByRole("button", { name: "Explain Speech recognition" }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    "Final transcription latency",
+  );
+});
+
 test("a message time exposes its correlated turn metrics on focus", async () => {
   render(<CallConsole client={createFixtureClient("conversation")} />);
 
