@@ -91,17 +91,27 @@
 }
 .vx-call-header {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
   padding: 20px 28px;
   border-bottom: 1px solid var(--vx-line);
 }
 .vx-call-actions {
-  align-self: flex-end;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.vx-call-actions > .vx-button {
+  width: 100%;
+}
+.vx-call-action-meta {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: flex-end;
+  gap: 12px;
 }
 .vx-call-actions time {
   font: 12px var(--vx-mono);
@@ -180,12 +190,13 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 24px 20px;
+  padding: 24px 0 0;
 }
 .vx-section-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 20px;
 }
 .vx-section-title h2 {
   font-size: 12px;
@@ -197,14 +208,14 @@
   font: 12px var(--vx-mono);
 }
 .vx-participants ul {
-  margin: 24px 0;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
   min-height: 0;
   overflow-y: auto;
 }
 .vx-participants li {
-  margin-bottom: 28px;
+  margin: 0;
 }
 .vx-participant-button {
   appearance: none;
@@ -212,10 +223,9 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 8px;
-  margin: -8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  padding: 14px 20px;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -225,7 +235,6 @@
 .vx-participant-button:focus-visible,
 .vx-participant-selected {
   background: var(--vx-soft);
-  border-color: var(--vx-line);
 }
 .vx-participant-muted {
   opacity: 0.48;
@@ -952,6 +961,7 @@ button.vx-tool-summary:hover {
   color: var(--vx-muted);
 }
 .vx-devices {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .vx-device-row {
@@ -1320,7 +1330,7 @@ button.vx-tool-summary:hover {
     grid-template-columns: 180px minmax(0, 1fr);
   }
   .vx-participants {
-    padding: 20px 12px;
+    padding-top: 20px;
   }
   .vx-call-header {
     padding: 20px;
@@ -1344,11 +1354,13 @@ button.vx-tool-summary:hover {
     height: 100dvh;
   }
   .vx-call-header {
+    align-items: stretch;
     padding: 16px;
     gap: 12px;
   }
   .vx-call-actions {
-    gap: 12px;
+    min-width: 104px;
+    gap: 8px;
   }
   .vx-call-actions .vx-button {
     font-size: 12px;
@@ -1359,7 +1371,7 @@ button.vx-tool-summary:hover {
   }
   .vx-participants {
     flex: 0 0 auto;
-    padding: 12px 16px;
+    padding: 8px 16px;
     border-right: 0;
     border-bottom: 1px solid var(--vx-line);
   }
@@ -1384,6 +1396,7 @@ button.vx-tool-summary:hover {
   .vx-participant-button {
     margin: 0;
     padding: 6px;
+    border-radius: 6px;
   }
   .vx-participants .vx-avatar {
     margin-top: 2px;

@@ -69,18 +69,8 @@ export function CallConsole({
       style={{ maxHeight }}
     >
       <header className="vx-call-header">
+        <DeviceControls snapshot={snapshot} client={client} theme={theme} />
         <div className="vx-call-actions">
-          <span className={`vx-call-state vx-state-${snapshot.state}`}>
-            <i />
-            {connected
-              ? "Connected"
-              : snapshot.state === "ended"
-                ? "Call ended"
-                : snapshot.state === "failed"
-                  ? "Connection failed"
-                  : "Ready"}
-          </span>
-          <time>{snapshot.duration}</time>
           {!ended && (
             <button
               className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
@@ -99,8 +89,20 @@ export function CallConsole({
                   : "Start call"}
             </button>
           )}
+          <div className="vx-call-action-meta">
+            <span className={`vx-call-state vx-state-${snapshot.state}`}>
+              <i />
+              {connected
+                ? "Connected"
+                : snapshot.state === "ended"
+                  ? "Call ended"
+                  : snapshot.state === "failed"
+                    ? "Connection failed"
+                    : "Ready"}
+            </span>
+            <time>{snapshot.duration}</time>
+          </div>
         </div>
-        <DeviceControls snapshot={snapshot} client={client} theme={theme} />
       </header>
       {error && (
         <p className="vx-error vx-notice" role="alert">
