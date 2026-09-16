@@ -45,7 +45,7 @@ const meta = {
     page: { control: "select", options: ["console", "setup"] },
     initialTab: {
       control: "select",
-      options: ["chat", "variables", "metrics", "logs"],
+      options: ["chat", "variables", "metrics"],
     },
     animateSpeech: {
       control: "boolean",
@@ -61,7 +61,6 @@ export const AgentHandoff: Story = { args: { scenario: "handoff" } };
 export const HumanHandoff: Story = { args: { scenario: "human-handoff" } };
 export const Variables: Story = { args: { initialTab: "variables" } };
 export const Metrics: Story = { args: { initialTab: "metrics" } };
-export const RtviEvents: Story = { args: { initialTab: "logs" } };
 export const MicrophoneDenied: Story = {
   args: { scenario: "microphone-denied" },
 };

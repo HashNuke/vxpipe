@@ -63,6 +63,23 @@ const initial: CallSnapshot = {
       spokenRange: { start: 55, end: 63 },
     },
   ],
+  activities: [
+    {
+      id: "a1",
+      time: "00:00",
+      text: "Call connected",
+      kind: "call",
+    },
+  ],
+  toolCalls: [
+    {
+      id: "tool-1",
+      time: "00:09",
+      name: "update_variables",
+      status: "completed",
+      summary: "Updated intake",
+    },
+  ],
   events: [
     {
       id: "e1",
@@ -199,6 +216,8 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       state: "ready",
       duration: "00:00",
       messages: [],
+      activities: [],
+      toolCalls: [],
       events: [],
       participants: [],
       variables: null,
@@ -230,10 +249,19 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
   if (scenario === "handoff" || scenario === "human-handoff")
     snapshot = {
       ...snapshot,
-      notice:
-        scenario === "handoff"
-          ? "Assistant handed the conversation to the Delivery specialist."
-          : "Support teammate accepted the invitation and joined the conversation.",
+      notice: undefined,
+      activities: [
+        ...snapshot.activities,
+        {
+          id: "a2",
+          time: "02:13",
+          text:
+            scenario === "handoff"
+              ? "Delivery specialist joined"
+              : "Support joined",
+          kind: "participant",
+        },
+      ],
       participants: [
         ...snapshot.participants.map((p) =>
           p.id === "assistant" ? { ...p, state: "left" as const } : p,

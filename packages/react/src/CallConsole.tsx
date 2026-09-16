@@ -4,12 +4,11 @@ import { Participants } from "./Participants.js";
 import { Conversation } from "./Conversation.js";
 import { Composer } from "./Composer.js";
 import { DeviceControls } from "./DeviceControls.js";
-import { EventLog } from "./EventLog.js";
 import { Metrics } from "./Metrics.js";
 import { Variables } from "./Variables.js";
 import { Icon } from "./Icon.js";
 
-type Tab = "chat" | "variables" | "metrics" | "logs";
+type Tab = "chat" | "variables" | "metrics";
 export interface CallConsoleProps {
   client: VxpipeClient;
   initialTab?: Tab;
@@ -91,7 +90,7 @@ export function CallConsole({
         <Participants participants={snapshot.participants} />
         <main className="vx-main">
           <nav className="vx-tabs" aria-label="Call views">
-            {(["chat", "variables", "metrics", "logs"] as const).map((item) => (
+            {(["chat", "variables", "metrics"] as const).map((item) => (
               <button
                 className={tab === item ? "vx-tab-active" : ""}
                 aria-current={tab === item ? "page" : undefined}
@@ -102,25 +101,13 @@ export function CallConsole({
                   ? "Conversation"
                   : item === "variables"
                     ? "Variables"
-                    : item === "logs"
-                      ? "Logs"
-                      : "Metrics"}
-                {item === "logs" && (
-                  <span>
-                    {
-                      snapshot.events.filter(
-                        (event) => event.protocol === "rtvi",
-                      ).length
-                    }
-                  </span>
-                )}
+                    : "Metrics"}
               </button>
             ))}
           </nav>
           {tab === "chat" && <Conversation snapshot={snapshot} />}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <Metrics metrics={snapshot.metrics} />}
-          {tab === "logs" && <EventLog events={snapshot.events} />}
           {tab === "chat" && <Composer client={client} disabled={!connected} />}
         </main>
       </div>

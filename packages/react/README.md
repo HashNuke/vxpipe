@@ -14,13 +14,13 @@ Dark mode is the default. Pass `theme="light"` for a light surface. The host own
 creation and disposal; components subscribe/unsubscribe without taking ownership of its lifetime.
 The public component contract remains provisional while the UI is prototyped.
 
-Exports include `CallConsole`, `Conversation`, `Composer`, `Participants`, `DeviceControls`, `Variables`,
-`Metrics`, `EventLog`, and the composable `Select` primitives. Device selection uses the
+Exports include `CallConsole`, `Conversation`, `Composer`, `Participants`, `DeviceControls`,
+`Variables`, `Metrics`, and the composable `Select` primitives. Device selection uses the
 shadcn Select pattern backed by Radix UI, so the trigger and popup share package-owned styling,
 keyboard behavior, focus management, and selected-state feedback. The composed console provides
 their scoped styles/theme. Standalone pieces should be hosted in the same `.vx-console` theme
-root. `EventLog` displays RTVI events
-only; it is not an application or server log viewer.
+root. The Conversation filters can reveal raw RTVI events; application and server logs stay out
+of this package contract.
 
 Run `npm run storybook` from the repository root. The [workspace README](../README.md) describes
 the sample-only behavior, review states and checks. `stories/` contains application composition

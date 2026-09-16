@@ -28,6 +28,21 @@ export interface ProtocolEvent {
   details: Readonly<Record<string, unknown>>;
 }
 
+export interface ActivityEvent {
+  id: string;
+  time: string;
+  text: string;
+  kind: "call" | "participant" | "transfer";
+}
+
+export interface ToolCall {
+  id: string;
+  time: string;
+  name: string;
+  status: "running" | "completed" | "failed";
+  summary: string;
+}
+
 export interface Metric {
   label: string;
   value: number | null;
@@ -60,6 +75,8 @@ export interface CallSnapshot {
   duration: string;
   participants: readonly Participant[];
   messages: readonly Message[];
+  activities: readonly ActivityEvent[];
+  toolCalls: readonly ToolCall[];
   events: readonly ProtocolEvent[];
   metrics: readonly Metric[];
   /** Latest full projection authorized for this client; null when unavailable. */

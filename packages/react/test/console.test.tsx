@@ -28,19 +28,21 @@ test("leaving keeps the transcript visible and disables further sending", async 
   expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
 });
 
-test("Logs displays only RTVI traffic and can filter and inspect an event", () => {
-  const client = createFixtureClient("conversation");
-  render(<CallConsole client={client} initialTab="logs" />);
-  fireEvent.change(
-    screen.getByRole("searchbox", { name: "Filter RTVI events" }),
-    { target: { value: "server-message" } },
-  );
-  expect(
-    screen.queryByRole("button", { name: /bot-ready/ }),
-  ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /server-message/ }));
-  expect(screen.getByText(/vxpipe.turn/)).toBeVisible();
-  expect(screen.queryByText("transport.connected")).not.toBeInTheDocument();
+test("Conversation filters messages, events, tool calls and raw RTVI logs", () => {
+  render(<CallConsole client={createFixtureClient("human-handoff")} />);
+
+  expect(screen.getByText("Support joined")).toBeVisible();
+  expect(screen.getByText("update_variables")).toBeVisible();
+  expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Show Logs" }));
+  expect(screen.getByText("client-ready")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Hide Events" }));
+  expect(screen.queryByText("Support joined")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
+  expect(screen.getByText("Support joined")).toBeVisible();
+  expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
 });
 
 test("unsupported alignment shows a speaking state without word highlighting", () => {
