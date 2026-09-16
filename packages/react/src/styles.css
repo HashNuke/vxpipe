@@ -550,12 +550,6 @@
   padding: 24px 32px 40px;
   overflow: auto;
 }
-.vx-variables-meta {
-  margin-bottom: 16px;
-  color: var(--vx-muted);
-  font: 12px var(--vx-mono);
-  text-align: right;
-}
 .vx-variable-sections {
   display: grid;
   gap: 16px;
@@ -569,17 +563,11 @@
 .vx-variable-section > header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--vx-line);
 }
 .vx-variable-section h2 {
   font: 600 13px var(--vx-mono);
-}
-.vx-variable-section header span {
-  color: var(--vx-muted);
-  font: 11px var(--vx-mono);
 }
 .vx-variable-section dl {
   margin: 0;

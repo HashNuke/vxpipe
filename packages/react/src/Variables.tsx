@@ -25,7 +25,6 @@ export function Variables({ snapshot }: { snapshot: VariableSnapshot | null }) {
   const sections = Object.entries(snapshot.sections);
   return (
     <section className="vx-variables" aria-label="Call variables">
-      <div className="vx-variables-meta">Revision {snapshot.revision}</div>
       {sections.length === 0 ? (
         <div className="vx-empty">
           <h2>No variables</h2>
@@ -36,7 +35,6 @@ export function Variables({ snapshot }: { snapshot: VariableSnapshot | null }) {
             <article className="vx-variable-section" key={name}>
               <header>
                 <h2>{name}</h2>
-                <span>Section {section.revision}</span>
               </header>
               <dl>
                 {entries(section.value).map(([key, value]) => (

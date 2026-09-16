@@ -77,7 +77,6 @@ test("Variables displays the latest authorized snapshot by section", () => {
   expect(screen.getByRole("heading", { name: "intake" })).toBeVisible();
   expect(screen.getByText("requested_date")).toBeVisible();
   expect(screen.getByText("2026-09-18")).toBeVisible();
-  expect(screen.getByText("Revision 7")).toBeVisible();
 });
 
 test("Metrics groups measurements by their authoritative scope", () => {
