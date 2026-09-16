@@ -6,9 +6,10 @@ import { Composer } from "./Composer.js";
 import { DeviceControls } from "./DeviceControls.js";
 import { EventLog } from "./EventLog.js";
 import { Metrics } from "./Metrics.js";
+import { Variables } from "./Variables.js";
 import { Icon } from "./Icon.js";
 
-type Tab = "chat" | "metrics" | "logs";
+type Tab = "chat" | "variables" | "metrics" | "logs";
 export interface CallConsoleProps {
   client: VxpipeClient;
   initialTab?: Tab;
@@ -90,7 +91,7 @@ export function CallConsole({
         <Participants participants={snapshot.participants} />
         <main className="vx-main">
           <nav className="vx-tabs" aria-label="Call views">
-            {(["chat", "metrics", "logs"] as const).map((item) => (
+            {(["chat", "variables", "metrics", "logs"] as const).map((item) => (
               <button
                 className={tab === item ? "vx-tab-active" : ""}
                 aria-current={tab === item ? "page" : undefined}
@@ -99,9 +100,11 @@ export function CallConsole({
               >
                 {item === "chat"
                   ? "Conversation"
-                  : item === "logs"
-                    ? "Logs"
-                    : "Metrics"}
+                  : item === "variables"
+                    ? "Variables"
+                    : item === "logs"
+                      ? "Logs"
+                      : "Metrics"}
                 {item === "logs" && (
                   <span>
                     {
@@ -115,9 +118,10 @@ export function CallConsole({
             ))}
           </nav>
           {tab === "chat" && <Conversation snapshot={snapshot} />}
+          {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <Metrics metrics={snapshot.metrics} />}
           {tab === "logs" && <EventLog events={snapshot.events} />}
-          <Composer client={client} disabled={!connected} />
+          {tab === "chat" && <Composer client={client} disabled={!connected} />}
         </main>
       </div>
     </div>

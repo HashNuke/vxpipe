@@ -36,6 +36,24 @@ export interface Metric {
   description: string;
 }
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+
+export interface VariableSection {
+  revision: number;
+  value: JsonValue;
+}
+
+export interface VariableSnapshot {
+  revision: number;
+  sections: Readonly<Record<string, VariableSection>>;
+}
+
 export interface CallSnapshot {
   callId: string;
   state: "ready" | "connected" | "ended" | "failed";
@@ -44,6 +62,8 @@ export interface CallSnapshot {
   messages: readonly Message[];
   events: readonly ProtocolEvent[];
   metrics: readonly Metric[];
+  /** Latest full projection authorized for this client; null when unavailable. */
+  variables: VariableSnapshot | null;
   alignment: "word" | "segment" | "unavailable";
   microphone: "off" | "on" | "denied";
   speakerMuted: boolean;

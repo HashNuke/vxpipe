@@ -63,3 +63,17 @@ test("device menus expose styled options and apply the selected device", async (
     screen.getByRole("combobox", { name: "Input device" }),
   ).toHaveTextContent("USB headset");
 });
+
+test("Variables displays the latest authorized snapshot by section", () => {
+  render(
+    <CallConsole
+      client={createFixtureClient("conversation")}
+      initialTab="variables"
+    />,
+  );
+
+  expect(screen.getByRole("heading", { name: "intake" })).toBeVisible();
+  expect(screen.getByText("requested_date")).toBeVisible();
+  expect(screen.getByText("2026-09-18")).toBeVisible();
+  expect(screen.getByText("Revision 7")).toBeVisible();
+});

@@ -357,6 +357,75 @@
 .vx-streaming i:nth-child(3) {
   animation-delay: 0.32s;
 }
+.vx-variables {
+  flex: 1;
+  min-height: 420px;
+  padding: 24px 32px 40px;
+  overflow: auto;
+}
+.vx-variables-meta {
+  margin-bottom: 16px;
+  color: var(--vx-muted);
+  font: 12px var(--vx-mono);
+  text-align: right;
+}
+.vx-variable-sections {
+  display: grid;
+  gap: 16px;
+}
+.vx-variable-section {
+  overflow: hidden;
+  border: 1px solid var(--vx-line);
+  border-radius: 8px;
+  background: var(--vx-panel);
+}
+.vx-variable-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vx-line);
+}
+.vx-variable-section h2 {
+  font: 600 13px var(--vx-mono);
+}
+.vx-variable-section header span {
+  color: var(--vx-muted);
+  font: 11px var(--vx-mono);
+}
+.vx-variable-section dl {
+  margin: 0;
+}
+.vx-variable-section dl > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.36fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vx-line);
+}
+.vx-variable-section dl > div:last-child {
+  border-bottom: 0;
+}
+.vx-variable-section dt {
+  color: var(--vx-muted);
+  font: 12px var(--vx-mono);
+  overflow-wrap: anywhere;
+}
+.vx-variable-section dd {
+  min-width: 0;
+  margin: 0;
+  font: 12px/1.6 var(--vx-mono);
+  overflow-wrap: anywhere;
+}
+.vx-variable-section pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.vx-variable-empty {
+  color: var(--vx-muted);
+  font-style: italic;
+}
 @keyframes vx-streaming-bounce {
   0%,
   50%,

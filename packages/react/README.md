@@ -14,7 +14,7 @@ Dark mode is the default. Pass `theme="light"` for a light surface. The host own
 creation and disposal; components subscribe/unsubscribe without taking ownership of its lifetime.
 The public component contract remains provisional while the UI is prototyped.
 
-Exports include `CallConsole`, `Conversation`, `Composer`, `Participants`, `DeviceControls`,
+Exports include `CallConsole`, `Conversation`, `Composer`, `Participants`, `DeviceControls`, `Variables`,
 `Metrics`, `EventLog`, and the composable `Select` primitives. Device selection uses the
 shadcn Select pattern backed by Radix UI, so the trigger and popup share package-owned styling,
 keyboard behavior, focus management, and selected-state feedback. The composed console provides

@@ -43,7 +43,10 @@ const meta = {
       ],
     },
     page: { control: "select", options: ["console", "setup"] },
-    initialTab: { control: "select", options: ["chat", "metrics", "logs"] },
+    initialTab: {
+      control: "select",
+      options: ["chat", "variables", "metrics", "logs"],
+    },
     animateSpeech: {
       control: "boolean",
       description: "Animate fixture word timing without playing audio.",
@@ -56,6 +59,7 @@ export const Conversation: Story = {};
 export const ReadyToStart: Story = { args: { scenario: "ready" } };
 export const AgentHandoff: Story = { args: { scenario: "handoff" } };
 export const HumanHandoff: Story = { args: { scenario: "human-handoff" } };
+export const Variables: Story = { args: { initialTab: "variables" } };
 export const Metrics: Story = { args: { initialTab: "metrics" } };
 export const RtviEvents: Story = { args: { initialTab: "logs" } };
 export const MicrophoneDenied: Story = {

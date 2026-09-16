@@ -126,6 +126,23 @@ const initial: CallSnapshot = {
       details: { text: "Of course. Let's find a time that works for you." },
     },
   ],
+  variables: {
+    revision: 7,
+    sections: {
+      order: {
+        revision: 1,
+        value: { order_id: "ORD-1048", customer_tier: "priority" },
+      },
+      intake: {
+        revision: 3,
+        value: {
+          requested_date: "2026-09-18",
+          window: "afternoon",
+          confirmed: false,
+        },
+      },
+    },
+  },
   metrics: [
     {
       label: "Speech recognition",
@@ -184,6 +201,7 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       messages: [],
       events: [],
       participants: [],
+      variables: null,
       metrics: snapshot.metrics.map((metric) => ({ ...metric, value: null })),
     };
   if (scenario === "microphone-denied")
