@@ -1,6 +1,7 @@
 import type { CallSnapshot, Metric, MetricScope } from "@vxpipe/core";
 import { MetricCellTooltip } from "./MetricCellTooltip.js";
 import { MetricHeaderTooltip } from "./MetricHeaderTooltip.js";
+import { participantDisplayName } from "./participantDisplayName.js";
 
 const metricOrder = [
   "Call duration",
@@ -79,7 +80,9 @@ function rowIdentity(scope: MetricScope, snapshot: CallSnapshot) {
   const participant = snapshot.participants.find(
     (person) => person.id === scope.participantId,
   );
-  const participantName = participant?.name ?? scope.participantId;
+  const participantName = participant
+    ? participantDisplayName(participant)
+    : scope.participantId;
   const target =
     scope.kind === "participant-capability"
       ? `${participantName} · ${scope.capability}`

@@ -1,4 +1,5 @@
 import type { Participant, ParticipantConnection } from "@vxpipe/core";
+import { participantDisplayName } from "./participantDisplayName.js";
 
 function presenceLabel(state: Participant["state"]) {
   return state === "listening" || state === "speaking" ? "connected" : state;
@@ -26,7 +27,7 @@ export function Participants({
       <ul>
         {participants.map((person) => {
           const presence = presenceLabel(person.state);
-          const displayName = person.role === "caller" ? "Caller" : person.name;
+          const displayName = participantDisplayName(person);
           const participantConnectionLabel = person.connection
             ? connectionLabel(person.connection)
             : undefined;

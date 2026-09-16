@@ -272,7 +272,7 @@ test("Metrics presents every scope in one measurement table", () => {
     within(table).getByRole("rowheader", { name: "Room capability: STT" }),
   ).toBeVisible();
   expect(
-    within(table).getByRole("rowheader", { name: "Participant: You" }),
+    within(table).getByRole("rowheader", { name: "Participant: Caller" }),
   ).toBeVisible();
 });
 
