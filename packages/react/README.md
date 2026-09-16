@@ -20,7 +20,8 @@ shadcn Select pattern backed by Radix UI, so the trigger and popup share package
 keyboard behavior, focus management, and selected-state feedback. The composed console provides
 their scoped styles/theme. Standalone pieces should be hosted in the same `.vx-console` theme
 root. The Conversation filters can reveal raw RTVI events; application and server logs stay out
-of this package contract.
+of this package contract. Turn metrics use Floating UI for their hover/focus tooltip; aggregate
+metrics are grouped by room, room capability, participant and participant capability.
 
 Run `npm run storybook` from the repository root. The [workspace README](../README.md) describes
 the sample-only behavior, review states and checks. `stories/` contains application composition

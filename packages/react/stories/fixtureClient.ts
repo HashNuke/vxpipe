@@ -61,6 +61,32 @@ const initial: CallSnapshot = {
       text: "Of course. Let's find a time that works for you. Would tomorrow morning or afternoon be better?",
       state: "streaming",
       spokenRange: { start: 55, end: 63 },
+      metrics: [
+        {
+          label: "First model token",
+          value: 312,
+          unit: "ms",
+          source: "LLM provider",
+          description: "Request to first generated token",
+          scope: {
+            kind: "participant-capability",
+            participantId: "assistant",
+            capability: "LLM",
+          },
+        },
+        {
+          label: "First audio",
+          value: 96,
+          unit: "ms",
+          source: "TTS provider",
+          description: "Request to first audio chunk",
+          scope: {
+            kind: "participant-capability",
+            participantId: "assistant",
+            capability: "TTS",
+          },
+        },
+      ],
     },
   ],
   activities: [
@@ -167,6 +193,7 @@ const initial: CallSnapshot = {
       unit: "ms",
       source: "STT provider",
       description: "Final transcription latency",
+      scope: { kind: "room-capability", capability: "STT" },
     },
     {
       label: "First model token",
@@ -174,6 +201,11 @@ const initial: CallSnapshot = {
       unit: "ms",
       source: "LLM provider",
       description: "Request to first generated token",
+      scope: {
+        kind: "participant-capability",
+        participantId: "assistant",
+        capability: "LLM",
+      },
     },
     {
       label: "First audio",
@@ -181,6 +213,11 @@ const initial: CallSnapshot = {
       unit: "ms",
       source: "TTS provider",
       description: "Request to first audio chunk",
+      scope: {
+        kind: "participant-capability",
+        participantId: "assistant",
+        capability: "TTS",
+      },
     },
     {
       label: "Round-trip time",
@@ -188,6 +225,7 @@ const initial: CallSnapshot = {
       unit: "ms",
       source: "Browser",
       description: "WebRTC connection measurement",
+      scope: { kind: "participant", participantId: "caller" },
     },
     {
       label: "Model output",
@@ -195,6 +233,11 @@ const initial: CallSnapshot = {
       unit: "tokens",
       source: "LLM provider",
       description: "Reported output usage",
+      scope: {
+        kind: "participant-capability",
+        participantId: "assistant",
+        capability: "LLM",
+      },
     },
     {
       label: "Remote playback",
@@ -202,6 +245,7 @@ const initial: CallSnapshot = {
       unit: "ms",
       source: "Unavailable",
       description: "No remote audibility measurement",
+      scope: { kind: "room" },
     },
   ],
 };

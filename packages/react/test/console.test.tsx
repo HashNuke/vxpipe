@@ -79,3 +79,33 @@ test("Variables displays the latest authorized snapshot by section", () => {
   expect(screen.getByText("2026-09-18")).toBeVisible();
   expect(screen.getByText("Revision 7")).toBeVisible();
 });
+
+test("Metrics groups measurements by their authoritative scope", () => {
+  render(
+    <CallConsole
+      client={createFixtureClient("conversation")}
+      initialTab="metrics"
+    />,
+  );
+
+  expect(screen.getByRole("heading", { name: "Room" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Room capability" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Participant" })).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Participant capability" }),
+  ).toBeVisible();
+});
+
+test("a message time exposes its correlated turn metrics on focus", async () => {
+  render(<CallConsole client={createFixtureClient("conversation")} />);
+
+  fireEvent.focus(
+    screen.getByRole("button", {
+      name: "View metrics for Assistant at 00:10",
+    }),
+  );
+
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(
+    "First model token312 ms",
+  );
+});

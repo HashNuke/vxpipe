@@ -358,6 +358,65 @@
   font: 12px var(--vx-mono);
   color: var(--vx-muted);
 }
+.vx-turn-metrics-button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vx-muted);
+}
+.vx-turn-metrics-button:hover,
+.vx-turn-metrics-button:focus-visible {
+  background: var(--vx-soft);
+  color: var(--vx-ink);
+}
+.vx-turn-metrics-button svg {
+  width: 15px;
+  height: 15px;
+}
+.vx-turn-tooltip {
+  z-index: 80;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px;
+  border: 1px solid oklch(0.92 0.004 286.32);
+  border-radius: 8px;
+  background: oklch(1 0 0);
+  color: oklch(0.21 0.006 285.885);
+  box-shadow: 0 12px 32px color-mix(in oklch, oklch(0.21 0.006 285.885) 18%, transparent);
+  font: 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.vx-turn-tooltip[data-vx-theme="dark"] {
+  border-color: oklch(0.35 0.006 286);
+  background: oklch(0.235 0.006 285.885);
+  color: oklch(0.985 0 0);
+  color-scheme: dark;
+}
+.vx-turn-tooltip > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 7px 8px;
+}
+.vx-turn-tooltip > div + div {
+  border-top: 1px solid color-mix(in oklch, currentColor 14%, transparent);
+}
+.vx-turn-tooltip span {
+  color: color-mix(in oklch, currentColor 72%, transparent);
+}
+.vx-turn-tooltip strong {
+  font: 500 12px var(--vx-mono, ui-monospace, monospace);
+  white-space: nowrap;
+}
+.vx-turn-tooltip small {
+  font: inherit;
+  color: color-mix(in oklch, currentColor 72%, transparent);
+}
 .vx-message p {
   font-size: 16px;
   line-height: 1.75;
@@ -398,9 +457,11 @@
 }
 .vx-timeline-tool {
   border: 1px solid var(--vx-line);
-  border-left: 2px solid var(--vx-violet);
   border-radius: 6px;
   background: var(--vx-panel);
+}
+.vx-timeline-tool > svg {
+  color: var(--vx-violet);
 }
 .vx-timeline-tool > div {
   display: flex;
@@ -810,17 +871,22 @@
   min-height: 398px;
   flex: 1;
 }
-.vx-panel-intro h2 {
-  font-size: 16px;
+.vx-metric-scope + .vx-metric-scope {
+  margin-top: 32px;
+}
+.vx-metric-scope > h2 {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vx-line);
+  font-size: 14px;
   font-weight: 600;
 }
-.vx-panel-intro p {
-  margin-top: 6px;
+.vx-metric-group > h3 {
+  margin-top: 16px;
   color: var(--vx-muted);
-  font-size: 12px;
+  font: 12px var(--vx-mono);
 }
 .vx-metric-table {
-  margin-top: 24px;
+  margin-top: 12px;
 }
 .vx-metric-head,
 .vx-metric-row {

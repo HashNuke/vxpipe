@@ -93,6 +93,12 @@
         ],
         "createdAt": "2026-09-15T03:23:46.535Z",
         "reason": "Agent review: existing Deepgram provider-logo artwork uses its brand color; the console UI palette does not govern third-party logos."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "vx-streaming-bounce",
+        "createdAt": "2026-09-16T03:35:37.127Z",
+        "reason": "User explicitly requested sequential jumping dots for streaming output"
       }
     ]
   }

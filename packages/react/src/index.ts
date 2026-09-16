@@ -5,6 +5,7 @@ export { Composer } from "./Composer.js";
 export { DeviceControls } from "./DeviceControls.js";
 export { Variables } from "./Variables.js";
 export { Metrics } from "./Metrics.js";
+export { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
 export { Participants } from "./Participants.js";
 export {
   Select,

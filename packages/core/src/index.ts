@@ -15,6 +15,8 @@ export interface Message {
   state: "final" | "streaming" | "interrupted";
   /** Character range supplied by the client, never estimated by the React view. */
   spokenRange?: { start: number; end: number };
+  /** Measurements correlated to this exact turn by the adapter. */
+  metrics?: readonly Metric[];
 }
 
 export interface ProtocolEvent {
@@ -49,7 +51,18 @@ export interface Metric {
   unit: string;
   source: string;
   description: string;
+  scope: MetricScope;
 }
+
+export type MetricScope =
+  | { kind: "room" }
+  | { kind: "room-capability"; capability: string }
+  | { kind: "participant"; participantId: string }
+  | {
+      kind: "participant-capability";
+      participantId: string;
+      capability: string;
+    };
 
 export type JsonValue =
   | string

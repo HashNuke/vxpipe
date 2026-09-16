@@ -7,6 +7,7 @@ import type {
   ToolCall,
 } from "@vxpipe/core";
 import { Icon } from "./Icon.js";
+import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
 
 type Filter = "messages" | "logs" | "events" | "tools";
 type Filters = Record<Filter, boolean>;
@@ -53,7 +54,15 @@ function MessageText({
   );
 }
 
-function MessageRow({ message, snapshot }: { message: Message; snapshot: CallSnapshot }) {
+function MessageRow({
+  message,
+  snapshot,
+  theme,
+}: {
+  message: Message;
+  snapshot: CallSnapshot;
+  theme: "light" | "dark";
+}) {
   const person = snapshot.participants.find(
     (item) => item.id === message.participantId,
   );
@@ -73,6 +82,14 @@ function MessageRow({ message, snapshot }: { message: Message; snapshot: CallSna
             </span>
           )}
           <time>{message.time}</time>
+          {message.metrics && message.metrics.length > 0 && (
+            <TurnMetricsTooltip
+              metrics={message.metrics}
+              speaker={person?.name ?? "Unknown speaker"}
+              time={message.time}
+              theme={theme}
+            />
+          )}
         </header>
         <p>
           <MessageText message={message} alignment={snapshot.alignment} />
@@ -178,7 +195,13 @@ function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
   );
 }
 
-export function Conversation({ snapshot }: { snapshot: CallSnapshot }) {
+export function Conversation({
+  snapshot,
+  theme = "dark",
+}: {
+  snapshot: CallSnapshot;
+  theme?: "light" | "dark";
+}) {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const speaking = snapshot.participants.find(
     (person) => person.role === "agent" && person.state === "speaking",
@@ -230,6 +253,7 @@ export function Conversation({ snapshot }: { snapshot: CallSnapshot }) {
                 key={`message-${item.id}`}
                 message={item.value}
                 snapshot={snapshot}
+                theme={theme}
               />
             );
           if (item.kind === "events")
