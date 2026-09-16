@@ -127,20 +127,20 @@ when the call ends. The same console will run Getting Started examples.
   logs append-only and keep local device/control state outside the serializable call record.
 - [x] Feed equivalent remote ongoing, attached-live and remote ended fixtures through that store
   and render the same Conversation, Variables, Metrics, and Participants data. The Console host
-  fetches the authorized Calls inspection snapshot and selected immutable database definition
+  fetches the authorized Calls inspection snapshot and immutable database resolved plan
   revision, then injects that baseline; RTVI contributes only attached-live
   updates. Unavailable or redacted data stays distinguishable from captured empty values.
 
 ### Checkpoint 1A — Assemble one complete database snapshot
 
 - [x] Red-test one authorized query that first resolves the call, then loads its complete persisted
-  `CallHistory`, exact immutable definition revision and persisted usage report. The result has no
-  pagination cursor and no response-generation timestamp.
+  `CallHistory`, immutable prepared call/resolved participant plan and persisted usage report. The
+  result has no pagination cursor and no response-generation timestamp.
 - [x] Treat "complete snapshot" as all history currently persisted in PostgreSQL. Preserve the
   archive's `complete`, `incomplete` or `unconfirmed` state; the endpoint never implies that an
   ongoing or interrupted asynchronous archive has finished.
-- [x] Keep the call history essential. Definition and usage failures remain explicit partial
-  availability; a missing/cross-tenant call or unavailable history fails the snapshot.
+- [x] Keep the call history and immutable prepared plan essential. Usage failures remain explicit
+  partial availability; a missing/cross-tenant call, plan or history fails the snapshot.
 - [x] Prove through the injected backend and source review that this query never invokes live-room inspection,
   call-details publications, recordings, artifact storage or S3.
 

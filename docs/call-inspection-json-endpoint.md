@@ -13,7 +13,7 @@ or ended call.
 The resource reads only PostgreSQL-backed Calls data:
 
 - the persisted call summary and complete `CallHistory`;
-- the immutable definition revision selected by the call;
+- the immutable prepared call and resolved participant plan selected at preparation;
 - persisted usage observations and totals.
 
 It does not inspect the live room process, download a call-details publication, list recordings,
@@ -37,7 +37,7 @@ same Calls workflows beneath the existing UI while keeping one JSON data path.
 ## Responsibilities
 
 `Vxpipe.Console.CallInspectionQuery` is the application workflow. It authorizes and loads the
-persisted inspection first, then resolves that call's exact definition revision and usage report
+persisted inspection first, then resolves that call's prepared plan, complete history and usage report
 through the injected Console backend. It returns one typed result and owns partial-data policy.
 
 `Vxpipe.Console.CallInspectionPresenter` is a pure conversion boundary. It converts the typed query
@@ -57,7 +57,7 @@ still reports `complete`, `incomplete` or `unconfirmed` honestly. It contains:
 - call identity, lifecycle timestamps, terminal reason and derived duration;
 - the selected room/incarnation identity when persisted facts establish it;
 - the configured participant roster and authorized debug configuration from the immutable
-  database definition revision;
+  database resolved plan, preserving the runtime participant IDs used by history facts;
 - normalized timeline entities for persisted transcripts, agent text, semantic activity and tool
   calls, with stable IDs, source sequences and revisions;
 - the latest variable snapshot in the complete persisted history, or an explicit unavailable reason;
@@ -79,8 +79,9 @@ this route directly.
 - Responses set `Cache-Control: private, no-store`.
 - The operator session remains server-side. API keys, provider credentials, signed artifact URLs,
   source policies and arbitrary private definition source never enter the response.
-- Definition or usage unavailability is represented explicitly when the call inspection itself is
-  available. It does not convert an inspectable call into a false `404`.
+- The prepared plan is required because it supplies the runtime participant identities used by
+  persisted facts. Usage unavailability is represented explicitly and does not convert an
+  otherwise inspectable call into a false `404`.
 
 ## Rejected alternatives
 

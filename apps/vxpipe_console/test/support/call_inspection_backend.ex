@@ -36,8 +36,8 @@ defmodule Vxpipe.Console.TestCallInspectionBackend do
   end
 
   @impl true
-  def fetch_definition({observer, responses}, tenant_key, definition_id, revision, options) do
-    send(observer, {:fetch_definition, tenant_key, definition_id, revision, options})
-    Map.fetch!(responses, :fetch_definition)
+  def fetch_prepared_call({observer, responses}, tenant_key, call_id, options) do
+    send(observer, {:fetch_prepared_call, tenant_key, call_id, options})
+    Map.fetch!(responses, :fetch_prepared_call)
   end
 end

@@ -5,8 +5,8 @@ defmodule Vxpipe.Console.CallInspection do
     CallDetailPage,
     CallHistory,
     CallListPage,
-    DefinitionRevision,
     LiveCallInspection,
+    PreparedCall,
     Principal,
     UsageReport
   }
@@ -65,22 +65,15 @@ defmodule Vxpipe.Console.CallInspection do
     |> validate_response(UsageReport)
   end
 
-  @spec fetch_definition(String.t(), String.t(), pos_integer(), keyword()) ::
-          {:ok, DefinitionRevision.t()} | {:error, term()}
-  def fetch_definition(tenant_key, definition_id, revision, options \\ [])
-      when is_binary(tenant_key) and is_binary(definition_id) and is_integer(revision) and
-             revision > 0 and is_list(options) do
+  @spec fetch_prepared_call(String.t(), String.t(), keyword()) ::
+          {:ok, PreparedCall.t()} | {:error, term()}
+  def fetch_prepared_call(tenant_key, call_id, options \\ [])
+      when is_binary(tenant_key) and is_binary(call_id) and is_list(options) do
     {module, backend_options, request_options} = backend(options)
 
     module
-    |> apply(:fetch_definition, [
-      backend_options,
-      tenant_key,
-      definition_id,
-      revision,
-      request_options
-    ])
-    |> validate_response(DefinitionRevision)
+    |> apply(:fetch_prepared_call, [backend_options, tenant_key, call_id, request_options])
+    |> validate_response(PreparedCall)
   end
 
   defp backend(options) do

@@ -5,8 +5,8 @@ defmodule Vxpipe.Console.CallInspectionBackend do
     CallDetailPage,
     CallHistory,
     CallListPage,
-    DefinitionRevision,
     LiveCallInspection,
+    PreparedCall,
     Principal,
     UsageReport
   }
@@ -26,6 +26,6 @@ defmodule Vxpipe.Console.CallInspectionBackend do
   @callback usage_report(term(), Principal.t(), String.t(), keyword()) ::
               {:ok, UsageReport.t()} | {:error, term()}
 
-  @callback fetch_definition(term(), String.t(), String.t(), pos_integer(), keyword()) ::
-              {:ok, DefinitionRevision.t()} | {:error, term()}
+  @callback fetch_prepared_call(term(), String.t(), String.t(), keyword()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
 end

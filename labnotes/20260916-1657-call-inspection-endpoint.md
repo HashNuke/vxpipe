@@ -41,3 +41,13 @@
   and the complete history read was never attempted. The green implementation now fetches the
   authorized summary with `inspect_call(limit: 1)`, then requires `fetch_call_history`; 6 focused
   query/facade tests pass.
+
+## Runtime participant identity correction
+
+- Presenter work exposed that definition keys (`assistant`) differ from generated runtime
+  participant IDs stored in call facts. Recompiling a definition cannot reproduce those IDs.
+- The database `PreparedCall` already stores the immutable resolved plan with the exact ID mapping,
+  effective capabilities, prompts, tools, connections and transfers. The query now requires that
+  record and no longer fetches the separate definition revision.
+- Red tests failed while the query skipped the prepared call. The corrected query stops before
+  history/usage if the prepared record is unavailable and passes 5 focused query tests.

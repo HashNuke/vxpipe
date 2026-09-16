@@ -12,26 +12,22 @@ defmodule Vxpipe.Console.CallInspectionQuery do
 
     with {:ok, %CallDetailPage{} = persisted} <-
            CallInspection.inspect_call(principal, call_id, [limit: 1] ++ backend_option(backend)),
+         {:ok, prepared_call} <-
+           CallInspection.fetch_prepared_call(
+             persisted.call.tenant_key,
+             call_id,
+             backend_option(backend)
+           ),
          {:ok, history} <-
            CallInspection.fetch_call_history(principal, call_id, backend_option(backend)) do
       {:ok,
        %CallInspectionResult{
          call: persisted.call,
+         prepared_call: prepared_call,
          history: history,
-         definition: load_definition(persisted, backend),
          usage: load_usage(principal, call_id, backend)
        }}
     end
-  end
-
-  defp load_definition(%CallDetailPage{call: call}, backend) do
-    call.tenant_key
-    |> CallInspection.fetch_definition(
-      call.definition_id,
-      call.definition_revision,
-      backend_option(backend)
-    )
-    |> availability()
   end
 
   defp load_usage(principal, call_id, backend) do

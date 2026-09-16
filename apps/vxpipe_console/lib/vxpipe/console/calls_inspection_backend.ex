@@ -31,12 +31,7 @@ defmodule Vxpipe.Console.CallsInspectionBackend do
   end
 
   @impl true
-  def fetch_definition(options, tenant_key, definition_id, revision, request_options) do
-    Calls.fetch_definition(
-      tenant_key,
-      definition_id,
-      revision,
-      Keyword.merge(request_options, options)
-    )
+  def fetch_prepared_call(options, tenant_key, call_id, request_options) do
+    Calls.fetch_call(tenant_key, call_id, Keyword.merge(request_options, options))
   end
 end
