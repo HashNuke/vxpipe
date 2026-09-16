@@ -984,6 +984,9 @@ button.vx-tool-summary:hover {
   outline: none;
   font-size: 14px;
 }
+.vx-console .vx-composer textarea:focus-visible {
+  outline: none;
+}
 .vx-composer textarea::placeholder {
   color: var(--vx-muted);
 }
