@@ -6,7 +6,13 @@ import type {
   ProtocolEvent,
   ToolCall,
 } from "@vxpipe/core";
-import { CircleAlert, CircleCheck, LoaderCircle, Wrench } from "lucide-react";
+import {
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  LoaderCircle,
+  Wrench,
+} from "lucide-react";
 import { Icon } from "./Icon.js";
 import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
 
@@ -113,6 +119,8 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
 }
 
 function ToolRow({ tool }: { tool: ToolCall }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = tool.request !== undefined || tool.response !== undefined;
   const statusLabel =
     tool.status === "pending"
       ? "Pending"
@@ -126,10 +134,13 @@ function ToolRow({ tool }: { tool: ToolCall }) {
         ? CircleCheck
         : CircleAlert;
 
-  return (
-    <div className="vx-timeline-tool">
+  const summary = (
+    <>
       <Wrench aria-hidden="true" />
       <strong>{tool.name}</strong>
+      {hasDetails && (
+        <ChevronDown className="vx-tool-chevron" aria-hidden="true" />
+      )}
       <time>{tool.time}</time>
       <span
         className={`vx-tool-status vx-tool-${tool.status}`}
@@ -139,6 +150,39 @@ function ToolRow({ tool }: { tool: ToolCall }) {
       >
         <StatusIcon aria-hidden="true" />
       </span>
+    </>
+  );
+
+  return (
+    <div className="vx-timeline-tool">
+      {hasDetails ? (
+        <button
+          className="vx-tool-summary"
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Hide" : "Show"} details for ${tool.name}`}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {summary}
+        </button>
+      ) : (
+        <div className="vx-tool-summary">{summary}</div>
+      )}
+      {hasDetails && expanded && (
+        <div className="vx-tool-details">
+          {tool.request !== undefined && (
+            <section>
+              <h3>Request</h3>
+              <pre>{JSON.stringify(tool.request, null, 2)}</pre>
+            </section>
+          )}
+          {tool.response !== undefined && (
+            <section>
+              <h3>Response</h3>
+              <pre>{JSON.stringify(tool.response, null, 2)}</pre>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 }

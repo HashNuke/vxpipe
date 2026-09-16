@@ -45,6 +45,34 @@ test("Conversation filters messages, events, tool calls and raw RTVI logs", () =
   expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
 });
 
+test("tool calls disclose optional request and response details", () => {
+  render(<CallConsole client={createFixtureClient("tool-states")} />);
+
+  const disclosure = screen.getByRole("button", {
+    name: "Show details for update_variables",
+  });
+  expect(screen.queryByText("Request")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", {
+      name: "Show details for lookup_delivery",
+    }),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(disclosure);
+  expect(screen.getByText("Request")).toBeVisible();
+  expect(screen.getByText("Response")).toBeVisible();
+  expect(
+    screen.getByText(/"requested_date": "2026-09-18"/),
+  ).toBeVisible();
+
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Hide details for update_variables",
+    }),
+  );
+  expect(screen.queryByText("Request")).not.toBeInTheDocument();
+});
+
 test("unsupported alignment shows a speaking state without word highlighting", () => {
   render(<CallConsole client={createFixtureClient("no-alignment")} />);
   expect(screen.getByText("Word timing unavailable")).toBeVisible();

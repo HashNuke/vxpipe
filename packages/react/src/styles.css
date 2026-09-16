@@ -436,8 +436,7 @@
   padding: 2px 0;
   box-shadow: 0 2px 0 var(--vx-green);
 }
-.vx-timeline-activity,
-.vx-timeline-tool {
+.vx-timeline-activity {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -456,17 +455,43 @@
   white-space: nowrap;
 }
 .vx-timeline-tool {
+  margin: 0 0 20px 44px;
   border: 1px solid var(--vx-line);
   border-radius: 6px;
   background: var(--vx-panel);
+  overflow: hidden;
 }
-.vx-timeline-tool > svg {
+.vx-tool-summary {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--vx-muted);
+  text-align: left;
+  font-size: 12px;
+}
+button.vx-tool-summary:hover {
+  background: var(--vx-soft);
+}
+.vx-tool-summary > svg:first-child {
   color: var(--vx-violet);
 }
 .vx-timeline-tool strong {
   color: var(--vx-ink);
   font: 12px var(--vx-mono);
   overflow-wrap: anywhere;
+}
+.vx-tool-chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 150ms ease;
+}
+.vx-tool-summary[aria-expanded="true"] .vx-tool-chevron {
+  transform: rotate(180deg);
 }
 .vx-tool-status {
   display: grid;
@@ -487,6 +512,35 @@
 }
 .vx-tool-failed {
   color: var(--vx-red);
+}
+.vx-tool-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 1px;
+  border-top: 1px solid var(--vx-line);
+  background: var(--vx-line);
+}
+.vx-tool-details section {
+  min-width: 0;
+  padding: 14px;
+  background: var(--vx-panel);
+}
+.vx-tool-details h3 {
+  margin: 0 0 8px;
+  color: var(--vx-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.vx-tool-details pre {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+  color: var(--vx-ink);
+  font: 12px/1.6 var(--vx-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 @keyframes vx-tool-spin {
   to {
@@ -621,6 +675,9 @@
   .vx-streaming i,
   .vx-tool-pending svg {
     animation: none;
+  }
+  .vx-tool-chevron {
+    transition: none;
   }
 }
 .vx-speaking {

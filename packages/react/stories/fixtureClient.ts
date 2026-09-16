@@ -290,6 +290,8 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
           time: "00:10",
           name: "update_variables",
           status: "completed",
+          request: { requested_date: "2026-09-18" },
+          response: { updated: true },
         },
         {
           id: "tool-3",
