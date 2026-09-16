@@ -70,7 +70,8 @@ Conversation is the default focus. Event details are secondary and collapsible; 
 is read-only in this milestone. Leave preserves the run view. A separate, explicitly authorized
 end-call action may be shown only if backed by an existing supported command; never relabel a
 local disconnect as ending the whole room. A completed call offers **Run again** (a fresh call)
-and **Inspect history**, not automatic session replay.
+and **Inspect history**, not automatic session replay. Starting the fresh call clears browser-local
+console state such as filters, drafts, disclosures and tab selection.
 
 | Component | Responsibility and important behavior |
 | --- | --- |

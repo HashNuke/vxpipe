@@ -567,6 +567,10 @@ export function createFixtureClient(
     snapshot = { ...snapshot, ...changes };
     listeners.forEach((listener) => listener());
   };
+  const replace = (nextSnapshot: CallSnapshot) => {
+    snapshot = nextSnapshot;
+    listeners.forEach((listener) => listener());
+  };
   const client: VxpipeClient = {
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
@@ -575,7 +579,7 @@ export function createFixtureClient(
         listeners.delete(listener);
       };
     },
-    connect: async () => update(fixtureSnapshot(startScenario)),
+    connect: async () => replace(fixtureSnapshot(startScenario)),
     disconnect: async () =>
       update({
         state: "ended",

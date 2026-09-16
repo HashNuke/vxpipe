@@ -10,6 +10,15 @@ import { Metrics } from "./Metrics.js";
 import { Variables } from "./Variables.js";
 
 type Tab = "chat" | "variables" | "metrics" | "participants";
+
+function defaultParticipantId(snapshot: ReturnType<VxpipeClient["getSnapshot"]>) {
+  return (
+    snapshot.participants.find((participant) => participant.role === "agent")?.id ??
+    snapshot.participants[0]?.id ??
+    null
+  );
+}
+
 export interface CallConsoleProps {
   client: VxpipeClient;
   initialTab?: Tab;
@@ -30,10 +39,9 @@ export function CallConsole({
   );
   const [tab, setTab] = useState<Tab>(initialTab);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(
-    snapshot.participants.find((participant) => participant.role === "agent")?.id ??
-      snapshot.participants[0]?.id ??
-      null,
+    defaultParticipantId(snapshot),
   );
+  const [runRevision, setRunRevision] = useState(0);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const connected = snapshot.state === "connected";
@@ -53,7 +61,15 @@ export function CallConsole({
     setPending(true);
     try {
       if (connected) await client.disconnect();
-      else await client.connect();
+      else {
+        await client.connect();
+        if (ended) {
+          const nextSnapshot = client.getSnapshot();
+          setTab("chat");
+          setSelectedParticipantId(defaultParticipantId(nextSnapshot));
+          setRunRevision((revision) => revision + 1);
+        }
+      }
     } catch {
       setError(
         "Couldn't change the call connection. Check its status before trying again.",
@@ -71,24 +87,24 @@ export function CallConsole({
       <header className="vx-call-header">
         <DeviceControls snapshot={snapshot} client={client} theme={theme} />
         <div className="vx-call-actions">
-          {!ended && (
-            <button
-              className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
-              disabled={pending}
-              onClick={() => void act()}
-            >
-              {connected ? (
-                <PhoneOff aria-hidden="true" />
-              ) : (
-                <PhoneCall aria-hidden="true" />
-              )}
-              {pending
-                ? "Please wait"
-                : connected
-                  ? "Leave call"
+          <button
+            className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
+            disabled={pending}
+            onClick={() => void act()}
+          >
+            {connected ? (
+              <PhoneOff aria-hidden="true" />
+            ) : (
+              <PhoneCall aria-hidden="true" />
+            )}
+            {pending
+              ? "Please wait"
+              : connected
+                ? "Leave call"
+                : ended
+                  ? "Call"
                   : "Start call"}
-            </button>
-          )}
+          </button>
           <div className="vx-call-action-meta">
             <span className={`vx-call-state vx-state-${snapshot.state}`}>
               <i />
@@ -114,7 +130,7 @@ export function CallConsole({
           {snapshot.notice}
         </p>
       )}
-      <div className="vx-workspace">
+      <div className="vx-workspace" key={runRevision}>
         <Participants
           participants={snapshot.participants}
           selectedParticipantId={selectedParticipant?.id ?? null}

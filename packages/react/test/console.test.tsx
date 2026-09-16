@@ -39,10 +39,20 @@ test("a denied microphone still allows typed input in the same conversation", as
 test("leaving keeps the transcript visible and disables further sending", async () => {
   const client = createFixtureClient("conversation");
   render(<CallConsole client={client} />);
+  fireEvent.click(screen.getByRole("button", { name: "Show Logs" }));
+  expect(screen.getByText("client-ready")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Leave call" }));
   await waitFor(() => expect(screen.getByText("Call ended")).toBeVisible());
   expect(screen.getByText("I'd like to reschedule my delivery.")).toBeVisible();
   expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Call" }));
+  await waitFor(() => expect(screen.getByText("Connected")).toBeVisible());
+  expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
+  expect(screen.queryByText(/You left the call/)).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled(),
+  );
 });
 
 test("Conversation filters messages, events, tool calls and raw RTVI logs", () => {
@@ -346,16 +356,6 @@ test("a message time exposes its correlated turn metrics on focus", async () => 
   expect(screen.getByRole("heading", { name: "TTS" })).toBeVisible();
 });
 
-test("completed turns show final metrics only with authoritative inputs", async () => {
-  render(<CallConsole client={createFixtureClient("conversation")} />);
-
-  const completedTurn = screen
-    .getByText(/Hi! I can help you arrange a delivery/)
-    .closest("article");
-  expect(completedTurn).not.toBeNull();
-  const completedMetrics = within(completedTurn!).getByRole("button", {
-    name: /View metrics for Assistant at/,
-  });
 test("timeline times show local clock time and disclose the UTC instant", async () => {
   const { container } = render(
     <CallConsole client={createFixtureClient("conversation")} />,
@@ -375,6 +375,16 @@ test("timeline times show local clock time and disclose the UTC instant", async 
   );
 });
 
+test("completed turns show final metrics only with authoritative inputs", async () => {
+  render(<CallConsole client={createFixtureClient("conversation")} />);
+
+  const completedTurn = screen
+    .getByText(/Hi! I can help you arrange a delivery/)
+    .closest("article");
+  expect(completedTurn).not.toBeNull();
+  const completedMetrics = within(completedTurn!).getByRole("button", {
+    name: /View metrics for Assistant at/,
+  });
   fireEvent.focus(completedMetrics);
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
     "Turn duration3,240 ms",
