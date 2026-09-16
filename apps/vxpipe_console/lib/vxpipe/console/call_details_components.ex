@@ -7,6 +7,7 @@ defmodule Vxpipe.Console.CallDetailsComponents do
   alias Vxpipe.Console.CallInspectionFormat
 
   attr :call_id, :string, required: true
+  attr :calls_path, :string, required: true
   attr :page, CallDetailsRevisionPage, default: nil
   attr :status, :atom, required: true
   attr :list_cursor, :string, default: nil
@@ -68,7 +69,7 @@ defmodule Vxpipe.Console.CallDetailsComponents do
             <a
               :if={revision.status == :published}
               class="button"
-              href={document_path(@call_id, revision.id)}
+              href={document_path(@calls_path, @call_id, revision.id)}
             >Download JSON</a>
             <span :if={revision.status == :pending}>Delivery pending</span>
           </div>
@@ -80,6 +81,7 @@ defmodule Vxpipe.Console.CallDetailsComponents do
             class="button"
             patch={
               page_path(
+                @calls_path,
                 @call_id,
                 @page.next_cursor,
                 @list_cursor,
@@ -130,12 +132,19 @@ defmodule Vxpipe.Console.CallDetailsComponents do
 
   defp short_checksum(checksum), do: checksum
 
-  defp document_path(call_id, publication_id) do
-    "/calls/#{URI.encode_www_form(call_id)}/details/#{URI.encode_www_form(publication_id)}"
+  defp document_path(calls_path, call_id, publication_id) do
+    "#{calls_path}/#{URI.encode_www_form(call_id)}/details/#{URI.encode_www_form(publication_id)}"
   end
 
-  defp page_path(call_id, details_cursor, list_cursor, history_cursor, selected_event_id) do
-    path_with_query(call_id, %{
+  defp page_path(
+         calls_path,
+         call_id,
+         details_cursor,
+         list_cursor,
+         history_cursor,
+         selected_event_id
+       ) do
+    path_with_query(calls_path, call_id, %{
       "cursor" => list_cursor,
       "details_cursor" => details_cursor,
       "event" => selected_event_id,
@@ -143,13 +152,13 @@ defmodule Vxpipe.Console.CallDetailsComponents do
     })
   end
 
-  defp path_with_query(call_id, values) do
+  defp path_with_query(calls_path, call_id, values) do
     query =
       values
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> URI.encode_query()
 
-    path = "/calls/" <> URI.encode_www_form(call_id)
+    path = calls_path <> "/" <> URI.encode_www_form(call_id)
     if query == "", do: path, else: path <> "?" <> query
   end
 end

@@ -166,7 +166,8 @@ Implementation evidence to date:
   fail closed before reaching a page. The replaceable boundary supports deterministic
   Console fixtures without adding Repo or engine-private access to the presentation app.
 - `/operator/sign-in` now exchanges an existing tenant key and `:calls`-scoped API key for
-  the non-secret signed browser session. `/calls` and `/calls/:call_id` are the only routes
+  the non-secret signed browser session. `/tenants/:tenant_key/calls` and
+  `/tenants/:tenant_key/calls/:call_id` are the only routes
   behind that guard; the sample, diagnostics and LiveDashboard remain outside it. Phoenix
   request filtering removes API-key values from debug request logs.
 - The Console loads at most 25 call summaries and 50 persisted timeline entries per page.

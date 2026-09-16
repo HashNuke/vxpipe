@@ -41,7 +41,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
   end
 
   test "requires an operator session only for the call-inspection route" do
-    calls_conn = get(build_conn(), "/calls")
+    calls_conn = get(build_conn(), "/tenants/#{@tenant_key}/calls")
 
     assert redirected_to(calls_conn, 302) == "/operator/sign-in"
 
@@ -60,13 +60,15 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     configure_list_response(%CallListPage{calls: [], next_cursor: nil})
 
     sign_in_html = html_response(get(build_conn(), "/operator/sign-in"), 200)
-    calls_html = html_response(sign_in() |> recycle() |> get("/calls"), 200)
+
+    calls_html =
+      html_response(sign_in() |> recycle() |> get("/tenants/#{@tenant_key}/calls"), 200)
 
     assert sign_in_html =~ ~s(href="/assets/call_inspection.css")
     assert calls_html =~ ~s(href="/assets/call_inspection.css")
     assert calls_html =~ ~s(type="module" src="/assets/live.js")
-    refute sign_in_html =~ "/calls/assets/"
-    refute calls_html =~ "/calls/assets/"
+    refute sign_in_html =~ "/tenants/#{@tenant_key}/calls/assets/"
+    refute calls_html =~ "/tenants/#{@tenant_key}/calls/assets/"
   end
 
   test "signs in with a calls-scoped API key without reflecting the secret" do
@@ -87,11 +89,11 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
         }
       })
 
-    assert redirected_to(conn, 302) == "/calls"
+    assert redirected_to(conn, 302) == "/tenants/#{@tenant_key}/calls"
     assert_receive {:operator_authentication, @tenant_key, "valid-api-key"}
     refute conn.resp_body =~ "valid-api-key"
 
-    calls_conn = conn |> recycle() |> get("/calls")
+    calls_conn = conn |> recycle() |> get("/tenants/#{@tenant_key}/calls")
     calls_html = html_response(calls_conn, 200)
 
     assert calls_html =~ "Vxpipe Calls"
@@ -121,7 +123,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
       |> Plug.Conn.put_req_header("content-type", "application/x-www-form-urlencoded")
       |> post("/operator/session", body)
 
-    assert redirected_to(conn, 302) == "/calls"
+    assert redirected_to(conn, 302) == "/tenants/#{@tenant_key}/calls"
     assert_receive {:operator_authentication, @tenant_key, "valid-api-key"}
   end
 
@@ -167,7 +169,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     configure_list_response(%CallListPage{calls: [call], next_cursor: "next-page"})
 
     conn = sign_in()
-    calls_conn = conn |> recycle() |> get("/calls")
+    calls_conn = conn |> recycle() |> get("/tenants/#{@tenant_key}/calls")
     html = html_response(calls_conn, 200)
 
     assert html =~ "call-public-id"
@@ -182,7 +184,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     configure_backend(%{list_calls: {:error, :repository_unavailable}})
 
     conn = sign_in()
-    calls_conn = conn |> recycle() |> get("/calls")
+    calls_conn = conn |> recycle() |> get("/tenants/#{@tenant_key}/calls")
     html = html_response(calls_conn, 200)
 
     assert html =~ "Call archive unavailable"
@@ -207,7 +209,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    detail_conn = conn |> recycle() |> get("/calls/#{call.id}")
+    detail_conn = conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}")
     html = html_response(detail_conn, 200)
 
     assert html =~ "Call evidence"
@@ -233,7 +235,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    detail_conn = conn |> recycle() |> get("/calls/#{call.id}")
+    detail_conn = conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}")
     html = html_response(detail_conn, 200)
 
     assert html =~ "Live revision"
@@ -255,7 +257,9 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    html =
+      html_response(conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}"), 200)
 
     assert html =~ "Runtime unavailable"
     assert html =~ "Persisted running record; live runtime unavailable"
@@ -274,7 +278,9 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    html =
+      html_response(conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}"), 200)
 
     assert html =~ "Live evidence available"
     assert html =~ "agent output generated"
@@ -325,7 +331,12 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
       })
 
     conn = sign_in()
-    html = html_response(conn |> recycle() |> get("/calls/#{call.id}?#{query}"), 200)
+
+    html =
+      html_response(
+        conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}?#{query}"),
+        200
+      )
 
     assert html =~ ~s(data-event-key="persisted:persisted-tool-result")
     assert html =~ ~s(aria-current="true")
@@ -385,7 +396,9 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    html =
+      html_response(conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}"), 200)
 
     assert html =~ "Variables changed"
     assert html =~ "r2 → r3"
@@ -426,7 +439,9 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    html =
+      html_response(conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/#{call.id}"), 200)
 
     assert html =~ "Archive gap: 2 missing sequences"
     assert html =~ "1 duplicate ID"
@@ -443,7 +458,12 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    html = html_response(conn |> recycle() |> get("/calls/purged-public-id"), 200)
+
+    html =
+      html_response(
+        conn |> recycle() |> get("/tenants/#{@tenant_key}/calls/purged-public-id"),
+        200
+      )
 
     assert html =~ "Call not found"
     assert html =~ "No retained call is visible to this tenant"
@@ -462,16 +482,50 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    {:ok, view, _html} = live(recycle(conn), "/calls/#{call.id}")
+    {:ok, view, _html} = live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
     flush_inspection_messages()
 
-    html = render_patch(view, "/calls/#{call.id}?event=live%3Aevent-public-id")
+    html =
+      render_patch(view, "/tenants/#{@tenant_key}/calls/#{call.id}?event=live%3Aevent-public-id")
 
     assert html =~ ~s(data-event-key="live:event-public-id")
     assert html =~ ~s(aria-current="true")
     refute_receive {:list_calls, _, _}
     refute_receive {:inspect_call, _, _, _}
     refute_receive {:inspect_live_call, _, _, _}
+  end
+
+  test "rejects a connected list patch to another tenant before reloading" do
+    configure_list_response(%CallListPage{calls: [], next_cursor: nil})
+
+    conn = sign_in()
+    {:ok, view, _html} = live(recycle(conn), "/tenants/#{@tenant_key}/calls")
+    flush_inspection_messages()
+
+    _html = render_patch(view, "/tenants/other-tenant-key/calls")
+
+    assert_redirect(view, "/operator/sign-in")
+    refute_receive {:list_calls, _, _}
+  end
+
+  test "rejects a connected detail patch to another tenant before loading the call" do
+    call = call_summary()
+
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
+      inspect_call: {:ok, persisted_detail(call)},
+      inspect_live_call: {:ok, live_detail()}
+    })
+
+    conn = sign_in()
+    {:ok, view, _html} = live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
+    flush_inspection_messages()
+
+    _html = render_patch(view, "/tenants/other-tenant-key/calls/other-call")
+
+    assert_redirect(view, "/operator/sign-in")
+    refute_receive {:inspect_call, _, "other-call", _}
+    refute_receive {:inspect_live_call, _, "other-call", _}
   end
 
   test "refreshes only the bounded live projection for a connected running call" do
@@ -484,7 +538,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    {:ok, view, _html} = live(recycle(conn), "/calls/#{call.id}")
+    {:ok, view, _html} = live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
     flush_inspection_messages()
 
     assert_receive {:inspect_live_call, _, "call-public-id", []}, 1_500
@@ -506,7 +560,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     configure_backend(available_responses)
 
     conn = sign_in()
-    {:ok, view, _html} = live(recycle(conn), "/calls/#{call.id}")
+    {:ok, view, _html} = live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
     flush_inspection_messages()
 
     configure_backend(%{available_responses | inspect_live_call: {:error, :call_not_live}})
@@ -531,7 +585,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    {:ok, view, _html} = live(recycle(conn), "/calls/#{call.id}")
+    {:ok, view, _html} = live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
     flush_inspection_messages()
 
     monitor = Process.monitor(view.pid)
@@ -559,7 +613,9 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     })
 
     conn = sign_in()
-    {:ok, first_view, first_html} = live(recycle(conn), "/calls/#{call.id}")
+
+    {:ok, first_view, first_html} =
+      live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
 
     assert first_html =~ "stale-page-evidence"
     assert_receive {:list_calls, _, [limit: 25]}
@@ -576,7 +632,8 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
       inspect_live_call: {:error, :call_not_live}
     })
 
-    {:ok, _reconnected_view, reconnected_html} = live(recycle(conn), "/calls/#{call.id}")
+    {:ok, _reconnected_view, reconnected_html} =
+      live(recycle(conn), "/tenants/#{@tenant_key}/calls/#{call.id}")
 
     assert reconnected_html =~ "Call not found"
     refute reconnected_html =~ "stale-page-evidence"

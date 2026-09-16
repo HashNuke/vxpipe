@@ -16,7 +16,7 @@ defmodule Vxpipe.Console.CallRecordingEndpointTest do
 
   @endpoint Vxpipe.Console.Endpoint
   @tenant_key "tenantkey1234567"
-  @route "/calls/call-public-id/recordings/artifact-public-id"
+  @route "/tenants/#{@tenant_key}/calls/call-public-id/recordings/artifact-public-id"
 
   setup do
     original_authenticator = Application.fetch_env!(:vxpipe_console, :operator_authenticator)

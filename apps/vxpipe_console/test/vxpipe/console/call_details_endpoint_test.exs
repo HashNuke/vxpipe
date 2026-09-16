@@ -48,7 +48,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
   end
 
   test "requires an operator session for a call-details document" do
-    route = "/calls/#{@call_id}/details/#{@publication_id}"
+    route = "/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
 
     assert redirected_to(get(build_conn(), route), 302) == "/operator/sign-in"
   end
@@ -57,7 +57,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
     contents = ~s({"call":{"id":"call-public-id"},"completeness":"complete"})
     configure_details(%{list: {:ok, revision_page()}, fetch: {:ok, document(contents)}})
 
-    route = "/calls/#{@call_id}/details/#{@publication_id}"
+    route = "/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
     conn = sign_in() |> recycle() |> get(route)
 
     assert response(conn, 200) == contents
@@ -79,7 +79,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
       fetch: {:error, :call_details_not_found}
     })
 
-    route = "/calls/#{@call_id}/details/#{@publication_id}"
+    route = "/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
     conn = sign_in() |> recycle() |> get(route)
 
     assert response(conn, 404) == "Call details not found."
@@ -90,7 +90,11 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
   test "presents published and pending revisions without storage references" do
     configure_details(%{list: {:ok, revision_page()}, fetch: {:ok, document("{}")}})
 
-    html = sign_in() |> recycle() |> get("/calls/#{@call_id}") |> html_response(200)
+    html =
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/#{@call_id}")
+      |> html_response(200)
 
     assert html =~ "Call details"
     assert html =~ "2 revisions"
@@ -99,7 +103,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
     assert html =~ "Incomplete"
     assert html =~ "Delivery pending"
     assert html =~ "details-20260912123456789.json"
-    assert html =~ "/calls/#{@call_id}/details/#{@publication_id}"
+    assert html =~ "/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
     assert length(Regex.scan(~r/>Download JSON</, html)) == 1
     refute html =~ "private/call-details/object-key"
 
@@ -124,7 +128,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
     html =
       sign_in()
       |> recycle()
-      |> get("/calls/#{@call_id}?#{query}")
+      |> get("/tenants/#{@tenant_key}/calls/#{@call_id}?#{query}")
       |> html_response(200)
 
     assert html =~ "Load older publications"

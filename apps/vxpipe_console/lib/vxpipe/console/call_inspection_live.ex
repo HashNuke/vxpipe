@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.CallInspectionLive do
 
   use Phoenix.LiveView, layout: false
 
-  alias Vxpipe.Console.{CallInspection, CallInspectionComponents}
+  alias Vxpipe.Console.{CallInspection, CallInspectionComponents, OperatorLiveAuthentication}
 
   @page_size 25
 
@@ -12,7 +12,11 @@ defmodule Vxpipe.Console.CallInspectionLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    {:noreply, load_page(socket, socket.assigns.principal, params)}
+    if OperatorLiveAuthentication.tenant_path?(socket, params) do
+      {:noreply, load_page(socket, socket.assigns.principal, params)}
+    else
+      {:noreply, redirect(socket, to: "/operator/sign-in")}
+    end
   end
 
   @impl true

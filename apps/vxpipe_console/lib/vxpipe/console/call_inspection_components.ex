@@ -25,6 +25,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   attr :call_details_status, :atom, default: :unavailable
 
   def index(assigns) do
+    assigns = assign(assigns, :calls_path, calls_path(assigns.principal.tenant_key))
+
     ~H"""
     <main id="call-inspection" class="inspection-shell">
       <header class="inspection-topbar">
@@ -48,6 +50,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
 
       <.status_strip status={@status} page={@page} />
       <.matrix
+        calls_path={@calls_path}
         status={@status}
         page={@page}
         selected_id={@selected_id}
@@ -58,6 +61,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
       />
       <CallInspectionDetailComponents.workbench
         :if={@selected_id}
+        calls_path={@calls_path}
         selected_id={@selected_id}
         selected_event_id={@selected_event_id}
         list_cursor={@list_cursor}
@@ -113,6 +117,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   attr :list_cursor, :string, default: nil
   attr :history_cursor, :string, default: nil
   attr :details_cursor, :string, default: nil
+  attr :calls_path, :string, required: true
 
   defp matrix(%{status: :unavailable} = assigns) do
     ~H"""
@@ -158,7 +163,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
           <tbody>
             <tr :for={call <- @page.calls} data-selected={to_string(call.id == @selected_id)}>
               <td class="cell-primary">
-                <.link patch={call_path(call.id, @list_cursor)}>{call.id}</.link>
+                <.link patch={call_path(@calls_path, call.id, @list_cursor)}>{call.id}</.link>
               </td>
               <td class="definition-cell">
                 <span>{call.definition_id}</span>
@@ -184,6 +189,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
           class="button"
           patch={
             next_page_path(
+              @calls_path,
               @selected_id,
               @page.next_cursor,
               @history_cursor,
@@ -211,25 +217,42 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   defp call_count(nil), do: "—"
   defp call_count(page), do: length(page.calls)
 
-  defp next_page_path(nil, cursor, _history_cursor, _selected_event_id, _details_cursor),
-    do: path_with_query("/calls", %{"cursor" => cursor})
+  defp next_page_path(
+         calls_path,
+         nil,
+         cursor,
+         _history_cursor,
+         _selected_event_id,
+         _details_cursor
+       ),
+       do: path_with_query(calls_path, %{"cursor" => cursor})
 
-  defp next_page_path(call_id, cursor, history_cursor, selected_event_id, details_cursor) do
-    call_path(call_id, cursor,
+  defp next_page_path(
+         calls_path,
+         call_id,
+         cursor,
+         history_cursor,
+         selected_event_id,
+         details_cursor
+       ) do
+    call_path(calls_path, call_id, cursor,
       history_cursor: history_cursor,
       selected_event_id: selected_event_id,
       details_cursor: details_cursor
     )
   end
 
-  defp call_path(call_id, list_cursor, options \\ []) do
-    path_with_query("/calls/" <> URI.encode_www_form(call_id), %{
+  defp call_path(calls_path, call_id, list_cursor, options \\ []) do
+    path_with_query(calls_path <> "/" <> URI.encode_www_form(call_id), %{
       "cursor" => list_cursor,
       "history_cursor" => Keyword.get(options, :history_cursor),
       "event" => Keyword.get(options, :selected_event_id),
       "details_cursor" => Keyword.get(options, :details_cursor)
     })
   end
+
+  defp calls_path(tenant_key),
+    do: "/tenants/#{URI.encode_www_form(tenant_key)}/calls"
 
   defp path_with_query(path, values) do
     query =

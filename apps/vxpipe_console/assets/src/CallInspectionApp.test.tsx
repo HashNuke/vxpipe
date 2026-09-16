@@ -31,7 +31,7 @@ test.each([
     refresh: vi.fn(async () => snapshot(state)),
   };
 
-  render(<CallInspectionApp callId="call-1" loader={loader} />);
+  render(<CallInspectionApp tenantKey="tenant-1" callId="call-1" loader={loader} />);
 
   expect(await screen.findByText("Loaded from call history")).toBeVisible();
   expect(screen.getByText(status)).toBeVisible();
@@ -46,7 +46,7 @@ test("shows an inspection error without rendering stale console state", async ()
     }),
   };
 
-  render(<CallInspectionApp callId="call-1" loader={loader} />);
+  render(<CallInspectionApp tenantKey="tenant-1" callId="call-1" loader={loader} />);
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Call inspection returned malformed JSON.",

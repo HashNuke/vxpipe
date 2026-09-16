@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.CallRecordingComponents do
   alias Vxpipe.Console.CallRecording.Summary
 
   attr :call_id, :string, required: true
+  attr :calls_path, :string, required: true
   attr :recordings, :list, required: true
   attr :status, :atom, required: true
 
@@ -66,7 +67,7 @@ defmodule Vxpipe.Console.CallRecordingComponents do
               :if={recording.playable?}
               controls
               preload="metadata"
-              src={recording_path(@call_id, recording.id)}
+              src={recording_path(@calls_path, @call_id, recording.id)}
               aria-label={"Play #{kind_label(recording.kind)}"}
             >
               Recording playback is not supported by this browser.
@@ -146,7 +147,7 @@ defmodule Vxpipe.Console.CallRecordingComponents do
 
   defp terminal_label(reason), do: reason |> String.replace("_", " ") |> String.capitalize()
 
-  defp recording_path(call_id, artifact_id) do
-    "/calls/#{URI.encode_www_form(call_id)}/recordings/#{URI.encode_www_form(artifact_id)}"
+  defp recording_path(calls_path, call_id, artifact_id) do
+    "#{calls_path}/#{URI.encode_www_form(call_id)}/recordings/#{URI.encode_www_form(artifact_id)}"
   end
 end

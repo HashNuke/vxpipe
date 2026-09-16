@@ -3109,7 +3109,7 @@ Console consumes that public Calls workflow through its own narrow backend behav
 not query the Repo or object storage. The call-inspection LiveView loads at most 25 immutable
 revision summaries per page and presents published, incomplete, pending, and latest-head states
 separately. Its metadata view includes only the safe read model above. A published row links to the
-operator-session-protected `GET /calls/:call_id/details/:publication_id` route, which returns the
+operator-session-protected `GET /tenants/:tenant_key/calls/:call_id/details/:publication_id` route, which returns the
 exact persisted canonical JSON as a private, non-cacheable attachment. Pending revisions have no
 download action, inaccessible revisions share a generic not-found response, and backend failures
 produce a generic temporary-unavailability response. The controller validates the persisted
@@ -3358,8 +3358,9 @@ Existing source-interval privacy and credential exclusions apply, and debugging 
 starts STT, recording or audio monitoring implicitly. Silent listening remains in the
 live-mixing milestone. Later slices extend these views with their implemented facts.
 
-The Console implements that inspection boundary at `/operator/sign-in`, `/calls`, and
-`/calls/:call_id`. It exchanges an existing tenant key plus `:calls`-scoped API key for a
+The Console implements that inspection boundary at `/operator/sign-in`,
+`/tenants/:tenant_key/calls`, and `/tenants/:tenant_key/calls/:call_id`. It exchanges an existing
+tenant key plus `:calls`-scoped API key for a
 non-secret signed browser session, filters the submitted secret from request logs, and
 keeps sample and platform-diagnostics routes outside this tenant guard. Calls supplies
 cursor-bounded persisted pages; the engine supplies only its bounded live projection.

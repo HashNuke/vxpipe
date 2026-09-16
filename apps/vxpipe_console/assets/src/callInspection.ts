@@ -28,11 +28,11 @@ export class CallInspectionResponseError extends Error {
   }
 }
 
-export function createCallInspectionLoader(callId: string) {
+export function createCallInspectionLoader(tenantKey: string, callId: string) {
   return {
     async refresh(signal: AbortSignal): Promise<CallDetailsSnapshot> {
       const response = await fetch(
-        `/calls/${encodeURIComponent(callId)}/inspection`,
+        `/tenants/${encodeURIComponent(tenantKey)}/calls/${encodeURIComponent(callId)}/inspection`,
         {
           signal,
           credentials: "same-origin",

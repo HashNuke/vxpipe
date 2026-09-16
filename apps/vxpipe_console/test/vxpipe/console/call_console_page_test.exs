@@ -32,23 +32,31 @@ defmodule Vxpipe.Console.CallConsolePageTest do
 
     assert response =~ ~s(id="call-console-root")
     assert response =~ ~s(data-call-id="#{@call_id}")
+    assert response =~ ~s(data-tenant-key="#{@tenant_key}")
     assert response =~ ~s(src="/assets/debug_console.js")
     assert response =~ ~s(href="/assets/debug_console.css")
     refute response =~ "valid-api-key"
-    refute response =~ @tenant_key
+  end
+
+  test "does not serve a call through another tenant namespace" do
+    conn = sign_in() |> recycle() |> get("/tenants/other-tenant-key/calls/#{@call_id}/console")
+
+    assert response(conn, 404)
   end
 
   test "escapes the call identity in the host document" do
     response =
       sign_in()
       |> recycle()
-      |> get("/calls/%22%3E%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E/console")
+      |> get(
+        "/tenants/#{@tenant_key}/calls/%22%3E%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E/console"
+      )
       |> html_response(200)
 
     refute response =~ "<img src=x onerror=alert(1)>"
   end
 
-  defp route, do: "/calls/#{@call_id}/console"
+  defp route, do: "/tenants/#{@tenant_key}/calls/#{@call_id}/console"
 
   defp sign_in do
     build_conn()

@@ -16,16 +16,18 @@ type LoadState =
   | { state: "error"; message: string };
 
 export function CallInspectionApp({
+  tenantKey,
   callId,
   loader,
 }: {
+  tenantKey: string;
   callId: string;
   loader?: CallDetailsLoader;
 }) {
   const [loadState, setLoadState] = useState<LoadState>({ state: "loading" });
 
   useEffect(() => {
-    const source = loader ?? createCallInspectionLoader(callId);
+    const source = loader ?? createCallInspectionLoader(tenantKey, callId);
     const abort = new AbortController();
     let history: CallDetailsController | undefined;
     setLoadState({ state: "loading" });
@@ -56,7 +58,7 @@ export function CallInspectionApp({
       abort.abort();
       history?.dispose();
     };
-  }, [callId, loader]);
+  }, [tenantKey, callId, loader]);
 
   if (loadState.state === "loading") {
     return (

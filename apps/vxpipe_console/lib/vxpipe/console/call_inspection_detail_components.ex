@@ -13,6 +13,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   }
 
   attr :selected_id, :string, required: true
+  attr :calls_path, :string, required: true
   attr :selected_event_id, :string, default: nil
   attr :list_cursor, :string, default: nil
   attr :history_cursor, :string, default: nil
@@ -73,6 +74,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
         <CallUsageComponents.panel report={@usage_report} status={@usage_status} />
 
         <CallDetailsComponents.panel
+          calls_path={@calls_path}
           call_id={@selected_id}
           page={@call_details_page}
           status={@call_details_status}
@@ -83,6 +85,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
         />
 
         <CallRecordingComponents.panel
+          calls_path={@calls_path}
           call_id={@selected_id}
           recordings={@recordings}
           status={@recordings_status}
@@ -101,6 +104,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
                 <.link
                   patch={
                     event_path(
+                      @calls_path,
                       @selected_id,
                       event,
                       @list_cursor,
@@ -130,6 +134,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
                 class="button"
                 patch={
                   history_path(
+                    @calls_path,
                     @selected_id,
                     next_history_cursor(@persisted),
                     @list_cursor,
@@ -406,8 +411,8 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     "r#{diff.from_revision} → r#{diff.to_revision}"
   end
 
-  defp event_path(call_id, event, list_cursor, history_cursor, details_cursor) do
-    path_with_query(call_id, %{
+  defp event_path(calls_path, call_id, event, list_cursor, history_cursor, details_cursor) do
+    path_with_query(calls_path, call_id, %{
       "cursor" => list_cursor,
       "details_cursor" => details_cursor,
       "event" => CallInspectionTimeline.selection_key(event),
@@ -415,8 +420,15 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     })
   end
 
-  defp history_path(call_id, history_cursor, list_cursor, selected_event, details_cursor) do
-    path_with_query(call_id, %{
+  defp history_path(
+         calls_path,
+         call_id,
+         history_cursor,
+         list_cursor,
+         selected_event,
+         details_cursor
+       ) do
+    path_with_query(calls_path, call_id, %{
       "cursor" => list_cursor,
       "details_cursor" => details_cursor,
       "event" => selected_event_key(selected_event),
@@ -430,13 +442,13 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   defp next_history_cursor(nil), do: nil
   defp next_history_cursor(persisted), do: persisted.next_cursor
 
-  defp path_with_query(call_id, values) do
+  defp path_with_query(calls_path, call_id, values) do
     query =
       values
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> URI.encode_query()
 
-    path = "/calls/" <> URI.encode_www_form(call_id)
+    path = calls_path <> "/" <> URI.encode_www_form(call_id)
     if query == "", do: path, else: path <> "?" <> query
   end
 end

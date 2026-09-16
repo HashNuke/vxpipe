@@ -39,7 +39,11 @@ defmodule Vxpipe.Console.CallUsagePresentationTest do
   test "renders non-overlapping totals and disclosed effective-operation evidence" do
     configure_backend({:ok, usage_report()})
 
-    html = sign_in() |> recycle() |> get("/calls/call-public-id") |> html_response(200)
+    html =
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/call-public-id")
+      |> html_response(200)
 
     assert html =~ "Usage &amp; cost"
     assert html =~ "2 non-overlapping totals"
@@ -74,13 +78,21 @@ defmodule Vxpipe.Console.CallUsagePresentationTest do
   test "distinguishes no projected usage from unavailable usage evidence" do
     configure_backend({:ok, %UsageReport{amounts: [], totals: []}})
 
-    empty_html = sign_in() |> recycle() |> get("/calls/call-public-id") |> html_response(200)
+    empty_html =
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/call-public-id")
+      |> html_response(200)
+
     assert empty_html =~ "No usage observations projected"
 
     configure_backend({:error, :repository_unavailable})
 
     unavailable_html =
-      sign_in() |> recycle() |> get("/calls/call-public-id") |> html_response(200)
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/call-public-id")
+      |> html_response(200)
 
     assert unavailable_html =~ "Usage evidence unavailable"
     refute unavailable_html =~ "repository_unavailable"

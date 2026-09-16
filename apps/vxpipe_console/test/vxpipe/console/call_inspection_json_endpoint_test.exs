@@ -111,6 +111,13 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
     refute conn.resp_body =~ @tenant_key
   end
 
+  test "does not inspect a call through another tenant namespace" do
+    conn = sign_in() |> recycle() |> get("/tenants/other-tenant-key/calls/#{@call_id}/inspection")
+
+    assert response(conn, 404)
+    refute_receive {:inspect_call, _, _, _}
+  end
+
   test "maps an invalid inspection request to bad request" do
     configure_backend(%{inspect_call: {:error, :invalid_call_inspection_request}})
 
@@ -132,7 +139,7 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
     assert get_resp_header(conn, "cache-control") == ["private, no-store"]
   end
 
-  defp route, do: "/calls/#{@call_id}/inspection"
+  defp route, do: "/tenants/#{@tenant_key}/calls/#{@call_id}/inspection"
 
   defp sign_in do
     post(build_conn(), "/operator/session", %{

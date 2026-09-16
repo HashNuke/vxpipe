@@ -4,7 +4,14 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
   use Phoenix.LiveView, layout: false
 
   alias Vxpipe.Calls.CallDetailPage
-  alias Vxpipe.Console.{CallDetails, CallInspection, CallInspectionComponents, CallRecording}
+
+  alias Vxpipe.Console.{
+    CallDetails,
+    CallInspection,
+    CallInspectionComponents,
+    CallRecording,
+    OperatorLiveAuthentication
+  }
 
   @list_page_size 25
   @history_page_size 50
@@ -33,28 +40,32 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
 
   @impl true
   def handle_params(%{"call_id" => call_id} = params, _uri, socket) do
-    requested = requested_state(call_id, params)
-    reload_call? = not socket.assigns.loaded? or socket.assigns.selected_id != call_id
+    if OperatorLiveAuthentication.tenant_path?(socket, params) do
+      requested = requested_state(call_id, params)
+      reload_call? = not socket.assigns.loaded? or socket.assigns.selected_id != call_id
 
-    socket =
-      socket
-      |> maybe_cancel_refresh(reload_call?)
-      |> maybe_load_list(requested, reload_call?)
-      |> maybe_load_detail(requested, reload_call?)
-      |> maybe_load_recordings(requested, reload_call?)
-      |> maybe_load_usage(requested, reload_call?)
-      |> maybe_load_call_details(requested, reload_call?)
-      |> assign(
-        loaded?: true,
-        selected_id: requested.call_id,
-        selected_event_id: requested.event,
-        list_cursor: requested.list_cursor,
-        history_cursor: requested.history_cursor,
-        details_cursor: requested.details_cursor
-      )
-      |> reconcile_live_refresh()
+      socket =
+        socket
+        |> maybe_cancel_refresh(reload_call?)
+        |> maybe_load_list(requested, reload_call?)
+        |> maybe_load_detail(requested, reload_call?)
+        |> maybe_load_recordings(requested, reload_call?)
+        |> maybe_load_usage(requested, reload_call?)
+        |> maybe_load_call_details(requested, reload_call?)
+        |> assign(
+          loaded?: true,
+          selected_id: requested.call_id,
+          selected_event_id: requested.event,
+          list_cursor: requested.list_cursor,
+          history_cursor: requested.history_cursor,
+          details_cursor: requested.details_cursor
+        )
+        |> reconcile_live_refresh()
 
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, redirect(socket, to: "/operator/sign-in")}
+    end
   end
 
   @impl true

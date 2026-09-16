@@ -6,7 +6,11 @@ defmodule Vxpipe.Console.CallConsolePageController do
   alias Vxpipe.Console.CallConsolePage
 
   def show(conn, %{"call_id" => call_id}) do
-    content = CallConsolePage.render(%{call_id: call_id})
+    content =
+      CallConsolePage.render(%{
+        call_id: call_id,
+        tenant_key: conn.assigns.operator_principal.tenant_key
+      })
 
     conn
     |> put_resp_header("cache-control", "private, no-store")

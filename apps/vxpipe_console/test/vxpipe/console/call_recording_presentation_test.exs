@@ -40,7 +40,11 @@ defmodule Vxpipe.Console.CallRecordingPresentationTest do
   test "renders playable full-mix and aligned-track evidence without storage references" do
     configure_recordings({:ok, [full_mix(), participant_track()]})
 
-    html = sign_in() |> recycle() |> get("/calls/call-public-id") |> html_response(200)
+    html =
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/call-public-id")
+      |> html_response(200)
 
     assert html =~ "Recordings"
     assert html =~ "Full mix"
@@ -48,8 +52,8 @@ defmodule Vxpipe.Console.CallRecordingPresentationTest do
     assert html =~ "Incomplete"
     assert html =~ "1 gap"
     assert html =~ "Starts at 1.000 s"
-    assert html =~ "/calls/call-public-id/recordings/full-mix-artifact"
-    assert html =~ "/calls/call-public-id/recordings/participant-artifact"
+    assert html =~ "/tenants/#{@tenant_key}/calls/call-public-id/recordings/full-mix-artifact"
+    assert html =~ "/tenants/#{@tenant_key}/calls/call-public-id/recordings/participant-artifact"
     assert length(Regex.scan(~r/<audio\b/, html)) == 2
     refute html =~ "private/full-mix.s16le"
 
@@ -60,14 +64,21 @@ defmodule Vxpipe.Console.CallRecordingPresentationTest do
   test "distinguishes no artifacts from unavailable recording evidence" do
     configure_recordings({:ok, []})
 
-    empty_html = sign_in() |> recycle() |> get("/calls/call-public-id") |> html_response(200)
+    empty_html =
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/call-public-id")
+      |> html_response(200)
 
     assert empty_html =~ "No recording artifacts"
 
     configure_recordings({:error, :repository_unavailable})
 
     unavailable_html =
-      sign_in() |> recycle() |> get("/calls/call-public-id") |> html_response(200)
+      sign_in()
+      |> recycle()
+      |> get("/tenants/#{@tenant_key}/calls/call-public-id")
+      |> html_response(200)
 
     assert unavailable_html =~ "Recording evidence unavailable"
     refute unavailable_html =~ "repository_unavailable"

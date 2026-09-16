@@ -7,9 +7,10 @@ implemented. Further live call interaction remains in the
 ## Decision
 
 The Console exposes one browser-facing JSON inspection resource at
-`GET /calls/:call_id/inspection`. It is protected by the existing signed operator session and
-`calls` authority. The response is the host payload used to populate `@vxpipe/core` for an ongoing
-or ended call.
+`GET /tenants/:tenant_key/calls/:call_id/inspection`. It is protected by the existing signed
+operator session and `calls` authority. The URL tenant must match the tenant in that signed
+principal. The response is the host payload used to populate `@vxpipe/core` for an ongoing or
+ended call.
 
 The resource reads only PostgreSQL-backed Calls data:
 
@@ -23,12 +24,12 @@ the database. A browser that owns a live debug seat may apply RTVI updates after
 
 The existing routes remain distinct because they return different resources:
 
-- `/calls/:call_id` is the server-rendered operator workspace. It currently combines persisted
-  evidence with an optional in-memory live view and supporting artifact lists.
-- `/calls/:call_id/details/:publication_id` downloads one immutable, versioned archival document.
-  It is an artifact retrieval route and may use object storage.
-- `/calls/:call_id/inspection` returns the complete, versioned database projection required by the
-  reusable debug console.
+- `/tenants/:tenant_key/calls/:call_id` is the server-rendered operator workspace. It currently
+  combines persisted evidence with an optional in-memory live view and supporting artifact lists.
+- `/tenants/:tenant_key/calls/:call_id/details/:publication_id` downloads one immutable, versioned
+  archival document. It is an artifact retrieval route and may use object storage.
+- `/tenants/:tenant_key/calls/:call_id/inspection` returns the complete, versioned database
+  projection required by the reusable debug console.
 
 Changing the HTML route to negotiate a second representation would couple LiveView routing and
 the reusable data contract. Expanding the publication download would make an optional S3 artifact
@@ -73,14 +74,15 @@ The response uses snake-case JSON to match existing Vxpipe HTTP contracts. The C
 validates and converts it to Core's camel-case TypeScript model; the reusable packages never fetch
 this route directly.
 
-The authenticated HTML host is `GET /calls/:call_id/console`. It loads the inspection resource,
-creates a Core store/controller and renders `@vxpipe/react` without attaching live controls. A
-refresh replaces the complete database baseline through Core's controller; a future RTVI adapter
-can buffer and reapply only newer live updates during that replacement.
+The authenticated HTML host is `GET /tenants/:tenant_key/calls/:call_id/console`. It loads the
+inspection resource, creates a Core store/controller and renders `@vxpipe/react` without attaching
+live controls. A refresh replaces the complete database baseline through Core's controller; a
+future RTVI adapter can buffer and reapply only newer live updates during that replacement.
 
 ## Failure and security behavior
 
 - A missing or cross-tenant call produces the same `404` response.
+- A URL tenant that differs from the signed operator tenant is rejected before call lookup.
 - Invalid requests produce `400`; unavailable database dependencies produce `503`.
 - Responses set `Cache-Control: private, no-store`.
 - The operator session remains server-side. API keys, provider credentials, signed artifact URLs,

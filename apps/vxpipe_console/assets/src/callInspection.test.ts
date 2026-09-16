@@ -83,12 +83,12 @@ test("fetches the authenticated inspection resource without caching it", async (
   });
   vi.stubGlobal("fetch", fetchMock);
 
-  const loader = createCallInspectionLoader("call/with spaces");
+  const loader = createCallInspectionLoader("tenant/with spaces", "call/with spaces");
   const snapshot = await loader.refresh(new AbortController().signal);
 
   expect(snapshot.call.id).toBe("call/with spaces");
   expect(fetchMock).toHaveBeenCalledWith(
-    "/calls/call%2Fwith%20spaces/inspection",
+    "/tenants/tenant%2Fwith%20spaces/calls/call%2Fwith%20spaces/inspection",
     expect.objectContaining({
       credentials: "same-origin",
       cache: "no-store",
@@ -107,7 +107,7 @@ test("rejects a response for a different call", async () => {
   );
 
   await expect(
-    createCallInspectionLoader("call-2").refresh(new AbortController().signal),
+    createCallInspectionLoader("tenant-1", "call-2").refresh(new AbortController().signal),
   ).rejects.toThrow("different call");
 });
 
@@ -115,7 +115,7 @@ test("reports an unavailable inspection response", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
 
   await expect(
-    createCallInspectionLoader("call-1").refresh(new AbortController().signal),
+    createCallInspectionLoader("tenant-1", "call-1").refresh(new AbortController().signal),
   ).rejects.toEqual(
     expect.objectContaining<Partial<CallInspectionResponseError>>({
       name: "CallInspectionResponseError",
@@ -138,7 +138,7 @@ test("preserves cancellation while reading the response body", async () => {
   );
 
   await expect(
-    createCallInspectionLoader("call-1").refresh(controller.signal),
+    createCallInspectionLoader("tenant-1", "call-1").refresh(controller.signal),
   ).rejects.toMatchObject({ name: "AbortError" });
 });
 

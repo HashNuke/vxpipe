@@ -16,7 +16,7 @@ defmodule Vxpipe.Console.CallConsolePage do
         <title>Call inspection · Vxpipe</title>
       </head>
       <body>
-        <div id="call-console-root" data-call-id={@call_id}></div>
+        <div id="call-console-root" data-call-id={@call_id} data-tenant-key={@tenant_key}></div>
         <script type="module" src="/assets/debug_console.js"></script>
       </body>
     </html>

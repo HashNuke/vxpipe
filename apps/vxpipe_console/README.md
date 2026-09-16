@@ -92,13 +92,13 @@ scope. Console verifies that credential server-side, then stores only tenant/API
 identifiers, closed scopes, and expiry in its signed browser session; the API-key secret is
 not serialized into the session.
 
-After sign-in, `/calls` shows a tenant-scoped list of at most 25 calls per page and
-`/calls/:call_id` shows at most 50 persisted timeline records per history page alongside
-the bounded live projection when the room is active. Persisted and live reads remain
-independent, so an archive outage can still show permitted live evidence. The page labels
-source, revision, gaps, loss, unavailable data, and unknown outcomes rather than inventing
-continuity. Closing or reconnecting the page only stops or repeats these bounded reads; it
-does not start, resume, or end a call.
+After sign-in, `/tenants/:tenant_key/calls` shows a tenant-scoped list of at most 25 calls per page
+and `/tenants/:tenant_key/calls/:call_id` shows at most 50 persisted timeline records per history
+page alongside the bounded live projection when the room is active. The URL tenant must match the
+signed operator principal. Persisted and live reads remain independent, so an archive outage can
+still show permitted live evidence. The page labels source, revision, gaps, loss, unavailable data,
+and unknown outcomes rather than inventing continuity. Closing or reconnecting the page only stops
+or repeats these bounded reads; it does not start, resume, or end a call.
 
 The call detail page also reads the tenant-safe usage projection independently. It shows
 non-overlapping provider totals and exact known currency values first, with individual effective

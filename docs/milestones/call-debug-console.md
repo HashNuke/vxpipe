@@ -23,7 +23,9 @@ when the call ends. The same console will run Getting Started examples.
 
 ## Contracts
 
-- Console owns `/debug` and `/debug/calls/:call_id` in its existing React/esbuild composition.
+- Console owns `/tenants/:tenant_key/calls/:call_id/console` in its existing React/esbuild
+  composition, with its database inspection resource beside it at
+  `/tenants/:tenant_key/calls/:call_id/inspection`.
   Use `packages/core` (`@vxpipe/core`) and `packages/react` (`@vxpipe/react`) as independent npm
   packages from the first slice. Keep them private until publication is separately requested.
   The Console app composes them and owns routes/auth/setup; Storybook lives with React.
@@ -164,7 +166,7 @@ Commit this slice with presenter tests and the synchronized Core contract.
 
 ### Checkpoint 1C — Expose the authorized HTTP resource
 
-- [x] Add `GET /calls/:call_id/inspection` under the existing operator session and `calls` authority.
+- [x] Add `GET /tenants/:tenant_key/calls/:call_id/inspection` under the existing operator session and `calls` authority.
   The controller only invokes the query and presenter, maps missing/cross-tenant calls to the same
   `404`, maps invalid requests to `400`, and maps database unavailability to `503`.
 - [x] Return JSON with `Cache-Control: private, no-store`. Red-test ongoing and ended calls,

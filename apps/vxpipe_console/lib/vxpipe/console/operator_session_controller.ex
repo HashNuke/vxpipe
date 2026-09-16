@@ -7,7 +7,7 @@ defmodule Vxpipe.Console.OperatorSessionController do
 
   def new(conn, _params) do
     case OperatorSession.fetch(conn) do
-      {:ok, _principal} -> redirect(conn, to: "/calls")
+      {:ok, principal} -> redirect(conn, to: calls_path(principal.tenant_key))
       :error -> render_page(conn, 200, nil, "")
     end
   end
@@ -20,7 +20,7 @@ defmodule Vxpipe.Console.OperatorSessionController do
         conn
         |> configure_session(renew: true)
         |> OperatorSession.put(principal)
-        |> redirect(to: "/calls")
+        |> redirect(to: calls_path(principal.tenant_key))
 
       {:error, _reason} ->
         render_page(
@@ -56,4 +56,7 @@ defmodule Vxpipe.Console.OperatorSessionController do
     |> put_resp_header("cache-control", "no-store")
     |> html(Phoenix.HTML.Safe.to_iodata(content))
   end
+
+  defp calls_path(tenant_key),
+    do: "/tenants/#{URI.encode_www_form(tenant_key)}/calls"
 end

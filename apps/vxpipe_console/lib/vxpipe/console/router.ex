@@ -18,6 +18,7 @@ defmodule Vxpipe.Console.Router do
 
   pipeline :operator do
     plug Vxpipe.Console.RequireOperator
+    plug Vxpipe.Console.RequireTenant
   end
 
   pipeline :operator_api do
@@ -25,6 +26,7 @@ defmodule Vxpipe.Console.Router do
     plug :fetch_session
     plug :put_secure_browser_headers
     plug Vxpipe.Console.RequireOperator
+    plug Vxpipe.Console.RequireTenant
   end
 
   pipeline :sample_api do
@@ -50,7 +52,7 @@ defmodule Vxpipe.Console.Router do
     post "/operator/sign-out", Vxpipe.Console.OperatorSessionController, :delete
   end
 
-  scope "/calls" do
+  scope "/tenants/:tenant_key/calls" do
     pipe_through [:browser, :operator]
 
     get "/:call_id/console", Vxpipe.Console.CallConsolePageController, :show
@@ -66,7 +68,7 @@ defmodule Vxpipe.Console.Router do
     end
   end
 
-  scope "/calls" do
+  scope "/tenants/:tenant_key/calls" do
     pipe_through :operator_api
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show

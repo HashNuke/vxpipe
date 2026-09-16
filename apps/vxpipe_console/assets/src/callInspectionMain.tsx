@@ -6,9 +6,12 @@ import { CallInspectionApp } from "./CallInspectionApp";
 
 const root = document.getElementById("call-console-root");
 const callId = root?.dataset.callId;
+const tenantKey = root?.dataset.tenantKey;
 
-if (!root || !callId) {
+if (!root || !callId || !tenantKey) {
   throw new Error("Missing call console host data");
 }
 
-createRoot(root).render(<CallInspectionApp callId={callId} />);
+createRoot(root).render(
+  <CallInspectionApp tenantKey={tenantKey} callId={callId} />,
+);
