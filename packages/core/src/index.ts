@@ -25,11 +25,11 @@ export type {
   LocalSessionSnapshot,
 } from "./liveSession.js";
 export type {
+  Availability,
   Available,
   CallDetailsCompleteness,
   CallDetailsController,
   CallDetailsLoader,
-  CallDetailsPage,
   CallDetailsReader,
   CallDetailsSnapshot,
   CallDetailsStore,

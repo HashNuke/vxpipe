@@ -43,6 +43,10 @@ export type Available<T> =
   | { state: "available"; value: T }
   | { state: "unavailable"; reason: UnavailableReason };
 
+export type Availability =
+  | { state: "available" }
+  | { state: "unavailable"; reason: UnavailableReason };
+
 export interface RevisionedEntity<T extends { id: string }> {
   id: string;
   revision: number;
@@ -84,17 +88,8 @@ export interface CallDetailsSnapshot {
   timeline: readonly CallDetailsTimelineEntity[];
   variables: Available<VariableSnapshot>;
   metrics: readonly MetricObservation[];
+  metricsAvailability: Availability;
   completeness: CallDetailsCompleteness;
-  olderCursor: string | null;
-  /** UTC RFC 3339 instant represented by this baseline. */
-  asOf: string;
-}
-
-export interface CallDetailsPage {
-  callId: string;
-  timeline: readonly CallDetailsTimelineEntity[];
-  olderCursor: string | null;
-  completeness?: CallDetailsCompleteness;
 }
 
 interface UpdateIdentity {
@@ -147,19 +142,16 @@ export interface CallDetailsReader {
 
 export interface CallDetailsStore extends CallDetailsReader {
   replaceBaseline(snapshot: CallDetailsSnapshot): boolean;
-  mergePage(page: CallDetailsPage): boolean;
   apply(update: CallDetailsUpdate): boolean;
 }
 
 export interface CallDetailsLoader {
   refresh(signal: AbortSignal): Promise<CallDetailsSnapshot>;
-  loadOlder(cursor: string, signal: AbortSignal): Promise<CallDetailsPage>;
 }
 
 export interface CallDetailsController extends CallDetailsReader {
   apply(update: CallDetailsUpdate): boolean;
   refresh(): Promise<void>;
-  loadOlder(): Promise<void>;
   dispose(): void;
 }
 
@@ -188,6 +180,7 @@ function copySnapshot(snapshot: CallDetailsSnapshot): CallDetailsSnapshot {
     participants: [...snapshot.participants],
     timeline: [...snapshot.timeline].sort(compareTimeline),
     metrics: [...snapshot.metrics],
+    metricsAvailability: { ...snapshot.metricsAvailability },
     completeness: { ...snapshot.completeness },
   };
 }
@@ -263,25 +256,6 @@ export function createCallDetailsStore(
         snapshot.variables.state === "available" ? snapshot.variables.value.revision : -1;
       for (const values of Object.values(tombstones)) values.clear();
       notify();
-      return true;
-    },
-    mergePage(page) {
-      if (page.callId !== snapshot.call.id) return false;
-      let timeline = snapshot.timeline;
-      for (const entity of page.timeline) {
-        timeline = upsert("timeline", timeline, entity) ?? timeline;
-      }
-      const changed =
-        timeline !== snapshot.timeline ||
-        page.olderCursor !== snapshot.olderCursor ||
-        page.completeness !== undefined;
-      if (!changed) return false;
-      publish({
-        ...snapshot,
-        timeline: [...timeline].sort(compareTimeline),
-        olderCursor: page.olderCursor,
-        completeness: page.completeness ?? snapshot.completeness,
-      });
       return true;
     },
     apply(update) {
@@ -370,7 +344,6 @@ export function createCallDetailsController({
 }): CallDetailsController {
   let disposed = false;
   let refreshController: AbortController | null = null;
-  let pageController: AbortController | null = null;
   let bufferedUpdates: CallDetailsUpdate[] | null = null;
 
   return {
@@ -398,24 +371,9 @@ export function createCallDetailsController({
         if (bufferedUpdates === updates) bufferedUpdates = null;
       }
     },
-    async loadOlder() {
-      if (disposed || !loader) return;
-      const cursor = store.getSnapshot().olderCursor;
-      if (!cursor) return;
-      pageController?.abort();
-      const controller = new AbortController();
-      pageController = controller;
-      try {
-        const page = await loader.loadOlder(cursor, controller.signal);
-        if (!disposed && !controller.signal.aborted) store.mergePage(page);
-      } finally {
-        if (pageController === controller) pageController = null;
-      }
-    },
     dispose() {
       disposed = true;
       refreshController?.abort();
-      pageController?.abort();
       bufferedUpdates = null;
     },
   };

@@ -29,6 +29,6 @@ export interface LiveCallControls {
 /** Host-composed boundary consumed by @vxpipe/react. */
 export interface CallConsoleController {
   details: CallDetailsReader;
-  history?: Pick<CallDetailsController, "refresh" | "loadOlder">;
+  history?: Pick<CallDetailsController, "refresh">;
   live?: LiveCallControls;
 }

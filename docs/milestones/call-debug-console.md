@@ -149,13 +149,13 @@ or presentation fields. Commit this slice with its focused query tests.
 
 ### Checkpoint 1B — Convert the snapshot to the public response
 
-- [ ] Red-test a pure `CallInspectionPresenter` that converts the typed query result into versioned
+- [x] Red-test a pure `CallInspectionPresenter` that converts the typed query result into versioned
   snake-case JSON. It performs no I/O and does not know about Plug, Phoenix or repositories.
-- [ ] Project lifecycle, configured participants, messages, semantic events, complete tool-call
+- [x] Project lifecycle, configured participants, messages, semantic events, complete tool-call
   request/response state, latest variables, usage metrics and archive completeness. Preserve
   captured empty values versus unavailable data; do not expose tenant keys, credential selectors,
   source policies or arbitrary definition source.
-- [ ] Remove `older_cursor` and `as_of` from this endpoint contract and from the matching Core
+- [x] Remove `older_cursor` and `as_of` from this endpoint contract and from the matching Core
   baseline. Stable database identities and revisions still support later RTVI updates.
 
 Exit: fixture database records encode to the complete client snapshot and round-trip through JSON.

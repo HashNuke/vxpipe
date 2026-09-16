@@ -648,6 +648,7 @@ function detailsFromFixture(
       revision,
       value,
     })),
+    metricsAvailability: { state: "available" },
     completeness: {
       state:
         snapshot.state === "ended" || snapshot.state === "failed"
@@ -656,8 +657,6 @@ function detailsFromFixture(
       missingSequenceCount: 0,
       droppedLiveRecords: 0,
     },
-    olderCursor: null,
-    asOf: "2026-09-16T22:32:14.000Z",
   };
 }
 

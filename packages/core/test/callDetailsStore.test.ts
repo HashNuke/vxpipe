@@ -2,7 +2,6 @@ import { describe, expect, test, vi } from "vitest";
 import {
   createCallDetailsController,
   createCallDetailsStore,
-  type CallDetailsPage,
   type CallDetailsSnapshot,
   type CallDetailsUpdate,
 } from "../src/index.js";
@@ -73,13 +72,12 @@ function endpointResponse(): CallDetailsSnapshot {
       value: { revision: 1, sections: {} },
     },
     metrics: [],
+    metricsAvailability: { state: "available" },
     completeness: {
       state: "unconfirmed",
       missingSequenceCount: 0,
       droppedLiveRecords: 0,
     },
-    olderCursor: "older-1",
-    asOf: "2026-09-16T08:00:04.000Z",
   };
 }
 
@@ -114,6 +112,7 @@ describe("call details store", () => {
       revision: 2,
       value: { text: "Working on it now", state: "final" },
     });
+    expect(store.getSnapshot().metricsAvailability).toEqual({ state: "available" });
 
     const current = store.getSnapshot();
     expect(
@@ -172,48 +171,6 @@ describe("call details store", () => {
     expect(store.getSnapshot()).toBe(snapshot);
   });
 
-  test("merges overlapping endpoint pages and orders timeline items deterministically", () => {
-    const store = createCallDetailsStore(endpointResponse());
-    const page: CallDetailsPage = {
-      callId: "call-001",
-      timeline: [
-        endpointResponse().timeline[0]!,
-        {
-          id: "message-1",
-          revision: 1,
-          sourceSequence: 1,
-          kind: "message",
-          value: {
-            id: "message-1",
-            participantId: "assistant",
-            text: "Hello",
-            occurredAt: "2026-09-16T08:00:02.000Z",
-            state: "final",
-          },
-        },
-      ],
-      olderCursor: null,
-      completeness: {
-        state: "incomplete",
-        missingSequenceCount: 2,
-        droppedLiveRecords: 1,
-      },
-    };
-
-    expect(store.mergePage(page)).toBe(true);
-    expect(store.getSnapshot().timeline.map((item) => item.id)).toEqual([
-      "message-1",
-      "message-2",
-      "rtvi-receipt-1",
-    ]);
-    expect(store.getSnapshot().olderCursor).toBeNull();
-    expect(store.getSnapshot().completeness).toEqual({
-      state: "incomplete",
-      missingSequenceCount: 2,
-      droppedLiveRecords: 1,
-    });
-  });
-
   test("rejects stale incarnations and supports explicit tombstones", () => {
     const store = createCallDetailsStore(endpointResponse());
     expect(
@@ -241,29 +198,18 @@ describe("call details store", () => {
 });
 
 describe("call details controller", () => {
-  test("uses host-injected endpoint callbacks for refresh and pagination", async () => {
+  test("uses the host-injected endpoint callback to refresh the complete snapshot", async () => {
     const store = createCallDetailsStore(endpointResponse());
     const refreshed = endpointResponse();
-    refreshed.asOf = "2026-09-16T08:01:00.000Z";
     refreshed.completeness = { ...refreshed.completeness, state: "complete" };
-    const page: CallDetailsPage = {
-      callId: "call-001",
-      timeline: [],
-      olderCursor: null,
-    };
     const loader = {
       refresh: vi.fn(async () => refreshed),
-      loadOlder: vi.fn(async () => page),
     };
     const controller = createCallDetailsController({ store, loader });
 
     await controller.refresh();
     expect(loader.refresh).toHaveBeenCalledOnce();
-    expect(store.getSnapshot().asOf).toBe("2026-09-16T08:01:00.000Z");
-
-    await controller.loadOlder();
-    expect(loader.loadOlder).toHaveBeenCalledWith("older-1", expect.any(AbortSignal));
-    expect(store.getSnapshot().olderCursor).toBeNull();
+    expect(store.getSnapshot().completeness.state).toBe("complete");
 
     controller.dispose();
   });
@@ -278,7 +224,6 @@ describe("call details controller", () => {
             resolveRefresh = resolve;
           }),
       ),
-      loadOlder: vi.fn(),
     };
     const controller = createCallDetailsController({ store, loader });
     const refresh = controller.refresh();

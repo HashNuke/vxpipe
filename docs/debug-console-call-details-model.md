@@ -1,8 +1,8 @@
 # Debug-console call details model
 
 Status: Core store/controller and React consumption implemented in the private TypeScript packages;
-the complete-snapshot query is implemented. Removing the prototype's cursor/timestamp fields and
-adding the real Console endpoint and RTVI adapters remain pending.
+the complete database query and response projection are implemented. The real Console endpoint,
+host mapper and RTVI adapters remain pending.
 
 ## Problem
 
@@ -36,6 +36,7 @@ interface CallDetailsSnapshot {
   timeline: readonly TimelineItem[];
   variables: Available<VariableSnapshot>;
   metrics: readonly MetricObservation[];
+  metricsAvailability: Availability;
   completeness: CallDetailsCompleteness;
 }
 
@@ -83,7 +84,8 @@ may omit the refresh loader. Storybook supplies an in-memory loader and the same
 `Available<T>` distinguishes a value from `unavailable`, with bounded reasons such as not loaded,
 not captured, not authorized, unsupported, or lost through a known gap. An absent tool response is
 therefore different from a captured JSON `null`, and a denied system prompt is different from an
-empty prompt.
+empty prompt. `metricsAvailability` preserves the same distinction for a metric collection, where
+an available empty array means that usage loaded successfully and contained no displayable values.
 
 The wire snapshot uses arrays because it must be JSON-safe. The Core store indexes participants,
 timeline items, and metric observations by stable ID internally. It exposes ordered immutable
@@ -93,7 +95,8 @@ arrays to React through selectors. Components key rows by those IDs and never by
 
 Every semantic entity has a stable ID and a monotonically increasing entity revision. An initial
 streaming message, its next text fragment, and its final form share one ID. Tool start and terminal
-updates share one tool-call ID. Metric updates share an observation ID. A newer revision replaces
+updates share one tool-call ID. Metric updates share one effective-amount identity derived from
+the settlement dimensions, while supporting archive sequences supply revisions. A newer revision replaces
 the prior normalized entity; duplicate and older revisions are ignored. Removal requires an
 explicit tombstone. Core does not perform an arbitrary deep merge because omission can mean either
 unchanged or unavailable depending on the source.
@@ -124,7 +127,7 @@ when the Logs filter is enabled.
 The Console host is the data owner for every existing call, including one that is still ongoing.
 It fetches one complete authorized database-backed Calls inspection snapshot, creates the Core
 store with that baseline, and injects an optional refresh callback. The server composes the full
-persisted `CallHistory`, selected immutable database definition revision and persisted usage into
+persisted `CallHistory`, immutable database prepared call/resolved plan and persisted usage into
 the response for authorized participant configuration, tools, transfers and metrics. The debug
 console endpoint does not load call-details publications or other object-storage artifacts. It
 passes through the database archive's completeness and gap information.
@@ -137,7 +140,7 @@ Core invokes the injected refresh callback instead of guessing a patch. Updates 
 the refresh are buffered and applied only after the baseline revision they follow.
 
 Once a call ends, Core has no RTVI dependency. The host fetches its durable database timeline and
-definition/usage projection and hands that payload to the same store. RTVI receipts seen only by an attached browser are
+resolved-plan/usage projection and hands that payload to the same store. RTVI receipts seen only by an attached browser are
 available in a later remote view only if the platform deliberately captured and authorized those
 receipts; their absence is reported as unavailable and is not confused with an empty log.
 
@@ -171,7 +174,7 @@ know whether the change came from RTVI, a live-inspection refresh, or a historic
   meanings, so unconstrained deep merging can retain stale or unauthorized data.
 - Ordering by receipt time: reconnection and batching can reorder receipts.
 - Rebuilding a second browser history store: Calls already owns authorized history,
-  completeness, archive gaps, variable revisions, definitions and persisted usage.
+  completeness, archive gaps, variable revisions, resolved plans and persisted usage.
 
 ## Implementation and verification
 

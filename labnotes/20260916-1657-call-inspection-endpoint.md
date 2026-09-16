@@ -51,3 +51,23 @@
   record and no longer fetches the separate definition revision.
 - Red tests failed while the query skipped the prepared call. The corrected query stops before
   history/usage if the prepared record is unavailable and passes 5 focused query tests.
+
+## Public response projection
+
+- Red tests established the versioned snake-case response, runtime participant IDs, semantic
+  timeline, tool request/response capture, variables, usage metrics, completeness and redaction.
+- GPT 6 Astra xhigh found three contract defects before commit: metric IDs omitted settlement
+  provenance, participant state changes reused a definition revision, and Core discarded metric
+  availability. It also found that tool lifecycle reduction incorrectly prioritized timestamps.
+- Metric IDs now hash the complete effective-amount identity used by persistence and settlement.
+  Metric and participant revisions use supporting archive fact sequences; zero explicitly means
+  that the selected persisted record has no matching source fact in the supplied history.
+- Tool lifecycle state reduces by source sequence. Timestamps remain display-order data only.
+- Core retains metric availability separately from the collection, so unavailable usage remains
+  distinct from a successfully loaded empty report. The redundant participant-configuration
+  availability marker was removed because the prepared plan is required.
+- Focused Console verification: 13 tests, 0 failures. TypeScript verification: build/typecheck,
+  5 Core tests and 27 React tests all pass.
+- Root verification also passes: format check, warnings-as-errors compile, strict Credo, full
+  umbrella tests and unused dependency check. The temporary React display condition was removed;
+  this checkpoint changes data contracts and fixtures but no rendered UI behavior.

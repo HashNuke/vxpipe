@@ -58,13 +58,12 @@ function mockEndpointResponse(
     ],
     variables: { state: "unavailable", reason: "not-captured" },
     metrics: [],
+    metricsAvailability: { state: "unavailable", reason: "not-loaded" },
     completeness: {
       state: "complete",
       missingSequenceCount: 0,
       droppedLiveRecords: 0,
     },
-    olderCursor: null,
-    asOf: "2026-09-16T08:02:15.000Z",
   };
 }
 
@@ -87,7 +86,6 @@ test("renders an ongoing remote call without joining its RTVI session", () => {
     store,
     loader: {
       refresh: vi.fn(async () => mockEndpointResponse("running")),
-      loadOlder: vi.fn(),
     },
   });
   const controller: CallConsoleController = { details: history, history };
