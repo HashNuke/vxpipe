@@ -98,7 +98,9 @@ const initial: CallSnapshot = {
       role: "human",
       state: "inactive",
       description: null,
-      capabilities: [{ name: "Voice", provider: "Browser", model: "WebRTC" }],
+      capabilities: [
+        { name: "Speech to text", provider: "Deepgram", model: "flux-general-en" },
+      ],
       systemPrompt: null,
       transferPolicies: [],
       tools: [],

@@ -74,8 +74,8 @@ and **Inspect history**, not automatic session replay.
 
 | Component | Responsibility and important behavior |
 | --- | --- |
-| Call header | Right-aligned call state, duration and one primary action; compact device groups beneath. Separate preparing, connecting, media connected, waiting for capabilities, ready, ended and failed. |
-| Participant rail | Identity, role, presence and known readiness/speaking facts. Planned, present and left are different; a role color never substitutes for a name. |
+| Call header | Input/output device groups and one right-aligned primary action share the toolbar; call state and duration sit below that action. Separate preparing, connecting, media connected, waiting for capabilities, ready, ended and failed. |
+| Participant rail | Identity, role, presence, connection method and known readiness/speaking facts. Planned, present and left are different; a role color never substitutes for a name. WebRTC or telephony audio is connection state, not a participant capability. |
 | Conversation timeline | Speaker-attributed text, interim/final transcript, streaming agent output, concise activity events, tool calls and optional raw RTVI logs. Icon filters default to messages/events/tool calls with raw logs off; Reset restores that selection. Keep observed order and authoritative identity. |
 | Chat composer | Text input in the same call as realtime voice; microphone controls stay in the call toolbar. Enter sends, Shift+Enter inserts a line, IME composition does not send accidentally. Typed input can receive spoken replies; text use does not require microphone permission. |
 | Spoken-text view | Highlight the current word or segment only when supported timing/alignment can identify it. Streaming generated text remains visible alongside audio. Interruption clears active highlighting without erasing generated text. |

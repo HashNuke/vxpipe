@@ -218,6 +218,20 @@ test("a connected non-caller displays its connection method", () => {
   expect(within(support).getByLabelText("WebRTC, connected")).toBeVisible();
 });
 
+test("a transferred human keeps connection media separate from configured capabilities", () => {
+  render(<CallConsole client={createFixtureClient("human-handoff")} />);
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "View Support teammate details" }),
+  );
+
+  const details = screen.getByRole("region", { name: "Participant details" });
+  expect(within(details).getByText("Speech to text")).toBeVisible();
+  expect(within(details).getByText("Deepgram")).toBeVisible();
+  expect(within(details).queryByText("Voice")).not.toBeInTheDocument();
+  expect(within(details).queryByText("WebRTC")).not.toBeInTheDocument();
+});
+
 test("a sidebar participant opens their authorized configuration", () => {
   render(<CallConsole client={createFixtureClient("conversation")} />);
 

@@ -145,7 +145,9 @@ Exit: an existing tenant can complete and inspect one call without the new onboa
   distinguish configured, present and left participants from browser transport connections.
 - [ ] Red-test and implement the persistent configured roster plus Participants tab. Selecting a
   muted, active or departed participant opens the same stable identity and renders only the
-  authorized capability, prompt, transfer-policy and tool projection.
+  authorized capability, prompt, transfer-policy and tool projection. Keep WebRTC/phone connection
+  media separate from configured capabilities: audio input and room output are runtime media
+  demands, while STT remains an optional participant capability.
 - [ ] Show current transfer attempt/phase/blockers from existing events. Offer the existing support
   seat in a separate view with explicit media consent and its bound acceptance-ready control.
   Displaying or selecting a participant must not secretly join or monitor them.
