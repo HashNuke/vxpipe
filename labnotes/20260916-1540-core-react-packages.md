@@ -37,3 +37,7 @@
 - Package dry runs exposed stale files left in `dist` by incremental source deletion. Added an
   explicit clean step before each package build so tarballs contain only current ESM, declarations,
   CSS, manifests, and README files.
+- Final evidence: all 33 Vitest tests pass; the strict root TypeScript check and both clean ESM/
+  declaration builds pass; the Storybook production build passes; package dry runs contain 10 Core
+  files and 37 React files; authored source, tests, stories, and Storybook configuration contain no
+  JavaScript files.
