@@ -1,6 +1,7 @@
 # Call debug console
 
-Status: planned, not implemented. Requested 2026-09-16; local specification review recorded below.
+Status: private-package Storybook prototype available; production integration not implemented.
+Requested 2026-09-16; local specification review recorded below.
 Prerequisites: [Prepared calls](prepared-call-admission.md), [Call inspection](call-inspection-and-debugging.md),
 [Tenant credentials](tenant-provider-credentials-and-platform-configuration.md), and the implemented
 [human-transfer](human-web-transfers.md) / [readiness](transfer-readiness-and-wait-sounds.md) contracts.
@@ -19,8 +20,9 @@ when the call ends. The same console will run Getting Started examples.
 ## Contracts
 
 - Console owns `/debug` and `/debug/calls/:call_id` in its existing React/esbuild composition.
-  Keep two independently extractable source boundaries from the first slice: framework-neutral
-  client JS and React components. The Console app composes them and owns routes/auth/setup.
+  Use `packages/core` (`@vxpipe/core`) and `packages/react` (`@vxpipe/react`) as independent npm
+  packages from the first slice. Keep them private until publication is separately requested.
+  The Console app composes them and owns routes/auth/setup; Storybook lives with React.
 - The client public interface owns normalized snapshots/subscriptions, lifecycle/commands,
   protocol/media capabilities, device controls, metrics, protocol-event records and spoken progress.
   Keep RTVI/Vxpipe decoding and WebRTC integration behind distinct adapter contracts. The
@@ -76,13 +78,13 @@ when the call ends. The same console will run Getting Started examples.
 
 - [ ] Record/review the client public API, separate protocol/media adapters, capabilities and
   import rules, plus the safe tenant route-selection/preparation boundary. Keep source isolated
-  for future client-JS/React extraction without introducing package publishing now.
+  in the confirmed Core/React workspaces without introducing package publishing now.
 - [ ] Red-test client lifecycle/events without React and components against a fake public client.
   Enforce dependency/import boundaries; substitute a fake adapter without changing components.
   Review the initial rendered composition within Operator's Bench.
 - [ ] Red-test an authorized published route, one deliberate start, duplicate/ambiguous preparation,
   microphone denial and transport failure. Include unauthorized/cross-tenant and draft-route denial.
-- [ ] Implement call header, selected definition/revision, chat history/composer, realtime voice
+- [ ] Implement compact call controls, chat history/composer, realtime voice
   control, input/output devices, microphone/speaker mute, leave and an enduring run-result view.
   Typing uses the existing send-text command; microphone consent is separate from text input.
 - [ ] Red-test typed input with no microphone permission, realtime voice, both within one call,
@@ -179,4 +181,19 @@ those layers from the first runnable slice, separates protocol from media transp
 implementation details and tests substitution without requiring another real adapter or publication.
 The user's logs clarification limits the Logs panel and event details to RTVI traffic. Server,
 browser, inspection and separate transfer-sideband logs are excluded; existing history stays linked.
-No implementation, rendered UI, independent-agent review or acceptance is claimed by this plan.
+This specification review did not claim implementation, rendered UI or acceptance; prototype
+evidence is recorded separately below.
+
+### Storybook prototype follow-up
+
+The subsequent user request moves source isolation into actual npm packages named `@vxpipe/core`
+and `@vxpipe/react`. The [prototype](../../packages/README.md) provides a typed Core boundary and
+fixture-backed React views, with dark as default. Preview states belong to Storybook; remove
+redundant headings, notices, tenant and transport labels from the call canvas. These are prototype
+artifacts, not passing production checkpoints: real adapters, admission and browser media remain
+unchecked. Application-specific Getting Started fixtures are outside reusable package exports.
+
+The latest review places call actions above compact microphone/input and speaker/output groups,
+using icon toggles and bordered selectors. Streaming output uses sequential dots before its time.
+Shadcn source distribution is feasible; the design source records the proposed package follow-up
+and consumer verification. It is not implemented or counted as production acceptance here.

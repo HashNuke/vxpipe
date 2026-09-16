@@ -1,0 +1,56 @@
+# Vxpipe browser packages
+
+Private npm workspaces for the future `@vxpipe` packages. From the repository root:
+
+```sh
+npm ci
+npm run storybook
+```
+
+Open [Storybook](http://127.0.0.1:6006). Node 22.12+ is required. The server binds to
+loopback, and serves the prototype independently of Phoenix, PostgreSQL and provider credentials.
+
+## Packages
+
+| Package | Responsibility |
+| --- | --- |
+| [@vxpipe/core](core) | Framework-neutral client contracts: snapshots, events, participants, messages, metrics and device commands. |
+| [@vxpipe/react](react) | React components consuming that public client contract; package-owned CSS and Storybook. |
+
+Both packages are `private: true`. Nothing is published or reserved on npm. The existing
+Phoenix asset project and documentation site retain their own dependency installations.
+The root lockfile belongs to these workspaces; `npm run build` builds Core before React.
+
+## Prototype scope
+
+Use Storybook's **Controls** and stories to choose call state, view, theme and fixture word-timing
+animation. Dark is the default; light is available for review. The canvas contains the proposed
+user interface, without preview controls, prototype notices, protocol/transport badges or tenant
+labels on the call page. Preview explanations belong here and in story metadata.
+
+All data is synthetic and in memory. The microphone/speaker controls simulate UI state: no
+microphone capture, audio playback, WebRTC connection, provider request or credential storage
+occurs. The word highlight demonstrates a supplied timing range; it is not real TTS alignment.
+The example event payloads illustrate presentation, not an executable wire-protocol fixture.
+
+Stories cover a conversation, ready/ended/failed calls, agent/human handoff, denied microphone,
+missing timing, metrics, RTVI-only events, and partial/complete setup. You can send text, leave,
+change devices, filter/pause/inspect events, switch themes, and complete the sample setup form.
+Use sample values in that form. Reloading discards prototype setup state.
+
+The `stories/` directory owns the fake client and the application-specific Getting Started page;
+neither is exported by the React package. Real protocol/media adapters, platform bootstrap,
+durable setup and production route integration remain in the [milestones](../docs/milestones/index.md).
+
+## Verification
+
+```sh
+npm test
+npm run check
+npm run build-storybook
+```
+
+The package builds emit ESM and declarations to ignored `dist/` directories. Storybook builds
+to ignored `packages/react/storybook-static/`. The story preview bundles local fonts for offline
+review. Vite polling is enabled for this preview because native file watching served stale source
+on the development machine; generated output directories are excluded.

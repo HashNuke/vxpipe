@@ -56,8 +56,9 @@ tenant, then Getting Started/examples. The console builds on current tenant admi
 Vxpipe extensions, so it does not wait for platform keys. The home retains setup tracking and
 per-example readiness; the same image defaults to production behavior, with proposed
 `VXPIPE_DEMO=1` opt-in. Demo mode grants no authority and does not relax credentials or TLS.
-The debug console must isolate framework-neutral client JS from React components for later package
-extraction; RTVI and WebRTC sit behind protocol/media adapters. Logs show RTVI events only.
+The debug console isolates framework-neutral `@vxpipe/core` from `@vxpipe/react` in `packages/`.
+The user requested a [Storybook prototype](../../packages/README.md) before production integration;
+RTVI and WebRTC remain planned protocol/media adapters. Logs show RTVI events only.
 These specifications have local design/dependency review only; they add no completed milestone,
 release no packaging/retention hold, and do not require new provider authentication support.
 
@@ -113,7 +114,7 @@ progress without claiming the entire milestone is complete.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [x] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Move existing provider credential readers to tenant DB storage, retain inline selections, rotate the platform encryption key and remove obsolete configuration paths.
-25. [ ] [Call debug console](call-debug-console.md) — Isolate future client-JS/React packages; run chat/voice, streaming text/audio, supported spoken highlighting, participants, metrics, RTVI event logs and device controls over pluggable protocol/media boundaries, initially RTVI/WebRTC.
+25. [ ] [Call debug console](call-debug-console.md) — Private @vxpipe/core and @vxpipe/react Storybook prototype available; production chat/voice, streaming text/audio, supported spoken highlighting, participants, metrics, RTVI events and device controls remain pending integration over RTVI/WebRTC adapters.
 26. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key authority, one stable demo tenant and resumable tenant credential setup.
 27. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default.
 28. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.

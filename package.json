@@ -1,0 +1,25 @@
+{
+  "name": "vxpipe-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/react"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "check": "npm run build && tsc --noEmit",
+    "test": "vitest run",
+    "storybook": "npm run storybook --workspace=@vxpipe/react",
+    "build-storybook": "npm run build-storybook --workspace=@vxpipe/react"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "jsdom": "^27.4.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

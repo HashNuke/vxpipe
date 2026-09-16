@@ -1,6 +1,7 @@
 # Developer debug console and first-use setup
 
-Status: proposed design, 2026-09-16. This plans new work; it does not claim an implemented UI.
+Status: proposed production design, 2026-09-16. A private-package Storybook prototype is available;
+production protocol, setup and route integration remain unimplemented.
 The user requested an extractable client-JS/React debug console first, followed by platform access,
 a demo tenant, provider credentials, example definitions and a Getting Started home.
 
@@ -52,17 +53,16 @@ Only public identifiers belong in URLs. `/pipecat-console` can redirect once its
 has a replacement; the existing transfer desk remains usable during the cutover.
 
 ```text
-Vxpipe / Debug     Demo tenant · Voice conversation · revision 1       Call ready
-──────────────────────────────────────────────────────────────────────────────
-PARTICIPANTS       CONVERSATION                         SELECTED EVENT
-You · connected    You                                 Speech recognition
-Assistant · ready  Can you help me?                     Participant · You
-                   Assistant                           Source · RTVI
-                   Of course.                          Timing · available facts
-                   [Transfer progress, when present]   [Inspect safe details]
-──────────────────────────────────────────────────────────────────────────────
-[Type a message…                                      ] [Send] [Microphone]
-Chat | Metrics | Logs | Definition          [Input] [Output] [Mute] [Leave]
+Vxpipe                                 Getting started | Console
+                                      Connected  02:14 [Leave call]
+[Mic toggle] [Input device ▾]      [Speaker toggle] [Output device ▾]
+──────────────────────────────────────────────────────────────────
+PARTICIPANTS       Conversation | Metrics | Logs
+You                Assistant                          ... 00:10
+Assistant          Of course. Let's find a time that works for you.
+                   [Spoken text, when timing is supported]
+                   ──────────────────────────────────────────────
+                   [Type a message…                       ] [Send]
 ```
 
 Conversation is the default focus. Event details are secondary and collapsible; the definition
@@ -73,10 +73,10 @@ and **Inspect history**, not automatic session replay.
 
 | Component | Responsibility and important behavior |
 | --- | --- |
-| Call header | Definition/revision, tenant, call state and one primary action. Separate preparing, connecting, media connected, waiting for capabilities, ready, ended and failed. |
+| Call header | Right-aligned call state, duration and one primary action; compact device groups beneath. Separate preparing, connecting, media connected, waiting for capabilities, ready, ended and failed. |
 | Participant rail | Identity, role, presence and known readiness/speaking facts. Planned, present and left are different; a role color never substitutes for a name. |
 | Chat history | Speaker-attributed text, interim/final transcript and streaming agent output. Keep message/turn identity, partial/failed states and generated-versus-spoken distinctions. Unknown speaker stays unknown. |
-| Chat composer | Text input and an explicit realtime microphone control in the same call. Enter sends, Shift+Enter inserts a line, IME composition does not send accidentally. Typed input can receive spoken replies; text use does not require microphone permission. |
+| Chat composer | Text input in the same call as realtime voice; microphone controls stay in the call toolbar. Enter sends, Shift+Enter inserts a line, IME composition does not send accidentally. Typed input can receive spoken replies; text use does not require microphone permission. |
 | Spoken-text view | Highlight the current word or segment only when supported timing/alignment can identify it. Streaming generated text remains visible alongside audio. Interruption clears active highlighting without erasing generated text. |
 | Metrics panel | Available call/STT/LLM/TTS latency, reported token/audio usage and client connection statistics, with source/units. Missing observations show unavailable; different clock domains are not subtracted. |
 | Transfer progress | Source/destination, attempt, phase and blockers from existing events. Surface human acceptance only in the authorized destination seat. |
@@ -85,7 +85,7 @@ and **Inspect history**, not automatic session replay.
 | Run result | Keep the terminal reason and available evidence after disconnect; link to existing durable inspection. No promise to persist browser-only diagnostics. |
 
 At desktop widths, use a slim participant column, dominant conversation and optional detail pane.
-On narrow screens use Chat / Participants / Metrics / Logs views and a reachable composer/media bar, without
+On narrow screens use a compact participant row, Conversation / Metrics / Logs tabs and stacked device groups, without
 page-wide horizontal scrolling. Validate 360, 768 and 1440 px; include keyboard use, long names,
 2/6 participants, reduced motion, light/dark themes and empty/loading/failure states. Do not animate
 every transcript token or announce every event to a screen reader. Paused scrolling stays paused.
@@ -124,25 +124,27 @@ requirements, not optional inspector embellishments.
   Preserve direction, observed order and available message identifiers, including repeated wire
   events; do not hide duplicate traffic merely because normalized chat state deduplicates it.
 
-## Future client-JS and React package boundaries
+## Client and React package boundaries
 
-The user intends two packages later: one framework-neutral client for protocol/connection/media
-behavior, and one React package for UI components. Isolate these now inside Console assets; do
-not publish packages, add another frontend app or make extraction depend on Phoenix code.
+The user confirmed two npm packages now: `@vxpipe/core` for framework-neutral client behavior,
+and `@vxpipe/react` for UI components. They live in root `packages/` npm workspaces and remain
+private during prototyping. Storybook belongs to the React package. Publication and production
+integration remain separate work; package extraction must not depend on Phoenix code.
 
-Proposed local organization (names may be adjusted to repository conventions at implementation):
+Confirmed organization (adapter directories remain planned):
 
 ```text
-assets/src/client/         → future client JS package
+packages/core/src/         → @vxpipe/core
   index.ts                public client, adapter contracts and normalized types
   core/                   lifecycle, subscriptions, state, command correlation
   protocols/rtvi/         current RTVI + Vxpipe extension mapping
   transports/webrtc/      current Small WebRTC media/connection integration
-assets/src/react/          → future React UI package
+packages/react/src/        → @vxpipe/react
   index.ts                public provider/hooks and components
   components/             chat, composer, participants, metrics, logs, devices
   styles/                 component-scoped styles and theme contract
-assets/src/app/            → remains Vxpipe Console application
+packages/react/stories/    → fixture client and app-specific prototype compositions
+apps/vxpipe_console/       → production Console application; integration remains planned
   setup, auth, examples, routing, admission/inspection API adapters
 ```
 
@@ -191,7 +193,14 @@ controlled inputs/callbacks, with styles/themes that do not need Phoenix layouts
 Verify the import graph: client has no React/app imports; React uses client public exports only
 and has no protocol/media-adapter imports; app composes both. Test the client without React, the
 components against a fake public client, and the actual RTVI/WebRTC integration separately. This
-is an extraction boundary now, not a package build/publishing or general plugin-registry project.
+is a package boundary now, not a publishing or general plugin-registry project.
+
+The [Storybook prototype](../packages/README.md) demonstrates the component contract with synthetic
+data. The user selected dark by default, with preview states in Storybook Controls. The canvas
+omits the redundant debug-console heading, prototype banner, tenant labels on the call page,
+protocol/transport badge, revision subtitle, session divider and bottom call-ID/audio-text bar.
+Before a call starts, show “No call active” and no placeholder participants. Those preferences guide implementation.
+This does not prove real media, wire interoperability, platform authentication or durable setup.
 
 ## Protocol and authority contracts
 
@@ -338,3 +347,26 @@ principals, existing inspection reuse, RTVI-only event logs, future client/React
 idempotent setup and dependency order. The debug console can
 ship before platform bootstrap; Getting Started depends on both. Each milestone below has its own
 runnable checkpoints and failure/browser checks. Planning alone completes none of them.
+
+## Shadcn distribution follow-up
+
+The device-control review requested an assessment of shadcn/ui and source-installable Vxpipe
+components. The [official registry model](https://ui.shadcn.com/docs/registry) supports custom
+components, hooks and other files; it works alongside the existing npm workspace layout.
+Keep `@vxpipe/core` as the framework-neutral client package. A subsequent focused package
+checkpoint can use shadcn primitives inside `@vxpipe/react` and generate registry items from
+that same React source, so consumers can either import the package or own editable components.
+No separate UI implementation, third package, or fork of the protocol client is needed.
+
+The current prototype uses scoped CSS and native HTML controls; it is not yet a shadcn registry.
+Before shipping that distribution, verify a local registry installation into a small consumer,
+its imports/styles, dark and light themes, keyboard device selection, and package builds.
+[Native Select](https://ui.shadcn.com/docs/components/base/native-select) fits the simple device
+choices and preserves native keyboard/mobile behavior. Avoid a wholesale visual redesign or
+adding every shadcn component merely to introduce this distribution path. Public registry hosting
+and npm publication remain separate release work.
+
+The accepted call toolbar has right-aligned call actions above a device row. Each device group
+is a mute icon beside a bordered dropdown; input and output groups have distinct spacing.
+Streaming message headers place the participant name first, then flexible space, sequential
+bouncing dots and the timestamp. Reduced-motion users receive static dots.
