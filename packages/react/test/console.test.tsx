@@ -36,6 +36,29 @@ test("a denied microphone still allows typed input in the same conversation", as
   expect(client.getSnapshot().callId).toBe("demo-call-001");
 });
 
+test("microphone denial does not block starting a text-only call", async () => {
+  const client = createFixtureClient("microphone-denied-ready");
+  render(<CallConsole client={client} />);
+
+  expect(
+    screen.getByText("Microphone access is blocked. You can still type."),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Enable microphone" }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole("combobox", { name: "Input device" }),
+  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Start call" })).toBeEnabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Start call" }));
+  await waitFor(() => expect(screen.getByText("Connected")).toBeVisible());
+  expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "Enable microphone" }),
+  ).toBeDisabled();
+});
+
 test("leaving keeps the transcript visible and disables further sending", async () => {
   const client = createFixtureClient("conversation");
   render(<CallConsole client={client} />);

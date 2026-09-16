@@ -31,7 +31,7 @@ export function DeviceControls({
   return (
     <div className="vx-devices">
       <div className="vx-device-row">
-        <div className="vx-device-group">
+        <div className="vx-device-group" role="group" aria-label="Input audio">
           <button
             className="vx-button vx-icon-button"
             aria-label={
@@ -74,7 +74,7 @@ export function DeviceControls({
             </SelectContent>
           </Select>
         </div>
-        <div className="vx-device-group">
+        <div className="vx-device-group" role="group" aria-label="Output audio">
           <button
             className="vx-button vx-icon-button"
             aria-label={

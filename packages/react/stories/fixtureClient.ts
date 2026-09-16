@@ -8,6 +8,7 @@ export type Scenario =
   | "phone-caller"
   | "tool-states"
   | "microphone-denied"
+  | "microphone-denied-ready"
   | "no-alignment"
   | "ended"
   | "failed";
@@ -415,7 +416,7 @@ export type ExampleScenario = "conversation" | "handoff" | "human-handoff";
 
 function fixtureSnapshot(scenario: Scenario): CallSnapshot {
   let snapshot: CallSnapshot = structuredClone(initial);
-  if (scenario === "ready")
+  if (scenario === "ready" || scenario === "microphone-denied-ready")
     snapshot = {
       ...snapshot,
       state: "ready",
@@ -431,7 +432,10 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       variables: null,
       metrics: snapshot.metrics.map((metric) => ({ ...metric, value: null })),
     };
-  if (scenario === "microphone-denied")
+  if (
+    scenario === "microphone-denied" ||
+    scenario === "microphone-denied-ready"
+  )
     snapshot = { ...snapshot, microphone: "denied" };
   if (scenario === "phone-caller")
     snapshot = {
@@ -562,6 +566,7 @@ export function createFixtureClient(
   startScenario: ExampleScenario = "conversation",
 ) {
   let snapshot = fixtureSnapshot(scenario);
+  const microphoneDenied = snapshot.microphone === "denied";
   const listeners = new Set<() => void>();
   const update = (changes: Partial<CallSnapshot>) => {
     snapshot = { ...snapshot, ...changes };
@@ -579,7 +584,14 @@ export function createFixtureClient(
         listeners.delete(listener);
       };
     },
-    connect: async () => replace(fixtureSnapshot(startScenario)),
+    connect: async () => {
+      const nextSnapshot = fixtureSnapshot(startScenario);
+      replace(
+        microphoneDenied
+          ? { ...nextSnapshot, microphone: "denied" }
+          : nextSnapshot,
+      );
+    },
     disconnect: async () =>
       update({
         state: "ended",

@@ -1010,9 +1010,24 @@ button.vx-tool-summary:hover {
 .vx-device-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   flex: 0 1 280px;
   min-width: 0;
+}
+.vx-device-group .vx-icon-button {
+  border-radius: 6px 0 0 6px;
+}
+.vx-device-group .vx-select-trigger {
+  position: relative;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 0;
+}
+.vx-device-group .vx-icon-button:hover:not(:disabled),
+.vx-device-group .vx-icon-button:focus-visible,
+.vx-device-group .vx-select-trigger:hover:not(:disabled),
+.vx-device-group .vx-select-trigger:focus-visible,
+.vx-device-group .vx-select-trigger[data-state="open"] {
+  z-index: 1;
 }
 .vx-select-trigger {
   flex: 1;

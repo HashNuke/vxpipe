@@ -39,6 +39,7 @@ const meta = {
         "phone-caller",
         "tool-states",
         "microphone-denied",
+        "microphone-denied-ready",
         "no-alignment",
         "ended",
         "failed",
@@ -68,6 +69,9 @@ export const Metrics: Story = { args: { initialTab: "metrics" } };
 export const Participants: Story = { args: { initialTab: "participants" } };
 export const MicrophoneDenied: Story = {
   args: { scenario: "microphone-denied" },
+};
+export const MicrophoneDeniedBeforeCall: Story = {
+  args: { scenario: "microphone-denied-ready" },
 };
 export const NoWordTiming: Story = { args: { scenario: "no-alignment" } };
 export const Ended: Story = { args: { scenario: "ended" } };
