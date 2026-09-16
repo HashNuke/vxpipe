@@ -12,7 +12,7 @@ export interface WorkbenchProps {
   theme?: "light" | "dark";
   page?: "console" | "setup";
   ready?: boolean;
-  initialTab?: "chat" | "variables" | "metrics";
+  initialTab?: "chat" | "variables" | "metrics" | "participants";
   animateSpeech?: boolean;
 }
 

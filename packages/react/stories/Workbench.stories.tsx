@@ -46,7 +46,7 @@ const meta = {
     page: { control: "select", options: ["console", "setup"] },
     initialTab: {
       control: "select",
-      options: ["chat", "variables", "metrics"],
+      options: ["chat", "variables", "metrics", "participants"],
     },
     animateSpeech: {
       control: "boolean",
@@ -63,6 +63,7 @@ export const HumanHandoff: Story = { args: { scenario: "human-handoff" } };
 export const ToolCallStates: Story = { args: { scenario: "tool-states" } };
 export const Variables: Story = { args: { initialTab: "variables" } };
 export const Metrics: Story = { args: { initialTab: "metrics" } };
+export const Participants: Story = { args: { initialTab: "participants" } };
 export const MicrophoneDenied: Story = {
   args: { scenario: "microphone-denied" },
 };

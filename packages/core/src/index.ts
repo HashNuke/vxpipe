@@ -3,7 +3,28 @@ export interface Participant {
   id: string;
   name: string;
   role: "caller" | "agent" | "human";
-  state: "listening" | "speaking" | "waiting" | "left";
+  state: "inactive" | "listening" | "speaking" | "left";
+  description: string;
+  capabilities: readonly ParticipantCapability[];
+  /** Included only by an authorized configuration projection. */
+  systemPrompt: string | null;
+  transferPolicies: readonly ParticipantTransferPolicy[];
+  tools: readonly ParticipantTool[];
+}
+
+export interface ParticipantCapability {
+  name: string;
+  provider: string;
+  model?: string;
+}
+
+export interface ParticipantTransferPolicy {
+  name: string;
+  description: string;
+}
+
+export interface ParticipantTool {
+  name: string;
   description: string;
 }
 

@@ -31,6 +31,12 @@ const initial: CallSnapshot = {
       role: "caller",
       state: "listening",
       description: "Browser participant",
+      capabilities: [
+        { name: "Speech to text", provider: "Deepgram", model: "flux-general-en" },
+      ],
+      systemPrompt: null,
+      transferPolicies: [],
+      tools: [],
     },
     {
       id: "assistant",
@@ -38,6 +44,62 @@ const initial: CallSnapshot = {
       role: "agent",
       state: "speaking",
       description: "Delivery concierge",
+      capabilities: [
+        { name: "Language model", provider: "Google", model: "gemini-2.5-flash" },
+        { name: "Text to speech", provider: "Deepgram", model: "aura-2-thalia-en" },
+      ],
+      systemPrompt:
+        "You are the delivery concierge for Acme. Help customers check orders and reschedule deliveries. Confirm important changes before applying them.",
+      transferPolicies: [
+        {
+          name: "Escalate to support",
+          description: "Offer a human support transfer when the caller asks or a delivery change cannot be completed.",
+        },
+        {
+          name: "Route delivery changes",
+          description: "Transfer complex rescheduling requests to the delivery specialist with the current context.",
+        },
+      ],
+      tools: [
+        { name: "lookup_delivery", description: "Read the current delivery and order status." },
+        { name: "update_variables", description: "Update validated call variables for this run." },
+        { name: "transfer", description: "Request an allowed participant transfer." },
+      ],
+    },
+    {
+      id: "specialist",
+      name: "Delivery specialist",
+      role: "agent",
+      state: "inactive",
+      description: "Rescheduling agent",
+      capabilities: [
+        { name: "Language model", provider: "Google", model: "gemini-2.5-flash" },
+        { name: "Text to speech", provider: "Deepgram", model: "aura-2-thalia-en" },
+      ],
+      systemPrompt:
+        "You handle delivery rescheduling. Use the transferred context, confirm the requested window, and update the delivery only after confirmation.",
+      transferPolicies: [
+        {
+          name: "Return to concierge",
+          description: "Return unrelated questions to the delivery concierge with the current context.",
+        },
+      ],
+      tools: [
+        { name: "lookup_delivery", description: "Read the current delivery and order status." },
+        { name: "reschedule_delivery", description: "Apply a confirmed delivery window." },
+        { name: "transfer", description: "Request an allowed participant transfer." },
+      ],
+    },
+    {
+      id: "support",
+      name: "Support teammate",
+      role: "human",
+      state: "inactive",
+      description: "Human support participant",
+      capabilities: [{ name: "Voice", provider: "Browser", model: "WebRTC" }],
+      systemPrompt: null,
+      transferPolicies: [],
+      tools: [],
     },
   ],
   messages: [
@@ -334,7 +396,10 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       activities: [],
       toolCalls: [],
       events: [],
-      participants: [],
+      participants: snapshot.participants.map((participant) => ({
+        ...participant,
+        state: "inactive" as const,
+      })),
       variables: null,
       metrics: snapshot.metrics.map((metric) => ({ ...metric, value: null })),
     };
@@ -403,22 +468,16 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
           kind: "participant",
         },
       ],
-      participants: [
-        ...snapshot.participants.map((p) =>
-          p.id === "assistant" ? { ...p, state: "left" as const } : p,
-        ),
-        {
-          id: "specialist",
-          name:
-            scenario === "handoff" ? "Delivery specialist" : "Support teammate",
-          role: scenario === "handoff" ? "agent" : "human",
-          state: "speaking",
-          description:
-            scenario === "handoff"
-              ? "Rescheduling agent"
-              : "Support participant",
-        },
-      ],
+      participants: snapshot.participants.map((participant) => {
+        if (participant.id === "assistant")
+          return { ...participant, state: "left" as const };
+        if (
+          (scenario === "handoff" && participant.id === "specialist") ||
+          (scenario === "human-handoff" && participant.id === "support")
+        )
+          return { ...participant, state: "speaking" as const };
+        return participant;
+      }),
       messages: [
         ...snapshot.messages.map((m) => ({
           ...m,
@@ -427,7 +486,7 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
         })),
         {
           id: "m4",
-          participantId: "specialist",
+          participantId: scenario === "handoff" ? "specialist" : "support",
           time: "02:14",
           text: "I can help with that. I have the details from your conversation, so we can pick up right here.",
           state: "streaming",

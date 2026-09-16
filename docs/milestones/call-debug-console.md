@@ -48,6 +48,14 @@ when the call ends. The same console will run Getting Started examples.
   Typed and realtime voice input share one call/participant; text works without microphone
   permission. Stream generated agent text while audio plays, including audio replies to typed
   messages when enabled/available. Preserve existing turn/interruption semantics.
+- Keep the full configured participant roster in the sidebar before, during and after a call.
+  Presence/activity is a separate projection: configured, inactive or departed participants remain
+  selectable with muted styling and never acquire a fabricated `waiting` state. Sidebar selection
+  opens the Participants tab.
+- The Participants tab shows the selected participant's authorized configuration: capabilities,
+  system prompt, transfer policies and available tools. This is tenant-authorized debug/operator
+  data, not an ordinary participant or public RTVI projection. Omit denied fields and label an
+  unavailable configuration; never infer configuration from live presence or emitted events.
 - Spoken-text highlighting requires explicit word/segment alignment capability, correct output/
   turn identity and usable playback timing. Keep generated, emitted and confirmed played states
   distinct; current segment progress does not prove word-level remote playout. Without alignment,
@@ -127,6 +135,9 @@ Exit: an existing tenant can complete and inspect one call without the new onboa
   interleaved participant events, late/stale incarnation messages and denied private content.
 - [ ] Implement participant rail and attributed conversation using authoritative identities;
   distinguish configured, present and left participants from browser transport connections.
+- [ ] Red-test and implement the persistent configured roster plus Participants tab. Selecting a
+  muted, active or departed participant opens the same stable identity and renders only the
+  authorized capability, prompt, transfer-policy and tool projection.
 - [ ] Show current transfer attempt/phase/blockers from existing events. Offer the existing support
   seat in a separate view with explicit media consent and its bound acceptance-ready control.
   Displaying or selecting a participant must not secretly join or monitor them.
@@ -237,3 +248,8 @@ The latest review places call actions above compact microphone/input and speaker
 using icon toggles and bordered selectors. Streaming output uses sequential dots before its time.
 Shadcn source distribution is feasible; the design source records the proposed package follow-up
 and consumer verification. It is not implemented or counted as production acceptance here.
+
+The participant follow-up keeps the configured roster visible in muted form before presence and
+adds the fourth Participants tab. The prototype shows authorized capabilities, system prompt,
+transfer policies and tools for a selected roster identity. This remains fixture-backed; the
+private definition projection and live roster adapter are still production checkpoint work.

@@ -113,6 +113,53 @@ test("Variables displays the latest authorized snapshot by section", () => {
   expect(screen.getByText("2026-09-18")).toBeVisible();
 });
 
+test("configured participants remain in the sidebar before joining", () => {
+  render(<CallConsole client={createFixtureClient("ready")} />);
+
+  expect(
+    screen.getByRole("button", {
+      name: "View Delivery specialist details",
+    }),
+  ).toHaveClass("vx-participant-muted");
+  expect(
+    screen.getByRole("button", { name: "View Support teammate details" }),
+  ).toHaveClass("vx-participant-muted");
+  expect(screen.queryByText("waiting", { exact: false })).not.toBeInTheDocument();
+});
+
+test("a sidebar participant opens their authorized configuration", () => {
+  render(<CallConsole client={createFixtureClient("conversation")} />);
+
+  const tabs = within(screen.getByRole("navigation", { name: "Call views" }))
+    .getAllByRole("button")
+    .map((button) => button.textContent);
+  expect(tabs).toEqual([
+    "Conversation",
+    "Variables",
+    "Metrics",
+    "Participants",
+  ]);
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "View Assistant details" }),
+  );
+
+  expect(
+    screen.getByRole("button", { name: "Participants" }),
+  ).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("heading", { name: "Assistant" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Capabilities" })).toBeVisible();
+  expect(screen.getByText("gemini-2.5-flash")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "System prompt" })).toBeVisible();
+  expect(screen.getByText(/delivery concierge for Acme/)).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Transfer policies" }),
+  ).toBeVisible();
+  expect(screen.getByText("Escalate to support")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Tools available" })).toBeVisible();
+  expect(screen.getByText("update_variables")).toBeVisible();
+});
+
 test("Metrics groups measurements by their authoritative scope", () => {
   render(
     <CallConsole

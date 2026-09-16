@@ -196,16 +196,48 @@
   list-style: none;
 }
 .vx-participants li {
-  display: flex;
-  gap: 12px;
   margin-bottom: 28px;
 }
-.vx-participants li strong {
+.vx-participant-button {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+  margin: -8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vx-participant-button:hover,
+.vx-participant-button:focus-visible,
+.vx-participant-selected {
+  background: var(--vx-soft);
+  border-color: var(--vx-line);
+}
+.vx-participant-muted {
+  opacity: 0.48;
+}
+.vx-participant-muted:hover,
+.vx-participant-muted:focus-visible,
+.vx-participant-muted.vx-participant-selected {
+  opacity: 0.78;
+}
+.vx-participant-summary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.vx-participant-summary strong {
   font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.vx-participants li p {
+.vx-participant-description {
   font-size: 12px;
   color: var(--vx-muted);
   margin: 2px 0 8px;
@@ -245,13 +277,101 @@
   border: 0;
   background: transparent;
 }
-.vx-left {
-  opacity: 0.65;
-}
 .vx-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+.vx-participant-details {
+  padding: 32px;
+  overflow: auto;
+}
+.vx-participant-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--vx-line);
+}
+.vx-participant-detail-header .vx-avatar {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+}
+.vx-participant-detail-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.vx-participant-detail-header p,
+.vx-participant-empty {
+  margin: 4px 0 0;
+  color: var(--vx-muted);
+  font-size: 13px;
+}
+.vx-participant-detail-section {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--vx-line);
+}
+.vx-participant-detail-section:last-child {
+  border-bottom: 0;
+}
+.vx-participant-detail-section h3 {
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+.vx-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.vx-capability-grid article,
+.vx-participant-detail-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--vx-line);
+  border-radius: 8px;
+  background: var(--vx-panel);
+}
+.vx-capability-grid strong,
+.vx-participant-detail-list strong,
+.vx-participant-detail-list code {
+  font-size: 13px;
+}
+.vx-capability-grid span,
+.vx-participant-detail-list span {
+  color: var(--vx-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.vx-capability-grid code {
+  color: var(--vx-blue);
+  font: 12px var(--vx-mono);
+  overflow-wrap: anywhere;
+}
+.vx-system-prompt {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--vx-line);
+  border-radius: 8px;
+  background: var(--vx-panel);
+  color: var(--vx-ink);
+  font: 12px/1.65 var(--vx-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.vx-participant-detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vx-tool-list code {
+  color: var(--vx-violet);
+  font-family: var(--vx-mono);
 }
 .vx-tabs {
   display: flex;
@@ -408,7 +528,7 @@
 .vx-turn-metric-group h3 {
   margin: 0 0 4px;
   color: color-mix(in oklch, currentColor 72%, transparent);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -546,7 +666,7 @@ button.vx-tool-summary:hover {
 .vx-tool-details h3 {
   margin: 0 0 8px;
   color: var(--vx-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1107,7 +1227,7 @@ button.vx-tool-summary:hover {
     border-bottom: 1px solid var(--vx-line);
   }
   .vx-section-title,
-  .vx-participants li p {
+  .vx-participant-description {
     display: none;
   }
   .vx-participants ul {
@@ -1121,12 +1241,15 @@ button.vx-tool-summary:hover {
     flex: 0 0 auto;
     gap: 8px;
   }
-  .vx-participants li > div {
-    display: flex;
-    flex-direction: column;
+  .vx-participant-button {
+    margin: 0;
+    padding: 6px;
   }
   .vx-participants .vx-avatar {
     margin-top: 2px;
+  }
+  .vx-participant-details {
+    padding: 24px 16px;
   }
   .vx-tabs {
     padding: 0 16px;
