@@ -36,6 +36,7 @@ const meta = {
         "conversation",
         "handoff",
         "human-handoff",
+        "phone-caller",
         "tool-states",
         "microphone-denied",
         "no-alignment",
@@ -60,6 +61,7 @@ export const Conversation: Story = {};
 export const ReadyToStart: Story = { args: { scenario: "ready" } };
 export const AgentHandoff: Story = { args: { scenario: "handoff" } };
 export const HumanHandoff: Story = { args: { scenario: "human-handoff" } };
+export const PhoneCaller: Story = { args: { scenario: "phone-caller" } };
 export const ToolCallStates: Story = { args: { scenario: "tool-states" } };
 export const Variables: Story = { args: { initialTab: "variables" } };
 export const Metrics: Story = { args: { initialTab: "metrics" } };

@@ -6,16 +6,21 @@ export interface Participant {
   state: "inactive" | "listening" | "speaking" | "left";
   description: string;
   /** Present for callers when the admission method is safe to display. */
-  connection?: {
-    kind: "webrtc" | "phone";
-    label: string;
-  };
+  connection?: ParticipantConnection;
   capabilities: readonly ParticipantCapability[];
   /** Included only by an authorized configuration projection. */
   systemPrompt: string | null;
   transferPolicies: readonly ParticipantTransferPolicy[];
   tools: readonly ParticipantTool[];
 }
+
+export type ParticipantConnection =
+  | { kind: "webrtc" }
+  | {
+      kind: "phone";
+      /** Normalized E.164 number. */
+      phoneNumber: string;
+    };
 
 export interface ParticipantCapability {
   name: string;

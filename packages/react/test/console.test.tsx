@@ -156,7 +156,9 @@ test("configured participants remain in the sidebar before joining", () => {
   render(<CallConsole client={createFixtureClient("ready")} />);
 
   const caller = screen.getByRole("button", { name: "View You details" });
-  expect(caller).toHaveTextContent("WebRTC · inactive");
+  expect(caller).toHaveTextContent("WebRTC");
+  expect(caller).not.toHaveTextContent("inactive");
+  expect(within(caller).getByLabelText("WebRTC, inactive")).toBeVisible();
   expect(caller).not.toHaveTextContent("Browser participant");
 
   const assistant = screen.getByRole("button", {
@@ -174,6 +176,17 @@ test("configured participants remain in the sidebar before joining", () => {
     screen.getByRole("button", { name: "View Support teammate details" }),
   ).toHaveClass("vx-participant-muted");
   expect(screen.queryByText("waiting", { exact: false })).not.toBeInTheDocument();
+});
+
+test("a phone caller displays its E.164 number without repeating connection state", () => {
+  render(<CallConsole client={createFixtureClient("phone-caller")} />);
+
+  const caller = screen.getByRole("button", { name: "View You details" });
+  expect(caller).toHaveTextContent("+14155550123");
+  expect(caller).not.toHaveTextContent("connected");
+  expect(
+    within(caller).getByLabelText("+14155550123, connected"),
+  ).toBeVisible();
 });
 
 test("a sidebar participant opens their authorized configuration", () => {

@@ -1,7 +1,11 @@
-import type { Participant } from "@vxpipe/core";
+import type { Participant, ParticipantConnection } from "@vxpipe/core";
 
 function presenceLabel(state: Participant["state"]) {
   return state === "listening" || state === "speaking" ? "connected" : state;
+}
+
+function connectionLabel(connection: ParticipantConnection) {
+  return connection.kind === "webrtc" ? "WebRTC" : connection.phoneNumber;
 }
 
 export function Participants({
@@ -22,6 +26,11 @@ export function Participants({
       <ul>
         {participants.map((person) => {
           const presence = presenceLabel(person.state);
+          const callerConnection =
+            person.role === "caller" ? person.connection : undefined;
+          const callerConnectionLabel = callerConnection
+            ? connectionLabel(callerConnection)
+            : undefined;
           return (
             <li key={person.id}>
               <button
@@ -52,11 +61,21 @@ export function Participants({
                 </span>
                 <span className="vx-participant-summary">
                   <strong>{person.name}</strong>
-                  <span className={`vx-presence vx-${presence}`}>
+                  <span
+                    className={`vx-presence vx-${presence}`}
+                    aria-label={
+                      callerConnectionLabel
+                        ? `${callerConnectionLabel}, ${presence}`
+                        : undefined
+                    }
+                    title={
+                      callerConnectionLabel
+                        ? `${callerConnectionLabel} · ${presence}`
+                        : undefined
+                    }
+                  >
                     <i />
-                    {person.role === "caller" && person.connection
-                      ? `${person.connection.label} · ${presence}`
-                      : presence}
+                    {callerConnectionLabel ?? presence}
                   </span>
                 </span>
               </button>

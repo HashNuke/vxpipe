@@ -5,6 +5,7 @@ export type Scenario =
   | "conversation"
   | "handoff"
   | "human-handoff"
+  | "phone-caller"
   | "tool-states"
   | "microphone-denied"
   | "no-alignment"
@@ -31,7 +32,7 @@ const initial: CallSnapshot = {
       role: "caller",
       state: "listening",
       description: "Browser participant",
-      connection: { kind: "webrtc", label: "WebRTC" },
+      connection: { kind: "webrtc" },
       capabilities: [
         { name: "Speech to text", provider: "Deepgram", model: "flux-general-en" },
       ],
@@ -406,6 +407,21 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
     };
   if (scenario === "microphone-denied")
     snapshot = { ...snapshot, microphone: "denied" };
+  if (scenario === "phone-caller")
+    snapshot = {
+      ...snapshot,
+      participants: snapshot.participants.map((participant) =>
+        participant.id === "caller"
+          ? {
+              ...participant,
+              connection: {
+                kind: "phone" as const,
+                phoneNumber: "+14155550123",
+              },
+            }
+          : participant,
+      ),
+    };
   if (scenario === "no-alignment")
     snapshot = {
       ...snapshot,
