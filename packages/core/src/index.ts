@@ -5,7 +5,7 @@ export interface Participant {
   role: "caller" | "agent" | "human";
   state: "inactive" | "listening" | "speaking" | "left";
   description: string;
-  /** Present for callers when the admission method is safe to display. */
+  /** Present when the participant's active connection method is safe to display. */
   connection?: ParticipantConnection;
   capabilities: readonly ParticipantCapability[];
   /** Included only by an authorized configuration projection. */

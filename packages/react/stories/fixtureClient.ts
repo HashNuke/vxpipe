@@ -501,11 +501,14 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       participants: snapshot.participants.map((participant) => {
         if (participant.id === "assistant")
           return { ...participant, state: "left" as const };
-        if (
-          (scenario === "handoff" && participant.id === "specialist") ||
-          (scenario === "human-handoff" && participant.id === "support")
-        )
+        if (scenario === "handoff" && participant.id === "specialist")
           return { ...participant, state: "speaking" as const };
+        if (scenario === "human-handoff" && participant.id === "support")
+          return {
+            ...participant,
+            state: "speaking" as const,
+            connection: { kind: "webrtc" as const },
+          };
         return participant;
       }),
       messages: [

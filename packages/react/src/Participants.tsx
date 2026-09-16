@@ -26,15 +26,14 @@ export function Participants({
       <ul>
         {participants.map((person) => {
           const presence = presenceLabel(person.state);
-          const callerConnection =
-            person.role === "caller" ? person.connection : undefined;
-          const callerConnectionLabel = callerConnection
-            ? connectionLabel(callerConnection)
+          const displayName = person.role === "caller" ? "Caller" : person.name;
+          const participantConnectionLabel = person.connection
+            ? connectionLabel(person.connection)
             : undefined;
           return (
             <li key={person.id}>
               <button
-                aria-label={`View ${person.name} details`}
+                aria-label={`View ${displayName} details`}
                 aria-pressed={selectedParticipantId === person.id}
                 className={`vx-participant-button ${
                   person.state === "inactive" || person.state === "left"
@@ -45,13 +44,13 @@ export function Participants({
               >
                 <span className="vx-avatar-shell">
                   <span className={`vx-avatar vx-${person.role}`}>
-                    {person.name.slice(0, 1)}
+                    {displayName.slice(0, 1)}
                   </span>
                   {person.state === "speaking" && (
                     <span
                       className="vx-avatar-audiogram"
                       role="img"
-                      aria-label={`${person.name} is speaking`}
+                      aria-label={`${displayName} is speaking`}
                     >
                       {[0, 1, 2, 3, 4].map((bar) => (
                         <i key={bar} />
@@ -60,22 +59,22 @@ export function Participants({
                   )}
                 </span>
                 <span className="vx-participant-summary">
-                  <strong>{person.name}</strong>
+                  <strong>{displayName}</strong>
                   <span
                     className={`vx-presence vx-${presence}`}
                     aria-label={
-                      callerConnectionLabel
-                        ? `${callerConnectionLabel}, ${presence}`
+                      participantConnectionLabel
+                        ? `${participantConnectionLabel}, ${presence}`
                         : undefined
                     }
                     title={
-                      callerConnectionLabel
-                        ? `${callerConnectionLabel} · ${presence}`
+                      participantConnectionLabel
+                        ? `${participantConnectionLabel} · ${presence}`
                         : undefined
                     }
                   >
                     <i />
-                    {callerConnectionLabel ?? presence}
+                    {participantConnectionLabel ?? presence}
                   </span>
                 </span>
               </button>
