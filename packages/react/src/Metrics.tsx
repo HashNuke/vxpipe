@@ -55,6 +55,7 @@ interface MetricRow {
   scopeLabel: string;
   target: string;
   accessibleName: string;
+  participantName?: string;
   metrics: Map<string, Metric>;
 }
 
@@ -83,11 +84,18 @@ function rowIdentity(scope: MetricScope, snapshot: CallSnapshot) {
   const participantName = participant
     ? participantDisplayName(participant)
     : scope.participantId;
-  const target =
-    scope.kind === "participant-capability"
-      ? `${participantName} · ${scope.capability}`
-      : participantName;
-  return { scopeLabel, target, accessibleName: `${scopeLabel}: ${target}` };
+  if (scope.kind === "participant-capability")
+    return {
+      scopeLabel,
+      target: scope.capability,
+      accessibleName: `${scope.capability}, ${participantName}`,
+      participantName,
+    };
+  return {
+    scopeLabel,
+    target: participantName,
+    accessibleName: `${scopeLabel}: ${participantName}`,
+  };
 }
 
 function metricRows(snapshot: CallSnapshot) {
@@ -160,7 +168,13 @@ export function Metrics({
               <tr key={row.key}>
                 <th scope="row" aria-label={row.accessibleName}>
                   <strong>{row.target}</strong>
-                  <small>{row.scopeLabel}</small>
+                  {row.participantName ? (
+                    <span className="vx-metric-participant-badge">
+                      {row.participantName}
+                    </span>
+                  ) : (
+                    <small>{row.scopeLabel}</small>
+                  )}
                 </th>
                 {columns.map((column) => (
                   <td key={column.label}>

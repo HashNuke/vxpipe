@@ -298,6 +298,14 @@ test("Metrics presents every scope in one measurement table", () => {
   expect(
     within(table).getByRole("rowheader", { name: "Participant: Caller" }),
   ).toBeVisible();
+  const llm = within(table).getByRole("rowheader", {
+    name: "LLM, Assistant",
+  });
+  expect(llm).toHaveTextContent("LLM");
+  expect(within(llm).getByText("Assistant")).toHaveClass(
+    "vx-metric-participant-badge",
+  );
+  expect(llm).not.toHaveTextContent("Participant capability");
 });
 
 test("Metrics keeps source and measurement context in a cell tooltip", async () => {

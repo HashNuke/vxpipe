@@ -1254,6 +1254,16 @@ button.vx-tool-summary:hover {
   color: var(--vx-muted);
   font: 12px var(--vx-mono);
 }
+.vx-metric-participant-badge {
+  display: table;
+  margin-top: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--vx-line);
+  border-radius: 4px;
+  background: var(--vx-soft);
+  color: var(--vx-muted);
+  font: 600 10px/1.4 var(--vx-mono);
+}
 .vx-metric-cell {
   width: 100%;
   height: 100%;
