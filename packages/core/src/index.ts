@@ -4,7 +4,8 @@ export interface Participant {
   name: string;
   role: "caller" | "agent" | "human";
   state: "inactive" | "listening" | "speaking" | "left";
-  description: string;
+  /** Optional description supplied by the call definition. */
+  description: string | null;
   /** Present when the participant's active connection method is safe to display. */
   connection?: ParticipantConnection;
   capabilities: readonly ParticipantCapability[];

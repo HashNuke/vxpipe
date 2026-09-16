@@ -25,7 +25,7 @@ export function ParticipantDetails({
         </span>
         <div>
           <h2>{participant.name}</h2>
-          <p>{participant.description}</p>
+          {participant.description && <p>{participant.description}</p>}
         </div>
       </header>
 

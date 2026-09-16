@@ -221,6 +221,7 @@ test("a sidebar participant opens their authorized configuration", () => {
     screen.getByRole("button", { name: "Participants" }),
   ).toHaveAttribute("aria-current", "page");
   expect(screen.getByRole("heading", { name: "Assistant" })).toBeVisible();
+  expect(screen.queryByText("Delivery concierge")).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Capabilities" })).toBeVisible();
   expect(screen.getByText("gemini-2.5-flash")).toBeVisible();
   expect(screen.getByRole("heading", { name: "System prompt" })).toBeVisible();

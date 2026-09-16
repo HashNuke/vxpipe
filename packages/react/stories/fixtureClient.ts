@@ -31,7 +31,7 @@ const initial: CallSnapshot = {
       name: "You",
       role: "caller",
       state: "listening",
-      description: "Browser participant",
+      description: null,
       connection: { kind: "webrtc" },
       capabilities: [
         { name: "Speech to text", provider: "Deepgram", model: "flux-general-en" },
@@ -45,7 +45,7 @@ const initial: CallSnapshot = {
       name: "Assistant",
       role: "agent",
       state: "speaking",
-      description: "Delivery concierge",
+      description: null,
       capabilities: [
         { name: "Language model", provider: "Google", model: "gemini-2.5-flash" },
         { name: "Text to speech", provider: "Deepgram", model: "aura-2-thalia-en" },
@@ -73,7 +73,7 @@ const initial: CallSnapshot = {
       name: "Delivery specialist",
       role: "agent",
       state: "inactive",
-      description: "Rescheduling agent",
+      description: null,
       capabilities: [
         { name: "Language model", provider: "Google", model: "gemini-2.5-flash" },
         { name: "Text to speech", provider: "Deepgram", model: "aura-2-thalia-en" },
@@ -97,7 +97,7 @@ const initial: CallSnapshot = {
       name: "Support teammate",
       role: "human",
       state: "inactive",
-      description: "Human support participant",
+      description: null,
       capabilities: [{ name: "Voice", provider: "Browser", model: "WebRTC" }],
       systemPrompt: null,
       transferPolicies: [],
