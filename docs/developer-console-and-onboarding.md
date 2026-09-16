@@ -26,7 +26,7 @@ subject to their existing review hold. Existing incomplete live-carrier gates re
 | [HomePage](../apps/vxpipe_console/lib/vxpipe/console/home_page.ex) | `/` already serves a small Vxpipe directory, not Phoenix's generated welcome. Replace this directory with the conditional developer home. |
 | [React App](../apps/vxpipe_console/assets/src/App.tsx) | `/pipecat-console` wraps Voice UI Kit `ConsoleTemplate`. It resets to room creation on disconnect, losing the visible run. Keep working SDK/transport integration and build a Vxpipe-owned presentation/state model. |
 | [Transfer client](../apps/vxpipe_console/assets/src/transferConnection.ts) | Human acceptance already uses the separate `vxpipe` data channel. Reuse this path and its authority; do not pretend it is an RTVI message or add another transfer implementation. |
-| [RTVI codec](../apps/vxpipe_gateway/lib/vxpipe/gateway/rtvi/codec.ex) | The server advertises RTVI 2.1.0, emits ordinary transcripts/output, and carries versioned `vxpipe.turn`/`vxpipe.transfer` server messages. Ordinary bot output lacks participant identity: a correct multi-agent display needs an explicit correlated projection. |
+| [RTVI codec](../apps/vxpipe_gateway/lib/vxpipe/gateway/rtvi/codec.ex) | The server advertises RTVI 2.1.0, emits ordinary transcripts/output, and carries versioned `vxpipe.turn`/`vxpipe.transfer` server messages. Ordinary bot output lacks participant identity, and RTVI has no standard call-variable message. Add the reviewed correlated participant projection and authorized `vxpipe.variables` snapshot envelope. |
 | [Tenant principal](../apps/vxpipe_calls/lib/vxpipe/calls/principal.ex) | Existing API keys are tenant-bound with independent `admin`/`calls` scopes. A platform key is a new authority contract; do not turn an existing tenant key into a global key. |
 | [Call inspection](milestones/call-inspection-and-debugging.md) | Authorized live/persisted facts, variable snapshots, pagination and gap reporting already exist. Reuse them; a debug page is not a new archive or privileged inspection channel for participants. |
 | [SampleCall](../apps/vxpipe_console/lib/vxpipe/console/sample_call.ex) | Startup saves/publishes a definition and issues an in-memory sample key. The new persistent setup must replace this provisioning path for managed examples instead of running both. |
@@ -57,9 +57,10 @@ Vxpipe                                 Getting started | Console
                                       Connected  02:14 [Leave call]
 [Mic toggle] [Input device ▾]      [Speaker toggle] [Output device ▾]
 ──────────────────────────────────────────────────────────────────
-PARTICIPANTS       Conversation | Metrics | Logs
+PARTICIPANTS       Conversation | Variables | Metrics
 You                Assistant                          ... 00:10
 Assistant          Of course. Let's find a time that works for you.
+                   [Messages] [Logs] [Events] [Tool calls] [Reset]
                    [Spoken text, when timing is supported]
                    ──────────────────────────────────────────────
                    [Type a message…                       ] [Send]
@@ -75,17 +76,18 @@ and **Inspect history**, not automatic session replay.
 | --- | --- |
 | Call header | Right-aligned call state, duration and one primary action; compact device groups beneath. Separate preparing, connecting, media connected, waiting for capabilities, ready, ended and failed. |
 | Participant rail | Identity, role, presence and known readiness/speaking facts. Planned, present and left are different; a role color never substitutes for a name. |
-| Chat history | Speaker-attributed text, interim/final transcript and streaming agent output. Keep message/turn identity, partial/failed states and generated-versus-spoken distinctions. Unknown speaker stays unknown. |
+| Conversation timeline | Speaker-attributed text, interim/final transcript, streaming agent output, concise activity events, tool calls and optional raw RTVI logs. Icon filters default to messages/events/tool calls with raw logs off; Reset restores that selection. Keep observed order and authoritative identity. |
 | Chat composer | Text input in the same call as realtime voice; microphone controls stay in the call toolbar. Enter sends, Shift+Enter inserts a line, IME composition does not send accidentally. Typed input can receive spoken replies; text use does not require microphone permission. |
 | Spoken-text view | Highlight the current word or segment only when supported timing/alignment can identify it. Streaming generated text remains visible alongside audio. Interruption clears active highlighting without erasing generated text. |
-| Metrics panel | Available call/STT/LLM/TTS latency, reported token/audio usage and client connection statistics, with source/units. Missing observations show unavailable; different clock domains are not subtracted. |
-| Transfer progress | Source/destination, attempt, phase and blockers from existing events. Surface human acceptance only in the authorized destination seat. |
+| Variables panel | Read-only, sectioned authorized call-variable snapshot with global/section revisions. Core owns protocol decoding and ordering; React never requests broader visibility. |
+| Metrics panel | Available room, room-capability, participant and participant-capability latency/usage/statistics with source and units. A message-time control shows authoritative turn metrics. Missing scopes are omitted. |
+| Transfer progress | Source/destination, attempt, phase and blockers from existing events. Completed join/leave/acceptance facts appear inline in the conversation. Surface human acceptance controls only in the authorized destination seat. |
 | Device controls | Explicit microphone consent, input/output selection where the browser supports it, microphone and speaker mute, level/activity and connection state. Unsupported output selection uses the system device with an explanation. Inspecting a call never starts capture or monitoring. |
-| Logs and selected-event inspector | Only sent/received RTVI events, including Vxpipe extensions carried inside RTVI. Filter by event type, direction and available participant/turn/attempt identity; inspect safe event details. Bounded retention, pause-follow and visible trimming. |
+| Raw logs and selected-event inspector | Raw items in the Conversation timeline contain only sent/received RTVI events, including Vxpipe extensions. Filter by direction and available participant/turn/attempt identity; inspect safe details. Bounded retention, pause-follow and visible trimming. |
 | Run result | Keep the terminal reason and available evidence after disconnect; link to existing durable inspection. No promise to persist browser-only diagnostics. |
 
 At desktop widths, use a slim participant column, dominant conversation and optional detail pane.
-On narrow screens use a compact participant row, Conversation / Metrics / Logs tabs and stacked device groups, without
+On narrow screens use a compact participant row, Conversation / Variables / Metrics tabs and stacked device groups, without
 page-wide horizontal scrolling. Validate 360, 768 and 1440 px; include keyboard use, long names,
 2/6 participants, reduced motion, light/dark themes and empty/loading/failure states. Do not animate
 every transcript token or announce every event to a screen reader. Paused scrolling stays paused.
@@ -118,7 +120,7 @@ requirements, not optional inspector embellishments.
 - Metrics reuse existing measurements/inspection and bounded browser transport statistics.
   Show unavailable values honestly, stop collection on leave, and do not add a billing estimator,
   benchmark suite, observability backend or system-wide log collector to this console milestone.
-- Logs are strictly the RTVI event stream. Do not mix in application/server logs, browser console
+- Raw log timeline items are strictly the RTVI event stream. Do not mix in application/server logs, browser console
   output, transport lifecycle diagnostics, private inspection records or the separate transfer
   sideband. Those may inform their existing status/progress views, but are not log entries.
   Preserve direction, observed order and available message identifiers, including repeated wire
@@ -141,7 +143,7 @@ packages/core/src/         → @vxpipe/core
   transports/webrtc/      current Small WebRTC media/connection integration
 packages/react/src/        → @vxpipe/react
   index.ts                public provider/hooks and components
-  components/             chat, composer, participants, metrics, logs, devices
+  components/             conversation timeline, composer, variables, metrics, devices
   styles/                 component-scoped styles and theme contract
 packages/react/stories/    → fixture client and app-specific prototype compositions
 apps/vxpipe_console/       → production Console application; integration remains planned

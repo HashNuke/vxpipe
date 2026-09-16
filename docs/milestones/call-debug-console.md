@@ -7,6 +7,7 @@ Prerequisites: [Prepared calls](prepared-call-admission.md), [Call inspection](c
 [human-transfer](human-web-transfers.md) / [readiness](transfer-readiness-and-wait-sounds.md) contracts.
 Pending live-carrier acceptance is not required to build this browser surface.
 Sources: [Developer console design](../developer-console-and-onboarding.md),
+[RTVI call-variable projection](../rtvi-call-variable-projection.md),
 [Gateway/Console boundary](../gateway-console-boundary.md), [Operator's Bench](../../DESIGN.md).
 
 ## Runnable outcome
@@ -42,7 +43,7 @@ when the call ends. The same console will run Getting Started examples.
 - Browser session authentication is server-side; no tenant/platform/provider secret is passed
   to the SDK. Every call selection, preparation, inspection and secondary-seat action checks
   tenant/call authority. Public IDs and join tokens do not establish operator access.
-- Chat history/composer, metrics, logs and voice-device controls are core UI requirements.
+- Chat history/composer, variables, metrics, logs and voice-device controls are core UI requirements.
   Typed and realtime voice input share one call/participant; text works without microphone
   permission. Stream generated agent text while audio plays, including audio replies to typed
   messages when enabled/available. Preserve existing turn/interruption semantics.
@@ -51,8 +52,13 @@ when the call ends. The same console will run Getting Started examples.
   distinct; current segment progress does not prove word-level remote playout. Without alignment,
   show streaming text plus a speaking indicator/confirmed progress. Never simulate a word cursor.
 - Metrics reuse available call/provider timing and reported usage, plus bounded client transport
-  statistics. Label source/units/unknowns and respect clock domains.
-- Logs contain only sent/received RTVI events, including Vxpipe extensions inside RTVI. Exclude
+  statistics. Model room, room-capability, participant and participant-capability scopes; expose
+  turn measurements beside the corresponding message only when correlation is authoritative.
+  Label source/units/unknowns and respect clock domains.
+- Conversation is one ordered timeline with icon filters for messages, semantic events, tool calls
+  and raw logs. Messages, events and tool calls are enabled by default; raw logs are disabled, and
+  Reset restores those defaults. Join/leave/transfer facts are concise activity rows, not a separate
+  status bar. Raw logs contain only sent/received RTVI events, including Vxpipe extensions. Exclude
   application/server logs, browser console output, transport lifecycle diagnostics, private
   inspection records and the separate transfer sideband. Filter by event type/direction and
   available identity; retain observed order and repeated traffic, with safe event details.
@@ -61,6 +67,10 @@ when the call ends. The same console will run Getting Started examples.
   activity/connection state. Unsupported speaker selection has a clear system-device fallback.
 - Keep standard RTVI and existing versioned `vxpipe.turn`/`vxpipe.transfer` envelopes compatible.
   Human acceptance remains on the existing separately parsed `vxpipe` sideband.
+- Project authorized call variables as complete, revisioned `vxpipe.variables` version 1 snapshots
+  inside RTVI `server-message`. Send a race-free baseline on debug-seat readiness and the newest
+  snapshot after accepted updates. Ordinary participant admission never receives unrestricted
+  values; the browser cannot elevate projection visibility. React consumes normalized Core state.
 - Document the minimal authoritative roster and output-attribution projection before adding
   wire fields. Ordinary bot output currently has no participant ID. Define source event identity,
   call/incarnation, baseline/revision, recipient visibility and gap/resync semantics. Unknown
@@ -91,6 +101,8 @@ when the call ends. The same console will run Getting Started examples.
   duplicate/failed sends, draft preservation, device loss and unsupported output-device selection.
 - [ ] Show streaming agent text while hearing audio. Red-test supported word/segment highlighting
   and no-alignment fallback, including interruption and stale progress for an earlier output.
+- [ ] Red-test and implement the read-only Variables tab from normalized snapshots, including
+  baseline/update/reconnect ordering, stale revisions, unavailable state and structured values.
 - [ ] Preserve connection versus capability readiness, interim/final text and generated/emitted/
   played distinctions. Missing timing stays unavailable; no guessed current-word highlighting.
 - [ ] Prove a real SDK connection and one conversation using controlled existing adapters, plus
@@ -120,8 +132,9 @@ Exit: a developer can follow who is in the call and who spoke across existing ha
 
 - [ ] Red-test bounded RTVI event retention, repeated traffic, observed order, paused-follow,
   unavailable history links and an ended call with no live room.
-- [ ] Add dedicated Metrics and Logs views, selected-event inspector and read-only definition view.
-  Reuse available timing/usage and bounded browser statistics; Logs filter only RTVI events.
+- [ ] Add the scoped Metrics view and the Conversation timeline's raw-log filter/selected-event
+  inspector, plus the read-only definition view. Reuse available timing/usage and bounded browser
+  statistics; raw Logs items include only RTVI events.
   Link to existing authorized history for durable facts instead of inventing another log store.
 - [ ] Test populated/partial/unavailable metrics, sources/units/clock differences, bounded log
   volume/filtering/pause behavior and cleanup of stats polling/listeners when a connection closes.
@@ -148,7 +161,8 @@ Exit: a usable, bounded debug console remains informative through failure and co
 - [ ] Chat history/composer accepts typed and realtime voice input in one call; the developer
   hears agent audio while text streams, with supported spoken-word/segment highlighting or a
   truthful fallback. Metrics, logs and device controls work without assuming mic/output support.
-- [ ] Logs display RTVI events only, including versioned Vxpipe server-message extensions.
+- [ ] Raw log timeline items display RTVI events only, including versioned Vxpipe
+  `server-message` extensions.
 - [ ] One authorized call, multi-agent handoff and human acceptance work through the same console;
   refresh/leave/end states preserve correct authority and useful evidence.
 - [ ] No secret, signed URL or unrestricted private payload enters URLs, client configuration,
@@ -179,8 +193,10 @@ covered in runnable checkpoints and acceptance rather than deferred to a future 
 The next user clarification requires future client-JS and React packages. The plan now isolates
 those layers from the first runnable slice, separates protocol from media transport, hides SDK
 implementation details and tests substitution without requiring another real adapter or publication.
-The user's logs clarification limits the Logs panel and event details to RTVI traffic. Server,
-browser, inspection and separate transfer-sideband logs are excluded; existing history stays linked.
+The user's logs clarification limits raw Conversation log items and event details to RTVI traffic.
+Server, browser, inspection and separate transfer-sideband logs are excluded; existing history
+stays linked. A later clarification removes the separate Logs tab in favor of the filterable
+Conversation timeline and places semantic participant activity inline.
 This specification review did not claim implementation, rendered UI or acceptance; prototype
 evidence is recorded separately below.
 
