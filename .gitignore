@@ -26,11 +26,19 @@ erl_crash.dump
 /apps/vxpipe_console/assets/.env*
 /apps/vxpipe_console/priv/static/assets/
 
+# Reusable browser packages and Storybook artifacts.
+/node_modules/
+/packages/*/node_modules/
+/packages/*/dist/
+/packages/*/storybook-static/
+/packages/*/debug-storybook.log
+
 .env
 
 
 .impeccable/build
 .impeccable/mocks
 .impeccable/review/diff
+.impeccable/review/storybook/
 
 sounds/*.wav
