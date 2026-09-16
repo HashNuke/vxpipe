@@ -1,5 +1,38 @@
 import type { CallSnapshot, Metric, MetricScope } from "@vxpipe/core";
-import { MetricDescriptionTooltip } from "./MetricDescriptionTooltip.js";
+import { MetricCellTooltip } from "./MetricCellTooltip.js";
+import { MetricHeaderTooltip } from "./MetricHeaderTooltip.js";
+
+const metricOrder = [
+  "Call duration",
+  "Turn duration",
+  "Request duration",
+  "Final transcript latency",
+  "Median TTFT",
+  "TTFT",
+  "Median time to first audio",
+  "Time to first audio",
+  "A2FA",
+  "Input tokens",
+  "Output tokens",
+  "Cached tokens",
+  "TPOT",
+  "TPS",
+  "RTF",
+  "Round-trip time",
+  "Jitter",
+  "Packet loss",
+] as const;
+
+const metricShortLabels: Readonly<Record<string, string>> = {
+  "Call duration": "DUR",
+  "Final transcript latency": "FTL",
+  "Median TTFT": "Mdn TTFT",
+  "Median time to first audio": "Mdn TTFA",
+  "Round-trip time": "RTT",
+  "Input tokens": "Input",
+  "Output tokens": "Output",
+  "Cached tokens": "Cached",
+};
 
 const scopeOrder: readonly MetricScope["kind"][] = [
   "room",
@@ -7,6 +40,7 @@ const scopeOrder: readonly MetricScope["kind"][] = [
   "participant",
   "participant-capability",
 ];
+
 const scopeLabels: Record<MetricScope["kind"], string> = {
   room: "Room",
   "room-capability": "Room capability",
@@ -14,63 +48,80 @@ const scopeLabels: Record<MetricScope["kind"], string> = {
   "participant-capability": "Participant capability",
 };
 
-function MetricRows({
-  metrics,
-  theme,
-}: {
-  metrics: readonly Metric[];
-  theme: "light" | "dark";
-}) {
-  return (
-    <div className="vx-metric-table">
-      <div className="vx-metric-head">
-        <span>Measurement</span>
-        <span>Value</span>
-        <span>Source</span>
-      </div>
-      {metrics.map((metric) => (
-        <div className="vx-metric-row" key={metric.label}>
-          <MetricDescriptionTooltip
-            label={metric.label}
-            description={metric.description}
-            theme={theme}
-          />
-          <span className="vx-metric-value">
-            {metric.value === null ? (
-              "Unavailable"
-            ) : (
-              <>
-                {metric.value.toLocaleString()} <small>{metric.unit}</small>
-              </>
-            )}
-          </span>
-          <span className="vx-metric-source">{metric.source}</span>
-        </div>
-      ))}
-    </div>
-  );
+interface MetricRow {
+  key: string;
+  scope: MetricScope;
+  scopeLabel: string;
+  target: string;
+  accessibleName: string;
+  metrics: Map<string, Metric>;
 }
 
-function subgroupLabel(metric: Metric, snapshot: CallSnapshot) {
-  const scope = metric.scope;
-  if (scope.kind === "room") return null;
-  if (scope.kind === "room-capability") return scope.capability;
+function scopeKey(scope: MetricScope) {
+  if (scope.kind === "room") return "room";
+  if (scope.kind === "room-capability")
+    return `room-capability:${scope.capability}`;
+  if (scope.kind === "participant")
+    return `participant:${scope.participantId}`;
+  return `participant-capability:${scope.participantId}:${scope.capability}`;
+}
+
+function rowIdentity(scope: MetricScope, snapshot: CallSnapshot) {
+  const scopeLabel = scopeLabels[scope.kind];
+  if (scope.kind === "room")
+    return { scopeLabel, target: "Call", accessibleName: "Room" };
+  if (scope.kind === "room-capability")
+    return {
+      scopeLabel,
+      target: scope.capability,
+      accessibleName: `${scopeLabel}: ${scope.capability}`,
+    };
   const participant = snapshot.participants.find(
     (person) => person.id === scope.participantId,
   );
-  const name = participant?.name ?? scope.participantId;
-  return scope.kind === "participant-capability"
-    ? `${name} · ${scope.capability}`
-    : name;
+  const participantName = participant?.name ?? scope.participantId;
+  const target =
+    scope.kind === "participant-capability"
+      ? `${participantName} · ${scope.capability}`
+      : participantName;
+  return { scopeLabel, target, accessibleName: `${scopeLabel}: ${target}` };
 }
 
-function groupByLabel(metrics: readonly Metric[], snapshot: CallSnapshot) {
-  const groups = new Map<string, Metric[]>();
-  metrics.forEach((metric) => {
-    const label = subgroupLabel(metric, snapshot) ?? "";
-    groups.set(label, [...(groups.get(label) ?? []), metric]);
+function metricRows(snapshot: CallSnapshot) {
+  const rows = new Map<string, MetricRow>();
+  snapshot.metrics.forEach((metric) => {
+    const key = scopeKey(metric.scope);
+    const current = rows.get(key);
+    if (current) {
+      current.metrics.set(metric.label, metric);
+      return;
+    }
+    rows.set(key, {
+      key,
+      scope: metric.scope,
+      ...rowIdentity(metric.scope, snapshot),
+      metrics: new Map([[metric.label, metric]]),
+    });
   });
-  return [...groups.entries()];
+  return [...rows.values()].sort((left, right) => {
+    const scopeDifference =
+      scopeOrder.indexOf(left.scope.kind) - scopeOrder.indexOf(right.scope.kind);
+    return scopeDifference || left.target.localeCompare(right.target);
+  });
+}
+
+function metricColumns(metrics: readonly Metric[]) {
+  const labels = new Set(metrics.map((metric) => metric.label));
+  const preferred = metricOrder.filter((label) => labels.delete(label));
+  const ordered = [
+    ...preferred,
+    ...[...labels].sort((left, right) => left.localeCompare(right)),
+  ];
+  return ordered.map((label) => ({
+    label,
+    shortLabel: metricShortLabels[label] ?? label,
+    hideUnit: label.endsWith("tokens"),
+  }));
 }
 
 export function Metrics({
@@ -80,25 +131,50 @@ export function Metrics({
   snapshot: CallSnapshot;
   theme: "light" | "dark";
 }) {
+  const columns = metricColumns(snapshot.metrics);
+  const rows = metricRows(snapshot);
+
   return (
     <section className="vx-metrics" aria-label="Call metrics">
-      {scopeOrder.map((kind) => {
-        const metrics = snapshot.metrics.filter(
-          (metric) => metric.scope.kind === kind,
-        );
-        if (metrics.length === 0) return null;
-        return (
-          <section className="vx-metric-scope" key={kind}>
-            <h2>{scopeLabels[kind]}</h2>
-            {groupByLabel(metrics, snapshot).map(([label, scoped]) => (
-              <div className="vx-metric-group" key={label || kind}>
-                {label && <h3>{label}</h3>}
-                <MetricRows metrics={scoped} theme={theme} />
-              </div>
+      <div className="vx-metric-table-scroll">
+        <table aria-label="Call metrics">
+          <thead>
+            <tr>
+              <th scope="col">Target</th>
+              {columns.map((column) => (
+                <th scope="col" key={column.label} aria-label={column.label}>
+                  <MetricHeaderTooltip
+                    label={column.label}
+                    shortLabel={column.shortLabel}
+                    theme={theme}
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row" aria-label={row.accessibleName}>
+                  <strong>{row.target}</strong>
+                  <small>{row.scopeLabel}</small>
+                </th>
+                {columns.map((column) => (
+                  <td key={column.label}>
+                    <MetricCellTooltip
+                      hideUnit={column.hideUnit}
+                      label={column.label}
+                      metric={row.metrics.get(column.label) ?? null}
+                      target={row.accessibleName}
+                      theme={theme}
+                    />
+                  </td>
+                ))}
+              </tr>
             ))}
-          </section>
-        );
-      })}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

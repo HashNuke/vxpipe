@@ -74,9 +74,9 @@ original call, participant, capability, turn, attempt, source, unit, outcome, an
 
 The existing tab fixture has these specific results:
 
-- **TTFT**, **Time to first audio**, and **Model output** make sense. Model output tokens are already
-  provider-reported and call-attributed. The two latency values need attempt-attributed local
-  measurements at the corrected boundaries.
+- **TTFT**, **Time to first audio**, and provider-reported **Input tokens**, **Output tokens**, and
+  **Cached tokens** make sense. Token categories remain separate and call-attributed. The two
+  latency values need attempt-attributed local measurements at the corrected boundaries.
 - **Round-trip time** makes sense as a participant connection metric sourced from the selected ICE
   candidate pair's `currentRoundTripTime`. It is a latest STUN RTT for the browser's own peer
   connection, not a backend response time or a measurement for every participant.

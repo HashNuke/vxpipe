@@ -252,7 +252,7 @@ test("a sidebar participant opens their authorized configuration", () => {
   expect(screen.getByText("update_variables")).toBeVisible();
 });
 
-test("Metrics groups measurements by their authoritative scope", () => {
+test("Metrics presents every scope in one measurement table", () => {
   render(
     <CallConsole
       client={createFixtureClient("conversation")}
@@ -260,15 +260,23 @@ test("Metrics groups measurements by their authoritative scope", () => {
     />,
   );
 
-  expect(screen.getByRole("heading", { name: "Room" })).toBeVisible();
-  expect(screen.getByRole("heading", { name: "Room capability" })).toBeVisible();
-  expect(screen.getByRole("heading", { name: "Participant" })).toBeVisible();
+  const table = screen.getByRole("table", { name: "Call metrics" });
+  expect(within(table).getByRole("columnheader", { name: "Target" })).toBeVisible();
   expect(
-    screen.getByRole("heading", { name: "Participant capability" }),
+    within(table).getByRole("columnheader", { name: "Call duration" }),
+  ).toBeVisible();
+  expect(
+    within(table).getByRole("columnheader", { name: "Input tokens" }),
+  ).toBeVisible();
+  expect(
+    within(table).getByRole("rowheader", { name: "Room capability: STT" }),
+  ).toBeVisible();
+  expect(
+    within(table).getByRole("rowheader", { name: "Participant: You" }),
   ).toBeVisible();
 });
 
-test("Metrics keeps measurement explanations in a tooltip", async () => {
+test("Metrics keeps source and measurement context in a cell tooltip", async () => {
   render(
     <CallConsole
       client={createFixtureClient("conversation")}
@@ -279,13 +287,33 @@ test("Metrics keeps measurement explanations in a tooltip", async () => {
   expect(
     screen.queryByText("Final transcript received after input audio ended"),
   ).not.toBeInTheDocument();
-  fireEvent.focus(
-    screen.getByRole("button", { name: "Explain Final transcript latency" }),
-  );
-  expect(await screen.findByRole("tooltip")).toHaveTextContent(
-    "Final transcript received after input audio ended",
-  );
+  fireEvent.focus(screen.getByRole("button", {
+    name: "Final transcript latency for Room capability: STT: 184 ms",
+  }));
+  const tooltip = await screen.findByRole("tooltip");
+  expect(tooltip).toHaveTextContent("Final transcript received after input audio ended");
+  expect(tooltip).toHaveTextContent("STT · 1 turn");
   expect(screen.queryByText("Remote playback")).not.toBeInTheDocument();
+});
+
+test("Metrics expands compact column labels in a tooltip", async () => {
+  render(
+    <CallConsole
+      client={createFixtureClient("conversation")}
+      initialTab="metrics"
+    />,
+  );
+
+  expect(screen.getByRole("columnheader", { name: "Call duration" })).toHaveTextContent(
+    "DUR",
+  );
+  expect(screen.getByRole("columnheader", { name: "Input tokens" })).toHaveTextContent(
+    "Input",
+  );
+  fireEvent.focus(
+    screen.getByRole("button", { name: "Explain Input tokens" }),
+  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Input tokens");
 });
 
 test("a message time exposes its correlated turn metrics on focus", async () => {

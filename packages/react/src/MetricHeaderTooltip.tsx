@@ -12,22 +12,21 @@ import {
   useInteractions,
   useRole,
 } from "@floating-ui/react";
-import { Info } from "lucide-react";
 
-export function MetricDescriptionTooltip({
+export function MetricHeaderTooltip({
   label,
-  description,
+  shortLabel,
   theme,
 }: {
   label: string;
-  description: string;
+  shortLabel: string;
   theme: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
   const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: setOpen,
-    placement: "top-start",
+    placement: "bottom",
     whileElementsMounted: autoUpdate,
     middleware: [offset(8), flip(), shift({ padding: 8 })],
   });
@@ -42,23 +41,22 @@ export function MetricDescriptionTooltip({
     <>
       <button
         ref={refs.setReference}
-        className="vx-metric-explanation"
+        className="vx-metric-header"
         aria-label={`Explain ${label}`}
         {...getReferenceProps()}
       >
-        <strong>{label}</strong>
-        <Info aria-hidden="true" />
+        {shortLabel}
       </button>
       {open && (
         <FloatingPortal>
           <div
             ref={refs.setFloating}
-            className="vx-metric-description-tooltip"
+            className="vx-metric-header-tooltip"
             data-vx-theme={theme}
             style={floatingStyles}
             {...getFloatingProps()}
           >
-            {description}
+            {label}
           </div>
         </FloatingPortal>
       )}

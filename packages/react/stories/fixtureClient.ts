@@ -363,11 +363,35 @@ const initial: CallSnapshot = {
       scope: { kind: "participant", participantId: "caller" },
     },
     {
-      label: "Model output",
+      label: "Input tokens",
+      value: 1_842,
+      unit: "tokens",
+      source: "LLM provider",
+      description: "Provider-reported input tokens for attributed model attempts",
+      scope: {
+        kind: "participant-capability",
+        participantId: "assistant",
+        capability: "LLM",
+      },
+    },
+    {
+      label: "Output tokens",
       value: 124,
       unit: "tokens",
       source: "LLM provider",
       description: "Provider-reported output usage, including provider token categories",
+      scope: {
+        kind: "participant-capability",
+        participantId: "assistant",
+        capability: "LLM",
+      },
+    },
+    {
+      label: "Cached tokens",
+      value: 768,
+      unit: "tokens",
+      source: "LLM provider",
+      description: "Provider-reported input tokens served from cache",
       scope: {
         kind: "participant-capability",
         participantId: "assistant",

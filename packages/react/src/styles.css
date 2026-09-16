@@ -738,7 +738,7 @@ button.vx-tool-summary:hover {
   min-height: 18px;
   padding: 1px 5px;
   border: 1px solid var(--vx-line);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--vx-soft);
   color: var(--vx-muted);
   font: 600 10px/1 var(--vx-mono);
@@ -1121,76 +1121,118 @@ button.vx-tool-summary:hover {
   color: var(--vx-muted);
 }
 .vx-metrics {
-  padding: 28px;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
+}
+.vx-metric-table-scroll {
+  width: 100%;
+  height: 100%;
   overflow: auto;
 }
-.vx-metric-scope + .vx-metric-scope {
-  margin-top: 32px;
+.vx-metrics table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
-.vx-metric-scope > h2 {
-  padding-bottom: 10px;
+.vx-metrics th,
+.vx-metrics td {
+  min-width: 144px;
+  height: 64px;
+  padding: 12px 16px;
+  border-right: 1px solid var(--vx-line);
   border-bottom: 1px solid var(--vx-line);
-  font-size: 14px;
-  font-weight: 600;
+  background: var(--vx-bg);
+  text-align: left;
+  vertical-align: middle;
 }
-.vx-metric-group > h3 {
-  margin-top: 16px;
+.vx-metrics thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 48px;
+  background: var(--vx-panel);
   color: var(--vx-muted);
-  font: 12px var(--vx-mono);
-}
-.vx-metric-table {
-  margin-top: 12px;
-}
-.vx-metric-head,
-.vx-metric-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 128px 110px;
-  gap: 16px;
-  align-items: center;
-}
-.vx-metric-head {
-  font: 12px var(--vx-mono);
-  color: var(--vx-muted);
+  font: 600 11px/1.3 var(--vx-mono);
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  padding-bottom: 12px;
+  white-space: nowrap;
 }
-.vx-metric-row {
-  border-top: 1px solid var(--vx-line);
-  padding: 16px 0;
+.vx-metrics th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 196px;
+  max-width: 196px;
+  border-left: 0;
+  box-shadow: 1px 0 var(--vx-line);
 }
-.vx-metric-row strong {
-  font-size: 14px;
-  font-weight: 500;
+.vx-metrics thead th:first-child {
+  z-index: 3;
 }
-.vx-metric-explanation {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
+.vx-metric-header {
+  width: 100%;
+  padding: 4px 0;
   border: 0;
   background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+.vx-metric-header:hover,
+.vx-metric-header:focus-visible {
+  color: var(--vx-ink);
+}
+.vx-metrics tbody th strong,
+.vx-metrics tbody th small {
+  display: block;
+}
+.vx-metrics tbody th strong {
+  color: var(--vx-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.vx-metrics tbody th small {
+  margin-top: 2px;
+  color: var(--vx-muted);
+  font: 11px var(--vx-mono);
+}
+.vx-metric-cell {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vx-ink);
   text-align: left;
 }
-.vx-metric-explanation svg {
-  width: 13px;
-  height: 13px;
+.vx-metric-cell:hover,
+.vx-metric-cell:focus-visible {
+  border-color: var(--vx-line);
+  background: var(--vx-soft);
+}
+.vx-metric-cell strong {
+  font: 600 13px var(--vx-mono);
+}
+.vx-metric-cell small {
+  color: var(--vx-muted);
+  font: 11px var(--vx-mono);
+}
+.vx-metric-unavailable {
   color: var(--vx-muted);
 }
-.vx-metric-explanation:hover,
-.vx-metric-explanation:focus-visible {
-  color: var(--vx-blue);
-}
-.vx-metric-explanation:hover svg,
-.vx-metric-explanation:focus-visible svg {
-  color: var(--vx-blue);
-}
-.vx-metric-description-tooltip {
+.vx-metric-cell-tooltip {
   z-index: 80;
-  max-width: min(280px, calc(100vw - 16px));
-  padding: 8px 10px;
+  width: min(320px, calc(100vw - 16px));
+  padding: 12px;
   border: 1px solid oklch(0.92 0.004 286.32);
   border-radius: 6px;
   background: oklch(1 0 0);
@@ -1198,20 +1240,52 @@ button.vx-tool-summary:hover {
   box-shadow: 0 10px 24px color-mix(in oklch, oklch(0.21 0.006 285.885) 16%, transparent);
   font: 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
 }
-.vx-metric-description-tooltip[data-vx-theme="dark"] {
+.vx-metric-header-tooltip {
+  z-index: 80;
+  max-width: min(240px, calc(100vw - 16px));
+  padding: 7px 9px;
+  border: 1px solid oklch(0.92 0.004 286.32);
+  border-radius: 6px;
+  background: oklch(1 0 0);
+  color: oklch(0.21 0.006 285.885);
+  box-shadow: 0 10px 24px color-mix(in oklch, oklch(0.21 0.006 285.885) 16%, transparent);
+  font: 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.vx-metric-header-tooltip[data-vx-theme="dark"] {
   border-color: oklch(0.35 0.006 286);
   background: oklch(0.235 0.006 285.885);
   color: oklch(0.985 0 0);
   color-scheme: dark;
 }
-.vx-metric-value {
-  font: 14px var(--vx-mono);
-  font-variant-numeric: tabular-nums;
+.vx-metric-cell-tooltip[data-vx-theme="dark"] {
+  border-color: oklch(0.35 0.006 286);
+  background: oklch(0.235 0.006 285.885);
+  color: oklch(0.985 0 0);
+  color-scheme: dark;
 }
-.vx-metric-value small,
-.vx-metric-source {
-  font-size: 12px;
+.vx-metric-cell-tooltip > strong,
+.vx-metric-cell-tooltip > span {
+  display: block;
+}
+.vx-metric-cell-tooltip > span,
+.vx-metric-cell-tooltip p,
+.vx-metric-cell-tooltip dt {
   color: var(--vx-muted);
+}
+.vx-metric-cell-tooltip p {
+  margin-top: 8px !important;
+}
+.vx-metric-cell-tooltip dl {
+  margin: 10px 0 0;
+}
+.vx-metric-cell-tooltip dl > div {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+}
+.vx-metric-cell-tooltip dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .vx-footnote {
   margin-top: 20px !important;
@@ -1255,14 +1329,6 @@ button.vx-tool-summary:hover {
   .vx-event-detail {
     border-left: 0;
     border-top: 1px solid var(--vx-line);
-  }
-  .vx-metric-head,
-  .vx-metric-row {
-    grid-template-columns: minmax(0, 1fr) 110px;
-  }
-  .vx-metric-source,
-  .vx-metric-head > :last-child {
-    display: none;
   }
 }
 @media (max-width: 600px) {
@@ -1352,9 +1418,6 @@ button.vx-tool-summary:hover {
   }
   .vx-icon-button {
     width: 44px;
-  }
-  .vx-metrics {
-    padding: 20px 16px;
   }
   .vx-call-footer {
     padding: 12px 16px;
