@@ -127,25 +127,66 @@ when the call ends. The same console will run Getting Started examples.
   logs append-only and keep local device/control state outside the serializable call record.
 - [x] Feed equivalent remote ongoing, attached-live and remote ended fixtures through that store
   and render the same Conversation, Variables, Metrics, and Participants data. The Console host
-  fetches with the authorized Calls inspection cursor and selected immutable database definition
-  revision, then injects those payloads and loading callbacks; RTVI contributes only attached-live
+  fetches the authorized Calls inspection snapshot and selected immutable database definition
+  revision, then injects that baseline; RTVI contributes only attached-live
   updates. Unavailable or redacted data stays distinguishable from captured empty values.
-- [ ] Add one operator-authorized `GET /calls/:call_id/inspection` JSON resource for the Core
-  baseline and older-history pages. Assemble it from PostgreSQL-backed Calls inspection, usage,
-  and immutable definition-revision reads only; do not read call-detail publications or recordings
-  from object storage and do not inspect a live room process.
-- [ ] Keep database loading and wire conversion separate: a cohesive inspection query assembles
-  the authorized database records, while a pure presenter converts that result into the versioned
-  snake-case response contract. Reuse those modules from any later HTML or API representation
-  instead of creating another inspection data path.
-- [ ] Red-test the presenter contract for lifecycle, configured participants, messages, activity,
-  tool-call state/details, variables, usage metrics, completeness, timestamps and opaque history
-  cursors. Preserve unavailable versus empty data and expose no secrets or unapproved definition
-  fields.
-- [ ] Red-test the authenticated endpoint for current and older pages, ongoing database state,
-  ended calls, cross-tenant/not-found collapse, backend failure, JSON-only negotiation and
-  `private, no-store` caching. Prove that the endpoint performs no live-room, S3 publication, or
-  recording read.
+
+### Checkpoint 1A — Assemble one complete database snapshot
+
+- [x] Red-test one authorized query that first resolves the call, then loads its complete persisted
+  `CallHistory`, exact immutable definition revision and persisted usage report. The result has no
+  pagination cursor and no response-generation timestamp.
+- [x] Treat "complete snapshot" as all history currently persisted in PostgreSQL. Preserve the
+  archive's `complete`, `incomplete` or `unconfirmed` state; the endpoint never implies that an
+  ongoing or interrupted asynchronous archive has finished.
+- [x] Keep the call history essential. Definition and usage failures remain explicit partial
+  availability; a missing/cross-tenant call or unavailable history fails the snapshot.
+- [x] Prove through the injected backend and source review that this query never invokes live-room inspection,
+  call-details publications, recordings, artifact storage or S3.
+
+Exit: one typed query result contains every database record needed by the response and no transport
+or presentation fields. Commit this slice with its focused query tests.
+
+### Checkpoint 1B — Convert the snapshot to the public response
+
+- [ ] Red-test a pure `CallInspectionPresenter` that converts the typed query result into versioned
+  snake-case JSON. It performs no I/O and does not know about Plug, Phoenix or repositories.
+- [ ] Project lifecycle, configured participants, messages, semantic events, complete tool-call
+  request/response state, latest variables, usage metrics and archive completeness. Preserve
+  captured empty values versus unavailable data; do not expose tenant keys, credential selectors,
+  source policies or arbitrary definition source.
+- [ ] Remove `older_cursor` and `as_of` from this endpoint contract and from the matching Core
+  baseline. Stable database identities and revisions still support later RTVI updates.
+
+Exit: fixture database records encode to the complete client snapshot and round-trip through JSON.
+Commit this slice with presenter tests and the synchronized Core contract.
+
+### Checkpoint 1C — Expose the authorized HTTP resource
+
+- [ ] Add `GET /calls/:call_id/inspection` under the existing operator session and `calls` authority.
+  The controller only invokes the query and presenter, maps missing/cross-tenant calls to the same
+  `404`, maps invalid requests to `400`, and maps database unavailability to `503`.
+- [ ] Return JSON with `Cache-Control: private, no-store`. Red-test ongoing and ended calls,
+  authentication, response content type, error mapping and absence of secret/session reflection.
+- [ ] Prove the endpoint performs no live-room, publication, recording, artifact or S3 operation.
+
+Exit: an authenticated browser can fetch one latest complete database snapshot for a call. Commit
+this slice with focused endpoint tests.
+
+### Checkpoint 1D — Connect the Console host to Core
+
+- [ ] Add a Console-owned runtime validator/mapper for the JSON response and inject the resulting
+  Core snapshot into the debug console. Core and React do not fetch the route directly.
+- [ ] Red-test ongoing, ended, unavailable and malformed responses. Refresh replaces the complete
+  database baseline; an attached RTVI adapter may contribute only newer live updates.
+- [ ] Render the same remote ongoing and ended states through the real host adapter and inspect the
+  bounded desktop/mobile states in Chrome.
+
+Exit: the production Console route renders a database-loaded call through the same reusable store
+and React components used by Storybook. Commit this slice with TypeScript and browser evidence.
+
+### Remaining call-start and interaction work
+
 - [ ] Before adding more components, migrate the prototype from its monolithic selector stylesheet
   to Tailwind v4 utilities plus semantic theme tokens. Build npm CSS from the same source and prove
   one clean shadcn-registry fixture installation; do not maintain two component implementations.

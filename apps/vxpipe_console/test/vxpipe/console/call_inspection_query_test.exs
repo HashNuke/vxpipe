@@ -4,10 +4,12 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
   alias Vxpipe.Calls.{
     ArchiveStatus,
     CallDetailPage,
+    CallHistory,
     CallSummary,
     DefinitionRevision,
     Principal,
-    UsageReport
+    UsageReport,
+    VariableSnapshotHistory
   }
 
   alias Vxpipe.Console.{CallInspectionQuery, TestCallInspectionBackend}
@@ -18,24 +20,21 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
     backend =
       backend(
         inspect_call: {:ok, detail_page()},
+        fetch_call_history: {:ok, call_history()},
         fetch_definition: {:ok, definition_revision()},
         usage_report: {:ok, %UsageReport{amounts: [], totals: []}}
       )
 
     assert {:ok, result} =
-             CallInspectionQuery.run(principal(), "call-public-id",
-               backend: backend,
-               cursor: "older-cursor",
-               limit: 40,
-               now: ~U[2026-09-16 10:00:00Z]
-             )
+             CallInspectionQuery.run(principal(), "call-public-id", backend: backend)
 
-    assert result.persisted == detail_page()
+    assert result.call == detail_page().call
+    assert result.history == call_history()
     assert result.definition == {:available, definition_revision()}
     assert result.usage == {:available, %UsageReport{amounts: [], totals: []}}
-    assert result.as_of == ~U[2026-09-16 10:00:00Z]
 
-    assert_receive {:inspect_call, _, "call-public-id", [cursor: "older-cursor", limit: 40]}
+    assert_receive {:inspect_call, _, "call-public-id", [limit: 1]}
+    assert_receive {:fetch_call_history, _, "call-public-id", []}
 
     assert_receive {:fetch_definition, @tenant_key, "definition-public-id", 3, []}
     assert_receive {:usage_report, _, "call-public-id", []}
@@ -46,6 +45,7 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
     backend =
       backend(
         inspect_call: {:ok, detail_page()},
+        fetch_call_history: {:ok, call_history()},
         fetch_definition: {:error, :repository_unavailable},
         usage_report: {:error, :repository_unavailable}
       )
@@ -57,6 +57,20 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
     assert result.usage == {:unavailable, :repository_unavailable}
   end
 
+  test "requires the complete database history for a snapshot" do
+    backend =
+      backend(
+        inspect_call: {:ok, detail_page()},
+        fetch_call_history: {:error, :repository_unavailable}
+      )
+
+    assert {:error, :repository_unavailable} =
+             CallInspectionQuery.run(principal(), "call-public-id", backend: backend)
+
+    refute_receive {:fetch_definition, _, _, _, _}
+    refute_receive {:usage_report, _, _, _}
+  end
+
   test "does not load supporting records when the authorized call is absent" do
     backend = backend(inspect_call: {:error, :call_not_found})
 
@@ -64,6 +78,7 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
              CallInspectionQuery.run(principal(), "missing-call", backend: backend)
 
     refute_receive {:fetch_definition, _, _, _, _}
+    refute_receive {:fetch_call_history, _, _, _}
     refute_receive {:usage_report, _, _, _}
     refute_receive {:inspect_live_call, _, _, _}
   end
@@ -114,5 +129,9 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
       published_at: ~U[2026-09-16 08:00:00Z],
       inserted_at: ~U[2026-09-16 07:00:00Z]
     }
+  end
+
+  defp call_history do
+    CallHistory.new([], %VariableSnapshotHistory{snapshots: [], latest: nil})
   end
 end

@@ -24,6 +24,12 @@ defmodule Vxpipe.Console.TestCallInspectionBackend do
   end
 
   @impl true
+  def fetch_call_history({observer, responses}, principal, call_id, options) do
+    send(observer, {:fetch_call_history, principal, call_id, options})
+    Map.fetch!(responses, :fetch_call_history)
+  end
+
+  @impl true
   def usage_report({observer, responses}, principal, call_id, options) do
     send(observer, {:usage_report, principal, call_id, options})
     Map.get(responses, :usage_report, {:ok, %UsageReport{amounts: [], totals: []}})

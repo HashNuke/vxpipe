@@ -3,6 +3,7 @@ defmodule Vxpipe.Console.CallInspectionBackend do
 
   alias Vxpipe.Calls.{
     CallDetailPage,
+    CallHistory,
     CallListPage,
     DefinitionRevision,
     LiveCallInspection,
@@ -18,6 +19,9 @@ defmodule Vxpipe.Console.CallInspectionBackend do
 
   @callback inspect_live_call(term(), Principal.t(), String.t(), keyword()) ::
               {:ok, LiveCallInspection.t()} | {:error, term()}
+
+  @callback fetch_call_history(term(), Principal.t(), String.t(), keyword()) ::
+              {:ok, CallHistory.t()} | {:error, term()}
 
   @callback usage_report(term(), Principal.t(), String.t(), keyword()) ::
               {:ok, UsageReport.t()} | {:error, term()}

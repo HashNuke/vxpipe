@@ -12,7 +12,7 @@ or ended call.
 
 The resource reads only PostgreSQL-backed Calls data:
 
-- the bounded persisted call inspection page and its opaque older cursor;
+- the persisted call summary and complete `CallHistory`;
 - the immutable definition revision selected by the call;
 - persisted usage observations and totals.
 
@@ -26,12 +26,12 @@ The existing routes remain distinct because they return different resources:
   evidence with an optional in-memory live view and supporting artifact lists.
 - `/calls/:call_id/details/:publication_id` downloads one immutable, versioned archival document.
   It is an artifact retrieval route and may use object storage.
-- `/calls/:call_id/inspection` returns the bounded, versioned database projection required by the
+- `/calls/:call_id/inspection` returns the complete, versioned database projection required by the
   reusable debug console.
 
 Changing the HTML route to negotiate a second representation would couple LiveView routing and
 the reusable data contract. Expanding the publication download would make an optional S3 artifact
-the source of truth for ongoing and paginated inspection. The new resource instead reuses the
+the source of truth for ongoing inspection. The new resource instead reuses the
 same Calls workflows beneath the existing UI while keeping one JSON data path.
 
 ## Responsibilities
@@ -46,12 +46,13 @@ narrow Ruby service/presenter split: the query coordinates use cases; the presen
 shape. Smaller private projection functions stay grouped with the presenter while they share the
 same reason to change.
 
-`Vxpipe.Console.CallInspectionController` owns HTTP concerns only: cursor validation, status mapping
-and cache headers.
+`Vxpipe.Console.CallInspectionController` owns HTTP concerns only: status mapping and cache headers.
 
 ## Response contract
 
-The initial response has schema version `1` and contains:
+The initial response has schema version `1` and contains all call history currently persisted in
+PostgreSQL. "Complete snapshot" describes the database read, not archive completion: the response
+still reports `complete`, `incomplete` or `unconfirmed` honestly. It contains:
 
 - call identity, lifecycle timestamps, terminal reason and derived duration;
 - the selected room/incarnation identity when persisted facts establish it;
@@ -59,9 +60,9 @@ The initial response has schema version `1` and contains:
   database definition revision;
 - normalized timeline entities for persisted transcripts, agent text, semantic activity and tool
   calls, with stable IDs, source sequences and revisions;
-- the newest variable snapshot present in the loaded page, or an explicit unavailable reason;
+- the latest variable snapshot in the complete persisted history, or an explicit unavailable reason;
 - database usage measurements whose attribution can be represented honestly;
-- archive completeness, an opaque older cursor and a UTC `as_of` instant.
+- archive completeness.
 
 Unknown fact kinds are retained as semantic activity rather than discarded. Raw RTVI receipts are
 reported as unavailable because this endpoint does not persist them. Empty captured tool arguments
@@ -74,7 +75,7 @@ this route directly.
 ## Failure and security behavior
 
 - A missing or cross-tenant call produces the same `404` response.
-- Invalid cursors produce `400`; unavailable database dependencies produce `503`.
+- Invalid requests produce `400`; unavailable database dependencies produce `503`.
 - Responses set `Cache-Control: private, no-store`.
 - The operator session remains server-side. API keys, provider credentials, signed artifact URLs,
   source policies and arbitrary private definition source never enter the response.

@@ -4,32 +4,24 @@ defmodule Vxpipe.Console.CallInspectionQuery do
   alias Vxpipe.Calls.{CallDetailPage, Principal}
   alias Vxpipe.Console.{CallInspection, CallInspectionResult}
 
-  @default_limit 50
-
   @spec run(Principal.t(), String.t(), keyword()) ::
           {:ok, CallInspectionResult.t()} | {:error, term()}
   def run(%Principal{} = principal, call_id, options \\ [])
       when is_binary(call_id) and is_list(options) do
     backend = Keyword.get(options, :backend)
-    inspection_options = inspection_options(options, backend)
 
     with {:ok, %CallDetailPage{} = persisted} <-
-           CallInspection.inspect_call(principal, call_id, inspection_options) do
+           CallInspection.inspect_call(principal, call_id, [limit: 1] ++ backend_option(backend)),
+         {:ok, history} <-
+           CallInspection.fetch_call_history(principal, call_id, backend_option(backend)) do
       {:ok,
        %CallInspectionResult{
-         persisted: persisted,
+         call: persisted.call,
+         history: history,
          definition: load_definition(persisted, backend),
-         usage: load_usage(principal, call_id, backend),
-         as_of: Keyword.get_lazy(options, :now, &DateTime.utc_now/0)
+         usage: load_usage(principal, call_id, backend)
        }}
     end
-  end
-
-  defp inspection_options(options, backend) do
-    options
-    |> Keyword.take([:cursor, :limit])
-    |> Keyword.put_new(:limit, @default_limit)
-    |> Keyword.put(:backend, backend)
   end
 
   defp load_definition(%CallDetailPage{call: call}, backend) do

@@ -23,3 +23,21 @@
 - Supporting definition or usage failures are explicit unavailable values; they do not hide an
   otherwise inspectable call. A missing/cross-tenant call stops before either supporting read.
 - Focused verification: 5 tests, 0 failures across the new query and existing inspection facade.
+
+## 2026-09-16 scope correction
+
+- The user rejected the inherited older-history cursor and `as_of` fields. The endpoint is one
+  complete latest database snapshot, not a page feed.
+- Replaced the broad milestone items with four explicit vertical checkpoints: complete database
+  query, pure presenter/Core contract, authenticated HTTP resource, and Console host integration.
+- The query checkpoint must now use the existing complete `Calls.fetch_call_history/3` workflow;
+  this also lets the presenter combine tool starts with their terminal request/response state and
+  select the actual latest variable snapshot without page-boundary guesses.
+- GPT 6 Astra xhigh found no blocker in the revised 1A implementation. It noted that the focused
+  backend tests prove no live-inspection call; reviewed dependency direction proves the query only
+  reaches Calls database workflows. Those are separate pieces of evidence and will be reported as
+  such rather than claiming that the test intercepts arbitrary S3 access.
+- Revised 1A red tests failed against the old paged result because `call`/`history` did not exist
+  and the complete history read was never attempted. The green implementation now fetches the
+  authorized summary with `inspect_call(limit: 1)`, then requires `fetch_call_history`; 6 focused
+  query/facade tests pass.

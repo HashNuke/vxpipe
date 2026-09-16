@@ -21,6 +21,11 @@ defmodule Vxpipe.Console.CallsInspectionBackend do
   end
 
   @impl true
+  def fetch_call_history(options, principal, call_id, request_options) do
+    Calls.fetch_call_history(principal, call_id, Keyword.merge(request_options, options))
+  end
+
+  @impl true
   def usage_report(options, principal, call_id, request_options) do
     Calls.fetch_usage_report(principal, call_id, Keyword.merge(request_options, options))
   end

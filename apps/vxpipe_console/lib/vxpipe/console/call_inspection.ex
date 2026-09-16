@@ -3,6 +3,7 @@ defmodule Vxpipe.Console.CallInspection do
 
   alias Vxpipe.Calls.{
     CallDetailPage,
+    CallHistory,
     CallListPage,
     DefinitionRevision,
     LiveCallInspection,
@@ -40,6 +41,17 @@ defmodule Vxpipe.Console.CallInspection do
     module
     |> apply(:inspect_live_call, [backend_options, principal, call_id, request_options])
     |> validate_response(LiveCallInspection)
+  end
+
+  @spec fetch_call_history(Principal.t(), String.t(), keyword()) ::
+          {:ok, CallHistory.t()} | {:error, term()}
+  def fetch_call_history(%Principal{} = principal, call_id, options \\ [])
+      when is_binary(call_id) and is_list(options) do
+    {module, backend_options, request_options} = backend(options)
+
+    module
+    |> apply(:fetch_call_history, [backend_options, principal, call_id, request_options])
+    |> validate_response(CallHistory)
   end
 
   @spec usage_report(Principal.t(), String.t(), keyword()) ::
