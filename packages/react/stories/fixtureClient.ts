@@ -31,6 +31,7 @@ const initial: CallSnapshot = {
       role: "caller",
       state: "listening",
       description: "Browser participant",
+      connection: { kind: "webrtc", label: "WebRTC" },
       capabilities: [
         { name: "Speech to text", provider: "Deepgram", model: "flux-general-en" },
       ],

@@ -33,13 +33,12 @@ export function Participants({
               </span>
               <span className="vx-participant-summary">
                 <strong>{person.name}</strong>
-                <span className="vx-participant-description">{person.description}</span>
-                {(person.state === "listening" || person.state === "speaking") && (
-                  <span className={`vx-presence vx-${person.state}`}>
-                    <i />
-                    {person.state}
-                  </span>
-                )}
+                <span className={`vx-presence vx-${person.state}`}>
+                  <i />
+                  {person.role === "caller" && person.connection
+                    ? `${person.connection.label} · ${person.state}`
+                    : person.state}
+                </span>
               </span>
             </button>
           </li>

@@ -5,6 +5,11 @@ export interface Participant {
   role: "caller" | "agent" | "human";
   state: "inactive" | "listening" | "speaking" | "left";
   description: string;
+  /** Present for callers when the admission method is safe to display. */
+  connection?: {
+    kind: "webrtc" | "phone";
+    label: string;
+  };
   capabilities: readonly ParticipantCapability[];
   /** Included only by an authorized configuration projection. */
   systemPrompt: string | null;

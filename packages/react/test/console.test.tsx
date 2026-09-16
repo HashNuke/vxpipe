@@ -116,6 +116,16 @@ test("Variables displays the latest authorized snapshot by section", () => {
 test("configured participants remain in the sidebar before joining", () => {
   render(<CallConsole client={createFixtureClient("ready")} />);
 
+  const caller = screen.getByRole("button", { name: "View You details" });
+  expect(caller).toHaveTextContent("WebRTC · inactive");
+  expect(caller).not.toHaveTextContent("Browser participant");
+
+  const assistant = screen.getByRole("button", {
+    name: "View Assistant details",
+  });
+  expect(assistant).toHaveTextContent("inactive");
+  expect(assistant).not.toHaveTextContent("Delivery concierge");
+
   expect(
     screen.getByRole("button", {
       name: "View Delivery specialist details",
