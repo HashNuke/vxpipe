@@ -23,6 +23,7 @@
     "build-storybook": "storybook build --disable-telemetry"
   },
   "dependencies": {
+    "@radix-ui/react-select": "^2.3.7",
     "@vxpipe/core": "0.1.0"
   },
   "peerDependencies": {

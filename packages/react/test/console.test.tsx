@@ -48,3 +48,18 @@ test("unsupported alignment shows a speaking state without word highlighting", (
   expect(screen.getByText("Word timing unavailable")).toBeVisible();
   expect(document.querySelector("mark")).toBeNull();
 });
+
+test("device menus expose styled options and apply the selected device", async () => {
+  const client = createFixtureClient("conversation");
+  render(<CallConsole client={client} />);
+
+  fireEvent.click(screen.getByRole("combobox", { name: "Input device" }));
+  fireEvent.click(await screen.findByRole("option", { name: "USB headset" }));
+
+  await waitFor(() =>
+    expect(client.getSnapshot().inputDevice).toBe("USB headset"),
+  );
+  expect(
+    screen.getByRole("combobox", { name: "Input device" }),
+  ).toHaveTextContent("USB headset");
+});

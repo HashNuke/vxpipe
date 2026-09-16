@@ -74,7 +74,7 @@ export function CallConsole({
             </button>
           )}
         </div>
-        <DeviceControls snapshot={snapshot} client={client} />
+        <DeviceControls snapshot={snapshot} client={client} theme={theme} />
       </header>
       {error && (
         <p className="vx-error vx-notice" role="alert">

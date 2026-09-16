@@ -358,13 +358,13 @@ checkpoint can use shadcn primitives inside `@vxpipe/react` and generate registr
 that same React source, so consumers can either import the package or own editable components.
 No separate UI implementation, third package, or fork of the protocol client is needed.
 
-The current prototype uses scoped CSS and native HTML controls; it is not yet a shadcn registry.
-Before shipping that distribution, verify a local registry installation into a small consumer,
-its imports/styles, dark and light themes, keyboard device selection, and package builds.
-[Native Select](https://ui.shadcn.com/docs/components/base/native-select) fits the simple device
-choices and preserves native keyboard/mobile behavior. Avoid a wholesale visual redesign or
-adding every shadcn component merely to introduce this distribution path. Public registry hosting
-and npm publication remain separate release work.
+The device selectors now use an exported, shadcn-style compositional
+[Select](https://ui.shadcn.com/docs/components/select) backed by Radix UI. This replaces the
+browser-owned native popup with package-owned trigger, popup, option, selected and focus states
+in light and dark themes. The package remains independent of Tailwind. A public shadcn registry
+is still separate distribution work: verify registry installation into a small consumer and its
+imports/styles before publishing it. Avoid adding unrelated shadcn components merely to introduce
+that distribution path. Public registry hosting and npm publication remain separate release work.
 
 The accepted call toolbar has right-aligned call actions above a device row. Each device group
 is a mute icon beside a bordered dropdown; input and output groups have distinct spacing.

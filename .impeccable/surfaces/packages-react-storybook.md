@@ -51,7 +51,9 @@ This brief records its composition without changing global design direction.
 - The first call-header row places status, elapsed time, and Start/Leave call at
   the right. The second contains microphone and speaker icon toggles, each paired
   with a visibly bordered input/output device select. Accessible names and toggle
-  state accompany the icons.
+  state accompany the icons. The selectors follow shadcn's compositional Select
+  pattern over Radix UI, with package-owned dark/light popup, focus, option and
+  selected states.
 - Desktop uses a participant rail and an unboxed, speaker-attributed conversation.
   The composer remains beneath the active main view. At 600px and below the roster
   becomes a horizontal strip, device groups stack, and controls receive larger

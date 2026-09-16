@@ -6,3 +6,10 @@ export { DeviceControls } from "./DeviceControls.js";
 export { EventLog } from "./EventLog.js";
 export { Metrics } from "./Metrics.js";
 export { Participants } from "./Participants.js";
+export {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./Select.js";

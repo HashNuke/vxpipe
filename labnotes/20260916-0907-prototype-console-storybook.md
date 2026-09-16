@@ -53,10 +53,11 @@ frontend server. Reuse existing test libraries and TypeScript major versions.
   source. Its three material findings are resolved; this approves the synthetic prototype,
   not production call-flow acceptance. Existing type-ramp/corner findings were corrected;
   no new detector suppressions were added and no unresolved detector findings remain.
-- Shadcn registry feasibility was checked against its official registry, native-select and
-  monorepo documentation. Recorded a separate source-distribution follow-up in the existing
-  design source. Current components use scoped CSS/native controls; they are not yet shadcn
-  registry items. Keep Core independent and derive npm/registry UI from one source.
+- Shadcn registry feasibility was checked against its official registry, Select and monorepo
+  documentation. A later focused checkpoint replaced the native device selectors with the
+  exported shadcn-style Select primitive backed by Radix UI; its own labnote records the red/green
+  behavior and rendered verification. The package is still not a published shadcn registry.
+  Keep Core independent and derive npm/registry UI from one source.
 
 ## Verification evidence
 

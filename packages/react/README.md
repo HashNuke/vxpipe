@@ -15,8 +15,11 @@ creation and disposal; components subscribe/unsubscribe without taking ownership
 The public component contract remains provisional while the UI is prototyped.
 
 Exports include `CallConsole`, `Conversation`, `Composer`, `Participants`, `DeviceControls`,
-`Metrics` and `EventLog`. The composed console provides their scoped styles/theme. Standalone
-pieces should be hosted in the same `.vx-console` theme root. `EventLog` displays RTVI events
+`Metrics`, `EventLog`, and the composable `Select` primitives. Device selection uses the
+shadcn Select pattern backed by Radix UI, so the trigger and popup share package-owned styling,
+keyboard behavior, focus management, and selected-state feedback. The composed console provides
+their scoped styles/theme. Standalone pieces should be hosted in the same `.vx-console` theme
+root. `EventLog` displays RTVI events
 only; it is not an application or server log viewer.
 
 Run `npm run storybook` from the repository root. The [workspace README](../README.md) describes
