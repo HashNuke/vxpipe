@@ -64,7 +64,15 @@ const initial: CallSnapshot = {
       spokenRange: { start: 55, end: 63 },
       metrics: [
         {
-          label: "First model token",
+          label: "Response duration",
+          value: 1_180,
+          unit: "ms",
+          source: "Turn",
+          description: "Input accepted to response completion",
+          scope: { kind: "participant", participantId: "assistant" },
+        },
+        {
+          label: "TTFT",
           value: 312,
           unit: "ms",
           source: "LLM provider",
@@ -76,11 +84,47 @@ const initial: CallSnapshot = {
           },
         },
         {
-          label: "First audio",
+          label: "TPOT",
+          value: 28,
+          unit: "ms",
+          source: "LLM provider",
+          description: "Average time per output token",
+          scope: {
+            kind: "participant-capability",
+            participantId: "assistant",
+            capability: "LLM",
+          },
+        },
+        {
+          label: "TPS",
+          value: 35.7,
+          unit: "tokens/s",
+          source: "LLM provider",
+          description: "Generated tokens per second",
+          scope: {
+            kind: "participant-capability",
+            participantId: "assistant",
+            capability: "LLM",
+          },
+        },
+        {
+          label: "Audio-to-first-audio",
           value: 96,
           unit: "ms",
           source: "TTS provider",
           description: "Request to first audio chunk",
+          scope: {
+            kind: "participant-capability",
+            participantId: "assistant",
+            capability: "TTS",
+          },
+        },
+        {
+          label: "RTF",
+          value: 0.72,
+          unit: "×",
+          source: "TTS provider",
+          description: "Synthesis duration divided by audio duration",
           scope: {
             kind: "participant-capability",
             participantId: "assistant",

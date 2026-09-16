@@ -138,9 +138,10 @@ test("a message time exposes its correlated turn metrics on focus", async () => 
     }),
   );
 
-  expect(await screen.findByRole("tooltip")).toHaveTextContent(
-    "First model token312 ms",
-  );
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("TTFT312 ms");
+  expect(screen.getByRole("heading", { name: "Turn" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "LLM" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "TTS" })).toBeVisible();
 });
 
 test("metric-enabled turns reserve the metrics action before the time", () => {

@@ -380,8 +380,8 @@
 }
 .vx-turn-tooltip {
   z-index: 80;
-  min-width: 240px;
-  max-width: min(320px, calc(100vw - 16px));
+  min-width: 280px;
+  max-width: min(380px, calc(100vw - 16px));
   padding: 8px;
   border: 1px solid oklch(0.92 0.004 286.32);
   border-radius: 8px;
@@ -396,24 +396,35 @@
   color: oklch(0.985 0 0);
   color-scheme: dark;
 }
-.vx-turn-tooltip > div {
+.vx-turn-metric-group {
+  padding: 7px 8px;
+}
+.vx-turn-metric-group + .vx-turn-metric-group {
+  border-top: 1px solid color-mix(in oklch, currentColor 14%, transparent);
+}
+.vx-turn-metric-group h3 {
+  margin: 0 0 4px;
+  color: color-mix(in oklch, currentColor 72%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.vx-turn-metric-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 20px;
-  padding: 7px 8px;
+  padding: 3px 0;
 }
-.vx-turn-tooltip > div + div {
-  border-top: 1px solid color-mix(in oklch, currentColor 14%, transparent);
-}
-.vx-turn-tooltip span {
+.vx-turn-metric-row span {
   color: color-mix(in oklch, currentColor 72%, transparent);
 }
-.vx-turn-tooltip strong {
+.vx-turn-metric-row strong {
   font: 500 12px var(--vx-mono, ui-monospace, monospace);
   white-space: nowrap;
 }
-.vx-turn-tooltip small {
+.vx-turn-metric-row small {
   font: inherit;
   color: color-mix(in oklch, currentColor 72%, transparent);
 }

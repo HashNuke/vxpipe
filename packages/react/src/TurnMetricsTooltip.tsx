@@ -15,6 +15,24 @@ import {
 import type { Metric } from "@vxpipe/core";
 import { Icon } from "./Icon.js";
 
+function metricGroup(metric: Metric) {
+  if (
+    metric.scope.kind === "room-capability" ||
+    metric.scope.kind === "participant-capability"
+  )
+    return metric.scope.capability;
+  return "Turn";
+}
+
+function groupMetrics(metrics: readonly Metric[]) {
+  const groups = new Map<string, Metric[]>();
+  metrics.forEach((metric) => {
+    const label = metricGroup(metric);
+    groups.set(label, [...(groups.get(label) ?? []), metric]);
+  });
+  return [...groups.entries()];
+}
+
 export function TurnMetricsTooltip({
   metrics,
   speaker,
@@ -27,6 +45,7 @@ export function TurnMetricsTooltip({
   theme: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
+  const groups = groupMetrics(metrics);
   const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: setOpen,
@@ -64,16 +83,21 @@ export function TurnMetricsTooltip({
             style={floatingStyles}
             {...getFloatingProps()}
           >
-            {metrics.map((metric) => (
-              <div key={metric.label}>
-                <span>{metric.label}</span>
-                <strong>
-                  {metric.value === null
-                    ? "Unavailable"
-                    : metric.value.toLocaleString()}
-                  {metric.value !== null && <small> {metric.unit}</small>}
-                </strong>
-              </div>
+            {groups.map(([label, group]) => (
+              <section className="vx-turn-metric-group" key={label}>
+                <h3>{label}</h3>
+                {group.map((metric) => (
+                  <div className="vx-turn-metric-row" key={metric.label}>
+                    <span>{metric.label}</span>
+                    <strong>
+                      {metric.value === null
+                        ? "Unavailable"
+                        : metric.value.toLocaleString()}
+                      {metric.value !== null && <small> {metric.unit}</small>}
+                    </strong>
+                  </div>
+                ))}
+              </section>
             ))}
           </div>
         </FloatingPortal>

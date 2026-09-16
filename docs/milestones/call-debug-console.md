@@ -54,7 +54,10 @@ when the call ends. The same console will run Getting Started examples.
 - Metrics reuse available call/provider timing and reported usage, plus bounded client transport
   statistics. Model room, room-capability, participant and participant-capability scopes; expose
   turn measurements beside the corresponding message only when correlation is authoritative.
-  Label source/units/unknowns and respect clock domains.
+  Group the hover detail into whole-turn and available LLM, input-guardrail, output-guardrail,
+  TTS and STT steps. Support reported response duration, TTFT, TPOT, TPS, RTF and
+  audio-to-first-audio measurements where they make sense; omit absent groups and values rather
+  than synthesizing them. Label source/units/unknowns and respect clock domains.
 - Conversation is one ordered timeline with icon filters for messages, semantic events, tool calls
   and raw logs. Messages, events and tool calls are enabled by default; raw logs are disabled, and
   Reset restores those defaults. Join/leave/transfer facts are concise activity rows, not a separate
@@ -197,6 +200,9 @@ The user's logs clarification limits raw Conversation log items and event detail
 Server, browser, inspection and separate transfer-sideband logs are excluded; existing history
 stays linked. A later clarification removes the separate Logs tab in favor of the filterable
 Conversation timeline and places semantic participant activity inline.
+The metrics clarification separates whole-turn measurements from optional LLM, input-guardrail,
+output-guardrail, TTS and STT step groups. It names the initial reported measurements without
+requiring every provider or call path to supply every group or value.
 This specification review did not claim implementation, rendered UI or acceptance; prototype
 evidence is recorded separately below.
 
