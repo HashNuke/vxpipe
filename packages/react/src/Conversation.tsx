@@ -14,6 +14,10 @@ import {
   Wrench,
 } from "lucide-react";
 import { Icon } from "./Icon.js";
+import {
+  formatTimelineClock,
+  TimelineTimestamp,
+} from "./TimelineTimestamp.js";
 import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
 
 type Filter = "messages" | "logs" | "events" | "tools";
@@ -92,20 +96,20 @@ function MessageRow({
               <TurnMetricsTooltip
                 metrics={message.metrics}
                 speaker={person?.name ?? "Unknown speaker"}
-                time={message.time}
+                time={formatTimelineClock(message.occurredAt)}
                 theme={theme}
               />
             ) : (
               <button
                 className="vx-turn-metrics-button"
-                aria-label={`Metrics unavailable for ${person?.name ?? "Unknown speaker"} at ${message.time}`}
+                aria-label={`Metrics unavailable for ${person?.name ?? "Unknown speaker"} at ${formatTimelineClock(message.occurredAt)}`}
                 title="Metrics unavailable"
                 disabled
               >
                 <Icon name="metrics" />
               </button>
             ))}
-          <time>{message.time}</time>
+          <TimelineTimestamp occurredAt={message.occurredAt} theme={theme} />
         </header>
         <p>
           <MessageText message={message} alignment={snapshot.alignment} />
@@ -118,17 +122,29 @@ function MessageRow({
   );
 }
 
-function ActivityRow({ event }: { event: ActivityEvent }) {
+function ActivityRow({
+  event,
+  theme,
+}: {
+  event: ActivityEvent;
+  theme: "light" | "dark";
+}) {
   return (
     <div className="vx-timeline-activity">
       <Icon name="event" />
       <span>{event.text}</span>
-      <time>{event.time}</time>
+      <TimelineTimestamp occurredAt={event.occurredAt} theme={theme} />
     </div>
   );
 }
 
-function ToolRow({ tool }: { tool: ToolCall }) {
+function ToolRow({
+  tool,
+  theme,
+}: {
+  tool: ToolCall;
+  theme: "light" | "dark";
+}) {
   const [expanded, setExpanded] = useState(false);
   const requestAvailable = tool.request !== undefined;
   const responseAvailable =
@@ -166,7 +182,7 @@ function ToolRow({ tool }: { tool: ToolCall }) {
       >
         <StatusIcon aria-hidden="true" />
       </span>
-      <time>{tool.time}</time>
+      <TimelineTimestamp occurredAt={tool.occurredAt} theme={theme} />
     </>
   );
 
@@ -250,7 +266,13 @@ function ToolRow({ tool }: { tool: ToolCall }) {
   );
 }
 
-function LogRow({ event }: { event: ProtocolEvent }) {
+function LogRow({
+  event,
+  theme,
+}: {
+  event: ProtocolEvent;
+  theme: "light" | "dark";
+}) {
   return (
     <details className="vx-timeline-log">
       <summary>
@@ -259,7 +281,7 @@ function LogRow({ event }: { event: ProtocolEvent }) {
         </span>
         <strong>{event.type}</strong>
         <span>{event.summary}</span>
-        <time>{event.time}</time>
+        <TimelineTimestamp occurredAt={event.occurredAt} theme={theme} />
       </summary>
       <pre>{JSON.stringify(event.details, null, 2)}</pre>
     </details>
@@ -267,10 +289,10 @@ function LogRow({ event }: { event: ProtocolEvent }) {
 }
 
 type TimelineItem =
-  | { kind: "messages"; id: string; time: string; value: Message }
-  | { kind: "events"; id: string; time: string; value: ActivityEvent }
-  | { kind: "tools"; id: string; time: string; value: ToolCall }
-  | { kind: "logs"; id: string; time: string; value: ProtocolEvent };
+  | { kind: "messages"; id: string; occurredAt: string; value: Message }
+  | { kind: "events"; id: string; occurredAt: string; value: ActivityEvent }
+  | { kind: "tools"; id: string; occurredAt: string; value: ToolCall }
+  | { kind: "logs"; id: string; occurredAt: string; value: ProtocolEvent };
 
 function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
   const items: TimelineItem[] = [];
@@ -279,7 +301,7 @@ function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
       ...snapshot.messages.map((value) => ({
         kind: "messages" as const,
         id: value.id,
-        time: value.time,
+        occurredAt: value.occurredAt,
         value,
       })),
     );
@@ -288,7 +310,7 @@ function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
       ...snapshot.activities.map((value) => ({
         kind: "events" as const,
         id: value.id,
-        time: value.time,
+        occurredAt: value.occurredAt,
         value,
       })),
     );
@@ -297,7 +319,7 @@ function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
       ...snapshot.toolCalls.map((value) => ({
         kind: "tools" as const,
         id: value.id,
-        time: value.time,
+        occurredAt: value.occurredAt,
         value,
       })),
     );
@@ -309,13 +331,14 @@ function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
         .map((value) => ({
           kind: "logs" as const,
           id: value.id,
-          time: value.time,
+          occurredAt: value.occurredAt,
           value,
         })),
     );
   return items.sort(
     (left, right) =>
-      left.time.localeCompare(right.time) || left.id.localeCompare(right.id),
+      left.occurredAt.localeCompare(right.occurredAt) ||
+      left.id.localeCompare(right.id),
   );
 }
 
@@ -382,10 +405,20 @@ export function Conversation({
               />
             );
           if (item.kind === "events")
-            return <ActivityRow key={`event-${item.id}`} event={item.value} />;
+            return (
+              <ActivityRow
+                key={`event-${item.id}`}
+                event={item.value}
+                theme={theme}
+              />
+            );
           if (item.kind === "tools")
-            return <ToolRow key={`tool-${item.id}`} tool={item.value} />;
-          return <LogRow key={`log-${item.id}`} event={item.value} />;
+            return (
+              <ToolRow key={`tool-${item.id}`} tool={item.value} theme={theme} />
+            );
+          return (
+            <LogRow key={`log-${item.id}`} event={item.value} theme={theme} />
+          );
         })}
       </div>
     </section>

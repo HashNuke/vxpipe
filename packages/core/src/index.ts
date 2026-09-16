@@ -43,7 +43,8 @@ export interface Message {
   id: string;
   participantId: string;
   text: string;
-  time: string;
+  /** UTC RFC 3339 instant when this item occurred. */
+  occurredAt: string;
   state: "final" | "streaming" | "interrupted";
   /** Character range supplied by the client, never estimated by the React view. */
   spokenRange?: { start: number; end: number };
@@ -56,7 +57,8 @@ export interface ProtocolEvent {
   protocol: string;
   type: string;
   direction: "in" | "out";
-  time: string;
+  /** UTC RFC 3339 instant when this item occurred. */
+  occurredAt: string;
   summary: string;
   /** Safe display data supplied by the adapter, excluding admission/auth secrets. */
   details: Readonly<Record<string, unknown>>;
@@ -64,14 +66,16 @@ export interface ProtocolEvent {
 
 export interface ActivityEvent {
   id: string;
-  time: string;
+  /** UTC RFC 3339 instant when this item occurred. */
+  occurredAt: string;
   text: string;
   kind: "call" | "participant" | "transfer";
 }
 
 export interface ToolCall {
   id: string;
-  time: string;
+  /** UTC RFC 3339 instant when this item occurred. */
+  occurredAt: string;
   name: string;
   status: "pending" | "completed" | "failed";
   /** Display-safe payloads supplied only when capture is enabled; null means empty. */

@@ -110,7 +110,7 @@ const initial: CallSnapshot = {
     {
       id: "m1",
       participantId: "assistant",
-      time: "00:02",
+      occurredAt: "2026-09-16T22:30:02.000Z",
       text: "Hi! I can help you arrange a delivery, check an order, or connect you with our team. What can I do for you?",
       state: "final",
       metrics: [
@@ -187,14 +187,14 @@ const initial: CallSnapshot = {
     {
       id: "m2",
       participantId: "caller",
-      time: "00:08",
+      occurredAt: "2026-09-16T22:30:08.000Z",
       text: "I'd like to reschedule my delivery.",
       state: "final",
     },
     {
       id: "m3",
       participantId: "assistant",
-      time: "00:10",
+      occurredAt: "2026-09-16T22:30:10.000Z",
       text: "Of course. Let's find a time that works for you. Would tomorrow morning or afternoon be better?",
       state: "streaming",
       spokenRange: { start: 55, end: 63 },
@@ -229,7 +229,7 @@ const initial: CallSnapshot = {
   activities: [
     {
       id: "a1",
-      time: "00:00",
+      occurredAt: "2026-09-16T22:30:00.000Z",
       text: "Call connected",
       kind: "call",
     },
@@ -237,7 +237,7 @@ const initial: CallSnapshot = {
   toolCalls: [
     {
       id: "tool-1",
-      time: "00:09",
+      occurredAt: "2026-09-16T22:30:09.000Z",
       name: "update_variables",
       status: "completed",
     },
@@ -248,7 +248,7 @@ const initial: CallSnapshot = {
       protocol: "rtvi",
       type: "client-ready",
       direction: "out",
-      time: "00:00.012",
+      occurredAt: "2026-09-16T22:30:00.012Z",
       summary: "Client ready",
       details: {
         label: "rtvi-ai",
@@ -261,7 +261,7 @@ const initial: CallSnapshot = {
       protocol: "rtvi",
       type: "bot-ready",
       direction: "in",
-      time: "00:00.041",
+      occurredAt: "2026-09-16T22:30:00.041Z",
       summary: "Agent ready",
       details: {
         label: "rtvi-ai",
@@ -274,7 +274,7 @@ const initial: CallSnapshot = {
       protocol: "rtvi",
       type: "user-transcription",
       direction: "in",
-      time: "00:08.120",
+      occurredAt: "2026-09-16T22:30:08.120Z",
       summary: "You · final transcript",
       details: {
         user_id: "caller",
@@ -287,7 +287,7 @@ const initial: CallSnapshot = {
       protocol: "rtvi",
       type: "server-message",
       direction: "in",
-      time: "00:09.420",
+      occurredAt: "2026-09-16T22:30:09.420Z",
       summary: "Vxpipe turn progress",
       details: {
         t: "vxpipe.turn",
@@ -300,7 +300,7 @@ const initial: CallSnapshot = {
       protocol: "rtvi",
       type: "bot-output",
       direction: "in",
-      time: "00:10.081",
+      occurredAt: "2026-09-16T22:30:10.081Z",
       summary: "Agent text fragment",
       details: { text: "Of course. Let's find a time that works for you." },
     },
@@ -460,13 +460,13 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
       toolCalls: [
         {
           id: "tool-1",
-          time: "00:09",
+          occurredAt: "2026-09-16T22:30:09.000Z",
           name: "lookup_delivery",
           status: "pending",
         },
         {
           id: "tool-2",
-          time: "00:10",
+          occurredAt: "2026-09-16T22:30:10.000Z",
           name: "update_variables",
           status: "completed",
           request: { requested_date: "2026-09-18" },
@@ -475,7 +475,7 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
         },
         {
           id: "tool-3",
-          time: "00:11",
+          occurredAt: "2026-09-16T22:30:11.000Z",
           name: "notify_customer",
           status: "failed",
           request: { channel: "sms" },
@@ -484,7 +484,7 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
         },
         {
           id: "tool-4",
-          time: "00:12",
+          occurredAt: "2026-09-16T22:30:12.000Z",
           name: "refresh_cache",
           status: "completed",
           request: null,
@@ -516,7 +516,7 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
         ...snapshot.activities,
         {
           id: "a2",
-          time: "02:13",
+          occurredAt: "2026-09-16T22:32:13.000Z",
           text:
             scenario === "handoff"
               ? "Delivery specialist joined"
@@ -546,7 +546,7 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
         {
           id: "m4",
           participantId: scenario === "handoff" ? "specialist" : "support",
-          time: "02:14",
+          occurredAt: "2026-09-16T22:32:14.000Z",
           text: "I can help with that. I have the details from your conversation, so we can pick up right here.",
           state: "streaming",
           spokenRange: { start: 0, end: 20 },
@@ -603,7 +603,7 @@ export function createFixtureClient(
             state: "final" as const,
             spokenRange: undefined,
           })),
-          { id, participantId: "caller", text, time: "02:15", state: "final" },
+          { id, participantId: "caller", text, occurredAt: "2026-09-16T22:32:15.000Z", state: "final" },
         ],
         events: [
           ...snapshot.events,
@@ -612,7 +612,7 @@ export function createFixtureClient(
             protocol: "rtvi",
             type: "send-text",
             direction: "out",
-            time: "02:15.000",
+            occurredAt: "2026-09-16T22:32:15.000Z",
             summary: "Typed message",
             details: { text },
           },

@@ -334,9 +334,9 @@ test("a message time exposes its correlated turn metrics on focus", async () => 
   render(<CallConsole client={createFixtureClient("conversation")} />);
 
   fireEvent.focus(
-    screen.getByRole("button", {
-      name: "View metrics for Assistant at 00:10",
-    }),
+    screen.getAllByRole("button", {
+      name: /View metrics for Assistant at/,
+    }).at(-1)!,
   );
 
   expect(await screen.findByRole("tooltip")).toHaveTextContent("TTFT284 ms");
@@ -354,8 +354,27 @@ test("completed turns show final metrics only with authoritative inputs", async 
     .closest("article");
   expect(completedTurn).not.toBeNull();
   const completedMetrics = within(completedTurn!).getByRole("button", {
-    name: "View metrics for Assistant at 00:02",
+    name: /View metrics for Assistant at/,
   });
+test("timeline times show local clock time and disclose the UTC instant", async () => {
+  const { container } = render(
+    <CallConsole client={createFixtureClient("conversation")} />,
+  );
+
+  const timestamp = container.querySelector(
+    'time[datetime="2026-09-16T22:30:00.000Z"]',
+  );
+  expect(timestamp).not.toBeNull();
+  expect(timestamp).not.toHaveTextContent("00:00");
+
+  fireEvent.focus(timestamp as HTMLElement);
+  const tooltip = await screen.findByRole("tooltip");
+  expect(tooltip).toHaveTextContent("2026-09-16T22:30:00.000Z");
+  expect(tooltip).toHaveTextContent(
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+});
+
   fireEvent.focus(completedMetrics);
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
     "Turn duration3,240 ms",
@@ -370,7 +389,7 @@ test("completed turns show final metrics only with authoritative inputs", async 
   expect(callerTurn).not.toBeNull();
   expect(
     within(callerTurn!).getByRole("button", {
-      name: "Metrics unavailable for You at 00:08",
+      name: /Metrics unavailable for You at/,
     }),
   ).toBeDisabled();
 
@@ -382,14 +401,15 @@ test("completed turns show final metrics only with authoritative inputs", async 
     name: "Streaming",
   });
   const metrics = within(streamingTurn!).getByRole("button", {
-    name: "View metrics for Assistant at 00:10",
+    name: /View metrics for Assistant at/,
   });
-  const time = within(streamingTurn!).getByText("00:10");
+  const time = streamingTurn!.querySelector("time");
+  expect(time).not.toBeNull();
 
   expect(
     streaming.compareDocumentPosition(metrics) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(
-    metrics.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING,
+    metrics.compareDocumentPosition(time!) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
 });

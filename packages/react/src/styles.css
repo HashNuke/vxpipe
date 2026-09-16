@@ -536,6 +536,44 @@
   font: 12px var(--vx-mono);
   color: var(--vx-muted);
 }
+.vx-timestamp {
+  border-radius: 4px;
+  cursor: help;
+}
+.vx-timestamp-tooltip {
+  z-index: 80;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 12px;
+  border: 1px solid oklch(0.92 0.004 286.32);
+  border-radius: 8px;
+  background: oklch(1 0 0);
+  color: oklch(0.21 0.006 285.885);
+  box-shadow: 0 12px 32px
+    color-mix(in oklch, oklch(0.21 0.006 285.885) 18%, transparent);
+  font: 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.vx-timestamp-tooltip[data-vx-theme="dark"] {
+  border-color: oklch(0.35 0.006 286);
+  background: oklch(0.235 0.006 285.885);
+  color: oklch(0.985 0 0);
+  color-scheme: dark;
+}
+.vx-timestamp-tooltip > div {
+  display: grid;
+  gap: 2px;
+}
+.vx-timestamp-tooltip > div + div {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in oklch, currentColor 14%, transparent);
+}
+.vx-timestamp-tooltip span {
+  color: color-mix(in oklch, currentColor 72%, transparent);
+}
+.vx-timestamp-tooltip strong {
+  font: 500 12px/1.5 var(--vx-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+}
 .vx-console .vx-turn-metrics-button {
   display: inline-grid;
   width: 24px;
@@ -1208,13 +1246,13 @@ button.vx-tool-summary:hover {
 }
 .vx-metrics tbody th strong {
   color: var(--vx-ink);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 .vx-metrics tbody th small {
   margin-top: 2px;
   color: var(--vx-muted);
-  font: 11px var(--vx-mono);
+  font: 12px var(--vx-mono);
 }
 .vx-metric-cell {
   width: 100%;
