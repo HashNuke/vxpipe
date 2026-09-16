@@ -12,6 +12,7 @@
     "@pipecat-ai/client-react": "^1.8.2",
     "@pipecat-ai/small-webrtc-transport": "^1.10.6",
     "@pipecat-ai/voice-ui-kit": "^0.13.1",
+    "@vxpipe/core": "file:../../../packages/core",
     "phoenix": "1.8.13",
     "phoenix_live_view": "1.2.11",
     "react": "^19.2.0",

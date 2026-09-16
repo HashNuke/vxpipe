@@ -88,3 +88,23 @@
   render-error configuration has no JSON error renderer, which is outside this resource slice.
 - Root format, warnings-as-errors compile, strict Credo, full umbrella tests and unused dependency
   checks pass with the HTTP resource included.
+
+## Console response adapter
+
+- Red: the focused Vitest suite failed because the Console-owned inspection adapter did not exist.
+- Green: the adapter fetches the same-origin inspection resource with JSON negotiation and no
+  browser cache, validates schema version 1 at runtime and maps snake-case fields into the
+  `@vxpipe/core` snapshot contract.
+- Validation covers lifecycle, configured participants, every timeline variant, variables,
+  metrics, availability and completeness. Optional captured tool payloads remain distinct from
+  missing payloads.
+- Focused coverage exercises ongoing and ended snapshots, a `503` response, malformed data and an
+  encoded call ID. The loader also rejects a valid snapshot carrying a different call identity.
+- Astra's pre-commit review found that a clean asset typecheck depended on ignored Core build
+  output. The Console asset TypeScript configuration now resolves the monorepo Core dependency to
+  its source, while the package dependency still records the intended package boundary.
+- Pre-commit verification passed the clean Console asset typecheck, all 19 Console asset tests,
+  root JavaScript checks/tests, formatting, warnings-as-errors compilation, strict Credo, Console
+  tests and unused-dependency checks. The umbrella run reached one unrelated existing Gateway
+  WebRTC failure at `human_transfer_webrtc_test.exs:376`; the same test also timed out in isolation
+  while waiting for its native adoption gate.
