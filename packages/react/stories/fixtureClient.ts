@@ -1,4 +1,11 @@
-import type { CallSnapshot, VxpipeClient } from "@vxpipe/core";
+import type {
+  CallConsoleController,
+  CallDetailsReader,
+  CallDetailsSnapshot,
+  LiveCallControls,
+  LocalSessionSnapshot,
+} from "@vxpipe/core";
+import type { ConsoleSnapshot } from "../src/types.js";
 
 export type Scenario =
   | "ready"
@@ -12,7 +19,7 @@ export type Scenario =
   | "no-alignment"
   | "ended"
   | "failed";
-const initial: CallSnapshot = {
+const initial: ConsoleSnapshot = {
   callId: "demo-call-001",
   state: "connected",
   duration: "02:14",
@@ -414,8 +421,8 @@ const initial: CallSnapshot = {
 
 export type ExampleScenario = "conversation" | "handoff" | "human-handoff";
 
-function fixtureSnapshot(scenario: Scenario): CallSnapshot {
-  let snapshot: CallSnapshot = structuredClone(initial);
+function fixtureSnapshot(scenario: Scenario): ConsoleSnapshot {
+  let snapshot: ConsoleSnapshot = structuredClone(initial);
   if (scenario === "ready" || scenario === "microphone-denied-ready")
     snapshot = {
       ...snapshot,
@@ -560,30 +567,157 @@ function fixtureSnapshot(scenario: Scenario): CallSnapshot {
   return snapshot;
 }
 
+function durationMs(duration: string) {
+  const [minutes = "0", seconds = "0"] = duration.split(":");
+  return (Number(minutes) * 60 + Number(seconds)) * 1_000;
+}
+
+function detailsFromFixture(
+  snapshot: ConsoleSnapshot,
+  revision: number,
+): CallDetailsSnapshot {
+  const timeline = [
+    ...snapshot.messages.map((value, index) => ({
+      id: value.id,
+      revision,
+      sourceSequence: index + 1,
+      kind: "message" as const,
+      value,
+    })),
+    ...snapshot.activities.map((value, index) => ({
+      id: value.id,
+      revision,
+      sourceSequence: snapshot.messages.length + index + 1,
+      kind: "activity" as const,
+      value,
+    })),
+    ...snapshot.toolCalls.map((value, index) => ({
+      id: value.id,
+      revision,
+      sourceSequence:
+        snapshot.messages.length + snapshot.activities.length + index + 1,
+      kind: "tool-call" as const,
+      value,
+    })),
+    ...snapshot.events.map((value, index) => ({
+      id: value.id,
+      revision: 1,
+      sourceSequence:
+        snapshot.messages.length +
+        snapshot.activities.length +
+        snapshot.toolCalls.length +
+        index +
+        1,
+      kind: "protocol-event" as const,
+      value,
+    })),
+  ];
+  return {
+    schemaVersion: 1,
+    call: {
+      id: snapshot.callId,
+      revision,
+      state:
+        snapshot.state === "ready"
+          ? "prepared"
+          : snapshot.state === "connected"
+            ? "running"
+            : snapshot.state,
+      createdAt: "2026-09-16T22:30:00.000Z",
+      startedAt:
+        snapshot.state === "ready" ? null : "2026-09-16T22:30:00.000Z",
+      endedAt:
+        snapshot.state === "ended" || snapshot.state === "failed"
+          ? "2026-09-16T22:32:14.000Z"
+          : null,
+      terminalReason: snapshot.state === "failed" ? "connection_lost" : null,
+      durationMs: durationMs(snapshot.duration),
+    },
+    incarnation: { roomId: "storybook-room", incarnationId: "storybook-run" },
+    participants: snapshot.participants.map((value) => ({
+      id: value.id,
+      revision,
+      value,
+    })),
+    timeline,
+    variables: snapshot.variables
+      ? { state: "available", value: snapshot.variables }
+      : { state: "unavailable", reason: "not-captured" },
+    metrics: snapshot.metrics.map((value, index) => ({
+      id: `metric-${index}`,
+      revision,
+      value,
+    })),
+    completeness: {
+      state:
+        snapshot.state === "ended" || snapshot.state === "failed"
+          ? "complete"
+          : "unconfirmed",
+      missingSequenceCount: 0,
+      droppedLiveRecords: 0,
+    },
+    olderCursor: null,
+    asOf: "2026-09-16T22:32:14.000Z",
+  };
+}
+
+function localFromFixture(snapshot: ConsoleSnapshot): LocalSessionSnapshot {
+  return {
+    connectionState:
+      snapshot.state === "connected"
+        ? "connected"
+        : snapshot.state === "failed"
+          ? "failed"
+          : "ready",
+    alignment: snapshot.alignment,
+    microphone: snapshot.microphone,
+    speakerMuted: snapshot.speakerMuted,
+    inputDevice: snapshot.inputDevice,
+    outputDevice: snapshot.outputDevice,
+    devices: snapshot.devices,
+    notice: snapshot.notice,
+  };
+}
+
 /** In-memory Storybook adapter. Never opens a socket, captures media or calls a provider. */
-export function createFixtureClient(
+export function createFixtureController(
   scenario: Scenario = "conversation",
   startScenario: ExampleScenario = "conversation",
-) {
+): CallConsoleController & {
+  getSnapshot(): ConsoleSnapshot;
+  advanceSpeech(): void;
+} {
   let snapshot = fixtureSnapshot(scenario);
+  let revision = 1;
+  let detailsSnapshot = detailsFromFixture(snapshot, revision);
+  let localSnapshot = localFromFixture(snapshot);
   const microphoneDenied = snapshot.microphone === "denied";
   const listeners = new Set<() => void>();
-  const update = (changes: Partial<CallSnapshot>) => {
+  const publish = () => {
+    revision += 1;
+    detailsSnapshot = detailsFromFixture(snapshot, revision);
+    localSnapshot = localFromFixture(snapshot);
+    listeners.forEach((listener) => listener());
+  };
+  const update = (changes: Partial<ConsoleSnapshot>) => {
     snapshot = { ...snapshot, ...changes };
-    listeners.forEach((listener) => listener());
+    publish();
   };
-  const replace = (nextSnapshot: CallSnapshot) => {
+  const replace = (nextSnapshot: ConsoleSnapshot) => {
     snapshot = nextSnapshot;
-    listeners.forEach((listener) => listener());
+    publish();
   };
-  const client: VxpipeClient = {
-    getSnapshot: () => snapshot,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+  const details: CallDetailsReader = {
+    getSnapshot: () => detailsSnapshot,
+    subscribe,
+  };
+  const live: LiveCallControls = {
+    getSnapshot: () => localSnapshot,
+    subscribe,
     connect: async () => {
       const nextSnapshot = fixtureSnapshot(startScenario);
       replace(
@@ -596,12 +730,12 @@ export function createFixtureClient(
       update({
         state: "ended",
         microphone: "off",
-        participants: snapshot.participants.map((p) => ({
-          ...p,
+        participants: snapshot.participants.map((participant) => ({
+          ...participant,
           state: "left",
         })),
-        messages: snapshot.messages.map((m) => ({
-          ...m,
+        messages: snapshot.messages.map((message) => ({
+          ...message,
           spokenRange: undefined,
           state: "final",
         })),
@@ -609,17 +743,22 @@ export function createFixtureClient(
           "You left the call. The transcript remains available in this view.",
       }),
     sendText: async (text) => {
-      if (snapshot.state !== "connected")
-        throw new Error("Call is not connected");
+      if (snapshot.state !== "connected") throw new Error("Call is not connected");
       const id = `m${snapshot.messages.length + 1}`;
       update({
         messages: [
-          ...snapshot.messages.map((m) => ({
-            ...m,
+          ...snapshot.messages.map((message) => ({
+            ...message,
             state: "final" as const,
             spokenRange: undefined,
           })),
-          { id, participantId: "caller", text, occurredAt: "2026-09-16T22:32:15.000Z", state: "final" },
+          {
+            id,
+            participantId: "caller",
+            text,
+            occurredAt: "2026-09-16T22:32:15.000Z",
+            state: "final",
+          },
         ],
         events: [
           ...snapshot.events,
@@ -636,8 +775,7 @@ export function createFixtureClient(
       });
     },
     setMicrophone: async (enabled) => {
-      if (snapshot.microphone === "denied")
-        throw new Error("Permission denied");
+      if (snapshot.microphone === "denied") throw new Error("Permission denied");
       update({ microphone: enabled ? "on" : "off" });
     },
     setSpeakerMuted: async (speakerMuted) => update({ speakerMuted }),
@@ -645,10 +783,11 @@ export function createFixtureClient(
       update(kind === "input" ? { inputDevice: id } : { outputDevice: id }),
   };
   return {
-    ...client,
+    details,
+    live,
+    getSnapshot: () => snapshot,
     advanceSpeech() {
-      if (!snapshot.participants.some((person) => person.state === "speaking"))
-        return;
+      if (!snapshot.participants.some((person) => person.state === "speaking")) return;
       const index = snapshot.messages
         .map((message) => message.participantId !== "caller")
         .lastIndexOf(true);
@@ -659,19 +798,22 @@ export function createFixtureClient(
       const end = nextSpace === -1 ? message.text.length : nextSpace;
       const finished = start >= message.text.length;
       update({
-        messages: snapshot.messages.map((m, i) =>
-          i === index
+        messages: snapshot.messages.map((item, itemIndex) =>
+          itemIndex === index
             ? {
-                ...m,
+                ...item,
                 spokenRange: finished ? undefined : { start, end },
                 state: finished ? "final" : "streaming",
               }
-            : m,
+            : item,
         ),
-        participants: snapshot.participants.map((p) =>
-          p.role === "agent" && p.state !== "left"
-            ? { ...p, state: finished ? "listening" : "speaking" }
-            : p,
+        participants: snapshot.participants.map((participant) =>
+          participant.role === "agent" && participant.state !== "left"
+            ? {
+                ...participant,
+                state: finished ? "listening" : "speaking",
+              }
+            : participant,
         ),
       });
     },

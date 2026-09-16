@@ -7,12 +7,12 @@ import {
 } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { CallConsole } from "../src/index.js";
-import { createFixtureClient } from "../stories/fixtureClient.js";
+import { createFixtureController } from "../stories/fixtureClient.js";
 
 test("the host can bound the console height", () => {
   const { container } = render(
     <CallConsole
-      client={createFixtureClient("conversation")}
+      controller={createFixtureController("conversation")}
       maxHeight="640px"
     />,
   );
@@ -21,8 +21,8 @@ test("the host can bound the console height", () => {
 });
 
 test("a denied microphone still allows typed input in the same conversation", async () => {
-  const client = createFixtureClient("microphone-denied");
-  render(<CallConsole client={client} />);
+  const client = createFixtureController("microphone-denied");
+  render(<CallConsole controller={client} />);
   fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
     target: { value: "Can we continue by text?" },
   });
@@ -37,8 +37,8 @@ test("a denied microphone still allows typed input in the same conversation", as
 });
 
 test("microphone denial does not block starting a text-only call", async () => {
-  const client = createFixtureClient("microphone-denied-ready");
-  render(<CallConsole client={client} />);
+  const client = createFixtureController("microphone-denied-ready");
+  render(<CallConsole controller={client} />);
 
   expect(
     screen.getByText("Microphone access is blocked. You can still type."),
@@ -60,8 +60,8 @@ test("microphone denial does not block starting a text-only call", async () => {
 });
 
 test("leaving keeps the transcript visible and disables further sending", async () => {
-  const client = createFixtureClient("conversation");
-  render(<CallConsole client={client} />);
+  const client = createFixtureController("conversation");
+  render(<CallConsole controller={client} />);
   fireEvent.click(screen.getByRole("button", { name: "Show Logs" }));
   expect(screen.getByText("client-ready")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Leave call" }));
@@ -79,7 +79,7 @@ test("leaving keeps the transcript visible and disables further sending", async 
 });
 
 test("Conversation filters messages, events, tool calls and raw RTVI logs", () => {
-  render(<CallConsole client={createFixtureClient("human-handoff")} />);
+  render(<CallConsole controller={createFixtureController("human-handoff")} />);
 
   expect(screen.getByText("Support joined")).toBeVisible();
   expect(screen.getByText("update_variables")).toBeVisible();
@@ -96,7 +96,7 @@ test("Conversation filters messages, events, tool calls and raw RTVI logs", () =
 });
 
 test("tool calls disclose optional request and response details", () => {
-  render(<CallConsole client={createFixtureClient("tool-states")} />);
+  render(<CallConsole controller={createFixtureController("tool-states")} />);
 
   const disclosure = screen.getByRole("button", {
     name: "Show details for update_variables",
@@ -161,7 +161,7 @@ test("tool calls disclose optional request and response details", () => {
 });
 
 test("speaking activity moves to the participant avatar", () => {
-  render(<CallConsole client={createFixtureClient("no-alignment")} />);
+  render(<CallConsole controller={createFixtureController("no-alignment")} />);
 
   const assistant = screen.getByRole("button", {
     name: "View Assistant details",
@@ -176,8 +176,8 @@ test("speaking activity moves to the participant avatar", () => {
 });
 
 test("device menus expose styled options and apply the selected device", async () => {
-  const client = createFixtureClient("conversation");
-  render(<CallConsole client={client} />);
+  const client = createFixtureController("conversation");
+  render(<CallConsole controller={client} />);
 
   fireEvent.click(screen.getByRole("combobox", { name: "Input device" }));
   fireEvent.click(await screen.findByRole("option", { name: "USB headset" }));
@@ -193,7 +193,7 @@ test("device menus expose styled options and apply the selected device", async (
 test("Variables displays the latest authorized snapshot by section", () => {
   render(
     <CallConsole
-      client={createFixtureClient("conversation")}
+      controller={createFixtureController("conversation")}
       initialTab="variables"
     />,
   );
@@ -204,7 +204,7 @@ test("Variables displays the latest authorized snapshot by section", () => {
 });
 
 test("configured participants remain in the sidebar before joining", () => {
-  render(<CallConsole client={createFixtureClient("ready")} />);
+  render(<CallConsole controller={createFixtureController("ready")} />);
 
   const caller = screen.getByRole("button", { name: "View Caller details" });
   expect(caller).toHaveTextContent("WebRTC");
@@ -230,7 +230,7 @@ test("configured participants remain in the sidebar before joining", () => {
 });
 
 test("a phone caller displays its E.164 number without repeating connection state", () => {
-  render(<CallConsole client={createFixtureClient("phone-caller")} />);
+  render(<CallConsole controller={createFixtureController("phone-caller")} />);
 
   const caller = screen.getByRole("button", { name: "View Caller details" });
   expect(caller).toHaveTextContent("+14155550123");
@@ -241,7 +241,7 @@ test("a phone caller displays its E.164 number without repeating connection stat
 });
 
 test("a connected non-caller displays its connection method", () => {
-  render(<CallConsole client={createFixtureClient("human-handoff")} />);
+  render(<CallConsole controller={createFixtureController("human-handoff")} />);
 
   const support = screen.getByRole("button", {
     name: "View Support teammate details",
@@ -252,7 +252,7 @@ test("a connected non-caller displays its connection method", () => {
 });
 
 test("a transferred human keeps connection media separate from configured capabilities", () => {
-  render(<CallConsole client={createFixtureClient("human-handoff")} />);
+  render(<CallConsole controller={createFixtureController("human-handoff")} />);
 
   fireEvent.click(
     screen.getByRole("button", { name: "View Support teammate details" }),
@@ -266,7 +266,7 @@ test("a transferred human keeps connection media separate from configured capabi
 });
 
 test("a sidebar participant opens their authorized configuration", () => {
-  render(<CallConsole client={createFixtureClient("conversation")} />);
+  render(<CallConsole controller={createFixtureController("conversation")} />);
 
   const tabs = within(screen.getByRole("navigation", { name: "Call views" }))
     .getAllByRole("button")
@@ -302,7 +302,7 @@ test("a sidebar participant opens their authorized configuration", () => {
 test("Metrics presents every scope in one measurement table", () => {
   render(
     <CallConsole
-      client={createFixtureClient("conversation")}
+      controller={createFixtureController("conversation")}
       initialTab="metrics"
     />,
   );
@@ -334,7 +334,7 @@ test("Metrics presents every scope in one measurement table", () => {
 test("Metrics keeps source and measurement context in a cell tooltip", async () => {
   render(
     <CallConsole
-      client={createFixtureClient("conversation")}
+      controller={createFixtureController("conversation")}
       initialTab="metrics"
     />,
   );
@@ -354,7 +354,7 @@ test("Metrics keeps source and measurement context in a cell tooltip", async () 
 test("Metrics expands compact column labels in a tooltip", async () => {
   render(
     <CallConsole
-      client={createFixtureClient("conversation")}
+      controller={createFixtureController("conversation")}
       initialTab="metrics"
     />,
   );
@@ -372,7 +372,7 @@ test("Metrics expands compact column labels in a tooltip", async () => {
 });
 
 test("a message time exposes its correlated turn metrics on focus", async () => {
-  render(<CallConsole client={createFixtureClient("conversation")} />);
+  render(<CallConsole controller={createFixtureController("conversation")} />);
 
   fireEvent.focus(
     screen.getAllByRole("button", {
@@ -389,7 +389,7 @@ test("a message time exposes its correlated turn metrics on focus", async () => 
 
 test("timeline times show local clock time and disclose the UTC instant", async () => {
   const { container } = render(
-    <CallConsole client={createFixtureClient("conversation")} />,
+    <CallConsole controller={createFixtureController("conversation")} />,
   );
 
   const timestamp = container.querySelector(
@@ -407,7 +407,7 @@ test("timeline times show local clock time and disclose the UTC instant", async 
 });
 
 test("completed turns show final metrics only with authoritative inputs", async () => {
-  render(<CallConsole client={createFixtureClient("conversation")} />);
+  render(<CallConsole controller={createFixtureController("conversation")} />);
 
   const completedTurn = screen
     .getByText(/Hi! I can help you arrange a delivery/)

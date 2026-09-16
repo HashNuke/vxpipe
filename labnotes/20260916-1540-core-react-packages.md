@@ -18,3 +18,22 @@
   workspace root explicitly and retained the shared configuration.
 - Evidence: five focused Vitest tests pass, the Core TypeScript declaration/ESM build passes, and
   the root strict TypeScript check passes.
+
+## React controller checkpoint
+
+- Added failing React tests using typed mock endpoint responses for an ended call and an ongoing
+  call inspected without joining RTVI. Both initially failed because `CallConsole` still required
+  the old combined client.
+- Replaced the combined client prop with a host-composed `CallConsoleController`: durable details
+  are required, while history actions and live controls are optional. Remote calls render without
+  device controls, a call action, or a composer; attaching live controls restores those actions.
+- Moved the combined rendering shape inside React as a derived view model. Core now exposes only
+  durable call-details, loader/controller, and local live-control contracts.
+- Migrated Storybook to a TypeScript fixture controller that projects its synthetic state into the
+  same call-details and local-session shapes. Existing interaction stories and tests use the new
+  boundary.
+- Added explicit remote-ended and remote-ongoing stories. Rendered desktop and 390px browser checks
+  showed remote data without device/call/composer controls and preserved the attached-live layout.
+- Package dry runs exposed stale files left in `dist` by incremental source deletion. Added an
+  explicit clean step before each package build so tarballs contain only current ESM, declarations,
+  CSS, manifests, and README files.

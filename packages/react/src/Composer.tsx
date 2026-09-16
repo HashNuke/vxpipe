@@ -1,12 +1,12 @@
 import { useId, useState, type KeyboardEvent } from "react";
-import type { VxpipeClient } from "@vxpipe/core";
+import type { LiveCallControls } from "@vxpipe/core";
 import { Icon } from "./Icon.js";
 
 export function Composer({
-  client,
+  controls,
   disabled,
 }: {
-  client: VxpipeClient;
+  controls: LiveCallControls;
   disabled: boolean;
 }) {
   const id = useId();
@@ -18,7 +18,7 @@ export function Composer({
     setPending(true);
     setError("");
     try {
-      await client.sendText(draft.trim());
+      await controls.sendText(draft.trim());
       setDraft("");
     } catch {
       setError(

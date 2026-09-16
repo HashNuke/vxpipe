@@ -1,11 +1,11 @@
 import { useId, useState } from "react";
 import type {
   ActivityEvent,
-  CallSnapshot,
   Message,
   ProtocolEvent,
   ToolCall,
 } from "@vxpipe/core";
+import type { ConsoleSnapshot } from "./types.js";
 import {
   ChevronDown,
   CircleAlert,
@@ -45,7 +45,7 @@ function MessageText({
   alignment,
 }: {
   message: Message;
-  alignment: CallSnapshot["alignment"];
+  alignment: ConsoleSnapshot["alignment"];
 }) {
   const range = alignment !== "unavailable" && message.spokenRange;
   if (
@@ -70,7 +70,7 @@ function MessageRow({
   theme,
 }: {
   message: Message;
-  snapshot: CallSnapshot;
+  snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
 }) {
   const person = snapshot.participants.find(
@@ -294,7 +294,7 @@ type TimelineItem =
   | { kind: "tools"; id: string; occurredAt: string; value: ToolCall }
   | { kind: "logs"; id: string; occurredAt: string; value: ProtocolEvent };
 
-function timeline(snapshot: CallSnapshot, filters: Filters): TimelineItem[] {
+function timeline(snapshot: ConsoleSnapshot, filters: Filters): TimelineItem[] {
   const items: TimelineItem[] = [];
   if (filters.messages)
     items.push(
@@ -346,7 +346,7 @@ export function Conversation({
   snapshot,
   theme = "dark",
 }: {
-  snapshot: CallSnapshot;
+  snapshot: ConsoleSnapshot;
   theme?: "light" | "dark";
 }) {
   const [filters, setFilters] = useState<Filters>(defaultFilters);

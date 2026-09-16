@@ -1,7 +1,7 @@
 # Debug-console call details model
 
-Status: proposed design for the Core/React implementation; the Storybook prototype has not yet
-migrated to this model.
+Status: Core store/controller and React consumption implemented in the private TypeScript packages;
+real Console endpoint and RTVI adapters remain pending.
 
 ## Problem
 
@@ -43,9 +43,9 @@ interface CallDetailsSnapshot {
 interface CallDetailsStore {
   getSnapshot(): CallDetailsSnapshot;
   subscribe(listener: () => void): () => void;
-  replaceBaseline(snapshot: CallDetailsSnapshot): void;
-  mergePage(page: CallDetailsPage): void;
-  apply(update: CallDetailsUpdate): void;
+  replaceBaseline(snapshot: CallDetailsSnapshot): boolean;
+  mergePage(page: CallDetailsPage): boolean;
+  apply(update: CallDetailsUpdate): boolean;
 }
 
 interface CallDetailsLoader {
@@ -185,17 +185,22 @@ know whether the change came from RTVI, a live-inspection refresh, or a historic
 
 ## Implementation and verification
 
-Migrate in a focused Core checkpoint before connecting a real transport:
+The private Core/React checkpoint now provides:
 
-1. Define the serializable types, normalized reducer, selectors, injected loader/store interfaces,
-   and separate live-control interface.
-2. Adapt the existing Storybook fixture through the store so the current UI remains reviewable.
-3. Prove newer/duplicate/stale revisions, tombstones, out-of-order updates, incarnation rejection,
-   variable replacement, page overlap, deterministic ordering, and known gaps in Core tests.
-4. Render the same call from a replayed live-update fixture and a historical snapshot fixture and
-   assert the resulting presentation is equivalent.
-5. Verify unavailable/redacted fields, an incomplete archive, a read-only historical call, older-
-   page loading, reconnect resynchronization, and browser cleanup.
+1. Serializable types, normalized reducer, selectors, injected loader/store interfaces, and a
+   separate live-control interface.
+2. Storybook fixtures using the same controller boundary, including remote-ended, remote-ongoing,
+   and attached-live states.
+3. Core tests for newer/duplicate/stale revisions, tombstones, call-incarnation rejection, raw RTVI
+   receipt immutability, variable/page reconciliation, deterministic ordering, completeness/gaps,
+   and live-update replay across baseline refresh.
+4. React tests that hydrate typed mock endpoint responses and render ongoing and ended calls without
+   live controls, alongside the existing attached-live interaction suite.
+5. TypeScript ESM/declaration builds, package tarball dry runs, Storybook production build, and
+   rendered desktop/390px review.
+
+The real Console endpoint adapter, runtime response validation, RTVI decoder, WebRTC transport, and
+authorized browser routes are later implementation checkpoints.
 
 This design does not claim that current RTVI messages provide all required identity or revisions.
 The roster/output-attribution wire design remains a gate: an adapter may emit a normalized update

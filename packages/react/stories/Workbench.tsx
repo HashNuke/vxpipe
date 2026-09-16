@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CallConsole } from "../src/index.js";
 import {
-  createFixtureClient,
+  createFixtureController,
   type ExampleScenario,
   type Scenario,
 } from "./fixtureClient.js";
@@ -14,6 +14,7 @@ export interface WorkbenchProps {
   ready?: boolean;
   initialTab?: "chat" | "variables" | "metrics" | "participants";
   animateSpeech?: boolean;
+  attached?: boolean;
 }
 
 export function Workbench({
@@ -23,6 +24,7 @@ export function Workbench({
   ready = true,
   initialTab = "chat",
   animateSpeech = false,
+  attached = true,
 }: WorkbenchProps) {
   const [page, setPage] = useState(initialPage);
   const [theme, setTheme] = useState(initialTheme);
@@ -31,8 +33,17 @@ export function Workbench({
   const [startScenario, setStartScenario] =
     useState<ExampleScenario>("conversation");
   const client = useMemo(
-    () => createFixtureClient(selectedScenario, startScenario),
+    () => createFixtureController(selectedScenario, startScenario),
     [selectedScenario, startScenario, run],
+  );
+  const controller = useMemo(
+    () =>
+      attached
+        ? client
+        : {
+            details: client.details,
+          },
+    [attached, client],
   );
   useEffect(() => {
     if (!animateSpeech || page !== "console") return;
@@ -109,7 +120,7 @@ export function Workbench({
         <div className="prototype-console-page">
           <CallConsole
             key={`${run}-${selectedScenario}`}
-            client={client}
+            controller={controller}
             initialTab={initialTab}
             maxHeight="calc(100dvh - 132px)"
             theme={theme}

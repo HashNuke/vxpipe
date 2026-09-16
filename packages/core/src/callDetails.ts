@@ -23,6 +23,8 @@ export interface CallIdentityAndLifecycle {
   startedAt: string | null;
   endedAt: string | null;
   terminalReason: string | null;
+  /** Authoritative elapsed call duration when known. */
+  durationMs: number | null;
 }
 
 export interface CallIncarnation {

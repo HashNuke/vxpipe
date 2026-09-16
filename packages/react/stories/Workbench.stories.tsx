@@ -18,6 +18,7 @@ const meta = {
     scenario: "conversation",
     ready: true,
     animateSpeech: false,
+    attached: true,
     page: "console",
     initialTab: "chat",
   },
@@ -54,6 +55,10 @@ const meta = {
       control: "boolean",
       description: "Animate fixture word timing without playing audio.",
     },
+    attached: {
+      control: "boolean",
+      description: "Attach the synthetic live RTVI and device controller.",
+    },
   },
 } satisfies Meta<typeof Workbench>;
 export default meta;
@@ -75,6 +80,12 @@ export const MicrophoneDeniedBeforeCall: Story = {
 };
 export const NoWordTiming: Story = { args: { scenario: "no-alignment" } };
 export const Ended: Story = { args: { scenario: "ended" } };
+export const RemoteEnded: Story = {
+  args: { scenario: "ended", attached: false },
+};
+export const RemoteOngoing: Story = {
+  args: { scenario: "conversation", attached: false },
+};
 export const ConnectionFailed: Story = { args: { scenario: "failed" } };
 export const Light: Story = { args: { theme: "light" } };
 export const SetupIncomplete: Story = { args: { page: "setup", ready: false } };

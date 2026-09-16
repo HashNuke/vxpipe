@@ -1,6 +1,5 @@
 export type {
   ActivityEvent,
-  CallSnapshot,
   JsonValue,
   Message,
   Metric,
@@ -14,13 +13,17 @@ export type {
   ToolCall,
   VariableSection,
   VariableSnapshot,
-  VxpipeClient,
 } from "./types.js";
 
 export {
   createCallDetailsController,
   createCallDetailsStore,
 } from "./callDetails.js";
+export type {
+  CallConsoleController,
+  LiveCallControls,
+  LocalSessionSnapshot,
+} from "./liveSession.js";
 export type {
   Available,
   CallDetailsCompleteness,

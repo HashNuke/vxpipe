@@ -14,8 +14,8 @@ loopback, and serves the prototype independently of Phoenix, PostgreSQL and prov
 
 | Package | Responsibility |
 | --- | --- |
-| [@vxpipe/core](core) | Framework-neutral client contracts: snapshots, events, participants, messages, metrics and device commands. |
-| [@vxpipe/react](react) | React components consuming that public client contract; package-owned CSS and Storybook. |
+| [@vxpipe/core](core) | Framework-neutral TypeScript call-details store, revision reconciliation, host loading controller, and live-control contracts. |
+| [@vxpipe/react](react) | TypeScript React components consuming the injected Core controller; package-owned CSS and Storybook. |
 
 Both packages are `private: true`. Nothing is published or reserved on npm. The existing
 Phoenix asset project and documentation site retain their own dependency installations.
@@ -38,7 +38,7 @@ missing timing, metrics, RTVI-only events, and partial/complete setup. You can s
 change devices, filter/pause/inspect events, switch themes, and complete the sample setup form.
 Use sample values in that form. Reloading discards prototype setup state.
 
-The `stories/` directory owns the fake client and the application-specific Getting Started page;
+The `stories/` directory owns the fake controller and the application-specific Getting Started page;
 neither is exported by the React package. Real protocol/media adapters, platform bootstrap,
 durable setup and production route integration remain in the [milestones](../docs/milestones/index.md).
 

@@ -1,4 +1,5 @@
-import type { CallSnapshot, Metric, MetricScope } from "@vxpipe/core";
+import type { Metric, MetricScope } from "@vxpipe/core";
+import type { ConsoleSnapshot } from "./types.js";
 import { MetricCellTooltip } from "./MetricCellTooltip.js";
 import { MetricHeaderTooltip } from "./MetricHeaderTooltip.js";
 import { participantDisplayName } from "./participantDisplayName.js";
@@ -68,7 +69,7 @@ function scopeKey(scope: MetricScope) {
   return `participant-capability:${scope.participantId}:${scope.capability}`;
 }
 
-function rowIdentity(scope: MetricScope, snapshot: CallSnapshot) {
+function rowIdentity(scope: MetricScope, snapshot: ConsoleSnapshot) {
   const scopeLabel = scopeLabels[scope.kind];
   if (scope.kind === "room")
     return { scopeLabel, target: "Call", accessibleName: "Room" };
@@ -98,7 +99,7 @@ function rowIdentity(scope: MetricScope, snapshot: CallSnapshot) {
   };
 }
 
-function metricRows(snapshot: CallSnapshot) {
+function metricRows(snapshot: ConsoleSnapshot) {
   const rows = new Map<string, MetricRow>();
   snapshot.metrics.forEach((metric) => {
     const key = scopeKey(metric.scope);
@@ -139,7 +140,7 @@ export function Metrics({
   snapshot,
   theme,
 }: {
-  snapshot: CallSnapshot;
+  snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
 }) {
   const columns = metricColumns(snapshot.metrics);

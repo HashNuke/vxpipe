@@ -121,11 +121,11 @@ when the call ends. The same console will run Getting Started examples.
 - [ ] Record/review the client public API, separate protocol/media adapters, capabilities and
   import rules, plus the safe tenant route-selection/preparation boundary. Keep source isolated
   in the confirmed Core/React workspaces without introducing package publishing now.
-- [ ] Red-test and implement the normalized call-details store before a real adapter: live semantic
+- [x] Red-test and implement the normalized call-details store before a real adapter: live semantic
   upserts, duplicate/stale revisions, tombstones, call-incarnation rejection, deterministic order,
   cursor-page overlap, completeness/gaps, and reconnect baseline replacement. Keep raw RTVI receipt
   logs append-only and keep local device/control state outside the serializable call record.
-- [ ] Feed equivalent remote ongoing, attached-live and remote ended fixtures through that store
+- [x] Feed equivalent remote ongoing, attached-live and remote ended fixtures through that store
   and render the same Conversation, Variables, Metrics, and Participants data. The Console host
   fetches with the authorized Calls inspection cursor and optional immutable call-details
   publication, then injects those payloads and loading callbacks; RTVI contributes only attached-

@@ -27,9 +27,6 @@ const controller = createCallDetailsController({
 An ended call can omit the loader. An RTVI adapter can call `controller.apply(update)` for the live
 edge of an attached call. Core never fetches a tenant endpoint itself.
 
-The older combined `VxpipeClient`/`CallSnapshot` presentation contract remains temporarily exported
-while the React package migrates to the split call-details and live-controls interfaces.
-
 Type-check and build from the repository root with:
 
 ```sh

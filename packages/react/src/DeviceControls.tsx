@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { CallSnapshot, VxpipeClient } from "@vxpipe/core";
+import type { LiveCallControls } from "@vxpipe/core";
+import type { ConsoleSnapshot } from "./types.js";
 import { Icon } from "./Icon.js";
 import {
   Select,
@@ -11,11 +12,11 @@ import {
 
 export function DeviceControls({
   snapshot,
-  client,
+  controls,
   theme = "dark",
 }: {
-  snapshot: CallSnapshot;
-  client: VxpipeClient;
+  snapshot: ConsoleSnapshot;
+  controls: LiveCallControls;
   theme?: "light" | "dark";
 }) {
   const [error, setError] = useState("");
@@ -47,7 +48,7 @@ export function DeviceControls({
             }
             disabled={!active || snapshot.microphone === "denied"}
             onClick={() =>
-              void act(() => client.setMicrophone(snapshot.microphone !== "on"))
+              void act(() => controls.setMicrophone(snapshot.microphone !== "on"))
             }
           >
             <Icon name="mic" />
@@ -59,7 +60,7 @@ export function DeviceControls({
             disabled={!active || snapshot.microphone === "denied"}
             value={snapshot.inputDevice}
             onValueChange={(value) =>
-              void act(() => client.selectDevice("input", value))
+              void act(() => controls.selectDevice("input", value))
             }
           >
             <SelectTrigger aria-label="Input device">
@@ -83,7 +84,7 @@ export function DeviceControls({
             aria-pressed={snapshot.speakerMuted}
             title={snapshot.speakerMuted ? "Unmute speaker" : "Mute speaker"}
             onClick={() =>
-              void act(() => client.setSpeakerMuted(!snapshot.speakerMuted))
+              void act(() => controls.setSpeakerMuted(!snapshot.speakerMuted))
             }
           >
             <Icon name="speaker" />
@@ -95,7 +96,7 @@ export function DeviceControls({
             disabled={!snapshot.devices.outputSelection}
             value={snapshot.outputDevice}
             onValueChange={(value) =>
-              void act(() => client.selectDevice("output", value))
+              void act(() => controls.selectDevice("output", value))
             }
           >
             <SelectTrigger aria-label="Output device">

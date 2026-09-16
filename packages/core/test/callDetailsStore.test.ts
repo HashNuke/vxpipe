@@ -18,6 +18,7 @@ function endpointResponse(): CallDetailsSnapshot {
       startedAt: "2026-09-16T08:00:01.000Z",
       endedAt: null,
       terminalReason: null,
+      durationMs: 3_000,
     },
     incarnation: { roomId: "room-001", incarnationId: "inc-001" },
     participants: [
@@ -192,6 +193,11 @@ describe("call details store", () => {
         },
       ],
       olderCursor: null,
+      completeness: {
+        state: "incomplete",
+        missingSequenceCount: 2,
+        droppedLiveRecords: 1,
+      },
     };
 
     expect(store.mergePage(page)).toBe(true);
@@ -201,6 +207,11 @@ describe("call details store", () => {
       "rtvi-receipt-1",
     ]);
     expect(store.getSnapshot().olderCursor).toBeNull();
+    expect(store.getSnapshot().completeness).toEqual({
+      state: "incomplete",
+      missingSequenceCount: 2,
+      droppedLiveRecords: 1,
+    });
   });
 
   test("rejects stale incarnations and supports explicit tombstones", () => {
@@ -255,5 +266,48 @@ describe("call details controller", () => {
     expect(store.getSnapshot().olderCursor).toBeNull();
 
     controller.dispose();
+  });
+
+  test("replays live updates received while a remote baseline refresh is pending", async () => {
+    const store = createCallDetailsStore(endpointResponse());
+    let resolveRefresh: (snapshot: CallDetailsSnapshot) => void = () => undefined;
+    const loader = {
+      refresh: vi.fn(
+        async () =>
+          new Promise<CallDetailsSnapshot>((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      ),
+      loadOlder: vi.fn(),
+    };
+    const controller = createCallDetailsController({ store, loader });
+    const refresh = controller.refresh();
+
+    controller.apply({
+      type: "timeline-upsert",
+      callId: "call-001",
+      incarnationId: "inc-001",
+      entity: {
+        id: "message-2",
+        revision: 2,
+        sourceSequence: 2,
+        kind: "message",
+        value: {
+          id: "message-2",
+          participantId: "assistant",
+          text: "Live update during refresh",
+          occurredAt: "2026-09-16T08:00:03.000Z",
+          state: "final",
+        },
+      },
+    });
+    resolveRefresh(endpointResponse());
+    await refresh;
+
+    expect(store.getSnapshot().timeline[0]).toMatchObject({
+      id: "message-2",
+      revision: 2,
+      value: { text: "Live update during refresh" },
+    });
   });
 });

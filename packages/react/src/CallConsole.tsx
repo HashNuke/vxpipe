@@ -1,5 +1,9 @@
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
-import type { VxpipeClient } from "@vxpipe/core";
+import type {
+  CallConsoleController,
+  CallDetailsSnapshot,
+  LocalSessionSnapshot,
+} from "@vxpipe/core";
 import { PhoneCall, PhoneOff } from "lucide-react";
 import { Participants } from "./Participants.js";
 import { ParticipantDetails } from "./ParticipantDetails.js";
@@ -7,11 +11,82 @@ import { Conversation } from "./Conversation.js";
 import { Composer } from "./Composer.js";
 import { DeviceControls } from "./DeviceControls.js";
 import { Metrics } from "./Metrics.js";
+import type { ConsoleSnapshot } from "./types.js";
 import { Variables } from "./Variables.js";
 
 type Tab = "chat" | "variables" | "metrics" | "participants";
 
-function defaultParticipantId(snapshot: ReturnType<VxpipeClient["getSnapshot"]>) {
+const detachedSession: LocalSessionSnapshot = {
+  connectionState: "ready",
+  alignment: "unavailable",
+  microphone: "off",
+  speakerMuted: false,
+  inputDevice: "",
+  outputDevice: "",
+  devices: { inputs: [], outputs: [], outputSelection: false },
+};
+const subscribeDetached = () => () => undefined;
+const getDetachedSession = () => detachedSession;
+
+function formatDuration(durationMs: number | null) {
+  const seconds = Math.max(0, Math.floor((durationMs ?? 0) / 1_000));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function consoleSnapshot(
+  details: CallDetailsSnapshot,
+  local: LocalSessionSnapshot,
+  attached: boolean,
+): ConsoleSnapshot {
+  const messages = [];
+  const activities = [];
+  const toolCalls = [];
+  const events = [];
+  for (const entity of details.timeline) {
+    if (entity.kind === "message") messages.push(entity.value);
+    if (entity.kind === "activity") activities.push(entity.value);
+    if (entity.kind === "tool-call") toolCalls.push(entity.value);
+    if (entity.kind === "protocol-event") events.push(entity.value);
+  }
+  const state =
+    details.call.state === "failed" || local.connectionState === "failed"
+      ? "failed"
+      : details.call.state === "ended"
+        ? "ended"
+        : attached && local.connectionState === "connected"
+          ? "connected"
+          : "ready";
+  const alignment = attached
+    ? local.alignment
+    : messages.some((message) => message.spokenRange)
+      ? "word"
+      : "unavailable";
+
+  return {
+    callId: details.call.id,
+    state,
+    duration: formatDuration(details.call.durationMs),
+    participants: details.participants.map((participant) => participant.value),
+    messages,
+    activities,
+    toolCalls,
+    events,
+    metrics: details.metrics.map((metric) => metric.value),
+    metricsEnabled: details.metrics.length > 0,
+    variables:
+      details.variables.state === "available" ? details.variables.value : null,
+    alignment,
+    microphone: local.microphone,
+    speakerMuted: local.speakerMuted,
+    inputDevice: local.inputDevice,
+    outputDevice: local.outputDevice,
+    devices: local.devices,
+    notice: local.notice,
+  };
+}
+
+function defaultParticipantId(snapshot: ConsoleSnapshot) {
   return (
     snapshot.participants.find((participant) => participant.role === "agent")?.id ??
     snapshot.participants[0]?.id ??
@@ -20,23 +95,30 @@ function defaultParticipantId(snapshot: ReturnType<VxpipeClient["getSnapshot"]>)
 }
 
 export interface CallConsoleProps {
-  client: VxpipeClient;
+  controller: CallConsoleController;
   initialTab?: Tab;
   theme?: "light" | "dark";
   maxHeight?: CSSProperties["maxHeight"];
 }
 
 export function CallConsole({
-  client,
+  controller,
   initialTab = "chat",
   theme = "dark",
   maxHeight,
 }: CallConsoleProps) {
-  const snapshot = useSyncExternalStore(
-    client.subscribe,
-    client.getSnapshot,
-    client.getSnapshot,
+  const details = useSyncExternalStore(
+    controller.details.subscribe,
+    controller.details.getSnapshot,
+    controller.details.getSnapshot,
   );
+  const live = controller.live;
+  const local = useSyncExternalStore(
+    live?.subscribe ?? subscribeDetached,
+    live?.getSnapshot ?? getDetachedSession,
+    live?.getSnapshot ?? getDetachedSession,
+  );
+  const snapshot = consoleSnapshot(details, local, live !== undefined);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(
     defaultParticipantId(snapshot),
@@ -44,8 +126,8 @@ export function CallConsole({
   const [runRevision, setRunRevision] = useState(0);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const connected = snapshot.state === "connected";
-  const ended = snapshot.state === "ended" || snapshot.state === "failed";
+  const connected = live !== undefined && local.connectionState === "connected";
+  const ended = details.call.state === "ended" || details.call.state === "failed";
   const selectedParticipant =
     snapshot.participants.find(
       (participant) => participant.id === selectedParticipantId,
@@ -57,14 +139,20 @@ export function CallConsole({
     setTab("participants");
   };
   const act = async () => {
+    if (!live) return;
     setError("");
     setPending(true);
     try {
-      if (connected) await client.disconnect();
+      if (connected) await live.disconnect();
       else {
-        await client.connect();
+        await live.connect();
         if (ended) {
-          const nextSnapshot = client.getSnapshot();
+          const nextDetails = controller.details.getSnapshot();
+          const nextSnapshot = consoleSnapshot(
+            nextDetails,
+            live.getSnapshot(),
+            true,
+          );
           setTab("chat");
           setSelectedParticipantId(defaultParticipantId(nextSnapshot));
           setRunRevision((revision) => revision + 1);
@@ -78,43 +166,47 @@ export function CallConsole({
       setPending(false);
     }
   };
+  const status = connected
+    ? "Connected"
+    : details.call.state === "ended"
+      ? "Call ended"
+      : details.call.state === "failed"
+        ? "Connection failed"
+        : details.call.state === "running"
+          ? "In progress"
+          : "Ready";
+
   return (
-    <div
-      className="vx-console"
-      data-vx-theme={theme}
-      style={{ maxHeight }}
-    >
+    <div className="vx-console" data-vx-theme={theme} style={{ maxHeight }}>
       <header className="vx-call-header">
-        <DeviceControls snapshot={snapshot} client={client} theme={theme} />
+        {live && (
+          <DeviceControls snapshot={snapshot} controls={live} theme={theme} />
+        )}
         <div className="vx-call-actions">
-          <button
-            className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
-            disabled={pending}
-            onClick={() => void act()}
-          >
-            {connected ? (
-              <PhoneOff aria-hidden="true" />
-            ) : (
-              <PhoneCall aria-hidden="true" />
-            )}
-            {pending
-              ? "Please wait"
-              : connected
-                ? "Leave call"
-                : ended
-                  ? "Call"
-                  : "Start call"}
-          </button>
+          {live && (
+            <button
+              className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
+              disabled={pending}
+              onClick={() => void act()}
+            >
+              {connected ? (
+                <PhoneOff aria-hidden="true" />
+              ) : (
+                <PhoneCall aria-hidden="true" />
+              )}
+              {pending
+                ? "Please wait"
+                : connected
+                  ? "Leave call"
+                  : ended
+                    ? "Call"
+                    : "Start call"}
+            </button>
+          )}
           <div className="vx-call-action-meta">
             <span className={`vx-call-state vx-state-${snapshot.state}`}>
               <i />
-              {connected
-                ? "Connected"
-                : snapshot.state === "ended"
-                  ? "Call ended"
-                  : snapshot.state === "failed"
-                    ? "Connection failed"
-                    : "Ready"}
+              {status}
             </span>
             <time>{snapshot.duration}</time>
           </div>
@@ -157,7 +249,9 @@ export function CallConsole({
           {tab === "participants" && (
             <ParticipantDetails participant={selectedParticipant} />
           )}
-          {tab === "chat" && <Composer client={client} disabled={!connected} />}
+          {tab === "chat" && live && (
+            <Composer controls={live} disabled={!connected} />
+          )}
         </main>
       </div>
     </div>
