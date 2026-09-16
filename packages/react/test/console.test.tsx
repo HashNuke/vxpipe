@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { expect, test } from "vitest";
 import { CallConsole } from "../src/index.js";
 import { createFixtureClient } from "../stories/fixtureClient.js";
@@ -135,4 +141,37 @@ test("a message time exposes its correlated turn metrics on focus", async () => 
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
     "First model token312 ms",
   );
+});
+
+test("metric-enabled turns reserve the metrics action before the time", () => {
+  render(<CallConsole client={createFixtureClient("conversation")} />);
+
+  const completedTurn = screen
+    .getByText(/Hi! I can help you arrange a delivery/)
+    .closest("article");
+  expect(completedTurn).not.toBeNull();
+  expect(
+    within(completedTurn!).getByRole("button", {
+      name: "Metrics unavailable for Assistant at 00:02",
+    }),
+  ).toBeDisabled();
+
+  const streamingTurn = screen
+    .getByText(/Of course. Let's find a time/)
+    .closest("article");
+  expect(streamingTurn).not.toBeNull();
+  const streaming = within(streamingTurn!).getByRole("img", {
+    name: "Streaming",
+  });
+  const metrics = within(streamingTurn!).getByRole("button", {
+    name: "View metrics for Assistant at 00:10",
+  });
+  const time = within(streamingTurn!).getByText("00:10");
+
+  expect(
+    streaming.compareDocumentPosition(metrics) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    metrics.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });

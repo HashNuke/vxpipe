@@ -340,7 +340,6 @@
 .vx-message > div {
   min-width: 0;
   flex: 1;
-  max-width: 66ch;
 }
 .vx-message header {
   display: flex;
@@ -348,6 +347,7 @@
   flex-wrap: wrap;
   gap: 12px;
   margin: 2px 0 8px;
+  padding-right: 12px;
 }
 .vx-message strong {
   margin-right: auto;
@@ -369,7 +369,7 @@
   background: transparent;
   color: var(--vx-muted);
 }
-.vx-turn-metrics-button:hover,
+.vx-turn-metrics-button:hover:not(:disabled),
 .vx-turn-metrics-button:focus-visible {
   background: var(--vx-soft);
   color: var(--vx-ink);
@@ -447,7 +447,6 @@
   font-size: 12px;
 }
 .vx-timeline-activity time,
-.vx-timeline-tool time,
 .vx-timeline-log time {
   margin-left: auto;
   color: var(--vx-muted);
@@ -456,9 +455,8 @@
 }
 .vx-timeline-tool {
   margin: 0 0 20px 44px;
-  border: 1px solid var(--vx-line);
-  border-radius: 6px;
-  background: var(--vx-panel);
+  border-left: 2px solid var(--vx-violet);
+  background: color-mix(in oklch, var(--vx-violet) 7%, var(--vx-panel));
   overflow: hidden;
 }
 .vx-tool-summary {
@@ -481,9 +479,15 @@ button.vx-tool-summary:hover {
   color: var(--vx-violet);
 }
 .vx-timeline-tool strong {
+  margin-right: auto;
   color: var(--vx-ink);
   font: 12px var(--vx-mono);
   overflow-wrap: anywhere;
+}
+.vx-tool-summary time {
+  color: var(--vx-muted);
+  font: 12px var(--vx-mono);
+  white-space: nowrap;
 }
 .vx-tool-chevron {
   width: 14px;

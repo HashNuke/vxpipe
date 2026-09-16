@@ -186,6 +186,7 @@ const initial: CallSnapshot = {
       },
     },
   },
+  metricsEnabled: true,
   metrics: [
     {
       label: "Speech recognition",

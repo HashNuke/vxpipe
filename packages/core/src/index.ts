@@ -94,6 +94,7 @@ export interface CallSnapshot {
   toolCalls: readonly ToolCall[];
   events: readonly ProtocolEvent[];
   metrics: readonly Metric[];
+  metricsEnabled: boolean;
   /** Latest full projection authorized for this client; null when unavailable. */
   variables: VariableSnapshot | null;
   alignment: "word" | "segment" | "unavailable";

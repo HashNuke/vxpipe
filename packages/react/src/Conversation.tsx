@@ -87,15 +87,25 @@ function MessageRow({
               <i />
             </span>
           )}
+          {snapshot.metricsEnabled &&
+            (message.metrics && message.metrics.length > 0 ? (
+              <TurnMetricsTooltip
+                metrics={message.metrics}
+                speaker={person?.name ?? "Unknown speaker"}
+                time={message.time}
+                theme={theme}
+              />
+            ) : (
+              <button
+                className="vx-turn-metrics-button"
+                aria-label={`Metrics unavailable for ${person?.name ?? "Unknown speaker"} at ${message.time}`}
+                title="Metrics unavailable"
+                disabled
+              >
+                <Icon name="metrics" />
+              </button>
+            ))}
           <time>{message.time}</time>
-          {message.metrics && message.metrics.length > 0 && (
-            <TurnMetricsTooltip
-              metrics={message.metrics}
-              speaker={person?.name ?? "Unknown speaker"}
-              time={message.time}
-              theme={theme}
-            />
-          )}
         </header>
         <p>
           <MessageText message={message} alignment={snapshot.alignment} />
@@ -141,7 +151,6 @@ function ToolRow({ tool }: { tool: ToolCall }) {
       {hasDetails && (
         <ChevronDown className="vx-tool-chevron" aria-hidden="true" />
       )}
-      <time>{tool.time}</time>
       <span
         className={`vx-tool-status vx-tool-${tool.status}`}
         role="img"
@@ -150,6 +159,7 @@ function ToolRow({ tool }: { tool: ToolCall }) {
       >
         <StatusIcon aria-hidden="true" />
       </span>
+      <time>{tool.time}</time>
     </>
   );
 
