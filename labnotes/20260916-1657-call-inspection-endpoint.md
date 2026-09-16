@@ -108,3 +108,37 @@
   tests and unused-dependency checks. The umbrella run reached one unrelated existing Gateway
   WebRTC failure at `human_transfer_webrtc_test.exs:376`; the same test also timed out in isolation
   while waiting for its native adoption gate.
+
+## Console production host
+
+- Red: the React host test failed because `CallInspectionApp` did not exist; the authenticated
+  Phoenix endpoint tests failed because `/calls/:call_id/console` was not routed.
+- Green: the HTML host safely embeds the requested call ID and loads the dedicated production
+  bundle. `CallInspectionApp` fetches once, creates the Core store/controller and injects that
+  controller into the same `@vxpipe/react` `CallConsole` exported to Storybook. Historical views do
+  not attach live call or device controls.
+- A clean `mix assets.build` exposed two React runtimes when esbuild followed source package paths.
+  The esbuild profile now aliases React and ReactDOM to the Console asset installation; the built
+  page then rendered normally.
+- Focused verification: 3 React host tests and 3 Phoenix host-route tests pass.
+- Chrome inspection used the built production JS/CSS and endpoint-shaped fixture responses.
+  Ongoing and ended calls rendered at 1440x900; the ongoing state also rendered at 390x844. Body
+  scroll width matched the viewport at both sizes, the console remained height-bounded, and no live
+  controls appeared. Screenshots were written to `/tmp` and are not repository artifacts.
+- Astra's final review exposed three integration defects before commit. The Console-only install
+  depended on undeclared root workspace output, repeated per-attempt metrics overwrote one another,
+  and unavailable duration/metrics were rendered as zero or empty data.
+- `mix assets.setup` now installs and builds the root workspaces once before the Console install;
+  the Console consumes the packages' declared distribution entry points. The exact setup/build/test
+  workflow passes from the umbrella root.
+- React now keeps every repeated metric observation in its table cell with separate source
+  tooltips. It also distinguishes unavailable metrics from an available empty report and renders an
+  unknown duration as unavailable. Three focused regressions failed first and now pass.
+- Re-inspected the metrics Storybook in Chrome at 1440x900 after the correction; the bounded table,
+  sticky target column and dark presentation remain intact. The capture is
+  `/tmp/vxpipe-metrics-rereview.png` and is not a repository artifact.
+- GPT 6 Astra xhigh cleared the corrected 1D-b checkpoint with no remaining commit blockers.
+- Final verification passes: workspace build and tests (Core 5, React 29), Console asset clean
+  setup/typecheck/build/tests (22), focused Console inspection/host tests (14), root formatting,
+  warnings-as-errors compilation, strict Credo, unused dependency check and the full umbrella test
+  suite. The final Console lane reports 133 tests, zero failures and one excluded test.

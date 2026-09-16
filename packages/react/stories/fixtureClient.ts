@@ -331,6 +331,7 @@ const initial: ConsoleSnapshot = {
     },
   },
   metricsEnabled: true,
+  metricsAvailability: "available",
   metrics: [
     {
       label: "Final transcript latency",
@@ -631,7 +632,8 @@ function detailsFromFixture(
           ? "2026-09-16T22:32:14.000Z"
           : null,
       terminalReason: snapshot.state === "failed" ? "connection_lost" : null,
-      durationMs: durationMs(snapshot.duration),
+      durationMs:
+        snapshot.duration === null ? null : durationMs(snapshot.duration),
     },
     incarnation: { roomId: "storybook-room", incarnationId: "storybook-run" },
     participants: snapshot.participants.map((value) => ({

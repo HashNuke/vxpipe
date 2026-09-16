@@ -29,7 +29,8 @@ const subscribeDetached = () => () => undefined;
 const getDetachedSession = () => detachedSession;
 
 function formatDuration(durationMs: number | null) {
-  const seconds = Math.max(0, Math.floor((durationMs ?? 0) / 1_000));
+  if (durationMs === null) return null;
+  const seconds = Math.max(0, Math.floor(durationMs / 1_000));
   const minutes = Math.floor(seconds / 60);
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
@@ -74,6 +75,7 @@ function consoleSnapshot(
     events,
     metrics: details.metrics.map((metric) => metric.value),
     metricsEnabled: details.metrics.length > 0,
+    metricsAvailability: details.metricsAvailability.state,
     variables:
       details.variables.state === "available" ? details.variables.value : null,
     alignment,
@@ -208,7 +210,7 @@ export function CallConsole({
               <i />
               {status}
             </span>
-            <time>{snapshot.duration}</time>
+            <time>{snapshot.duration ?? "—"}</time>
           </div>
         </div>
       </header>

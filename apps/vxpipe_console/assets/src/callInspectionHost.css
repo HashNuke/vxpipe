@@ -1,0 +1,46 @@
+:root {
+  color-scheme: dark;
+  background: #0f0f11;
+}
+
+body {
+  box-sizing: border-box;
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 16px;
+  background: #0f0f11;
+}
+
+#call-console-root {
+  width: min(100%, 1600px);
+  margin: 0 auto;
+}
+
+.vx-inspection-state {
+  box-sizing: border-box;
+  min-height: 160px;
+  padding: 24px;
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  color: #e4e4e7;
+  background: #18181b;
+  font: 500 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.vx-inspection-error {
+  border-color: oklch(0.56 0.185 22.23);
+  color: oklch(0.985 0 0);
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 0;
+  }
+
+  .vx-inspection-state {
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+}

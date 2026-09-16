@@ -1,6 +1,7 @@
 # Call debug console
 
-Status: private-package Storybook prototype available; production integration not implemented.
+Status: private-package Storybook prototype and database-backed production inspection host available;
+live call interaction is not implemented.
 Requested 2026-09-16; local specification review recorded below.
 Prerequisites: [Prepared calls](prepared-call-admission.md), [Call inspection](call-inspection-and-debugging.md),
 [Tenant credentials](tenant-provider-credentials-and-platform-configuration.md), and the implemented
@@ -175,11 +176,11 @@ this slice with focused endpoint tests.
 
 ### Checkpoint 1D — Connect the Console host to Core
 
-- [ ] Add a Console-owned runtime validator/mapper for the JSON response and inject the resulting
+- [x] Add a Console-owned runtime validator/mapper for the JSON response and inject the resulting
   Core snapshot into the debug console. Core and React do not fetch the route directly.
-- [ ] Red-test ongoing, ended, unavailable and malformed responses. Refresh replaces the complete
+- [x] Red-test ongoing, ended, unavailable and malformed responses. Refresh replaces the complete
   database baseline; an attached RTVI adapter may contribute only newer live updates.
-- [ ] Render the same remote ongoing and ended states through the real host adapter and inspect the
+- [x] Render the same remote ongoing and ended states through the real host adapter and inspect the
   bounded desktop/mobile states in Chrome.
 
 Exit: the production Console route renders a database-loaded call through the same reusable store

@@ -1293,6 +1293,19 @@ button.vx-tool-summary:hover {
   color: var(--vx-ink);
   text-align: left;
 }
+.vx-metric-observations {
+  display: grid;
+  min-height: 64px;
+}
+.vx-metric-observations > .vx-metric-cell + .vx-metric-cell {
+  border-top: 1px solid var(--vx-line);
+}
+.vx-metrics-empty {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  color: var(--vx-muted);
+}
 .vx-metric-cell:hover,
 .vx-metric-cell:focus-visible {
   background: var(--vx-soft);

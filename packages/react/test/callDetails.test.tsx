@@ -81,7 +81,9 @@ test("renders an ended call from a mocked endpoint response without live control
 });
 
 test("renders an ongoing remote call without joining its RTVI session", () => {
-  const store = createCallDetailsStore(mockEndpointResponse("running"));
+  const response = mockEndpointResponse("running");
+  response.call.durationMs = null;
+  const store = createCallDetailsStore(response);
   const history = createCallDetailsController({
     store,
     loader: {
@@ -94,5 +96,55 @@ test("renders an ongoing remote call without joining its RTVI session", () => {
 
   expect(screen.getByText("Loaded from call history")).toBeVisible();
   expect(screen.getByText("In progress")).toBeVisible();
+  expect(screen.getByText("—")).toBeVisible();
+  expect(screen.queryByText("00:00")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Leave call" })).not.toBeInTheDocument();
+});
+
+test("distinguishes unavailable metrics from an available empty report", () => {
+  const unavailable = createCallDetailsStore(mockEndpointResponse());
+  const { unmount } = render(
+    <CallConsole controller={{ details: unavailable }} initialTab="metrics" />,
+  );
+
+  expect(screen.getByText("Metrics unavailable.")).toBeVisible();
+  unmount();
+
+  const emptyResponse = mockEndpointResponse();
+  emptyResponse.metricsAvailability = { state: "available" };
+  const empty = createCallDetailsStore(emptyResponse);
+  render(<CallConsole controller={{ details: empty }} initialTab="metrics" />);
+
+  expect(screen.getByText("No metrics recorded.")).toBeVisible();
+});
+
+test("preserves repeated metric observations for the same target and label", () => {
+  const response = mockEndpointResponse();
+  response.metricsAvailability = { state: "available" };
+  response.metrics = [10, 20].map((value, index) => ({
+    id: `attempt-${index + 1}`,
+    revision: index + 1,
+    value: {
+      label: "Input tokens",
+      value,
+      unit: "tokens",
+      source: `LLM provider · attempt ${index + 1}`,
+      description: "Provider-reported input tokens",
+      scope: {
+        kind: "participant-capability" as const,
+        participantId: "assistant",
+        capability: "LLM",
+      },
+    },
+  }));
+
+  const details = createCallDetailsStore(response);
+  render(<CallConsole controller={{ details }} initialTab="metrics" />);
+
+  expect(
+    screen.getByRole("button", { name: "Input tokens for LLM, Assistant: 10 tokens" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Input tokens for LLM, Assistant: 20 tokens" }),
+  ).toBeVisible();
 });

@@ -57,7 +57,7 @@ interface MetricRow {
   target: string;
   accessibleName: string;
   participantName?: string;
-  metrics: Map<string, Metric>;
+  metrics: Map<string, Metric[]>;
 }
 
 function scopeKey(scope: MetricScope) {
@@ -105,14 +105,15 @@ function metricRows(snapshot: ConsoleSnapshot) {
     const key = scopeKey(metric.scope);
     const current = rows.get(key);
     if (current) {
-      current.metrics.set(metric.label, metric);
+      const observations = current.metrics.get(metric.label) ?? [];
+      current.metrics.set(metric.label, [...observations, metric]);
       return;
     }
     rows.set(key, {
       key,
       scope: metric.scope,
       ...rowIdentity(metric.scope, snapshot),
-      metrics: new Map([[metric.label, metric]]),
+      metrics: new Map([[metric.label, [metric]]]),
     });
   });
   return [...rows.values()].sort((left, right) => {
@@ -145,6 +146,22 @@ export function Metrics({
 }) {
   const columns = metricColumns(snapshot.metrics);
   const rows = metricRows(snapshot);
+
+  if (snapshot.metricsAvailability === "unavailable") {
+    return (
+      <section className="vx-metrics vx-metrics-empty" aria-label="Call metrics">
+        <p>Metrics unavailable.</p>
+      </section>
+    );
+  }
+
+  if (snapshot.metrics.length === 0) {
+    return (
+      <section className="vx-metrics vx-metrics-empty" aria-label="Call metrics">
+        <p>No metrics recorded.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="vx-metrics" aria-label="Call metrics">
@@ -179,13 +196,20 @@ export function Metrics({
                 </th>
                 {columns.map((column) => (
                   <td key={column.label}>
-                    <MetricCellTooltip
-                      hideUnit={column.hideUnit}
-                      label={column.label}
-                      metric={row.metrics.get(column.label) ?? null}
-                      target={row.accessibleName}
-                      theme={theme}
-                    />
+                    <div className="vx-metric-observations">
+                      {(row.metrics.get(column.label) ?? [null]).map(
+                        (metric, index) => (
+                          <MetricCellTooltip
+                            hideUnit={column.hideUnit}
+                            key={`${metric?.source ?? "unavailable"}:${index}`}
+                            label={column.label}
+                            metric={metric}
+                            target={row.accessibleName}
+                            theme={theme}
+                          />
+                        ),
+                      )}
+                    </div>
                   </td>
                 ))}
               </tr>

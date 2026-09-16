@@ -117,6 +117,10 @@ mix assets.setup
 bin/dev
 ```
 
+`mix assets.setup` installs and builds the root `@vxpipe/core` and `@vxpipe/react`
+workspaces before installing the Console assets. This keeps a clean Console build on the
+packages' declared distribution entry points.
+
 To check, test, or build the frontend without starting the endpoint:
 
 ```shell

@@ -1,7 +1,8 @@
 # Database-backed call inspection JSON
 
-Status: database query, response projection and authenticated HTTP resource implemented; Console
-host integration is tracked in the [call debug console milestone](milestones/call-debug-console.md).
+Status: database query, response projection, authenticated HTTP resource and Console host are
+implemented. Further live call interaction remains in the
+[call debug console milestone](milestones/call-debug-console.md).
 
 ## Decision
 
@@ -71,6 +72,11 @@ or results remain distinct from missing capture.
 The response uses snake-case JSON to match existing Vxpipe HTTP contracts. The Console host adapter
 validates and converts it to Core's camel-case TypeScript model; the reusable packages never fetch
 this route directly.
+
+The authenticated HTML host is `GET /calls/:call_id/console`. It loads the inspection resource,
+creates a Core store/controller and renders `@vxpipe/react` without attaching live controls. A
+refresh replaces the complete database baseline through Core's controller; a future RTVI adapter
+can buffer and reapply only newer live updates during that replacement.
 
 ## Failure and security behavior
 

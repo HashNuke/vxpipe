@@ -53,6 +53,7 @@ defmodule Vxpipe.Console.Router do
   scope "/calls" do
     pipe_through [:browser, :operator]
 
+    get "/:call_id/console", Vxpipe.Console.CallConsolePageController, :show
     get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show
     get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show
 

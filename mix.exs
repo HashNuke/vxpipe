@@ -27,6 +27,8 @@ defmodule Vxpipe.MixProject do
     [
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": [
+        "do --app vxpipe_console cmd --cd ../.. npm ci",
+        "do --app vxpipe_console cmd --cd ../.. npm run build",
         "do --app vxpipe_console cmd --cd assets npm ci",
         "do --app vxpipe_console esbuild.install --if-missing"
       ],

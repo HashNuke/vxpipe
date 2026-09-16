@@ -12,7 +12,7 @@ import type {
 export interface ConsoleSnapshot {
   callId: string;
   state: "ready" | "connected" | "ended" | "failed";
-  duration: string;
+  duration: string | null;
   participants: readonly Participant[];
   messages: readonly Message[];
   activities: readonly ActivityEvent[];
@@ -20,6 +20,7 @@ export interface ConsoleSnapshot {
   events: readonly ProtocolEvent[];
   metrics: readonly Metric[];
   metricsEnabled: boolean;
+  metricsAvailability: "available" | "unavailable";
   variables: VariableSnapshot | null;
   alignment: "word" | "segment" | "unavailable";
   microphone: "off" | "on" | "denied";
