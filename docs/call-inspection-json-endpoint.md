@@ -1,7 +1,7 @@
 # Database-backed call inspection JSON
 
-Status: approved implementation design; implementation tracked in the
-[call debug console milestone](milestones/call-debug-console.md).
+Status: database query, response projection and authenticated HTTP resource implemented; Console
+host integration is tracked in the [call debug console milestone](milestones/call-debug-console.md).
 
 ## Decision
 

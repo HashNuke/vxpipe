@@ -20,6 +20,13 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireOperator
   end
 
+  pipeline :operator_api do
+    plug :accepts, ["json"]
+    plug :fetch_session
+    plug :put_secure_browser_headers
+    plug Vxpipe.Console.RequireOperator
+  end
+
   pipeline :sample_api do
     plug :accepts, ["json"]
     plug :put_secure_browser_headers
@@ -56,6 +63,12 @@ defmodule Vxpipe.Console.Router do
       live "/", Vxpipe.Console.CallInspectionLive, :index
       live "/:call_id", Vxpipe.Console.CallInspectionDetailLive, :show
     end
+  end
+
+  scope "/calls" do
+    pipe_through :operator_api
+
+    get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
   end
 
   scope "/diagnostics" do

@@ -71,3 +71,20 @@
 - Root verification also passes: format check, warnings-as-errors compile, strict Credo, full
   umbrella tests and unused dependency check. The temporary React display condition was removed;
   this checkpoint changes data contracts and fixtures but no rendered UI behavior.
+
+## Authenticated HTTP resource
+
+- Red: six endpoint tests failed with `Phoenix.Router.NoRouteError` before the route existed.
+- Green: `GET /calls/:call_id/inspection` now uses a JSON/session/operator pipeline and a thin
+  controller that delegates to the query and presenter. It returns private, non-cacheable JSON.
+- The focused endpoint coverage exercises authentication, ongoing and ended lifecycle data,
+  content type, secret/tenant redaction, indistinguishable missing/cross-tenant results, invalid
+  requests and database unavailability.
+- Focused verification: 17 query, presenter and endpoint tests pass. The injected backend proves
+  that the endpoint never asks for live inspection; source review confirms the query has no
+  publication, recording, artifact or object-storage dependency.
+- GPT 6 Astra xhigh found no 1C blocker after explicit `Accept: application/json` coverage. An
+  incompatible Accept header was not claimed as verified: the endpoint's pre-existing global
+  render-error configuration has no JSON error renderer, which is outside this resource slice.
+- Root format, warnings-as-errors compile, strict Credo, full umbrella tests and unused dependency
+  checks pass with the HTTP resource included.

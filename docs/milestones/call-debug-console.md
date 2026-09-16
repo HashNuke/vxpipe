@@ -163,12 +163,12 @@ Commit this slice with presenter tests and the synchronized Core contract.
 
 ### Checkpoint 1C — Expose the authorized HTTP resource
 
-- [ ] Add `GET /calls/:call_id/inspection` under the existing operator session and `calls` authority.
+- [x] Add `GET /calls/:call_id/inspection` under the existing operator session and `calls` authority.
   The controller only invokes the query and presenter, maps missing/cross-tenant calls to the same
   `404`, maps invalid requests to `400`, and maps database unavailability to `503`.
-- [ ] Return JSON with `Cache-Control: private, no-store`. Red-test ongoing and ended calls,
+- [x] Return JSON with `Cache-Control: private, no-store`. Red-test ongoing and ended calls,
   authentication, response content type, error mapping and absence of secret/session reflection.
-- [ ] Prove the endpoint performs no live-room, publication, recording, artifact or S3 operation.
+- [x] Prove the endpoint performs no live-room, publication, recording, artifact or S3 operation.
 
 Exit: an authenticated browser can fetch one latest complete database snapshot for a call. Commit
 this slice with focused endpoint tests.
