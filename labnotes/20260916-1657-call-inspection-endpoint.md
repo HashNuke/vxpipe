@@ -13,3 +13,13 @@
   edge applied by the browser after the database baseline.
 - Added four implementation checkpoints to the call-debug-console milestone and recorded the
   durable decision in `docs/call-inspection-json-endpoint.md`.
+
+## Database query boundary
+
+- Red: three focused query tests failed because `CallInspectionQuery` did not exist.
+- Green: the query now loads the authorized persisted inspection before the exact definition
+  revision and usage report. It uses the existing injected Calls backend and never invokes
+  `inspect_live_call`.
+- Supporting definition or usage failures are explicit unavailable values; they do not hide an
+  otherwise inspectable call. A missing/cross-tenant call stops before either supporting read.
+- Focused verification: 5 tests, 0 failures across the new query and existing inspection facade.

@@ -24,4 +24,14 @@ defmodule Vxpipe.Console.CallsInspectionBackend do
   def usage_report(options, principal, call_id, request_options) do
     Calls.fetch_usage_report(principal, call_id, Keyword.merge(request_options, options))
   end
+
+  @impl true
+  def fetch_definition(options, tenant_key, definition_id, revision, request_options) do
+    Calls.fetch_definition(
+      tenant_key,
+      definition_id,
+      revision,
+      Keyword.merge(request_options, options)
+    )
+  end
 end

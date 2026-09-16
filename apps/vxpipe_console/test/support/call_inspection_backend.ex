@@ -28,4 +28,10 @@ defmodule Vxpipe.Console.TestCallInspectionBackend do
     send(observer, {:usage_report, principal, call_id, options})
     Map.get(responses, :usage_report, {:ok, %UsageReport{amounts: [], totals: []}})
   end
+
+  @impl true
+  def fetch_definition({observer, responses}, tenant_key, definition_id, revision, options) do
+    send(observer, {:fetch_definition, tenant_key, definition_id, revision, options})
+    Map.fetch!(responses, :fetch_definition)
+  end
 end
