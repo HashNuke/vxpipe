@@ -1,6 +1,6 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoints 1 through 4 of 5 are complete. Requested and independently
+Status: implementation active; checkpoints 1 through 4 of 7 are complete. Requested and independently
 reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
@@ -11,8 +11,9 @@ Sources: [Developer console design](../developer-console-and-onboarding.md),
 ## Runnable outcome
 
 The existing debug-console Storybook presents the complete operator administration experience with
-deterministic mock data. A reviewer can move from the tenant list to one tenant's definitions, then to a
-definition's calls, and finally to the existing debug console for an ongoing or ended call.
+deterministic mock data. A reviewer can move from the tenant list into one tenant workspace, browse
+that tenant's definitions, optionally filter its calls by a definition, inspect an ongoing or ended
+call, and configure the tenant's supported AI and telephony services.
 
 Every page intended for the first `/admin` application is visually and interactively reviewable
 before authentication, database queries, JSON endpoints or production admin routes are implemented.
@@ -45,17 +46,36 @@ The Phoenix-rendered login/auth pages are the only UI excluded from this Storybo
   prototype disclaimer or synthetic-data toolbar inside the product UI.
 - Component tests cover Vxpipe-owned interaction and accessibility contracts. Do not duplicate tests
   for behavior guaranteed by React, Radix, Storybook or the browser.
+- Tenant navigation is shared presentation, not duplicated page markup. Definitions, Calls and
+  Services are sibling destinations under one tenant. Breadcrumbs retain hierarchy; tenant
+  navigation shows the available destinations and current page.
+- A checkpoint adds a tenant-navigation destination only with that destination's complete page.
+  Intermediate commits contain no dead links, mock placeholders or production routes backed by
+  Storybook data.
+- Calls belong to the tenant route. A definition is an optional filter represented in the URL so a
+  definition row can deep-link to the same Calls page without creating another page contract.
+- Services exposes only providers already supported by the platform: Google and Zenmux model
+  credentials, Deepgram speech credentials, and Telnyx/Twilio telephony configuration. Credential
+  values are write-only inputs. Stories never render a stored value, fake masked secret, access key,
+  token or provider response payload.
+- Adding a supported credential is an operator action in this design. Third-party
+  credential rotation schedules, credential reveal, provider discovery and support for new provider
+  authentication methods are outside scope. Platform encryption-key rotation remains separate.
+- Credential setup is create-only for the `(tenant, provider, name)` binding. A duplicate is shown
+  as a conflict and does not overwrite the existing binding; the UI offers no edit or replace action.
 
 ## Storybook information architecture
 
 | Intended production URL | Storybook page | Minimum reviewable content |
 | --- | --- | --- |
 | `/admin` | Tenants | Bounded tenant list, stable identity and navigation to a tenant. |
-| `/admin/tenants/:tenant_key` | Tenant definitions | Tenant context and published/draft definition summaries. |
-| `/admin/tenants/:tenant_key/definitions/:definition_id` | Definition calls | Definition context/current revision and calls across its revisions. |
+| `/admin/tenants/:tenant_key` | Tenant workspace entry | Redirects to the tenant's Call definitions destination. |
+| `/admin/tenants/:tenant_key/definitions` | Call definitions | Tenant context and published/draft definition summaries. |
+| `/admin/tenants/:tenant_key/calls` | Calls | Tenant calls with an optional `definition_id` filter and a reset to all calls. |
+| `/admin/tenants/:tenant_key/services` | Services | Supported AI/telephony service inventory and write-only credential setup. |
 | `/admin/tenants/:tenant_key/calls/:call_id` | Call details | Existing debug console populated with ongoing or ended inspection fixtures. |
 
-Tenant creation, definition editing, provider credential entry and demo installation belong to later
+Tenant creation, definition editing, provider expansion and demo installation belong to later
 milestones. They are not placeholder actions in this Storybook.
 
 ## Checkpoint 1 — Complete the Tenants page
@@ -151,10 +171,62 @@ The React package's 35 tests and Console's 54 tests pass; production Storybook b
 390 px, 768 px, 820 px, 901 px and desktop inspection passed. See
 [refinement labnotes](../../labnotes/20260917-0958-compact-call-header.md).
 
-## Checkpoint 5 — Review the complete mocked journey
+## Checkpoint 5 — Complete the tenant workspace and Calls page
 
-- [ ] Compose one deterministic journey that moves Tenants → Tenant definitions → Definition calls
-  → Call details and back through the same components used by the individual page stories.
+- [ ] Refactor the existing definition-scoped call prototype into a tenant Calls page; reuse the
+  existing call rows, lifecycle/archive badges, pagination and call-details links.
+- [ ] Build one focused tenant-workspace navigation component and integrate its working Call
+  definitions and Calls destinations. Keep breadcrumbs and route/business logic in their existing
+  focused owners; Services is added only with checkpoint 6's complete page.
+- [ ] Move definitions to `/admin/tenants/:tenant_key/definitions`, treat the tenant root as its
+  Storybook entry redirect, and update definition links to
+  `/admin/tenants/:tenant_key/calls?definition_id=:definition_id`.
+- [ ] Default to all tenant calls. Provide a clearly bordered definition filter populated from the
+  tenant's definitions, show the selected definition without repeating it in descriptive copy, and
+  provide a direct reset to all calls.
+- [ ] Compose all-calls, filtered, no calls, no filter matches, unavailable, loading, partial archive,
+  long-content, paginated and narrow-screen stories. Unknown filter identity remains distinct from
+  a valid filter with zero matches.
+- [ ] Keep filtering outside `CallList`; the page receives a serializable state and injected filter,
+  pagination and selection actions.
+- [ ] Test URL/filter synchronization, definition deep-links, reset, stale actions and truthful
+  empty/unavailable states. Cover navigation active state, long tenant names and desktop/mobile
+  keyboard operation without making page components own routing.
+
+Exit: a reviewer can browse all calls for a tenant or arrive with one definition selected, then open
+the same call-details console; Call definitions and Calls are fully working sibling destinations.
+Commit this page/shell slice separately.
+
+## Checkpoint 6 — Complete Services and credential setup
+
+- [ ] Define small typed view models for provider credential metadata and telephony service metadata.
+  Keep secret input values only in the credential form state and out of fixtures, URL state and list
+  rows.
+- [ ] Build focused service inventory, capability/provider badge, credential status, empty/loading/
+  unavailable presentation, and credential setup form components. Do not combine the
+  inventory, provider field rules and modal/sheet behavior into one component.
+- [ ] Limit provider choices and fields to current contracts: API key for Google, Deepgram, Zenmux
+  and Telnyx; Account SID plus Auth Token for Twilio. Telephony public configuration is presented
+  separately from write-only credential fields.
+- [ ] Treat existing Telnyx/Twilio telephony service metadata as read-only. Credential creation does
+  not register or rebind a telephony service and does not validate provider-side readiness. Show
+  “credential stored” separately from configured/verified/ready service status.
+- [ ] Compose inventory, empty, unavailable, validation-error, submission-pending, save-failure and
+  save-success stories. Existing credentials show metadata without showing or pretending to show
+  stored values, and do not imply a third-party rotation workflow.
+- [ ] Test provider-specific field selection, secret clearing after success/cancel, duplicate-name
+  conflict without overwrite, stale-submission handling, accessible focus restoration and absence
+  of secret values from rendered metadata.
+- [ ] Inspect dark/light, desktop/mobile and keyboard-only setup flows in rendered Storybook.
+
+Exit: a reviewer can understand which services are configured and safely model adding credentials
+for every provider Vxpipe currently supports. The Services link is added to tenant navigation only
+with this working page. Commit this page and setup-flow slice separately.
+
+## Checkpoint 7 — Review the complete mocked journey
+
+- [ ] Compose one deterministic journey that moves Tenants → Call definitions → filtered Calls →
+  Call details and back, and also reaches all Calls and Services through the tenant navigation.
 - [ ] Verify page context, breadcrumbs, links, back/forward behavior, pagination handoff and state
   isolation across resource changes. No late mock action may replace the currently selected page.
 - [ ] Review the full journey at representative desktop and mobile viewports, dark/light themes,
@@ -173,11 +245,14 @@ final Storybook acceptance and synchronize the milestone index.
 
 - [ ] Every intended `/admin` page exists as a complete Storybook page built from its real small
   components and feature sections.
-- [ ] A reviewer can traverse the full tenant-to-call journey without Phoenix, a database, network
-  requests, media capture or protocol connections.
+- [ ] A reviewer can traverse the full tenant-to-call journey and the tenant Services setup flow
+  without Phoenix, a database, network requests, media capture or protocol connections.
 - [ ] Loading, empty, populated, unavailable/error, long-content, pagination and narrow-screen states
   are reviewable where applicable.
 - [ ] The Call details page uses the real `@vxpipe/react` console and deterministic typed fixtures.
+- [ ] Calls defaults to the tenant scope, preserves an optional definition filter in its URL, and
+  links to the same call-details route from filtered and unfiltered states.
+- [ ] Services supports only current provider contracts and never renders a stored credential value.
 - [ ] Rendered desktop/mobile, dark/light, keyboard and reduced-motion review passes.
 - [ ] Storybook build and focused frontend tests pass; no production app/backend integration exists.
 - [ ] The user has reviewed and explicitly approved the complete Storybook journey.
@@ -186,14 +261,20 @@ final Storybook acceptance and synchronize the milestone index.
 ## Scope boundaries
 
 No login/auth page, Mix task, session, Phoenix admin route, database query, JSON endpoint, production
-client, tenant CRUD, definition editor, credential UI, new call-console behavior, package publication
-or backend contract implementation is included.
+client, tenant CRUD, definition editor, new provider/authentication support, third-party credential
+rotation, new call-console behavior, package publication or backend contract implementation is
+included. Services and credential entry are deterministic Storybook UI contracts only.
 
 ## Specification review
 
-Independent GPT 6 Astra xhigh review, 2026-09-17: all four admin pages have matching Storybook and
-production-integration checkpoints. The Storybook scope excludes auth, backend work, endpoint
-clients and production routes; the complete mocked journey requires explicit user approval before
-the production milestone can begin. Dependency order and route coverage are clear. Specification
-only: no component, page, rendered review, test result, user design approval or production behavior
-is claimed.
+Independent GPT 6 Astra xhigh review, 2026-09-17: the original four-page scope separated Storybook
+design from auth, backend work, endpoint clients and production routes. The later tenant-navigation,
+tenant Calls and Services requirements are split into checkpoints 5–6 before the final review gate;
+their downstream production checkpoints must stay synchronized. The complete mocked journey still
+requires explicit user approval before production integration. Specification additions alone do not
+claim component, page, rendered-review or production behavior.
+
+Scope-reconciliation review, 2026-09-17: independent GPT 6 Astra xhigh review found no remaining
+blockers after each navigation destination was paired with its complete page slice, provider
+credential creation received create-only/no-overwrite semantics, and read-only telephony metadata
+was separated from stored-credential and provider-readiness status.

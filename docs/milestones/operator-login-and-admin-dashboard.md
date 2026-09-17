@@ -17,10 +17,11 @@ A trusted operator runs `mix vxpipe.login` and receives a short-lived URL plus a
 eight-digit code. The URL opens a server-rendered code-entry page. A correct code creates an
 operator session and redirects to `/admin`.
 
-The authenticated admin application is React. It lets the operator browse every tenant, browse
-the tenant's call definitions, browse calls for a definition, and open an ongoing or ended call in
-the existing debug console. This first operator role has installation-wide visibility; it does not
-introduce users, teams, tenant memberships or RBAC.
+The authenticated admin application is React. It lets the operator browse every tenant, move among
+one tenant's call definitions, calls and services, optionally filter calls by definition, configure
+  credentials for providers Vxpipe already supports, and open an ongoing or ended call in the existing
+debug console. This first operator role has installation-wide visibility; it does not introduce
+users, teams, tenant memberships or RBAC.
 
 ## Product and authority contracts
 
@@ -34,13 +35,20 @@ introduce users, teams, tenant memberships or RBAC.
 - Console owns the login pages, operator session and `/admin` application. Calls owns authorized
   read workflows and repository-neutral result types. Persistence owns schemas, migrations and
   database adapters. Gateway remains reusable and does not acquire Console UI dependencies.
-- Calls defines an explicit installation-operator read authority accepted only by these bounded
-  workflows. Console passes that authority plus the selected tenant/resource identifiers; it never
-  fabricates a tenant `Principal`, tenant API-key ID or wildcard tenant to reuse existing checks.
+- Calls defines an explicit installation-operator authority accepted only by the bounded admin read
+  workflows and the create-only provider-credential mutation. Console passes that authority plus
+  selected tenant/resource identifiers; it never fabricates a tenant `Principal`, tenant API-key ID
+  or wildcard tenant to reuse existing checks, and it never writes through Persistence directly.
 - Anonymous requests and expired sessions disclose no tenant, definition or call data. Missing and
   cross-resource identifiers return the same safe not-found result.
 - Lists are bounded and have stable pagination. Empty, loading, unavailable and partial states are
   truthful; the UI never turns an unavailable query into an empty list.
+- Provider credential values are accepted only by authenticated, CSRF-protected operator writes and
+  are never returned by list/read endpoints. Existing credentials expose metadata only. This
+  milestone adds no credential reveal, third-party rotation workflow or new
+  provider authentication contract.
+- Credential creation preserves the existing unique `(tenant, provider, name)` binding. A duplicate
+  returns a conflict without decrypting, replacing or overwriting the stored credential.
 
 ## Login challenge and session contracts
 
@@ -106,12 +114,14 @@ introduce users, teams, tenant memberships or RBAC.
 | Route | React page | Minimum content |
 | --- | --- | --- |
 | `/admin` | Tenants | Bounded tenant list, stable identity and link to each tenant. |
-| `/admin/tenants/:tenant_key` | Tenant definitions | Tenant context and bounded published/draft definition summaries. |
-| `/admin/tenants/:tenant_key/definitions/:definition_id` | Definition calls | Definition identity/current revision and bounded calls across that definition's revisions. |
+| `/admin/tenants/:tenant_key` | Tenant workspace entry | Redirects to the tenant's Call definitions destination. |
+| `/admin/tenants/:tenant_key/definitions` | Call definitions | Tenant context and bounded published/draft definition summaries. |
+| `/admin/tenants/:tenant_key/calls` | Calls | Bounded tenant calls with an optional `definition_id` filter. |
+| `/admin/tenants/:tenant_key/services` | Services | Metadata-only service inventory and write-only credential setup for supported providers. |
 | `/admin/tenants/:tenant_key/calls/:call_id` | Call details | Existing live or historical debug console populated from the authorized inspection snapshot. |
 
-The first page focuses on navigation and inspection. Tenant creation, definition editing, provider
-credential entry and demo installation belong to their later milestones and will extend this shell.
+Tenant creation, definition editing, provider expansion and demo installation belong to later
+milestones and will extend this shell.
 
 ## Checkpoint 1 — Persist and issue one login challenge
 
@@ -158,31 +168,59 @@ protected empty React mount. Commit the complete authentication slice separately
 Exit: an authenticated operator can browse all tenants in the real React admin application. Commit
 the query, endpoint, React integration, tests, docs and labnotes together.
 
-## Checkpoint 4 — Browse one tenant's definitions
+## Checkpoint 4 — Browse one tenant's definitions and workspace
 
 - [ ] Red-test a bounded tenant-definition summary query and endpoint with stable pagination,
   current publication state, missing tenant and persistence failure.
 - [ ] Connect the approved Tenant definitions page without changing its presentation contract.
   Preserve tenant context in navigation and reject a stale response after switching tenants.
+- [ ] Move the destination to `/admin/tenants/:tenant_key/definitions`. The tenant root redirects
+  there without losing the selected tenant; Calls and Services links are not exposed yet.
 - [ ] Verify direct URL load, refresh, back/forward, empty/populated/unavailable states and long
   definition names in automated and rendered browser checks.
 
 Exit: an authenticated operator can select any tenant and browse its call definitions. Commit this
 vertical slice separately.
 
-## Checkpoint 5 — Browse definition-scoped calls
+## Checkpoint 5 — Browse tenant calls with an optional definition filter
 
-- [ ] Red-test a bounded call-summary query filtered by the exact definition identity across its
-  immutable revisions. A call attached to another definition or tenant never appears.
-- [ ] Expose the operator-only endpoint and connect the approved Definition calls page, including
-  lifecycle/archive status, pagination and truthful unavailable fields.
+- [ ] Red-test a bounded tenant call-summary query whose optional definition filter matches the exact
+  definition identity across immutable revisions. Another tenant's call or definition never appears.
+- [ ] Expose the operator-only endpoint and connect the approved Calls page, including optional
+  `definition_id`, filter reset, lifecycle/archive status, pagination and truthful unavailable fields.
+- [ ] Connect the approved shared tenant navigation with working Call definitions and Calls
+  destinations. Do not expose Services until checkpoint 6 supplies its page and endpoints.
 - [ ] Verify direct URL load, refresh, back/forward, empty/populated/unavailable data, stale-response
   protection and cross-resource failures.
 
-Exit: an operator can select a definition and browse its ongoing and ended calls. Commit this
-vertical slice separately.
+Exit: an operator can browse all tenant calls or follow a definition deep-link to the same page with
+that definition selected. Commit this vertical slice separately.
 
-## Checkpoint 6 — Open live and historical call details
+## Checkpoint 6 — Manage supported tenant services
+
+- [ ] Red-test metadata-only provider credential and telephony service reads under installation-
+  operator authority, including tenant isolation, stable ordering and unavailable persistence.
+- [ ] Red-test CSRF-protected credential-add endpoints for the current Google, Deepgram,
+  Zenmux, Telnyx and Twilio auth contracts. Responses and logs contain metadata only; rejected and
+  successful writes never echo secret fields.
+- [ ] Add the smallest Calls-owned installation-operator credential workflow around the existing
+  repository port. It is create-only and returns a duplicate conflict without overwriting; Console
+  never invokes Persistence or the trusted-host-only provisioning API directly.
+- [ ] Connect the approved Services inventory and provider-specific setup flow. Keep form state and
+  endpoint validation outside list/presentation components, and clear secret inputs after cancel,
+  error recovery and success.
+- [ ] Add Services to the shared tenant navigation only after its page and endpoints work. Existing
+  telephony service metadata is read-only: adding Telnyx/Twilio credentials does not register or
+  rebind a telephony service or prove provider-side readiness. Report stored-credential status
+  separately from configured/verified/ready service state.
+- [ ] Verify direct URL load, refresh, back/forward, loading/empty/unavailable states, duplicate
+  names, stale submissions, session expiry and cross-tenant identifiers in automated and
+  rendered browser checks.
+
+Exit: an authenticated operator can inspect service metadata and add credentials for providers
+Vxpipe already supports without any secret-read path. Commit this vertical slice separately.
+
+## Checkpoint 7 — Open live and historical call details
 
 - [ ] Replace the old tenant-API-key browser authority on all Console call-inspection resources with
   the operator session. Preserve tenant/call lookup isolation and `private, no-store` responses.
@@ -209,8 +247,12 @@ console. Commit this migration separately.
   persist, and expiry/attempt/concurrency behavior passes after application restart.
 - [ ] The Phoenix-rendered auth flow is the only non-React user page introduced here. Every `/admin`
   page comes from the completed and explicitly user-approved Storybook milestone.
-- [ ] One operator session sees every tenant, definition and definition-scoped call without user,
-  team, membership or RBAC records.
+- [ ] One operator session sees every tenant, definition and tenant call without user, team,
+  membership or RBAC records.
+- [ ] Tenant Calls defaults to all calls and accepts an isolated definition filter; shared tenant
+  navigation reaches Call definitions, Calls and Services on direct load and through browser history.
+- [ ] The Services page lists metadata and accepts supported provider credentials through write-only,
+  CSRF-protected actions; no endpoint or UI reveals stored credential values.
 - [ ] Platform and tenant API keys remain API credentials and cannot sign into the UI.
 - [ ] Anonymous, expired and cross-resource requests disclose no administration or call data.
 - [ ] Direct loads, refresh and browser history work for every admin URL; lists remain bounded and
@@ -221,9 +263,9 @@ console. Commit this migration separately.
 ## Scope boundaries
 
 No user directory, email/password authentication, password reset, signup, invitation, team,
-membership, RBAC, OIDC/SSO, audit identity, tenant CRUD, definition editor, provider credential UI,
-API-key redesign, billing, third-party credential rotation, package publication or container release
-is included.
+membership, RBAC, OIDC/SSO, audit identity, tenant CRUD, definition editor, new provider/auth method,
+API-key redesign, billing, credential reveal, third-party credential rotation schedule, package
+publication or container release is included.
 
 ## Specification review
 
@@ -234,6 +276,12 @@ operator authority, legacy route/session cutover, and clarified debug-console pr
 ownership, installation-wide visibility and exclusion of users/RBAC/API-key UI login are clear.
 Specification only: no implementation, migration, Storybook page or acceptance is claimed.
 
-Split-plan review, 2026-09-17: independent GPT 6 Astra xhigh review confirmed all four admin pages
-have matching Storybook and production checkpoints, auth remains outside Storybook, and this entire
+Split-plan review, 2026-09-17: the original four-page plan was independently reviewed. Later user
+direction adds shared tenant navigation, tenant-wide Calls and Services credential setup; these now
+have matching Storybook and production checkpoints. Auth remains outside Storybook, and this entire
 milestone is blocked until the user explicitly approves the complete mocked journey.
+
+Scope-reconciliation review, 2026-09-17: independent GPT 6 Astra xhigh review found no remaining
+blockers. Calls owns the bounded installation-operator credential mutation, duplicates cannot
+overwrite an existing binding, navigation activates only with working destinations, and existing
+telephony service metadata remains read-only and distinct from credential/provider readiness.
