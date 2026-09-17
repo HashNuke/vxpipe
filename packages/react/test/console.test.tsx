@@ -48,6 +48,7 @@ test("the host can inject a dedicated header row and fill its container", () => 
     <CallConsole
       controller={createFixtureController("conversation")}
       header={<nav aria-label="Call breadcrumb">Tenant / Calls / Call details</nav>}
+      headerVisibility="desktop"
       layout="fill"
     />,
   );
@@ -57,7 +58,10 @@ test("the host can inject a dedicated header row and fill its container", () => 
   const controls = screen.getByText("Connected").closest("header");
 
   expect(consoleRoot).toHaveClass("vx-console-fill");
-  expect(breadcrumb.parentElement).toHaveClass("vx-console-header");
+  expect(breadcrumb.parentElement).toHaveClass(
+    "vx-console-header",
+    "vx-console-header-desktop",
+  );
   expect(
     breadcrumb.compareDocumentPosition(controls as Node) &
       Node.DOCUMENT_POSITION_FOLLOWING,

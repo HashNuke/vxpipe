@@ -31,15 +31,13 @@ export function Breadcrumbs({
       className={compact ? "min-w-0 flex-1" : "mb-4"}
     >
       <ol
-        className={`flex min-w-0 items-center gap-1 text-[var(--admin-muted)] ${
-          compact ? "font-mono text-xs" : "text-sm"
+        className={`min-w-0 items-center gap-1 text-[var(--admin-muted)] ${
+          compact ? "flex font-mono text-xs" : "flex text-sm"
         }`}
       >
         {items.map((item, index) => (
           <li
-            className={`min-w-0 items-center gap-1 ${
-              compact && index < items.length - 2 ? "hidden sm:flex" : "flex"
-            }`}
+            className="flex min-w-0 items-center gap-1"
             key={`${item.label}-${index}`}
           >
             {index > 0 ? (

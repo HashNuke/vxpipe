@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { CallConsoleController } from "@vxpipe/core";
@@ -14,8 +14,8 @@ vi.mock("@vxpipe/react", () => ({
     callConsole(props);
     return (
       <div data-layout={props.layout} data-testid="call-console">
-        {props.header}
-        {props.headerContext}
+        <div data-testid="console-header">{props.header}</div>
+        <div data-testid="console-header-context">{props.headerContext}</div>
         Reusable call console
       </div>
     );
@@ -64,8 +64,25 @@ test("fills the ready page with a console-owned breadcrumb header", () => {
     "href",
     "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
+  expect(
+    within(screen.getByTestId("console-header")).queryByRole("link", {
+      name: "Back to calls",
+    }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(screen.getByTestId("console-header-context")).getByRole("link", {
+      name: "Back to calls",
+    }),
+  ).toHaveAttribute(
+    "href",
+    "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
+  );
   expect(screen.getByText("call-1")).toBeVisible();
   expect(screen.getByTestId("call-console")).toHaveTextContent(
+    "v3 · call-1",
+  );
+  expect(screen.getByTestId("console-header")).not.toHaveTextContent("call-1");
+  expect(screen.getByTestId("console-header-context")).toHaveTextContent(
     "v3 · call-1",
   );
   expect(
@@ -76,13 +93,14 @@ test("fills the ready page with a console-owned breadcrumb header", () => {
   expect(callConsole).toHaveBeenCalledWith(
     expect.objectContaining({
       controller,
+      headerContext: expect.anything(),
       theme: "light",
       header: expect.anything(),
+      headerVisibility: "desktop",
       layout: "fill",
     }),
   );
   const props = callConsole.mock.calls[0]?.[0];
-  expect(props.headerContext).toBeUndefined();
   expect(props.maxHeight).toBeUndefined();
 });
 

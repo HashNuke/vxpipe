@@ -173,10 +173,12 @@ The React package's 35 tests and Console's 54 tests pass; production Storybook b
 
 A second review made the ready call-details page an edge-to-edge console surface. The reusable
 console now accepts a dedicated compact host header and an opt-in borderless fill layout; the admin
-host injects its tenant/definition breadcrumbs, call identity and partial-history state there.
+host injects its tenant/definition breadcrumbs there while call identity and partial-history state
+remain in the console control row.
 Mobile hides the participant rail, lets message identities open participant details, and provides a
-participant picker inside that view. Status, device controls, duration and the icon-only call action
-fit on one mobile row. See
+participant picker inside that view. Mobile hides the breadcrumb row and places a `Back to calls`
+link before call identity in the control row. Status, device controls, duration and the icon-only
+call action remain compact. See
 [refinement labnotes](../../labnotes/20260917-1207-full-bleed-call-page.md).
 
 ## Checkpoint 5 — Complete the tenant workspace and Calls page

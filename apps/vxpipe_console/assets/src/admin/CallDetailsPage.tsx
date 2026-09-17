@@ -1,7 +1,9 @@
 import { CallConsole } from "@vxpipe/react";
+import { AlertTriangle } from "lucide-react";
 
 import { AdminShell } from "./AdminShell";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { CallDetailsBackLink } from "./CallDetailsBackLink";
 import { CallDetailsConsoleHeader } from "./CallDetailsConsoleHeader";
 import { CallIdentity } from "./CallIdentity";
 import { CallDetailsSkeleton } from "./CallDetailsSkeleton";
@@ -48,21 +50,38 @@ export function CallDetailsPage({
       definitionRevision={state.definitionRevision}
     />
   );
+  const callsBreadcrumb = [...breadcrumbs].reverse().find((item) => item.href);
+  const callContext = (
+    <div className="flex min-w-0 items-center gap-3">
+      {callsBreadcrumb ? <CallDetailsBackLink item={callsBreadcrumb} /> : null}
+      {callIdentity}
+      {state.status === "ready" && state.completeness === "incomplete" ? (
+        <span
+          className="inline-flex shrink-0 items-center gap-1 text-[var(--admin-amber)]"
+          role="status"
+          title="This call history may be incomplete."
+        >
+          <AlertTriangle aria-hidden="true" className="size-3" />
+          Partial history
+        </span>
+      ) : null}
+    </div>
+  );
 
   if (state.status === "ready") {
     return (
       <AdminShell showHeader={false} theme={theme}>
         <main className="h-dvh w-full overflow-hidden">
+          <h1 className="sr-only">Call details</h1>
           <CallConsole
             controller={state.controller}
             header={
               <CallDetailsConsoleHeader
                 breadcrumbs={breadcrumbs}
-                callId={state.callId}
-                definitionRevision={state.definitionRevision}
-                incomplete={state.completeness === "incomplete"}
               />
             }
+            headerVisibility="desktop"
+            headerContext={callContext}
             layout="fill"
             theme={theme}
           />

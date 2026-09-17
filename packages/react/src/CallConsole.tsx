@@ -110,6 +110,7 @@ function defaultParticipantId(snapshot: ConsoleSnapshot) {
 export interface CallConsoleProps {
   controller: CallConsoleController;
   header?: ReactNode;
+  headerVisibility?: "always" | "desktop";
   headerContext?: ReactNode;
   initialTab?: Tab;
   layout?: "contained" | "fill";
@@ -120,6 +121,7 @@ export interface CallConsoleProps {
 export function CallConsole({
   controller,
   header,
+  headerVisibility = "always",
   headerContext,
   initialTab = "chat",
   layout = "contained",
@@ -212,7 +214,15 @@ export function CallConsole({
       data-vx-theme={theme}
       style={{ maxHeight }}
     >
-      {header ? <div className="vx-console-header">{header}</div> : null}
+      {header ? (
+        <div
+          className={`vx-console-header ${
+            headerVisibility === "desktop" ? "vx-console-header-desktop" : ""
+          }`}
+        >
+          {header}
+        </div>
+      ) : null}
       <header className="vx-call-header">
         <div className="vx-call-context">{headerContext}</div>
         <div className="vx-call-toolbar">

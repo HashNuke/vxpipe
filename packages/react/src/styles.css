@@ -1788,3 +1788,9 @@ button.vx-tool-summary:hover {
     font-size: 12px;
   }
 }
+
+@media (max-width: 639px) {
+  .vx-console-header-desktop {
+    display: none;
+  }
+}
