@@ -1,6 +1,6 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoints 1 through 3 of 5 are complete. Requested and independently
+Status: implementation active; checkpoints 1 through 4 of 5 are complete. Requested and independently
 reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
@@ -120,18 +120,27 @@ See [checkpoint labnotes](../../labnotes/20260917-0858-definition-calls-storyboo
 
 ## Checkpoint 4 — Complete the Call details page
 
-- [ ] Build only the admin host frame and resource context needed around the existing call console.
+- [x] Build only the admin host frame and resource context needed around the existing call console.
   Reuse the real `@vxpipe/react` component rather than copying it.
-- [ ] Compose the complete Call details page with existing ongoing and ended fixtures plus loading,
+- [x] Compose the complete Call details page with typed ongoing and ended fixtures plus loading,
   unavailable, partial archive, malformed-response and narrow-screen host states.
-- [ ] Preserve the debug console's bounded height, internal scrolling, sticky composer and device/
+- [x] Preserve the debug console's bounded height, internal scrolling, sticky composer and device/
   timeline/variables/metrics/participants interactions in the composed page.
-- [ ] Test the host-to-console view-model/action boundary and failure presentation without testing
+- [x] Test the host-to-console view-model/action boundary and failure presentation without testing
   `@vxpipe/react` behavior a second time.
-- [ ] Inspect every important state and scrolling boundary in rendered desktop/mobile Storybook.
+- [x] Inspect every important state and scrolling boundary in rendered desktop/mobile Storybook.
 
 Exit: a reviewer can evaluate live and historical call inspection inside the complete admin page.
 Commit this page slice separately.
+
+Evidence: the admin host reuses the real `@vxpipe/react` CallConsole for interactive ongoing and
+read-only ended calls. Deterministic stories cover loading, unavailable, malformed-response and
+partial-archive states; **Admin / Full journey** now reaches call details and returns through working
+breadcrumbs and browser history. The Console's 54 frontend tests, TypeScript check, warning-free
+ESLint check and production Storybook build pass. Rendered dark/light, 390 px and desktop review
+verified bounded internal scrolling, composer submission, device controls, every console tab,
+reduced motion and failure states. See
+[checkpoint labnotes](../../labnotes/20260917-0917-call-details-storybook.md).
 
 ## Checkpoint 5 — Review the complete mocked journey
 
@@ -159,7 +168,7 @@ final Storybook acceptance and synchronize the milestone index.
   requests, media capture or protocol connections.
 - [ ] Loading, empty, populated, unavailable/error, long-content, pagination and narrow-screen states
   are reviewable where applicable.
-- [ ] The Call details page uses the real `@vxpipe/react` console and existing fixtures.
+- [ ] The Call details page uses the real `@vxpipe/react` console and deterministic typed fixtures.
 - [ ] Rendered desktop/mobile, dark/light, keyboard and reduced-motion review passes.
 - [ ] Storybook build and focused frontend tests pass; no production app/backend integration exists.
 - [ ] The user has reviewed and explicitly approved the complete Storybook journey.

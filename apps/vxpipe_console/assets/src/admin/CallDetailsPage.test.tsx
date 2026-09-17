@@ -1,0 +1,111 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+import type { CallConsoleController } from "@vxpipe/core";
+
+const callConsole = vi.fn();
+vi.mock("@vxpipe/react", () => ({
+  CallConsole: (props: unknown) => {
+    callConsole(props);
+    return <div data-testid="call-console">Reusable call console</div>;
+  },
+}));
+
+import { CallDetailsPage } from "./CallDetailsPage";
+import { CallDetailsStory } from "./CallDetailsStory";
+
+afterEach(() => {
+  cleanup();
+  callConsole.mockClear();
+});
+
+const context = {
+  tenant: { key: "tn_demo_01", name: "Demo workspace" },
+  definition: {
+    id: "delivery-rescheduling",
+    name: "Delivery rescheduling",
+    latestRevision: 4,
+    publishedRevision: 3,
+  },
+  callId: "call-1",
+  definitionRevision: 3,
+};
+
+const controller = {
+  details: {
+    getSnapshot: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  },
+} as unknown as CallConsoleController;
+
+test("frames the reusable console with resource context", () => {
+  render(
+    <CallDetailsPage
+      state={{ status: "ready", ...context, controller, completeness: "complete" }}
+      theme="light"
+    />,
+  );
+
+  expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute(
+    "href",
+    "/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+  );
+  expect(screen.getByText("call-1")).toBeVisible();
+  expect(screen.getByTestId("call-console")).toBeVisible();
+  expect(callConsole).toHaveBeenCalledWith(
+    expect.objectContaining({
+      controller,
+      theme: "light",
+      maxHeight: "min(760px, calc(100dvh - 220px))",
+    }),
+  );
+});
+
+test("keeps loading, unavailable, and malformed states distinct", () => {
+  const view = render(
+    <CallDetailsPage state={{ status: "loading", ...context }} />,
+  );
+  expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+  expect(screen.queryByTestId("call-console")).not.toBeInTheDocument();
+
+  view.rerender(
+    <CallDetailsPage
+      state={{ status: "unavailable", ...context, message: "Storage is unavailable." }}
+    />,
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("Call unavailable");
+
+  view.rerender(
+    <CallDetailsPage
+      state={{ status: "malformed", ...context, message: "Invalid participants." }}
+    />,
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("Call data could not be read");
+  expect(screen.getByRole("alert")).toHaveTextContent("Invalid participants.");
+});
+
+test("warns when the inspection archive is partial", () => {
+  render(
+    <CallDetailsPage
+      state={{ status: "ready", ...context, controller, completeness: "incomplete" }}
+    />,
+  );
+
+  expect(screen.getByRole("status")).toHaveTextContent("Partial call history");
+});
+
+test("the individual story records breadcrumb destinations inside its preview", () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/iframe.html?id=admin-call-details--ongoing",
+  );
+  render(<CallDetailsStory scenario="ongoing" theme="dark" />);
+
+  screen.getByRole("link", { name: "Delivery rescheduling" }).click();
+
+  expect(window.location.pathname).toBe("/iframe.html");
+  expect(window.location.hash).toBe(
+    "#/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+  );
+});

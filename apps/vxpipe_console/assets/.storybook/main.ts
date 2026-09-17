@@ -9,6 +9,10 @@ const config: StorybookConfig = {
   viteFinal: async (viteConfig) => ({
     ...viteConfig,
     plugins: [...(viteConfig.plugins ?? []), tailwindcss()],
+    resolve: {
+      ...viteConfig.resolve,
+      dedupe: [...(viteConfig.resolve?.dedupe ?? []), "react", "react-dom"],
+    },
     server: {
       ...viteConfig.server,
       watch: {
