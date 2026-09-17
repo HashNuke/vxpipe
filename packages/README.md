@@ -4,6 +4,8 @@ Private npm workspaces for the future `@vxpipe` packages. From the repository ro
 
 ```sh
 npm ci
+npm ci --prefix apps/vxpipe_console/assets
+npm run build
 npm run storybook
 ```
 
@@ -17,8 +19,10 @@ loopback, and serves the prototype independently of Phoenix, PostgreSQL and prov
 | [@vxpipe/core](core) | Framework-neutral TypeScript call-details store, revision reconciliation, host loading controller, and live-control contracts. |
 | [@vxpipe/react](react) | TypeScript React components consuming the injected Core controller; package-owned CSS and Storybook. |
 
-Both packages are `private: true`. Nothing is published or reserved on npm. The existing
-Phoenix asset project and documentation site retain their own dependency installations.
+Both packages are `private: true`. Nothing is published or reserved on npm. The Phoenix asset
+project and documentation site retain their own dependency installations. The second install above
+supplies dependencies for the Console-owned Admin stories; it does not start or configure another
+Storybook.
 The root lockfile belongs to these workspaces; `npm run build` builds Core before React.
 
 ## Prototype scope

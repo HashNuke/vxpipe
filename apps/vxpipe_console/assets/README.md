@@ -128,15 +128,18 @@ mix assets.test
 mix assets.build
 ```
 
-The operator administration prototype has a Console-owned Storybook. It uses deterministic view
-models and does not require Phoenix, PostgreSQL, media access, or a live call:
+The operator administration prototype is included in the existing `@vxpipe/react` Storybook. It
+uses deterministic view models and does not require Phoenix, PostgreSQL, media access, or a live
+call. Run it from the repository root:
 
 ```shell
-cd apps/vxpipe_console/assets
+npm ci
+npm ci --prefix apps/vxpipe_console/assets
+npm run build
 npm run storybook
 ```
 
-Open `http://127.0.0.1:6007/`. Individual page stories expose their important states through
+Open `http://127.0.0.1:6006/`. Individual page stories expose their important states through
 Storybook Controls. Use **Admin / Full journey** for the linked review flow; each page checkpoint
 extends that same story until it reaches call details.
 

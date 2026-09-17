@@ -10,8 +10,8 @@ Sources: [Developer console design](../developer-console-and-onboarding.md),
 
 ## Runnable outcome
 
-The Console Storybook presents the complete operator administration experience with deterministic
-mock data. A reviewer can move from the tenant list to one tenant's definitions, then to a
+The existing debug-console Storybook presents the complete operator administration experience with
+deterministic mock data. A reviewer can move from the tenant list to one tenant's definitions, then to a
 definition's calls, and finally to the existing debug console for an ongoing or ended call.
 
 Every page intended for the first `/admin` application is visually and interactively reviewable
@@ -26,8 +26,9 @@ The Phoenix-rendered login/auth pages are the only UI excluded from this Storybo
 - Admin-specific components live under Console assets. Reusable call state remains in
   `@vxpipe/core`; reusable call UI remains in `@vxpipe/react`. Do not move tenant administration
   concepts into the reusable packages.
-- Console owns an admin Storybook that consumes the same component exports the production React
-  application will later use. The production app must not receive a second implementation.
+- Console owns the admin stories inside the existing `@vxpipe/react` Storybook. Those stories
+  consume the same component exports the production React application will later use. The
+  production app must not receive a second implementation or a second Storybook server.
 - Use shadcn's source-owned component composition and Radix behavior primitives where appropriate.
   Reuse the debug console's semantic tokens, typography, density, focus behavior and dark default.
 - Build each vertical slice from its smallest page-specific components, compose those into sections,
@@ -59,8 +60,8 @@ milestones. They are not placeholder actions in this Storybook.
 
 ## Checkpoint 1 — Complete the Tenants page
 
-- [x] Add the Console Storybook and its build/test commands without duplicating the existing
-  `@vxpipe/react` Storybook implementation.
+- [x] Extend the existing `@vxpipe/react` Storybook with Console-owned admin stories instead of
+  adding a second Storybook implementation or server.
 - [x] Build the smallest shadcn-compatible components needed for this page: page frame, navigation,
   page header, tenant row/card, list/table, status presentation, skeleton, empty/error state and
   pagination. Keep fixtures and actions outside presentation components.

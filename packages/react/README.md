@@ -48,11 +48,15 @@ Select pattern backed by Radix UI. Turn metrics use Floating UI for hover and fo
 Run from the repository root:
 
 ```sh
+npm ci
+npm ci --prefix apps/vxpipe_console/assets
 npm test --workspace=@vxpipe/react
-npm run build --workspace=@vxpipe/react
+npm run build
 npm run storybook
 ```
 
-The [workspace README](../README.md) describes the review states and checks. `stories/` contains
-application composition and typed mock endpoint/RTVI fixtures; it is excluded from package exports.
-No packages are published in this checkpoint.
+This single Storybook contains both the reusable debug-console stories and the Console-owned
+operator administration stories. Use **Admin / Full journey** for the linked tenant-to-call review
+flow. The [workspace README](../README.md) describes the review states and checks. `stories/`
+contains application composition and typed mock endpoint/RTVI fixtures; it is excluded from package
+exports. No packages are published in this checkpoint.
