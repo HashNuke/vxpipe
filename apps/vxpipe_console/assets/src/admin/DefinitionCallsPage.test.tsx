@@ -73,7 +73,8 @@ test("retains tenant and definition context around real call links", () => {
     "/admin/tenants/tn_demo_01",
   );
   expect(screen.getByText("Delivery rescheduling")).toBeVisible();
-  expect(screen.getByText(/published r3/i)).toBeVisible();
+  expect(screen.queryByText(/Across all revisions/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/published r3/i)).not.toBeInTheDocument();
 
   const call = screen.getByRole("link", {
     name: /open call 018f27cb/i,

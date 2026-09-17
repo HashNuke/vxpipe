@@ -25,9 +25,6 @@ export function DefinitionCallsPage({
   onNextPage?: () => void;
 }) {
   const definitionLabel = state.definition.name ?? state.definition.id;
-  const publication = state.definition.publishedRevision
-    ? `published r${state.definition.publishedRevision}`
-    : "not published";
 
   return (
     <AdminShell theme={theme}>
@@ -46,10 +43,7 @@ export function DefinitionCallsPage({
             { label: definitionLabel },
           ]}
         />
-        <PageHeader
-          description={`Across all revisions of ${state.definition.id} · ${publication}.`}
-          title="Calls"
-        />
+        <PageHeader title="Calls" />
         <section
           aria-label="Call directory"
           className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]"

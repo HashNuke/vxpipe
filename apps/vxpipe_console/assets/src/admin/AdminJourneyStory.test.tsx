@@ -63,7 +63,7 @@ test("keeps a non-default definition context when a call route is reloaded", () 
     screen.getByRole("link", { name: /open appointment reminders/i }),
   );
 
-  expect(screen.getByText(/published r2/i)).toBeVisible();
+  expect(screen.queryByText(/Across all revisions/i)).not.toBeInTheDocument();
   expect(screen.queryByText("r3")).not.toBeInTheDocument();
 
   fireEvent.click(screen.getAllByRole("link", { name: /open call/i })[0]);
