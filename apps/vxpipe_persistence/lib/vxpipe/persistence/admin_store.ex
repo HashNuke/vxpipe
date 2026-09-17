@@ -6,6 +6,8 @@ defmodule Vxpipe.Persistence.AdminStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.{CallDirectorySummary, CallFilterDefinition, DefinitionSummary}
+  alias Vxpipe.Calls.ProviderCredential, as: DomainProviderCredential
+  alias Vxpipe.Calls.TelephonyService, as: DomainTelephonyService
   alias Vxpipe.Calls.Tenant, as: DomainTenant
 
   alias Vxpipe.Persistence.Schema.{
@@ -13,10 +15,13 @@ defmodule Vxpipe.Persistence.AdminStore do
     CallDefinition,
     CallDetailsPublication,
     DefinitionRevision,
+    ProviderCredential,
+    TelephonyService,
     Tenant
   }
 
   @definition_filter_limit 100
+  @service_inventory_limit 100
 
   @impl true
   def list_tenants(repo, limit, offset) do
@@ -141,6 +146,77 @@ defmodule Vxpipe.Persistence.AdminStore do
            {:ok, {calls, total}} <-
              call_page(repo, tenant_id, definition_id, limit, offset) do
         {:ok, {tenant, definitions, definitions_truncated, calls, total}}
+      end
+    end)
+  end
+
+  @impl true
+  def list_services(repo, tenant_key) do
+    repository_result(fn ->
+      with {:ok, {tenant, tenant_id}} <- fetch_tenant(repo, tenant_key) do
+        credentials =
+          ProviderCredential
+          |> where([credential], credential.tenant_id == ^tenant_id)
+          |> order_by([credential], asc: credential.provider, asc: credential.name)
+          |> limit(^(@service_inventory_limit + 1))
+          |> select(
+            [credential],
+            struct(credential, [
+              :public_id,
+              :provider,
+              :name,
+              :auth_kind,
+              :version,
+              :payload_schema_version,
+              :status,
+              :encryption_key_id,
+              :inserted_at,
+              :updated_at
+            ])
+          )
+          |> repo.all()
+          |> Enum.map(&credential_metadata(&1, tenant.key))
+
+        {visible_credentials, remaining_credentials} =
+          Enum.split(credentials, @service_inventory_limit)
+
+        visible_credential_ids = Enum.map(visible_credentials, & &1.id)
+
+        services =
+          TelephonyService
+          |> where(
+            [service],
+            service.tenant_id == ^tenant_id and
+              service.credential_id in ^visible_credential_ids
+          )
+          |> order_by([service], asc: service.provider, asc: service.name)
+          |> limit(^(@service_inventory_limit + 1))
+          |> select(
+            [service],
+            struct(service, [
+              :public_id,
+              :name,
+              :ingress_key,
+              :provider,
+              :provider_connection_id,
+              :credential_id,
+              :public_key,
+              :outbound_number,
+              :answering_machine_detection,
+              :media_token_ttl_ms,
+              :webhook_tolerance_seconds,
+              :inserted_at,
+              :updated_at
+            ])
+          )
+          |> repo.all()
+          |> Enum.map(&telephony_metadata(&1, tenant.key))
+
+        {visible_services, remaining_services} = Enum.split(services, @service_inventory_limit)
+
+        {:ok,
+         {tenant, visible_credentials, visible_services,
+          remaining_credentials != [] or remaining_services != []}}
       end
     end)
   end
@@ -387,6 +463,47 @@ defmodule Vxpipe.Persistence.AdminStore do
       }
     )
   end
+
+  defp credential_metadata(stored, tenant_key) do
+    %DomainProviderCredential{
+      id: stored.public_id,
+      tenant_key: tenant_key,
+      provider: stored.provider,
+      name: stored.name,
+      auth_kind: stored.auth_kind,
+      version: stored.version,
+      payload_schema_version: stored.payload_schema_version,
+      status: credential_status(stored.status),
+      encryption_key_id: stored.encryption_key_id,
+      inserted_at: stored.inserted_at,
+      updated_at: stored.updated_at
+    }
+  end
+
+  defp telephony_metadata(stored, tenant_key) do
+    %DomainTelephonyService{
+      id: stored.public_id,
+      tenant_key: tenant_key,
+      name: stored.name,
+      ingress_key: stored.ingress_key,
+      provider: stored.provider,
+      provider_connection_id: stored.provider_connection_id,
+      credential_id: stored.credential_id,
+      public_key: stored.public_key,
+      outbound_number: stored.outbound_number,
+      answering_machine_detection: detection(stored.answering_machine_detection),
+      media_token_ttl_ms: stored.media_token_ttl_ms,
+      webhook_tolerance_seconds: stored.webhook_tolerance_seconds,
+      inserted_at: stored.inserted_at,
+      updated_at: stored.updated_at
+    }
+  end
+
+  defp credential_status("active"), do: :active
+  defp credential_status("revoked"), do: :revoked
+
+  defp detection("disabled"), do: :disabled
+  defp detection("detect"), do: :detect
 
   defp repository_result(operation) do
     operation.()

@@ -75,6 +75,25 @@ const callPage = (
         },
 });
 
+const serviceDirectory = (tenantKey: string, credentials = true) => ({
+  tenant: { key: tenantKey, name: "Example tenant" },
+  truncated: false,
+  credentials: credentials
+    ? [
+        {
+          id: "credential-google",
+          provider: "google",
+          name: "primary",
+          auth_kind: "api_key",
+          status: "active",
+          created_at: "2026-09-17T02:00:00Z",
+          updated_at: "2026-09-17T02:00:00Z",
+        },
+      ]
+    : [],
+  telephony_services: [],
+});
+
 test("loads the approved tenant page with a CSRF-protected sign-out action", async () => {
   const fetchImpl = vi.fn(() => response(tenantPage(1)));
   const view = render(<AdminApp csrfToken="csrf-test-token" fetchImpl={fetchImpl} />);
@@ -210,7 +229,7 @@ test("opens a tenant's approved definitions page and canonicalizes the workspace
   expect(screen.getByText("Delivery rescheduling")).toBeVisible();
   expect(window.location.pathname).toBe("/admin/tenants/tenant-1-0/definitions");
   expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
-  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Services" })).toBeVisible();
   expect(
     screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" }),
   ).toHaveAttribute(
@@ -246,7 +265,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
 
   expect(await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342")).toBeVisible();
   expect(screen.getByRole("link", { name: "Call definitions" })).toBeVisible();
-  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Services" })).toBeVisible();
   expect(screen.queryByRole("link", { name: /open call 018f27cb/i })).not.toBeInTheDocument();
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=2&definition_id=delivery-rescheduling",
@@ -416,4 +435,234 @@ test("keeps empty, missing, and unavailable definition states distinct", async (
       "Call definitions could not be loaded",
     ),
   );
+});
+
+test("loads the approved services page directly and exposes all tenant destinations", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
+  const fetchImpl = vi.fn(() => response(serviceDirectory("AAAAAAAAAAAAAAAA")));
+
+  render(<AdminApp csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+
+  expect(await screen.findByRole("heading", { name: "Services" })).toBeVisible();
+  expect(screen.getAllByText("primary")).not.toHaveLength(0);
+  expect(screen.getByRole("link", { name: "Call definitions" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/services",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+});
+
+test("submits write-only credential values with CSRF and updates metadata after success", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
+  const fetchImpl = vi
+    .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() =>
+      response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
+    )
+    .mockImplementationOnce(() => response(serviceDirectory("AAAAAAAAAAAAAAAA", false)))
+    .mockImplementationOnce((_input?: RequestInfo | URL, init?: RequestInit) => {
+      expect(init).toMatchObject({
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-csrf-token": "csrf-token",
+        },
+      });
+      expect(JSON.parse(String(init?.body))).toEqual({
+        provider: "google",
+        name: "primary",
+        values: { api_key: "private-value" },
+      });
+      return response(
+        {
+          credential: {
+            id: "credential-google",
+            provider: "google",
+            name: "primary",
+            auth_kind: "api_key",
+            status: "active",
+            created_at: "2026-09-17T02:00:00Z",
+            updated_at: "2026-09-17T02:00:00Z",
+          },
+        },
+        201,
+      );
+    });
+
+  render(<AdminApp csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  expect(await screen.findByText("No services yet")).toBeVisible();
+
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.change(screen.getByLabelText("Credential name"), {
+    target: { value: "primary" },
+  });
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "private-value" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.getByText("Credential stored.")).toBeVisible();
+  expect(screen.getAllByText("primary")).not.toHaveLength(0);
+  expect(screen.queryByDisplayValue("private-value")).not.toBeInTheDocument();
+});
+
+test("ignores a stale credential submission after leaving the tenant services page", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
+  const expired = vi.fn();
+  let resolveCreate: ((value: Response) => void) | undefined;
+  const pendingCreate = new Promise<Response>((resolve) => {
+    resolveCreate = resolve;
+  });
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") return pendingCreate;
+    const url = String(input);
+    if (url.includes("/definitions")) {
+      return response(definitionPage("AAAAAAAAAAAAAAAA", "Example tenant", "Current definition"));
+    }
+    return response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+  });
+
+  render(
+    <AdminApp
+      csrfToken="csrf-token"
+      fetchImpl={fetchImpl}
+      onSessionExpired={expired}
+    />,
+  );
+  expect(await screen.findByText("No services yet")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "primary" } });
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "private-value" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+
+  window.history.pushState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/definitions");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  expect(await screen.findByText("Current definition")).toBeVisible();
+
+  await act(async () => {
+    resolveCreate?.(await response({ error: { code: "credential_already_exists" } }, 409));
+    await pendingCreate;
+  });
+
+  expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
+  expect(expired).not.toHaveBeenCalled();
+});
+
+test("ignores a credential response after its dialog is closed and reopened", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
+  let resolveCreate: ((value: Response) => void) | undefined;
+  const pendingCreate = new Promise<Response>((resolve) => {
+    resolveCreate = resolve;
+  });
+  const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    init?.method === "POST"
+      ? pendingCreate
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
+  );
+
+  render(<AdminApp csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  expect(await screen.findByText("No services yet")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "first" } });
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "first-secret" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Close credential setup" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "second" } });
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "second-secret" } });
+
+  await act(async () => {
+    resolveCreate?.(
+      await response(
+        {
+          credential: {
+            id: "credential-first",
+            provider: "google",
+            name: "first",
+            auth_kind: "api_key",
+            status: "active",
+            created_at: "2026-09-17T02:00:00Z",
+            updated_at: "2026-09-17T02:00:00Z",
+          },
+        },
+        201,
+      ),
+    );
+    await pendingCreate;
+  });
+
+  expect(screen.getByRole("dialog", { name: "Add credential" })).toBeVisible();
+  expect(screen.getByLabelText("Credential name")).toHaveValue("second");
+  expect(screen.getByLabelText("API key")).toHaveValue("second-secret");
+});
+
+test("presents service load, duplicate, and expired-session outcomes truthfully", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
+  const expired = vi.fn();
+  const unavailableView = render(
+    <AdminApp
+      csrfToken="csrf-token"
+      fetchImpl={() => Promise.reject(new Error("offline"))}
+      onSessionExpired={expired}
+    />,
+  );
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Services could not be loaded",
+  );
+  unavailableView.unmount();
+
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      return response({ error: { code: "credential_already_exists" } }, 409);
+    }
+    return response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+  });
+
+  render(
+    <AdminApp
+      csrfToken="csrf-token"
+      fetchImpl={fetchImpl}
+      onSessionExpired={expired}
+    />,
+  );
+  expect(await screen.findByText("No services yet")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "primary" } });
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "private-value" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
+
+  cleanup();
+  render(
+    <AdminApp
+      csrfToken="csrf-token"
+      fetchImpl={() => response({}, 401)}
+      onSessionExpired={expired}
+    />,
+  );
+  await waitFor(() => expect(expired).toHaveBeenCalledOnce());
+});
+
+test("rejects a service directory for a different tenant", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
+
+  render(
+    <AdminApp
+      csrfToken="csrf-token"
+      fetchImpl={() => response(serviceDirectory("BBBBBBBBBBBBBBBB"))}
+    />,
+  );
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Services could not be loaded",
+  );
+  expect(screen.queryByText("Credential stored")).not.toBeInTheDocument();
 });

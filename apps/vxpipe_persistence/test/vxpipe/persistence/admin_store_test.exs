@@ -1,8 +1,23 @@
 defmodule Vxpipe.Persistence.AdminStoreTest do
   use Vxpipe.Persistence.DataCase, async: false
 
-  alias Vxpipe.Calls.{Administration, Definitions, InstallationOperator}
-  alias Vxpipe.Persistence.{AdminStore, CredentialStore, DefinitionStore, Repo}
+  alias Vxpipe.Calls.{
+    Administration,
+    Definitions,
+    InstallationOperator,
+    ProviderCredentials,
+    TelephonyServices
+  }
+
+  alias Vxpipe.Persistence.{
+    AdminStore,
+    CredentialKeyring,
+    CredentialStore,
+    DefinitionStore,
+    ProviderCredentialStore,
+    Repo,
+    TelephonyServiceStore
+  }
 
   alias Vxpipe.Persistence.Schema.{
     Call,
@@ -59,6 +74,118 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
 
     assert {:error, :repository_unavailable} =
              AdminStore.list_calls(TestUnavailableAdminRepo, "AAAAAAAAAAAAAAAA", nil, 25, 0)
+
+    assert {:error, :repository_unavailable} =
+             AdminStore.list_services(TestUnavailableAdminRepo, "AAAAAAAAAAAAAAAA")
+  end
+
+  test "lists stable metadata-only credentials and telephony registrations for one tenant" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
+    other = insert_tenant("BBBBBBBBBBBBBBBB", "Other tenant")
+    {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
+    context = [repo: Repo, keyring: keyring]
+
+    options = [
+      provider_credential_repository: {ProviderCredentialStore, context},
+      telephony_service_repository: {TelephonyServiceStore, context}
+    ]
+
+    assert {:ok, google} =
+             ProviderCredentials.provision(
+               tenant.key,
+               "google",
+               "primary",
+               "api_key",
+               %{"api_key" => "google-private-value"},
+               options
+             )
+
+    assert {:ok, telnyx} =
+             ProviderCredentials.provision(
+               tenant.key,
+               "telnyx",
+               "voice",
+               "api_key",
+               %{"api_key" => "telnyx-private-value"},
+               options
+             )
+
+    assert {:ok, _foreign} =
+             ProviderCredentials.provision(
+               other.key,
+               "deepgram",
+               "foreign",
+               "api_key",
+               %{"api_key" => "foreign-private-value"},
+               options
+             )
+
+    assert {:ok, service} =
+             TelephonyServices.register(
+               tenant.key,
+               %{
+                 "name" => "support",
+                 "ingress_key" => "support-ingress",
+                 "provider" => "telnyx",
+                 "provider_connection_id" => "connection-primary",
+                 "credential_id" => telnyx.id,
+                 "public_key" => Base.encode64(:crypto.strong_rand_bytes(32)),
+                 "outbound_number" => "+14155550100"
+               },
+               options
+             )
+
+    assert {:ok, {listed_tenant, credentials, services, false}} =
+             AdminStore.list_services(Repo, tenant.key)
+
+    assert listed_tenant.key == tenant.key
+    assert Enum.map(credentials, &{&1.provider, &1.name}) == [
+             {"google", "primary"},
+             {"telnyx", "voice"}
+           ]
+
+    assert Enum.map(services, &{&1.provider, &1.name}) == [{"telnyx", "support"}]
+    assert List.first(credentials).id == google.id
+    assert List.first(services).id == service.id
+
+    rendered = inspect({credentials, services})
+    refute rendered =~ "google-private-value"
+    refute rendered =~ "telnyx-private-value"
+    refute rendered =~ "foreign-private-value"
+
+    assert {:error, :tenant_not_found} =
+             AdminStore.list_services(Repo, "CCCCCCCCCCCCCCCC")
+  end
+
+  test "returns a bounded and explicitly partial service inventory" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
+    {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
+
+    options = [
+      provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]}
+    ]
+
+    for number <- 1..101 do
+      name = "credential-#{String.pad_leading(Integer.to_string(number), 3, "0")}"
+
+      assert {:ok, _metadata} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 "google",
+                 name,
+                 "api_key",
+                 %{"api_key" => "private-value"},
+                 options
+               )
+    end
+
+    assert {:ok, {listed_tenant, credentials, [], true}} =
+             AdminStore.list_services(Repo, tenant.key)
+
+    assert listed_tenant.key == tenant.key
+    assert length(credentials) == 100
+    assert List.first(credentials).name == "credential-001"
+    assert List.last(credentials).name == "credential-100"
   end
 
   test "lists one tenant's definitions with latest and published versions and call totals" do

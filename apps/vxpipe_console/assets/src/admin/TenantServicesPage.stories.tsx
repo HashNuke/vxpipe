@@ -22,6 +22,7 @@ const meta = {
         "populated",
         "loading",
         "empty",
+        "partial",
         "unavailable",
         "long-content",
         "validation-error",
@@ -44,6 +45,7 @@ type Story = StoryObj<typeof meta>;
 export const Populated: Story = {};
 export const Loading: Story = { args: { scenario: "loading" } };
 export const Empty: Story = { args: { scenario: "empty" } };
+export const PartialInventory: Story = { args: { scenario: "partial" } };
 export const Unavailable: Story = { args: { scenario: "unavailable" } };
 export const LongContent: Story = { args: { scenario: "long-content" } };
 export const ValidationError: Story = { args: { scenario: "validation-error" } };

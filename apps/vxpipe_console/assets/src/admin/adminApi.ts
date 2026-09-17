@@ -1,6 +1,7 @@
 import type { TenantSummary } from "./tenantTypes";
 import type { DefinitionSummary, TenantContext } from "./definitionTypes";
 import type { CallSummary, DefinitionContext } from "./callTypes";
+import type { ServiceInventoryItem, ServiceProvider } from "./serviceTypes";
 
 export type TenantDirectoryPage = {
   tenants: TenantSummary[];
@@ -25,6 +26,12 @@ export type CallDirectoryPage = {
   selectedDefinitionId: string | null;
   calls: CallSummary[];
   pagination: TenantDirectoryPage["pagination"];
+};
+
+export type ServiceDirectory = {
+  tenant: TenantContext;
+  services: ServiceInventoryItem[];
+  truncated: boolean;
 };
 
 export function parseTenantPage(value: unknown): TenantDirectoryPage {
@@ -143,6 +150,202 @@ export function parseCallPage(value: unknown): CallDirectoryPage {
       totalPages: Number(totalPages),
     },
   };
+}
+
+export function parseServiceDirectory(value: unknown): ServiceDirectory {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, ["tenant", "credentials", "telephony_services", "truncated"]) ||
+    !isRecord(value.tenant) ||
+    !exactKeys(value.tenant, ["key", "name"]) ||
+    typeof value.tenant.key !== "string" ||
+    value.tenant.key.length === 0 ||
+    typeof value.tenant.name !== "string" ||
+    value.tenant.name.length === 0 ||
+    !Array.isArray(value.credentials) ||
+    !Array.isArray(value.telephony_services) ||
+    typeof value.truncated !== "boolean"
+  ) {
+    throw invalidServiceResponse();
+  }
+
+  const truncated = value.truncated;
+  const credentials = value.credentials.map(parseCredentialMetadata);
+  const telephonyServices = value.telephony_services.map(parseTelephonyMetadata);
+  const credentialsById = new Map(credentials.map((credential) => [credential.id, credential]));
+
+  if (
+    new Set(credentials.map(({ id }) => id)).size !== credentials.length ||
+    new Set(telephonyServices.map(({ id }) => id)).size !== telephonyServices.length ||
+    telephonyServices.some((service) => {
+      const credential = credentialsById.get(service.credentialId);
+      return !credential || credential.provider !== service.provider;
+    })
+  ) {
+    throw invalidServiceResponse();
+  }
+
+  const services = credentials.flatMap<ServiceInventoryItem>((credential) => {
+    const registrations = telephonyServices.filter(
+      ({ credentialId }) => credentialId === credential.id,
+    );
+
+    if (registrations.length > 0) {
+      return registrations.map<ServiceInventoryItem>((service) => ({
+        id: service.id,
+        name: service.name,
+        provider: service.provider,
+        capability: "Telephony" as const,
+        credentialName: credential.name,
+        serviceStatus: "registered" as const,
+        telephonyConfiguration: {
+          providerConnectionId: service.providerConnectionId,
+          outboundNumber: service.outboundNumber,
+        },
+      }));
+    }
+
+    return [credentialInventory(credential, truncated)];
+  });
+
+  return {
+    tenant: { key: value.tenant.key, name: value.tenant.name },
+    services,
+    truncated,
+  };
+}
+
+export function parseCreatedCredential(value: unknown): ServiceInventoryItem {
+  if (!isRecord(value) || !exactKeys(value, ["credential"])) {
+    throw invalidCredentialResponse();
+  }
+
+  let credential: CredentialMetadata;
+  try {
+    credential = parseCredentialMetadata(value.credential);
+  } catch {
+    throw invalidCredentialResponse();
+  }
+  if (credential.status !== "active") throw invalidCredentialResponse();
+  return credentialInventory(credential);
+}
+
+type CredentialMetadata = {
+  id: string;
+  provider: ServiceProvider;
+  name: string;
+  authKind: "api_key" | "account_sid_auth_token";
+  status: "active" | "revoked";
+};
+
+type TelephonyMetadata = {
+  id: string;
+  name: string;
+  provider: "telnyx" | "twilio";
+  providerConnectionId: string;
+  credentialId: string;
+  outboundNumber: string | null;
+};
+
+function parseCredentialMetadata(value: unknown): CredentialMetadata {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      "id",
+      "provider",
+      "name",
+      "auth_kind",
+      "status",
+      "created_at",
+      "updated_at",
+    ]) ||
+    typeof value.id !== "string" ||
+    value.id.length === 0 ||
+    !member(value.provider, ["google", "zenmux", "deepgram", "telnyx", "twilio"]) ||
+    typeof value.name !== "string" ||
+    value.name.length === 0 ||
+    !member(value.status, ["active", "revoked"]) ||
+    !validTimestamp(value.created_at) ||
+    !validTimestamp(value.updated_at) ||
+    !(
+      (value.provider === "twilio" && value.auth_kind === "account_sid_auth_token") ||
+      (value.provider !== "twilio" && value.auth_kind === "api_key")
+    )
+  ) {
+    throw invalidServiceResponse();
+  }
+
+  return {
+    id: value.id,
+    provider: value.provider,
+    name: value.name,
+    authKind: value.auth_kind,
+    status: value.status,
+  };
+}
+
+function parseTelephonyMetadata(value: unknown): TelephonyMetadata {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      "id",
+      "name",
+      "provider",
+      "provider_connection_id",
+      "credential_id",
+      "outbound_number",
+    ]) ||
+    typeof value.id !== "string" ||
+    value.id.length === 0 ||
+    typeof value.name !== "string" ||
+    value.name.length === 0 ||
+    !member(value.provider, ["telnyx", "twilio"]) ||
+    typeof value.provider_connection_id !== "string" ||
+    value.provider_connection_id.length === 0 ||
+    typeof value.credential_id !== "string" ||
+    value.credential_id.length === 0 ||
+    !(value.outbound_number === null || typeof value.outbound_number === "string")
+  ) {
+    throw invalidServiceResponse();
+  }
+
+  return {
+    id: value.id,
+    name: value.name,
+    provider: value.provider,
+    providerConnectionId: value.provider_connection_id,
+    credentialId: value.credential_id,
+    outboundNumber: value.outbound_number,
+  };
+}
+
+function capability(provider: ServiceProvider): ServiceInventoryItem["capability"] {
+  if (provider === "deepgram") return "Speech";
+  if (telephonyProvider(provider)) return "Telephony";
+  return "Models";
+}
+
+function credentialInventory(
+  credential: CredentialMetadata,
+  inventoryTruncated = false,
+): ServiceInventoryItem {
+  return {
+    id: credential.id,
+    name: credential.name,
+    provider: credential.provider,
+    capability: capability(credential.provider),
+    credentialName: credential.name,
+    serviceStatus: telephonyProvider(credential.provider)
+      ? inventoryTruncated
+        ? "unknown"
+        : "not-registered"
+      : "not-applicable",
+    telephonyConfiguration: null,
+  };
+}
+
+function telephonyProvider(provider: ServiceProvider): provider is "telnyx" | "twilio" {
+  return provider === "telnyx" || provider === "twilio";
 }
 
 function parseCallDefinition(value: unknown): Pick<DefinitionContext, "id" | "name"> {
@@ -267,6 +470,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function exactKeys(value: Record<string, unknown>, expected: string[]) {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return (
+    actual.length === sortedExpected.length &&
+    actual.every((key, index) => key === sortedExpected[index])
+  );
+}
+
 function isPositiveInteger(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) > 0;
 }
@@ -297,4 +509,12 @@ function invalidDefinitionResponse() {
 
 function invalidCallResponse() {
   return new Error("Invalid call directory response");
+}
+
+function invalidServiceResponse() {
+  return new Error("Invalid service directory response");
+}
+
+function invalidCredentialResponse() {
+  return new Error("Invalid credential response");
 }

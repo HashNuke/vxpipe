@@ -51,6 +51,17 @@ test("keeps empty and unavailable service inventories distinct", () => {
   expect(screen.getByRole("button", { name: "Add credential" })).toBeDisabled();
 });
 
+test("keeps a bounded partial inventory usable and labels it truthfully", () => {
+  render(
+    <TenantServicesPage
+      state={{ ...serviceFixture("populated"), truncated: true }}
+    />,
+  );
+
+  expect(screen.getByText(/partial inventory/i)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Add credential" })).toBeEnabled();
+});
+
 test("presents duplicate credentials as a conflict without a replace action", () => {
   render(<TenantServicesPage state={serviceFixture("duplicate-conflict")} />);
 

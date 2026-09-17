@@ -18,6 +18,8 @@ function statusLabel(status: ServiceInventoryItem["serviceStatus"]) {
       return "Not registered";
     case "registered":
       return "Registered";
+    case "unknown":
+      return "Unknown";
   }
 }
 
@@ -31,7 +33,7 @@ export function ServiceInventory({ services }: { services: ServiceInventoryItem[
         <ul className="m-0 list-none p-0">
           {services.map((service) => (
             <li className="grid grid-cols-[minmax(190px,1.4fr)_120px_130px_150px] items-center gap-4 border-t border-[var(--admin-line)] px-4 py-4" key={service.id}>
-              <span className="min-w-0"><strong className="block truncate text-sm">{service.name}</strong><span className="mt-1 block text-xs text-[var(--admin-muted)]">{providerLabels[service.provider]}</span>{service.telephonyConfiguration ? <span className="mt-1 block truncate font-mono text-xs text-[var(--admin-muted)]">{service.telephonyConfiguration.providerConnectionId}{service.telephonyConfiguration.outboundNumber ? ` · ${service.telephonyConfiguration.outboundNumber}` : ""}</span> : service.capability === "Telephony" ? <span className="mt-1 block text-xs text-[var(--admin-muted)]">No telephony service registered</span> : null}</span>
+              <span className="min-w-0"><strong className="block truncate text-sm">{service.name}</strong><span className="mt-1 block text-xs text-[var(--admin-muted)]">{providerLabels[service.provider]}</span>{service.telephonyConfiguration ? <span className="mt-1 block truncate font-mono text-xs text-[var(--admin-muted)]">{service.telephonyConfiguration.providerConnectionId}{service.telephonyConfiguration.outboundNumber ? ` · ${service.telephonyConfiguration.outboundNumber}` : ""}</span> : service.capability === "Telephony" ? <span className="mt-1 block text-xs text-[var(--admin-muted)]">{service.serviceStatus === "unknown" ? "Registration unavailable" : "No telephony service registered"}</span> : null}</span>
               <span className="text-sm text-[var(--admin-muted)]">{service.capability}</span>
               <span className={service.credentialName ? "inline-flex min-w-0 items-center gap-1.5 text-sm text-[var(--admin-green)]" : "inline-flex min-w-0 items-center gap-1.5 text-sm text-[var(--admin-muted)]"}>
                 {service.credentialName ? <KeyRound aria-hidden="true" className="size-4 shrink-0" /> : <CircleMinus aria-hidden="true" className="size-4 shrink-0" />}

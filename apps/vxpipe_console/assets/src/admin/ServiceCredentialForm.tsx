@@ -41,7 +41,14 @@ export function ServiceCredentialForm({
   }
 
   useEffect(() => {
-    if (status === "success") clearSecrets();
+    if (
+      status === "success" ||
+      status === "conflict" ||
+      status === "validation" ||
+      status === "error"
+    ) {
+      clearSecrets();
+    }
   }, [status]);
 
   const pending = status === "submitting";

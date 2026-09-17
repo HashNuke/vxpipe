@@ -83,3 +83,23 @@ test("clears secret fields after success and cancel", () => {
   expect(cancel).toHaveBeenCalledOnce();
   expect(screen.getByLabelText("API key")).toHaveValue("");
 });
+
+test("clears secret fields after the backend rejects a credential", () => {
+  const view = render(
+    <ServiceCredentialForm onCancel={vi.fn()} onSubmit={vi.fn()} status="submitting" />,
+  );
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "rejected-secret" },
+  });
+
+  view.rerender(
+    <ServiceCredentialForm
+      message="A credential with this provider and name already exists."
+      onCancel={vi.fn()}
+      onSubmit={vi.fn()}
+      status="conflict"
+    />,
+  );
+
+  expect(screen.getByLabelText("API key")).toHaveValue("");
+});

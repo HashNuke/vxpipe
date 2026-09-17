@@ -5,7 +5,13 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     CallDirectoryPage,
     DefinitionPage,
     InstallationOperator,
+    ProviderAuth,
+    ProviderCredential,
+    PublicId,
     Repositories,
+    ServiceDirectory,
+    TelephonyService,
+    Tenant,
     TenantPage
   }
 
@@ -113,6 +119,164 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   def list_calls(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
+
+  @spec list_services(InstallationOperator.t(), String.t(), keyword()) ::
+          {:ok, ServiceDirectory.t()} | {:error, term()}
+  def list_services(
+        %InstallationOperator{grant: :installation_operator},
+        tenant_key,
+        options
+      )
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+    with {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         {:ok, {tenant, credentials, telephony_services, truncated}} <-
+           Repositories.call(repository, :list_services, [tenant_key]),
+         true <- is_boolean(truncated),
+         :ok <- validate_service_directory(tenant_key, tenant, credentials, telephony_services) do
+      {:ok,
+       %ServiceDirectory{
+         tenant: tenant,
+         credentials: credentials,
+         telephony_services: telephony_services,
+         truncated: truncated
+       }}
+    else
+      false -> {:error, :service_directory_unavailable}
+      error -> error
+    end
+  end
+
+  def list_services(%InstallationOperator{}, _tenant_key, _options),
+    do: {:error, :installation_operator_required}
+
+  def list_services(_authority, _tenant_key, _options),
+    do: {:error, :installation_operator_required}
+
+  @spec create_credential(
+          InstallationOperator.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          map(),
+          keyword()
+        ) :: {:ok, ProviderCredential.t()} | {:error, term()}
+  def create_credential(
+        %InstallationOperator{grant: :installation_operator},
+        tenant_key,
+        provider,
+        name,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_list(options) do
+    with :ok <- ProviderAuth.binding(tenant_key, provider, name),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      credential = %ProviderCredential{
+        id: generate_uuid(options),
+        tenant_key: tenant_key,
+        provider: provider,
+        name: name,
+        auth_kind: auth_kind
+      }
+
+      repository
+      |> Repositories.call(:provision, [credential, payload])
+      |> validate_created_credential(credential)
+    end
+  end
+
+  def create_credential(%InstallationOperator{}, _tenant, _provider, _name, _kind, _payload, _opts),
+    do: {:error, :installation_operator_required}
+
+  def create_credential(_authority, _tenant, _provider, _name, _kind, _payload, _options),
+    do: {:error, :installation_operator_required}
+
+  defp generate_uuid(options) do
+    options
+    |> Keyword.get(:uuid_generator, &PublicId.uuid/0)
+    |> then(fn generator -> generator.() end)
+  end
+
+  defp validate_service_directory(
+         tenant_key,
+         %Tenant{key: tenant_key},
+         credentials,
+         telephony_services
+       )
+       when is_list(credentials) and is_list(telephony_services) do
+    credential_ids =
+      credentials
+      |> Enum.filter(&valid_credential_metadata?(&1, tenant_key))
+      |> Enum.map(& &1.id)
+      |> MapSet.new()
+
+    credentials_valid? = MapSet.size(credential_ids) == length(credentials)
+
+    services_valid? =
+      Enum.all?(telephony_services, fn
+        %TelephonyService{tenant_key: ^tenant_key, provider: provider, credential_id: id}
+        when provider in ["telnyx", "twilio"] ->
+          MapSet.member?(credential_ids, id)
+
+        _invalid ->
+          false
+      end)
+
+    if credentials_valid? and services_valid?,
+      do: :ok,
+      else: {:error, :service_directory_unavailable}
+  end
+
+  defp validate_service_directory(_tenant_key, _tenant, _credentials, _services),
+    do: {:error, :service_directory_unavailable}
+
+  defp valid_credential_metadata?(
+         %ProviderCredential{
+           tenant_key: tenant_key,
+           provider: provider,
+           name: name,
+           auth_kind: auth_kind
+         },
+         tenant_key
+       ) do
+    ProviderAuth.binding(tenant_key, provider, name) == :ok and
+      valid_auth_kind?(provider, auth_kind)
+  end
+
+  defp valid_credential_metadata?(_credential, _tenant_key), do: false
+
+  defp valid_auth_kind?("twilio", "account_sid_auth_token"), do: true
+
+  defp valid_auth_kind?(provider, "api_key")
+       when provider in ["google", "deepgram", "zenmux", "telnyx"],
+       do: true
+
+  defp valid_auth_kind?(_provider, _auth_kind), do: false
+
+  defp validate_created_credential(
+         {:ok,
+          %ProviderCredential{
+            tenant_key: tenant_key,
+            provider: provider,
+            name: name,
+            auth_kind: auth_kind
+          } = stored},
+         %ProviderCredential{
+           tenant_key: tenant_key,
+           provider: provider,
+           name: name,
+           auth_kind: auth_kind
+         }
+       ),
+       do: {:ok, stored}
+
+  defp validate_created_credential({:ok, _invalid}, _requested),
+    do: {:error, :provider_credential_write_failed}
+
+  defp validate_created_credential({:error, _reason} = error, _requested), do: error
 
   defp page_size(options) do
     with {:ok, limit} <- positive_integer(options, :limit, @default_page_size),

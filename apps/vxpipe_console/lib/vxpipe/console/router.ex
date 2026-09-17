@@ -92,6 +92,8 @@ defmodule Vxpipe.Console.Router do
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
     get "/tenants/:tenant_key/definitions", Vxpipe.Console.AdminDefinitionsController, :index
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
+    get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
+    post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create
   end
 
   scope "/admin" do

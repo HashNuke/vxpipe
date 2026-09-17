@@ -9,11 +9,14 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     DefinitionSummary,
     InstallationOperator,
     Principal,
+    ProviderCredential,
+    ServiceDirectory,
     Tenant,
-    TenantPage
+    TenantPage,
+    TelephonyService
   }
 
-  alias Vxpipe.Calls.TestAdminRepository
+  alias Vxpipe.Calls.{TestAdminRepository, TestOperatorCredentialRepository}
 
   test "lists one bounded deterministic tenant page for installation operator authority" do
     tenants = [
@@ -257,6 +260,216 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                },
                "AAAAAAAAAAAAAAAA",
                admin_repository: TestAdminRepository.admin_repository(failed)
+             )
+  end
+
+  test "lists metadata-only tenant services for installation operator authority" do
+    tenant = %Tenant{
+      key: "AAAAAAAAAAAAAAAA",
+      name: "Example tenant",
+      inserted_at: ~U[2026-09-17 01:00:00Z]
+    }
+
+    credentials = [
+      %ProviderCredential{
+        id: "11111111-1111-4111-8111-111111111111",
+        tenant_key: tenant.key,
+        provider: "google",
+        name: "primary",
+        auth_kind: "api_key",
+        inserted_at: ~U[2026-09-17 02:00:00Z],
+        updated_at: ~U[2026-09-17 02:00:00Z]
+      },
+      %ProviderCredential{
+        id: "33333333-3333-4333-8333-333333333333",
+        tenant_key: tenant.key,
+        provider: "telnyx",
+        name: "voice",
+        auth_kind: "api_key",
+        inserted_at: ~U[2026-09-17 02:01:00Z],
+        updated_at: ~U[2026-09-17 02:01:00Z]
+      }
+    ]
+
+    telephony_services = [
+      %TelephonyService{
+        id: "22222222-2222-4222-8222-222222222222",
+        tenant_key: tenant.key,
+        name: "voice",
+        ingress_key: "voice-ingress",
+        provider: "telnyx",
+        provider_connection_id: "connection-primary",
+        credential_id: "33333333-3333-4333-8333-333333333333",
+        public_key: nil,
+        outbound_number: "+14155550100",
+        answering_machine_detection: :disabled,
+        media_token_ttl_ms: 60_000,
+        webhook_tolerance_seconds: 300
+      }
+    ]
+
+    repository =
+      start_supervised!(
+        {TestAdminRepository, {:ok, {tenant, credentials, telephony_services, false}}}
+      )
+
+    assert {:ok,
+            %ServiceDirectory{
+              tenant: ^tenant,
+              credentials: ^credentials,
+              telephony_services: ^telephony_services,
+              truncated: false
+            }} =
+             Vxpipe.Calls.list_operator_services(
+               InstallationOperator.authority(),
+               tenant.key,
+               admin_repository: TestAdminRepository.admin_repository(repository)
+             )
+
+    assert_received {:admin_repository_list_services, "AAAAAAAAAAAAAAAA"}
+
+    assert {:error, :installation_operator_required} =
+             Vxpipe.Calls.list_operator_services(
+               %Principal{
+                 tenant_key: tenant.key,
+                 api_key_id: "key",
+                 scopes: MapSet.new([:admin])
+               },
+               tenant.key,
+               admin_repository: TestAdminRepository.admin_repository(repository)
+             )
+  end
+
+  test "creates each currently supported credential contract without an overwrite path" do
+    tenant_key = "AAAAAAAAAAAAAAAA"
+
+    cases = [
+      {"google", "api_key", %{"api_key" => "google-secret"}},
+      {"deepgram", "api_key", %{"api_key" => "deepgram-secret"}},
+      {"zenmux", "api_key", %{"api_key" => "zenmux-secret"}},
+      {"telnyx", "api_key", %{"api_key" => "telnyx-secret"}},
+      {"twilio", "account_sid_auth_token",
+       %{
+         "account_sid" => "AC11111111111111111111111111111111",
+         "auth_token" => "twilio-secret"
+       }}
+    ]
+
+    for {{provider, auth_kind, payload}, index} <- Enum.with_index(cases, 1) do
+      suffix = String.pad_leading(Integer.to_string(index), 12, "0")
+
+      returned = %ProviderCredential{
+        id: "11111111-1111-4111-8111-#{suffix}",
+        tenant_key: tenant_key,
+        provider: provider,
+        name: "primary",
+        auth_kind: auth_kind
+      }
+
+      repository = TestOperatorCredentialRepository.repository(self(), {:ok, returned})
+
+      assert {:ok, ^returned} =
+               Vxpipe.Calls.create_operator_credential(
+                 InstallationOperator.authority(),
+                 tenant_key,
+                 provider,
+                 "primary",
+                 auth_kind,
+                 payload,
+                 provider_credential_repository: repository,
+                 uuid_generator: fn -> returned.id end
+               )
+
+      assert_received {:operator_credential_provisioned, provisioned, ^payload}
+      assert provisioned.id == returned.id
+      assert provisioned.tenant_key == tenant_key
+      assert provisioned.provider == provider
+      assert provisioned.name == "primary"
+      assert provisioned.auth_kind == auth_kind
+    end
+  end
+
+  test "credential creation preserves validation, duplicate, storage, and authority failures" do
+    tenant_key = "AAAAAAAAAAAAAAAA"
+    repository =
+      TestOperatorCredentialRepository.repository(
+        self(),
+        {:error, :provider_credential_conflict}
+      )
+
+    options = [provider_credential_repository: repository]
+
+    assert {:error, :provider_credential_conflict} =
+             Vxpipe.Calls.create_operator_credential(
+               InstallationOperator.authority(),
+               tenant_key,
+               "google",
+               "primary",
+               "api_key",
+               %{"api_key" => "private"},
+               options
+             )
+
+    assert {:error, :invalid_provider_auth} =
+             Vxpipe.Calls.create_operator_credential(
+               InstallationOperator.authority(),
+               tenant_key,
+               "unsupported",
+               "primary",
+               "api_key",
+               %{"api_key" => "private"},
+               options
+             )
+
+    assert {:error, :installation_operator_required} =
+             Vxpipe.Calls.create_operator_credential(
+               %Principal{tenant_key: tenant_key, api_key_id: "key", scopes: MapSet.new([:admin])},
+               tenant_key,
+               "google",
+               "primary",
+               "api_key",
+               %{"api_key" => "private"},
+               options
+             )
+  end
+
+  test "rejects repository metadata that crosses the requested tenant boundary" do
+    tenant = %Tenant{
+      key: "AAAAAAAAAAAAAAAA",
+      name: "Example tenant",
+      inserted_at: ~U[2026-09-17 01:00:00Z]
+    }
+
+    foreign = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_key: "BBBBBBBBBBBBBBBB",
+      provider: "google",
+      name: "primary",
+      auth_kind: "api_key"
+    }
+
+    directory_repository =
+      start_supervised!({TestAdminRepository, {:ok, {tenant, [foreign], [], false}}})
+
+    assert {:error, :service_directory_unavailable} =
+             Vxpipe.Calls.list_operator_services(
+               InstallationOperator.authority(),
+               tenant.key,
+               admin_repository: TestAdminRepository.admin_repository(directory_repository)
+             )
+
+    credential_repository =
+      TestOperatorCredentialRepository.repository(self(), {:ok, foreign})
+
+    assert {:error, :provider_credential_write_failed} =
+             Vxpipe.Calls.create_operator_credential(
+               InstallationOperator.authority(),
+               tenant.key,
+               "google",
+               "primary",
+               "api_key",
+               %{"api_key" => "private"},
+               provider_credential_repository: credential_repository
              )
   end
 end

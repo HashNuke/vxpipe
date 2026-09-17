@@ -60,6 +60,7 @@ export type ServiceFixtureScenario =
   | "populated"
   | "loading"
   | "empty"
+  | "partial"
   | "unavailable"
   | "long-content"
   | "validation-error"
@@ -77,6 +78,18 @@ export function serviceFixture(
       return { status: "loading", tenant: demoTenant, setup };
     case "empty":
       return { status: "ready", tenant: demoTenant, setup, services: [] };
+    case "partial":
+      return {
+        status: "ready",
+        tenant: demoTenant,
+        setup,
+        services: services.map((service) =>
+          service.serviceStatus === "not-registered"
+            ? { ...service, serviceStatus: "unknown" as const }
+            : service,
+        ),
+        truncated: true,
+      };
     case "unavailable":
       return {
         status: "unavailable",

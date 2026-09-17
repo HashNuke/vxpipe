@@ -1,5 +1,5 @@
 import { Plus, X } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -8,7 +8,10 @@ import { PageNotice } from "./PageNotice";
 import { ServiceCredentialForm } from "./ServiceCredentialForm";
 import { ServiceInventory } from "./ServiceInventory";
 import type { CredentialDraft, TenantServicesPageState } from "./serviceTypes";
-import { TenantWorkspaceNavigation } from "./TenantWorkspaceNavigation";
+import {
+  TenantWorkspaceNavigation,
+  type TenantDestination,
+} from "./TenantWorkspaceNavigation";
 
 export function TenantServicesPage({
   state,
@@ -17,13 +20,19 @@ export function TenantServicesPage({
   onSelectTenant,
   onSelectWorkspace,
   onCreateCredential,
+  onDismissCredential,
+  headerActions,
+  workspaceDestinations,
 }: {
   state: TenantServicesPageState;
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectTenant?: () => void;
-  onSelectWorkspace?: (destination: "definitions" | "calls" | "services") => void;
+  onSelectWorkspace?: (destination: TenantDestination) => void;
   onCreateCredential?: (draft: CredentialDraft) => void;
+  onDismissCredential?: () => void;
+  headerActions?: ReactNode;
+  workspaceDestinations?: TenantDestination[];
 }) {
   const [open, setOpen] = useState(state.setup.open);
   const [freshAttempt, setFreshAttempt] = useState(false);
@@ -47,6 +56,7 @@ export function TenantServicesPage({
     if (contentRef.current) contentRef.current.inert = false;
     setOpen(false);
     setFreshAttempt(true);
+    onDismissCredential?.();
     triggerRef.current?.focus();
   }
 
@@ -75,15 +85,25 @@ export function TenantServicesPage({
   }
 
   return (
-    <AdminShell theme={theme}>
+    <AdminShell headerActions={headerActions} theme={theme}>
       <main aria-busy={state.status === "loading" ? "true" : undefined} className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
         <div aria-hidden={open ? "true" : undefined} inert={open ? true : undefined} ref={contentRef}>
         <Breadcrumbs items={[{ label: "Tenants", href: "/admin", onSelect: onSelectTenants }, { label: state.tenant.name, href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}`, onSelect: onSelectTenant }, { label: "Services" }]} />
-        <TenantWorkspaceNavigation active="services" onSelect={onSelectWorkspace} tenant={state.tenant} />
+        <TenantWorkspaceNavigation
+          active="services"
+          destinations={workspaceDestinations}
+          onSelect={onSelectWorkspace}
+          tenant={state.tenant}
+        />
         <header className="mb-6 flex items-center justify-between gap-4 border-b border-[var(--admin-line)] pb-5 sm:mb-8">
           <h1 className="text-xl font-bold tracking-[-0.02em]">Services</h1>
           <Button disabled={state.status !== "ready"} onClick={() => { setFreshAttempt(true); setOpen(true); }} ref={triggerRef} type="button"><Plus aria-hidden="true" className="size-4" />Add credential</Button>
         </header>
+        {state.status === "ready" && state.truncated ? (
+          <p className="mb-4 text-sm text-[var(--admin-muted)]" role="status">
+            Showing a partial inventory. More services are configured for this tenant.
+          </p>
+        ) : null}
         <section aria-label="Service inventory" className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]">
           {state.status === "loading" ? <div className="min-h-56 animate-pulse bg-[var(--admin-soft)] motion-reduce:animate-none" /> : null}
           {state.status === "unavailable" ? <PageNotice kind="unavailable" message={state.message} title="Services unavailable" /> : null}

@@ -18,4 +18,10 @@ defmodule Vxpipe.Console.Test.AdminRepository do
     send(owner, {:operator_calls_requested, tenant_key, definition_id, limit, offset})
     result
   end
+
+  @impl true
+  def list_services({owner, result}, tenant_key) do
+    send(owner, {:operator_services_requested, tenant_key})
+    result
+  end
 end

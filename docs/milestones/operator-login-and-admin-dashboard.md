@@ -1,6 +1,6 @@
 # Operator login and admin dashboard
 
-Status: checkpoints 1–5 complete; checkpoints 6–7 remain.
+Status: checkpoints 1–6 complete; checkpoint 7 remains.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
@@ -275,27 +275,44 @@ consistency, then approved the corrected implementation and focused evidence.
 
 ## Checkpoint 6 — Manage supported tenant services
 
-- [ ] Red-test metadata-only provider credential and telephony service reads under installation-
+- [x] Red-test metadata-only provider credential and telephony service reads under installation-
   operator authority, including tenant isolation, stable ordering and unavailable persistence.
-- [ ] Red-test CSRF-protected credential-add endpoints for the current Google, Deepgram,
+- [x] Red-test CSRF-protected credential-add endpoints for the current Google, Deepgram,
   Zenmux, Telnyx and Twilio auth contracts. Responses and logs contain metadata only; rejected and
   successful writes never echo secret fields.
-- [ ] Add the smallest Calls-owned installation-operator credential workflow around the existing
+- [x] Add the smallest Calls-owned installation-operator credential workflow around the existing
   repository port. It is create-only and returns a duplicate conflict without overwriting; Console
   never invokes Persistence or the trusted-host-only provisioning API directly.
-- [ ] Connect the approved Services inventory and provider-specific setup flow. Keep form state and
+- [x] Connect the approved Services inventory and provider-specific setup flow. Keep form state and
   endpoint validation outside list/presentation components, and clear secret inputs after cancel,
   error recovery and success.
-- [ ] Add Services to the shared tenant navigation only after its page and endpoints work. Existing
+- [x] Add Services to the shared tenant navigation only after its page and endpoints work. Existing
   telephony service metadata is read-only: adding Telnyx/Twilio credentials does not register or
   rebind a telephony service or prove provider-side readiness. Report stored-credential status
   separately from configured/verified/ready service state.
-- [ ] Verify direct URL load, refresh, back/forward, loading/empty/unavailable states, duplicate
+- [x] Verify direct URL load, refresh, back/forward, loading/empty/unavailable states, duplicate
   names, stale submissions, session expiry and cross-tenant identifiers in automated and
   rendered browser checks.
 
 Exit: an authenticated operator can inspect service metadata and add credentials for providers
 Vxpipe already supports without any secret-read path. Commit this vertical slice separately.
+
+Evidence: Calls owns the installation-operator service directory and create-only credential
+workflow, validates tenant containment, and accepts only the existing Google, Deepgram, Zenmux,
+Telnyx and Twilio authentication contracts. Persistence selects credential metadata without
+materializing ciphertext, keeps stable ordering and returns a bounded partial inventory with an
+explicit truncation marker when more rows exist.
+Console exposes authenticated, CSRF-protected tenant routes whose responses contain metadata only;
+the complete `values` container is filtered before Phoenix logs valid or malformed requests. The
+React integration strictly validates responses, aborts stale requests and invalidates submissions
+when setup is dismissed. Secrets clear after every terminal result. Chrome checks at 1440×900 and
+390×844 covered empty and populated inventories, Google creation, Twilio fields, duplicate handling,
+history restoration and mobile overflow; the partial state was also rendered at both sizes. The
+focused Calls, Persistence and Console endpoint suites, 109 frontend tests, TypeScript and ESLint
+pass. GPT-6 Astra xhigh reviewed the final slice after its
+three findings—bounded metadata projection, malformed-value filtering and dismissal invalidation—
+and its follow-up findings about unusable oversized inventories and uncertain registration status
+were fixed and retested.
 
 ## Checkpoint 7 — Open live and historical call details
 

@@ -1,10 +1,25 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
 
-import { parseCallPage, parseDefinitionPage, parseTenantPage } from "./admin/adminApi";
+import {
+  parseCallPage,
+  parseCreatedCredential,
+  parseDefinitionPage,
+  parseServiceDirectory,
+  parseTenantPage,
+} from "./admin/adminApi";
 import { DefinitionCallsPage } from "./admin/DefinitionCallsPage";
 import type { DefinitionCallsPageState } from "./admin/callTypes";
 import { TenantDefinitionsPage } from "./admin/TenantDefinitionsPage";
 import type { TenantDefinitionsPageState } from "./admin/definitionTypes";
+import type { CredentialDraft, TenantServicesPageState } from "./admin/serviceTypes";
+import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
 
@@ -13,7 +28,8 @@ type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 type AdminRoute =
   | { kind: "tenants"; page: number }
   | { kind: "definitions"; tenantKey: string; page: number }
-  | { kind: "calls"; tenantKey: string; definitionId: string | null; page: number };
+  | { kind: "calls"; tenantKey: string; definitionId: string | null; page: number }
+  | { kind: "services"; tenantKey: string };
 
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
 const redirectExpiredSession = () => window.location.assign("/auth/login");
@@ -41,12 +57,41 @@ export function AdminApp({
     definitionOptionsTruncated: false,
     selectedDefinitionId: route.kind === "calls" ? route.definitionId : null,
   }));
+  const [services, setServices] = useState<TenantServicesPageState>(() => ({
+    status: "loading",
+    tenant: route.kind === "services" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
+    setup: { open: false, status: "idle", resultVersion: 0 },
+  }));
+  const routeRef = useRef(route);
+  const submissionRef = useRef<
+    { id: number; tenantKey: string; controller: AbortController } | undefined
+  >(undefined);
+  const submissionSequenceRef = useRef(0);
 
   useEffect(() => {
-    const restore = () => setRoute(readRoute());
+    const restore = () => {
+      const restored = readRoute();
+      routeRef.current = restored;
+      setRoute(restored);
+    };
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
+
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    const submission = submissionRef.current;
+    if (
+      submission &&
+      (route.kind !== "services" || route.tenantKey !== submission.tenantKey)
+    ) {
+      submission.controller.abort();
+      submissionRef.current = undefined;
+    }
+  }, [route]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -112,7 +157,7 @@ export function AdminApp({
             }));
           }
         });
-    } else {
+    } else if (route.kind === "calls") {
       setCalls((state) => ({
         status: "loading",
         tenant:
@@ -154,6 +199,30 @@ export function AdminApp({
             }));
           }
         });
+    } else {
+      setServices((state) => ({
+        status: "loading",
+        tenant:
+          state.tenant.key === route.tenantKey
+            ? state.tenant
+            : tenantPlaceholder(route.tenantKey),
+        setup: { open: false, status: "idle", resultVersion: state.setup.resultVersion },
+      }));
+
+      loadServices(route, controller.signal, fetchImpl, onSessionExpired, isCurrent)
+        .then((state) => {
+          if (current && state) setServices(state);
+        })
+        .catch((error: unknown) => {
+          if (current && !aborted(error)) {
+            setServices((state) => ({
+              status: "unavailable",
+              tenant: state.tenant,
+              setup: state.setup,
+              message: "Services could not be loaded. Try again after storage is available.",
+            }));
+          }
+        });
     }
 
     return () => {
@@ -164,10 +233,12 @@ export function AdminApp({
 
   function navigate(nextRoute: AdminRoute, replace = false) {
     window.history[replace ? "replaceState" : "pushState"]({}, "", routeUrl(nextRoute));
+    routeRef.current = nextRoute;
     setRoute(nextRoute);
   }
 
   const headerActions = <SignOut csrfToken={csrfToken} />;
+  const workspaceDestinations = ["definitions", "calls", "services"] as const;
 
   if (route.kind === "definitions") {
     return (
@@ -183,10 +254,12 @@ export function AdminApp({
         onSelectWorkspace={(destination) => {
           if (destination === "calls") {
             navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 });
+          } else if (destination === "services") {
+            navigate({ kind: "services", tenantKey: route.tenantKey });
           }
         }}
         state={definitions}
-        workspaceDestinations={["definitions", "calls"]}
+        workspaceDestinations={[...workspaceDestinations]}
       />
     );
   }
@@ -208,10 +281,58 @@ export function AdminApp({
         onSelectWorkspace={(destination) => {
           if (destination === "definitions") {
             navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 });
+          } else if (destination === "services") {
+            navigate({ kind: "services", tenantKey: route.tenantKey });
           }
         }}
         state={calls}
-        workspaceDestinations={["definitions", "calls"]}
+        workspaceDestinations={[...workspaceDestinations]}
+      />
+    );
+  }
+
+  if (route.kind === "services") {
+    return (
+      <TenantServicesPage
+        headerActions={headerActions}
+        onCreateCredential={(draft) =>
+          createCredential(
+            route.tenantKey,
+            draft,
+            csrfToken,
+            fetchImpl,
+            onSessionExpired,
+            setServices,
+            routeRef,
+            submissionRef,
+            submissionSequenceRef,
+          )
+        }
+        onDismissCredential={() => {
+          submissionRef.current?.controller.abort();
+          submissionRef.current = undefined;
+          setServices((state) => ({
+            ...state,
+            setup: {
+              open: false,
+              status: "idle",
+              resultVersion: state.setup.resultVersion,
+            },
+          }));
+        }}
+        onSelectTenant={() =>
+          navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 })
+        }
+        onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
+        onSelectWorkspace={(destination) => {
+          if (destination === "definitions") {
+            navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 });
+          } else if (destination === "calls") {
+            navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 });
+          }
+        }}
+        state={services}
+        workspaceDestinations={[...workspaceDestinations]}
       />
     );
   }
@@ -369,6 +490,196 @@ async function loadCalls(
   };
 }
 
+async function loadServices(
+  selected: Extract<AdminRoute, { kind: "services" }>,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  isCurrent: () => boolean,
+): Promise<TenantServicesPageState | undefined> {
+  const encodedTenant = encodeURIComponent(selected.tenantKey);
+  const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}/services`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+
+  if (!isCurrent()) return;
+  if (response.status === 401) {
+    onSessionExpired();
+    return;
+  }
+  if (response.status === 404) {
+    return {
+      status: "unavailable",
+      tenant: tenantPlaceholder(selected.tenantKey),
+      setup: { open: false, status: "idle", resultVersion: 0 },
+      message: "This tenant could not be found.",
+    };
+  }
+  if (!response.ok) throw new Error("Service directory unavailable");
+
+  const result = parseServiceDirectory(await response.json());
+  if (!isCurrent()) return;
+  if (result.tenant.key !== selected.tenantKey) throw new Error("Unexpected tenant response");
+
+  return {
+    status: "ready",
+    tenant: result.tenant,
+    services: result.services,
+    truncated: result.truncated,
+    setup: { open: false, status: "idle", resultVersion: 0 },
+  };
+}
+
+async function createCredential(
+  tenantKey: string,
+  draft: CredentialDraft,
+  csrfToken: string,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  setServices: Dispatch<SetStateAction<TenantServicesPageState>>,
+  routeRef: MutableRefObject<AdminRoute>,
+  submissionRef: MutableRefObject<
+    { id: number; tenantKey: string; controller: AbortController } | undefined
+  >,
+  submissionSequenceRef: MutableRefObject<number>,
+) {
+  submissionRef.current?.controller.abort();
+  const controller = new AbortController();
+  const id = ++submissionSequenceRef.current;
+  submissionRef.current = { id, tenantKey, controller };
+
+  setServices((state) => ({
+    ...state,
+    setup: {
+      open: true,
+      status: "submitting",
+      resultVersion: state.setup.resultVersion,
+    },
+  }));
+
+  try {
+    const encodedTenant = encodeURIComponent(tenantKey);
+    const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}/credentials`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      body: JSON.stringify(credentialRequest(draft)),
+      signal: controller.signal,
+    });
+
+    if (!currentSubmission(id, tenantKey, routeRef, submissionRef)) return;
+    if (response.status === 401) {
+      onSessionExpired();
+      return;
+    }
+    if (response.status === 409) {
+      setServices((state) => ({
+        ...state,
+        setup: {
+          open: true,
+          status: "conflict",
+          resultVersion: state.setup.resultVersion,
+          message: "A credential with this provider and name already exists.",
+        },
+      }));
+      return;
+    }
+    if (response.status === 422) {
+      setServices((state) => ({
+        ...state,
+        setup: {
+          open: true,
+          status: "validation",
+          resultVersion: state.setup.resultVersion,
+          message: "Enter a valid credential name and provider credential.",
+        },
+      }));
+      return;
+    }
+    if (!response.ok) throw new Error("Credential store unavailable");
+    const created = parseCreatedCredential(await response.json());
+    if (!currentSubmission(id, tenantKey, routeRef, submissionRef)) return;
+
+    setServices((state) =>
+      state.status === "ready"
+        ? {
+            ...state,
+            services: [...state.services, created].sort(compareServices),
+            setup: {
+              open: false,
+              status: "success",
+              resultVersion: state.setup.resultVersion + 1,
+            },
+          }
+        : state,
+    );
+  } catch (error: unknown) {
+    if (!aborted(error) && currentSubmission(id, tenantKey, routeRef, submissionRef)) {
+      setServices((state) => ({
+        ...state,
+        setup: {
+          open: true,
+          status: "error",
+          resultVersion: state.setup.resultVersion,
+          message: "Credential could not be stored.",
+        },
+      }));
+    }
+  } finally {
+    if (submissionRef.current?.id === id) submissionRef.current = undefined;
+  }
+}
+
+function compareServices(
+  left: Extract<TenantServicesPageState, { status: "ready" }>["services"][number],
+  right: Extract<TenantServicesPageState, { status: "ready" }>["services"][number],
+) {
+  return (
+    left.provider.localeCompare(right.provider) ||
+    left.name.localeCompare(right.name) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function credentialRequest(draft: CredentialDraft) {
+  if ("apiKey" in draft.values) {
+    return {
+      provider: draft.provider,
+      name: draft.name,
+      values: { api_key: draft.values.apiKey },
+    };
+  }
+
+  return {
+    provider: draft.provider,
+    name: draft.name,
+    values: {
+      account_sid: draft.values.accountSid,
+      auth_token: draft.values.authToken,
+    },
+  };
+}
+
+function currentSubmission(
+  id: number,
+  tenantKey: string,
+  routeRef: MutableRefObject<AdminRoute>,
+  submissionRef: MutableRefObject<
+    { id: number; tenantKey: string; controller: AbortController } | undefined
+  >,
+) {
+  const route = routeRef.current;
+  return (
+    submissionRef.current?.id === id &&
+    route.kind === "services" &&
+    route.tenantKey === tenantKey
+  );
+}
+
 function SignOut({ csrfToken }: { csrfToken: string }) {
   return (
     <form action="/auth/logout" method="post">
@@ -386,7 +697,7 @@ function SignOut({ csrfToken }: { csrfToken: string }) {
 function readRoute(): AdminRoute {
   const page = readPage();
   const match = window.location.pathname.match(
-    /^\/admin\/tenants\/([^/]+)(?:\/(definitions|calls))?\/?$/,
+    /^\/admin\/tenants\/([^/]+)(?:\/(definitions|calls|services))?\/?$/,
   );
 
   if (!match) return { kind: "tenants", page };
@@ -404,6 +715,8 @@ function readRoute(): AdminRoute {
       };
     }
 
+    if (destination === "services") return { kind: "services", tenantKey };
+
     const route = { kind: "definitions", tenantKey, page } as const;
     if (!destination) window.history.replaceState({}, "", routeUrl(route));
     return route;
@@ -414,7 +727,7 @@ function readRoute(): AdminRoute {
 
 function routeUrl(route: AdminRoute) {
   const query = new URLSearchParams();
-  if (route.page !== 1) query.set("page", String(route.page));
+  if (route.kind !== "services" && route.page !== 1) query.set("page", String(route.page));
   if (route.kind === "calls" && route.definitionId) {
     query.set("definition_id", route.definitionId);
   }

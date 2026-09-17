@@ -13,7 +13,7 @@ export type ServiceInventoryItem = {
   provider: ServiceProvider;
   capability: "Models" | "Speech" | "Telephony";
   credentialName: string | null;
-  serviceStatus: "not-applicable" | "not-registered" | "registered";
+  serviceStatus: "not-applicable" | "not-registered" | "registered" | "unknown";
   telephonyConfiguration: {
     providerConnectionId: string;
     outboundNumber: string | null;
@@ -36,6 +36,7 @@ export type CredentialDraft = {
 
 type ServicesContext = {
   tenant: TenantContext;
+  truncated?: boolean;
   setup: {
     open: boolean;
     status: CredentialSetupStatus;

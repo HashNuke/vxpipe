@@ -35,6 +35,29 @@ defmodule Vxpipe.Calls do
   def list_operator_calls(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_calls(authority, tenant_key, options)
 
+  def list_operator_services(authority, tenant_key, options \\ []),
+    do: OperatorAdministration.list_services(authority, tenant_key, options)
+
+  def create_operator_credential(
+        authority,
+        tenant_key,
+        provider,
+        name,
+        auth_kind,
+        payload,
+        options \\ []
+      ),
+      do:
+        OperatorAdministration.create_credential(
+          authority,
+          tenant_key,
+          provider,
+          name,
+          auth_kind,
+          payload,
+          options
+        )
+
   def bootstrap_tenant(name, scopes, options \\ []),
     do: Administration.bootstrap_tenant(name, scopes, options)
 

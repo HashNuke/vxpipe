@@ -1,6 +1,12 @@
 import { expect, test } from "vitest";
 
-import { parseCallPage, parseDefinitionPage, parseTenantPage } from "./adminApi";
+import {
+  parseCallPage,
+  parseCreatedCredential,
+  parseDefinitionPage,
+  parseServiceDirectory,
+  parseTenantPage,
+} from "./adminApi";
 
 test("validates and maps the tenant directory response", () => {
   expect(
@@ -228,4 +234,162 @@ test("rejects malformed calls, unknown selected definitions, and contradictory c
   expect(() => parseCallPage({ ...base, definitions_truncated: "yes" })).toThrow(
     "Invalid call directory response",
   );
+});
+
+test("validates and projects metadata-only service inventory", () => {
+  expect(
+    parseServiceDirectory({
+      tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
+      truncated: false,
+      credentials: [
+        {
+          id: "credential-google",
+          provider: "google",
+          name: "primary",
+          auth_kind: "api_key",
+          status: "active",
+          created_at: "2026-09-17T02:00:00Z",
+          updated_at: "2026-09-17T02:00:00Z",
+        },
+        {
+          id: "credential-telnyx",
+          provider: "telnyx",
+          name: "voice",
+          auth_kind: "api_key",
+          status: "active",
+          created_at: "2026-09-17T02:01:00Z",
+          updated_at: "2026-09-17T02:01:00Z",
+        },
+      ],
+      telephony_services: [
+        {
+          id: "service-support",
+          name: "support",
+          provider: "telnyx",
+          provider_connection_id: "connection-primary",
+          credential_id: "credential-telnyx",
+          outbound_number: "+14155550100",
+        },
+      ],
+    }),
+  ).toEqual({
+    tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
+    truncated: false,
+    services: [
+      {
+        id: "credential-google",
+        name: "primary",
+        provider: "google",
+        capability: "Models",
+        credentialName: "primary",
+        serviceStatus: "not-applicable",
+        telephonyConfiguration: null,
+      },
+      {
+        id: "service-support",
+        name: "support",
+        provider: "telnyx",
+        capability: "Telephony",
+        credentialName: "voice",
+        serviceStatus: "registered",
+        telephonyConfiguration: {
+          providerConnectionId: "connection-primary",
+          outboundNumber: "+14155550100",
+        },
+      },
+    ],
+  });
+});
+
+test("does not claim a telephony credential is unregistered when inventory is partial", () => {
+  const result = parseServiceDirectory({
+    tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
+    truncated: true,
+    credentials: [
+      {
+        id: "credential-telnyx",
+        provider: "telnyx",
+        name: "voice",
+        auth_kind: "api_key",
+        status: "active",
+        created_at: "2026-09-17T02:01:00Z",
+        updated_at: "2026-09-17T02:01:00Z",
+      },
+    ],
+    telephony_services: [],
+  });
+
+  expect(result.services[0]?.serviceStatus).toBe("unknown");
+});
+
+test("rejects service responses containing malformed, cross-linked, or secret data", () => {
+  const valid = {
+    tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
+    truncated: false,
+    credentials: [
+      {
+        id: "credential-google",
+        provider: "google",
+        name: "primary",
+        auth_kind: "api_key",
+        status: "active",
+        created_at: "2026-09-17T02:00:00Z",
+        updated_at: "2026-09-17T02:00:00Z",
+      },
+    ],
+    telephony_services: [],
+  };
+
+  expect(() =>
+    parseServiceDirectory({
+      ...valid,
+      credentials: [{ ...valid.credentials[0], api_key: "must-not-render" }],
+    }),
+  ).toThrow("Invalid service directory response");
+
+  expect(() =>
+    parseServiceDirectory({
+      ...valid,
+      telephony_services: [
+        {
+          id: "service-support",
+          name: "support",
+          provider: "telnyx",
+          provider_connection_id: "connection-primary",
+          credential_id: "missing-credential",
+          outbound_number: null,
+        },
+      ],
+    }),
+  ).toThrow("Invalid service directory response");
+});
+
+test("maps a created credential response without accepting private response fields", () => {
+  const response = {
+    credential: {
+      id: "credential-deepgram",
+      provider: "deepgram",
+      name: "realtime",
+      auth_kind: "api_key",
+      status: "active",
+      created_at: "2026-09-17T02:00:00Z",
+      updated_at: "2026-09-17T02:00:00Z",
+    },
+  };
+
+  expect(parseCreatedCredential(response)).toEqual({
+    id: "credential-deepgram",
+    name: "realtime",
+    provider: "deepgram",
+    capability: "Speech",
+    credentialName: "realtime",
+    serviceStatus: "not-applicable",
+    telephonyConfiguration: null,
+  });
+
+  expect(() =>
+    parseCreatedCredential({
+      credential: { ...response.credential, api_key: "must-not-render" },
+    }),
+  ).toThrow("Invalid credential response");
 });
