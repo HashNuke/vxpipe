@@ -1,0 +1,109 @@
+import type {
+  DefinitionSummary,
+  TenantContext,
+  TenantDefinitionsPageState,
+} from "./definitionTypes";
+
+export const demoTenant: TenantContext = {
+  key: "tn_demo_01",
+  name: "Demo workspace",
+};
+
+export const definitions: DefinitionSummary[] = [
+  {
+    id: "delivery-rescheduling",
+    name: "Delivery rescheduling",
+    latestRevision: 4,
+    publishedRevision: 3,
+    updatedAt: "2026-09-16T08:40:00.000Z",
+  },
+  {
+    id: "appointment-reminders",
+    name: "Appointment reminders",
+    latestRevision: 2,
+    publishedRevision: 2,
+    updatedAt: "2026-09-15T10:20:00.000Z",
+  },
+  {
+    id: "returns-intake",
+    name: null,
+    latestRevision: 1,
+    publishedRevision: null,
+    updatedAt: "2026-09-14T03:15:00.000Z",
+  },
+  {
+    id: "after-hours-triage",
+    name: "After-hours triage",
+    latestRevision: 7,
+    publishedRevision: 7,
+    updatedAt: "2026-09-11T17:05:00.000Z",
+  },
+];
+
+export type DefinitionFixtureScenario =
+  | "populated"
+  | "loading"
+  | "empty"
+  | "unavailable"
+  | "long-content"
+  | "paginated";
+
+export function definitionFixture(
+  scenario: DefinitionFixtureScenario,
+): TenantDefinitionsPageState {
+  switch (scenario) {
+    case "loading":
+      return { status: "loading", tenant: demoTenant };
+    case "empty":
+      return {
+        status: "ready",
+        tenant: demoTenant,
+        definitions: [],
+        pagination: null,
+      };
+    case "unavailable":
+      return {
+        status: "unavailable",
+        tenant: demoTenant,
+        message:
+          "Call definitions could not be loaded. Try again after storage is available.",
+      };
+    case "long-content":
+      return {
+        status: "ready",
+        tenant: {
+          key: "tn_international_customer_experience_operations_southeast_asia_2026",
+          name: "International customer experience and delivery operations",
+        },
+        definitions: [
+          {
+            id: "international-priority-delivery-rescheduling-and-exception-resolution",
+            name: "International priority delivery rescheduling and exception resolution",
+            latestRevision: 128,
+            publishedRevision: 127,
+            updatedAt: "2026-09-16T08:40:00.000Z",
+          },
+          ...definitions.slice(0, 2),
+        ],
+        pagination: null,
+      };
+    case "paginated":
+      return {
+        status: "ready",
+        tenant: demoTenant,
+        definitions,
+        pagination: {
+          label: "1–4 of 12",
+          hasPrevious: false,
+          hasNext: true,
+        },
+      };
+    case "populated":
+      return {
+        status: "ready",
+        tenant: demoTenant,
+        definitions,
+        pagination: null,
+      };
+  }
+}

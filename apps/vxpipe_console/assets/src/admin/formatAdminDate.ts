@@ -4,6 +4,6 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
 });
 
-export function formatTenantDate(value: string) {
+export function formatAdminDate(value: string) {
   return dateFormatter.format(new Date(value));
 }

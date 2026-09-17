@@ -1,6 +1,6 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoint 1 of 5 is complete. Requested and independently
+Status: implementation active; checkpoints 1 and 2 of 5 are complete. Requested and independently
 reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
@@ -81,16 +81,22 @@ TypeScript check, ESLint check and Storybook production build pass. Rendered dar
 
 ## Checkpoint 2 — Complete the Tenant definitions page
 
-- [ ] Build tenant context, definition row/card, publication-state and definition-list components.
-- [ ] Compose the complete Tenant definitions page with loading, empty, populated, unavailable,
+- [x] Build tenant context, definition row/card, publication-state and definition-list components.
+- [x] Compose the complete Tenant definitions page with loading, empty, populated, unavailable,
   mixed draft/published, long-name, paginated and narrow-screen fixtures.
-- [ ] Make definition selection navigate through the Storybook harness. Back navigation retains the
+- [x] Make definition selection navigate through the Storybook harness. Back navigation retains the
   selected tenant context without depending on a live response.
-- [ ] Test the Vxpipe-owned selection, publication presentation, pagination and unavailable states.
-- [ ] Inspect every important state in rendered desktop/mobile Storybook.
+- [x] Test the Vxpipe-owned selection, publication presentation, pagination and unavailable states.
+- [x] Inspect every important state in rendered desktop/mobile Storybook.
 
 Exit: a reviewer can evaluate definition browsing within a selected tenant. Commit this page slice
 separately.
+
+Evidence: deterministic stories cover all required states and **Admin / Full journey** connects the
+tenant directory to definitions with working breadcrumbs and browser back/forward. The Console's
+37 frontend tests, TypeScript check and warning-free ESLint check pass. Rendered dark/light desktop,
+390 px mobile, long-content and reduced-motion inspection passed without overflow. See
+[checkpoint labnotes](../../labnotes/20260917-0843-admin-definitions-storybook.md).
 
 ## Checkpoint 3 — Complete the Definition calls page
 

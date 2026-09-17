@@ -56,6 +56,7 @@ export function TenantsPage({
               />
               {state.pagination ? (
                 <Pagination
+                  ariaLabel="Tenant pages"
                   onNext={onNextPage}
                   onPrevious={onPreviousPage}
                   pagination={state.pagination}

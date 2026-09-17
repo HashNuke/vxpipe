@@ -137,8 +137,8 @@ npm run storybook
 ```
 
 Open `http://127.0.0.1:6007/`. Individual page stories expose their important states through
-Storybook Controls. The completed milestone will provide **Admin / Full journey** as the linked
-review entry point from tenants through call details.
+Storybook Controls. Use **Admin / Full journey** for the linked review flow; each page checkpoint
+extends that same story until it reaches call details.
 
 The browser uses only the scoped, short-lived connection details returned by the
 gateway. There is no build-time gateway URL or frontend environment file, and

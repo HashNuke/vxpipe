@@ -1,6 +1,6 @@
 import type { TenantsPageState, TenantSummary } from "./tenantTypes";
 
-const tenants: TenantSummary[] = [
+export const tenants: TenantSummary[] = [
   {
     key: "tn_demo_01",
     name: "Demo workspace",

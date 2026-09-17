@@ -1,7 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
-import type { MouseEvent } from "react";
 
-import { formatTenantDate } from "./formatTenantDate";
+import { formatAdminDate } from "./formatAdminDate";
+import { shouldInterceptNavigation } from "./shouldInterceptNavigation";
 import type { TenantSummary } from "./tenantTypes";
 
 export function TenantRow({
@@ -13,18 +13,8 @@ export function TenantRow({
 }) {
   const href = `/admin/tenants/${encodeURIComponent(tenant.key)}`;
 
-  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (
-      !onSelect ||
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
+  function handleClick(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (!onSelect || !shouldInterceptNavigation(event)) return;
     event.preventDefault();
     onSelect(tenant.key);
   }
@@ -40,7 +30,7 @@ export function TenantRow({
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold">{tenant.name}</span>
           <span className="mt-1 block text-xs text-[var(--admin-muted)] sm:hidden">
-            {formatTenantDate(tenant.createdAt)}
+            {formatAdminDate(tenant.createdAt)}
           </span>
         </span>
         <span
@@ -53,7 +43,7 @@ export function TenantRow({
           className="hidden text-sm text-[var(--admin-muted)] sm:block"
           dateTime={tenant.createdAt}
         >
-          {formatTenantDate(tenant.createdAt)}
+          {formatAdminDate(tenant.createdAt)}
         </time>
         <span>
           <ArrowUpRight

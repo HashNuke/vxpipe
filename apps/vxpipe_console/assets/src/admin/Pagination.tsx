@@ -4,17 +4,19 @@ import { Button } from "./Button";
 import type { PaginationModel } from "./tenantTypes";
 
 export function Pagination({
+  ariaLabel,
   pagination,
   onPrevious,
   onNext,
 }: {
+  ariaLabel: string;
   pagination: PaginationModel;
   onPrevious?: () => void;
   onNext?: () => void;
 }) {
   return (
     <nav
-      aria-label="Tenant pages"
+      aria-label={ariaLabel}
       className="flex items-center justify-between gap-4 border-t border-[var(--admin-line)] px-3 py-3 sm:px-4"
     >
       <span className="font-mono text-xs tabular-nums text-[var(--admin-muted)]">
