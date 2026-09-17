@@ -55,3 +55,5 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
 
 config :vxpipe_console, Vxpipe.Console.Endpoint,
   secret_key_base: String.duplicate("test-only-", 8)
+
+config :vxpipe_console, :operator_login_secret, String.duplicate("test-operator-only-", 4)

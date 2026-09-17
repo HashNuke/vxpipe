@@ -83,6 +83,8 @@ if database_url do
     artifact_repository: {Vxpipe.Persistence.ArtifactStore, Vxpipe.Persistence.Repo},
     usage_repository: {Vxpipe.Persistence.UsageStore, Vxpipe.Persistence.Repo},
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
+    operator_login_challenge_repository:
+      {Vxpipe.Persistence.OperatorLoginChallengeStore, [repo: Vxpipe.Persistence.Repo]},
     provider_credential_repository:
       {Vxpipe.Persistence.ProviderCredentialStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
@@ -251,7 +253,82 @@ if config_env() == :dev do
       [http: [ip: console_ip, port: port], https: false]
     end
 
-  config :vxpipe_console, Vxpipe.Console.Endpoint, [url: console_url] ++ console_listener
+  console_endpoint = [url: console_url] ++ console_listener
+
+  console_endpoint =
+    case nonempty_env.("SECRET_KEY_BASE") do
+      nil ->
+        console_endpoint
+
+      secret when byte_size(secret) >= 64 ->
+        config :vxpipe_console, :operator_login_secret, secret
+        Keyword.put(console_endpoint, :secret_key_base, secret)
+
+      _invalid ->
+        raise "SECRET_KEY_BASE must contain at least 64 bytes"
+    end
+
+  config :vxpipe_console, Vxpipe.Console.Endpoint, console_endpoint
+end
+
+if config_env() == :prod do
+  console_host =
+    case nonempty_env.("APP_HOST") do
+      nil ->
+        raise "APP_HOST is required for the production Console origin"
+
+      host ->
+        normalized = host |> String.downcase() |> String.trim_trailing(".")
+
+        normalized
+    end
+
+  console_port =
+    case Integer.parse(nonempty_env.("PORT") || "4000") do
+      {port, ""} when port in 1..65_535 -> port
+      _invalid -> raise "invalid PORT configuration"
+    end
+
+  secret_key_base =
+    case nonempty_env.("SECRET_KEY_BASE") do
+      secret when is_binary(secret) and byte_size(secret) >= 64 -> secret
+      _invalid -> raise "SECRET_KEY_BASE must contain at least 64 bytes"
+    end
+
+  loopback_hosts = ["localhost", "127.0.0.1", "::1"]
+  loopback? = console_host in loopback_hosts
+  console_scheme = if loopback?, do: "http", else: "https"
+  external_port = if loopback?, do: console_port, else: 443
+
+  valid_dns_host? = fn host ->
+    host
+    |> String.split(".", trim: false)
+    |> Enum.all?(&String.match?(&1, ~r/\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z/))
+  end
+
+  valid_host? =
+    byte_size(console_host) <= 253 and
+      case :inet.parse_address(String.to_charlist(console_host)) do
+        {:ok, _address} -> true
+        {:error, _reason} -> valid_dns_host?.(console_host)
+      end
+
+  unless valid_host?, do: raise("invalid APP_HOST configuration")
+
+  listener_ip =
+    case console_host do
+      host when host in ["localhost", "127.0.0.1"] -> {127, 0, 0, 1}
+      "::1" -> {0, 0, 0, 0, 0, 0, 0, 1}
+      _public_host -> {0, 0, 0, 0}
+    end
+
+  config :vxpipe_console, Vxpipe.Console.Endpoint,
+    url: [scheme: console_scheme, host: console_host, port: external_port],
+    http: [ip: listener_ip, port: console_port],
+    secret_key_base: secret_key_base,
+    server: true
+
+  config :vxpipe_console, :operator_login_secret, secret_key_base
 end
 
 telephony_public_base_url =

@@ -7,7 +7,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE
     VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS
     STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_RECORDING_ENABLED VXPIPE_DEV_TENANT
-    VXPIPE_TELEPHONY_PUBLIC_BASE_URL APP_HOST PORT VXPIPE_DEV_TLS)
+    VXPIPE_TELEPHONY_PUBLIC_BASE_URL APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS)
   @settings [{:vxpipe_gateway, Vxpipe.Gateway.Application}]
 
   setup do
@@ -17,6 +17,8 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
       Map.new(@settings, fn {app, key} -> {{app, key}, Application.fetch_env!(app, key)} end)
 
     Enum.each(@variables, &System.delete_env/1)
+    System.put_env("APP_HOST", "127.0.0.1")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("runtime-test-secret-", 4))
     development = Config.Reader.read!(@development)
 
     for {app, key} <- @settings do

@@ -1,7 +1,12 @@
 defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.Persistence.{CredentialKeyring, ProviderCredentialStore, Repo}
+  alias Vxpipe.Persistence.{
+    CredentialKeyring,
+    OperatorLoginChallengeStore,
+    ProviderCredentialStore,
+    Repo
+  }
 
   @variables [
     "VXPIPE_DB_URL",
@@ -15,7 +20,10 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
     "STORAGE_BUCKET",
     "AWS_REGION",
     "AWS_ENDPOINT",
-    "AWS_SESSION_TOKEN"
+    "AWS_SESSION_TOKEN",
+    "APP_HOST",
+    "PORT",
+    "SECRET_KEY_BASE"
   ]
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
 
@@ -23,6 +31,8 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
     previous = Map.new(@variables, &{&1, System.get_env(&1)})
     Enum.each(@variables, &System.delete_env/1)
     System.put_env("VXPIPE_DB_URL", "postgres://localhost/credential_runtime_test")
+    System.put_env("APP_HOST", "console.example.test")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("runtime-test-secret-", 4))
 
     on_exit(fn ->
       Enum.each(previous, fn
@@ -48,6 +58,11 @@ defmodule Vxpipe.Persistence.ProviderCredentialRuntimeTest do
 
     assert {Vxpipe.Persistence.TelephonyServiceStore, ^context} =
              Keyword.fetch!(calls, :telephony_service_repository)
+
+    assert {OperatorLoginChallengeStore, operator_login_context} =
+             Keyword.fetch!(calls, :operator_login_challenge_repository)
+
+    assert Keyword.fetch!(operator_login_context, :repo) == Repo
 
     refute inspect(config) =~ Base.encode64(key)
     refute Keyword.has_key?(config, :req_llm)

@@ -12,11 +12,18 @@ defmodule Vxpipe.Calls do
     CallDetailsPublications,
     Definitions,
     Inspections,
+    OperatorLoginChallenges,
     PublicationFinalizers,
     PublicationWorkers,
     TelephonyAdmissions,
     UsageProjections
   }
+
+  def issue_operator_login_challenge(verifier_secret, options \\ []),
+    do: OperatorLoginChallenges.issue(verifier_secret, options)
+
+  def consume_operator_login_challenge(token, code, verifier_secret, options \\ []),
+    do: OperatorLoginChallenges.consume(token, code, verifier_secret, options)
 
   def bootstrap_tenant(name, scopes, options \\ []),
     do: Administration.bootstrap_tenant(name, scopes, options)

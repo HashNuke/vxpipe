@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
     VXPIPE_RECORDING_S3_BUCKET VXPIPE_RECORDING_S3_REGION VXPIPE_RECORDING_S3_ENDPOINT
     VXPIPE_CALL_DETAILS_S3_BUCKET VXPIPE_CALL_DETAILS_S3_REGION VXPIPE_CALL_DETAILS_S3_ENDPOINT
     VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS VXPIPE_DEV_MODEL_FIXTURE
-    VXPIPE_DEV_SPEECH_PROFILE DEEPGRAM_API_KEY APP_HOST PORT VXPIPE_DEV_TLS)
+    VXPIPE_DEV_SPEECH_PROFILE DEEPGRAM_API_KEY APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -25,6 +25,8 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
       Map.new(@settings, fn {app, key} -> {{app, key}, Application.get_env(app, key)} end)
 
     Enum.each(@variables, &System.delete_env/1)
+    System.put_env("APP_HOST", "127.0.0.1")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("runtime-test-secret-", 4))
     development = Config.Reader.read!(@development)
 
     for {app, key} <- @settings do

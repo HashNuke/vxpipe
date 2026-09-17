@@ -1,6 +1,7 @@
 # Operator login and admin dashboard
 
-Status: planned, not implemented. Requested, split and independently reviewed 2026-09-17.
+Status: checkpoint 1 complete; checkpoints 2–7 remain.
+Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
 [Tenant administration](tenant-definitions-and-api-keys.md),
@@ -125,17 +126,30 @@ milestones and will extend this shell.
 
 ## Checkpoint 1 — Persist and issue one login challenge
 
-- [ ] Review the challenge/session schema, ownership and secret boundaries before implementation.
-- [ ] Red-test challenge issuance, token/code digests, leading-zero codes, expiry, restart, five
+- [x] Review the challenge/session schema, ownership and secret boundaries before implementation.
+- [x] Red-test challenge issuance, token/code digests, leading-zero codes, expiry, restart, five
   failed attempts, atomic consumption, concurrent correct submissions, unavailable persistence and
   rejection of a non-loopback HTTP origin.
-- [ ] Add the smallest Persistence schema/adapter and Calls contract needed to create and consume a
+- [x] Add the smallest Persistence schema/adapter and Calls contract needed to create and consume a
   challenge. Keep plaintext token/code values out of database fields, logs and inspected structs.
-- [ ] Implement `mix vxpipe.login` with the configured external origin and protected one-time output.
-- [ ] Run focused owning-application tests and the relevant migration/restart checks.
+- [x] Implement `mix vxpipe.login` with the configured external origin and protected one-time output.
+- [x] Run focused owning-application tests and the relevant migration/restart checks.
 
 Exit: a trusted command issues one durable, expiring challenge whose plaintext exists only in its
 one-time output. Commit schema, behavior, tests, documentation and labnotes as one checkpoint.
+
+Implementation evidence, 2026-09-17: Calls owns domain-separated challenge generation and its
+repository port; Persistence stores redacted fixed-size digests and atomically consumes or advances
+the five-attempt budget under a row lock; Console validates an explicit HTTPS or loopback origin and
+prints the URL and code separately. Production requires a 64-byte `SECRET_KEY_BASE`; development
+login issuance also requires that explicit secret and never uses the checked-in development endpoint
+secret. Calls (89 tests), Persistence (144 tests, 11 excluded) and Console (151 tests, 1 excluded)
+pass. Persistence evidence includes concurrent correct submissions, missing-table failure, expiry,
+exhaustion, consumed state and attempt-budget survival across Repo restarts. Final common gates and
+the follow-up GPT-6 Astra xhigh review passed. Formatting, compilation with warnings as errors,
+Credo and unused-dependency checks pass. The full umbrella test run reached one unrelated,
+timing-sensitive Telnyx handoff failure (`missing source recovery speech`); its five generated
+scenarios passed immediately when rerun in isolation.
 
 ## Checkpoint 2 — Exchange the code for an operator session
 

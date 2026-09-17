@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls.Repositories do
           | :artifact_repository
           | :usage_repository
           | :credential_repository
+          | :operator_login_challenge_repository
           | :provider_credential_repository
           | :telephony_service_repository
           | :definition_repository
