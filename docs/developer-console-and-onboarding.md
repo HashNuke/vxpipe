@@ -2,16 +2,19 @@
 
 Status: proposed production design, 2026-09-16. A private-package Storybook prototype is available;
 production protocol, setup and route integration remain unimplemented.
-The user requested an extractable client-JS/React debug console first, followed by platform access,
-a demo tenant, provider credentials, example definitions and a Getting Started home.
+The user requested an extractable client-JS/React debug console first, followed by operator login
+and administration, platform API access, a demo tenant, provider credentials, example definitions
+and a Getting Started home.
 
 ## Decision and delivery order
 
 1. [Call debug console](milestones/call-debug-console.md): run and understand a real call using
    existing tenant admission, RTVI and Vxpipe extensions.
-2. [Platform bootstrap and demo tenant](milestones/platform-bootstrap-and-demo-tenant.md): add
+2. [Operator login and admin dashboard](milestones/operator-login-and-admin-dashboard.md): issue a
+   local login challenge, then browse every tenant, definition and call in a Storybook-first React app.
+3. [Platform bootstrap and demo tenant](milestones/platform-bootstrap-and-demo-tenant.md): add
    the platform authority currently missing, then resumable demo-tenant setup through existing workflows.
-3. [Getting Started and example calls](milestones/getting-started-and-example-calls.md): present
+4. [Getting Started and example calls](milestones/getting-started-and-example-calls.md): present
    those operations at `/`, install a small example catalog, and launch the same debug console.
 
 The console comes first because every example needs a usable place to run. Its first slice uses
@@ -27,7 +30,7 @@ subject to their existing review hold. Existing incomplete live-carrier gates re
 | [React App](../apps/vxpipe_console/assets/src/App.tsx) | `/pipecat-console` wraps Voice UI Kit `ConsoleTemplate`. It resets to room creation on disconnect, losing the visible run. Keep working SDK/transport integration and build a Vxpipe-owned presentation/state model. |
 | [Transfer client](../apps/vxpipe_console/assets/src/transferConnection.ts) | Human acceptance already uses the separate `vxpipe` data channel. Reuse this path and its authority; do not pretend it is an RTVI message or add another transfer implementation. |
 | [RTVI codec](../apps/vxpipe_gateway/lib/vxpipe/gateway/rtvi/codec.ex) | The server advertises RTVI 2.1.0, emits ordinary transcripts/output, and carries versioned `vxpipe.turn`/`vxpipe.transfer` server messages. Ordinary bot output lacks participant identity, and RTVI has no standard call-variable message. Add the reviewed correlated participant projection and authorized `vxpipe.variables` snapshot envelope. |
-| [Tenant principal](../apps/vxpipe_calls/lib/vxpipe/calls/principal.ex) | Existing API keys are tenant-bound with independent `admin`/`calls` scopes. A platform key is a new authority contract; do not turn an existing tenant key into a global key. |
+| [Tenant principal](../apps/vxpipe_calls/lib/vxpipe/calls/principal.ex) | Existing API keys are tenant-bound with independent `admin`/`calls` scopes. A platform key is a separate programmatic authority contract. Neither key type authenticates the operator UI. |
 | [Call inspection](milestones/call-inspection-and-debugging.md) | Authorized live/persisted facts, variable snapshots, pagination and gap reporting already exist. Reuse them; a debug page is not a new archive or privileged inspection channel for participants. |
 | [SampleCall](../apps/vxpipe_console/lib/vxpipe/console/sample_call.ex) | Startup saves/publishes a definition and issues an in-memory sample key. The new persistent setup must replace this provisioning path for managed examples instead of running both. |
 | [Provider inventory](existing-provider-credentials.md) | Google, Deepgram, Zenmux, Telnyx and Twilio are supported. First voice setup uses Google plus Deepgram; STT/TTS share a Deepgram binding. No new provider/auth modes are required. |
@@ -273,11 +276,10 @@ tenant APIs, reusable Gateway operation and separately configured inspection/dia
 own access contracts. Demo mode does not auto-enable those diagnostic surfaces or grant access.
 The future container milestone proves the same image in both modes; no new image is built here.
 
-1. **Platform access.** A trusted local bootstrap command creates the platform key once, stores
-   only its digest, and shows the secret once through protected operator output. The initial
-   page can explain this command; an unauthenticated network visitor cannot claim the platform.
-   Exchange the key over a protected connection for a bounded browser session holding non-secret
-   identifiers. No key in URLs, HTML configuration, local storage or protocol events.
+1. **Operator access.** A trusted operator runs `mix vxpipe.login`, opens the short-lived URL and
+   enters the separately printed eight-digit code. A successful exchange creates a bounded operator
+   browser session. Platform and tenant API keys remain programmatic credentials and are never used
+   to sign in. No API key enters URLs, HTML configuration, local storage or protocol events.
 2. **Demo workspace.** One deliberate action creates or adopts the configured demo tenant and
    persists its binding. Repeat requests, tabs and restarts converge on that tenant. An existing
    `VXPIPE_DEV_TENANT` requires explicit adoption, not an unrelated second demo tenant.
@@ -322,18 +324,22 @@ fixtures remain useful for automated tests; they are not presented as a real spe
 
 ## Ownership, alternatives and open design work
 
-Console owns pages, session exchange and application orchestration. Its isolated client and React
-source boundaries own reusable connection behavior and UI components respectively. Gateway owns authenticated
+Console owns the Phoenix-rendered login exchange, React administration and Getting Started pages,
+operator session and application orchestration. Every user-facing page except login/auth is React
+and is built from small Storybook components through complete mocked page compositions before
+production integration. Its isolated
+client and React source boundaries own reusable connection behavior and UI components respectively. Gateway owns authenticated
 HTTP/protocol translation and versioned projections. Calls owns platform/tenant workflows and
 ports; Persistence owns digest/encrypted storage and transactions. Engine remains protocol-neutral.
 Browser client/UI package boundaries do not change these server application ownership rules.
-A platform principal is explicit and separate from a tenant principal: only named platform
+A platform principal is explicit and separate from a tenant principal and the operator browser
+grant: only named platform
 operations may choose a target tenant, then delegate to existing tenant workflows. Do not add a
 wildcard tenant or accept platform keys at ordinary participant endpoints.
 
 Rejected alternatives: another generic SDK console (cannot express Vxpipe attribution/state), a
 new transport or Python server (duplicates working boundaries), rebuilding call inspection,
-anonymous first-visitor platform ownership, automatic provisioning on every page load, one key
+anonymous first-visitor platform ownership, API-key UI login, automatic provisioning on every page load, one key
 field per capability, and a visual definition editor or comprehensive tenant-management product.
 No provider/auth expansion, third-party credential rotation, new call-flow engine, billing UI,
 SSO/RBAC framework, arbitrary tool execution, package publication, a second real protocol/transport,

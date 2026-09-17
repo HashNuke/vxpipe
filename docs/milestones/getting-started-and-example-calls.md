@@ -2,6 +2,7 @@
 
 Status: planned, not implemented. Requested 2026-09-16; local specification review recorded below.
 Prerequisites: [Call debug console](call-debug-console.md),
+[Operator login/admin dashboard](operator-login-and-admin-dashboard.md),
 [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md), and the existing
 [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md).
 Sources: [First-use design](../developer-console-and-onboarding.md#first-use-flow),
@@ -18,6 +19,9 @@ requirements. Refresh, partial failure and restart preserve completed work.
 
 - Replace the current Vxpipe directory at `/`. The user confirmed a persistent setup checklist
   plus sample links, with production behavior by default and explicit demo opt-in on the same image.
+- Implement `/` and its setup/example states in the existing React admin application. Build small
+  setup/catalog components and complete mocked page states in Console Storybook before connecting
+  production workflows. The operator login/code-entry page remains the only server-rendered UI.
 - Proposed switch: `VXPIPE_DEMO=1`; unset/blank/`0` disables it in every environment. Other
   non-empty values fail safely. Use only `config/runtime.exs` and document the optional setting
   in visible `env.sample`. This does not switch `MIX_ENV` or weaken production settings.
@@ -27,7 +31,7 @@ requirements. Refresh, partial failure and restart preserve completed work.
   inspection/diagnostics keep their own contracts. The flag grants no authority.
 - Turning demo mode off retains saved resources and already admitted calls, while disabling new
   demo actions. The same production-built assets support both modes, without seeding on boot.
-- Without a platform session, show only the bootstrap/sign-in guidance. Access alone never issues
+- Without an operator session, show only the login guidance. Access alone never issues
   a key, claims ownership, creates a tenant, writes credentials or starts a provider call.
 - Once authenticated, `/` always shows durable setup state: platform access, demo tenant, three
   capability requirements and per-example installation. Each example's Try action depends on
@@ -59,13 +63,14 @@ requirements. Refresh, partial failure and restart preserve completed work.
 
 ## Checkpoint 1 — Complete setup through the home page
 
-- [ ] Review the setup composition inside the existing design system: compact progress checklist,
-  one next action, grouped provider forms and clear enabled/disabled/authentication states.
+- [ ] Build and review small setup components, grouped provider forms and complete `/` states in
+  Console Storybook: unauthenticated guidance, partial setup, configured, unavailable and demo off.
 - [ ] Red-test unset/blank/0/1/invalid demo settings, production-default root behavior and blocked
   direct demo endpoints, unauthenticated guidance, authenticated resumable state, unavailable
   database/keyring, existing demo adoption and partial provider-setup errors.
-- [ ] Replace the directory home with setup-state presentation and the existing platform session/
-  demo workflows. Show three capability requirements while avoiding duplicate Deepgram key input.
+- [ ] Replace the directory home with the approved React setup page and connect it to the existing
+  operator session/demo workflows. Show three capability requirements while avoiding duplicate
+  Deepgram key input.
 - [ ] Add `VXPIPE_DEMO` runtime handling and optional commented `env.sample` documentation.
   Prove the same source/build toggles surfaces without changing runtime environment, database,
   auth or saved resources; never ship a default platform or provider secret.
@@ -132,3 +137,8 @@ history and user changes; conditional routing also guards writes. Shared setup/e
 inherit the existing visual system. The user's follow-up confirms persistent setup tracking,
 per-example readiness and production-default/demo-opt-in behavior on one image; `VXPIPE_DEMO=1`
 is the proposed concrete switch. All implementation/acceptance boxes remain unchecked.
+
+Amendment review, 2026-09-17: the preceding operator-login milestone replaces platform-key browser
+exchange. The Getting Started page is React, uses that operator session, and must be composed from
+small components into complete Storybook states before production workflow integration. The
+production-default/demo-opt-in and per-example readiness contracts remain unchanged.
