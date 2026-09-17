@@ -1,7 +1,9 @@
 # Operator login and admin dashboard
 
-Status: planned, not implemented. Requested and independently reviewed 2026-09-17.
-Prerequisites: [Tenant administration](tenant-definitions-and-api-keys.md),
+Status: planned, not implemented. Requested, split and independently reviewed 2026-09-17.
+Prerequisites: completed and user-approved
+[Operator admin Storybook](operator-admin-storybook.md),
+[Tenant administration](tenant-definitions-and-api-keys.md),
 [Call inspection](call-inspection-and-debugging.md), and the completed database-snapshot/Core/React
 host slices of the in-progress [Call debug console](call-debug-console.md). Its pending live-call
 controls and RTVI/WebRTC adapters do not block operator login or historical browsing.
@@ -76,6 +78,9 @@ introduce users, teams, tenant memberships or RBAC.
 
 ## React and Storybook contracts
 
+- Do not begin this milestone until every admin page has passed the separate Storybook milestone and
+  the user has reviewed and approved the complete mocked journey. Automated checks do not substitute
+  for that design approval. Login/auth pages are intentionally absent from the Storybook gate.
 - Everything below `/admin` is one React application served by Console. Phoenix provides the HTML
   mount, operator-session guard and JSON endpoints; it does not render admin lists, navigation,
   detail pages or debug-console content.
@@ -85,11 +90,9 @@ introduce users, teams, tenant memberships or RBAC.
 - Use shadcn's source-owned composition model and Radix behavior primitives where appropriate.
   Reuse the debug console's semantic color tokens, typography, spacing and dark default rather than
   creating a second visual language. Keep components editable in the repository.
-- Console owns an admin Storybook that imports the real admin components and `@vxpipe/react`.
-  Build small components first, compose them into feature sections, then compose complete pages.
-  Stories use deterministic mock repositories/actions and never require Phoenix or a live database.
-- Every admin page and its important loading, empty, populated, error, long-content and narrow-screen
-  states must exist in Storybook and pass rendered review before production route integration begins.
+- Reuse the exact components and page contracts approved in the Storybook milestone. Backend
+  integration may supply real data/actions and fix integration defects; it does not redesign an
+  approved page implicitly. Return material design changes to Storybook for review first.
 - The React application owns browser-history navigation under `/admin`. A direct load or refresh of
   any admin URL returns the same authenticated mount and restores the selected page. Links use real
   URLs, preserve browser back/forward behavior and do not depend on in-memory navigation state.
@@ -140,53 +143,7 @@ one-time output. Commit schema, behavior, tests, documentation and labnotes as o
 Exit: the command-to-browser flow creates one installation-wide operator session and reaches a
 protected empty React mount. Commit the complete authentication slice separately.
 
-## Checkpoint 3 — Establish the React admin foundation in Storybook
-
-- [ ] Establish the Console Storybook, semantic theme tokens and dark default. Reuse the debug
-  console palette, typography, density and focus treatment.
-- [ ] Build shadcn-compatible primitives with focused stories: application shell,
-  navigation/breadcrumbs, page header, table/list, badges, pagination, skeleton, empty/error states
-  and responsive disclosure patterns.
-- [ ] Compose an application-shell story with representative navigation and content, but no
-  production endpoint calls. Confirm admin-specific code stays in Console assets.
-- [ ] Add focused interaction/accessibility tests for project-owned contracts. Do not test behavior
-  already guaranteed by React, Radix or Storybook.
-- [ ] Inspect the shell and primitives with `agent-browser` at desktop/mobile sizes, dark/light
-  themes, keyboard navigation and reduced motion.
-
-Exit: the visual and interaction foundation is reviewable independently and ready to compose into
-pages. Commit the reviewed foundation separately.
-
-## Checkpoint 4 — Compose tenant and definition pages in Storybook
-
-- [ ] Build tenant-row, definition-row and resource-context components from the approved foundation.
-  Keep mock data, navigation and actions outside presentation components.
-- [ ] Compose complete Tenants and Tenant definitions page stories before either page has a
-  production JSON integration.
-- [ ] Cover deterministic loading, empty, populated, unavailable, long-value, pagination and narrow
-  states with focused project-owned component tests.
-- [ ] Inspect both complete pages in `agent-browser` at representative desktop/mobile sizes,
-  dark/light themes, keyboard navigation and reduced motion.
-
-Exit: tenant and definition browsing are approved as complete mocked pages. Commit these Storybook
-pages separately.
-
-## Checkpoint 5 — Compose call-list and call-detail pages in Storybook
-
-- [ ] Build call-row and debug-console host-frame components from the approved foundation.
-- [ ] Compose complete Definition calls and Call details page stories before either page has a
-  production JSON integration.
-- [ ] Reuse the real `@vxpipe/react` call console with existing ongoing and ended fixtures. Do not
-  create a dashboard-only copy of call components.
-- [ ] Cover deterministic loading, empty, populated, unavailable, partial archive, malformed data,
-  long-value, pagination and narrow states with focused project-owned component tests.
-- [ ] Inspect both complete pages in `agent-browser` at representative desktop/mobile sizes,
-  dark/light themes, keyboard navigation, scrolling and reduced motion.
-
-Exit: every admin page is reviewable with mocks in Storybook before backend page integration begins.
-Commit these Storybook pages separately.
-
-## Checkpoint 6 — Browse tenants through the React application
+## Checkpoint 3 — Browse tenants through the React application
 
 - [ ] Red-test a bounded installation-wide tenant-summary query and operator-only Console JSON
   endpoint, including pagination, empty data, persistence failure and anonymous access.
@@ -201,7 +158,7 @@ Commit these Storybook pages separately.
 Exit: an authenticated operator can browse all tenants in the real React admin application. Commit
 the query, endpoint, React integration, tests, docs and labnotes together.
 
-## Checkpoint 7 — Browse one tenant's definitions
+## Checkpoint 4 — Browse one tenant's definitions
 
 - [ ] Red-test a bounded tenant-definition summary query and endpoint with stable pagination,
   current publication state, missing tenant and persistence failure.
@@ -213,7 +170,7 @@ the query, endpoint, React integration, tests, docs and labnotes together.
 Exit: an authenticated operator can select any tenant and browse its call definitions. Commit this
 vertical slice separately.
 
-## Checkpoint 8 — Browse definition-scoped calls
+## Checkpoint 5 — Browse definition-scoped calls
 
 - [ ] Red-test a bounded call-summary query filtered by the exact definition identity across its
   immutable revisions. A call attached to another definition or tenant never appears.
@@ -225,7 +182,7 @@ vertical slice separately.
 Exit: an operator can select a definition and browse its ongoing and ended calls. Commit this
 vertical slice separately.
 
-## Checkpoint 9 — Open live and historical call details
+## Checkpoint 6 — Open live and historical call details
 
 - [ ] Replace the old tenant-API-key browser authority on all Console call-inspection resources with
   the operator session. Preserve tenant/call lookup isolation and `private, no-store` responses.
@@ -251,7 +208,7 @@ console. Commit this migration separately.
 - [ ] `mix vxpipe.login` produces one short-lived URL and separate eight-digit code; only digests
   persist, and expiry/attempt/concurrency behavior passes after application restart.
 - [ ] The Phoenix-rendered auth flow is the only non-React user page introduced here. Every `/admin`
-  page was composed and reviewed in Storybook before its production integration.
+  page comes from the completed and explicitly user-approved Storybook milestone.
 - [ ] One operator session sees every tenant, definition and definition-scoped call without user,
   team, membership or RBAC records.
 - [ ] Platform and tenant API keys remain API credentials and cannot sign into the UI.
@@ -276,3 +233,7 @@ Review findings added the token-free auth destination, explicit HTTPS/loopback r
 operator authority, legacy route/session cutover, and clarified debug-console prerequisite. React
 ownership, installation-wide visibility and exclusion of users/RBAC/API-key UI login are clear.
 Specification only: no implementation, migration, Storybook page or acceptance is claimed.
+
+Split-plan review, 2026-09-17: independent GPT 6 Astra xhigh review confirmed all four admin pages
+have matching Storybook and production checkpoints, auth remains outside Storybook, and this entire
+milestone is blocked until the user explicitly approves the complete mocked journey.

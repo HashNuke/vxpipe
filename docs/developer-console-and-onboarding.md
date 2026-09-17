@@ -10,11 +10,13 @@ and a Getting Started home.
 
 1. [Call debug console](milestones/call-debug-console.md): run and understand a real call using
    existing tenant admission, RTVI and Vxpipe extensions.
-2. [Operator login and admin dashboard](milestones/operator-login-and-admin-dashboard.md): issue a
-   local login challenge, then browse every tenant, definition and call in a Storybook-first React app.
-3. [Platform bootstrap and demo tenant](milestones/platform-bootstrap-and-demo-tenant.md): add
+2. [Operator admin Storybook](milestones/operator-admin-storybook.md): build every admin vertical
+   slice as a complete mocked React page, then stop for explicit user design review.
+3. [Operator login and admin dashboard](milestones/operator-login-and-admin-dashboard.md): after
+   Storybook approval, issue a local login challenge and integrate each approved page vertically.
+4. [Platform bootstrap and demo tenant](milestones/platform-bootstrap-and-demo-tenant.md): add
    the platform authority currently missing, then resumable demo-tenant setup through existing workflows.
-4. [Getting Started and example calls](milestones/getting-started-and-example-calls.md): present
+5. [Getting Started and example calls](milestones/getting-started-and-example-calls.md): present
    those operations at `/`, install a small example catalog, and launch the same debug console.
 
 The console comes first because every example needs a usable place to run. Its first slice uses
@@ -326,8 +328,9 @@ fixtures remain useful for automated tests; they are not presented as a real spe
 
 Console owns the Phoenix-rendered login exchange, React administration and Getting Started pages,
 operator session and application orchestration. Every user-facing page except login/auth is React
-and is built from small Storybook components through complete mocked page compositions before
-production integration. Its isolated
+and is built from small Storybook components through complete mocked page compositions. The full
+admin Storybook milestone must receive explicit user design approval before production integration
+starts. Its isolated
 client and React source boundaries own reusable connection behavior and UI components respectively. Gateway owns authenticated
 HTTP/protocol translation and versioned projections. Calls owns platform/tenant workflows and
 ports; Persistence owns digest/encrypted storage and transactions. Engine remains protocol-neutral.
