@@ -1,6 +1,6 @@
 # Operator login and admin dashboard
 
-Status: checkpoint 1 complete; checkpoints 2–7 remain.
+Status: checkpoints 1–2 complete; checkpoints 3–7 remain.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
@@ -63,25 +63,30 @@ users, teams, tenant memberships or RBAC.
 - A challenge expires after 10 minutes, permits at most five incorrect code submissions and is
   consumed atomically. Two concurrent correct submissions produce at most one session. Expired,
   exhausted and consumed challenges cannot be revived.
-- The token-bearing path is filtered from request logs and excluded from telemetry metadata,
-  exception text and rendered HTML after lookup. The raw token and code appear only in the trusted
-  command output and the operator's browser interaction.
+- Phoenix treats the path token as a filtered parameter and never logs its value. Deployments must
+  keep raw URL access logging disabled for this private authentication route because the HTTP server
+  and any reverse proxy necessarily receive the token-bearing path. Token and code POST fields are
+  redacted before CSRF, controller and project telemetry processing, including error paths.
 - `GET /auth/login` is a token-free, server-rendered guidance page that tells a trusted operator to
   run `mix vxpipe.login`; it cannot issue or claim a challenge. Anonymous `/admin` requests and
   expired sessions redirect there.
-- `GET /auth/login-token/:token` and its CSRF-protected `POST` are server-rendered Phoenix pages.
+- `GET /auth/login-token/:token` renders the token into a hidden form field on the server; its
+  CSRF-protected `POST /auth/login-token` performs the exchange. No frontend script is required.
   Together with `/auth/login`, they are the only user-facing pages in this milestone that are not
   React. Errors use the same generic wording for an unknown, expired, exhausted or consumed challenge
   and lead back to the token-free guidance page.
-- A successful exchange rotates the session identifier and stores only the operator grant and
-  issued/absolute-expiry times in the signed or server-backed session. The initial absolute session
+- A successful exchange rotates the session identifier and stores only the operator grant,
+  issued/absolute-expiry times and an operator-secret authentication tag in the signed session. The tag
+  prevents the checked-in development endpoint key from forging operator authority. The initial absolute session
   lifetime is 12 hours with no sliding extension. Sign-out invalidates the browser session and
   redirects to `/auth/login`.
 - Cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` when served over HTTPS. Authenticated writes
-  retain Phoenix CSRF protection. Login and admin responses use `Cache-Control: private, no-store`.
+  retain Phoenix CSRF protection. Login and admin responses use `Cache-Control: private, no-store` and
+  `Referrer-Policy: no-referrer`.
 - Require HTTPS for operator login and admin traffic outside loopback development. Plain HTTP is
   permitted only for an explicit loopback origin such as `127.0.0.1` or `localhost`; reject other
-  HTTP origins rather than issuing a challenge or accepting a login.
+  HTTP origins rather than issuing a challenge or accepting a login. A same-host reverse proxy may
+  supply `X-Forwarded-Proto: https`; forwarded scheme headers from non-loopback peers are ignored.
 - The printed origin comes from explicit Phoenix endpoint configuration. The task fails with an
   actionable message if it cannot construct an allowed external HTTP(S) URL.
 
@@ -153,19 +158,27 @@ scenarios passed immediately when rerun in isolation.
 
 ## Checkpoint 2 — Exchange the code for an operator session
 
-- [ ] Red-test the Phoenix GET/POST flow, CSRF, generic invalid states, attempt exhaustion, atomic
+- [x] Red-test the Phoenix GET/POST flow, CSRF, generic invalid states, attempt exhaustion, atomic
   consumption, session rotation, absolute expiry, sign-out, cache headers, secret filtering and
   rejection of non-loopback insecure traffic.
-- [ ] Implement the server-rendered `/auth/login` guidance and login/code-entry pages plus the
+- [x] Implement the server-rendered `/auth/login` guidance and login/code-entry pages plus the
   operator-session plug. Keep these pages intentionally small; do not bootstrap a second frontend
   application for authentication.
-- [ ] Protect a minimal `/admin` React mount and its JSON namespace. Anonymous or expired requests
+- [x] Protect a minimal `/admin` React mount and its JSON namespace. Anonymous or expired requests
   redirect to login for HTML and return an authorization error for JSON.
-- [ ] Inspect the login page and authenticated/expired transitions with `agent-browser` at desktop
+- [x] Inspect the login page and authenticated/expired transitions with `agent-browser` at desktop
   and mobile sizes, including keyboard focus and validation errors.
 
 Exit: the command-to-browser flow creates one installation-wide operator session and reaches a
 protected empty React mount. Commit the complete authentication slice separately.
+
+Evidence: the server-rendered guidance, token/code exchange, operator-secret-authenticated grant,
+12-hour absolute expiry, rotation, sign-out, CSRF, generic failures, secret filtering, cache/referrer
+headers, loopback enforcement and same-host proxy trust pass 23 focused tests. The Console suite
+passes 169 tests with one integration exclusion; its React assets pass 77 tests, TypeScript and
+ESLint. Headless Chrome completed the real `mix vxpipe.login` flow at desktop and mobile sizes,
+including sign-out. GPT-6 Astra xhigh independently reviewed the revised backend-rendered token form
+and found no checkpoint blocker. Raw URL logging remains an explicitly documented deployment boundary.
 
 ## Checkpoint 3 — Browse tenants through the React application
 

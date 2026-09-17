@@ -4,7 +4,8 @@ defmodule Vxpipe.Console.Endpoint do
   @session_options [
     store: :cookie,
     key: "_vxpipe_console_key",
-    signing_salt: "vxpipe-console"
+    signing_salt: "vxpipe-console",
+    same_site: "Lax"
   ]
 
   socket "/diagnostics/live", Vxpipe.Console.DiagnosticsSocket,
@@ -17,6 +18,9 @@ defmodule Vxpipe.Console.Endpoint do
     socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
   end
 
+  plug Vxpipe.Console.TrustedProxyScheme
+  plug Vxpipe.Console.OperatorResponseHeaders
+  plug Vxpipe.Console.OperatorTraffic
   plug Vxpipe.Console.GatewayMount
 
   plug Plug.Static,

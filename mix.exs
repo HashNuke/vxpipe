@@ -34,10 +34,12 @@ defmodule Vxpipe.MixProject do
       ],
       "assets.build": [
         "do --app vxpipe_console cmd --cd assets npm run check",
+        "do --app vxpipe_console cmd --cd assets npm run css:build",
         "do --app vxpipe_console esbuild vxpipe_console"
       ],
       "assets.deploy": [
         "do --app vxpipe_console cmd --cd assets npm run check",
+        "do --app vxpipe_console cmd --cd assets npm run css:build -- --minify",
         "do --app vxpipe_console esbuild vxpipe_console --minify"
       ],
       "assets.test": ["do --app vxpipe_console cmd --cd assets npm test"],

@@ -205,7 +205,14 @@ config :vxpipe_console, Vxpipe.Console.Endpoint,
   secret_key_base: String.duplicate("development-only-", 4),
   server: true,
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:vxpipe_console, ~w(--sourcemap=inline --watch)]}
+    esbuild: {Esbuild, :install_and_run, [:vxpipe_console, ~w(--sourcemap=inline --watch)]},
+    tailwind:
+      {System, :cmd,
+       [
+         "npm",
+         ["run", "css:watch"],
+         [cd: Path.expand("../apps/vxpipe_console/assets", __DIR__)]
+       ]}
   ],
   live_reload: [
     patterns: [

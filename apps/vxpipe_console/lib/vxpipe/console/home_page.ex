@@ -36,9 +36,9 @@ defmodule Vxpipe.Console.HomePage do
                 </a>
               </li>
               <li>
-                <a href="/operator/sign-in">
-                  <strong>Call inspection</strong>
-                  <span>Inspect persisted calls with tenant operator credentials.</span>
+                <a href="/auth/login">
+                  <strong>Admin</strong>
+                  <span>Open the installation operator dashboard.</span>
                 </a>
               </li>
               <li>

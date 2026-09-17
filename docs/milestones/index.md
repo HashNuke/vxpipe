@@ -56,8 +56,8 @@ operator-admin Storybook, operator login/admin integration, platform bootstrap/d
 Getting Started/examples. The debug
 console now has a database-backed read-only production host; its live interaction work and the
 other three milestones remain. The operator-admin Storybook is complete and approved. The operator
-login/admin milestone has **1 of 7 checkpoints complete**: durable login-challenge issuance is
-available through `mix vxpipe.login`; browser exchange and the React admin integration remain. The console builds on current tenant
+login/admin milestone has **2 of 7 checkpoints complete**: durable login-challenge issuance and the
+installation-operator browser exchange are available; real admin data integration remains. The console builds on current tenant
 admission and RTVI/Vxpipe extensions, so it does not wait for platform keys. The home retains setup tracking and
 per-example readiness; the same image defaults to production behavior, with proposed
 `VXPIPE_DEMO=1` opt-in. Demo mode grants no authority and does not relax credentials or TLS.

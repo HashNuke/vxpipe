@@ -54,6 +54,7 @@ defmodule Vxpipe.Console.OperatorLoginTaskTest do
     assert uri.host == "127.0.0.1"
     assert uri.port == 4000
     assert ["auth", "login-token", token] = String.split(uri.path, "/", trim: true)
+    assert is_nil(uri.fragment)
     assert {:ok, token_bytes} = Base.url_decode64(token, padding: false)
     assert byte_size(token_bytes) == 32
 

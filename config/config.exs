@@ -9,7 +9,7 @@
 # move said applications out of the umbrella.
 import Config
 
-config :phoenix, :filter_parameters, ["password", "secret", "token", "api_key"]
+config :phoenix, :filter_parameters, ["password", "secret", "token", "code", "api_key"]
 
 config :vxpipe_persistence,
   ecto_repos: [Vxpipe.Persistence.Repo],
@@ -106,6 +106,10 @@ config :vxpipe_console, Vxpipe.Console.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000],
   live_view: [signing_salt: "vxpipe-console-live"],
   pubsub_server: Vxpipe.Console.PubSub,
+  render_errors: [
+    formats: [html: Vxpipe.Console.ErrorHTML, json: Vxpipe.Console.ErrorJSON],
+    layout: false
+  ],
   server: false,
   url: [host: "localhost"]
 
@@ -121,6 +125,8 @@ config :vxpipe_console, :operator_authenticator, {Vxpipe.Console.CallsOperatorAu
 
 config :vxpipe_console, :operator_session, max_age_seconds: 3_600
 
+config :vxpipe_console, :installation_operator_session, max_age_seconds: 43_200
+
 config :vxpipe_console, :call_inspection_backend, {Vxpipe.Console.CallsInspectionBackend, []}
 
 config :vxpipe_console, :call_details_backend, {Vxpipe.Console.CallsCallDetailsBackend, []}
@@ -131,7 +137,7 @@ config :esbuild,
   version: "0.25.4",
   vxpipe_console: [
     args:
-      ~w(app=src/main.tsx debug_console=src/callInspectionMain.tsx live=src/live.ts home=css/home.css call_inspection=css/call_inspection.css diagnostics=css/diagnostics.css --bundle --format=esm --target=es2022 --alias:react=./node_modules/react --alias:react-dom=./node_modules/react-dom --outdir=../priv/static/assets --entry-names=[name]),
+      ~w(app=src/main.tsx admin=src/adminMain.tsx debug_console=src/callInspectionMain.tsx live=src/live.ts home=css/home.css call_inspection=css/call_inspection.css diagnostics=css/diagnostics.css operator_login=css/operator_login.css --bundle --format=esm --target=es2022 --alias:react=./node_modules/react --alias:react-dom=./node_modules/react-dom --outdir=../priv/static/assets --entry-names=[name]),
     cd: Path.expand("../apps/vxpipe_console/assets", __DIR__),
     env: %{
       "NODE_PATH" => Path.expand("../apps/vxpipe_console/assets/node_modules", __DIR__)

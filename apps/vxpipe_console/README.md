@@ -12,13 +12,29 @@ gateway runtime starts without its standalone Bandit listener. The Console
 endpoint is then the only listener.
 
 The React voice playground source lives under `assets/`. Phoenix's `esbuild` Hex
-integration owns development watching and release bundling; Phoenix LiveReload
+integration owns JavaScript development watching and release bundling; Tailwind's CLI compiles the
+approved admin components, and Phoenix LiveReload
 refreshes the browser after watched changes. There is no separate frontend HTTP
-server or Goreman application. `mix assets.build` writes the React `app.js` and `app.css`, shared
+server or Goreman application. `mix assets.build` writes the React `app.js`, `admin.js`,
+`admin.css`, and `app.css`, shared
 LiveView `live.js`, Console directory `home.css`, and separate `call_inspection.css` and
-`diagnostics.css` outputs into the application's ignored `priv/static/assets` directory. Call
+`diagnostics.css` and operator-login CSS outputs into the application's ignored
+`priv/static/assets` directory. Call
 inspection and diagnostics select their own socket paths through their HTML roots while sharing
 the same LiveView client module.
+
+## Operator login
+
+With PostgreSQL migrated and an explicit `SECRET_KEY_BASE` configured, run `mix vxpipe.login` on
+the Vxpipe host. Open the printed URL and enter the separately printed eight-digit code. Phoenix
+filters the path token from its logs, renders it into the server-owned form, and redacts both token
+and code before application telemetry processes the POST. Keep raw URL access logging disabled for
+the private login route. The resulting installation-operator session lasts at most 12 hours and
+opens `/admin`.
+
+Public deployments terminate HTTPS either in the Console endpoint or at a same-host reverse proxy.
+The Console accepts `X-Forwarded-Proto: https` only from a loopback peer. Plain HTTP operator access
+is limited to a loopback peer requesting a loopback host.
 
 The Console root is a small directory of browser-facing interfaces. The tracked React SPA index is
 served at `/pipecat-console` for the caller sample and `/transfer` for its transfer destination.

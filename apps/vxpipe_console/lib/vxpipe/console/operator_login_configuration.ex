@@ -9,6 +9,7 @@ defmodule Vxpipe.Console.OperatorLoginConfiguration do
 
   @minimum_secret_bytes 64
   @secret_label "vxpipe.operator-login.challenge-secret.v1"
+  @session_secret_label "vxpipe.operator-login.session-secret.v1"
   @loopback_hosts ["localhost", "127.0.0.1", "::1"]
   @url_options [:scheme, :host, :port, :path]
 
@@ -19,6 +20,24 @@ defmodule Vxpipe.Console.OperatorLoginConfiguration do
     endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
     deployment_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
     build(Keyword.get(endpoint, :url), deployment_secret)
+  end
+
+  @spec verifier_secret() :: {:ok, binary()} | {:error, :invalid_operator_login_secret}
+  def verifier_secret do
+    deployment_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
+
+    with :ok <- validate_secret(deployment_secret) do
+      {:ok, :crypto.mac(:hmac, :sha256, deployment_secret, @secret_label)}
+    end
+  end
+
+  @spec session_secret() :: {:ok, binary()} | {:error, :invalid_operator_login_secret}
+  def session_secret do
+    deployment_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
+
+    with :ok <- validate_secret(deployment_secret) do
+      {:ok, :crypto.mac(:hmac, :sha256, deployment_secret, @session_secret_label)}
+    end
   end
 
   @spec build(keyword() | term(), binary() | term()) :: {:ok, t()} | {:error, atom()}

@@ -8,8 +8,26 @@ defmodule Vxpipe.Console.Router do
     plug :accepts, ["html"]
     plug Plug.Parsers, parsers: [:urlencoded, :multipart], pass: ["*/*"]
     plug :fetch_session
+    plug Vxpipe.Console.OperatorLoginCredentials
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+  end
+
+  pipeline :operator_pages do
+    plug Vxpipe.Console.PrivateNoStore
+  end
+
+  pipeline :installation_operator do
+    plug Vxpipe.Console.RequireInstallationOperator
+  end
+
+  pipeline :installation_operator_api do
+    plug :accepts, ["json"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug Vxpipe.Console.PrivateNoStore
+    plug Vxpipe.Console.RequireInstallationOperatorAPI
   end
 
   pipeline :diagnostics do
@@ -50,6 +68,28 @@ defmodule Vxpipe.Console.Router do
     get "/operator/sign-in", Vxpipe.Console.OperatorSessionController, :new
     post "/operator/session", Vxpipe.Console.OperatorSessionController, :create
     post "/operator/sign-out", Vxpipe.Console.OperatorSessionController, :delete
+  end
+
+  scope "/auth" do
+    pipe_through [:browser, :operator_pages]
+
+    get "/login", Vxpipe.Console.OperatorLoginController, :guidance
+    get "/login-token/:token", Vxpipe.Console.OperatorLoginController, :new
+    post "/login-token", Vxpipe.Console.OperatorLoginController, :create
+    post "/logout", Vxpipe.Console.OperatorLoginController, :delete
+  end
+
+  scope "/admin/api" do
+    pipe_through :installation_operator_api
+
+    get "/session", Vxpipe.Console.AdminSessionController, :show
+  end
+
+  scope "/admin" do
+    pipe_through [:browser, :operator_pages, :installation_operator]
+
+    get "/", Vxpipe.Console.AdminPageController, :index
+    get "/*path", Vxpipe.Console.AdminPageController, :index
   end
 
   scope "/tenants/:tenant_key/calls" do

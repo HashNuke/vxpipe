@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 
 export function AdminShell({
   children,
+  headerActions,
   showHeader = true,
   theme = "dark",
 }: {
   children: ReactNode;
+  headerActions?: ReactNode;
   showHeader?: boolean;
   theme?: "dark" | "light";
 }) {
@@ -23,6 +25,7 @@ export function AdminShell({
                 Admin
               </span>
             </nav>
+            {headerActions ? <div className="ml-auto">{headerActions}</div> : null}
           </div>
         </header>
       ) : null}

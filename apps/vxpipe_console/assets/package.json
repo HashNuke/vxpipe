@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
+    "css:build": "tailwindcss -i src/admin/admin.css -o ../priv/static/assets/admin.css",
+    "css:watch": "tailwindcss -i src/admin/admin.css -o ../priv/static/assets/admin.css --watch",
     "lint": "eslint .",
     "test": "vitest run"
   },
@@ -28,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@storybook/react-vite": "10.6.0",
+    "@tailwindcss/cli": "^4.3.3",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
