@@ -1,6 +1,6 @@
 # Operator login and admin dashboard
 
-Status: checkpoints 1–4 complete; checkpoints 5–7 remain.
+Status: checkpoints 1–5 complete; checkpoints 6–7 remain.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
@@ -245,17 +245,33 @@ unrelated Gateway WebRTC handoff timing failure; that exact test passed alone im
 
 ## Checkpoint 5 — Browse tenant calls with an optional definition filter
 
-- [ ] Red-test a bounded tenant call-summary query whose optional definition filter matches the exact
+- [x] Red-test a bounded tenant call-summary query whose optional definition filter matches the exact
   definition identity across immutable revisions. Another tenant's call or definition never appears.
-- [ ] Expose the operator-only endpoint and connect the approved Calls page, including optional
+- [x] Expose the operator-only endpoint and connect the approved Calls page, including optional
   `definition_id`, filter reset, lifecycle/archive status, pagination and truthful unavailable fields.
-- [ ] Connect the approved shared tenant navigation with working Call definitions and Calls
+- [x] Connect the approved shared tenant navigation with working Call definitions and Calls
   destinations. Do not expose Services until checkpoint 6 supplies its page and endpoints.
-- [ ] Verify direct URL load, refresh, back/forward, empty/populated/unavailable data, stale-response
+- [x] Verify direct URL load, refresh, back/forward, empty/populated/unavailable data, stale-response
   protection and cross-resource failures.
 
 Exit: an operator can browse all tenant calls or follow a definition deep-link to the same page with
 that definition selected. Commit this vertical slice separately.
+
+Evidence: Calls joins each call through its pinned immutable definition revision while the optional
+filter matches the definition's stable public identity. Persistence returns a deterministic bounded
+page, tenant-scoped filter options, pinned version/name, lifecycle state and latest archive
+completeness without reading archive payloads. The selector uses a limit-plus-one query, discloses
+when more than 100 definitions exist and keeps a direct selection outside that window available.
+Console exposes only the installation-operator endpoint. The typed React client rejects malformed
+pagination, tenant/filter contradictions and call rows that contradict an active filter; URL-backed
+navigation handles reset, recovery and obsolete responses. Calls (97), Persistence (149; 11
+excluded), Console (176; one excluded) and Console assets (97) pass. TypeScript, ESLint, formatting,
+warnings-as-errors compilation, strict Credo and unused-dependency checks pass. The full umbrella
+suite passes, including 438 Gateway tests and its WebRTC lane. Headless Chrome verified real
+all-calls and filtered URLs, reset, back navigation and refresh at desktop and mobile sizes; the
+bounded-options disclosure was also inspected in Storybook at both sizes. The Impeccable detector
+reported no findings. GPT-6 Astra xhigh requested truthful option truncation and filtered-row
+consistency, then approved the corrected implementation and focused evidence.
 
 ## Checkpoint 6 — Manage supported tenant services
 

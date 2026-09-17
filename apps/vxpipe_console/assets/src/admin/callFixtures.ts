@@ -158,6 +158,7 @@ export type CallFixtureScenario =
   | "no-filter-matches"
   | "unknown-filter"
   | "unavailable"
+  | "truncated-options"
   | "long-content"
   | "paginated";
 
@@ -201,6 +202,14 @@ export function callFixture(scenario: CallFixtureScenario): DefinitionCallsPageS
         status: "unavailable",
         ...context,
         message: "Calls could not be loaded. Try again after storage is available.",
+      };
+    case "truncated-options":
+      return {
+        status: "ready",
+        ...context,
+        definitionOptionsTruncated: true,
+        calls: callsForTenant(),
+        pagination: null,
       };
     case "long-content":
       return {

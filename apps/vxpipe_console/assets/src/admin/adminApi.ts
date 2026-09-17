@@ -1,5 +1,6 @@
 import type { TenantSummary } from "./tenantTypes";
 import type { DefinitionSummary, TenantContext } from "./definitionTypes";
+import type { CallSummary, DefinitionContext } from "./callTypes";
 
 export type TenantDirectoryPage = {
   tenants: TenantSummary[];
@@ -14,6 +15,15 @@ export type TenantDirectoryPage = {
 export type DefinitionDirectoryPage = {
   tenant: TenantContext;
   definitions: DefinitionSummary[];
+  pagination: TenantDirectoryPage["pagination"];
+};
+
+export type CallDirectoryPage = {
+  tenant: TenantContext;
+  definitions: Array<Pick<DefinitionContext, "id" | "name">>;
+  definitionsTruncated: boolean;
+  selectedDefinitionId: string | null;
+  calls: CallSummary[];
   pagination: TenantDirectoryPage["pagination"];
 };
 
@@ -72,6 +82,116 @@ export function parseDefinitionPage(value: unknown): DefinitionDirectoryPage {
       total: Number(total),
       totalPages: Number(totalPages),
     },
+  };
+}
+
+export function parseCallPage(value: unknown): CallDirectoryPage {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.tenant) ||
+    !Array.isArray(value.definitions) ||
+    !Array.isArray(value.calls) ||
+    !isRecord(value.pagination) ||
+    typeof value.definitions_truncated !== "boolean" ||
+    typeof value.tenant.key !== "string" ||
+    value.tenant.key.length === 0 ||
+    typeof value.tenant.name !== "string" ||
+    value.tenant.name.length === 0
+  ) {
+    throw invalidCallResponse();
+  }
+
+  const definitions = value.definitions.map(parseCallDefinition);
+  const selectedDefinitionId = value.selected_definition_id;
+
+  if (
+    !(
+      selectedDefinitionId === null ||
+      (typeof selectedDefinitionId === "string" &&
+        selectedDefinitionId.length > 0 &&
+        definitions.some(({ id }) => id === selectedDefinitionId))
+    )
+  ) {
+    throw invalidCallResponse();
+  }
+
+  const calls = value.calls.map(parseCall);
+
+  if (
+    selectedDefinitionId !== null &&
+    calls.some(({ definitionId }) => definitionId !== selectedDefinitionId)
+  ) {
+    throw invalidCallResponse();
+  }
+
+  const { page, page_size: pageSize, total, total_pages: totalPages } = value.pagination;
+
+  if (!validPagination(page, pageSize, total, totalPages, calls.length)) {
+    throw invalidCallResponse();
+  }
+
+  return {
+    tenant: { key: value.tenant.key, name: value.tenant.name },
+    definitions,
+    definitionsTruncated: value.definitions_truncated,
+    selectedDefinitionId,
+    calls,
+    pagination: {
+      page: Number(page),
+      pageSize: Number(pageSize),
+      total: Number(total),
+      totalPages: Number(totalPages),
+    },
+  };
+}
+
+function parseCallDefinition(value: unknown): Pick<DefinitionContext, "id" | "name"> {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    value.id.length === 0 ||
+    !(value.name === null || (typeof value.name === "string" && value.name.length > 0))
+  ) {
+    throw invalidCallResponse();
+  }
+
+  return { id: value.id, name: value.name };
+}
+
+function parseCall(value: unknown): CallSummary {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    value.id.length === 0 ||
+    typeof value.definition_id !== "string" ||
+    value.definition_id.length === 0 ||
+    !(value.definition_name === null ||
+      (typeof value.definition_name === "string" && value.definition_name.length > 0)) ||
+    !isPositiveInteger(value.definition_revision) ||
+    !member(value.state, ["prepared", "admitting", "running", "ended", "failed"]) ||
+    !validTimestamp(value.created_at) ||
+    !validOptionalTimestamp(value.started_at) ||
+    !validOptionalTimestamp(value.ended_at) ||
+    !(
+      value.terminal_reason === null ||
+      (typeof value.terminal_reason === "string" && value.terminal_reason.length > 0)
+    ) ||
+    !member(value.archive_state, ["complete", "incomplete", "unconfirmed"])
+  ) {
+    throw invalidCallResponse();
+  }
+
+  return {
+    id: value.id,
+    definitionId: value.definition_id,
+    definitionName: value.definition_name,
+    definitionRevision: value.definition_revision,
+    state: value.state,
+    createdAt: value.created_at,
+    startedAt: value.started_at,
+    endedAt: value.ended_at,
+    terminalReason: value.terminal_reason,
+    archiveState: value.archive_state,
   };
 }
 
@@ -155,10 +275,26 @@ function isNonNegativeInteger(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 0;
 }
 
+function validTimestamp(value: unknown): value is string {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function validOptionalTimestamp(value: unknown): value is string | null {
+  return value === null || validTimestamp(value);
+}
+
+function member<T extends string>(value: unknown, values: readonly T[]): value is T {
+  return typeof value === "string" && values.includes(value as T);
+}
+
 function invalidResponse() {
   return new Error("Invalid tenant directory response");
 }
 
 function invalidDefinitionResponse() {
   return new Error("Invalid definition directory response");
+}
+
+function invalidCallResponse() {
+  return new Error("Invalid call directory response");
 }

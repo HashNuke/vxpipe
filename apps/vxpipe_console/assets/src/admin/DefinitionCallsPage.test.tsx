@@ -130,6 +130,17 @@ test("selects and resets a definition filter through injected actions", () => {
   expect(selectDefinition).toHaveBeenLastCalledWith(null);
 });
 
+test("discloses when the definition filter contains only the bounded first page", () => {
+  render(
+    <DefinitionCallsPage
+      state={{ ...populated, definitionOptionsTruncated: true }}
+    />,
+  );
+
+  expect(screen.getByText(/first 100 definitions/i)).toBeVisible();
+  expect(screen.getByRole("link", { name: "Call definitions" })).toBeVisible();
+});
+
 test("keeps valid empty filters distinct from unknown filters", () => {
   const { rerender } = render(
     <DefinitionCallsPage

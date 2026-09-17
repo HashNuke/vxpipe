@@ -14,4 +14,9 @@ defmodule Vxpipe.Calls.TestAdminRepository do
     send(self(), {:admin_repository_list_definitions, tenant_key, limit, offset})
     Agent.get(agent, & &1)
   end
+
+  def list_calls(agent, tenant_key, definition_id, limit, offset) do
+    send(self(), {:admin_repository_list_calls, tenant_key, definition_id, limit, offset})
+    Agent.get(agent, & &1)
+  end
 end

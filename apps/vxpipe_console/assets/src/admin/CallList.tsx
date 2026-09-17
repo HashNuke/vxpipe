@@ -6,10 +6,12 @@ export function CallList({
   calls,
   tenant,
   onSelectCall,
+  linkCallDetails,
 }: {
   calls: CallSummary[];
   tenant: TenantContext;
   onSelectCall?: (callId: string) => void;
+  linkCallDetails?: boolean;
 }) {
   return (
     <div aria-label="Calls">
@@ -31,6 +33,7 @@ export function CallList({
           <CallRow
             call={call}
             key={call.id}
+            linkDetails={linkCallDetails}
             onSelect={onSelectCall}
             tenant={tenant}
           />

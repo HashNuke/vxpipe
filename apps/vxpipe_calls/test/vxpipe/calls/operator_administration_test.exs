@@ -2,6 +2,9 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Calls.{
+    CallDirectoryPage,
+    CallDirectorySummary,
+    CallFilterDefinition,
     DefinitionPage,
     DefinitionSummary,
     InstallationOperator,
@@ -159,6 +162,98 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                  tenant_key: "AAAAAAAAAAAAAAAA",
                  api_key_id: "key",
                  scopes: MapSet.new()
+               },
+               "AAAAAAAAAAAAAAAA",
+               admin_repository: TestAdminRepository.admin_repository(failed)
+             )
+  end
+
+  test "lists one tenant's calls with an exact optional definition filter" do
+    tenant = %Tenant{
+      key: "AAAAAAAAAAAAAAAA",
+      name: "Example tenant",
+      inserted_at: ~U[2026-09-17 01:00:00Z]
+    }
+
+    definitions = [
+      %CallFilterDefinition{id: "delivery-rescheduling", name: "Delivery rescheduling"}
+    ]
+
+    calls = [
+      %CallDirectorySummary{
+        id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
+        definition_id: "delivery-rescheduling",
+        definition_name: "Delivery rescheduling",
+        definition_revision: 3,
+        state: :running,
+        created_at: ~U[2026-09-17 02:20:00Z],
+        started_at: ~U[2026-09-17 02:20:03Z],
+        ended_at: nil,
+        terminal_reason: nil,
+        archive_state: :unconfirmed
+      }
+    ]
+
+    repository =
+      start_supervised!({TestAdminRepository, {:ok, {tenant, definitions, false, calls, 3}}})
+
+    assert {:ok,
+            %CallDirectoryPage{
+              tenant: ^tenant,
+              definitions: ^definitions,
+              definitions_truncated: false,
+              selected_definition_id: "delivery-rescheduling",
+              calls: ^calls,
+              page: 2,
+              page_size: 2,
+              total: 3,
+              total_pages: 2
+            }} =
+             Vxpipe.Calls.list_operator_calls(
+               InstallationOperator.authority(),
+               tenant.key,
+               definition_id: "delivery-rescheduling",
+               page: 2,
+               limit: 2,
+               admin_repository: TestAdminRepository.admin_repository(repository)
+             )
+
+    assert_received {:admin_repository_list_calls, "AAAAAAAAAAAAAAAA", "delivery-rescheduling", 2,
+                     2}
+  end
+
+  test "keeps missing call resources, unavailable storage, and operator authority distinct" do
+    missing_tenant =
+      start_supervised!({TestAdminRepository, {:error, :tenant_not_found}}, id: :call_tenant)
+
+    missing_definition =
+      start_supervised!({TestAdminRepository, {:error, :definition_not_found}},
+        id: :call_definition
+      )
+
+    failed =
+      start_supervised!({TestAdminRepository, {:error, :database_unavailable}}, id: :call_failed)
+
+    for {repository, expected} <- [
+          {missing_tenant, :tenant_not_found},
+          {missing_definition, :definition_not_found},
+          {failed, :database_unavailable}
+        ] do
+      assert {:error, ^expected} =
+               Vxpipe.Calls.list_operator_calls(
+                 InstallationOperator.authority(),
+                 "AAAAAAAAAAAAAAAA",
+                 definition_id: "delivery-rescheduling",
+                 admin_repository: TestAdminRepository.admin_repository(repository)
+               )
+    end
+
+    assert {:error, :installation_operator_required} =
+             Vxpipe.Calls.list_operator_calls(
+               %Principal{
+                 tenant_key: "AAAAAAAAAAAAAAAA",
+                 api_key_id: "key",
+                 scopes: MapSet.new([:calls])
                },
                "AAAAAAAAAAAAAAAA",
                admin_repository: TestAdminRepository.admin_repository(failed)

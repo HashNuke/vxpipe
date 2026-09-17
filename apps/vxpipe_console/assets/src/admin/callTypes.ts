@@ -33,6 +33,7 @@ export type CallSummary = {
 type TenantCallsContext = {
   tenant: TenantContext;
   definitions: Array<Pick<DefinitionContext, "id" | "name">>;
+  definitionOptionsTruncated?: boolean;
   selectedDefinitionId: string | null;
 };
 

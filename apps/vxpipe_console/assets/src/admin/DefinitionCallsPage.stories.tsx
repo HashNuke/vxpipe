@@ -26,6 +26,7 @@ const meta = {
         "no-filter-matches",
         "unknown-filter",
         "unavailable",
+        "truncated-options",
         "long-content",
         "paginated",
       ],
@@ -47,6 +48,7 @@ export const Filtered: Story = { args: { scenario: "filtered" } };
 export const NoFilterMatches: Story = { args: { scenario: "no-filter-matches" } };
 export const UnknownFilter: Story = { args: { scenario: "unknown-filter" } };
 export const Unavailable: Story = { args: { scenario: "unavailable" } };
+export const TruncatedOptions: Story = { args: { scenario: "truncated-options" } };
 export const LongContent: Story = { args: { scenario: "long-content" } };
 export const Paginated: Story = { args: { scenario: "paginated" } };
 export const Light: Story = { args: { theme: "light" } };

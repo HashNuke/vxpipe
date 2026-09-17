@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.AdminRepository do
   @moduledoc "Persistence port for bounded installation-operator reads."
 
-  alias Vxpipe.Calls.{DefinitionSummary, Tenant}
+  alias Vxpipe.Calls.{CallDirectorySummary, CallFilterDefinition, DefinitionSummary, Tenant}
 
   @type context :: term()
 
@@ -10,4 +10,16 @@ defmodule Vxpipe.Calls.AdminRepository do
 
   @callback list_definitions(context(), String.t(), pos_integer(), non_neg_integer()) ::
               {:ok, {Tenant.t(), [DefinitionSummary.t()], non_neg_integer()}} | {:error, term()}
+
+  @callback list_calls(
+              context(),
+              String.t(),
+              String.t() | nil,
+              pos_integer(),
+              non_neg_integer()
+            ) ::
+              {:ok,
+               {Tenant.t(), [CallFilterDefinition.t()], boolean(), [CallDirectorySummary.t()],
+                non_neg_integer()}}
+              | {:error, term()}
 end

@@ -35,6 +35,46 @@ const definitionPage = (tenantKey: string, tenantName: string, definitionName: s
   pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
 });
 
+const callPage = (
+  tenantKey: string,
+  selectedDefinitionId: string | null,
+  page = 1,
+) => ({
+  tenant: { key: tenantKey, name: "Example tenant" },
+  definitions: [
+    { id: "delivery-rescheduling", name: "Delivery rescheduling" },
+    { id: "appointment-reminders", name: "Appointment reminders" },
+  ],
+  definitions_truncated: false,
+  selected_definition_id: selectedDefinitionId,
+  calls:
+    selectedDefinitionId === "appointment-reminders"
+      ? []
+      : [
+          {
+            id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
+            definition_id: "delivery-rescheduling",
+            definition_name: "Delivery rescheduling",
+            definition_revision: 3,
+            state: "running",
+            created_at: "2026-09-17T02:20:00Z",
+            started_at: "2026-09-17T02:20:03Z",
+            ended_at: null,
+            terminal_reason: null,
+            archive_state: "unconfirmed",
+          },
+        ],
+  pagination:
+    page === 2
+      ? { page: 2, page_size: 25, total: 26, total_pages: 2 }
+      : {
+          page: 1,
+          page_size: 25,
+          total: selectedDefinitionId === "appointment-reminders" ? 0 : 1,
+          total_pages: selectedDefinitionId === "appointment-reminders" ? 0 : 1,
+        },
+});
+
 test("loads the approved tenant page with a CSRF-protected sign-out action", async () => {
   const fetchImpl = vi.fn(() => response(tenantPage(1)));
   const view = render(<AdminApp csrfToken="csrf-test-token" fetchImpl={fetchImpl} />);
@@ -156,6 +196,9 @@ test("opens a tenant's approved definitions page and canonicalizes the workspace
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith("/admin/api/tenants?")) return response(tenantPage(1));
+    if (url.includes("/calls?")) {
+      return response(callPage("tenant-1-0", "delivery-rescheduling"));
+    }
     return response(definitionPage("tenant-1-0", "Example tenant", "Delivery rescheduling"));
   });
 
@@ -166,12 +209,144 @@ test("opens a tenant's approved definitions page and canonicalizes the workspace
   expect(await screen.findByRole("heading", { name: "Call definitions" })).toBeVisible();
   expect(screen.getByText("Delivery rescheduling")).toBeVisible();
   expect(window.location.pathname).toBe("/admin/tenants/tenant-1-0/definitions");
-  expect(screen.queryByRole("link", { name: "Calls" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
   expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
-  expect(screen.getByText("5")).toBeVisible();
   expect(
-    screen.queryByRole("link", { name: "View 5 calls for Delivery rescheduling" }),
-  ).not.toBeInTheDocument();
+    screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" }),
+  ).toHaveAttribute(
+    "href",
+    "/admin/tenants/tenant-1-0/calls?definition_id=delivery-rescheduling",
+  );
+
+  fireEvent.click(
+    screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" }),
+  );
+  expect(await screen.findByRole("heading", { name: "Calls" })).toBeVisible();
+  expect(window.location.pathname + window.location.search).toBe(
+    "/admin/tenants/tenant-1-0/calls?definition_id=delivery-rescheduling",
+  );
+});
+
+test("loads filtered tenant calls and updates the URL when the filter changes", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?definition_id=delivery-rescheduling&page=2",
+  );
+
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    const selected = url.includes("appointment-reminders")
+      ? "appointment-reminders"
+      : "delivery-rescheduling";
+    return response(callPage("AAAAAAAAAAAAAAAA", selected, url.includes("page=2") ? 2 : 1));
+  });
+
+  render(<AdminApp csrfToken="csrf" fetchImpl={fetchImpl} />);
+
+  expect(await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Call definitions" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /open call 018f27cb/i })).not.toBeInTheDocument();
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=2&definition_id=delivery-rescheduling",
+    expect.any(Object),
+  );
+
+  fireEvent.change(screen.getByRole("combobox", { name: "Call definition" }), {
+    target: { value: "appointment-reminders" },
+  });
+
+  expect(await screen.findByText("No matching calls")).toBeVisible();
+  expect(window.location.pathname + window.location.search).toBe(
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?definition_id=appointment-reminders",
+  );
+});
+
+test("ignores an obsolete call response after the definition filter changes", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?definition_id=delivery-rescheduling",
+  );
+  let resolveFirst: ((value: Response) => void) | undefined;
+  const first = new Promise<Response>((resolve) => {
+    resolveFirst = resolve;
+  });
+  const fetchImpl = vi
+    .fn(() => response(callPage("AAAAAAAAAAAAAAAA", "appointment-reminders")))
+    .mockImplementationOnce(() => first);
+
+  render(<AdminApp csrfToken="csrf" fetchImpl={fetchImpl} />);
+
+  window.history.pushState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?definition_id=appointment-reminders",
+  );
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  expect(await screen.findByText("No matching calls")).toBeVisible();
+
+  await act(async () => {
+    resolveFirst?.(await response(callPage("AAAAAAAAAAAAAAAA", "delivery-rescheduling")));
+    await first;
+  });
+
+  expect(screen.queryByText("018f27cb-6f87-7d1c-a61f-8873cb667342")).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Call definition" })).toHaveValue(
+    "appointment-reminders",
+  );
+});
+
+test("recovers an out-of-range call page without losing its definition filter", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?page=999&definition_id=delivery-rescheduling",
+  );
+  const fetchImpl = vi
+    .fn(() => response(callPage("AAAAAAAAAAAAAAAA", "delivery-rescheduling")))
+    .mockImplementationOnce(() => response({ error: { code: "invalid_page" } }, 422));
+
+  render(<AdminApp csrfToken="csrf" fetchImpl={fetchImpl} />);
+
+  expect(await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342")).toBeVisible();
+  expect(window.location.pathname + window.location.search).toBe(
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?definition_id=delivery-rescheduling",
+  );
+  expect(fetchImpl).toHaveBeenNthCalledWith(
+    1,
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=999&definition_id=delivery-rescheduling",
+    expect.any(Object),
+  );
+  expect(fetchImpl).toHaveBeenNthCalledWith(
+    2,
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1&definition_id=delivery-rescheduling",
+    expect.any(Object),
+  );
+});
+
+test("keeps missing and unavailable call directories distinct", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls");
+  const { rerender } = render(
+    <AdminApp csrfToken="csrf" fetchImpl={() => response({}, 404)} />,
+  );
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "tenant or call definition could not be found",
+  );
+
+  rerender(
+    <AdminApp
+      csrfToken="csrf"
+      fetchImpl={() => Promise.reject(new Error("offline"))}
+    />,
+  );
+  window.dispatchEvent(new PopStateEvent("popstate"));
+
+  await waitFor(() =>
+    expect(screen.getByRole("alert")).toHaveTextContent("Calls could not be loaded"),
+  );
 });
 
 test("redirects a tenant workspace root to definitions on direct load", async () => {

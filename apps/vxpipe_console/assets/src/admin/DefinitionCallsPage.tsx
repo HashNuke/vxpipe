@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { AdminShell } from "./AdminShell";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { CallList } from "./CallList";
@@ -18,6 +20,9 @@ export function DefinitionCallsPage({
   onSelectCall,
   onPreviousPage,
   onNextPage,
+  headerActions,
+  workspaceDestinations,
+  linkCallDetails,
 }: {
   state: DefinitionCallsPageState;
   theme?: "dark" | "light";
@@ -28,6 +33,9 @@ export function DefinitionCallsPage({
   onSelectCall?: (callId: string) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
+  headerActions?: ReactNode;
+  workspaceDestinations?: TenantDestination[];
+  linkCallDetails?: boolean;
 }) {
   const selectedDefinition = state.selectedDefinitionId
     ? state.definitions.find(({ id }) => id === state.selectedDefinitionId)
@@ -35,7 +43,7 @@ export function DefinitionCallsPage({
   const unknownFilter = Boolean(state.selectedDefinitionId && !selectedDefinition);
 
   return (
-    <AdminShell theme={theme}>
+    <AdminShell headerActions={headerActions} theme={theme}>
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
         className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
@@ -53,6 +61,7 @@ export function DefinitionCallsPage({
         />
         <TenantWorkspaceNavigation
           active="calls"
+          destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
@@ -84,6 +93,11 @@ export function DefinitionCallsPage({
           >
             Show all calls
           </button>
+          {state.definitionOptionsTruncated ? (
+            <p className="basis-full text-xs text-[var(--admin-muted)]">
+              Showing the first 100 definitions. Use Call definitions above to find another.
+            </p>
+          ) : null}
         </div>
         <section
           aria-label="Call directory"
@@ -115,6 +129,7 @@ export function DefinitionCallsPage({
             <>
               <CallList
                 calls={state.calls}
+                linkCallDetails={linkCallDetails}
                 onSelectCall={onSelectCall}
                 tenant={state.tenant}
               />

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { parseDefinitionPage, parseTenantPage } from "./admin/adminApi";
+import { parseCallPage, parseDefinitionPage, parseTenantPage } from "./admin/adminApi";
+import { DefinitionCallsPage } from "./admin/DefinitionCallsPage";
+import type { DefinitionCallsPageState } from "./admin/callTypes";
 import { TenantDefinitionsPage } from "./admin/TenantDefinitionsPage";
 import type { TenantDefinitionsPageState } from "./admin/definitionTypes";
 import { TenantsPage } from "./admin/TenantsPage";
@@ -10,7 +12,8 @@ type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 type AdminRoute =
   | { kind: "tenants"; page: number }
-  | { kind: "definitions"; tenantKey: string; page: number };
+  | { kind: "definitions"; tenantKey: string; page: number }
+  | { kind: "calls"; tenantKey: string; definitionId: string | null; page: number };
 
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
 const redirectExpiredSession = () => window.location.assign("/auth/login");
@@ -30,6 +33,13 @@ export function AdminApp({
     status: "loading",
     tenant:
       route.kind === "definitions" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
+  }));
+  const [calls, setCalls] = useState<DefinitionCallsPageState>(() => ({
+    status: "loading",
+    tenant: route.kind === "calls" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
+    definitions: [],
+    definitionOptionsTruncated: false,
+    selectedDefinitionId: route.kind === "calls" ? route.definitionId : null,
   }));
 
   useEffect(() => {
@@ -68,7 +78,7 @@ export function AdminApp({
             });
           }
         });
-    } else {
+    } else if (route.kind === "definitions") {
       setDefinitions((state) => ({
         status: "loading",
         tenant:
@@ -102,6 +112,48 @@ export function AdminApp({
             }));
           }
         });
+    } else {
+      setCalls((state) => ({
+        status: "loading",
+        tenant:
+          state.tenant.key === route.tenantKey
+            ? state.tenant
+            : tenantPlaceholder(route.tenantKey),
+        definitions: state.tenant.key === route.tenantKey ? state.definitions : [],
+        definitionOptionsTruncated:
+          state.tenant.key === route.tenantKey
+            ? state.definitionOptionsTruncated
+            : false,
+        selectedDefinitionId: route.definitionId,
+      }));
+
+      loadCalls(
+        route,
+        controller.signal,
+        fetchImpl,
+        onSessionExpired,
+        isCurrent,
+        () => {
+          const firstPage = { ...route, page: 1 };
+          window.history.replaceState({}, "", routeUrl(firstPage));
+          setRoute(firstPage);
+        },
+      )
+        .then((state) => {
+          if (current && state) setCalls(state);
+        })
+        .catch((error: unknown) => {
+          if (current && !aborted(error)) {
+            setCalls((state) => ({
+              status: "unavailable",
+              tenant: state.tenant,
+              definitions: state.definitions,
+              definitionOptionsTruncated: state.definitionOptionsTruncated,
+              selectedDefinitionId: route.definitionId,
+              message: "Calls could not be loaded. Try again after storage is available.",
+            }));
+          }
+        });
     }
 
     return () => {
@@ -121,12 +173,45 @@ export function AdminApp({
     return (
       <TenantDefinitionsPage
         headerActions={headerActions}
-        linkCalls={false}
+        linkCalls
         onNextPage={() => navigate({ ...route, page: route.page + 1 })}
         onPreviousPage={() => navigate({ ...route, page: Math.max(1, route.page - 1) })}
+        onSelectDefinition={(definitionId) =>
+          navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId, page: 1 })
+        }
         onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
+        onSelectWorkspace={(destination) => {
+          if (destination === "calls") {
+            navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 });
+          }
+        }}
         state={definitions}
-        workspaceDestinations={["definitions"]}
+        workspaceDestinations={["definitions", "calls"]}
+      />
+    );
+  }
+
+  if (route.kind === "calls") {
+    return (
+      <DefinitionCallsPage
+        headerActions={headerActions}
+        linkCallDetails={false}
+        onNextPage={() => navigate({ ...route, page: route.page + 1 })}
+        onPreviousPage={() => navigate({ ...route, page: Math.max(1, route.page - 1) })}
+        onSelectDefinition={(definitionId) =>
+          navigate({ ...route, definitionId, page: 1 })
+        }
+        onSelectTenant={() =>
+          navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 })
+        }
+        onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
+        onSelectWorkspace={(destination) => {
+          if (destination === "definitions") {
+            navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 });
+          }
+        }}
+        state={calls}
+        workspaceDestinations={["definitions", "calls"]}
       />
     );
   }
@@ -225,6 +310,65 @@ async function loadDefinitions(
   };
 }
 
+async function loadCalls(
+  selected: Extract<AdminRoute, { kind: "calls" }>,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  isCurrent: () => boolean,
+  recoverFirstPage: () => void,
+): Promise<DefinitionCallsPageState | undefined> {
+  const encodedTenant = encodeURIComponent(selected.tenantKey);
+  const query = new URLSearchParams({ page: String(selected.page) });
+  if (selected.definitionId) query.set("definition_id", selected.definitionId);
+
+  const response = await fetchImpl(
+    `/admin/api/tenants/${encodedTenant}/calls?${query.toString()}`,
+    { headers: { accept: "application/json" }, signal },
+  );
+
+  if (!isCurrent()) return;
+
+  if (response.status === 401) {
+    onSessionExpired();
+    return;
+  }
+
+  if (response.status === 422 && selected.page !== 1) {
+    recoverFirstPage();
+    return;
+  }
+
+  if (response.status === 404) {
+    return {
+      status: "unavailable",
+      tenant: tenantPlaceholder(selected.tenantKey),
+      definitions: [],
+      definitionOptionsTruncated: false,
+      selectedDefinitionId: selected.definitionId,
+      message: "This tenant or call definition could not be found.",
+    };
+  }
+
+  if (!response.ok) throw new Error("Call directory unavailable");
+  const result = parseCallPage(await response.json());
+  if (!isCurrent()) return;
+  if (result.tenant.key !== selected.tenantKey) throw new Error("Unexpected tenant response");
+  if (result.selectedDefinitionId !== selected.definitionId) {
+    throw new Error("Unexpected call filter response");
+  }
+
+  return {
+    status: "ready",
+    tenant: result.tenant,
+    definitions: result.definitions,
+    definitionOptionsTruncated: result.definitionsTruncated,
+    selectedDefinitionId: result.selectedDefinitionId,
+    calls: result.calls,
+    pagination: paginationModel(result.pagination),
+  };
+}
+
 function SignOut({ csrfToken }: { csrfToken: string }) {
   return (
     <form action="/auth/logout" method="post">
@@ -242,15 +386,26 @@ function SignOut({ csrfToken }: { csrfToken: string }) {
 function readRoute(): AdminRoute {
   const page = readPage();
   const match = window.location.pathname.match(
-    /^\/admin\/tenants\/([^/]+)(\/definitions)?\/?$/,
+    /^\/admin\/tenants\/([^/]+)(?:\/(definitions|calls))?\/?$/,
   );
 
   if (!match) return { kind: "tenants", page };
 
   try {
     const tenantKey = decodeURIComponent(match[1]);
+    const destination = match[2];
+
+    if (destination === "calls") {
+      return {
+        kind: "calls",
+        tenantKey,
+        definitionId: readDefinitionFilter(),
+        page,
+      };
+    }
+
     const route = { kind: "definitions", tenantKey, page } as const;
-    if (!match[2]) window.history.replaceState({}, "", routeUrl(route));
+    if (!destination) window.history.replaceState({}, "", routeUrl(route));
     return route;
   } catch {
     return { kind: "tenants", page: 1 };
@@ -258,9 +413,16 @@ function readRoute(): AdminRoute {
 }
 
 function routeUrl(route: AdminRoute) {
-  const query = route.page === 1 ? "" : `?page=${route.page}`;
-  if (route.kind === "tenants") return `/admin${query}`;
-  return `/admin/tenants/${encodeURIComponent(route.tenantKey)}/definitions${query}`;
+  const query = new URLSearchParams();
+  if (route.page !== 1) query.set("page", String(route.page));
+  if (route.kind === "calls" && route.definitionId) {
+    query.set("definition_id", route.definitionId);
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+
+  if (route.kind === "tenants") return `/admin${suffix}`;
+  const tenant = encodeURIComponent(route.tenantKey);
+  return `/admin/tenants/${tenant}/${route.kind}${suffix}`;
 }
 
 function readPage() {
@@ -268,6 +430,11 @@ function readPage() {
   if (raw === null) return 1;
   const page = Number(raw);
   return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
+function readDefinitionFilter() {
+  const definitionId = new URLSearchParams(window.location.search).get("definition_id");
+  return definitionId && definitionId.length <= 256 ? definitionId : null;
 }
 
 function tenantPlaceholder(key: string) {
