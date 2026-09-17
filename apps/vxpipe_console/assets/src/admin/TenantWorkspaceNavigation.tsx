@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 import type { TenantContext } from "./definitionTypes";
 import { shouldInterceptNavigation } from "./shouldInterceptNavigation";
 
-type TenantDestination = "definitions" | "calls";
+export type TenantDestination = "definitions" | "calls" | "services";
 
 export function TenantWorkspaceNavigation({
   active,
@@ -17,8 +17,8 @@ export function TenantWorkspaceNavigation({
   return (
     <nav aria-label="Tenant workspace" className="mb-6 border-b border-[var(--admin-line)]">
       <div className="flex gap-6">
-        {(["definitions", "calls"] as const).map((destination) => {
-          const label = destination === "definitions" ? "Call definitions" : "Calls";
+        {(["definitions", "calls", "services"] as const).map((destination) => {
+          const label = destination === "definitions" ? "Call definitions" : destination === "calls" ? "Calls" : "Services";
           const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/${destination}`;
 
           return (

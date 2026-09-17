@@ -9,12 +9,54 @@ import { callDetailsFixtureForCall } from "./callDetailsFixtures";
 import { DefinitionCallsPage } from "./DefinitionCallsPage";
 import { definitionFixture, definitions } from "./definitionFixtures";
 import { TenantDefinitionsPage } from "./TenantDefinitionsPage";
+import { applyCredentialCreation, serviceFixture } from "./serviceFixtures";
+import { TenantServicesPage } from "./TenantServicesPage";
+import type { AdminStoryRoute } from "./adminStoryRoute";
+import type { TenantContext } from "./definitionTypes";
 import { tenantFixture, tenants } from "./tenantFixtures";
 import { TenantsPage } from "./TenantsPage";
 import { useAdminStoryNavigation } from "./useAdminStoryNavigation";
 
+function JourneyServicesPage({
+  tenant,
+  theme,
+  navigate,
+}: {
+  tenant: TenantContext;
+  theme: "dark" | "light";
+  navigate: (route: AdminStoryRoute) => void;
+}) {
+  const [state, setState] = useState(() => ({
+    ...serviceFixture("populated"),
+    tenant,
+  }));
+
+  return (
+    <TenantServicesPage
+      onCreateCredential={(draft) =>
+        setState((current) => applyCredentialCreation(current, draft))
+      }
+      onSelectTenant={() => navigate({ page: "definitions", tenantKey: tenant.key })}
+      onSelectTenants={() => navigate({ page: "tenants" })}
+      onSelectWorkspace={(destination) =>
+        navigate({ page: destination, tenantKey: tenant.key })
+      }
+      state={state}
+      theme={theme}
+    />
+  );
+}
+
 export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
   const { route, navigate } = useAdminStoryNavigation();
+
+  if (route.page === "services") {
+    const selectedTenant = tenants.find((tenant) => tenant.key === route.tenantKey) ?? {
+      key: route.tenantKey,
+      name: route.tenantKey,
+    };
+    return <JourneyServicesPage key={selectedTenant.key} navigate={navigate} tenant={selectedTenant} theme={theme} />;
+  }
 
   if (route.page === "call-details") {
     const selectedTenant = tenants.find((tenant) => tenant.key === route.tenantKey) ?? {
@@ -146,3 +188,4 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
     />
   );
 }
+import { useState } from "react";

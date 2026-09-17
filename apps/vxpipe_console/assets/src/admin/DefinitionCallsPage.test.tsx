@@ -85,7 +85,10 @@ test("shows tenant navigation and real call links", () => {
     "aria-current",
     "page",
   );
-  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
+    "href",
+    "/admin/tenants/tn_demo_01/services",
+  );
   expect(screen.queryByText(/Across all revisions/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/published r3/i)).not.toBeInTheDocument();
 

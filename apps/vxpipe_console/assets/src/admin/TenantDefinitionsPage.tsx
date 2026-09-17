@@ -6,7 +6,7 @@ import type { TenantDefinitionsPageState } from "./definitionTypes";
 import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
-import { TenantWorkspaceNavigation } from "./TenantWorkspaceNavigation";
+import { TenantWorkspaceNavigation, type TenantDestination } from "./TenantWorkspaceNavigation";
 
 export function TenantDefinitionsPage({
   state,
@@ -21,7 +21,7 @@ export function TenantDefinitionsPage({
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectDefinition?: (definitionId: string) => void;
-  onSelectWorkspace?: (destination: "definitions" | "calls") => void;
+  onSelectWorkspace?: (destination: TenantDestination) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
 }) {

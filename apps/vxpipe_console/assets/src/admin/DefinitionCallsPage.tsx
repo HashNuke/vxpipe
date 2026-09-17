@@ -6,7 +6,7 @@ import type { DefinitionCallsPageState } from "./callTypes";
 import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
-import { TenantWorkspaceNavigation } from "./TenantWorkspaceNavigation";
+import { TenantWorkspaceNavigation, type TenantDestination } from "./TenantWorkspaceNavigation";
 
 export function DefinitionCallsPage({
   state,
@@ -23,7 +23,7 @@ export function DefinitionCallsPage({
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectTenant?: () => void;
-  onSelectWorkspace?: (destination: "definitions" | "calls") => void;
+  onSelectWorkspace?: (destination: TenantDestination) => void;
   onSelectDefinition?: (definitionId: string | null) => void;
   onSelectCall?: (callId: string) => void;
   onPreviousPage?: () => void;

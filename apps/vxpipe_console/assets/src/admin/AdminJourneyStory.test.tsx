@@ -112,3 +112,63 @@ test("moves between sibling definitions and all tenant calls", () => {
   fireEvent.click(screen.getByRole("link", { name: "Call definitions" }));
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
 });
+
+test("reaches services through the tenant workspace", () => {
+  window.history.replaceState({}, "", "/iframe.html?id=admin-full-journey");
+  render(<AdminJourneyStory theme="dark" />);
+
+  fireEvent.click(screen.getByRole("link", { name: /open demo workspace/i }));
+  fireEvent.click(screen.getByRole("link", { name: "Services" }));
+
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/services");
+  expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Add credential" })).toBeVisible();
+
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.change(screen.getByLabelText("Credential name"), {
+    target: { value: "secondary" },
+  });
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "valid-key" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Credential stored");
+  expect(screen.getAllByText("secondary")).not.toHaveLength(0);
+
+  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  expect(screen.getByLabelText("API key")).toHaveValue("");
+  expect(
+    within(screen.getByRole("dialog")).queryByText("Credential stored."),
+  ).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Credential name"), {
+    target: { value: "tertiary" },
+  });
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "next-valid-key" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getAllByText("tertiary")).not.toHaveLength(0);
+});
+
+test("resets service state when the tenant route changes", () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/iframe.html?id=admin-full-journey#/admin/tenants/tn_demo_01/services",
+  );
+  render(<AdminJourneyStory theme="dark" />);
+  expect(screen.getByText("Demo workspace")).toBeVisible();
+
+  window.history.pushState(
+    {},
+    "",
+    "#/admin/tenants/tn_other_workspace/services",
+  );
+  fireEvent(window, new PopStateEvent("popstate"));
+
+  expect(screen.getByText("tn_other_workspace")).toBeVisible();
+  expect(screen.queryByText("Demo workspace")).not.toBeInTheDocument();
+});

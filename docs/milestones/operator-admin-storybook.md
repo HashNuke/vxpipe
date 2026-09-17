@@ -1,6 +1,6 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoints 1 through 5 of 7 are complete. Requested and independently
+Status: implementation active; checkpoints 1 through 6 of 7 are complete. Requested and independently
 reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
@@ -207,29 +207,40 @@ passed. See [checkpoint labnotes](../../labnotes/20260917-1045-tenant-calls-work
 
 ## Checkpoint 6 — Complete Services and credential setup
 
-- [ ] Define small typed view models for provider credential metadata and telephony service metadata.
+- [x] Define small typed view models for provider credential metadata and telephony service metadata.
   Keep secret input values only in the credential form state and out of fixtures, URL state and list
   rows.
-- [ ] Build focused service inventory, capability/provider badge, credential status, empty/loading/
+- [x] Build focused service inventory, capability/provider badge, credential status, empty/loading/
   unavailable presentation, and credential setup form components. Do not combine the
   inventory, provider field rules and modal/sheet behavior into one component.
-- [ ] Limit provider choices and fields to current contracts: API key for Google, Deepgram, Zenmux
+- [x] Limit provider choices and fields to current contracts: API key for Google, Deepgram, Zenmux
   and Telnyx; Account SID plus Auth Token for Twilio. Telephony public configuration is presented
   separately from write-only credential fields.
-- [ ] Treat existing Telnyx/Twilio telephony service metadata as read-only. Credential creation does
+- [x] Treat existing Telnyx/Twilio telephony service metadata as read-only. Credential creation does
   not register or rebind a telephony service and does not validate provider-side readiness. Show
   “credential stored” separately from configured/verified/ready service status.
-- [ ] Compose inventory, empty, unavailable, validation-error, submission-pending, save-failure and
+- [x] Compose inventory, empty, unavailable, validation-error, submission-pending, save-failure and
   save-success stories. Existing credentials show metadata without showing or pretending to show
   stored values, and do not imply a third-party rotation workflow.
-- [ ] Test provider-specific field selection, secret clearing after success/cancel, duplicate-name
+- [x] Test provider-specific field selection, secret clearing after success/cancel, duplicate-name
   conflict without overwrite, stale-submission handling, accessible focus restoration and absence
   of secret values from rendered metadata.
-- [ ] Inspect dark/light, desktop/mobile and keyboard-only setup flows in rendered Storybook.
+- [x] Inspect dark/light, desktop/mobile and keyboard-only setup flows in rendered Storybook.
 
 Exit: a reviewer can understand which services are configured and safely model adding credentials
 for every provider Vxpipe currently supports. The Services link is added to tenant navigation only
 with this working page. Commit this page and setup-flow slice separately.
+
+Evidence: the Services page lists Google, Zenmux, Deepgram, Telnyx and Twilio without returning a
+secret value. ProviderAuth-compatible local validation precedes an injected create action;
+duplicate `(provider, name)` bindings return a conflict and preserve existing metadata. Telephony
+rows separately show credential binding identity and read-only registration, provider connection
+and outbound-number metadata without claiming provider verification. Deterministic stories cover
+inventory, empty, unavailable, validation, pending, failure, conflict, success, long-content,
+light and narrow states. The Console's 75 tests, TypeScript check and ESLint check pass; the React
+package's 30 tests and production Storybook build pass. Rendered desktop/mobile, dark/light,
+long-content, repeated-save and keyboard-modal review passed. See
+[checkpoint labnotes](../../labnotes/20260917-1105-tenant-services-storybook.md).
 
 ## Checkpoint 7 — Review the complete mocked journey
 

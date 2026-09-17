@@ -9,6 +9,13 @@ test("uses explicit tenant workspace destinations", () => {
   expect(adminStoryPath({ page: "calls", tenantKey: "tn demo" })).toBe(
     "/admin/tenants/tn%20demo/calls",
   );
+  expect(adminStoryPath({ page: "services", tenantKey: "tn demo" })).toBe(
+    "/admin/tenants/tn%20demo/services",
+  );
+  expect(adminStoryRoute("#/admin/tenants/tn%20demo/services")).toEqual({
+    page: "services",
+    tenantKey: "tn demo",
+  });
 });
 
 test("round trips an optional definition filter on tenant calls", () => {
