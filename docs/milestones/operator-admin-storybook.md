@@ -1,7 +1,7 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoints 1 through 6 of 7 are complete. Requested and independently
-reviewed 2026-09-17.
+Status: complete; all 7 checkpoints are implemented and the user approved the reviewed UI for
+production integration on 2026-09-17. Requested and independently reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
 Sources: [Developer console design](../developer-console-and-onboarding.md),
@@ -267,9 +267,9 @@ long-content, repeated-save and keyboard-modal review passed. See
   keyboard-only operation, reduced motion and long localized-looking content.
 - [x] Build Storybook from a clean checkout and run the focused frontend test suite. Record the exact
   review evidence and any approved design adjustments.
-- [ ] Present the complete running Storybook journey to the user and record explicit design approval.
+- [x] Present the complete running Storybook journey to the user and record explicit design approval.
   A passing build, automated test or internal review does not grant approval to integrate the app.
-- [ ] Mark this milestone complete only after that approval, before starting any checkpoint in the
+- [x] Mark this milestone complete only after that approval, before starting any checkpoint in the
   operator login/admin production-integration milestone.
 
 Exit: the entire first admin application is approved as a coherent mocked experience. Commit the
@@ -282,8 +282,10 @@ keyboard interactions, reduced-motion emulation and page-specific long-content s
 at `a64fda3` also covered the added Call details long-content story. A separate detached clean
 checkout at that commit passed the Console TypeScript check, ESLint check and 76 tests plus the React
 package's 30 tests and Storybook 10.6.0 production build after building the local workspaces. All five
-umbrella completion gates also pass. Explicit user design approval and the resulting milestone/index
-completion remain open.
+umbrella completion gates also pass. Subsequent user-led review refined the compact console, full-page
+Call details composition and semantic Call definitions table through `c374fb7`. After those changes,
+the user confirmed that the UI is good enough to implement. This explicitly approves the Storybook
+design for the next production-integration milestone.
 See [acceptance labnotes](../../labnotes/20260917-1139-admin-storybook-acceptance.md).
 
 ## Acceptance and completion
@@ -300,8 +302,8 @@ See [acceptance labnotes](../../labnotes/20260917-1139-admin-storybook-acceptanc
 - [x] Services supports only current provider contracts and never renders a stored credential value.
 - [x] Rendered desktop/mobile, dark/light, keyboard and reduced-motion review passes.
 - [x] Storybook build and focused frontend tests pass; no production app/backend integration exists.
-- [ ] The user has reviewed and explicitly approved the complete Storybook journey.
-- [ ] Each checkpoint is committed separately with documentation and labnotes.
+- [x] The user has reviewed and explicitly approved the complete Storybook journey.
+- [x] Each checkpoint is committed separately with documentation and labnotes.
 
 ## Scope boundaries
 
@@ -315,9 +317,10 @@ included. Services and credential entry are deterministic Storybook UI contracts
 Independent GPT 6 Astra xhigh review, 2026-09-17: the original four-page scope separated Storybook
 design from auth, backend work, endpoint clients and production routes. The later tenant-navigation,
 tenant Calls and Services requirements are split into checkpoints 5–6 before the final review gate;
-their downstream production checkpoints must stay synchronized. The complete mocked journey still
-requires explicit user approval before production integration. Specification additions alone do not
-claim component, page, rendered-review or production behavior.
+their downstream production checkpoints must stay synchronized. The review required explicit user
+approval before production integration; the user supplied that approval after reviewing the complete
+mocked journey and its requested refinements. Specification additions alone did not claim component,
+page, rendered-review or production behavior.
 
 Scope-reconciliation review, 2026-09-17: independent GPT 6 Astra xhigh review found no remaining
 blockers after each navigation destination was paired with its complete page slice, provider

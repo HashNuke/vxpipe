@@ -278,8 +278,9 @@ Specification only: no implementation, migration, Storybook page or acceptance i
 
 Split-plan review, 2026-09-17: the original four-page plan was independently reviewed. Later user
 direction adds shared tenant navigation, tenant-wide Calls and Services credential setup; these now
-have matching Storybook and production checkpoints. Auth remains outside Storybook, and this entire
-milestone is blocked until the user explicitly approves the complete mocked journey.
+have matching Storybook and production checkpoints. Auth remains outside Storybook. The production
+milestone was initially gated on explicit approval of the complete mocked journey; the user cleared
+that gate on 2026-09-17 after reviewing and refining the Storybook UI.
 
 Scope-reconciliation review, 2026-09-17: independent GPT 6 Astra xhigh review found no remaining
 blockers. Calls owns the bounded installation-operator credential mutation, duplicates cannot

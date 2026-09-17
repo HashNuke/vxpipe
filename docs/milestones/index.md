@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 31 milestone specifications: 22 complete and 9 incomplete. Milestone 17, Telnyx calls and
+Status: 31 milestone specifications: 23 complete and 8 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -55,15 +55,16 @@ The 2026-09-16 [developer experience plan](../developer-console-and-onboarding.m
 operator-admin Storybook, operator login/admin integration, platform bootstrap/demo tenant, then
 Getting Started/examples. The debug
 console now has a database-backed read-only production host; its live interaction work and the
-other four milestones remain. The console builds on current tenant
+other three milestones remain. The operator-admin Storybook is complete and approved. The console builds on current tenant
 admission and RTVI/Vxpipe extensions, so it does not wait for platform keys. The home retains setup tracking and
 per-example readiness; the same image defaults to production behavior, with proposed
 `VXPIPE_DEMO=1` opt-in. Demo mode grants no authority and does not relax credentials or TLS.
 The debug console isolates framework-neutral `@vxpipe/core` from `@vxpipe/react` in `packages/`.
 The user requested a [Storybook prototype](../../packages/README.md) before production integration;
 RTVI and WebRTC remain planned protocol/media adapters. Logs show RTVI events only.
-These specifications have local design/dependency review only; they add no completed milestone,
-release no packaging/retention hold, and do not require new provider authentication support.
+The Storybook milestone completed after component-level implementation, rendered review and explicit
+user approval. The remaining specifications have local design/dependency review only; they release
+no packaging/retention hold and do not require new provider authentication support.
 
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -118,7 +119,7 @@ progress without claiming the entire milestone is complete.
 23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Human web handoff, AI handoff, initial waiting, changing listeners and local phone checks accepted; live carrier audibility and final audit remain, with complete readiness, private waits/cues and acknowledged release throughout.
 24. [x] [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md) — Move existing provider credential readers to tenant DB storage, retain inline selections, rotate the platform encryption key and remove obsolete configuration paths.
 25. [ ] [Call debug console](call-debug-console.md) — Private @vxpipe/core and @vxpipe/react packages plus a database-backed read-only production host are available; live chat/voice, streaming text/audio, supported spoken highlighting, RTVI events and device controls remain pending integration over RTVI/WebRTC adapters.
-26. [ ] [Operator admin Storybook](operator-admin-storybook.md) — Checkpoints 1 through 6 of 7 are complete. The complete Storybook journey now awaits final user review and approval.
+26. [x] [Operator admin Storybook](operator-admin-storybook.md) — All seven checkpoints are complete; the user reviewed the refined journey and approved the UI for production integration.
 27. [ ] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default.
@@ -394,7 +395,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Transfer readiness and participant wait sounds**: user-requested pre-delivery refinement of G7/G8/G9; all required resources ready, independent local playback, URL/null/default configuration and cue-before-bridge completion.
 - **Tenant-scoped provider credentials and platform configuration**: replace capability profiles/TOML with inline upstream selections and encrypted tenant credential readers, including existing Telnyx/Twilio control/webhook/media authentication; no application credential fallback, platform infrastructure env-backed and ReqLLM internal. The [scope correction](../credential-cutover-scope.md) excludes third-party API-key rotation and broad call-flow feature work, while retaining platform encryption-key rotation.
 - **Call debug console**: user-requested chat/voice workbench with metrics, RTVI-only event logs, devices, streaming and supported spoken text; isolated future client-JS/React packages over pluggable protocol/media boundaries, initially RTVI/WebRTC. Reuse tenant admission and existing authorized history links; no new call engine or SDK fork.
-- **Operator admin Storybook**: complete mocked tenant-to-call administration journey built from small React components, with an explicit user-review gate before production integration.
+- **Operator admin Storybook**: complete mocked tenant-to-call administration journey built from small React components and approved by the user for production integration.
 - **Operator login and admin dashboard**: short-lived local login challenge, installation-wide operator session and integration of the user-approved React administration over every tenant, definition and call; no users, teams or RBAC.
 - **Platform bootstrap and demo tenant**: explicit hash-only platform API-key authority and durable demo binding, preserving tenant boundaries and encrypted provider storage.
 - **Getting Started and example calls**: production-default runtime, explicit demo mode, persistent `/` setup checklist and per-example readiness, three versioned examples and safe debug-console launch.
@@ -439,7 +440,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Human web handoff, AI handoff, initial waiting and local phone checks accepted; live carrier audibility and changing-listener acceptance remain in their runnable checkpoints. |
 | [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Complete; specification, scope and final implementation independently reviewed | All seven credential/configuration checkpoints and all five final root gates pass. Existing provider readers, platform encryption-key rotation and configuration cleanup are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. Final root: 1,622 tests, zero failures, 39 excluded at `58d7b34`. |
 | [Call debug console](call-debug-console.md#specification-review) | In progress; specification and database inspection slice independently reviewed | Isolates client-JS/React source boundaries and pluggable protocol/media adapters. The authenticated read-only host renders the latest database snapshot through Core and React; live chat/voice, streaming/spoken text, devices and RTVI adapters remain. |
-| [Operator admin Storybook](operator-admin-storybook.md#specification-review) | Active; checkpoints 1–6 of 7 complete and independently reviewed 2026-09-17 | The complete mocked journey is implemented; final user review remains before production integration. |
+| [Operator admin Storybook](operator-admin-storybook.md#specification-review) | Complete; all 7 checkpoints independently reviewed and user-approved 2026-09-17 | The complete mocked journey is approved for production integration in the next milestone. |
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Planned; split independently reviewed 2026-09-17 | Short-lived local challenge and installation-wide operator authority are distinct from API keys. Production work begins only after the separate complete Storybook milestone receives explicit user approval; auth guidance/code entry alone is server-rendered. Reviews cover HTTPS, authority ownership and complete legacy-session/route cutover. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | Planned; locally reviewed 2026-09-16 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity; no tenant-key promotion or third-party credential lifecycle. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Planned; locally reviewed 2026-09-16 | Confirmed persistent checklist/sample links and production-default/demo-opt-in behavior; per-example readiness, idempotent catalog publication and existing debug-console launch. |

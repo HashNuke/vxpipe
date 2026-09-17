@@ -3,7 +3,7 @@
 ## Scope
 
 Audit the complete mocked operator-admin journey after checkpoints 1–6, record technical acceptance
-evidence, and leave the explicit user-approval gate open.
+evidence, incorporate user review changes and record the final approval gate.
 
 ## Rendered review
 
@@ -53,9 +53,19 @@ transcript content without adding scenario logic to the page or CallConsole. Des
 mobile Chrome review passed with no document-level horizontal overflow. See
 [the focused labnotes](../../labnotes/20260917-1146-call-details-long-content.md).
 
-## Remaining gate
+## User approval
 
 The running Storybook was presented to the user at
-`http://localhost:6007/?path=/story/admin-full-journey--review-flow`. Explicit design approval is
-still required before checking checkpoint 7 complete, updating the milestone index, or starting
-production integration.
+`http://localhost:6007/?path=/story/admin-full-journey--review-flow`. The user reviewed the journey
+and requested iterative refinements to console density, call-details composition, responsive
+participant access, terminology and the Call definitions table. Those changes were completed in
+small commits through `c374fb7` and reverified in Storybook.
+
+On 2026-09-17 the user confirmed: “the UI is good enough to implement.” This clears the explicit
+design-approval gate for checkpoint 7 and allows the separate operator login/admin production
+integration milestone to begin.
+
+The approval checkpoint was reverified against the final reviewed tree: workspace package builds
+and 38 tests passed; Console TypeScript, ESLint and all 76 tests passed; and the shared Storybook
+production build completed successfully with only the existing dependency-directive and bundle-size
+advisories.
