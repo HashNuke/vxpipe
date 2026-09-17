@@ -1,6 +1,6 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoints 1 and 2 of 5 are complete. Requested and independently
+Status: implementation active; checkpoints 1 through 3 of 5 are complete. Requested and independently
 reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
@@ -100,16 +100,23 @@ tenant directory to definitions with working breadcrumbs and browser back/forwar
 
 ## Checkpoint 3 — Complete the Definition calls page
 
-- [ ] Build definition context, call row/card, lifecycle/archive status and call-list components.
-- [ ] Compose the complete Definition calls page with loading, empty, populated, unavailable,
+- [x] Build definition context, call row/card, lifecycle/archive status and call-list components.
+- [x] Compose the complete Definition calls page with loading, empty, populated, unavailable,
   ongoing/ended/failed, partial archive, long-value, paginated and narrow-screen fixtures.
-- [ ] Make call selection navigate through the Storybook harness. Clearly retain both tenant and
+- [x] Make call selection navigate through the Storybook harness. Clearly retain both tenant and
   definition context in the page and navigation.
-- [ ] Test the Vxpipe-owned selection, status, pagination and unavailable-state contracts.
-- [ ] Inspect every important state in rendered desktop/mobile Storybook.
+- [x] Test the Vxpipe-owned selection, status, pagination and unavailable-state contracts.
+- [x] Inspect every important state in rendered desktop/mobile Storybook.
 
 Exit: a reviewer can evaluate definition-scoped call browsing without backend query behavior.
 Commit this page slice separately.
+
+Evidence: the calls page covers every lifecycle, independent archive completeness, immutable
+definition revisions, terminal reasons and local timestamps. **Admin / Full journey** now connects
+tenants through definitions to calls and records a reload-safe call-details route. The Console's 48
+frontend tests, TypeScript check and warning-free ESLint check pass. Rendered dark/light, 390 px,
+768 px, 1024 px, long-content, pagination and reduced-motion inspection passed without clipping.
+See [checkpoint labnotes](../../labnotes/20260917-0858-definition-calls-storybook.md).
 
 ## Checkpoint 4 — Complete the Call details page
 

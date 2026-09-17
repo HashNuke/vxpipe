@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Start here to review the linked admin experience. The current implementation connects Tenants → Tenant definitions with working breadcrumbs and browser history. Later checkpoints extend this same story through calls and call details.",
+          "Start here to review the linked admin experience. The current implementation connects Tenants → Tenant definitions → Definition calls with working breadcrumbs and browser history. The next checkpoint attaches call details to this same story.",
       },
     },
   },

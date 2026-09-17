@@ -27,6 +27,15 @@ test("links the tenant directory to definitions and back", () => {
   expect(window.location.hash).toBe(
     "#/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
   );
+  expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
+
+  fireEvent.click(screen.getByRole("link", { name: /open call 018f27cb/i }));
+  expect(window.location.hash).toBe(
+    "#/admin/tenants/tn_demo_01/calls/018f27cb-6f87-7d1c-a61f-8873cb667342",
+  );
+  expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
+
+  fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
   expect(
     screen.getByRole("heading", { name: "Call definitions" }),
   ).toBeVisible();
@@ -35,4 +44,39 @@ test("links the tenant directory to definitions and back", () => {
 
   expect(screen.getByRole("heading", { name: "Tenants" })).toBeVisible();
   expect(window.location.hash).toBe("#/admin");
+});
+
+test("keeps a non-default definition context when a call route is reloaded", () => {
+  window.history.replaceState({}, "", "/iframe.html?id=admin-full-journey");
+  const view = render(<AdminJourneyStory theme="dark" />);
+
+  fireEvent.click(screen.getByRole("link", { name: /open demo workspace/i }));
+  fireEvent.click(
+    screen.getByRole("link", { name: /open appointment reminders/i }),
+  );
+
+  expect(screen.getByText(/published r2/i)).toBeVisible();
+  expect(screen.queryByText("r3")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getAllByRole("link", { name: /open call/i })[0]);
+  expect(screen.getByText("Appointment reminders")).toBeVisible();
+
+  view.unmount();
+  render(<AdminJourneyStory theme="dark" />);
+
+  expect(screen.getByText("Appointment reminders")).toBeVisible();
+  expect(screen.queryByText("Delivery rescheduling")).not.toBeInTheDocument();
+});
+
+test("does not substitute the default definition for an unknown call route", () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/iframe.html?id=admin-full-journey#/admin/tenants/tn_demo_01/calls/unknown-call",
+  );
+
+  render(<AdminJourneyStory theme="dark" />);
+
+  expect(screen.getByRole("heading", { name: "Call unavailable" })).toBeVisible();
+  expect(screen.queryByText("Delivery rescheduling")).not.toBeInTheDocument();
 });
