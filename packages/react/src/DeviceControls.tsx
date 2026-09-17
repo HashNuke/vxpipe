@@ -1,14 +1,8 @@
 import { useState } from "react";
 import type { LiveCallControls } from "@vxpipe/core";
 import type { ConsoleSnapshot } from "./types.js";
+import { DeviceMenu } from "./DeviceMenu.js";
 import { Icon } from "./Icon.js";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./Select.js";
 
 export function DeviceControls({
   snapshot,
@@ -56,24 +50,16 @@ export function DeviceControls({
               <span className="vx-mute-slash" aria-hidden="true" />
             )}
           </button>
-          <Select
+          <DeviceMenu
+            devices={snapshot.devices.inputs}
             disabled={!active || snapshot.microphone === "denied"}
-            value={snapshot.inputDevice}
-            onValueChange={(value) =>
+            label="Input device"
+            onSelect={(value) =>
               void act(() => controls.selectDevice("input", value))
             }
-          >
-            <SelectTrigger aria-label="Input device">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent theme={theme}>
-              {snapshot.devices.inputs.map((device) => (
-                <SelectItem key={device} value={device}>
-                  {device}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            theme={theme}
+            value={snapshot.inputDevice}
+          />
         </div>
         <div className="vx-device-group" role="group" aria-label="Output audio">
           <button
@@ -92,24 +78,16 @@ export function DeviceControls({
               <span className="vx-mute-slash" aria-hidden="true" />
             )}
           </button>
-          <Select
+          <DeviceMenu
+            devices={snapshot.devices.outputs}
             disabled={!snapshot.devices.outputSelection}
-            value={snapshot.outputDevice}
-            onValueChange={(value) =>
+            label="Output device"
+            onSelect={(value) =>
               void act(() => controls.selectDevice("output", value))
             }
-          >
-            <SelectTrigger aria-label="Output device">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent theme={theme}>
-              {snapshot.devices.outputs.map((device) => (
-                <SelectItem key={device} value={device}>
-                  {device}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            theme={theme}
+            value={snapshot.outputDevice}
+          />
         </div>
       </div>
       {snapshot.microphone === "denied" && (

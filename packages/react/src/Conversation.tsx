@@ -14,31 +14,12 @@ import {
   Wrench,
 } from "lucide-react";
 import { Icon } from "./Icon.js";
+import type { ConversationFilters } from "./conversationFilters.js";
 import {
   formatTimelineClock,
   TimelineTimestamp,
 } from "./TimelineTimestamp.js";
 import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
-
-type Filter = "messages" | "logs" | "events" | "tools";
-type Filters = Record<Filter, boolean>;
-const defaultFilters: Filters = {
-  messages: true,
-  logs: false,
-  events: true,
-  tools: true,
-};
-const filterLabels: Record<Filter, string> = {
-  messages: "Messages",
-  logs: "Logs",
-  events: "Events",
-  tools: "Tool calls",
-};
-const filterIcons = {
-  messages: "message",
-  logs: "log",
-  events: "event",
-} as const;
 
 function MessageText({
   message,
@@ -294,7 +275,10 @@ type TimelineItem =
   | { kind: "tools"; id: string; occurredAt: string; value: ToolCall }
   | { kind: "logs"; id: string; occurredAt: string; value: ProtocolEvent };
 
-function timeline(snapshot: ConsoleSnapshot, filters: Filters): TimelineItem[] {
+function timeline(
+  snapshot: ConsoleSnapshot,
+  filters: ConversationFilters,
+): TimelineItem[] {
   const items: TimelineItem[] = [];
   if (filters.messages)
     items.push(
@@ -343,47 +327,18 @@ function timeline(snapshot: ConsoleSnapshot, filters: Filters): TimelineItem[] {
 }
 
 export function Conversation({
+  filters,
   snapshot,
   theme = "dark",
 }: {
+  filters: ConversationFilters;
   snapshot: ConsoleSnapshot;
   theme?: "light" | "dark";
 }) {
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
   const items = timeline(snapshot, filters);
-  const toggle = (filter: Filter) =>
-    setFilters((current) => ({ ...current, [filter]: !current[filter] }));
 
   return (
     <section className="vx-conversation" aria-label="Conversation">
-      <div className="vx-timeline-filters" aria-label="Conversation filters">
-        {(Object.keys(defaultFilters) as Filter[]).map((filter) => (
-          <button
-            key={filter}
-            className={filters[filter] ? "vx-filter-active" : ""}
-            aria-pressed={filters[filter]}
-            aria-label={`${filters[filter] ? "Hide" : "Show"} ${filterLabels[filter]}`}
-            title={filterLabels[filter]}
-            onClick={() => toggle(filter)}
-          >
-            {filter === "tools" ? (
-              <Wrench aria-hidden="true" />
-            ) : (
-              <Icon name={filterIcons[filter]} />
-            )}
-            <span>{filterLabels[filter]}</span>
-          </button>
-        ))}
-        <button
-          className="vx-filter-reset"
-          aria-label="Reset filters"
-          title="Reset filters"
-          onClick={() => setFilters({ ...defaultFilters })}
-        >
-          <Icon name="reset" />
-          <span>Reset</span>
-        </button>
-      </div>
       <div className="vx-transcript">
         {items.length === 0 && (
           <div className="vx-empty">

@@ -3,9 +3,9 @@ import { CallConsole } from "@vxpipe/react";
 
 import { AdminShell } from "./AdminShell";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { CallIdentity } from "./CallIdentity";
 import { CallDetailsSkeleton } from "./CallDetailsSkeleton";
 import type { CallDetailsPageState } from "./callDetailsTypes";
-import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
 
 export function CallDetailsPage({
@@ -42,29 +42,22 @@ export function CallDetailsPage({
       : []),
     { label: "Call details" },
   ];
+  const callIdentity = (
+    <CallIdentity
+      callId={state.callId}
+      definitionRevision={state.definitionRevision}
+    />
+  );
 
   return (
-    <AdminShell theme={theme}>
+    <AdminShell showHeader={false} theme={theme}>
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
-        className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
+        className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6"
       >
+        <h1 className="sr-only">Call details</h1>
         <Breadcrumbs items={breadcrumbs} />
-        <PageHeader
-          description={
-            definitionLabel && state.definitionRevision !== null
-              ? `${definitionLabel} · definition revision r${state.definitionRevision}`
-              : "Inspect the latest available state for this call."
-          }
-          title="Call details"
-        />
-        <div className="mb-4 flex min-w-0 items-center gap-2 text-sm text-[var(--admin-muted)]">
-          <span>Call</span>
-          <code className="truncate font-mono text-xs text-[var(--admin-ink)]" title={state.callId}>
-            {state.callId}
-          </code>
-        </div>
-
+        {state.status !== "ready" ? <div className="mb-3">{callIdentity}</div> : null}
         {state.status === "loading" ? <CallDetailsSkeleton /> : null}
         {state.status === "unavailable" ? (
           <PageNotice kind="unavailable" message={state.message} title="Call unavailable" />
@@ -91,7 +84,8 @@ export function CallDetailsPage({
             ) : null}
             <CallConsole
               controller={state.controller}
-              maxHeight="min(760px, calc(100dvh - 220px))"
+              headerContext={callIdentity}
+              maxHeight="calc(100dvh - 76px)"
               theme={theme}
             />
           </>

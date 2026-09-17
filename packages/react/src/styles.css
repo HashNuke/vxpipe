@@ -91,29 +91,29 @@
 }
 .vx-call-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 28px;
-  padding: 20px 28px;
+  gap: 20px;
+  padding: 16px 28px;
   border-bottom: 1px solid var(--vx-line);
 }
-.vx-call-actions {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-}
-.vx-call-actions > .vx-button {
-  width: 100%;
-}
-.vx-call-action-meta {
+.vx-call-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 16px;
+  flex: 0 0 auto;
 }
-.vx-call-actions time {
+.vx-call-context {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vx-muted);
+  font: 12px var(--vx-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vx-call-toolbar time {
   font: 12px var(--vx-mono);
   color: var(--vx-muted);
   font-variant-numeric: tabular-nums;
@@ -430,14 +430,22 @@
 }
 .vx-tabs {
   display: flex;
-  align-items: stretch;
-  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 0 28px;
   border-bottom: 1px solid var(--vx-line);
   min-height: 54px;
   flex: 0 0 auto;
 }
-.vx-tabs button {
+.vx-tab-list {
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  min-width: 0;
+}
+.vx-tab-list > button {
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -445,12 +453,12 @@
   font-size: 14px;
   color: var(--vx-muted);
 }
-.vx-tabs button.vx-tab-active {
+.vx-tab-list > button.vx-tab-active {
   border-bottom-color: var(--vx-ink);
   color: var(--vx-ink);
   font-weight: 600;
 }
-.vx-tabs button span {
+.vx-tab-list > button span {
   margin-left: 6px;
   font: 12px var(--vx-mono);
   color: var(--vx-muted);
@@ -462,46 +470,104 @@
   min-height: 0;
   overflow: hidden;
 }
-.vx-timeline-filters {
+.vx-conversation-filter-controls,
+.vx-filter-icons {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 32px;
-  border-bottom: 1px solid var(--vx-line);
-  overflow-x: auto;
-  flex: 0 0 auto;
+  gap: 4px;
 }
-.vx-timeline-filters button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 5px 9px;
-  border: 1px solid transparent;
+.vx-filter-icons button,
+.vx-filter-menu-trigger {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--vx-muted);
-  font-size: 12px;
-  white-space: nowrap;
 }
-.vx-timeline-filters button:hover {
-  border-color: var(--vx-line);
-  color: var(--vx-ink);
-}
-.vx-timeline-filters button.vx-filter-active {
-  border-color: var(--vx-control-line);
+.vx-filter-icons button:hover,
+.vx-filter-icons button:focus-visible,
+.vx-filter-menu-trigger:hover,
+.vx-filter-menu-trigger:focus-visible,
+.vx-filter-menu-trigger[aria-expanded="true"] {
   background: var(--vx-soft);
   color: var(--vx-ink);
 }
-.vx-timeline-filters button.vx-filter-reset {
-  margin-left: auto;
+.vx-filter-icons button.vx-filter-active {
+  color: var(--vx-blue);
 }
-.vx-timeline-filters svg,
+.vx-filter-icons button.vx-filter-logs {
+  color: var(--vx-amber);
+}
+.vx-filter-icons button.vx-filter-events {
+  color: var(--vx-violet);
+}
+.vx-filter-icons button.vx-filter-tools {
+  color: var(--vx-green);
+}
+.vx-filter-icons svg,
+.vx-filter-menu-trigger svg,
 .vx-timeline-activity svg,
 .vx-timeline-tool svg {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
+}
+.vx-filter-menu-trigger {
+  display: none;
+}
+.vx-filter-menu {
+  z-index: 90;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid oklch(0.92 0.004 286.32);
+  border-radius: 8px;
+  background: oklch(1 0 0);
+  color: oklch(0.21 0.006 285.885);
+  box-shadow: 0 12px 32px
+    color-mix(in oklch, oklch(0.21 0.006 285.885) 18%, transparent);
+  font:
+    14px/1.5 Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  color-scheme: light;
+}
+.vx-filter-menu[data-vx-theme="dark"] {
+  border-color: oklch(0.35 0.006 286);
+  background: oklch(0.235 0.006 285.885);
+  color: oklch(0.985 0 0);
+}
+.vx-filter-menu > button {
+  appearance: none;
+  display: grid;
+  width: 100%;
+  min-height: 36px;
+  grid-template-columns: 18px 1fr 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vx-filter-menu > button:hover,
+.vx-filter-menu > button:focus-visible {
+  background: color-mix(in oklch, currentColor 9%, transparent);
+  outline: none;
+}
+.vx-filter-menu svg {
+  width: 15px;
+  height: 15px;
 }
 .vx-transcript {
   flex: 1;
@@ -648,8 +714,8 @@
   color: color-mix(in oklch, currentColor 72%, transparent);
 }
 .vx-message p {
-  font-size: 16px;
-  line-height: 1.75;
+  font-size: 14px;
+  line-height: 1.65;
   max-width: 66ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -990,47 +1056,124 @@ button.vx-tool-summary:hover {
 .vx-composer textarea::placeholder {
   color: var(--vx-muted);
 }
-.vx-composer-actions {
+.vx-composer-input-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-end;
   gap: 12px;
-  margin-top: 8px;
 }
-.vx-composer-actions > span {
-  font-size: 12px;
-  color: var(--vx-muted);
+.vx-composer-input-row textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.vx-composer-input-row > .vx-button {
+  flex: 0 0 auto;
 }
 .vx-devices {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .vx-device-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 28px;
+  gap: 12px 14px;
 }
 .vx-device-group {
   display: flex;
   align-items: center;
   gap: 0;
-  flex: 0 1 280px;
-  min-width: 0;
+  flex: 0 0 auto;
 }
 .vx-device-group .vx-icon-button {
   border-radius: 6px 0 0 6px;
 }
-.vx-device-group .vx-select-trigger {
+.vx-device-group .vx-device-menu-trigger {
   position: relative;
+  width: 40px;
+  height: 40px;
   margin-left: -1px;
+  padding: 8px;
   border-radius: 0 6px 6px 0;
 }
 .vx-device-group .vx-icon-button:hover:not(:disabled),
 .vx-device-group .vx-icon-button:focus-visible,
-.vx-device-group .vx-select-trigger:hover:not(:disabled),
-.vx-device-group .vx-select-trigger:focus-visible,
-.vx-device-group .vx-select-trigger[data-state="open"] {
+.vx-device-group .vx-device-menu-trigger:hover:not(:disabled),
+.vx-device-group .vx-device-menu-trigger:focus-visible,
+.vx-device-group .vx-device-menu-trigger[aria-expanded="true"] {
   z-index: 1;
+}
+.vx-device-menu-trigger svg,
+.vx-device-menu button svg {
+  width: 16px;
+  height: 16px;
+}
+.vx-device-menu {
+  z-index: 90;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 6px;
+  border: 1px solid oklch(0.92 0.004 286.32);
+  border-radius: 8px;
+  background: oklch(1 0 0);
+  color: oklch(0.21 0.006 285.885);
+  box-shadow: 0 12px 32px
+    color-mix(in oklch, oklch(0.21 0.006 285.885) 18%, transparent);
+  font:
+    14px/1.5 Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  color-scheme: light;
+}
+.vx-device-menu[data-vx-theme="dark"] {
+  border-color: oklch(0.35 0.006 286);
+  background: oklch(0.235 0.006 285.885);
+  color: oklch(0.985 0 0);
+  color-scheme: dark;
+}
+.vx-device-menu-heading {
+  padding: 8px 9px 7px;
+  border-bottom: 1px solid color-mix(in oklch, currentColor 14%, transparent);
+}
+.vx-device-menu-heading span,
+.vx-device-menu-heading strong {
+  display: block;
+}
+.vx-device-menu-heading span {
+  color: color-mix(in oklch, currentColor 68%, transparent);
+  font-size: 12px;
+}
+.vx-device-menu-heading strong {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vx-device-menu > button {
+  appearance: none;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vx-device-menu > button:hover,
+.vx-device-menu > button:focus-visible {
+  background: color-mix(in oklch, currentColor 9%, transparent);
+  outline: none;
 }
 .vx-select-trigger {
   flex: 1;
@@ -1404,6 +1547,18 @@ button.vx-tool-summary:hover {
   white-space: nowrap;
   border: 0;
 }
+@media (max-width: 900px) {
+  .vx-tab-list {
+    overflow-x: auto;
+  }
+  .vx-filter-icons {
+    display: none;
+  }
+  .vx-filter-menu-trigger {
+    display: inline-grid;
+    flex: 0 0 auto;
+  }
+}
 @media (max-width: 800px) {
   .vx-workspace {
     grid-template-columns: 180px minmax(0, 1fr);
@@ -1413,9 +1568,6 @@ button.vx-tool-summary:hover {
   }
   .vx-call-header {
     padding: 20px;
-  }
-  .vx-call-actions {
-    gap: 12px;
   }
   .vx-log-layout {
     grid-template-columns: 1fr;
@@ -1433,16 +1585,22 @@ button.vx-tool-summary:hover {
     height: 100dvh;
   }
   .vx-call-header {
-    align-items: stretch;
+    align-items: flex-start;
+    flex-wrap: wrap;
     padding: 16px;
     gap: 12px;
   }
-  .vx-call-actions {
-    min-width: 104px;
-    gap: 8px;
+  .vx-call-context {
+    flex-basis: 100%;
   }
-  .vx-call-actions .vx-button {
-    font-size: 12px;
+  .vx-call-toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .vx-call-toolbar > .vx-button {
+    margin-left: auto;
   }
   .vx-workspace {
     display: flex;
@@ -1484,8 +1642,12 @@ button.vx-tool-summary:hover {
     padding: 24px 16px;
   }
   .vx-tabs {
+    gap: 8px;
     padding: 0 16px;
     min-height: 48px;
+  }
+  .vx-tab-list {
+    gap: 20px;
   }
   .vx-transcript {
     padding: 20px 16px;
@@ -1499,21 +1661,18 @@ button.vx-tool-summary:hover {
   .vx-composer {
     padding: 16px;
   }
-  .vx-composer-actions > span {
-    font-size: 12px;
-    max-width: 155px;
-  }
   .vx-device-row {
-    gap: 12px;
+    gap: 6px;
   }
   .vx-device-group {
-    flex-basis: 100%;
+    flex-basis: auto;
   }
-  .vx-select-trigger,
-  .vx-icon-button {
+  .vx-icon-button,
+  .vx-device-menu-trigger {
     min-height: 44px;
   }
-  .vx-icon-button {
+  .vx-icon-button,
+  .vx-device-menu-trigger {
     width: 44px;
   }
   .vx-call-footer {

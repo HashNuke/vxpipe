@@ -143,6 +143,14 @@ verified bounded internal scrolling, composer submission, device controls, every
 reduced motion and failure states. See
 [checkpoint labnotes](../../labnotes/20260917-0917-call-details-storybook.md).
 
+Follow-up review compacted the call workspace without adding another page layer: injected call
+identity, status, device controls, duration and call action share the console toolbar; conversation
+filters share the tab row and collapse into an accessible overflow menu when space is constrained.
+The composer is one row and device selection uses compact, keyboard-navigable Floating UI menus.
+The React package's 35 tests and Console's 54 tests pass; production Storybook builds, and rendered
+390 px, 768 px, 820 px, 901 px and desktop inspection passed. See
+[refinement labnotes](../../labnotes/20260917-0958-compact-call-header.md).
+
 ## Checkpoint 5 — Review the complete mocked journey
 
 - [ ] Compose one deterministic journey that moves Tenants → Tenant definitions → Definition calls

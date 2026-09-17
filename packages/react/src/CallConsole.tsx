@@ -1,4 +1,9 @@
-import { useState, useSyncExternalStore, type CSSProperties } from "react";
+import {
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import type {
   CallConsoleController,
   CallDetailsSnapshot,
@@ -8,6 +13,11 @@ import { PhoneCall, PhoneOff } from "lucide-react";
 import { Participants } from "./Participants.js";
 import { ParticipantDetails } from "./ParticipantDetails.js";
 import { Conversation } from "./Conversation.js";
+import { ConversationFilterControls } from "./ConversationFilterControls.js";
+import {
+  defaultConversationFilters,
+  type ConversationFilter,
+} from "./conversationFilters.js";
 import { Composer } from "./Composer.js";
 import { DeviceControls } from "./DeviceControls.js";
 import { Metrics } from "./Metrics.js";
@@ -98,6 +108,7 @@ function defaultParticipantId(snapshot: ConsoleSnapshot) {
 
 export interface CallConsoleProps {
   controller: CallConsoleController;
+  headerContext?: ReactNode;
   initialTab?: Tab;
   theme?: "light" | "dark";
   maxHeight?: CSSProperties["maxHeight"];
@@ -105,6 +116,7 @@ export interface CallConsoleProps {
 
 export function CallConsole({
   controller,
+  headerContext,
   initialTab = "chat",
   theme = "dark",
   maxHeight,
@@ -126,6 +138,9 @@ export function CallConsole({
     defaultParticipantId(snapshot),
   );
   const [runRevision, setRunRevision] = useState(0);
+  const [conversationFilters, setConversationFilters] = useState({
+    ...defaultConversationFilters,
+  });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const connected = live !== undefined && local.connectionState === "connected";
@@ -156,6 +171,7 @@ export function CallConsole({
             true,
           );
           setTab("chat");
+          setConversationFilters({ ...defaultConversationFilters });
           setSelectedParticipantId(defaultParticipantId(nextSnapshot));
           setRunRevision((revision) => revision + 1);
         }
@@ -177,15 +193,26 @@ export function CallConsole({
         : details.call.state === "running"
           ? "In progress"
           : "Ready";
+  const toggleConversationFilter = (filter: ConversationFilter) =>
+    setConversationFilters((current) => ({
+      ...current,
+      [filter]: !current[filter],
+    }));
 
   return (
     <div className="vx-console" data-vx-theme={theme} style={{ maxHeight }}>
       <header className="vx-call-header">
-        {live && (
-          <DeviceControls snapshot={snapshot} controls={live} theme={theme} />
-        )}
-        <div className="vx-call-actions">
-          {live && (
+        <div className="vx-call-context">{headerContext}</div>
+        <div className="vx-call-toolbar">
+          <span className={`vx-call-state vx-state-${snapshot.state}`}>
+            <i />
+            {status}
+          </span>
+          {live ? (
+            <DeviceControls snapshot={snapshot} controls={live} theme={theme} />
+          ) : null}
+          <time>{snapshot.duration ?? "—"}</time>
+          {live ? (
             <button
               className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
               disabled={pending}
@@ -204,14 +231,7 @@ export function CallConsole({
                     ? "Call"
                     : "Start call"}
             </button>
-          )}
-          <div className="vx-call-action-meta">
-            <span className={`vx-call-state vx-state-${snapshot.state}`}>
-              <i />
-              {status}
-            </span>
-            <time>{snapshot.duration ?? "—"}</time>
-          </div>
+          ) : null}
         </div>
       </header>
       {error && (
@@ -232,20 +252,38 @@ export function CallConsole({
         />
         <main className="vx-main">
           <nav className="vx-tabs" aria-label="Call views">
-            {(["chat", "variables", "metrics", "participants"] as const).map((item) => (
-              <button
-                className={tab === item ? "vx-tab-active" : ""}
-                aria-current={tab === item ? "page" : undefined}
-                key={item}
-                onClick={() => setTab(item)}
-              >
-                {item === "chat"
-                  ? "Conversation"
-                  : item[0].toUpperCase() + item.slice(1)}
-              </button>
-            ))}
+            <div className="vx-tab-list">
+              {(["chat", "variables", "metrics", "participants"] as const).map((item) => (
+                <button
+                  className={tab === item ? "vx-tab-active" : ""}
+                  aria-current={tab === item ? "page" : undefined}
+                  key={item}
+                  onClick={() => setTab(item)}
+                >
+                  {item === "chat"
+                    ? "Conversation"
+                    : item[0].toUpperCase() + item.slice(1)}
+                </button>
+              ))}
+            </div>
+            {tab === "chat" ? (
+              <ConversationFilterControls
+                filters={conversationFilters}
+                onReset={() =>
+                  setConversationFilters({ ...defaultConversationFilters })
+                }
+                onToggle={toggleConversationFilter}
+                theme={theme}
+              />
+            ) : null}
           </nav>
-          {tab === "chat" && <Conversation snapshot={snapshot} theme={theme} />}
+          {tab === "chat" && (
+            <Conversation
+              filters={conversationFilters}
+              snapshot={snapshot}
+              theme={theme}
+            />
+          )}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <Metrics snapshot={snapshot} theme={theme} />}
           {tab === "participants" && (

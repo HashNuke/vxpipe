@@ -1,12 +1,18 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { CallConsoleController } from "@vxpipe/core";
 
 const callConsole = vi.fn();
 vi.mock("@vxpipe/react", () => ({
-  CallConsole: (props: unknown) => {
+  CallConsole: (props: { headerContext?: ReactNode }) => {
     callConsole(props);
-    return <div data-testid="call-console">Reusable call console</div>;
+    return (
+      <div data-testid="call-console">
+        {props.headerContext}
+        Reusable call console
+      </div>
+    );
   },
 }));
 
@@ -45,18 +51,26 @@ test("frames the reusable console with resource context", () => {
     />,
   );
 
-  expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Call details" })).toHaveClass(
+    "sr-only",
+  );
   expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute(
     "href",
     "/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
   );
   expect(screen.getByText("call-1")).toBeVisible();
+  expect(screen.getByTestId("call-console")).toHaveTextContent(
+    "v3 · call-1",
+  );
+  expect(
+    screen.queryByRole("navigation", { name: "Primary navigation" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByTestId("call-console")).toBeVisible();
   expect(callConsole).toHaveBeenCalledWith(
     expect.objectContaining({
       controller,
       theme: "light",
-      maxHeight: "min(760px, calc(100dvh - 220px))",
+      maxHeight: "calc(100dvh - 76px)",
     }),
   );
 });
@@ -74,6 +88,7 @@ test("keeps loading, unavailable, and malformed states distinct", () => {
     />,
   );
   expect(screen.getByRole("alert")).toHaveTextContent("Call unavailable");
+  expect(screen.getByText("call-1")).toBeVisible();
 
   view.rerender(
     <CallDetailsPage

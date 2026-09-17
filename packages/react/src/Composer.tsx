@@ -49,24 +49,20 @@ export function Composer({
         <label className="vx-sr-only" htmlFor={id}>
           Message
         </label>
-        <textarea
-          id={id}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={
-            disabled
-              ? "Start a call to send a message"
-              : "Type a message, or speak…"
-          }
-          disabled={disabled || pending}
-          rows={2}
-        />
-        <div className="vx-composer-actions">
-          <span>
-            Enter to send <span aria-hidden="true">·</span> Shift + Enter for a
-            new line
-          </span>
+        <div className="vx-composer-input-row">
+          <textarea
+            id={id}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={
+              disabled
+                ? "Start a call to send a message"
+                : "Type a message, or speak…"
+            }
+            disabled={disabled || pending}
+            rows={2}
+          />
           <button
             className="vx-button vx-primary"
             type="submit"

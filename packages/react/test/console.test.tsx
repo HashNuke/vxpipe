@@ -20,6 +20,29 @@ test("the host can bound the console height", () => {
   expect(container.firstElementChild).toHaveStyle({ maxHeight: "640px" });
 });
 
+test("the host can inject call context before the compact call controls", () => {
+  render(
+    <CallConsole
+      controller={createFixtureController("conversation")}
+      headerContext={<code>call-018f</code>}
+    />,
+  );
+
+  const context = screen.getByText("call-018f");
+  const status = screen.getByText("Connected");
+  const input = screen.getByRole("button", {
+    name: "Input device: Built-in microphone",
+  });
+
+  expect(context).toBeVisible();
+  expect(context.compareDocumentPosition(status)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  expect(status.compareDocumentPosition(input)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+});
+
 test("a denied microphone still allows typed input in the same conversation", async () => {
   const client = createFixtureController("microphone-denied");
   render(<CallConsole controller={client} />);
@@ -47,7 +70,7 @@ test("microphone denial does not block starting a text-only call", async () => {
     screen.getByRole("button", { name: "Enable microphone" }),
   ).toBeDisabled();
   expect(
-    screen.getByRole("combobox", { name: "Input device" }),
+    screen.getByRole("button", { name: /Input device:/ }),
   ).toBeDisabled();
   expect(screen.getByRole("button", { name: "Start call" })).toBeEnabled();
 
@@ -179,15 +202,25 @@ test("device menus expose styled options and apply the selected device", async (
   const client = createFixtureController("conversation");
   render(<CallConsole controller={client} />);
 
-  fireEvent.click(screen.getByRole("combobox", { name: "Input device" }));
-  fireEvent.click(await screen.findByRole("option", { name: "USB headset" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Input device: Built-in microphone" }),
+  );
+  const current = await screen.findByRole("menuitemradio", {
+    name: "Built-in microphone",
+  });
+  const headset = screen.getByRole("menuitemradio", { name: "USB headset" });
+
+  await waitFor(() => expect(current).toHaveFocus());
+  fireEvent.keyDown(current, { key: "ArrowDown" });
+  expect(headset).toHaveFocus();
+  fireEvent.click(headset);
 
   await waitFor(() =>
     expect(client.getSnapshot().inputDevice).toBe("USB headset"),
   );
   expect(
-    screen.getByRole("combobox", { name: "Input device" }),
-  ).toHaveTextContent("USB headset");
+    screen.getByRole("button", { name: "Input device: USB headset" }),
+  ).toBeVisible();
 });
 
 test("Variables displays the latest authorized snapshot by section", () => {
@@ -270,7 +303,8 @@ test("a sidebar participant opens their authorized configuration", () => {
 
   const tabs = within(screen.getByRole("navigation", { name: "Call views" }))
     .getAllByRole("button")
-    .map((button) => button.textContent);
+    .map((button) => button.textContent)
+    .filter((label) => label !== "");
   expect(tabs).toEqual([
     "Conversation",
     "Variables",

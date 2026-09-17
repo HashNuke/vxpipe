@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 vi.mock("@vxpipe/react", () => ({
@@ -37,7 +37,11 @@ test("links the tenant directory to definitions and back", () => {
   expect(window.location.hash).toBe(
     "#/admin/tenants/tn_demo_01/calls/018f27cb-6f87-7d1c-a61f-8873cb667342",
   );
-  expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
+  expect(
+    within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText(
+      "Call details",
+    ),
+  ).toBeVisible();
 
   fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
   expect(
@@ -63,7 +67,11 @@ test("keeps a non-default definition context when a call route is reloaded", () 
   expect(screen.queryByText("r3")).not.toBeInTheDocument();
 
   fireEvent.click(screen.getAllByRole("link", { name: /open call/i })[0]);
-  expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
+  expect(
+    within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText(
+      "Call details",
+    ),
+  ).toBeVisible();
   expect(screen.getByRole("link", { name: "Appointment reminders" })).toBeVisible();
 
   view.unmount();
