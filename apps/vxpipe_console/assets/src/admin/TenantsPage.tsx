@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { AdminShell } from "./AdminShell";
 import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
@@ -12,15 +14,17 @@ export function TenantsPage({
   onSelectTenant,
   onPreviousPage,
   onNextPage,
+  headerActions,
 }: {
   state: TenantsPageState;
   theme?: "dark" | "light";
   onSelectTenant?: (tenantKey: string) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
+  headerActions?: ReactNode;
 }) {
   return (
-    <AdminShell theme={theme}>
+    <AdminShell headerActions={headerActions} theme={theme}>
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
         className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"

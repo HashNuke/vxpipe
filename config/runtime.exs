@@ -79,6 +79,7 @@ if database_url do
     end
 
   config :vxpipe_calls, Vxpipe.Calls,
+    admin_repository: {Vxpipe.Persistence.AdminStore, Vxpipe.Persistence.Repo},
     archive_repository: {Vxpipe.Persistence.ArchiveStore, Vxpipe.Persistence.Repo},
     artifact_repository: {Vxpipe.Persistence.ArtifactStore, Vxpipe.Persistence.Repo},
     usage_repository: {Vxpipe.Persistence.UsageStore, Vxpipe.Persistence.Repo},

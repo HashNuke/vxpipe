@@ -23,6 +23,12 @@ defmodule Vxpipe.Console.Router do
 
   pipeline :installation_operator_api do
     plug :accepts, ["json"]
+
+    plug Plug.Parsers,
+      parsers: [:urlencoded, :json],
+      pass: ["application/json"],
+      json_decoder: Phoenix.json_library()
+
     plug :fetch_session
     plug :protect_from_forgery
     plug :put_secure_browser_headers
@@ -83,6 +89,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through :installation_operator_api
 
     get "/session", Vxpipe.Console.AdminSessionController, :show
+    get "/tenants", Vxpipe.Console.AdminTenantsController, :index
   end
 
   scope "/admin" do

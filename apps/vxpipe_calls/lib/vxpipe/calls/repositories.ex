@@ -4,6 +4,7 @@ defmodule Vxpipe.Calls.Repositories do
   @spec fetch(
           keyword(),
           :archive_repository
+          | :admin_repository
           | :artifact_repository
           | :usage_repository
           | :credential_repository

@@ -1,6 +1,6 @@
 # Operator login and admin dashboard
 
-Status: checkpoints 1–2 complete; checkpoints 3–7 remain.
+Status: checkpoints 1–3 complete; checkpoints 4–7 remain.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
@@ -182,18 +182,36 @@ and found no checkpoint blocker. Raw URL logging remains an explicitly documente
 
 ## Checkpoint 3 — Browse tenants through the React application
 
-- [ ] Red-test a bounded installation-wide tenant-summary query and operator-only Console JSON
+- [x] Red-test a bounded installation-wide tenant-summary query and operator-only Console JSON
   endpoint, including pagination, empty data, persistence failure and anonymous access.
-- [ ] Introduce the Calls-owned installation-operator read authority used by each admin query. Prove
+- [x] Introduce the Calls-owned installation-operator read authority used by each admin query. Prove
   Console does not synthesize a tenant principal or API-key identity.
-- [ ] Connect the approved Tenants Storybook page to the real endpoint through a typed Console-owned
+- [x] Connect the approved Tenants Storybook page to the real endpoint through a typed Console-owned
   client/validator. Keep component inputs identical to their mocked story inputs.
-- [ ] Implement `/admin` browser-history navigation, refresh restoration and session-expiry handling.
-- [ ] Prove loading, empty, populated, unavailable and stale-response behavior in component tests and
+- [x] Implement `/admin` browser-history navigation, refresh restoration and session-expiry handling.
+- [x] Prove loading, empty, populated, unavailable and stale-response behavior in component tests and
   rendered browser inspection.
 
 Exit: an authenticated operator can browse all tenants in the real React admin application. Commit
 the query, endpoint, React integration, tests, docs and labnotes together.
+
+Evidence: Calls accepts only its explicit installation-operator authority and returns validated,
+bounded tenant pages through the repository-neutral admin port. Persistence reads each page and its
+total in one statement, ordered by creation time and stable key; Console exposes the operator-session-only endpoint and maps the response
+through a typed validator into the approved Tenants page. Browser history stores the page in the URL,
+refresh restores it, expired sessions return to login, and obsolete responses cannot replace a newer
+page or expire the current session. Structured and out-of-range pages fail safely; the React client
+recovers an out-of-range URL and rejects contradictory pagination metadata. Calls (93 tests),
+Persistence (146 tests, 11 excluded), Console (172 tests, one excluded), and Console assets (84 tests)
+pass. Headless Chrome verified the real login-to-directory flow, desktop and
+mobile layouts, page-two refresh, back navigation, and rendered populated, empty and unavailable
+states. Browser inspection caught a missing query parser before completion; the literal-query endpoint
+test now covers it. Formatting, warnings-as-errors compilation, strict Credo and unused-dependency
+checks pass. GPT-6 Astra xhigh approved the final checkpoint after reviewing persistence consistency,
+failure handling, pagination validation and stale-request behavior. The umbrella run reached one
+unrelated Call Engine live-inspection failure after 698 tests;
+that unchanged test also fails alone because killing its inspection buffer removes the participant it
+then expects to remain.
 
 ## Checkpoint 4 — Browse one tenant's definitions and workspace
 
