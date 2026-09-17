@@ -171,6 +171,14 @@ The React package's 35 tests and Console's 54 tests pass; production Storybook b
 390 px, 768 px, 820 px, 901 px and desktop inspection passed. See
 [refinement labnotes](../../labnotes/20260917-0958-compact-call-header.md).
 
+A second review made the ready call-details page an edge-to-edge console surface. The reusable
+console now accepts a dedicated compact host header and an opt-in borderless fill layout; the admin
+host injects its tenant/definition breadcrumbs, call identity and partial-history state there.
+Mobile hides the participant rail, lets message identities open participant details, and provides a
+participant picker inside that view. Status, device controls, duration and the icon-only call action
+fit on one mobile row. See
+[refinement labnotes](../../labnotes/20260917-1207-full-bleed-call-page.md).
+
 ## Checkpoint 5 — Complete the tenant workspace and Calls page
 
 - [x] Refactor the existing definition-scoped call prototype into a tenant Calls page; reuse the

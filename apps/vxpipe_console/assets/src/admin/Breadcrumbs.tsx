@@ -9,7 +9,13 @@ export type BreadcrumbItem = {
   onSelect?: () => void;
 };
 
-export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+export function Breadcrumbs({
+  compact = false,
+  items,
+}: {
+  compact?: boolean;
+  items: BreadcrumbItem[];
+}) {
   function handleClick(
     event: MouseEvent<HTMLAnchorElement>,
     onSelect: (() => void) | undefined,
@@ -20,10 +26,22 @@ export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   }
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-4">
-      <ol className="flex min-w-0 items-center gap-1 text-sm text-[var(--admin-muted)]">
+    <nav
+      aria-label="Breadcrumb"
+      className={compact ? "min-w-0 flex-1" : "mb-4"}
+    >
+      <ol
+        className={`flex min-w-0 items-center gap-1 text-[var(--admin-muted)] ${
+          compact ? "font-mono text-xs" : "text-sm"
+        }`}
+      >
         {items.map((item, index) => (
-          <li className="flex min-w-0 items-center gap-1" key={`${item.label}-${index}`}>
+          <li
+            className={`min-w-0 items-center gap-1 ${
+              compact && index < items.length - 2 ? "hidden sm:flex" : "flex"
+            }`}
+            key={`${item.label}-${index}`}
+          >
             {index > 0 ? (
               <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />
             ) : null}

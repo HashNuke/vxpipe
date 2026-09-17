@@ -1,8 +1,14 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
 vi.mock("@vxpipe/react", () => ({
-  CallConsole: () => <div>Reusable call console</div>,
+  CallConsole: ({ header }: { header?: ReactNode }) => (
+    <div>
+      {header}
+      Reusable call console
+    </div>
+  ),
 }));
 
 import { AdminJourneyStory } from "./AdminJourneyStory";

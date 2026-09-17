@@ -5,10 +5,16 @@ import type { CallConsoleController } from "@vxpipe/core";
 
 const callConsole = vi.fn();
 vi.mock("@vxpipe/react", () => ({
-  CallConsole: (props: { headerContext?: ReactNode }) => {
+  CallConsole: (props: {
+    header?: ReactNode;
+    headerContext?: ReactNode;
+    layout?: "contained" | "fill";
+    maxHeight?: string;
+  }) => {
     callConsole(props);
     return (
-      <div data-testid="call-console">
+      <div data-layout={props.layout} data-testid="call-console">
+        {props.header}
         {props.headerContext}
         Reusable call console
       </div>
@@ -43,7 +49,7 @@ const controller = {
   },
 } as unknown as CallConsoleController;
 
-test("frames the reusable console with resource context", () => {
+test("fills the ready page with a console-owned breadcrumb header", () => {
   render(
     <CallDetailsPage
       state={{ status: "ready", ...context, controller, completeness: "complete" }}
@@ -66,13 +72,18 @@ test("frames the reusable console with resource context", () => {
     screen.queryByRole("navigation", { name: "Primary navigation" }),
   ).not.toBeInTheDocument();
   expect(screen.getByTestId("call-console")).toBeVisible();
+  expect(screen.getByTestId("call-console")).toHaveAttribute("data-layout", "fill");
   expect(callConsole).toHaveBeenCalledWith(
     expect.objectContaining({
       controller,
       theme: "light",
-      maxHeight: "calc(100dvh - 76px)",
+      header: expect.anything(),
+      layout: "fill",
     }),
   );
+  const props = callConsole.mock.calls[0]?.[0];
+  expect(props.headerContext).toBeUndefined();
+  expect(props.maxHeight).toBeUndefined();
 });
 
 test("keeps loading, unavailable, and malformed states distinct", () => {
@@ -106,7 +117,7 @@ test("warns when the inspection archive is partial", () => {
     />,
   );
 
-  expect(screen.getByRole("status")).toHaveTextContent("Partial call history");
+  expect(screen.getByRole("status")).toHaveTextContent("Partial history");
 });
 
 test("the individual story records breadcrumb destinations inside its preview", () => {

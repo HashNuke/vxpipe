@@ -226,6 +226,15 @@ export function CallConsole({
           <time>{snapshot.duration ?? "—"}</time>
           {live ? (
             <button
+              aria-label={
+                pending
+                  ? "Please wait"
+                  : connected
+                    ? "Leave call"
+                    : ended
+                      ? "Call"
+                      : "Start call"
+              }
               className={`vx-button ${connected ? "vx-leave" : "vx-primary"}`}
               disabled={pending}
               onClick={() => void act()}
@@ -235,13 +244,15 @@ export function CallConsole({
               ) : (
                 <PhoneCall aria-hidden="true" />
               )}
-              {pending
-                ? "Please wait"
-                : connected
-                  ? "Leave call"
-                  : ended
-                    ? "Call"
-                    : "Start call"}
+              <span className="vx-call-action-label">
+                {pending
+                  ? "Please wait"
+                  : connected
+                    ? "Leave call"
+                    : ended
+                      ? "Call"
+                      : "Start call"}
+              </span>
             </button>
           ) : null}
         </div>
