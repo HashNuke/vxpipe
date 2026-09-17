@@ -25,12 +25,13 @@ the same LiveView client module.
 
 ## Operator login
 
-With PostgreSQL migrated and an explicit `SECRET_KEY_BASE` configured, run `mix vxpipe.login` on
-the Vxpipe host. Open the printed URL and enter the separately printed eight-digit code. Phoenix
-filters the path token from its logs, renders it into the server-owned form, and redacts both token
-and code before application telemetry processes the POST. Keep raw URL access logging disabled for
-the private login route. The resulting installation-operator session lasts at most 12 hours and
-opens `/admin`.
+With PostgreSQL migrated, run `mix vxpipe.login` on the Vxpipe host. Loopback development uses the
+existing Phoenix development secret. Production and development exposed through a non-loopback host
+or listener require an explicit `SECRET_KEY_BASE`. Open the printed URL and enter the separately
+printed eight-digit code. Phoenix filters the path token from its logs, renders it into the
+server-owned form, and redacts both token and code before application telemetry processes the POST.
+Keep raw URL access logging disabled for the private login route. The resulting installation-operator
+session lasts at most 12 hours and opens `/admin`.
 
 Public deployments terminate HTTPS either in the Console endpoint or at a same-host reverse proxy.
 The Console accepts `X-Forwarded-Proto: https` only from a loopback peer. Plain HTTP operator access

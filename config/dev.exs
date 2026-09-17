@@ -199,10 +199,14 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     ]
   ]
 
+development_secret = String.duplicate("development-only-", 4)
+
+config :vxpipe_console, :development_operator_login_secret, development_secret
+
 config :vxpipe_console, Vxpipe.Console.Endpoint,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: String.duplicate("development-only-", 4),
+  secret_key_base: development_secret,
   server: true,
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:vxpipe_console, ~w(--sourcemap=inline --watch)]},

@@ -80,7 +80,12 @@ defmodule Vxpipe.Console.OperatorLoginRuntimeConfigurationTest do
     end
   end
 
-  test "development exposes operator login only with an explicit secret" do
+  test "development provides a loopback secret and permits an explicit override" do
+    development = Config.Reader.read!(@development) |> Keyword.fetch!(:vxpipe_console)
+
+    assert Keyword.fetch!(development, :development_operator_login_secret) ==
+             development |> Keyword.fetch!(Endpoint) |> Keyword.fetch!(:secret_key_base)
+
     runtime = Config.Reader.read!(@runtime, env: :dev)
     refute runtime |> Keyword.get(:vxpipe_console, []) |> Keyword.has_key?(:operator_login_secret)
 

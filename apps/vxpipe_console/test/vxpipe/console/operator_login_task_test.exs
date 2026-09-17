@@ -9,6 +9,9 @@ defmodule Vxpipe.Console.OperatorLoginTaskTest do
     previous_endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
     previous_operator_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
 
+    previous_development_secret =
+      Application.get_env(:vxpipe_console, :development_operator_login_secret)
+
     Mix.shell(Mix.Shell.Process)
 
     Application.put_env(:vxpipe_calls, Vxpipe.Calls,
@@ -36,6 +39,13 @@ defmodule Vxpipe.Console.OperatorLoginTaskTest do
       restore(:vxpipe_calls, Vxpipe.Calls, previous_calls)
       Application.put_env(:vxpipe_console, Endpoint, previous_endpoint)
       restore(:vxpipe_console, :operator_login_secret, previous_operator_secret)
+
+      restore(
+        :vxpipe_console,
+        :development_operator_login_secret,
+        previous_development_secret
+      )
+
       Mix.Task.reenable("vxpipe.login")
     end)
 
@@ -90,8 +100,53 @@ defmodule Vxpipe.Console.OperatorLoginTaskTest do
     refute_received {:mix_shell, :info, _message}
   end
 
-  test "does not fall back to the checked-in endpoint secret" do
+  test "uses the development secret for a loopback login when no explicit secret is set" do
     Application.delete_env(:vxpipe_console, :operator_login_secret)
+
+    Application.put_env(
+      :vxpipe_console,
+      :development_operator_login_secret,
+      String.duplicate("development-only-", 4)
+    )
+
+    Mix.Tasks.Vxpipe.Login.run([])
+
+    assert_receive {:operator_login_challenge_inserted, _challenge}
+    assert_receive {:mix_shell, :info, ["Operator login URL: http://127.0.0.1:4000/" <> _path]}
+    assert_receive {:mix_shell, :info, ["Operator login code: " <> _code]}
+  end
+
+  test "does not use the development secret for a non-loopback login" do
+    Application.delete_env(:vxpipe_console, :operator_login_secret)
+
+    Application.put_env(
+      :vxpipe_console,
+      :development_operator_login_secret,
+      String.duplicate("development-only-", 4)
+    )
+
+    update_endpoint(url: [scheme: "https", host: "console.example.com", port: 443])
+
+    error = assert_raise Mix.Error, fn -> Mix.Tasks.Vxpipe.Login.run([]) end
+    assert Exception.message(error) =~ "at least 64 bytes"
+    refute_received {:operator_login_challenge_inserted, _challenge}
+    refute_received {:mix_shell, :info, _message}
+  end
+
+  test "does not use the development secret when a loopback URL listens remotely" do
+    Application.delete_env(:vxpipe_console, :operator_login_secret)
+
+    Application.put_env(
+      :vxpipe_console,
+      :development_operator_login_secret,
+      String.duplicate("development-only-", 4)
+    )
+
+    update_endpoint(
+      url: [scheme: "https", host: "localhost", port: 4000],
+      http: false,
+      https: [ip: {100, 64, 0, 1}, port: 4000]
+    )
 
     error = assert_raise Mix.Error, fn -> Mix.Tasks.Vxpipe.Login.run([]) end
     assert Exception.message(error) =~ "at least 64 bytes"

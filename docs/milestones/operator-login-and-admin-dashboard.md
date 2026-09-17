@@ -76,10 +76,10 @@ users, teams, tenant memberships or RBAC.
   React. Errors use the same generic wording for an unknown, expired, exhausted or consumed challenge
   and lead back to the token-free guidance page.
 - A successful exchange rotates the session identifier and stores only the operator grant,
-  issued/absolute-expiry times and an operator-secret authentication tag in the signed session. The tag
-  prevents the checked-in development endpoint key from forging operator authority. The initial absolute session
-  lifetime is 12 hours with no sliding extension. Sign-out invalidates the browser session and
-  redirects to `/auth/login`.
+  issued/absolute-expiry times and an operator-secret authentication tag in the signed session. An
+  explicit deployment secret prevents the checked-in development endpoint key from forging operator
+  authority outside loopback-only development. The initial absolute session lifetime is 12 hours
+  with no sliding extension. Sign-out invalidates the browser session and redirects to `/auth/login`.
 - Cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` when served over HTTPS. Authenticated writes
   retain Phoenix CSRF protection. Login and admin responses use `Cache-Control: private, no-store` and
   `Referrer-Policy: no-referrer`.
@@ -146,9 +146,9 @@ one-time output. Commit schema, behavior, tests, documentation and labnotes as o
 Implementation evidence, 2026-09-17: Calls owns domain-separated challenge generation and its
 repository port; Persistence stores redacted fixed-size digests and atomically consumes or advances
 the five-attempt budget under a row lock; Console validates an explicit HTTPS or loopback origin and
-prints the URL and code separately. Production requires a 64-byte `SECRET_KEY_BASE`; development
-login issuance also requires that explicit secret and never uses the checked-in development endpoint
-secret. Calls (89 tests), Persistence (144 tests, 11 excluded) and Console (151 tests, 1 excluded)
+prints the URL and code separately. Production and development with a non-loopback host or listener
+require a 64-byte `SECRET_KEY_BASE`; loopback development uses Phoenix's existing development secret.
+Calls (89 tests), Persistence (144 tests, 11 excluded) and Console (151 tests, 1 excluded)
 pass. Persistence evidence includes concurrent correct submissions, missing-table failure, expiry,
 exhaustion, consumed state and attempt-budget survival across Repo restarts. Final common gates and
 the follow-up GPT-6 Astra xhigh review passed. Formatting, compilation with warnings as errors,
@@ -347,7 +347,7 @@ at 1440×900 and 390×844, including responsive scrolling and mobile participant
 (103 tests), Console (154 tests, one excluded), Console assets (115 tests), TypeScript and ESLint
 pass. GPT-6 Astra xhigh approved the final slice after verifying fixes for retained-resource HTTPS,
 stale session expiry, legacy-cookie clearing and malformed authority handling. Final umbrella
-verification passes 1,696 tests with zero failures and 39 exclusions; Storybook, assets, formatting,
+verification passes 1,698 tests with zero failures and 39 exclusions; Storybook, assets, formatting,
 warnings-as-errors compilation, strict Credo and unused-dependency checks also pass.
 
 ## Acceptance and completion

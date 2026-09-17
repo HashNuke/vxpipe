@@ -18,13 +18,14 @@ defmodule Vxpipe.Console.OperatorLoginConfiguration do
   @spec load() :: {:ok, t()} | {:error, atom()}
   def load do
     endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
-    deployment_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
+    deployment_secret = deployment_secret(endpoint)
     build(Keyword.get(endpoint, :url), deployment_secret)
   end
 
   @spec verifier_secret() :: {:ok, binary()} | {:error, :invalid_operator_login_secret}
   def verifier_secret do
-    deployment_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
+    endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
+    deployment_secret = deployment_secret(endpoint)
 
     with :ok <- validate_secret(deployment_secret) do
       {:ok, :crypto.mac(:hmac, :sha256, deployment_secret, @secret_label)}
@@ -33,7 +34,8 @@ defmodule Vxpipe.Console.OperatorLoginConfiguration do
 
   @spec session_secret() :: {:ok, binary()} | {:error, :invalid_operator_login_secret}
   def session_secret do
-    deployment_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
+    endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
+    deployment_secret = deployment_secret(endpoint)
 
     with :ok <- validate_secret(deployment_secret) do
       {:ok, :crypto.mac(:hmac, :sha256, deployment_secret, @session_secret_label)}
@@ -108,6 +110,43 @@ defmodule Vxpipe.Console.OperatorLoginConfiguration do
 
   defp secure_origin?("https", _host), do: true
   defp secure_origin?("http", host), do: host in @loopback_hosts
+
+  defp deployment_secret(endpoint) do
+    case Application.get_env(:vxpipe_console, :operator_login_secret) do
+      nil -> development_secret(endpoint)
+      explicit_secret -> explicit_secret
+    end
+  end
+
+  defp development_secret(endpoint) do
+    case Keyword.get(endpoint, :url) do
+      url when is_list(url) ->
+        if normalize_host(Keyword.get(url, :host)) in @loopback_hosts and
+             loopback_listener?(endpoint),
+           do: Application.get_env(:vxpipe_console, :development_operator_login_secret),
+           else: nil
+
+      _invalid_url ->
+        nil
+    end
+  end
+
+  defp loopback_listener?(endpoint) do
+    listeners =
+      [:http, :https]
+      |> Enum.flat_map(fn transport ->
+        case Keyword.get(endpoint, transport) do
+          options when is_list(options) -> [Keyword.get(options, :ip)]
+          _disabled_or_missing -> []
+        end
+      end)
+
+    listeners != [] and Enum.all?(listeners, &loopback_ip?/1)
+  end
+
+  defp loopback_ip?({127, 0, 0, 1}), do: true
+  defp loopback_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
+  defp loopback_ip?(_ip), do: false
 
   defp validate_secret(secret)
        when is_binary(secret) and byte_size(secret) >= @minimum_secret_bytes,
