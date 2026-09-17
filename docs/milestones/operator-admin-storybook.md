@@ -1,6 +1,6 @@
 # Operator admin Storybook
 
-Status: implementation active; checkpoints 1 through 4 of 7 are complete. Requested and independently
+Status: implementation active; checkpoints 1 through 5 of 7 are complete. Requested and independently
 reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
@@ -173,29 +173,37 @@ The React package's 35 tests and Console's 54 tests pass; production Storybook b
 
 ## Checkpoint 5 — Complete the tenant workspace and Calls page
 
-- [ ] Refactor the existing definition-scoped call prototype into a tenant Calls page; reuse the
+- [x] Refactor the existing definition-scoped call prototype into a tenant Calls page; reuse the
   existing call rows, lifecycle/archive badges, pagination and call-details links.
-- [ ] Build one focused tenant-workspace navigation component and integrate its working Call
+- [x] Build one focused tenant-workspace navigation component and integrate its working Call
   definitions and Calls destinations. Keep breadcrumbs and route/business logic in their existing
   focused owners; Services is added only with checkpoint 6's complete page.
-- [ ] Move definitions to `/admin/tenants/:tenant_key/definitions`, treat the tenant root as its
+- [x] Move definitions to `/admin/tenants/:tenant_key/definitions`, treat the tenant root as its
   Storybook entry redirect, and update definition links to
   `/admin/tenants/:tenant_key/calls?definition_id=:definition_id`.
-- [ ] Default to all tenant calls. Provide a clearly bordered definition filter populated from the
+- [x] Default to all tenant calls. Provide a clearly bordered definition filter populated from the
   tenant's definitions, show the selected definition without repeating it in descriptive copy, and
   provide a direct reset to all calls.
-- [ ] Compose all-calls, filtered, no calls, no filter matches, unavailable, loading, partial archive,
+- [x] Compose all-calls, filtered, no calls, no filter matches, unavailable, loading, partial archive,
   long-content, paginated and narrow-screen stories. Unknown filter identity remains distinct from
   a valid filter with zero matches.
-- [ ] Keep filtering outside `CallList`; the page receives a serializable state and injected filter,
+- [x] Keep filtering outside `CallList`; the page receives a serializable state and injected filter,
   pagination and selection actions.
-- [ ] Test URL/filter synchronization, definition deep-links, reset, stale actions and truthful
+- [x] Test URL/filter synchronization, definition deep-links, reset, stale actions and truthful
   empty/unavailable states. Cover navigation active state, long tenant names and desktop/mobile
   keyboard operation without making page components own routing.
 
 Exit: a reviewer can browse all calls for a tenant or arrive with one definition selected, then open
 the same call-details console; Call definitions and Calls are fully working sibling destinations.
 Commit this page/shell slice separately.
+
+Evidence: one shared tenant navigation links complete Call definitions and Calls pages without a
+Services placeholder. Calls default to nine tenant calls, accept an optional `definition_id`, and
+distinguish tenant-empty, valid-filter-empty, unknown-filter and unavailable results. Definitions
+deep-link to the filtered Calls page; call details retain their existing route. The Console's 62
+tests, TypeScript check and ESLint check pass; the React package's 30 tests and the production
+Storybook build pass. Rendered desktop, 390 px mobile, filter interaction and unknown-filter review
+passed. See [checkpoint labnotes](../../labnotes/20260917-1045-tenant-calls-workspace.md).
 
 ## Checkpoint 6 — Complete Services and credential setup
 

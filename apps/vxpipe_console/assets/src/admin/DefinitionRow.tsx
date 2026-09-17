@@ -16,7 +16,7 @@ export function DefinitionRow({
   onSelect?: (definitionId: string) => void;
 }) {
   const label = definition.name ?? definition.id;
-  const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/definitions/${encodeURIComponent(definition.id)}`;
+  const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/calls?definition_id=${encodeURIComponent(definition.id)}`;
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     if (!onSelect || !shouldInterceptNavigation(event)) return;
@@ -45,7 +45,7 @@ export function DefinitionRow({
           {definition.id}
         </span>
         <span className="font-mono text-xs tabular-nums text-[var(--admin-muted)]">
-          r{definition.latestRevision}
+          v{definition.latestRevision}
         </span>
         <DefinitionStatusBadge definition={definition} />
         <time

@@ -22,7 +22,7 @@ export function CallDetailsStory({
         window.history.pushState(
           {},
           "",
-          `#${tenantPath}/definitions/${encodeURIComponent(state.definition.id)}`,
+          `#${tenantPath}/calls?definition_id=${encodeURIComponent(state.definition.id)}`,
         );
       }}
       onSelectTenant={() => window.history.pushState({}, "", `#${tenantPath}`)}

@@ -56,7 +56,7 @@ test("frames the reusable console with resource context", () => {
   );
   expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute(
     "href",
-    "/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+    "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
   expect(screen.getByText("call-1")).toBeVisible();
   expect(screen.getByTestId("call-console")).toHaveTextContent(
@@ -121,6 +121,6 @@ test("the individual story records breadcrumb destinations inside its preview", 
 
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
 });

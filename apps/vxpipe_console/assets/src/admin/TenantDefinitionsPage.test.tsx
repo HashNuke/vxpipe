@@ -59,13 +59,21 @@ test("keeps tenant context and real definition links visible", () => {
     "/admin",
   );
   expect(screen.getByText("Demo workspace")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Call definitions" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(screen.getByRole("link", { name: "Calls" })).toHaveAttribute(
+    "href",
+    "/admin/tenants/tn_demo_01/calls",
+  );
 
   const definition = screen.getByRole("link", {
     name: /open delivery rescheduling/i,
   });
   expect(definition).toHaveAttribute(
     "href",
-    "/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+    "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
 
   fireEvent.click(definition);
@@ -169,7 +177,7 @@ test("definition story links record forward and back destinations without replac
   );
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
 
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));

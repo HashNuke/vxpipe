@@ -41,11 +41,18 @@ export function TenantDefinitionsStory({
         window.history.pushState(
           { definitionId },
           "",
-          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/definitions/${encodeURIComponent(definitionId)}`,
+          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?definition_id=${encodeURIComponent(definitionId)}`,
         );
       }}
       onSelectTenants={() => {
         window.history.pushState({}, "", "#/admin");
+      }}
+      onSelectWorkspace={(destination) => {
+        window.history.pushState(
+          { destination },
+          "",
+          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/${destination}`,
+        );
       }}
       state={state}
       theme={theme}

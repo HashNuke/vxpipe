@@ -22,14 +22,14 @@ test("links the tenant directory to definitions and back", () => {
   expect(
     screen.getByRole("heading", { name: "Call definitions" }),
   ).toBeVisible();
-  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01");
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
 
   fireEvent.click(
     screen.getByRole("link", { name: /open delivery rescheduling/i }),
   );
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/definitions/delivery-rescheduling",
+    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
   expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
 
@@ -96,4 +96,19 @@ test("does not substitute the default definition for an unknown call route", () 
 
   fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
   expect(screen.getByRole("heading", { name: "Call definitions" })).toBeVisible();
+});
+
+test("moves between sibling definitions and all tenant calls", () => {
+  window.history.replaceState({}, "", "/iframe.html?id=admin-full-journey");
+  render(<AdminJourneyStory theme="dark" />);
+
+  fireEvent.click(screen.getByRole("link", { name: /open demo workspace/i }));
+  fireEvent.click(screen.getByRole("link", { name: "Calls" }));
+
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/calls");
+  expect(screen.getByRole("combobox", { name: "Call definition" })).toHaveValue("");
+  expect(screen.getAllByRole("link", { name: /^open call/i }).length).toBeGreaterThan(5);
+
+  fireEvent.click(screen.getByRole("link", { name: "Call definitions" }));
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
 });

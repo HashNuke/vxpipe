@@ -2,7 +2,7 @@ import {
   callContext,
   callFixture,
   callsForDefinition,
-  demoDefinition,
+  callsForTenant,
 } from "./callFixtures";
 import { CallDetailsPage } from "./CallDetailsPage";
 import { callDetailsFixtureForCall } from "./callDetailsFixtures";
@@ -75,27 +75,13 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
     };
 
     const definitionId = route.definitionId;
-    const selectedDefinition = definitionId
-      ? definitions.find((candidate) => candidate.id === definitionId)
-      : null;
-    const definition = selectedDefinition
-        ? {
-            id: selectedDefinition.id,
-            name: selectedDefinition.name,
-            latestRevision: selectedDefinition.latestRevision,
-            publishedRevision: selectedDefinition.publishedRevision,
-          }
-        : {
-            ...demoDefinition,
-            id: definitionId ?? demoDefinition.id,
-            name: definitionId ?? demoDefinition.name,
-          };
     const fixture = callFixture("populated");
     const state = {
       ...fixture,
       tenant: selectedTenant,
-      definition,
-      calls: callsForDefinition(definition.id),
+      definitions: definitions.map(({ id, name }) => ({ id, name })),
+      selectedDefinitionId: definitionId ?? null,
+      calls: definitionId ? callsForDefinition(definitionId) : callsForTenant(),
     };
 
     return (
@@ -105,6 +91,16 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
         }
         onSelectTenant={() =>
           navigate({ page: "definitions", tenantKey: route.tenantKey })
+        }
+        onSelectWorkspace={(destination) =>
+          navigate({ page: destination, tenantKey: route.tenantKey })
+        }
+        onSelectDefinition={(nextDefinitionId) =>
+          navigate({
+            page: "calls",
+            tenantKey: route.tenantKey,
+            ...(nextDefinitionId ? { definitionId: nextDefinitionId } : {}),
+          })
         }
         onSelectTenants={() => navigate({ page: "tenants" })}
         state={state}
@@ -129,6 +125,9 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
             tenantKey: route.tenantKey,
             definitionId,
           })
+        }
+        onSelectWorkspace={(destination) =>
+          navigate({ page: destination, tenantKey: route.tenantKey })
         }
         onSelectTenants={() => navigate({ page: "tenants" })}
         state={state}

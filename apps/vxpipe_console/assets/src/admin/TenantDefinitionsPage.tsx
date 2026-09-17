@@ -6,12 +6,14 @@ import type { TenantDefinitionsPageState } from "./definitionTypes";
 import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
+import { TenantWorkspaceNavigation } from "./TenantWorkspaceNavigation";
 
 export function TenantDefinitionsPage({
   state,
   theme = "dark",
   onSelectTenants,
   onSelectDefinition,
+  onSelectWorkspace,
   onPreviousPage,
   onNextPage,
 }: {
@@ -19,6 +21,7 @@ export function TenantDefinitionsPage({
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectDefinition?: (definitionId: string) => void;
+  onSelectWorkspace?: (destination: "definitions" | "calls") => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
 }) {
@@ -33,6 +36,11 @@ export function TenantDefinitionsPage({
             { label: "Tenants", href: "/admin", onSelect: onSelectTenants },
             { label: state.tenant.name },
           ]}
+        />
+        <TenantWorkspaceNavigation
+          active="definitions"
+          onSelect={onSelectWorkspace}
+          tenant={state.tenant}
         />
         <PageHeader
           description={`Published and draft definitions for ${state.tenant.name}.`}

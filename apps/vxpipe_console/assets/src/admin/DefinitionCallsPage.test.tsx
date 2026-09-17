@@ -13,15 +13,16 @@ afterEach(() => {
 const populated: DefinitionCallsPageState = {
   status: "ready",
   tenant: { key: "tn_demo_01", name: "Demo workspace" },
-  definition: {
-    id: "delivery-rescheduling",
-    name: "Delivery rescheduling",
-    latestRevision: 4,
-    publishedRevision: 3,
-  },
+  definitions: [
+    { id: "delivery-rescheduling", name: "Delivery rescheduling" },
+    { id: "appointment-reminders", name: "Appointment reminders" },
+  ],
+  selectedDefinitionId: null,
   calls: [
     {
       id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
+      definitionId: "delivery-rescheduling",
+      definitionName: "Delivery rescheduling",
       definitionRevision: 3,
       state: "running",
       createdAt: "2026-09-17T02:20:00.000Z",
@@ -32,6 +33,8 @@ const populated: DefinitionCallsPageState = {
     },
     {
       id: "018f27a2-51d5-77c9-a44f-e5c648bf8495",
+      definitionId: "delivery-rescheduling",
+      definitionName: "Delivery rescheduling",
       definitionRevision: 2,
       state: "ended",
       createdAt: "2026-09-16T08:00:00.000Z",
@@ -42,6 +45,8 @@ const populated: DefinitionCallsPageState = {
     },
     {
       id: "018f2791-f803-781c-9e96-35cc46d612cc",
+      definitionId: "delivery-rescheduling",
+      definitionName: "Delivery rescheduling",
       definitionRevision: 4,
       state: "failed",
       createdAt: "2026-09-16T06:10:00.000Z",
@@ -58,7 +63,7 @@ const populated: DefinitionCallsPageState = {
   },
 };
 
-test("retains tenant and definition context around real call links", () => {
+test("shows tenant navigation and real call links", () => {
   const selectCall = vi.fn();
 
   render(<DefinitionCallsPage onSelectCall={selectCall} state={populated} />);
@@ -72,7 +77,15 @@ test("retains tenant and definition context around real call links", () => {
     "href",
     "/admin/tenants/tn_demo_01",
   );
-  expect(screen.getByText("Delivery rescheduling")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Call definitions" })).toHaveAttribute(
+    "href",
+    "/admin/tenants/tn_demo_01/definitions",
+  );
+  expect(screen.getByRole("link", { name: "Calls" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Across all revisions/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/published r3/i)).not.toBeInTheDocument();
 
@@ -89,6 +102,61 @@ test("retains tenant and definition context around real call links", () => {
   );
 });
 
+test("selects and resets a definition filter through injected actions", () => {
+  const selectDefinition = vi.fn();
+
+  const view = render(
+    <DefinitionCallsPage
+      onSelectDefinition={selectDefinition}
+      state={populated}
+    />,
+  );
+
+  fireEvent.change(screen.getByRole("combobox", { name: "Call definition" }), {
+    target: { value: "delivery-rescheduling" },
+  });
+  expect(selectDefinition).toHaveBeenCalledWith("delivery-rescheduling");
+
+  view.rerender(
+    <DefinitionCallsPage
+      onSelectDefinition={selectDefinition}
+      state={{ ...populated, selectedDefinitionId: "delivery-rescheduling" }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Show all calls" }));
+  expect(selectDefinition).toHaveBeenLastCalledWith(null);
+});
+
+test("keeps valid empty filters distinct from unknown filters", () => {
+  const { rerender } = render(
+    <DefinitionCallsPage
+      state={{
+        ...populated,
+        selectedDefinitionId: "appointment-reminders",
+        calls: [],
+        pagination: null,
+      }}
+    />,
+  );
+
+  expect(screen.getByText("No matching calls")).toBeVisible();
+
+  rerender(
+    <DefinitionCallsPage
+      state={{
+        ...populated,
+        selectedDefinitionId: "missing-definition",
+        calls: [],
+        pagination: null,
+      }}
+    />,
+  );
+
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "This call definition is not available",
+  );
+});
+
 test("shows lifecycle, revision, archive, duration, and failure information", () => {
   render(<DefinitionCallsPage state={populated} />);
 
@@ -98,7 +166,7 @@ test("shows lifecycle, revision, archive, duration, and failure information", ()
   expect(screen.getByText("Partial")).toBeVisible();
   expect(screen.getByText("1m 30s")).toBeVisible();
   expect(screen.getAllByText("Session start failed")).not.toHaveLength(0);
-  expect(screen.getByText("r4")).toBeVisible();
+  expect(screen.getByText("v4")).toBeVisible();
 });
 
 test("does not present a prepared call's creation time as its start time", () => {
@@ -110,6 +178,8 @@ test("does not present a prepared call's creation time as its start time", () =>
         calls: [
           {
             id: "018f2708-76d2-72f5-885c-d2d62a8a8ea1",
+            definitionId: "delivery-rescheduling",
+            definitionName: "Delivery rescheduling",
             definitionRevision: 1,
             state: "prepared",
             createdAt,
@@ -142,7 +212,8 @@ test("keeps empty and unavailable call results distinct", () => {
       state={{
         status: "unavailable",
         tenant: populated.tenant,
-        definition: populated.definition,
+        definitions: populated.definitions,
+        selectedDefinitionId: null,
         message: "Calls could not be loaded.",
       }}
     />,
@@ -179,7 +250,8 @@ test("loading removes stale call actions", () => {
       state={{
         status: "loading",
         tenant: populated.tenant,
-        definition: populated.definition,
+        definitions: populated.definitions,
+        selectedDefinitionId: null,
       }}
     />,
   );
@@ -224,5 +296,38 @@ test("call story records call and breadcrumb destinations without replacing the 
   );
 
   fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
-  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01");
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
+});
+
+test("call story keeps the selected definition in its URL and visible results", () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/iframe.html?id=admin-calls--populated",
+  );
+  render(<DefinitionCallsStory scenario="populated" theme="dark" />);
+
+  fireEvent.change(screen.getByRole("combobox", { name: "Call definition" }), {
+    target: { value: "appointment-reminders" },
+  });
+
+  expect(window.location.hash).toBe(
+    "#/admin/tenants/tn_demo_01/calls?definition_id=appointment-reminders",
+  );
+  expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(2);
+});
+
+test("call story clears stale pagination when its definition filter changes", () => {
+  render(<DefinitionCallsStory scenario="paginated" theme="dark" />);
+
+  fireEvent.change(screen.getByRole("combobox", { name: "Call definition" }), {
+    target: { value: "appointment-reminders" },
+  });
+
+  expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: "Next page" })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Show all calls" }));
+  expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(9);
+  expect(screen.queryByRole("button", { name: "Next page" })).not.toBeInTheDocument();
 });

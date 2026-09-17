@@ -35,7 +35,7 @@ export function CallDetailsPage({
       ? [
           {
             label: definitionLabel,
-            href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}/definitions/${encodeURIComponent(state.definition.id)}`,
+            href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?definition_id=${encodeURIComponent(state.definition.id)}`,
             onSelect: onSelectDefinition,
           },
         ]

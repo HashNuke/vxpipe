@@ -1,7 +1,7 @@
 export type AdminStoryRoute =
   | { page: "tenants" }
   | { page: "definitions"; tenantKey: string }
-  | { page: "calls"; tenantKey: string; definitionId: string }
+  | { page: "calls"; tenantKey: string; definitionId?: string }
   | { page: "call-details"; tenantKey: string; callId: string };
 
 export function adminStoryPath(route: AdminStoryRoute) {
@@ -9,9 +9,9 @@ export function adminStoryPath(route: AdminStoryRoute) {
     case "tenants":
       return "/admin";
     case "definitions":
-      return `/admin/tenants/${encodeURIComponent(route.tenantKey)}`;
+      return `/admin/tenants/${encodeURIComponent(route.tenantKey)}/definitions`;
     case "calls":
-      return `/admin/tenants/${encodeURIComponent(route.tenantKey)}/definitions/${encodeURIComponent(route.definitionId)}`;
+      return `/admin/tenants/${encodeURIComponent(route.tenantKey)}/calls${route.definitionId ? `?definition_id=${encodeURIComponent(route.definitionId)}` : ""}`;
     case "call-details":
       return `/admin/tenants/${encodeURIComponent(route.tenantKey)}/calls/${encodeURIComponent(route.callId)}`;
   }
@@ -31,22 +31,24 @@ export function adminStoryRoute(hash: string): AdminStoryRoute {
     }
   }
 
-  const definitionMatch = hash.match(
-    /^#\/admin\/tenants\/([^/]+)\/definitions\/([^/]+)$/,
+  const callsMatch = hash.match(
+    /^#\/admin\/tenants\/([^/]+)\/calls(?:\?definition_id=([^&]+))?$/,
   );
-  if (definitionMatch) {
+  if (callsMatch) {
     try {
       return {
         page: "calls",
-        tenantKey: decodeURIComponent(definitionMatch[1]),
-        definitionId: decodeURIComponent(definitionMatch[2]),
+        tenantKey: decodeURIComponent(callsMatch[1]),
+        ...(callsMatch[2]
+          ? { definitionId: decodeURIComponent(callsMatch[2]) }
+          : {}),
       };
     } catch {
       return { page: "tenants" };
     }
   }
 
-  const match = hash.match(/^#\/admin\/tenants\/([^/]+)$/);
+  const match = hash.match(/^#\/admin\/tenants\/([^/]+)(?:\/definitions)?$/);
   if (!match) return { page: "tenants" };
 
   try {

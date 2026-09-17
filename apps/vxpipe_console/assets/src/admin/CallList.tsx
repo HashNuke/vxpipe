@@ -15,13 +15,14 @@ export function CallList({
     <div aria-label="Calls">
       <div
         aria-hidden="true"
-        className="grid grid-cols-[minmax(0,1fr)_88px_104px_16px] gap-3 px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)] sm:px-4 lg:grid-cols-[minmax(220px,1.4fr)_70px_120px_180px_90px_120px_16px] lg:gap-4"
+        className="grid grid-cols-[minmax(0,1fr)_88px_104px_16px] gap-3 px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)] sm:px-4 xl:grid-cols-[minmax(210px,1.25fr)_minmax(150px,1fr)_62px_110px_170px_80px_110px_16px] xl:gap-4"
       >
         <span>Call</span>
-        <span className="hidden lg:block">Revision</span>
+        <span className="hidden xl:block">Definition</span>
+        <span className="hidden xl:block">Revision</span>
         <span>State</span>
-        <span className="hidden lg:block">Started</span>
-        <span className="hidden lg:block">Duration</span>
+        <span className="hidden xl:block">Started</span>
+        <span className="hidden xl:block">Duration</span>
         <span>Archive</span>
         <span className="sr-only">Open</span>
       </div>

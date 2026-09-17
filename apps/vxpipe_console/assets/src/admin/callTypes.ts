@@ -19,6 +19,8 @@ export type CallArchiveState = "complete" | "incomplete" | "unconfirmed";
 
 export type CallSummary = {
   id: string;
+  definitionId: string;
+  definitionName: string | null;
   definitionRevision: number;
   state: CallLifecycleState;
   createdAt: string;
@@ -28,12 +30,13 @@ export type CallSummary = {
   archiveState: CallArchiveState;
 };
 
-type DefinitionCallsContext = {
+type TenantCallsContext = {
   tenant: TenantContext;
-  definition: DefinitionContext;
+  definitions: Array<Pick<DefinitionContext, "id" | "name">>;
+  selectedDefinitionId: string | null;
 };
 
-export type DefinitionCallsPageState = DefinitionCallsContext &
+export type DefinitionCallsPageState = TenantCallsContext &
   (
     | { status: "loading" }
     | { status: "unavailable"; message: string }

@@ -3,14 +3,14 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DefinitionCallsStory } from "./DefinitionCallsStory";
 
 const meta = {
-  title: "Admin/Definition calls",
+  title: "Admin/Calls",
   component: DefinitionCallsStory,
   parameters: {
     layout: "fullscreen",
     docs: {
       description: {
         component:
-          "Calls for one definition across all immutable revisions, with lifecycle and archive state kept separate. Use Admin / Full journey to review the linked flow.",
+          "All calls for one tenant, with an optional URL-backed definition filter. Use Admin / Full journey to review the linked flow.",
       },
     },
   },
@@ -22,6 +22,9 @@ const meta = {
         "populated",
         "loading",
         "empty",
+        "filtered",
+        "no-filter-matches",
+        "unknown-filter",
         "unavailable",
         "long-content",
         "paginated",
@@ -40,6 +43,9 @@ type Story = StoryObj<typeof meta>;
 export const Populated: Story = {};
 export const Loading: Story = { args: { scenario: "loading" } };
 export const Empty: Story = { args: { scenario: "empty" } };
+export const Filtered: Story = { args: { scenario: "filtered" } };
+export const NoFilterMatches: Story = { args: { scenario: "no-filter-matches" } };
+export const UnknownFilter: Story = { args: { scenario: "unknown-filter" } };
 export const Unavailable: Story = { args: { scenario: "unavailable" } };
 export const LongContent: Story = { args: { scenario: "long-content" } };
 export const Paginated: Story = { args: { scenario: "paginated" } };
