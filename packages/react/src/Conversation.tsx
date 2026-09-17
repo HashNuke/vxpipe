@@ -20,6 +20,7 @@ import {
   TimelineTimestamp,
 } from "./TimelineTimestamp.js";
 import { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
+import { participantDisplayName } from "./participantDisplayName.js";
 
 function MessageText({
   message,
@@ -49,22 +50,50 @@ function MessageRow({
   message,
   snapshot,
   theme,
+  onSelectParticipant,
 }: {
   message: Message;
   snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
+  onSelectParticipant?: (participantId: string) => void;
 }) {
   const person = snapshot.participants.find(
     (item) => item.id === message.participantId,
   );
+  const displayName = person ? participantDisplayName(person) : "Unknown speaker";
+  const selectParticipant = person
+    ? () => onSelectParticipant?.(person.id)
+    : undefined;
   return (
     <article className={`vx-message vx-message-${person?.role ?? "unknown"}`}>
-      <span className={`vx-avatar vx-${person?.role ?? "unknown"}`}>
-        {person?.name.slice(0, 1) ?? "?"}
-      </span>
+      {person && onSelectParticipant ? (
+        <button
+          aria-label={`Open ${displayName} participant`}
+          className="vx-message-participant vx-message-avatar"
+          onClick={selectParticipant}
+        >
+          <span className={`vx-avatar vx-${person.role}`}>
+            {displayName.slice(0, 1)}
+          </span>
+        </button>
+      ) : (
+        <span className={`vx-avatar vx-${person?.role ?? "unknown"}`}>
+          {displayName.slice(0, 1)}
+        </span>
+      )}
       <div>
         <header>
-          <strong>{person?.name ?? "Unknown speaker"}</strong>
+          {person && onSelectParticipant ? (
+            <button
+              aria-label={`Open ${displayName} participant`}
+              className="vx-message-participant vx-message-name"
+              onClick={selectParticipant}
+            >
+              {displayName}
+            </button>
+          ) : (
+            <strong>{displayName}</strong>
+          )}
           {message.state === "streaming" && (
             <span className="vx-streaming" role="img" aria-label="Streaming">
               <i />
@@ -330,10 +359,12 @@ export function Conversation({
   filters,
   snapshot,
   theme = "dark",
+  onSelectParticipant,
 }: {
   filters: ConversationFilters;
   snapshot: ConsoleSnapshot;
   theme?: "light" | "dark";
+  onSelectParticipant?: (participantId: string) => void;
 }) {
   const items = timeline(snapshot, filters);
 
@@ -357,6 +388,7 @@ export function Conversation({
                 message={item.value}
                 snapshot={snapshot}
                 theme={theme}
+                onSelectParticipant={onSelectParticipant}
               />
             );
           if (item.kind === "events")

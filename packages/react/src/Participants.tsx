@@ -86,3 +86,35 @@ export function Participants({
     </aside>
   );
 }
+
+export function ParticipantPicker({
+  participants,
+  selectedParticipantId,
+  onSelect,
+}: {
+  participants: readonly Participant[];
+  selectedParticipantId: string | null;
+  onSelect: (participantId: string) => void;
+}) {
+  return (
+    <nav className="vx-participant-picker" aria-label="Select participant">
+      {participants.map((person) => {
+        const displayName = participantDisplayName(person);
+        return (
+          <button
+            aria-label={`View ${displayName} details`}
+            aria-pressed={selectedParticipantId === person.id}
+            className={selectedParticipantId === person.id ? "vx-picker-selected" : ""}
+            key={person.id}
+            onClick={() => onSelect(person.id)}
+          >
+            <span className={`vx-avatar vx-${person.role}`}>
+              {displayName.slice(0, 1)}
+            </span>
+            <span>{displayName}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}

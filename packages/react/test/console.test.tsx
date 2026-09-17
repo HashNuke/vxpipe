@@ -43,6 +43,27 @@ test("the host can inject call context before the compact call controls", () => 
   );
 });
 
+test("the host can inject a dedicated header row and fill its container", () => {
+  const { container } = render(
+    <CallConsole
+      controller={createFixtureController("conversation")}
+      header={<nav aria-label="Call breadcrumb">Tenant / Calls / Call details</nav>}
+      layout="fill"
+    />,
+  );
+
+  const consoleRoot = container.firstElementChild;
+  const breadcrumb = screen.getByRole("navigation", { name: "Call breadcrumb" });
+  const controls = screen.getByText("Connected").closest("header");
+
+  expect(consoleRoot).toHaveClass("vx-console-fill");
+  expect(breadcrumb.parentElement).toHaveClass("vx-console-header");
+  expect(
+    breadcrumb.compareDocumentPosition(controls as Node) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
 test("a denied microphone still allows typed input in the same conversation", async () => {
   const client = createFixtureController("microphone-denied");
   render(<CallConsole controller={client} />);
@@ -331,6 +352,41 @@ test("a sidebar participant opens their authorized configuration", () => {
   expect(screen.getByText("Escalate to support")).toBeVisible();
   expect(screen.getByRole("heading", { name: "Tools available" })).toBeVisible();
   expect(screen.getByText("update_variables")).toBeVisible();
+});
+
+test("a conversation participant identity opens their details", () => {
+  render(<CallConsole controller={createFixtureController("conversation")} />);
+
+  fireEvent.click(
+    screen.getAllByRole("button", { name: "Open Assistant participant" }).at(-1)!,
+  );
+
+  const participantsTab = screen.getByRole("button", { name: "Participants" });
+  expect(participantsTab).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(participantsTab).toHaveFocus();
+  expect(screen.getByRole("heading", { name: "Assistant" })).toBeVisible();
+  expect(
+    screen.getByRole("navigation", { name: "Select participant" }),
+  ).toBeVisible();
+});
+
+test("the Participants view can select another participant without the sidebar", () => {
+  render(
+    <CallConsole
+      controller={createFixtureController("human-handoff")}
+      initialTab="participants"
+    />,
+  );
+
+  const picker = screen.getByRole("navigation", { name: "Select participant" });
+  fireEvent.click(
+    within(picker).getByRole("button", { name: "View Support teammate details" }),
+  );
+
+  expect(screen.getByRole("heading", { name: "Support teammate" })).toBeVisible();
 });
 
 test("Metrics presents every scope in one measurement table", () => {

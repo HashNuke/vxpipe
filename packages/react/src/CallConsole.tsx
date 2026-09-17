@@ -1,4 +1,5 @@
 import {
+  useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
@@ -10,7 +11,7 @@ import type {
   LocalSessionSnapshot,
 } from "@vxpipe/core";
 import { PhoneCall, PhoneOff } from "lucide-react";
-import { Participants } from "./Participants.js";
+import { ParticipantPicker, Participants } from "./Participants.js";
 import { ParticipantDetails } from "./ParticipantDetails.js";
 import { Conversation } from "./Conversation.js";
 import { ConversationFilterControls } from "./ConversationFilterControls.js";
@@ -108,16 +109,20 @@ function defaultParticipantId(snapshot: ConsoleSnapshot) {
 
 export interface CallConsoleProps {
   controller: CallConsoleController;
+  header?: ReactNode;
   headerContext?: ReactNode;
   initialTab?: Tab;
+  layout?: "contained" | "fill";
   theme?: "light" | "dark";
   maxHeight?: CSSProperties["maxHeight"];
 }
 
 export function CallConsole({
   controller,
+  header,
   headerContext,
   initialTab = "chat",
+  layout = "contained",
   theme = "dark",
   maxHeight,
 }: CallConsoleProps) {
@@ -143,6 +148,7 @@ export function CallConsole({
   });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const participantsTabRef = useRef<HTMLButtonElement>(null);
   const connected = live !== undefined && local.connectionState === "connected";
   const ended = details.call.state === "ended" || details.call.state === "failed";
   const selectedParticipant =
@@ -154,6 +160,7 @@ export function CallConsole({
   const selectParticipant = (participantId: string) => {
     setSelectedParticipantId(participantId);
     setTab("participants");
+    participantsTabRef.current?.focus();
   };
   const act = async () => {
     if (!live) return;
@@ -200,7 +207,12 @@ export function CallConsole({
     }));
 
   return (
-    <div className="vx-console" data-vx-theme={theme} style={{ maxHeight }}>
+    <div
+      className={`vx-console ${layout === "fill" ? "vx-console-fill" : ""}`}
+      data-vx-theme={theme}
+      style={{ maxHeight }}
+    >
+      {header ? <div className="vx-console-header">{header}</div> : null}
       <header className="vx-call-header">
         <div className="vx-call-context">{headerContext}</div>
         <div className="vx-call-toolbar">
@@ -259,6 +271,7 @@ export function CallConsole({
                   aria-current={tab === item ? "page" : undefined}
                   key={item}
                   onClick={() => setTab(item)}
+                  ref={item === "participants" ? participantsTabRef : undefined}
                 >
                   {item === "chat"
                     ? "Conversation"
@@ -282,12 +295,20 @@ export function CallConsole({
               filters={conversationFilters}
               snapshot={snapshot}
               theme={theme}
+              onSelectParticipant={selectParticipant}
             />
           )}
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <Metrics snapshot={snapshot} theme={theme} />}
           {tab === "participants" && (
-            <ParticipantDetails participant={selectedParticipant} />
+            <div className="vx-participant-view">
+              <ParticipantPicker
+                participants={snapshot.participants}
+                selectedParticipantId={selectedParticipant?.id ?? null}
+                onSelect={selectParticipant}
+              />
+              <ParticipantDetails participant={selectedParticipant} />
+            </div>
           )}
           {tab === "chat" && live && (
             <Composer controls={live} disabled={!connected} />

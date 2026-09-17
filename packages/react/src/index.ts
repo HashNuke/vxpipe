@@ -6,7 +6,7 @@ export { DeviceControls } from "./DeviceControls.js";
 export { Variables } from "./Variables.js";
 export { Metrics } from "./Metrics.js";
 export { TurnMetricsTooltip } from "./TurnMetricsTooltip.js";
-export { Participants } from "./Participants.js";
+export { ParticipantPicker, Participants } from "./Participants.js";
 export { ParticipantDetails } from "./ParticipantDetails.js";
 export {
   Select,
