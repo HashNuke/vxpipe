@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.CallDetailsController do
 
   def show(conn, %{"call_id" => call_id, "publication_id" => publication_id}) do
     with {:ok, document} <-
-           CallDetails.fetch(conn.assigns.operator_principal, call_id, publication_id),
+           CallDetails.fetch(conn.assigns.call_read_access, call_id, publication_id),
          :ok <- validate_filename(document.filename) do
       conn
       |> put_resp_content_type("application/json")

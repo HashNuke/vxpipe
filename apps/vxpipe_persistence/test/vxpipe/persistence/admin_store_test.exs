@@ -334,6 +334,16 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
 
     assert Enum.map(calls, & &1.archive_state) == [:unconfirmed, :complete]
 
+    assert {:ok, {^listed_tenant, selected_call}} =
+             AdminStore.fetch_call_context(Repo, tenant.key, newer.public_id)
+
+    assert selected_call.id == newer.public_id
+    assert selected_call.definition_name == "Delivery rescheduling"
+    assert selected_call.definition_revision == 2
+
+    assert {:error, :call_not_found} =
+             AdminStore.fetch_call_context(Repo, tenant.key, "44444444-4444-4444-8444-444444444444")
+
     assert {:ok, {^listed_tenant, _definitions, false, all_calls, 3}} =
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 0)
 

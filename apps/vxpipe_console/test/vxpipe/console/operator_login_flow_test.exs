@@ -237,6 +237,13 @@ defmodule Vxpipe.Console.OperatorLoginFlowTest do
 
     assert response(conn, 404) == "not found"
     refute_received {:operator_login_challenge_consumed, _, _}
+
+    resource_conn =
+      build_conn()
+      |> Map.put(:remote_ip, {203, 0, 113, 4})
+      |> get("http://localhost/tenants/tenantkey1234567/calls/call-id/inspection")
+
+    assert response(resource_conn, 404) == "not found"
   end
 
   test "permits HTTP only when both the peer and requested host are loopback" do

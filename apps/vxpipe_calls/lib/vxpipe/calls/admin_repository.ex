@@ -33,4 +33,7 @@ defmodule Vxpipe.Calls.AdminRepository do
   @callback list_services(context(), String.t()) ::
               {:ok, {Tenant.t(), [ProviderCredential.t()], [TelephonyService.t()], boolean()}}
               | {:error, term()}
+
+  @callback fetch_call_context(context(), String.t(), String.t()) ::
+              {:ok, {Tenant.t(), CallDirectorySummary.t()}} | {:error, term()}
 end

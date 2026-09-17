@@ -151,6 +151,41 @@ defmodule Vxpipe.Persistence.AdminStore do
   end
 
   @impl true
+  def fetch_call_context(repo, tenant_key, call_id) do
+    repository_result(fn ->
+      with {:ok, {tenant, tenant_id}} <- fetch_tenant(repo, tenant_key) do
+        query =
+          from(call in Call,
+            join: revision in DefinitionRevision,
+            on: revision.id == call.definition_revision_id,
+            join: definition in CallDefinition,
+            on: definition.id == revision.call_definition_id,
+            left_join: publication in CallDetailsPublication,
+            on: publication.id == call.latest_details_publication_id,
+            where: call.tenant_id == ^tenant_id and call.public_id == ^call_id,
+            select: {
+              call.public_id,
+              definition.public_id,
+              fragment("?->>'name'", revision.source),
+              revision.revision,
+              call.state,
+              call.created_at,
+              call.started_at,
+              call.ended_at,
+              call.terminal_reason,
+              publication.completeness
+            }
+          )
+
+        case repo.one(query) do
+          nil -> {:error, :call_not_found}
+          row -> {:ok, {tenant, call_summary(row)}}
+        end
+      end
+    end)
+  end
+
+  @impl true
   def list_services(repo, tenant_key) do
     repository_result(fn ->
       with {:ok, {tenant, tenant_id}} <- fetch_tenant(repo, tenant_key) do
@@ -432,18 +467,19 @@ defmodule Vxpipe.Persistence.AdminStore do
         {id, definition_id, definition_name, definition_revision, state, created_at, started_at,
          ended_at, terminal_reason, archive_state, total},
         totals ->
-          call = %CallDirectorySummary{
-            id: id,
-            definition_id: definition_id,
-            definition_name: definition_name,
-            definition_revision: definition_revision,
-            state: state,
-            created_at: created_at,
-            started_at: started_at,
-            ended_at: ended_at,
-            terminal_reason: terminal_reason,
-            archive_state: archive_state || :unconfirmed
-          }
+          call =
+            call_summary({
+              id,
+              definition_id,
+              definition_name,
+              definition_revision,
+              state,
+              created_at,
+              started_at,
+              ended_at,
+              terminal_reason,
+              archive_state
+            })
 
           {call, [total | totals]}
       end)
@@ -452,6 +488,24 @@ defmodule Vxpipe.Persistence.AdminStore do
       [total] -> {:ok, {calls, total}}
       _inconsistent -> {:error, :repository_unavailable}
     end
+  end
+
+  defp call_summary(
+         {id, definition_id, definition_name, definition_revision, state, created_at, started_at,
+          ended_at, terminal_reason, archive_state}
+       ) do
+    %CallDirectorySummary{
+      id: id,
+      definition_id: definition_id,
+      definition_name: definition_name,
+      definition_revision: definition_revision,
+      state: state,
+      created_at: created_at,
+      started_at: started_at,
+      ended_at: ended_at,
+      terminal_reason: terminal_reason,
+      archive_state: archive_state || :unconfirmed
+    }
   end
 
   defp latest_revision_numbers do

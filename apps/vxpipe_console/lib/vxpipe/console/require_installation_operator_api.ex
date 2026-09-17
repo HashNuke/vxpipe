@@ -6,13 +6,15 @@ defmodule Vxpipe.Console.RequireInstallationOperatorAPI do
   import Phoenix.Controller, only: [json: 2]
 
   alias Plug.Conn
-  alias Vxpipe.Console.InstallationOperatorSession
+  alias Vxpipe.Console.{InstallationOperatorSession, OperatorSession}
 
   @impl true
   def init(options), do: options
 
   @impl true
   def call(%Conn{} = conn, _options) do
+    conn = OperatorSession.clear(conn)
+
     case InstallationOperatorSession.fetch(conn) do
       {:ok, grant} ->
         Conn.assign(conn, :installation_operator, grant)

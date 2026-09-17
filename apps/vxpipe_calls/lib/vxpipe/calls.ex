@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls do
     Archives,
     Artifacts,
     BillingEnrichments,
+    CallReadAccess,
     CallDetailsInspections,
     CallDetailsFinalization,
     CallDetailsPublications,
@@ -34,6 +35,9 @@ defmodule Vxpipe.Calls do
 
   def list_operator_calls(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_calls(authority, tenant_key, options)
+
+  def fetch_operator_call(authority, tenant_key, call_id, options \\ []),
+    do: OperatorAdministration.fetch_call_context(authority, tenant_key, call_id, options)
 
   def list_operator_services(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_services(authority, tenant_key, options)
@@ -140,6 +144,9 @@ defmodule Vxpipe.Calls do
 
   def fetch_usage_report(principal, call_id, options \\ []),
     do: UsageProjections.fetch_report(principal, call_id, options)
+
+  def operator_call_access(authority, tenant_key),
+    do: CallReadAccess.for_operator(authority, tenant_key)
 
   def enrich_usage_billing(principal, call_id, options \\ []),
     do: BillingEnrichments.enrich(principal, call_id, options)

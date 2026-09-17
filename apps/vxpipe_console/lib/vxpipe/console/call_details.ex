@@ -3,30 +3,30 @@ defmodule Vxpipe.Console.CallDetails do
 
   alias Vxpipe.Calls.{
     CallDetailsDocument,
+    CallReadAccess,
     CallDetailsRevision,
-    CallDetailsRevisionPage,
-    Principal
+    CallDetailsRevisionPage
   }
 
-  @spec list(Principal.t(), String.t(), keyword()) ::
+  @spec list(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, CallDetailsRevisionPage.t()} | {:error, term()}
-  def list(%Principal{} = principal, call_id, options \\ [])
+  def list(authority, call_id, options \\ [])
       when is_binary(call_id) and is_list(options) do
     {module, backend_options, request_options} = backend(options)
 
     module
-    |> apply(:list, [backend_options, principal, call_id, request_options])
+    |> apply(:list, [backend_options, authority, call_id, request_options])
     |> validate_page()
   end
 
-  @spec fetch(Principal.t(), String.t(), String.t(), keyword()) ::
+  @spec fetch(CallReadAccess.authority(), String.t(), String.t(), keyword()) ::
           {:ok, CallDetailsDocument.t()} | {:error, term()}
-  def fetch(%Principal{} = principal, call_id, publication_id, options \\ [])
+  def fetch(authority, call_id, publication_id, options \\ [])
       when is_binary(call_id) and is_binary(publication_id) and is_list(options) do
     {module, backend_options, request_options} = backend(options)
 
     module
-    |> apply(:fetch, [backend_options, principal, call_id, publication_id, request_options])
+    |> apply(:fetch, [backend_options, authority, call_id, publication_id, request_options])
     |> validate_document()
   end
 

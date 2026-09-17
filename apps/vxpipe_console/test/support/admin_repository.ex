@@ -24,4 +24,10 @@ defmodule Vxpipe.Console.Test.AdminRepository do
     send(owner, {:operator_services_requested, tenant_key})
     result
   end
+
+  @impl true
+  def fetch_call_context({owner, result}, tenant_key, call_id) do
+    send(owner, {:operator_call_context_requested, tenant_key, call_id})
+    result
+  end
 end

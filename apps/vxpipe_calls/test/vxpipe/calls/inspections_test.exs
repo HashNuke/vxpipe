@@ -6,10 +6,33 @@ defmodule Vxpipe.Calls.InspectionsTest do
   alias Vxpipe.Calls.{
     CallFact,
     CallSummary,
+    InstallationOperator,
     Principal,
     TestInspectionRepository,
     VariableSnapshot
   }
+
+  test "installation operator scopes call inspection to the requested tenant" do
+    call = summary("call-a1", "AAAAAAAAAAAAAAAA", ~U[2026-09-09 12:00:00.000000Z])
+    repository = start_supervised!({TestInspectionRepository, calls: [call]})
+    options = [inspection_repository: TestInspectionRepository.repository(repository)]
+
+    assert {:ok, access} =
+             Calls.operator_call_access(InstallationOperator.authority(), call.tenant_key)
+
+    assert {:ok, detail} = Calls.inspect_call(access, call.id, options)
+    assert detail.call == call
+
+    assert {:ok, other_access} =
+             Calls.operator_call_access(InstallationOperator.authority(), "BBBBBBBBBBBBBBBB")
+
+    assert {:error, :call_not_found} = Calls.inspect_call(other_access, call.id, options)
+  end
+
+  test "rejects an invalid call-read authority without raising" do
+    assert {:error, :invalid_call_inspection_request} =
+             Calls.inspect_call(nil, "call-public-id", [])
+  end
 
   test "lists a bounded tenant page and continues with an opaque cursor" do
     repository =

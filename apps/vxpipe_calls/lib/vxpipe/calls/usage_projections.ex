@@ -2,7 +2,7 @@ defmodule Vxpipe.Calls.UsageProjections do
   @moduledoc "Database-neutral workflows for persisted usage observations and operator reports."
 
   alias Vxpipe.CallEngine.Usage.Observation
-  alias Vxpipe.Calls.{Principal, Repositories, UsageReport}
+  alias Vxpipe.Calls.{CallReadAccess, Repositories, UsageReport}
 
   @spec store(Observation.t(), keyword()) :: {:ok, Observation.t()} | {:error, term()}
   def store(%Observation{} = observation, options) when is_list(options) do
@@ -13,21 +13,18 @@ defmodule Vxpipe.Calls.UsageProjections do
 
   def store(_observation, _options), do: {:error, :invalid_usage_observation}
 
-  @spec fetch_report(Principal.t(), String.t(), keyword()) ::
+  @spec fetch_report(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, UsageReport.t()} | {:error, term()}
-  def fetch_report(%Principal{} = principal, call_id, options)
+  def fetch_report(authority, call_id, options)
       when is_binary(call_id) and is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <- CallReadAccess.tenant_key(authority, :invalid_usage_request),
          {:ok, repository} <- Repositories.fetch(options, :usage_repository),
          {:ok, amounts} <-
-           Repositories.call(repository, :fetch_usage_amounts, [principal.tenant_key, call_id]) do
+           Repositories.call(repository, :fetch_usage_amounts, [tenant_key, call_id]) do
       UsageReport.new(amounts)
     end
   end
 
   def fetch_report(_principal, _call_id, _options), do: {:error, :invalid_usage_request}
 
-  defp authorize(%Principal{scopes: scopes}) do
-    if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
-  end
 end

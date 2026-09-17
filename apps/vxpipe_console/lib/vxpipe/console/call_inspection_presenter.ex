@@ -181,10 +181,13 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   defp capability(nil), do: nil
 
   defp capability(%CapabilitySelection{} = selection) do
+    options = Map.get(selection, :options, %{})
+
     %{
       "name" => capability_name(selection.kind),
       "provider" => selection.provider,
-      "model" => selection.model
+      "model" =>
+        Map.get(selection, :model) || Map.get(options, :model) || Map.get(options, "model")
     }
   end
 

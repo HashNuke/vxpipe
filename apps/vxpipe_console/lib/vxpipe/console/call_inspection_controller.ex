@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.CallInspectionController do
   alias Vxpipe.Console.{CallInspectionPresenter, CallInspectionQuery}
 
   def show(conn, %{"call_id" => call_id}) do
-    case CallInspectionQuery.run(conn.assigns.operator_principal, call_id) do
+    case CallInspectionQuery.run(conn.assigns.call_read_access, call_id) do
       {:ok, result} ->
         respond(conn, :ok, CallInspectionPresenter.present(result))
 

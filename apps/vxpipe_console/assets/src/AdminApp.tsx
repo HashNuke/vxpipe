@@ -6,6 +6,12 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+import {
+  createCallDetailsController,
+  createCallDetailsStore,
+  type CallDetailsController,
+  type CallDetailsLoader,
+} from "@vxpipe/core";
 
 import {
   parseCallPage,
@@ -15,6 +21,12 @@ import {
   parseTenantPage,
 } from "./admin/adminApi";
 import { DefinitionCallsPage } from "./admin/DefinitionCallsPage";
+import { CallDetailsPage } from "./admin/CallDetailsPage";
+import {
+  parseAdminCallDetails,
+  type AdminCallDetails,
+} from "./admin/adminCallDetailsApi";
+import type { CallDetailsPageState } from "./admin/callDetailsTypes";
 import type { DefinitionCallsPageState } from "./admin/callTypes";
 import { TenantDefinitionsPage } from "./admin/TenantDefinitionsPage";
 import type { TenantDefinitionsPageState } from "./admin/definitionTypes";
@@ -29,6 +41,7 @@ type AdminRoute =
   | { kind: "tenants"; page: number }
   | { kind: "definitions"; tenantKey: string; page: number }
   | { kind: "calls"; tenantKey: string; definitionId: string | null; page: number }
+  | { kind: "call-details"; tenantKey: string; callId: string }
   | { kind: "services"; tenantKey: string };
 
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
@@ -62,6 +75,17 @@ export function AdminApp({
     tenant: route.kind === "services" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
     setup: { open: false, status: "idle", resultVersion: 0 },
   }));
+  const [callDetails, setCallDetails] = useState<CallDetailsPageState>(() => ({
+    status: "loading",
+    tenant:
+      route.kind === "call-details"
+        ? tenantPlaceholder(route.tenantKey)
+        : tenantPlaceholder(""),
+    definition: null,
+    definitionRevision: null,
+    callId: route.kind === "call-details" ? route.callId : "",
+  }));
+  const callDetailsControllerRef = useRef<CallDetailsController | undefined>(undefined);
   const routeRef = useRef(route);
   const submissionRef = useRef<
     { id: number; tenantKey: string; controller: AbortController } | undefined
@@ -81,6 +105,13 @@ export function AdminApp({
   useEffect(() => {
     routeRef.current = route;
   }, [route]);
+
+  useEffect(
+    () => () => {
+      callDetailsControllerRef.current?.dispose();
+    },
+    [],
+  );
 
   useEffect(() => {
     const submission = submissionRef.current;
@@ -199,7 +230,7 @@ export function AdminApp({
             }));
           }
         });
-    } else {
+    } else if (route.kind === "services") {
       setServices((state) => ({
         status: "loading",
         tenant:
@@ -223,11 +254,44 @@ export function AdminApp({
             }));
           }
         });
+    } else {
+      callDetailsControllerRef.current?.dispose();
+      callDetailsControllerRef.current = undefined;
+      setCallDetails({
+        status: "loading",
+        tenant: tenantPlaceholder(route.tenantKey),
+        definition: null,
+        definitionRevision: null,
+        callId: route.callId,
+      });
+
+      loadCallDetails(route, controller.signal, fetchImpl, onSessionExpired, isCurrent)
+        .then((result) => {
+          if (!current || !result) return;
+          if (result.controller) callDetailsControllerRef.current = result.controller;
+          setCallDetails(result.state);
+        })
+        .catch((error: unknown) => {
+          if (current && !aborted(error)) {
+            setCallDetails({
+              status: "unavailable",
+              tenant: tenantPlaceholder(route.tenantKey),
+              definition: null,
+              definitionRevision: null,
+              callId: route.callId,
+              message: "Call inspection is unavailable. Try again after storage is available.",
+            });
+          }
+        });
     }
 
     return () => {
       current = false;
       controller.abort();
+      if (route.kind === "call-details") {
+        callDetailsControllerRef.current?.dispose();
+        callDetailsControllerRef.current = undefined;
+      }
     };
   }, [fetchImpl, onSessionExpired, route]);
 
@@ -239,6 +303,26 @@ export function AdminApp({
 
   const headerActions = <SignOut csrfToken={csrfToken} />;
   const workspaceDestinations = ["definitions", "calls", "services"] as const;
+
+  if (route.kind === "call-details") {
+    return (
+      <CallDetailsPage
+        onSelectDefinition={() =>
+          navigate({
+            kind: "calls",
+            tenantKey: route.tenantKey,
+            definitionId: callDetails.definition?.id ?? null,
+            page: 1,
+          })
+        }
+        onSelectTenant={() =>
+          navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 })
+        }
+        onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
+        state={callDetails}
+      />
+    );
+  }
 
   if (route.kind === "definitions") {
     return (
@@ -268,11 +352,14 @@ export function AdminApp({
     return (
       <DefinitionCallsPage
         headerActions={headerActions}
-        linkCallDetails={false}
+        linkCallDetails
         onNextPage={() => navigate({ ...route, page: route.page + 1 })}
         onPreviousPage={() => navigate({ ...route, page: Math.max(1, route.page - 1) })}
         onSelectDefinition={(definitionId) =>
           navigate({ ...route, definitionId, page: 1 })
+        }
+        onSelectCall={(callId) =>
+          navigate({ kind: "call-details", tenantKey: route.tenantKey, callId })
         }
         onSelectTenant={() =>
           navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 })
@@ -531,6 +618,138 @@ async function loadServices(
   };
 }
 
+async function loadCallDetails(
+  selected: Extract<AdminRoute, { kind: "call-details" }>,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  isCurrent: () => boolean,
+): Promise<
+  | { state: CallDetailsPageState; controller?: CallDetailsController }
+  | undefined
+> {
+  let result: AdminCallDetails;
+  try {
+    result = await requestCallDetails(selected, signal, fetchImpl);
+  } catch (error: unknown) {
+    if (!isCurrent()) return;
+    if (error instanceof AdminCallDetailsError && error.kind === "expired") {
+      onSessionExpired();
+      return;
+    }
+
+    const context = {
+      tenant: tenantPlaceholder(selected.tenantKey),
+      definition: null,
+      definitionRevision: null,
+      callId: selected.callId,
+    };
+
+    if (error instanceof AdminCallDetailsError && error.kind === "missing") {
+      return {
+        state: {
+          status: "unavailable",
+          ...context,
+          message: "This call could not be found.",
+        },
+      };
+    }
+    if (error instanceof AdminCallDetailsError && error.kind === "malformed") {
+      return {
+        state: {
+          status: "malformed",
+          ...context,
+          message: "The inspection response did not match the supported call-details schema.",
+        },
+      };
+    }
+    throw error;
+  }
+
+  if (!isCurrent()) return;
+  validateCallDetailsIdentity(result, selected);
+
+  const loader: CallDetailsLoader = {
+    refresh: async (refreshSignal) => {
+      try {
+        const refreshed = await requestCallDetails(selected, refreshSignal, fetchImpl);
+        validateCallDetailsIdentity(refreshed, selected);
+        return refreshed.snapshot;
+      } catch (error: unknown) {
+        if (
+          error instanceof AdminCallDetailsError &&
+          error.kind === "expired" &&
+          !refreshSignal.aborted
+        ) {
+          onSessionExpired();
+        }
+        throw error;
+      }
+    },
+  };
+  const store = createCallDetailsStore(result.snapshot);
+  const controller = createCallDetailsController({ store, loader });
+
+  return {
+    controller,
+    state: {
+      status: "ready",
+      tenant: result.tenant,
+      definition: result.definition,
+      definitionRevision: result.definitionRevision,
+      callId: selected.callId,
+      controller: { details: controller, history: controller },
+      completeness: result.snapshot.completeness.state,
+    },
+  };
+}
+
+async function requestCallDetails(
+  selected: Extract<AdminRoute, { kind: "call-details" }>,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+) {
+  const response = await fetchImpl(
+    `/admin/api/tenants/${encodeURIComponent(selected.tenantKey)}/calls/${encodeURIComponent(selected.callId)}`,
+    { headers: { accept: "application/json" }, signal },
+  );
+
+  if (response.status === 401) {
+    throw new AdminCallDetailsError("expired");
+  }
+  if (response.status === 404) throw new AdminCallDetailsError("missing");
+  if (!response.ok) throw new AdminCallDetailsError("unavailable");
+
+  try {
+    return parseAdminCallDetails(await response.json());
+  } catch (error: unknown) {
+    signal.throwIfAborted();
+    throw new AdminCallDetailsError("malformed", { cause: error });
+  }
+}
+
+function validateCallDetailsIdentity(
+  result: AdminCallDetails,
+  selected: Extract<AdminRoute, { kind: "call-details" }>,
+) {
+  if (
+    result.tenant.key !== selected.tenantKey ||
+    result.snapshot.call.id !== selected.callId
+  ) {
+    throw new AdminCallDetailsError("malformed");
+  }
+}
+
+class AdminCallDetailsError extends Error {
+  constructor(
+    readonly kind: "expired" | "missing" | "malformed" | "unavailable",
+    options?: ErrorOptions,
+  ) {
+    super(`Admin call details ${kind}`, options);
+    this.name = "AdminCallDetailsError";
+  }
+}
+
 async function createCredential(
   tenantKey: string,
   draft: CredentialDraft,
@@ -696,6 +915,22 @@ function SignOut({ csrfToken }: { csrfToken: string }) {
 
 function readRoute(): AdminRoute {
   const page = readPage();
+  const detailsMatch = window.location.pathname.match(
+    /^\/admin\/tenants\/([^/]+)\/calls\/([^/]+)\/?$/,
+  );
+
+  if (detailsMatch) {
+    try {
+      return {
+        kind: "call-details",
+        tenantKey: decodeURIComponent(detailsMatch[1]),
+        callId: decodeURIComponent(detailsMatch[2]),
+      };
+    } catch {
+      return { kind: "tenants", page: 1 };
+    }
+  }
+
   const match = window.location.pathname.match(
     /^\/admin\/tenants\/([^/]+)(?:\/(definitions|calls|services))?\/?$/,
   );
@@ -727,7 +962,9 @@ function readRoute(): AdminRoute {
 
 function routeUrl(route: AdminRoute) {
   const query = new URLSearchParams();
-  if (route.kind !== "services" && route.page !== 1) query.set("page", String(route.page));
+  if (route.kind !== "services" && route.kind !== "call-details" && route.page !== 1) {
+    query.set("page", String(route.page));
+  }
   if (route.kind === "calls" && route.definitionId) {
     query.set("definition_id", route.definitionId);
   }
@@ -735,6 +972,9 @@ function routeUrl(route: AdminRoute) {
 
   if (route.kind === "tenants") return `/admin${suffix}`;
   const tenant = encodeURIComponent(route.tenantKey);
+  if (route.kind === "call-details") {
+    return `/admin/tenants/${tenant}/calls/${encodeURIComponent(route.callId)}`;
+  }
   return `/admin/tenants/${tenant}/${route.kind}${suffix}`;
 }
 

@@ -1,7 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { AdminApp } from "./AdminApp";
+
+vi.mock("@vxpipe/react", () => ({
+  CallConsole: ({ header, headerContext }: { header?: ReactNode; headerContext?: ReactNode }) => (
+    <div data-testid="call-console">
+      {header}
+      {headerContext}
+    </div>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -92,6 +102,36 @@ const serviceDirectory = (tenantKey: string, credentials = true) => ({
       ]
     : [],
   telephony_services: [],
+});
+
+const callDetailsResponse = (state: "running" | "ended" = "running") => ({
+  tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
+  definition: { id: "delivery-rescheduling", name: "Delivery rescheduling" },
+  definition_revision: 3,
+  inspection: {
+    schema_version: 1,
+    call: {
+      id: "call-public-id",
+      revision: state === "running" ? 3 : 4,
+      state,
+      created_at: "2026-09-17T02:20:00Z",
+      started_at: "2026-09-17T02:20:03Z",
+      ended_at: state === "ended" ? "2026-09-17T02:22:17Z" : null,
+      terminal_reason: state === "ended" ? "completed" : null,
+      duration_ms: state === "ended" ? 134_000 : null,
+    },
+    incarnation: { room_id: "room-1", incarnation_id: "incarnation-1" },
+    participants: [],
+    timeline: [],
+    variables: { state: "unavailable", reason: "not-captured" },
+    metrics: [],
+    metrics_availability: { state: "unavailable", reason: "not-loaded" },
+    completeness: {
+      state: state === "ended" ? "complete" : "unconfirmed",
+      missing_sequence_count: 0,
+      dropped_live_records: 0,
+    },
+  },
 });
 
 test("loads the approved tenant page with a CSRF-protected sign-out action", async () => {
@@ -266,7 +306,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
   expect(await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342")).toBeVisible();
   expect(screen.getByRole("link", { name: "Call definitions" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Services" })).toBeVisible();
-  expect(screen.queryByRole("link", { name: /open call 018f27cb/i })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /open call 018f27cb/i })).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=2&definition_id=delivery-rescheduling",
     expect.any(Object),
@@ -280,6 +320,118 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
   expect(window.location.pathname + window.location.search).toBe(
     "/admin/tenants/AAAAAAAAAAAAAAAA/calls?definition_id=appointment-reminders",
   );
+});
+
+test("loads an approved call details route into the reusable console", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
+  );
+  const fetchImpl = vi.fn(() => response(callDetailsResponse()));
+
+  render(<AdminApp csrfToken="csrf" fetchImpl={fetchImpl} />);
+
+  expect(await screen.findByRole("heading", { name: "Call details" })).toBeInTheDocument();
+  expect(screen.getByText("call-public-id")).toBeVisible();
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+});
+
+test("opens call details from the call directory without a document navigation", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls");
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    String(input).endsWith("/calls?page=1")
+      ? response(callPage("AAAAAAAAAAAAAAAA", null))
+      : response({
+          ...callDetailsResponse(),
+          inspection: {
+            ...callDetailsResponse().inspection,
+            call: {
+              ...callDetailsResponse().inspection.call,
+              id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
+            },
+          },
+        }),
+  );
+
+  render(<AdminApp csrfToken="csrf" fetchImpl={fetchImpl} />);
+  fireEvent.click(await screen.findByRole("link", { name: /open call 018f27cb/i }));
+
+  expect(await screen.findByTestId("call-console")).toBeVisible();
+  expect(window.location.pathname).toBe(
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls/018f27cb-6f87-7d1c-a61f-8873cb667342",
+  );
+});
+
+test("keeps missing, malformed, unavailable, and expired call details distinct", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
+  );
+  const expired = vi.fn();
+  const view = render(
+    <AdminApp csrfToken="csrf" fetchImpl={() => response({}, 404)} onSessionExpired={expired} />,
+  );
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("This call could not be found");
+
+  view.rerender(
+    <AdminApp
+      csrfToken="csrf"
+      fetchImpl={() => response({ tenant: "invalid" })}
+      onSessionExpired={expired}
+    />,
+  );
+  expect(await screen.findByText("Call data could not be read")).toBeVisible();
+
+  view.rerender(
+    <AdminApp
+      csrfToken="csrf"
+      fetchImpl={() => Promise.reject(new Error("offline"))}
+      onSessionExpired={expired}
+    />,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent("Call inspection is unavailable");
+
+  view.rerender(
+    <AdminApp csrfToken="csrf" fetchImpl={() => response({}, 401)} onSessionExpired={expired} />,
+  );
+  await waitFor(() => expect(expired).toHaveBeenCalledOnce());
+});
+
+test("ignores an expired-session response from an obsolete call-details request", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
+  );
+  let resolveDetails: ((value: Response) => void) | undefined;
+  const pendingDetails = new Promise<Response>((resolve) => {
+    resolveDetails = resolve;
+  });
+  const expired = vi.fn();
+  const fetchImpl = vi
+    .fn(() => response(tenantPage(1, "Current tenant")))
+    .mockImplementationOnce(() => pendingDetails);
+
+  render(
+    <AdminApp csrfToken="csrf" fetchImpl={fetchImpl} onSessionExpired={expired} />,
+  );
+
+  window.history.pushState({}, "", "/admin");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  expect(await screen.findByText("Current tenant")).toBeVisible();
+
+  await act(async () => {
+    resolveDetails?.(await response({}, 401));
+    await pendingDetails;
+  });
+
+  expect(expired).not.toHaveBeenCalled();
 });
 
 test("ignores an obsolete call response after the definition filter changes", async () => {

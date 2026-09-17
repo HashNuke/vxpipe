@@ -26,6 +26,7 @@ defmodule Vxpipe.Console.OperatorTraffic do
 
   defp operator_path?(["auth" | _rest]), do: true
   defp operator_path?(["admin" | _rest]), do: true
+  defp operator_path?(["tenants", _tenant_key, "calls" | _rest]), do: true
   defp operator_path?(_path), do: false
 
   defp insecure_public?(%Conn{scheme: :https}), do: false

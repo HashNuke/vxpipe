@@ -9,12 +9,12 @@ type CallDetailsIdentity = {
 };
 
 type KnownDefinition = {
-  definition: DefinitionContext;
+  definition: Pick<DefinitionContext, "id" | "name">;
   definitionRevision: number;
 };
 
 type OptionalDefinition = {
-  definition: DefinitionContext | null;
+  definition: Pick<DefinitionContext, "id" | "name"> | null;
   definitionRevision: number | null;
 };
 

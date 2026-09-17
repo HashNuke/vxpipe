@@ -1,6 +1,6 @@
 # Operator login and admin dashboard
 
-Status: checkpoints 1–6 complete; checkpoint 7 remains.
+Status: complete; all seven checkpoints and acceptance gates pass.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
@@ -316,18 +316,18 @@ were fixed and retested.
 
 ## Checkpoint 7 — Open live and historical call details
 
-- [ ] Replace the old tenant-API-key browser authority on all Console call-inspection resources with
+- [x] Replace the old tenant-API-key browser authority on all Console call-inspection resources with
   the operator session. Preserve tenant/call lookup isolation and `private, no-store` responses.
-- [ ] Connect the approved Call details page to the existing inspection snapshot. Hand validated
+- [x] Connect the approved Call details page to the existing inspection snapshot. Hand validated
   data to `@vxpipe/core`; keep endpoint fetching and operator routing outside reusable packages.
-- [ ] Render ongoing, ended, partial archive, unavailable and malformed snapshot states. Existing
+- [x] Render ongoing, ended, partial archive, unavailable and malformed snapshot states. Existing
   RTVI/WebRTC live attachment remains governed by the call-debug-console milestone.
-- [ ] Verify direct links, session expiry, another tenant's call ID, desktop/mobile scrolling and the
+- [x] Verify direct links, session expiry, another tenant's call ID, desktop/mobile scrolling and the
   existing debug-console interactions in automated and rendered browser checks.
-- [ ] Retire `/operator/sign-in` and `/operator/session`. Reject and clear the legacy tenant-session
+- [x] Retire `/operator/sign-in` and `/operator/session`. Reject and clear the legacy tenant-session
   cookie; it never upgrades into the installation-wide operator grant. Keep tenant API
   authentication itself unchanged.
-- [ ] Redirect the old tenant call-list, LiveView call-detail and `/console` HTML URLs to their exact
+- [x] Redirect the old tenant call-list, LiveView call-detail and `/console` HTML URLs to their exact
   `/admin` destinations after operator authentication. Retain the inspection JSON, call-details
   download and recording artifact URLs only as operator-session-protected resource endpoints used
   by the React page; they render no independent UI.
@@ -335,23 +335,38 @@ were fixed and retested.
 Exit: the React admin application opens any authorized live or historical call in the same debug
 console. Commit this migration separately.
 
+Evidence: Calls owns a bounded `CallReadAccess` derived from installation-operator authority and an
+explicit tenant key; invalid or cross-tenant authorities return structured errors rather than
+crashing. Console exposes the tenant-scoped call-details snapshot to the authenticated React host,
+whose strict parser feeds `@vxpipe/core` and `@vxpipe/react`. Request cancellation prevents a stale
+call response or stale 401 from replacing the current route or ending its session. Old HTML routes
+redirect to exact admin destinations, retained JSON/document/recording resources require the
+installation session and HTTPS policy, and the legacy tenant browser cookie is always cleared.
+Unreachable LiveView presentation code was removed. Headless Chrome verified a real historical call
+at 1440×900 and 390×844, including responsive scrolling and mobile participant selection. Calls
+(103 tests), Console (154 tests, one excluded), Console assets (115 tests), TypeScript and ESLint
+pass. GPT-6 Astra xhigh approved the final slice after verifying fixes for retained-resource HTTPS,
+stale session expiry, legacy-cookie clearing and malformed authority handling. Final umbrella
+verification passes 1,696 tests with zero failures and 39 exclusions; Storybook, assets, formatting,
+warnings-as-errors compilation, strict Credo and unused-dependency checks also pass.
+
 ## Acceptance and completion
 
-- [ ] `mix vxpipe.login` produces one short-lived URL and separate eight-digit code; only digests
+- [x] `mix vxpipe.login` produces one short-lived URL and separate eight-digit code; only digests
   persist, and expiry/attempt/concurrency behavior passes after application restart.
-- [ ] The Phoenix-rendered auth flow is the only non-React user page introduced here. Every `/admin`
+- [x] The Phoenix-rendered auth flow is the only non-React user page introduced here. Every `/admin`
   page comes from the completed and explicitly user-approved Storybook milestone.
-- [ ] One operator session sees every tenant, definition and tenant call without user, team,
+- [x] One operator session sees every tenant, definition and tenant call without user, team,
   membership or RBAC records.
-- [ ] Tenant Calls defaults to all calls and accepts an isolated definition filter; shared tenant
+- [x] Tenant Calls defaults to all calls and accepts an isolated definition filter; shared tenant
   navigation reaches Call definitions, Calls and Services on direct load and through browser history.
-- [ ] The Services page lists metadata and accepts supported provider credentials through write-only,
+- [x] The Services page lists metadata and accepts supported provider credentials through write-only,
   CSRF-protected actions; no endpoint or UI reveals stored credential values.
-- [ ] Platform and tenant API keys remain API credentials and cannot sign into the UI.
-- [ ] Anonymous, expired and cross-resource requests disclose no administration or call data.
-- [ ] Direct loads, refresh and browser history work for every admin URL; lists remain bounded and
+- [x] Platform and tenant API keys remain API credentials and cannot sign into the UI.
+- [x] Anonymous, expired and cross-resource requests disclose no administration or call data.
+- [x] Direct loads, refresh and browser history work for every admin URL; lists remain bounded and
   unavailable states remain distinct from empty data.
-- [ ] Focused Elixir/TypeScript tests, Storybook build, rendered desktop/mobile checks and all common
+- [x] Focused Elixir/TypeScript tests, Storybook build, rendered desktop/mobile checks and all common
   umbrella gates pass. Each passing checkpoint is committed with its docs and labnotes.
 
 ## Scope boundaries

@@ -1,35 +1,35 @@
 defmodule Vxpipe.Console.CallRecording do
   @moduledoc "Lists and opens tenant-authorized recordings for private playback."
 
-  alias Vxpipe.Calls.Principal
+  alias Vxpipe.Calls.CallReadAccess
   alias Vxpipe.Console.CallRecording.{Source, Summary}
 
-  @spec list(Principal.t(), String.t(), keyword()) ::
+  @spec list(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, [Summary.t()]} | {:error, term()}
   def list(principal, call_id, options \\ [])
 
-  def list(%Principal{} = principal, call_id, options)
+  def list(authority, call_id, options)
       when is_binary(call_id) and call_id != "" and is_list(options) do
     {backend, backend_options} = backend(options)
 
     backend
-    |> apply(:list, [backend_options, principal, call_id])
+    |> apply(:list, [backend_options, authority, call_id])
     |> validate_list_response()
   end
 
   def list(_principal, _call_id, _options), do: {:error, :invalid_recording_request}
 
-  @spec open(Principal.t(), String.t(), String.t(), keyword()) ::
+  @spec open(CallReadAccess.authority(), String.t(), String.t(), keyword()) ::
           {:ok, Source.t()} | {:error, term()}
   def open(principal, call_id, artifact_id, options \\ [])
 
-  def open(%Principal{} = principal, call_id, artifact_id, options)
+  def open(authority, call_id, artifact_id, options)
       when is_binary(call_id) and call_id != "" and is_binary(artifact_id) and artifact_id != "" and
              is_list(options) do
     {backend, backend_options} = backend(options)
 
     backend
-    |> apply(:open, [backend_options, principal, call_id, artifact_id])
+    |> apply(:open, [backend_options, authority, call_id, artifact_id])
     |> validate_response()
   end
 

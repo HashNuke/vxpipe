@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.Artifacts do
   @moduledoc "Database-neutral workflows for terminal call-artifact metadata."
 
-  alias Vxpipe.Calls.{CallArtifact, Principal, PublicationTriggers, Repositories}
+  alias Vxpipe.Calls.{CallArtifact, CallReadAccess, PublicationTriggers, Repositories}
 
   @spec store(CallArtifact.t(), keyword()) :: {:ok, CallArtifact.t()} | {:error, term()}
   def store(%CallArtifact{} = artifact, options) when is_list(options) do
@@ -14,26 +14,26 @@ defmodule Vxpipe.Calls.Artifacts do
 
   def store(_artifact, _options), do: {:error, :invalid_call_artifact}
 
-  @spec fetch(Principal.t(), String.t(), keyword()) ::
+  @spec fetch(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, [CallArtifact.t()]} | {:error, term()}
-  def fetch(%Principal{} = principal, call_id, options)
+  def fetch(authority, call_id, options)
       when is_binary(call_id) and is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <- CallReadAccess.tenant_key(authority, :invalid_artifact_request),
          {:ok, repository} <- Repositories.fetch(options, :artifact_repository) do
-      Repositories.call(repository, :fetch_call_artifacts, [principal.tenant_key, call_id])
+      Repositories.call(repository, :fetch_call_artifacts, [tenant_key, call_id])
     end
   end
 
   def fetch(_principal, _call_id, _options), do: {:error, :invalid_artifact_request}
 
-  @spec fetch_one(Principal.t(), String.t(), String.t(), keyword()) ::
+  @spec fetch_one(CallReadAccess.authority(), String.t(), String.t(), keyword()) ::
           {:ok, CallArtifact.t()} | {:error, term()}
-  def fetch_one(%Principal{} = principal, call_id, artifact_id, options)
+  def fetch_one(authority, call_id, artifact_id, options)
       when is_binary(call_id) and is_binary(artifact_id) and is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <- CallReadAccess.tenant_key(authority, :invalid_artifact_request),
          {:ok, repository} <- Repositories.fetch(options, :artifact_repository) do
       Repositories.call(repository, :fetch_call_artifact, [
-        principal.tenant_key,
+        tenant_key,
         call_id,
         artifact_id
       ])
@@ -43,7 +43,4 @@ defmodule Vxpipe.Calls.Artifacts do
   def fetch_one(_principal, _call_id, _artifact_id, _options),
     do: {:error, :invalid_artifact_request}
 
-  defp authorize(%Principal{scopes: scopes}) do
-    if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
-  end
 end

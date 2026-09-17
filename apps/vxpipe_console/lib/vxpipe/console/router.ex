@@ -21,6 +21,10 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireInstallationOperator
   end
 
+  pipeline :installation_operator_call do
+    plug Vxpipe.Console.AssignInstallationCallAccess
+  end
+
   pipeline :installation_operator_api do
     plug :accepts, ["json"]
 
@@ -71,9 +75,9 @@ defmodule Vxpipe.Console.Router do
     get "/", Vxpipe.Console.HomeController, :index
     get "/pipecat-console", Vxpipe.Console.PageController, :index
     get "/transfer", Vxpipe.Console.PageController, :index
-    get "/operator/sign-in", Vxpipe.Console.OperatorSessionController, :new
-    post "/operator/session", Vxpipe.Console.OperatorSessionController, :create
-    post "/operator/sign-out", Vxpipe.Console.OperatorSessionController, :delete
+    get "/operator/sign-in", Vxpipe.Console.LegacyOperatorSessionController, :guidance
+    post "/operator/session", Vxpipe.Console.LegacyOperatorSessionController, :reject
+    post "/operator/sign-out", Vxpipe.Console.LegacyOperatorSessionController, :reject
   end
 
   scope "/auth" do
@@ -92,6 +96,7 @@ defmodule Vxpipe.Console.Router do
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
     get "/tenants/:tenant_key/definitions", Vxpipe.Console.AdminDefinitionsController, :index
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
+    get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
     post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create
   end
@@ -104,23 +109,27 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/tenants/:tenant_key/calls" do
-    pipe_through [:browser, :operator]
+    pipe_through [:browser, :operator_pages, :installation_operator]
 
-    get "/:call_id/console", Vxpipe.Console.CallConsolePageController, :show
-    get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show
-    get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show
-
-    live_session :vxpipe_call_inspection,
-      root_layout: {Vxpipe.Console.CallInspectionLayout, :root},
-      session: {Vxpipe.Console.OperatorSession, :live_session, []},
-      on_mount: [Vxpipe.Console.OperatorLiveAuthentication] do
-      live "/", Vxpipe.Console.CallInspectionLive, :index
-      live "/:call_id", Vxpipe.Console.CallInspectionDetailLive, :show
-    end
+    get "/", Vxpipe.Console.LegacyCallRouteController, :index
+    get "/:call_id", Vxpipe.Console.LegacyCallRouteController, :show
+    get "/:call_id/console", Vxpipe.Console.LegacyCallRouteController, :show
   end
 
   scope "/tenants/:tenant_key/calls" do
-    pipe_through :operator_api
+    pipe_through [
+      :browser,
+      :operator_pages,
+      :installation_operator,
+      :installation_operator_call
+    ]
+
+    get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show
+    get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show
+  end
+
+  scope "/tenants/:tenant_key/calls" do
+    pipe_through [:installation_operator_api, :installation_operator_call]
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
   end

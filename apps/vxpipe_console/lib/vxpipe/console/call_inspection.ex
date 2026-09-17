@@ -5,6 +5,7 @@ defmodule Vxpipe.Console.CallInspection do
     CallDetailPage,
     CallHistory,
     CallListPage,
+    CallReadAccess,
     LiveCallInspection,
     PreparedCall,
     Principal,
@@ -21,14 +22,14 @@ defmodule Vxpipe.Console.CallInspection do
     |> validate_response(CallListPage)
   end
 
-  @spec inspect_call(Principal.t(), String.t(), keyword()) ::
+  @spec inspect_call(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, CallDetailPage.t()} | {:error, term()}
-  def inspect_call(%Principal{} = principal, call_id, options \\ [])
+  def inspect_call(authority, call_id, options \\ [])
       when is_binary(call_id) and is_list(options) do
     {module, backend_options, request_options} = backend(options)
 
     module
-    |> apply(:inspect_call, [backend_options, principal, call_id, request_options])
+    |> apply(:inspect_call, [backend_options, authority, call_id, request_options])
     |> validate_response(CallDetailPage)
   end
 
@@ -43,25 +44,25 @@ defmodule Vxpipe.Console.CallInspection do
     |> validate_response(LiveCallInspection)
   end
 
-  @spec fetch_call_history(Principal.t(), String.t(), keyword()) ::
+  @spec fetch_call_history(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, CallHistory.t()} | {:error, term()}
-  def fetch_call_history(%Principal{} = principal, call_id, options \\ [])
+  def fetch_call_history(authority, call_id, options \\ [])
       when is_binary(call_id) and is_list(options) do
     {module, backend_options, request_options} = backend(options)
 
     module
-    |> apply(:fetch_call_history, [backend_options, principal, call_id, request_options])
+    |> apply(:fetch_call_history, [backend_options, authority, call_id, request_options])
     |> validate_response(CallHistory)
   end
 
-  @spec usage_report(Principal.t(), String.t(), keyword()) ::
+  @spec usage_report(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, UsageReport.t()} | {:error, term()}
-  def usage_report(%Principal{} = principal, call_id, options \\ [])
+  def usage_report(authority, call_id, options \\ [])
       when is_binary(call_id) and is_list(options) do
     {module, backend_options, request_options} = backend(options)
 
     module
-    |> apply(:usage_report, [backend_options, principal, call_id, request_options])
+    |> apply(:usage_report, [backend_options, authority, call_id, request_options])
     |> validate_response(UsageReport)
   end
 

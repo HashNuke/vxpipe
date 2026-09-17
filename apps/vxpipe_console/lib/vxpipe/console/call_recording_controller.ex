@@ -9,7 +9,7 @@ defmodule Vxpipe.Console.CallRecordingController do
 
   def show(conn, %{"artifact_id" => artifact_id, "call_id" => call_id}) do
     with {:ok, source} <-
-           CallRecording.open(conn.assigns.operator_principal, call_id, artifact_id),
+           CallRecording.open(conn.assigns.call_read_access, call_id, artifact_id),
          {:ok, wave} <- RecordingWave.new(source) do
       RecordingResponse.stream(conn, wave)
     else

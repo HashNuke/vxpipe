@@ -144,6 +144,36 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     refute encoded =~ "source_policy"
   end
 
+  test "presents capability selections archived before model became a top-level field" do
+    inspection = result()
+    prepared_call = inspection.prepared_call
+    plan = prepared_call.plan
+    caller = Map.fetch!(plan.participants, "caller")
+
+    archived_selection = %{
+      __struct__: CapabilitySelection,
+      kind: :speech_to_text,
+      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+      profile: "deepgram-flux-stt",
+      options: %{model: "flux-general-en"}
+    }
+
+    capabilities = %{caller.capabilities | speech_to_text: archived_selection}
+    caller = %{caller | capabilities: capabilities}
+    plan = %{plan | participants: Map.put(plan.participants, "caller", caller)}
+    inspection = %{inspection | prepared_call: %{prepared_call | plan: plan}}
+
+    [presented_caller | _rest] = CallInspectionPresenter.present(inspection)["participants"]
+
+    assert presented_caller["value"]["capabilities"] == [
+             %{
+               "name" => "STT",
+               "provider" => Vxpipe.CallEngine.Provider.Deepgram.Flux,
+               "model" => "flux-general-en"
+             }
+           ]
+  end
+
   test "does not fabricate ongoing duration or absent captured data" do
     call = %{call_summary() | state: :running, ended_at: nil, terminal_reason: nil}
     history = CallHistory.new([], %VariableSnapshotHistory{snapshots: [], latest: nil})

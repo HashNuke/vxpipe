@@ -6,6 +6,7 @@ defmodule Vxpipe.Calls.Inspections do
     CallFact,
     CallListCursor,
     CallListPage,
+    CallReadAccess,
     CallTimeline,
     HistoryCursor,
     LiveCallInspection,
@@ -35,22 +36,23 @@ defmodule Vxpipe.Calls.Inspections do
 
   def list_calls(_principal, _options), do: {:error, :invalid_call_list_request}
 
-  @spec inspect_call(Principal.t(), String.t(), keyword()) ::
+  @spec inspect_call(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, CallDetailPage.t()} | {:error, term()}
-  def inspect_call(%Principal{} = principal, call_id, options)
+  def inspect_call(authority, call_id, options)
       when is_binary(call_id) and byte_size(call_id) > 0 and byte_size(call_id) <= 256 and
              is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <-
+           CallReadAccess.tenant_key(authority, :invalid_call_inspection_request),
          {:ok, limit} <- page_size(options),
          {:ok, cursor} <- history_cursor(options),
          {:ok, repository} <- Repositories.fetch(options, :inspection_repository),
          {:ok, call} <-
-           Repositories.call(repository, :fetch_call, [principal.tenant_key, call_id]),
+           Repositories.call(repository, :fetch_call, [tenant_key, call_id]),
          {:ok, archive_status} <-
-           Repositories.call(repository, :fetch_archive_status, [principal.tenant_key, call_id]),
+           Repositories.call(repository, :fetch_archive_status, [tenant_key, call_id]),
          {:ok, candidates} <-
            Repositories.call(repository, :list_history_records, [
-             principal.tenant_key,
+             tenant_key,
              call_id,
              limit + 1,
              cursor

@@ -3,8 +3,10 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   alias Vxpipe.Calls.{
     CallDirectoryPage,
+    CallDirectorySummary,
     DefinitionPage,
     InstallationOperator,
+    OperatorCallContext,
     ProviderAuth,
     ProviderCredential,
     PublicId,
@@ -118,6 +120,32 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     do: {:error, :installation_operator_required}
 
   def list_calls(_authority, _tenant_key, _options),
+    do: {:error, :installation_operator_required}
+
+  @spec fetch_call_context(InstallationOperator.t(), String.t(), String.t(), keyword()) ::
+          {:ok, OperatorCallContext.t()} | {:error, term()}
+  def fetch_call_context(
+        %InstallationOperator{grant: :installation_operator},
+        tenant_key,
+        call_id,
+        options
+      )
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_binary(call_id) and
+             byte_size(call_id) > 0 and byte_size(call_id) <= 256 and is_list(options) do
+    with {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         {:ok, {%Tenant{key: ^tenant_key} = tenant, %CallDirectorySummary{id: ^call_id} = call}} <-
+           Repositories.call(repository, :fetch_call_context, [tenant_key, call_id]) do
+      {:ok, %OperatorCallContext{tenant: tenant, call: call}}
+    else
+      {:ok, _invalid} -> {:error, :call_directory_unavailable}
+      error -> error
+    end
+  end
+
+  def fetch_call_context(%InstallationOperator{}, _tenant_key, _call_id, _options),
+    do: {:error, :installation_operator_required}
+
+  def fetch_call_context(_authority, _tenant_key, _call_id, _options),
     do: {:error, :installation_operator_required}
 
   @spec list_services(InstallationOperator.t(), String.t(), keyword()) ::

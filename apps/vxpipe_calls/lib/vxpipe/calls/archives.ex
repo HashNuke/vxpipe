@@ -4,7 +4,7 @@ defmodule Vxpipe.Calls.Archives do
   alias Vxpipe.Calls.{
     CallFact,
     CallHistory,
-    Principal,
+    CallReadAccess,
     PublicationTriggers,
     Repositories,
     VariableSnapshot
@@ -32,43 +32,43 @@ defmodule Vxpipe.Calls.Archives do
 
   def store_variable_snapshot(_snapshot, _options), do: {:error, :invalid_variable_snapshot}
 
-  @spec fetch_variable_snapshots(Principal.t(), String.t(), keyword()) ::
+  @spec fetch_variable_snapshots(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, Vxpipe.Calls.VariableSnapshotHistory.t()} | {:error, term()}
-  def fetch_variable_snapshots(%Principal{} = principal, call_id, options)
+  def fetch_variable_snapshots(authority, call_id, options)
       when is_binary(call_id) and is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <- CallReadAccess.tenant_key(authority, :invalid_archive_request),
          {:ok, repository} <- Repositories.fetch(options, :archive_repository) do
-      Repositories.call(repository, :fetch_variable_snapshots, [principal.tenant_key, call_id])
+      Repositories.call(repository, :fetch_variable_snapshots, [tenant_key, call_id])
     end
   end
 
   def fetch_variable_snapshots(_principal, _call_id, _options),
     do: {:error, :invalid_archive_request}
 
-  @spec fetch_call_facts(Principal.t(), String.t(), keyword()) ::
+  @spec fetch_call_facts(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, [CallFact.t()]} | {:error, term()}
-  def fetch_call_facts(%Principal{} = principal, call_id, options)
+  def fetch_call_facts(authority, call_id, options)
       when is_binary(call_id) and is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <- CallReadAccess.tenant_key(authority, :invalid_archive_request),
          {:ok, repository} <- Repositories.fetch(options, :archive_repository) do
-      Repositories.call(repository, :fetch_call_facts, [principal.tenant_key, call_id])
+      Repositories.call(repository, :fetch_call_facts, [tenant_key, call_id])
     end
   end
 
   def fetch_call_facts(_principal, _call_id, _options),
     do: {:error, :invalid_archive_request}
 
-  @spec fetch_call_history(Principal.t(), String.t(), keyword()) ::
+  @spec fetch_call_history(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, CallHistory.t()} | {:error, term()}
-  def fetch_call_history(%Principal{} = principal, call_id, options)
+  def fetch_call_history(authority, call_id, options)
       when is_binary(call_id) and is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <- CallReadAccess.tenant_key(authority, :invalid_archive_request),
          {:ok, repository} <- Repositories.fetch(options, :archive_repository),
          {:ok, facts} <-
-           Repositories.call(repository, :fetch_call_facts, [principal.tenant_key, call_id]),
+           Repositories.call(repository, :fetch_call_facts, [tenant_key, call_id]),
          {:ok, variable_snapshots} <-
            Repositories.call(repository, :fetch_variable_snapshots, [
-             principal.tenant_key,
+             tenant_key,
              call_id
            ]) do
       {:ok, CallHistory.new(facts, variable_snapshots)}
@@ -77,10 +77,6 @@ defmodule Vxpipe.Calls.Archives do
 
   def fetch_call_history(_principal, _call_id, _options),
     do: {:error, :invalid_archive_request}
-
-  defp authorize(%Principal{scopes: scopes}) do
-    if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
-  end
 
   defp maybe_request_publication(%CallFact{kind: :archive_stream_closed} = fact, options) do
     _result = PublicationTriggers.request(fact.tenant_key, fact.call_id, options)

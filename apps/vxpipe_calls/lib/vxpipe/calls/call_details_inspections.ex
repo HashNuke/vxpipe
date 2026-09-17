@@ -4,19 +4,20 @@ defmodule Vxpipe.Calls.CallDetailsInspections do
   alias Vxpipe.Calls.{
     CallDetailsCursor,
     CallDetailsDocument,
+    CallReadAccess,
     CallDetailsRevision,
     CallDetailsRevisionPage,
-    Principal,
     Repositories
   }
 
   @default_page_size 25
   @maximum_page_size 100
 
-  @spec list(Principal.t(), String.t(), keyword()) ::
+  @spec list(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, CallDetailsRevisionPage.t()} | {:error, term()}
-  def list(%Principal{} = principal, call_id, options) when is_list(options) do
-    with :ok <- authorize(principal),
+  def list(authority, call_id, options) when is_list(options) do
+    with {:ok, tenant_key} <-
+           CallReadAccess.tenant_key(authority, :invalid_call_details_request),
          :ok <- valid_id(call_id),
          {:ok, limit} <- page_size(options),
          {:ok, cursor} <- cursor(options),
@@ -24,7 +25,7 @@ defmodule Vxpipe.Calls.CallDetailsInspections do
            Repositories.fetch(options, :call_details_inspection_repository),
          {:ok, candidates} when is_list(candidates) <-
            Repositories.call(repository, :list, [
-             principal.tenant_key,
+             tenant_key,
              call_id,
              limit + 1,
              cursor
@@ -40,18 +41,19 @@ defmodule Vxpipe.Calls.CallDetailsInspections do
 
   def list(_principal, _call_id, _options), do: {:error, :invalid_call_details_request}
 
-  @spec fetch(Principal.t(), String.t(), String.t(), keyword()) ::
+  @spec fetch(CallReadAccess.authority(), String.t(), String.t(), keyword()) ::
           {:ok, CallDetailsDocument.t()} | {:error, term()}
-  def fetch(%Principal{} = principal, call_id, publication_id, options)
+  def fetch(authority, call_id, publication_id, options)
       when is_list(options) do
-    with :ok <- authorize(principal),
+    with {:ok, tenant_key} <-
+           CallReadAccess.tenant_key(authority, :invalid_call_details_request),
          :ok <- valid_id(call_id),
          :ok <- valid_id(publication_id),
          {:ok, repository} <-
            Repositories.fetch(options, :call_details_inspection_repository),
          {:ok, %CallDetailsDocument{} = document} <-
            Repositories.call(repository, :fetch, [
-             principal.tenant_key,
+             tenant_key,
              call_id,
              publication_id
            ]) do
@@ -64,10 +66,6 @@ defmodule Vxpipe.Calls.CallDetailsInspections do
 
   def fetch(_principal, _call_id, _publication_id, _options),
     do: {:error, :invalid_call_details_request}
-
-  defp authorize(%Principal{scopes: scopes}) do
-    if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
-  end
 
   defp valid_id(value)
        when is_binary(value) and byte_size(value) > 0 and byte_size(value) <= 256,

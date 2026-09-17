@@ -24,4 +24,9 @@ defmodule Vxpipe.Calls.TestAdminRepository do
     send(self(), {:admin_repository_list_services, tenant_key})
     Agent.get(agent, & &1)
   end
+
+  def fetch_call_context(agent, tenant_key, call_id) do
+    send(self(), {:admin_repository_fetch_call_context, tenant_key, call_id})
+    Agent.get(agent, & &1)
+  end
 end
