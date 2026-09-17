@@ -128,6 +128,18 @@ mix assets.test
 mix assets.build
 ```
 
+The operator administration prototype has a Console-owned Storybook. It uses deterministic view
+models and does not require Phoenix, PostgreSQL, media access, or a live call:
+
+```shell
+cd apps/vxpipe_console/assets
+npm run storybook
+```
+
+Open `http://127.0.0.1:6007/`. Individual page stories expose their important states through
+Storybook Controls. The completed milestone will provide **Admin / Full journey** as the linked
+review entry point from tenants through call details.
+
 The browser uses only the scoped, short-lived connection details returned by the
 gateway. There is no build-time gateway URL or frontend environment file, and
 credentials must never be added to browser assets.

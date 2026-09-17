@@ -1,6 +1,7 @@
 # Operator admin Storybook
 
-Status: planned, not implemented. Requested and independently reviewed 2026-09-17.
+Status: implementation active; checkpoint 1 of 5 is complete. Requested and independently
+reviewed 2026-09-17.
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
 Sources: [Developer console design](../developer-console-and-onboarding.md),
@@ -58,20 +59,25 @@ milestones. They are not placeholder actions in this Storybook.
 
 ## Checkpoint 1 — Complete the Tenants page
 
-- [ ] Add the Console Storybook and its build/test commands without duplicating the existing
+- [x] Add the Console Storybook and its build/test commands without duplicating the existing
   `@vxpipe/react` Storybook implementation.
-- [ ] Build the smallest shadcn-compatible components needed for this page: page frame, navigation,
+- [x] Build the smallest shadcn-compatible components needed for this page: page frame, navigation,
   page header, tenant row/card, list/table, status presentation, skeleton, empty/error state and
   pagination. Keep fixtures and actions outside presentation components.
-- [ ] Compose the complete Tenants page with loading, empty, populated, unavailable, long-identity,
+- [x] Compose the complete Tenants page with loading, empty, populated, unavailable, long-identity,
   paginated and narrow-screen fixtures.
-- [ ] Make tenant selection navigate through the Storybook harness while preserving a real-link
+- [x] Make tenant selection navigate through the Storybook harness while preserving a real-link
   affordance and visible destination.
-- [ ] Test the Vxpipe-owned selection, pagination, empty/error and stale-action behavior.
-- [ ] Inspect every important state in rendered desktop/mobile Storybook.
+- [x] Test the Vxpipe-owned selection, pagination, empty/error and stale-action behavior.
+- [x] Inspect every important state in rendered desktop/mobile Storybook.
 
 Exit: a reviewer can evaluate the complete tenant-selection page without a server. Commit this page
 slice with its Storybook configuration, frontend tests, documentation and labnotes.
+
+Evidence: deterministic stories cover all required states; the Console's 29 frontend tests,
+TypeScript check, ESLint check and Storybook production build pass. Rendered dark/light desktop and
+390 px mobile inspection passed without overflow or browser errors. See
+[checkpoint labnotes](../../labnotes/20260917-0826-admin-tenants-storybook.md).
 
 ## Checkpoint 2 — Complete the Tenant definitions page
 

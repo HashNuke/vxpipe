@@ -4,8 +4,6 @@ import {
   claimSampleSession,
   isSessionResponse,
   requestSampleAdmission,
-  type GatewaySession,
-  type ParticipantSnapshot,
   type RoomConnection,
 } from "./sampleAdmission";
 
@@ -19,11 +17,6 @@ type RoomSnapshot = {
 
 type RoomResponse = {
   room: RoomSnapshot;
-};
-
-type SessionResponse = {
-  participant: ParticipantSnapshot;
-  session: GatewaySession;
 };
 
 export type { RoomConnection } from "./sampleAdmission";

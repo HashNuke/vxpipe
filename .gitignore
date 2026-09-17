@@ -24,6 +24,7 @@ erl_crash.dump
 /apps/vxpipe_console/assets/node_modules/
 /apps/vxpipe_console/assets/*.tsbuildinfo
 /apps/vxpipe_console/assets/.env*
+/apps/vxpipe_console/assets/storybook-static/
 /apps/vxpipe_console/priv/static/assets/
 
 # Reusable browser packages and Storybook artifacts.
