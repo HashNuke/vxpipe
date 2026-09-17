@@ -144,7 +144,7 @@ See [checkpoint labnotes](../../labnotes/20260917-0858-definition-calls-storyboo
 - [x] Build only the admin host frame and resource context needed around the existing call console.
   Reuse the real `@vxpipe/react` component rather than copying it.
 - [x] Compose the complete Call details page with typed ongoing and ended fixtures plus loading,
-  unavailable, partial archive, malformed-response and narrow-screen host states.
+  unavailable, partial archive, malformed-response, long-content and narrow-screen host states.
 - [x] Preserve the debug console's bounded height, internal scrolling, sticky composer and device/
   timeline/variables/metrics/participants interactions in the composed page.
 - [x] Test the host-to-console view-model/action boundary and failure presentation without testing
@@ -223,8 +223,8 @@ passed. See [checkpoint labnotes](../../labnotes/20260917-1045-tenant-calls-work
   save-success stories. Existing credentials show metadata without showing or pretending to show
   stored values, and do not imply a third-party rotation workflow.
 - [x] Test provider-specific field selection, secret clearing after success/cancel, duplicate-name
-  conflict without overwrite, stale-submission handling, accessible focus restoration and absence
-  of secret values from rendered metadata.
+  conflict without overwrite, repeated submission and tenant-reset state isolation, accessible focus
+  restoration and absence of secret values from rendered metadata.
 - [x] Inspect dark/light, desktop/mobile and keyboard-only setup flows in rendered Storybook.
 
 Exit: a reviewer can understand which services are configured and safely model adding credentials
@@ -244,13 +244,13 @@ long-content, repeated-save and keyboard-modal review passed. See
 
 ## Checkpoint 7 — Review the complete mocked journey
 
-- [ ] Compose one deterministic journey that moves Tenants → Call definitions → filtered Calls →
+- [x] Compose one deterministic journey that moves Tenants → Call definitions → filtered Calls →
   Call details and back, and also reaches all Calls and Services through the tenant navigation.
-- [ ] Verify page context, breadcrumbs, links, back/forward behavior, pagination handoff and state
+- [x] Verify page context, breadcrumbs, links, back/forward behavior, pagination handoff and state
   isolation across resource changes. No late mock action may replace the currently selected page.
-- [ ] Review the full journey at representative desktop and mobile viewports, dark/light themes,
+- [x] Review the full journey at representative desktop and mobile viewports, dark/light themes,
   keyboard-only operation, reduced motion and long localized-looking content.
-- [ ] Build Storybook from a clean checkout and run the focused frontend test suite. Record the exact
+- [x] Build Storybook from a clean checkout and run the focused frontend test suite. Record the exact
   review evidence and any approved design adjustments.
 - [ ] Present the complete running Storybook journey to the user and record explicit design approval.
   A passing build, automated test or internal review does not grant approval to integrate the app.
@@ -260,20 +260,31 @@ long-content, repeated-save and keyboard-modal review passed. See
 Exit: the entire first admin application is approved as a coherent mocked experience. Commit the
 final Storybook acceptance and synchronize the milestone index.
 
+Technical review evidence: the deterministic Storybook journey at `c016c63` was traversed through
+Tenants, Call definitions, definition-filtered Calls, Call details, browser back/forward, all tenant
+Calls and Services. Rendered review covered 1440 px desktop and 390 px mobile, dark and light themes,
+keyboard interactions, reduced-motion emulation and page-specific long-content states. Final review
+at `a64fda3` also covered the added Call details long-content story. A separate detached clean
+checkout at that commit passed the Console TypeScript check, ESLint check and 76 tests plus the React
+package's 30 tests and Storybook 10.6.0 production build after building the local workspaces. All five
+umbrella completion gates also pass. Explicit user design approval and the resulting milestone/index
+completion remain open.
+See [acceptance labnotes](../../labnotes/20260917-1139-admin-storybook-acceptance.md).
+
 ## Acceptance and completion
 
-- [ ] Every intended `/admin` page exists as a complete Storybook page built from its real small
+- [x] Every intended `/admin` page exists as a complete Storybook page built from its real small
   components and feature sections.
-- [ ] A reviewer can traverse the full tenant-to-call journey and the tenant Services setup flow
+- [x] A reviewer can traverse the full tenant-to-call journey and the tenant Services setup flow
   without Phoenix, a database, network requests, media capture or protocol connections.
-- [ ] Loading, empty, populated, unavailable/error, long-content, pagination and narrow-screen states
+- [x] Loading, empty, populated, unavailable/error, long-content, pagination and narrow-screen states
   are reviewable where applicable.
-- [ ] The Call details page uses the real `@vxpipe/react` console and deterministic typed fixtures.
-- [ ] Calls defaults to the tenant scope, preserves an optional definition filter in its URL, and
+- [x] The Call details page uses the real `@vxpipe/react` console and deterministic typed fixtures.
+- [x] Calls defaults to the tenant scope, preserves an optional definition filter in its URL, and
   links to the same call-details route from filtered and unfiltered states.
-- [ ] Services supports only current provider contracts and never renders a stored credential value.
-- [ ] Rendered desktop/mobile, dark/light, keyboard and reduced-motion review passes.
-- [ ] Storybook build and focused frontend tests pass; no production app/backend integration exists.
+- [x] Services supports only current provider contracts and never renders a stored credential value.
+- [x] Rendered desktop/mobile, dark/light, keyboard and reduced-motion review passes.
+- [x] Storybook build and focused frontend tests pass; no production app/backend integration exists.
 - [ ] The user has reviewed and explicitly approved the complete Storybook journey.
 - [ ] Each checkpoint is committed separately with documentation and labnotes.
 
