@@ -6,4 +6,10 @@ defmodule Vxpipe.Console.Test.AdminRepository do
     send(owner, {:operator_tenants_requested, limit, offset})
     result
   end
+
+  @impl true
+  def list_definitions({owner, result}, tenant_key, limit, offset) do
+    send(owner, {:operator_definitions_requested, tenant_key, limit, offset})
+    result
+  end
 end

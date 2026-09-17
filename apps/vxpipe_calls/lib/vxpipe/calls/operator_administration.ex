@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.OperatorAdministration do
   @moduledoc "Installation-wide, bounded read workflows for the operator application."
 
-  alias Vxpipe.Calls.{InstallationOperator, Repositories, TenantPage}
+  alias Vxpipe.Calls.{DefinitionPage, InstallationOperator, Repositories, TenantPage}
 
   @default_page_size 25
   @maximum_page_size 100
@@ -33,6 +33,39 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   def list_tenants(_authority, _options), do: {:error, :installation_operator_required}
 
+  @spec list_definitions(InstallationOperator.t(), String.t(), keyword()) ::
+          {:ok, DefinitionPage.t()} | {:error, term()}
+  def list_definitions(
+        %InstallationOperator{grant: :installation_operator},
+        tenant_key,
+        options
+      )
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+    with {:ok, page} <- positive_integer(options, :page, 1),
+         {:ok, limit} <- page_size(options),
+         {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         offset = (page - 1) * limit,
+         {:ok, {tenant, definitions, total}} <-
+           Repositories.call(repository, :list_definitions, [tenant_key, limit, offset]),
+         {:ok, total_pages} <- page_range(page, total, limit, :definition_page_out_of_range) do
+      {:ok,
+       %DefinitionPage{
+         tenant: tenant,
+         definitions: definitions,
+         page: page,
+         page_size: limit,
+         total: total,
+         total_pages: total_pages
+       }}
+    end
+  end
+
+  def list_definitions(%InstallationOperator{}, _tenant_key, _options),
+    do: {:error, :installation_operator_required}
+
+  def list_definitions(_authority, _tenant_key, _options),
+    do: {:error, :installation_operator_required}
+
   defp page_size(options) do
     with {:ok, limit} <- positive_integer(options, :limit, @default_page_size),
          true <- limit <= @maximum_page_size do
@@ -52,11 +85,11 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   defp total_pages(0, _limit), do: 0
   defp total_pages(total, limit), do: div(total + limit - 1, limit)
 
-  defp page_range(page, total, limit) do
+  defp page_range(page, total, limit, error \\ :tenant_page_out_of_range) do
     pages = total_pages(total, limit)
 
     if page <= max(pages, 1),
       do: {:ok, pages},
-      else: {:error, :tenant_page_out_of_range}
+      else: {:error, error}
   end
 end

@@ -29,6 +29,9 @@ defmodule Vxpipe.Calls do
   def list_operator_tenants(authority, options \\ []),
     do: OperatorAdministration.list_tenants(authority, options)
 
+  def list_operator_definitions(authority, tenant_key, options \\ []),
+    do: OperatorAdministration.list_definitions(authority, tenant_key, options)
+
   def bootstrap_tenant(name, scopes, options \\ []),
     do: Administration.bootstrap_tenant(name, scopes, options)
 

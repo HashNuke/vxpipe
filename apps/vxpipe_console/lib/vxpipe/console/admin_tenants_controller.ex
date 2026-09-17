@@ -4,9 +4,10 @@ defmodule Vxpipe.Console.AdminTenantsController do
   use Phoenix.Controller, formats: [:json]
 
   alias Vxpipe.Calls.InstallationOperator
+  alias Vxpipe.Console.AdminPageParameter
 
   def index(conn, params) do
-    with {:ok, page} <- page_number(params),
+    with {:ok, page} <- AdminPageParameter.parse(params),
          {:ok, tenant_page} <-
            Vxpipe.Calls.list_operator_tenants(InstallationOperator.authority(), page: page) do
       json(conn, %{
@@ -28,17 +29,6 @@ defmodule Vxpipe.Console.AdminTenantsController do
         |> json(%{error: %{code: "tenant_directory_unavailable"}})
     end
   end
-
-  defp page_number(%{"page" => page}) when is_binary(page) do
-    case Integer.parse(page) do
-      {value, ""} when value > 0 -> {:ok, value}
-      _invalid -> {:error, :invalid_page}
-    end
-  end
-
-  defp page_number(%{"page" => _structured}), do: {:error, :invalid_page}
-
-  defp page_number(_params), do: {:ok, 1}
 
   defp tenant_json(tenant) do
     %{

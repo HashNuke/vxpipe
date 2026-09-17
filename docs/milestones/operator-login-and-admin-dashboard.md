@@ -1,6 +1,6 @@
 # Operator login and admin dashboard
 
-Status: checkpoints 1–3 complete; checkpoints 4–7 remain.
+Status: checkpoints 1–4 complete; checkpoints 5–7 remain.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
@@ -215,17 +215,33 @@ then expects to remain.
 
 ## Checkpoint 4 — Browse one tenant's definitions and workspace
 
-- [ ] Red-test a bounded tenant-definition summary query and endpoint with stable pagination,
+- [x] Red-test a bounded tenant-definition summary query and endpoint with stable pagination,
   current publication state, missing tenant and persistence failure.
-- [ ] Connect the approved Tenant definitions page without changing its presentation contract.
+- [x] Connect the approved Tenant definitions page without changing its presentation contract.
   Preserve tenant context in navigation and reject a stale response after switching tenants.
-- [ ] Move the destination to `/admin/tenants/:tenant_key/definitions`. The tenant root redirects
+- [x] Move the destination to `/admin/tenants/:tenant_key/definitions`. The tenant root redirects
   there without losing the selected tenant; Calls and Services links are not exposed yet.
-- [ ] Verify direct URL load, refresh, back/forward, empty/populated/unavailable states and long
+- [x] Verify direct URL load, refresh, back/forward, empty/populated/unavailable states and long
   definition names in automated and rendered browser checks.
 
 Exit: an authenticated operator can select any tenant and browse its call definitions. Commit this
 vertical slice separately.
+
+Evidence: Calls exposes the bounded definition-summary workflow only to installation-operator
+authority. Persistence returns tenant identity, a deterministically ordered page, its total, latest
+saved version/name, published version and call count in one statement; missing tenants remain distinct
+from empty definition lists and storage failure. Console serves the tenant-scoped JSON endpoint and
+the React application restores canonical definition URLs, page history and tenant switches while
+ignoring stale responses. Production displays call counts without linking to the unfinished Calls
+route; the approved Storybook contract retains those links for checkpoint 5. Calls (95 tests), Persistence (147 tests, 11 excluded), Console (174 tests,
+one excluded), and Console assets (90 tests) pass. Headless Chrome verified real PostgreSQL data at
+1440×900 and 390×844, direct tenant-root canonicalization, refresh and back/forward navigation with no
+page-level horizontal overflow. The existing approved Storybook states cover long names and the
+component tests cover loading, empty and unavailable states. The Impeccable detector reported no
+deterministic findings in the changed React surface. GPT-6 Astra xhigh approved the corrected slice
+after identifying and verifying the unfinished-link boundary. Root `mix test` completed with one
+unrelated Gateway WebRTC handoff timing failure; that exact test passed alone immediately afterward
+(one test, zero failures, 67 excluded), while every application changed here passed in the root run.
 
 ## Checkpoint 5 — Browse tenant calls with an optional definition filter
 

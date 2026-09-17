@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { AdminShell } from "./AdminShell";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { DefinitionList } from "./DefinitionList";
@@ -16,6 +18,9 @@ export function TenantDefinitionsPage({
   onSelectWorkspace,
   onPreviousPage,
   onNextPage,
+  headerActions,
+  workspaceDestinations,
+  linkCalls,
 }: {
   state: TenantDefinitionsPageState;
   theme?: "dark" | "light";
@@ -24,9 +29,12 @@ export function TenantDefinitionsPage({
   onSelectWorkspace?: (destination: TenantDestination) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
+  headerActions?: ReactNode;
+  workspaceDestinations?: TenantDestination[];
+  linkCalls?: boolean;
 }) {
   return (
-    <AdminShell theme={theme}>
+    <AdminShell headerActions={headerActions} theme={theme}>
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
         className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
@@ -39,6 +47,7 @@ export function TenantDefinitionsPage({
         />
         <TenantWorkspaceNavigation
           active="definitions"
+          destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
@@ -69,6 +78,7 @@ export function TenantDefinitionsPage({
             <>
               <DefinitionList
                 definitions={state.definitions}
+                linkCalls={linkCalls}
                 onSelectDefinition={onSelectDefinition}
                 tenant={state.tenant}
               />

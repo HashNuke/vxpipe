@@ -9,10 +9,12 @@ export function DefinitionRow({
   definition,
   tenant,
   onSelect,
+  linkCalls = true,
 }: {
   definition: DefinitionSummary;
   tenant: TenantContext;
   onSelect?: (definitionId: string) => void;
+  linkCalls?: boolean;
 }) {
   const label = definition.name ?? definition.id;
   const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/calls?definition_id=${encodeURIComponent(definition.id)}`;
@@ -35,14 +37,18 @@ export function DefinitionRow({
         v{definition.latestRevision}
       </td>
       <td className="px-4 py-4 text-right font-mono text-xs tabular-nums">
-        <a
-          aria-label={`View ${definition.callCount} calls for ${label}`}
-          className="rounded-sm text-[var(--admin-blue)] underline-offset-4 hover:underline"
-          href={href}
-          onClick={handleClick}
-        >
-          {definition.callCount.toLocaleString()}
-        </a>
+        {linkCalls ? (
+          <a
+            aria-label={`View ${definition.callCount} calls for ${label}`}
+            className="rounded-sm text-[var(--admin-blue)] underline-offset-4 hover:underline"
+            href={href}
+            onClick={handleClick}
+          >
+            {definition.callCount.toLocaleString()}
+          </a>
+        ) : (
+          definition.callCount.toLocaleString()
+        )}
       </td>
       <td className="px-4 py-4">
         <DefinitionStatusBadge definition={definition} />

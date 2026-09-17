@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { parseTenantPage } from "./admin/adminApi";
+import { parseDefinitionPage, parseTenantPage } from "./admin/adminApi";
+import { TenantDefinitionsPage } from "./admin/TenantDefinitionsPage";
+import type { TenantDefinitionsPageState } from "./admin/definitionTypes";
 import { TenantsPage } from "./admin/TenantsPage";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+type AdminRoute =
+  | { kind: "tenants"; page: number }
+  | { kind: "definitions"; tenantKey: string; page: number };
 
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
 const redirectExpiredSession = () => window.location.assign("/auth/login");
@@ -18,11 +24,16 @@ export function AdminApp({
   fetchImpl?: Fetch;
   onSessionExpired?: () => void;
 }) {
-  const [page, setPage] = useState(readPage);
-  const [state, setState] = useState<TenantsPageState>({ status: "loading" });
+  const [route, setRoute] = useState(readRoute);
+  const [tenants, setTenants] = useState<TenantsPageState>({ status: "loading" });
+  const [definitions, setDefinitions] = useState<TenantDefinitionsPageState>(() => ({
+    status: "loading",
+    tenant:
+      route.kind === "definitions" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
+  }));
 
   useEffect(() => {
-    const restore = () => setPage(readPage());
+    const restore = () => setRoute(readRoute());
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
@@ -30,66 +41,188 @@ export function AdminApp({
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
-    setState({ status: "loading" });
+    const isCurrent = () => current;
 
-    void fetchImpl(`/admin/api/tenants?page=${page}`, {
-      headers: { accept: "application/json" },
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!current) return;
-
-        if (response.status === 401) {
-          onSessionExpired();
-          return;
-        }
-
-        if (response.status === 422 && page !== 1) {
-          window.history.replaceState({}, "", "/admin");
-          setPage(1);
-          return;
-        }
-
-        if (!response.ok) throw new Error("Tenant directory unavailable");
-
-        const result = parseTenantPage(await response.json());
-        if (!current) return;
-
-        setState({
-          status: "ready",
-          tenants: result.tenants,
-          pagination: paginationModel(result.pagination),
+    if (route.kind === "tenants") {
+      setTenants({ status: "loading" });
+      loadTenants(
+        route,
+        controller.signal,
+        fetchImpl,
+        onSessionExpired,
+        isCurrent,
+        () => {
+          const firstPage = { kind: "tenants", page: 1 } as const;
+          window.history.replaceState({}, "", routeUrl(firstPage));
+          setRoute(firstPage);
+        },
+      )
+        .then((state) => {
+          if (current && state) setTenants(state);
+        })
+        .catch((error: unknown) => {
+          if (current && !aborted(error)) {
+            setTenants({
+              status: "unavailable",
+              message: "Tenant data could not be loaded. Try again after storage is available.",
+            });
+          }
         });
-      })
-      .catch((error: unknown) => {
-        if (!current || (error instanceof DOMException && error.name === "AbortError")) return;
+    } else {
+      setDefinitions((state) => ({
+        status: "loading",
+        tenant:
+          state.tenant.key === route.tenantKey
+            ? state.tenant
+            : tenantPlaceholder(route.tenantKey),
+      }));
 
-        setState({
-          status: "unavailable",
-          message: "Tenant data could not be loaded. Try again after storage is available.",
+      loadDefinitions(
+        route,
+        controller.signal,
+        fetchImpl,
+        onSessionExpired,
+        isCurrent,
+        () => {
+          const firstPage = { ...route, page: 1 };
+          window.history.replaceState({}, "", routeUrl(firstPage));
+          setRoute(firstPage);
+        },
+      )
+        .then((state) => {
+          if (current && state) setDefinitions(state);
+        })
+        .catch((error: unknown) => {
+          if (current && !aborted(error)) {
+            setDefinitions((state) => ({
+              status: "unavailable",
+              tenant: state.tenant,
+              message:
+                "Call definitions could not be loaded. Try again after storage is available.",
+            }));
+          }
         });
-      });
+    }
 
     return () => {
       current = false;
       controller.abort();
     };
-  }, [fetchImpl, onSessionExpired, page]);
+  }, [fetchImpl, onSessionExpired, route]);
 
-  const navigatePage = useCallback((nextPage: number) => {
-    const url = nextPage === 1 ? "/admin" : `/admin?page=${nextPage}`;
-    window.history.pushState({}, "", url);
-    setPage(nextPage);
-  }, []);
+  function navigate(nextRoute: AdminRoute, replace = false) {
+    window.history[replace ? "replaceState" : "pushState"]({}, "", routeUrl(nextRoute));
+    setRoute(nextRoute);
+  }
+
+  const headerActions = <SignOut csrfToken={csrfToken} />;
+
+  if (route.kind === "definitions") {
+    return (
+      <TenantDefinitionsPage
+        headerActions={headerActions}
+        linkCalls={false}
+        onNextPage={() => navigate({ ...route, page: route.page + 1 })}
+        onPreviousPage={() => navigate({ ...route, page: Math.max(1, route.page - 1) })}
+        onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
+        state={definitions}
+        workspaceDestinations={["definitions"]}
+      />
+    );
+  }
 
   return (
     <TenantsPage
-      headerActions={<SignOut csrfToken={csrfToken} />}
-      onNextPage={() => navigatePage(page + 1)}
-      onPreviousPage={() => navigatePage(Math.max(1, page - 1))}
-      state={state}
+      headerActions={headerActions}
+      onNextPage={() => navigate({ kind: "tenants", page: route.page + 1 })}
+      onPreviousPage={() => navigate({ kind: "tenants", page: Math.max(1, route.page - 1) })}
+      onSelectTenant={(tenantKey) => navigate({ kind: "definitions", tenantKey, page: 1 })}
+      state={tenants}
     />
   );
+}
+
+async function loadTenants(
+  selected: Extract<AdminRoute, { kind: "tenants" }>,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  isCurrent: () => boolean,
+  recoverFirstPage: () => void,
+): Promise<TenantsPageState | undefined> {
+  const response = await fetchImpl(`/admin/api/tenants?page=${selected.page}`, {
+    headers: { accept: "application/json" },
+    signal,
+  });
+
+  if (!isCurrent()) return;
+
+  if (response.status === 401) {
+    onSessionExpired();
+    return;
+  }
+
+  if (response.status === 422 && selected.page !== 1) {
+    recoverFirstPage();
+    return;
+  }
+
+  if (!response.ok) throw new Error("Tenant directory unavailable");
+  const result = parseTenantPage(await response.json());
+  if (!isCurrent()) return;
+
+  return {
+    status: "ready",
+    tenants: result.tenants,
+    pagination: paginationModel(result.pagination),
+  };
+}
+
+async function loadDefinitions(
+  selected: Extract<AdminRoute, { kind: "definitions" }>,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  isCurrent: () => boolean,
+  recoverFirstPage: () => void,
+): Promise<TenantDefinitionsPageState | undefined> {
+  const encodedTenant = encodeURIComponent(selected.tenantKey);
+  const response = await fetchImpl(
+    `/admin/api/tenants/${encodedTenant}/definitions?page=${selected.page}`,
+    { headers: { accept: "application/json" }, signal },
+  );
+
+  if (!isCurrent()) return;
+
+  if (response.status === 401) {
+    onSessionExpired();
+    return;
+  }
+
+  if (response.status === 422 && selected.page !== 1) {
+    recoverFirstPage();
+    return;
+  }
+
+  if (response.status === 404) {
+    return {
+      status: "unavailable",
+      tenant: tenantPlaceholder(selected.tenantKey),
+      message: "This tenant could not be found.",
+    };
+  }
+
+  if (!response.ok) throw new Error("Definition directory unavailable");
+  const result = parseDefinitionPage(await response.json());
+  if (!isCurrent()) return;
+  if (result.tenant.key !== selected.tenantKey) throw new Error("Unexpected tenant response");
+
+  return {
+    status: "ready",
+    tenant: result.tenant,
+    definitions: result.definitions,
+    pagination: paginationModel(result.pagination),
+  };
 }
 
 function SignOut({ csrfToken }: { csrfToken: string }) {
@@ -106,11 +239,43 @@ function SignOut({ csrfToken }: { csrfToken: string }) {
   );
 }
 
+function readRoute(): AdminRoute {
+  const page = readPage();
+  const match = window.location.pathname.match(
+    /^\/admin\/tenants\/([^/]+)(\/definitions)?\/?$/,
+  );
+
+  if (!match) return { kind: "tenants", page };
+
+  try {
+    const tenantKey = decodeURIComponent(match[1]);
+    const route = { kind: "definitions", tenantKey, page } as const;
+    if (!match[2]) window.history.replaceState({}, "", routeUrl(route));
+    return route;
+  } catch {
+    return { kind: "tenants", page: 1 };
+  }
+}
+
+function routeUrl(route: AdminRoute) {
+  const query = route.page === 1 ? "" : `?page=${route.page}`;
+  if (route.kind === "tenants") return `/admin${query}`;
+  return `/admin/tenants/${encodeURIComponent(route.tenantKey)}/definitions${query}`;
+}
+
 function readPage() {
   const raw = new URLSearchParams(window.location.search).get("page");
   if (raw === null) return 1;
   const page = Number(raw);
   return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
+function tenantPlaceholder(key: string) {
+  return { key, name: key || "Tenant" };
+}
+
+function aborted(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function paginationModel({

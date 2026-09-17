@@ -90,6 +90,7 @@ defmodule Vxpipe.Console.Router do
 
     get "/session", Vxpipe.Console.AdminSessionController, :show
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
+    get "/tenants/:tenant_key/definitions", Vxpipe.Console.AdminDefinitionsController, :index
   end
 
   scope "/admin" do

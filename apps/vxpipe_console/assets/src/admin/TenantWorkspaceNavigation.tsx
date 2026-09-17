@@ -9,15 +9,17 @@ export function TenantWorkspaceNavigation({
   active,
   tenant,
   onSelect,
+  destinations = ["definitions", "calls", "services"],
 }: {
   active: TenantDestination;
   tenant: TenantContext;
   onSelect?: (destination: TenantDestination) => void;
+  destinations?: TenantDestination[];
 }) {
   return (
     <nav aria-label="Tenant workspace" className="mb-6 border-b border-[var(--admin-line)]">
       <div className="flex gap-6">
-        {(["definitions", "calls", "services"] as const).map((destination) => {
+        {destinations.map((destination) => {
           const label = destination === "definitions" ? "Call definitions" : destination === "calls" ? "Calls" : "Services";
           const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/${destination}`;
 

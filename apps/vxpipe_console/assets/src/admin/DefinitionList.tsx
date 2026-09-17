@@ -5,10 +5,12 @@ export function DefinitionList({
   definitions,
   tenant,
   onSelectDefinition,
+  linkCalls,
 }: {
   definitions: DefinitionSummary[];
   tenant: TenantContext;
   onSelectDefinition?: (definitionId: string) => void;
+  linkCalls?: boolean;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -37,6 +39,7 @@ export function DefinitionList({
             <DefinitionRow
               definition={definition}
               key={definition.id}
+              linkCalls={linkCalls}
               onSelect={onSelectDefinition}
               tenant={tenant}
             />
