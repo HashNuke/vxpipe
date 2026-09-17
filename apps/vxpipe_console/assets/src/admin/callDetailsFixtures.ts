@@ -15,13 +15,26 @@ export type CallDetailsFixtureScenario =
   | "ongoing"
   | "ended"
   | "partial-archive"
+  | "long-content"
   | "loading"
   | "unavailable"
   | "malformed-response";
 
+const longTenant: TenantContext = {
+  key: "tn_regional_delivery_customer_experience_operations_southeast_asia",
+  name: "Regional delivery and customer experience operations — Southeast Asia",
+};
+
+const longDefinition: DefinitionContext = {
+  ...demoDefinition,
+  id: "international-delivery-rescheduling-and-customer-resolution",
+  name: "International delivery rescheduling and customer resolution",
+};
+
 function snapshot(
   selectedCall: CallSummary,
   completeness: "complete" | "incomplete" | "unconfirmed",
+  content: "default" | "long" = "default",
 ): CallDetailsSnapshot {
   const ended = selectedCall.state === "ended" || selectedCall.state === "failed";
   const durationMs =
@@ -83,7 +96,10 @@ function snapshot(
             { name: "Language model", provider: "Google", model: "gemini-2.5-flash" },
             { name: "Text to speech", provider: "Deepgram", model: "aura-2-thalia-en" },
           ],
-          systemPrompt: "Help callers reschedule deliveries and confirm changes before applying them.",
+          systemPrompt:
+            content === "long"
+              ? "Help callers coordinate international delivery changes across multiple time zones, confirm every address and scheduling constraint, explain the available alternatives clearly, and obtain explicit confirmation before applying any change to the shipment."
+              : "Help callers reschedule deliveries and confirm changes before applying them.",
           transferPolicies: [
             { name: "Support", description: "Transfer when a delivery change needs a teammate." },
           ],
@@ -142,7 +158,10 @@ function snapshot(
         value: {
           id: "message-2",
           participantId: "assistant",
-          text: "Tomorrow morning is available. Would you like me to confirm it?",
+          text:
+            content === "long"
+              ? "Tomorrow morning is available between 8:00 AM and 11:30 AM in the destination time zone. Before I confirm it, please verify that the receiving address, building access instructions, and contact telephone number are still correct for the courier."
+              : "Tomorrow morning is available. Would you like me to confirm it?",
           occurredAt: occurredAt(10),
           state: selectedCall.state === "running" ? "streaming" : "final",
           ...(selectedCall.state === "running"
@@ -287,8 +306,9 @@ function readyState(
   completeness: "complete" | "incomplete" | "unconfirmed",
   definition: DefinitionContext = demoDefinition,
   tenant: TenantContext = demoTenant,
+  content: "default" | "long" = "default",
 ): CallDetailsPageState {
-  const details = snapshot(selectedCall, completeness);
+  const details = snapshot(selectedCall, completeness, content);
   const store = createCallDetailsStore(details);
   const controller: CallConsoleController = {
     details: store,
@@ -313,6 +333,9 @@ export function callDetailsFixture(
   if (scenario === "ongoing") return readyState(calls[0], "unconfirmed");
   if (scenario === "ended") return readyState(calls[1], "complete");
   if (scenario === "partial-archive") return readyState(calls[1], "incomplete");
+  if (scenario === "long-content") {
+    return readyState(calls[0], "unconfirmed", longDefinition, longTenant, "long");
+  }
 
   const call = calls[0];
   const context = {

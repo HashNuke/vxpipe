@@ -57,3 +57,20 @@ test("fixture events stay within calls that actually started", () => {
     }
   }
 });
+
+test("the long-content fixture provides long call context and console content", () => {
+  const state = callDetailsFixture("long-content");
+  expect(state.status).toBe("ready");
+  if (state.status !== "ready") return;
+
+  expect(state.tenant.name.length).toBeGreaterThan(50);
+  expect((state.definition?.name ?? "").length).toBeGreaterThan(50);
+
+  const snapshot = state.controller.details.getSnapshot();
+  const assistant = snapshot.participants.find(({ id }) => id === "assistant");
+  const message = snapshot.timeline.find(({ id }) => id === "message-2");
+  expect(assistant?.value.systemPrompt?.length).toBeGreaterThan(150);
+  expect(message?.kind).toBe("message");
+  if (!message || message.kind !== "message") return;
+  expect(message.value.text.length).toBeGreaterThan(150);
+});

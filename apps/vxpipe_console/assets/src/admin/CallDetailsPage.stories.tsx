@@ -14,6 +14,7 @@ const meta = {
         "ongoing",
         "ended",
         "partial-archive",
+        "long-content",
         "loading",
         "unavailable",
         "malformed-response",
@@ -30,6 +31,7 @@ type Story = StoryObj<typeof meta>;
 export const Ongoing: Story = {};
 export const Ended: Story = { args: { scenario: "ended" } };
 export const PartialArchive: Story = { args: { scenario: "partial-archive" } };
+export const LongContent: Story = { args: { scenario: "long-content" } };
 export const Loading: Story = { args: { scenario: "loading" } };
 export const Unavailable: Story = { args: { scenario: "unavailable" } };
 export const MalformedResponse: Story = { args: { scenario: "malformed-response" } };
