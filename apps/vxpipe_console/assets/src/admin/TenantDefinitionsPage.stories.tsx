@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Call definitions for one tenant, including publication state, immutable revision context, and intended admin links. The complete linked flow is available under Admin / Full journey.",
+          "Call definitions for one tenant, including publication state, latest saved version, all-version call totals, and filtered Calls links. The complete linked flow is available under Admin / Full journey.",
       },
     },
   },

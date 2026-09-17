@@ -31,13 +31,16 @@ test("links the tenant directory to definitions and back", () => {
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
 
   fireEvent.click(
-    screen.getByRole("link", { name: /open delivery rescheduling/i }),
+    screen.getByRole("link", {
+      name: /view 5 calls for delivery rescheduling/i,
+    }),
   );
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(
     "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
   expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
+  expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(5);
 
   fireEvent.click(screen.getByRole("link", { name: /open call 018f27cb/i }));
   expect(window.location.hash).toBe(
@@ -66,11 +69,14 @@ test("keeps a non-default definition context when a call route is reloaded", () 
 
   fireEvent.click(screen.getByRole("link", { name: /open demo workspace/i }));
   fireEvent.click(
-    screen.getByRole("link", { name: /open appointment reminders/i }),
+    screen.getByRole("link", {
+      name: /view 2 calls for appointment reminders/i,
+    }),
   );
 
   expect(screen.queryByText(/Across all revisions/i)).not.toBeInTheDocument();
   expect(screen.queryByText("r3")).not.toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(2);
 
   fireEvent.click(screen.getAllByRole("link", { name: /open call/i })[0]);
   expect(

@@ -14,6 +14,12 @@ export function DefinitionStatusBadge({
   definition: DefinitionSummary;
 }) {
   const status = getDefinitionStatus(definition);
+  const title =
+    status === "published"
+      ? `Published version v${definition.publishedRevision}`
+      : status === "draft-changes"
+        ? `Latest version v${definition.latestRevision}; published version v${definition.publishedRevision}`
+        : "No version has been published";
   return (
     <span
       className={classNames(
@@ -25,6 +31,7 @@ export function DefinitionStatusBadge({
         status === "draft-changes" &&
           "border-[var(--admin-blue)]/35 bg-[var(--admin-blue-soft)] text-[var(--admin-blue)]",
       )}
+      title={title}
     >
       {labels[status]}
     </span>

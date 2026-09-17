@@ -19,7 +19,7 @@ export function CallList({
       >
         <span>Call</span>
         <span className="hidden xl:block">Definition</span>
-        <span className="hidden xl:block">Revision</span>
+        <span className="hidden xl:block">Version</span>
         <span>State</span>
         <span className="hidden xl:block">Started</span>
         <span className="hidden xl:block">Duration</span>

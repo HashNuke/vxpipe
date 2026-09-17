@@ -19,6 +19,7 @@ const populated: TenantDefinitionsPageState = {
       name: "Delivery rescheduling",
       latestRevision: 4,
       publishedRevision: 3,
+      callCount: 5,
       updatedAt: "2026-09-16T08:40:00.000Z",
     },
     {
@@ -26,6 +27,7 @@ const populated: TenantDefinitionsPageState = {
       name: "Appointment reminders",
       latestRevision: 2,
       publishedRevision: 2,
+      callCount: 2,
       updatedAt: "2026-09-15T10:20:00.000Z",
     },
     {
@@ -33,6 +35,7 @@ const populated: TenantDefinitionsPageState = {
       name: null,
       latestRevision: 1,
       publishedRevision: null,
+      callCount: 1,
       updatedAt: "2026-09-14T03:15:00.000Z",
     },
   ],
@@ -54,6 +57,11 @@ test("keeps tenant context and real definition links visible", () => {
   );
 
   expect(screen.getByRole("heading", { name: "Call definitions" })).toBeVisible();
+  expect(screen.getByRole("columnheader", { name: "Name" })).toBeVisible();
+  expect(screen.getByRole("columnheader", { name: "Version" })).toBeVisible();
+  expect(screen.getByRole("columnheader", { name: "Calls" })).toBeVisible();
+  expect(screen.queryByText("Definition")).not.toBeInTheDocument();
+  expect(screen.queryByText("Revision")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Tenants" })).toHaveAttribute(
     "href",
     "/admin",
@@ -68,15 +76,15 @@ test("keeps tenant context and real definition links visible", () => {
     "/admin/tenants/tn_demo_01/calls",
   );
 
-  const definition = screen.getByRole("link", {
-    name: /open delivery rescheduling/i,
+  const definitionCalls = screen.getByRole("link", {
+    name: /view 5 calls for delivery rescheduling/i,
   });
-  expect(definition).toHaveAttribute(
+  expect(definitionCalls).toHaveAttribute(
     "href",
     "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
 
-  fireEvent.click(definition);
+  fireEvent.click(definitionCalls);
   expect(selectDefinition).toHaveBeenCalledWith("delivery-rescheduling");
 });
 
@@ -87,7 +95,7 @@ test("distinguishes published, draft changes, and unpublished definitions", () =
   expect(screen.getByText("Draft changes")).toBeVisible();
   expect(screen.getByText("Draft")).toBeVisible();
   expect(
-    screen.getByRole("link", { name: "Open returns-intake" }),
+    screen.getByRole("link", { name: "View 1 calls for returns-intake" }),
   ).toBeVisible();
 });
 
@@ -149,7 +157,7 @@ test("loading removes stale definition actions", () => {
   );
 
   expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
-  expect(screen.queryByRole("link", { name: /^open /i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /^view .* calls for /i })).not.toBeInTheDocument();
 });
 
 test("the paginated definition story reaches its advertised final page", () => {
@@ -173,7 +181,9 @@ test("definition story links record forward and back destinations without replac
   render(<TenantDefinitionsStory scenario="populated" theme="dark" />);
 
   fireEvent.click(
-    screen.getByRole("link", { name: /open delivery rescheduling/i }),
+    screen.getByRole("link", {
+      name: /view 5 calls for delivery rescheduling/i,
+    }),
   );
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(

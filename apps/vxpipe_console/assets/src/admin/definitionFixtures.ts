@@ -15,6 +15,7 @@ export const definitions: DefinitionSummary[] = [
     name: "Delivery rescheduling",
     latestRevision: 4,
     publishedRevision: 3,
+    callCount: 5,
     updatedAt: "2026-09-16T08:40:00.000Z",
   },
   {
@@ -22,6 +23,7 @@ export const definitions: DefinitionSummary[] = [
     name: "Appointment reminders",
     latestRevision: 2,
     publishedRevision: 2,
+    callCount: 2,
     updatedAt: "2026-09-15T10:20:00.000Z",
   },
   {
@@ -29,6 +31,7 @@ export const definitions: DefinitionSummary[] = [
     name: null,
     latestRevision: 1,
     publishedRevision: null,
+    callCount: 1,
     updatedAt: "2026-09-14T03:15:00.000Z",
   },
   {
@@ -36,6 +39,7 @@ export const definitions: DefinitionSummary[] = [
     name: "After-hours triage",
     latestRevision: 7,
     publishedRevision: 7,
+    callCount: 1,
     updatedAt: "2026-09-11T17:05:00.000Z",
   },
 ];
@@ -81,6 +85,7 @@ export function definitionFixture(
             name: "International priority delivery rescheduling and exception resolution",
             latestRevision: 128,
             publishedRevision: 127,
+            callCount: 12_480,
             updatedAt: "2026-09-16T08:40:00.000Z",
           },
           ...definitions.slice(0, 2),

@@ -1,4 +1,3 @@
-import { ArrowUpRight } from "lucide-react";
 import type { MouseEvent } from "react";
 
 import { DefinitionStatusBadge } from "./DefinitionStatusBadge";
@@ -25,40 +24,37 @@ export function DefinitionRow({
   }
 
   return (
-    <li>
-      <a
-        aria-label={`Open ${label}`}
-        className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 border-t border-[var(--admin-line)] px-3 py-4 text-inherit no-underline transition-colors hover:bg-[var(--admin-soft)] sm:px-4 lg:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1fr)_90px_130px_130px_auto] lg:gap-4"
-        href={href}
-        onClick={handleClick}
-      >
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold">{label}</span>
-          <span className="mt-1 block truncate font-mono text-xs text-[var(--admin-muted)] lg:hidden">
-            {definition.id}
-          </span>
-        </span>
-        <span
-          className="hidden truncate font-mono text-xs text-[var(--admin-muted)] lg:block"
-          title={definition.id}
+    <tr className="border-t border-[var(--admin-line)] transition-colors hover:bg-[var(--admin-soft)]">
+      <th className="truncate px-4 py-4 text-sm font-semibold" scope="row" title={label}>
+        {label}
+      </th>
+      <td className="truncate px-4 py-4 font-mono text-xs text-[var(--admin-muted)]" title={definition.id}>
+        {definition.id}
+      </td>
+      <td className="px-4 py-4 font-mono text-xs tabular-nums text-[var(--admin-muted)]">
+        v{definition.latestRevision}
+      </td>
+      <td className="px-4 py-4 text-right font-mono text-xs tabular-nums">
+        <a
+          aria-label={`View ${definition.callCount} calls for ${label}`}
+          className="rounded-sm text-[var(--admin-blue)] underline-offset-4 hover:underline"
+          href={href}
+          onClick={handleClick}
         >
-          {definition.id}
-        </span>
-        <span className="font-mono text-xs tabular-nums text-[var(--admin-muted)]">
-          v{definition.latestRevision}
-        </span>
+          {definition.callCount.toLocaleString()}
+        </a>
+      </td>
+      <td className="px-4 py-4">
         <DefinitionStatusBadge definition={definition} />
+      </td>
+      <td className="px-4 py-4">
         <time
-          className="hidden text-sm text-[var(--admin-muted)] lg:block"
+          className="text-sm text-[var(--admin-muted)]"
           dateTime={definition.updatedAt}
         >
           {formatAdminDate(definition.updatedAt)}
         </time>
-        <ArrowUpRight
-          aria-hidden="true"
-          className="size-4 text-[var(--admin-muted)] transition-colors group-hover:text-[var(--admin-ink)]"
-        />
-      </a>
-    </li>
+      </td>
+    </tr>
   );
 }

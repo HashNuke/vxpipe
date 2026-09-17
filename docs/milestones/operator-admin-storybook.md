@@ -102,11 +102,12 @@ TypeScript check, ESLint check and Storybook production build pass. Rendered dar
 
 ## Checkpoint 2 — Complete the Tenant definitions page
 
-- [x] Build tenant context, definition row/card, publication-state and definition-list components.
+- [x] Build tenant context and a semantic definition table with publication state, latest version,
+  all-version call count and a filtered Calls link. Do not imply a definition details destination.
 - [x] Compose the complete Tenant definitions page with loading, empty, populated, unavailable,
   mixed draft/published, long-name, paginated and narrow-screen fixtures.
-- [x] Make definition selection navigate through the Storybook harness. Back navigation retains the
-  selected tenant context without depending on a live response.
+- [x] Make each definition's call count navigate to its filtered Calls page through the Storybook
+  harness. Back navigation retains the selected tenant context without depending on a live response.
 - [x] Test the Vxpipe-owned selection, publication presentation, pagination and unavailable states.
 - [x] Inspect every important state in rendered desktop/mobile Storybook.
 
@@ -114,10 +115,14 @@ Exit: a reviewer can evaluate definition browsing within a selected tenant. Comm
 separately.
 
 Evidence: deterministic stories cover all required states and **Admin / Full journey** connects the
-tenant directory to definitions with working breadcrumbs and browser back/forward. The Console's
-37 frontend tests, TypeScript check and warning-free ESLint check pass. Rendered dark/light desktop,
-390 px mobile, long-content and reduced-motion inspection passed without overflow. See
-[checkpoint labnotes](../../labnotes/20260917-0843-admin-definitions-storybook.md).
+tenant directory to definitions with working breadcrumbs and browser back/forward. A follow-up
+contract review confirmed that the platform stores one published revision per definition; the page
+uses `Published`, `Draft`, and `Draft changes` from that state and links call totals to all calls for
+the definition. The Console frontend tests, TypeScript check and warning-free ESLint check pass.
+Rendered dark desktop and 390 px mobile inspection confirmed aligned semantic columns and bounded
+horizontal table scrolling. See
+[checkpoint labnotes](../../labnotes/20260917-0843-admin-definitions-storybook.md) and
+[table contract labnotes](../../labnotes/20260917-1236-definition-table-contract.md).
 
 ## Checkpoint 3 — Complete the Definition calls page
 

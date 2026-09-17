@@ -10,6 +10,7 @@ export type DefinitionSummary = {
   name: string | null;
   latestRevision: number;
   publishedRevision: number | null;
+  callCount: number;
   updatedAt: string;
 };
 
