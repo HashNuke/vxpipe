@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Workbench } from "./Workbench.js";
 
 const meta = {
-  title: "Prototype/Workbench",
+  title: "@vxpipe/react/Workbench",
   component: Workbench,
   parameters: {
     layout: "fullscreen",

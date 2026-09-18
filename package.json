@@ -13,12 +13,18 @@
     "build": "npm run build --workspaces",
     "check": "npm run build && tsc --noEmit",
     "test": "vitest run",
-    "storybook": "npm run storybook --workspace=@vxpipe/react",
-    "build-storybook": "npm run build-storybook --workspace=@vxpipe/react"
+    "storybook": "storybook dev -p 6006 --host 127.0.0.1 --no-open --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry"
   },
   "devDependencies": {
+    "@fontsource/geist-mono": "^5.2.7",
+    "@fontsource/inter": "^5.2.8",
+    "@storybook/react-vite": "10.6.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.0.0",
     "jsdom": "^27.4.0",
+    "storybook": "10.6.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
     "vitest": "^4.1.11"
   }

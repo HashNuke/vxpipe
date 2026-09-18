@@ -17,12 +17,13 @@ loopback, and serves the prototype independently of Phoenix, PostgreSQL and prov
 | Package | Responsibility |
 | --- | --- |
 | [@vxpipe/core](core) | Framework-neutral TypeScript call-details store, revision reconciliation, host loading controller, and live-control contracts. |
-| [@vxpipe/react](react) | TypeScript React components consuming the injected Core controller; package-owned CSS and Storybook. |
+| [@vxpipe/react](react) | TypeScript React components consuming the injected Core controller; package-owned CSS and prototype stories. |
 
 Both packages are `private: true`. Nothing is published or reserved on npm. The Phoenix asset
-project and documentation site retain their own dependency installations. The second install above
-supplies dependencies for the Console-owned Admin stories; it does not start or configure another
-Storybook.
+project and documentation site retain their own dependency installations. The repository-root
+Storybook is the single shared catalog for the Console-owned Admin stories, the `@vxpipe/react`
+debug console, and the Getting Started prototype. Stories stay next to the package or application
+that owns their UI; the root config discovers them together.
 The root lockfile belongs to these workspaces; `npm run build` builds Core before React.
 
 ## Prototype scope
@@ -42,7 +43,7 @@ missing timing, metrics, RTVI-only events, and partial/complete setup. You can s
 change devices, filter/pause/inspect events, switch themes, and complete the sample setup form.
 Use sample values in that form. Reloading discards prototype setup state.
 
-The `stories/` directory owns the fake controller and the application-specific Getting Started page;
+The `packages/react/stories/` directory owns the fake controller and the application-specific Getting Started page;
 neither is exported by the React package. Real protocol/media adapters, platform bootstrap,
 durable setup and production route integration remain in the [milestones](../docs/milestones/index.md).
 
@@ -54,7 +55,7 @@ npm run check
 npm run build-storybook
 ```
 
-The package builds emit ESM and declarations to ignored `dist/` directories. Storybook builds
-to ignored `packages/react/storybook-static/`. The story preview bundles local fonts for offline
+The package builds emit ESM and declarations to ignored `dist/` directories. The shared Storybook builds
+to ignored `storybook-static/` at the repository root. The story preview bundles local fonts for offline
 review. Vite polling is enabled for this preview because native file watching served stale source
 on the development machine; generated output directories are excluded.

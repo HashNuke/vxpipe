@@ -3,8 +3,8 @@ import tailwindcss from "@tailwindcss/vite";
 
 const config: StorybookConfig = {
   stories: [
-    "../stories/**/*.stories.tsx",
-    "../../../apps/vxpipe_console/assets/src/admin/**/*.stories.tsx",
+    "../packages/react/stories/**/*.stories.tsx",
+    "../apps/vxpipe_console/assets/src/admin/**/*.stories.tsx",
   ],
   framework: "@storybook/react-vite",
   core: { disableTelemetry: true },
@@ -27,4 +27,5 @@ const config: StorybookConfig = {
     },
   }),
 };
+
 export default config;

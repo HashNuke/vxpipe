@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { TenantServicesStory } from "./TenantServicesStory";
 
 const meta = {
-  title: "Admin/Services",
+  title: "vxpipe_console/Services",
   component: TenantServicesStory,
   parameters: {
     layout: "fullscreen",
