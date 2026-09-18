@@ -1,26 +1,52 @@
-/* SaaS hero: airy, centered, clear of the site header. */
-.sl-container > div.hero {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  padding-block: clamp(4rem, 9vw, 6.5rem) clamp(2rem, 4vw, 3rem);
-  border-radius: 0.5rem;
-  background-color: color-mix(in srgb, var(--secondary) 32%, transparent);
+/* The landing atmosphere belongs to the whole opening stage, not the text box. */
+html[data-theme='dark'][data-has-hero] {
+  --landing-backdrop-base: var(--sl-color-bg);
+  --landing-backdrop-wash: color-mix(in oklab, var(--sl-color-gray-6) 54%, var(--sl-color-bg));
+  --landing-backdrop-halo: color-mix(in oklab, var(--sl-color-gray-5) 22%, transparent);
+  --landing-backdrop-line: color-mix(in oklab, var(--foreground) 9%, transparent);
 }
 
-.sl-container > div.hero::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  pointer-events: none;
-  background-image: repeating-radial-gradient(
-    ellipse at 50% 115%,
-    transparent 0 2.5rem,
-    color-mix(in srgb, var(--foreground) 9%, transparent) 2.55rem 2.625rem,
-    transparent 2.675rem 5rem
-  );
-  mask-image: linear-gradient(to bottom, transparent, black 28%, black 78%, transparent);
+html[data-theme='light'][data-has-hero] {
+  --landing-backdrop-base: var(--sl-color-bg);
+  --landing-backdrop-wash: color-mix(in oklab, var(--sl-color-gray-6) 38%, var(--sl-color-bg));
+  --landing-backdrop-halo: color-mix(in oklab, var(--sl-color-gray-4) 16%, transparent);
+  --landing-backdrop-line: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+html[data-has-hero] body {
+  background-color: var(--landing-backdrop-base);
+  background-image:
+    linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 31rem,
+      var(--landing-backdrop-base) 69rem
+    ),
+    radial-gradient(
+      ellipse 78rem 38rem at 50% 12rem,
+      var(--landing-backdrop-halo),
+      transparent 72%
+    ),
+    repeating-radial-gradient(
+      ellipse 76rem 31rem at 50% 31rem,
+      transparent 0 5.25rem,
+      var(--landing-backdrop-line) 5.3rem 5.38rem,
+      transparent 5.43rem 10.5rem
+    ),
+    linear-gradient(to bottom, var(--landing-backdrop-wash), var(--landing-backdrop-base));
+  background-repeat: no-repeat;
+  background-size: 100% 70rem, 100% 60rem, max(100%, 86rem) 58rem, 100% 70rem;
+  background-position: top center;
+}
+
+html[data-has-hero] .header {
+  background-color: color-mix(in oklab, var(--landing-backdrop-base) 82%, transparent);
+  backdrop-filter: blur(0.75rem);
+}
+
+.sl-container > div.hero {
+  padding-block: clamp(4rem, 9vw, 6.5rem) clamp(2rem, 4vw, 3rem);
+  background: transparent;
 }
 
 .sl-container > div.hero .hero-image:empty {

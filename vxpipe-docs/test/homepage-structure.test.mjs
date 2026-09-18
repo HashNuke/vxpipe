@@ -8,6 +8,34 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const homepage = readFileSync(join(root, 'src/content/docs/index.mdx'), 'utf8');
 const landingCss = readFileSync(join(root, 'src/styles/landing.css'), 'utf8');
 
+test('landing backdrop spans the full top stage in both themes', () => {
+  assert.match(
+    landingCss,
+    /html\[data-has-hero\] body\s*\{[^}]*background-image:/s,
+    'the page, not the hero text box, must own the landing backdrop',
+  );
+  assert.match(
+    landingCss,
+    /html\[data-theme=['"]dark['"]\]\[data-has-hero\]/,
+    'the landing backdrop must define a dark-theme treatment',
+  );
+  assert.match(
+    landingCss,
+    /html\[data-theme=['"]light['"]\]\[data-has-hero\]/,
+    'the landing backdrop must define a light-theme treatment',
+  );
+  assert.match(
+    landingCss,
+    /\.sl-container > div\.hero\s*\{[^}]*background:\s*transparent/s,
+    'the hero must not retain its old rectangular background',
+  );
+  assert.doesNotMatch(
+    landingCss,
+    /\.sl-container > div\.hero::before/,
+    'the ripple field must not be clipped to the hero text box',
+  );
+});
+
 test('homepage hero states the product crisply and presents the feature set', () => {
   assert.match(homepage, /tagline: .+/, 'hero must state a tagline');
   assert.doesNotMatch(
