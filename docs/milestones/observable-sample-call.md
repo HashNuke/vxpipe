@@ -3,7 +3,7 @@
 Status: complete as of 2026-09-09. The Phoenix Console owns the dashboard and
 React/esbuild sample assets, while the reusable gateway remains independent of Phoenix
 and UI dependencies.
-Prerequisites: [Definition-driven call](definition-driven-call.md).
+Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md).
 Sources: [Security and observability](../architecture.md#security-and-observability);
 [Gateway/console boundary](../gateway-console-boundary.md);
 [Telemetry handler execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4);
@@ -220,8 +220,8 @@ pass with call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests, 0
 Implementation evidence, checkpoint 9 (2026-09-09): added an opt-in supervised local
 model fixture with fixed success, 1.5-second delay, provider-failure and invalid-empty-output
 scenarios. A one-shot selection is consumed atomically and resets to the configured default.
-The trusted runtime setting injects it at the Jido request-transformer boundary; call
-definitions, invocation bodies and RTVI messages gain no fixture switch. The normal room,
+The trusted runtime setting injects it at the Jido request-transformer boundary; call specs,
+invocation bodies and RTVI messages gain no fixture switch. The normal room,
 gateway, optional TTS and payload-free Telemetry paths remain in use, with the closed
 `:local_fixture` provider dimension. The diagnostics board shows controls only while the
 fixture is configured.
@@ -270,7 +270,7 @@ rendered the unchanged create-room page through the Vite HTTPS origin and the bu
 endpoint at 1440x900 and 390x844 with no page errors or horizontal overflow. A child-app
 production release assembled successfully and contained the index plus six generated assets.
 An initial root release attempt correctly failed because the umbrella has no explicit release
-definition; documentation now gives the verified Console child release command rather than
+call spec; documentation now gives the verified Console child release command rather than
 adding broader release policy in this milestone. The complete umbrella gates pass with call
 engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`, and
 Console `13 tests, 0 failures`.

@@ -5,9 +5,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler
+    CallSpecCompiler
   }
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
@@ -237,8 +237,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   end
 
   defp compile_plan do
-    definition_input = %{
-      schema_version: CallDefinition.schema_version(),
+    call_spec_input = %{
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",
@@ -267,16 +267,16 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       limits: %{max_duration_ms: 60_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input,
-               resource_id: unique_id("definition"),
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input,
+               resource_id: unique_id("call-spec"),
                revision: 1
              )
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: definition.resource_id, revision: 1},
+                 call_spec: %{id: call_spec.resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "telephony"}
                },
@@ -290,7 +290,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       host_tools: %{}
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 
@@ -299,8 +299,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       call: %PreparedCall{
         id: plan.call_id,
         tenant_key: plan.tenant_id,
-        definition_id: plan.definition_id,
-        definition_revision: plan.definition_revision,
+        call_spec_id: plan.call_spec_id,
+        call_spec_revision: plan.call_spec_revision,
         schema_version: plan.schema_version,
         participant_routes: %{},
         entry_caller: plan.entry_caller,

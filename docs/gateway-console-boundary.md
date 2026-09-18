@@ -21,7 +21,7 @@ playground source under Console ownership as approved.
 | --- | --- |
 | `vxpipe_gateway` | Reusable API plugs, request authentication, protocol translation, signaling, sessions and transport connection supervision |
 | `vxpipe_console` | Phoenix endpoint and browser presentation: samples, operational dashboards and later authorized call inspection |
-| `vxpipe_calls` | Database-neutral definition, admission and archive workflows and repository interfaces |
+| `vxpipe_calls` | Database-neutral call spec, admission and archive workflows and repository interfaces |
 | `vxpipe_persistence` | Ecto Repo, schemas, migrations, queries and transactions implementing those interfaces |
 | `vxpipe_call_engine` | Protocol-neutral live room, participant, variables, tool and media behavior |
 
@@ -186,7 +186,7 @@ The gateway child has no Phoenix or Console dependency.
 
 Implementation checkpoint 6 adds the durable development sample without moving admission
 or persistence into Phoenix. Console supervises a trusted process that uses the public Calls
-API to bootstrap a private development tenant/key and publish the configured definition.
+API to bootstrap a private development tenant/key and publish the configured call spec.
 Its endpoint returns only a safe call locator and join token. The React creation page then
 uses the mounted gateway's standard participant-session route; the API key and initial
 variables stay server-side. When persistence is not configured, the process is absent and

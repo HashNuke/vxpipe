@@ -46,7 +46,7 @@ bootstrap a tenant and provision its Google and Deepgram credentials through pro
 Operator Mix commands need these platform variables exported in their launching shell.
 
 Set `VXPIPE_DEV_TENANT` to that tenant's public key. The sample selects Google Gemini and
-Deepgram Flux directly in its definition and resolves their `default` tenant bindings.
+Deepgram Flux directly in its call spec and resolves their `default` tenant bindings.
 The server can boot without provider credentials; an unprovisioned sample cannot create calls.
 
 Then start the Vxpipe umbrella, Console frontend, and Astro docs together:
@@ -144,9 +144,9 @@ Development defaults to `postgres://localhost/vxpipe_dev` in `config/runtime.exs
 `VXPIPE_DB_POOL_SIZE` or `DB_POOL_SIZE` overrides the default pool of 10. Blank values are
 absent; invalid selected values fail. These aliases never replace the dedicated test database.
 The Console reuses the provisioned tenant selected by `VXPIPE_DEV_TENANT` across BEAM
-restarts. It saves/publishes the sample definition, then issues a call-scoped API key.
+restarts. It saves/publishes the sample call spec, then issues a call-scoped API key.
 PostgreSQL retains only that key’s digest; the plaintext key and configured initial
-variables stay inside the supervised Console sample process. Failed definition setup
+variables stay inside the supervised Console sample process. Failed call spec setup
 does not create tenants or issue keys.
 Each **Create room** action then prepares a new durable call and obtains its
 participant-bound join token through the public Calls workflows.
@@ -155,7 +155,7 @@ The development Repo starts with the local database default. The managed caller/
 sample is enabled only when `VXPIPE_DEV_TENANT` selects a provisioned tenant. PostgreSQL
 must be running and the database migrated before `bin/dev`.
 Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
-definition publication are documented in
+call spec publication are documented in
 [Tenant control-plane operations](tenant-control-plane.md).
 
 The human transfer desk at `/samples/transfer` requires this PostgreSQL-backed sample.
@@ -189,7 +189,7 @@ atomically claims it and starts the pinned plan exactly once. Neither the API ke
 the initial variables enter browser requests or responses. The sample endpoint and
 managed admission routes are disabled by default outside repository development.
 
-An embedding host can configure an explicit trusted inline definition and credential source
+An embedding host can configure an explicit trusted inline call spec and credential source
 through the gateway API. The repository sample uses the durable tenant admission path.
 
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It

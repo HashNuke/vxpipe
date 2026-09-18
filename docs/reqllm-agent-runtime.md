@@ -54,7 +54,7 @@ enters ReqLLM request values, diagnostics, or model-facing schemas.
 
 The package emits normalized runtime events to an owner supplied by Call Engine. It does
 not decide which events are public, start TTS, update Call Variables, write history, select
-a tenant, inspect a call definition, or communicate with MCP itself.
+a tenant, inspect a call spec, or communicate with MCP itself.
 
 Call Engine owns:
 
@@ -121,7 +121,7 @@ started first and the registry and Session resolve its registered reference to t
 their own startup boundaries.
 
 Plan Startup and Room Authority can select this graph through an internal application runtime
-setting. Plan Startup validates and pins the selected provider configuration, call-definition
+setting. Plan Startup validates and pins the selected provider configuration, call-spec
 model and prompt, resolved host-tool map, Call Variables binding, and runtime limits. Room Authority
 stores the selected coordinator module behind its existing text-capability boundary, so response,
 interruption, and participant-owned shutdown require no room-protocol change. Application and
@@ -172,7 +172,7 @@ responses must not double-deliver text. Tool results retain provider-required ca
 ordering. Provider-native built-ins remain distinguishable from Vxpipe-executed tools.
 
 Each authored platform/built-in, host, or MCP binding obtains its tool-specific
-`conversation_mode` from its call-definition `tools` entry. The only modes are `blocking` and
+`conversation_mode` from its call-spec `tools` entry. The only modes are `blocking` and
 `non_blocking`, and omission resolves to `blocking`. Blocking affects only admission of
 subsequent caller turns; `non_blocking` lets unrelated later turns proceed while the invocation
 is pending. Both modes use the same independently supervised worker path; neither authorizes an
@@ -182,7 +182,7 @@ required for non-blocking caller turns: the LLM can answer the new request while
 of the separately executing work. See the complete
 [tool execution model](tool-execution-model.md).
 
-The current dated call-definition compiler exposes this choice for authored host and MCP
+The current dated call-spec compiler exposes this choice for authored host and MCP
 selections. Permission-derived Call Variables tools use the default `blocking` mode; the planned
 unified platform-tool entry remains a later compiler extension.
 

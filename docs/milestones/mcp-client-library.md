@@ -151,7 +151,7 @@ Implementation evidence:
 - `Vxpipe.MCP.Discovery` obtains every page through the narrow protocol boundary under one
   absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and
   returns no partial catalog. `Vxpipe.MCP.Catalog` preserves complete string-keyed remote
-  definitions while rejecting malformed or duplicate tool identities.
+  call specs while rejecting malformed or duplicate tool identities.
 - Deterministic discovery checks cover repeated and endlessly changing cursors, cumulative
   decoded size across pages, malformed page shapes, duplicate identities, and the page cap.
   Dependency failures become the credential-free `:discovery_failed` category rather than

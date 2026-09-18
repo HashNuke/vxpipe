@@ -19,7 +19,7 @@ export function CallSpecCombobox({
   options: CallSpecOption[];
   selectedId: string | null;
   unknownSelection: boolean;
-  onSelect?: (definitionId: string | null) => void;
+  onSelect?: (callSpecId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find(({ id }) => id === selectedId);

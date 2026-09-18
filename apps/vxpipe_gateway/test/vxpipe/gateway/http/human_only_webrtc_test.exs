@@ -8,7 +8,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   alias ExWebRTC.{ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
   alias Membrane.Opus.{Decoder, Encoder}
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.SessionSupervisor
@@ -661,7 +661,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     room_id = unique_id("room-human-webrtc")
 
     input = %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
@@ -674,13 +674,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
       limits: %{max_duration_ms: 30_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: resource_id, revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -690,7 +690,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
                room_id: room_id
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
     plan
   end
 
@@ -699,7 +699,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     room_id = unique_id("room-restrictive-webrtc")
 
     input = %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
@@ -725,13 +725,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
       limits: %{max_duration_ms: 30_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: resource_id, revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -741,7 +741,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
                room_id: room_id
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
     plan
   end
 
@@ -750,7 +750,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     room_id = unique_id("room-monitor-webrtc")
 
     input = %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
@@ -771,13 +771,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
       limits: %{max_duration_ms: 30_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: resource_id, revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -787,7 +787,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
                room_id: room_id
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
     plan
   end
 

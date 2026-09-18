@@ -3,10 +3,10 @@ import type { ComponentProps } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { callFixture } from "./callFixtures";
-import { DefinitionCallsPage } from "./DefinitionCallsPage";
-import { definitionFixture } from "./definitionFixtures";
+import { CallSpecCallsPage } from "./CallSpecCallsPage";
+import { callSpecFixture } from "./callSpecFixtures";
 import { serviceFixture } from "./serviceFixtures";
-import { TenantDefinitionsPage } from "./TenantDefinitionsPage";
+import { TenantCallSpecsPage } from "./TenantCallSpecsPage";
 import { TenantServicesPage } from "./TenantServicesPage";
 
 afterEach(cleanup);
@@ -15,12 +15,12 @@ type SharedProps = Pick<ComponentProps<typeof TenantServicesPage>, "headerAction
 
 test.each([
   {
-    title: "Call definitions",
-    renderPage: (props: SharedProps) => <TenantDefinitionsPage {...props} state={definitionFixture("populated")} />,
+    title: "Call specs",
+    renderPage: (props: SharedProps) => <TenantCallSpecsPage {...props} state={callSpecFixture("populated")} />,
   },
   {
     title: "Calls",
-    renderPage: (props: SharedProps) => <DefinitionCallsPage {...props} state={callFixture("populated")} />,
+    renderPage: (props: SharedProps) => <CallSpecCallsPage {...props} state={callFixture("populated")} />,
   },
   {
     title: "Services",

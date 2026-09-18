@@ -4,8 +4,8 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
   alias Vxpipe.CallEngine.Telephony.Event
 
   alias Vxpipe.Calls.{
-    DefinitionCredentials,
-    Definitions,
+    CallSpecCredentials,
+    CallSpecs,
     PreparedCallFactory,
     Repositories,
     TelephonyAdmissionClaim
@@ -23,12 +23,12 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
   def claim_incoming(scope, service, %Event{kind: :incoming} = event, options)
       when is_binary(service) and is_list(options) do
     with :ok <- incoming_event(event),
-         {:ok, route} <- Definitions.resolve_telephony_route(scope, service, event.to, options),
+         {:ok, route} <- CallSpecs.resolve_telephony_route(scope, service, event.to, options),
          {:ok, revision} <-
-           Definitions.fetch(
+           CallSpecs.fetch(
              route.tenant_key,
-             route.definition_id,
-             route.definition_revision,
+             route.call_spec_id,
+             route.call_spec_revision,
              options
            ),
          {:ok, call} <- PreparedCallFactory.build(revision, %{}, :telephony, options),
@@ -51,7 +51,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
       }
 
       authorize = fn ->
-        DefinitionCredentials.with_active(revision, call.plan, options, fn ->
+        CallSpecCredentials.with_active(revision, call.plan, options, fn ->
           {:ok, :authorized}
         end)
       end

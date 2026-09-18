@@ -2,7 +2,7 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
   use Vxpipe.Persistence.DataCase, async: false
 
   alias Vxpipe.Calls.Administration
-  alias Vxpipe.Persistence.{CredentialStore, DefinitionStore, Repo}
+  alias Vxpipe.Persistence.{CredentialStore, CallSpecStore, Repo}
 
   setup do
     previous_shell = Mix.shell()
@@ -12,7 +12,7 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
 
     Application.put_env(:vxpipe_calls, Vxpipe.Calls,
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       registries: %{
         host_tools: %{}
       }
@@ -77,38 +77,38 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
              Administration.authenticate(tenant_key, replacement["api_key"], :calls)
   end
 
-  test "saves, publishes, and reads a definition through trusted commands" do
-    {:ok, tenant, _issued} = Administration.bootstrap_tenant("Definitions tenant", [:admin])
+  test "saves, publishes, and reads a call spec through trusted commands" do
+    {:ok, tenant, _issued} = Administration.bootstrap_tenant("CallSpecs tenant", [:admin])
 
     path =
-      Path.join(System.tmp_dir!(), "vxpipe-definition-#{System.unique_integer([:positive])}.json")
+      Path.join(System.tmp_dir!(), "vxpipe-call-spec-#{System.unique_integer([:positive])}.json")
 
-    File.write!(path, JSON.encode!(definition_input()))
+    File.write!(path, JSON.encode!(call_spec_input()))
     on_exit(fn -> File.rm(path) end)
 
-    Mix.Tasks.Vxpipe.Definition.Save.run(["--tenant", tenant.key, "--file", path])
+    Mix.Tasks.Vxpipe.CallSpec.Save.run(["--tenant", tenant.key, "--file", path])
     saved = receive_json!()
 
     assert saved["revision"] == 1
     assert saved["validation_errors"] == []
     assert [%{"participant_ref" => "caller"}] = saved["routes"]
 
-    Mix.Tasks.Vxpipe.Definition.Publish.run([
+    Mix.Tasks.Vxpipe.CallSpec.Publish.run([
       "--tenant",
       tenant.key,
-      "--definition-id",
-      saved["definition_id"],
+      "--call-spec-id",
+      saved["call_spec_id"],
       "--revision",
       "1"
     ])
 
     assert %{"published" => true} = receive_json!()
 
-    Mix.Tasks.Vxpipe.Definition.Show.run([
+    Mix.Tasks.Vxpipe.CallSpec.Show.run([
       "--tenant",
       tenant.key,
-      "--definition-id",
-      saved["definition_id"],
+      "--call-spec-id",
+      saved["call_spec_id"],
       "--revision",
       "1"
     ])
@@ -123,7 +123,7 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
     JSON.decode!(message)
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: "20260915.01",
       name: "Operator example",

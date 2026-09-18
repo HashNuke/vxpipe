@@ -5,9 +5,9 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, ProviderCredentials}
-  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, DefinitionStore}
+  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, CallSpecStore}
   alias Vxpipe.Persistence.ProviderCredentialStore
-  alias Vxpipe.Persistence.Schema.{CallDefinition, DefinitionRevision, ParticipantRoute}
+  alias Vxpipe.Persistence.Schema.{CallSpec, CallSpecRevision, ParticipantRoute}
 
   setup do
     {:ok, keyring} =
@@ -15,7 +15,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
 
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
       registries: %{host_tools: %{}}
@@ -44,13 +44,13 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
 
   test "provisions, saves, publishes and prepares a tenant voice plan without storing secrets",
        ctx do
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
     assert draft.validation_errors == []
 
     assert {:ok, published} =
-             Calls.publish_definition(
+             Calls.publish_call_spec(
                ctx.tenant.key,
-               draft.definition_id,
+               draft.call_spec_id,
                draft.revision,
                ctx.options
              )
@@ -92,7 +92,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     before = row_counts()
 
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Calls.save_definition(ctx.tenant.key, source, ctx.options)
+             Calls.save_call_spec(ctx.tenant.key, source, ctx.options)
 
     assert row_counts() == before
 
@@ -108,11 +108,11 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
                )
     end
 
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source, ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source, ctx.options)
     assert draft.validation_errors == []
 
     assert {:ok, published} =
-             Calls.publish_definition(ctx.tenant.key, draft.definition_id, 1, ctx.options)
+             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, 1, ctx.options)
 
     assert [route] = published.routes
     assert {:ok, prepared, token} = Calls.prepare_call(ctx.principal, route.key, %{}, ctx.options)
@@ -162,7 +162,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
 
   test "another tenant cannot save the same provider selections or create any rows", ctx do
     before = row_counts()
-    assert {:error, error} = Calls.save_definition(ctx.other.key, source(), ctx.options)
+    assert {:error, error} = Calls.save_call_spec(ctx.other.key, source(), ctx.options)
     assert error.code == :provider_credential_unavailable
 
     assert error.details["path"] in [
@@ -214,7 +214,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
       before = row_counts()
 
       assert {:error, error} =
-               Calls.save_definition(
+               Calls.save_call_spec(
                  ctx.tenant.key,
                  destination_source(@destination_kind),
                  ctx.options
@@ -238,7 +238,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
         model_inference: %{provider: "fixture", model: "local"}
       })
 
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, input, ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, input, ctx.options)
     assert draft.validation_errors == []
     refute :erlang.term_to_binary(draft) =~ "private-marker"
   end
@@ -260,16 +260,16 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     before = row_counts()
 
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Calls.save_definition(ctx.tenant.key, source(), options)
+             Calls.save_call_spec(ctx.tenant.key, source(), options)
 
     assert row_counts() == before
   end
 
   test "a credential revoked during preparation cannot authorize a prepared call write", ctx do
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
 
     assert {:ok, published} =
-             Calls.publish_definition(ctx.tenant.key, draft.definition_id, 1, ctx.options)
+             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, 1, ctx.options)
 
     assert [route] = published.routes
 
@@ -313,13 +313,13 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
   end
 
   test "publication rechecks a credential revoked after save", ctx do
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
     revoke_google(ctx)
 
     assert {:error, error} =
-             Calls.publish_definition(
+             Calls.publish_call_spec(
                ctx.tenant.key,
-               draft.definition_id,
+               draft.call_spec_id,
                draft.revision,
                ctx.options
              )
@@ -332,12 +332,12 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
   end
 
   test "preparation rechecks current credentials and stores no call after revocation", ctx do
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
 
     assert {:ok, published} =
-             Calls.publish_definition(
+             Calls.publish_call_spec(
                ctx.tenant.key,
-               draft.definition_id,
+               draft.call_spec_id,
                draft.revision,
                ctx.options
              )
@@ -353,10 +353,10 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
 
   test "runtime source resolves exact tenant bindings and checks revocation on every activation",
        ctx do
-    {:ok, definition} =
-      Vxpipe.CallEngine.CallDefinition.new(source(), resource_id: "source-test", revision: 1)
+    {:ok, call_spec} =
+      Vxpipe.CallEngine.CallSpec.new(source(), resource_id: "source-test", revision: 1)
 
-    selection = definition.default_capabilities.model_inference
+    selection = call_spec.default_capabilities.model_inference
     options = [credential_source: {Vxpipe.Calls.ProviderCredentialSource, ctx.options}]
 
     assert {:ok, credential} =
@@ -381,10 +381,10 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
   @tag timeout: 20_000
   test "runs a synthetic Google and Deepgram voice turn from the persisted tenant plan", ctx do
     configure_voice_transports()
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
 
     assert {:ok, published} =
-             Calls.publish_definition(ctx.tenant.key, draft.definition_id, 1, ctx.options)
+             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, 1, ctx.options)
 
     assert [route] = published.routes
     assert {:ok, prepared, token} = Calls.prepare_call(ctx.principal, route.key, %{}, ctx.options)
@@ -467,10 +467,10 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
   @tag :integration
   test "new caller speech startup rechecks credentials after initial room preparation", ctx do
     configure_voice_transports()
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
 
     assert {:ok, published} =
-             Calls.publish_definition(ctx.tenant.key, draft.definition_id, 1, ctx.options)
+             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, 1, ctx.options)
 
     assert [route] = published.routes
 
@@ -628,7 +628,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
   end
 
   defp row_counts do
-    Enum.map([CallDefinition, DefinitionRevision, ParticipantRoute], &Repo.aggregate(&1, :count))
+    Enum.map([CallSpec, CallSpecRevision, ParticipantRoute], &Repo.aggregate(&1, :count))
   end
 
   defp source do

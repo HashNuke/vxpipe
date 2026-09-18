@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.TelephonyPlanBindingsTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation}
   alias Vxpipe.Calls.{CallPlanCompiler, TestTelephonyServiceRepository}
 
   setup do
@@ -12,7 +12,7 @@ defmodule Vxpipe.Calls.TelephonyPlanBindingsTest do
     {:ok, invocation} =
       CallInvocation.new(
         %{
-          call_definition: %{id: "definition-pinned", revision: 1},
+          call_spec: %{id: "call-spec-pinned", revision: 1},
           initial_variables: %{},
           transport: %{type: "web"}
         },
@@ -32,8 +32,8 @@ defmodule Vxpipe.Calls.TelephonyPlanBindingsTest do
   end
 
   test "host compilation pins one private-free service identity for a shared alias", data do
-    assert {:ok, definition} = definition(source())
-    assert {:ok, plan} = CallPlanCompiler.compile(definition, data.invocation, data.options)
+    assert {:ok, call_spec} = call_spec(source())
+    assert {:ok, plan} = CallPlanCompiler.compile(call_spec, data.invocation, data.options)
     service = data.snapshot.service
 
     assert %{telephony_service: reference} = Map.fetch!(plan.participants, "phone")
@@ -57,30 +57,30 @@ defmodule Vxpipe.Calls.TelephonyPlanBindingsTest do
   end
 
   test "host compilation cannot borrow a service from another tenant", data do
-    assert {:ok, definition} = definition(source())
+    assert {:ok, call_spec} = call_spec(source())
     invocation = %{data.invocation | tenant_id: String.duplicate("b", 16)}
 
-    assert {:error, error} = CallPlanCompiler.compile(definition, invocation, data.options)
+    assert {:error, error} = CallPlanCompiler.compile(call_spec, invocation, data.options)
     assert error.code == :provider_credential_unavailable
     assert error.details["path"] == ["participants", "backup", "connection", "service"]
   end
 
   test "raw embedded compilation needs no host service repository and JSON cannot supply pins",
        data do
-    assert {:ok, definition} = definition(source())
+    assert {:ok, call_spec} = call_spec(source())
 
     assert {:ok, plan} =
-             Vxpipe.CallEngine.compile_definition(definition, data.invocation, %{host_tools: %{}})
+             Vxpipe.CallEngine.compile_call_spec(call_spec, data.invocation, %{host_tools: %{}})
 
     assert Map.fetch!(plan.participants, "phone").telephony_service == nil
     refute_received {:service_resolution, _, _}
 
     input = put_in(source(), [:participants, "phone", :connection, :service_id], "forged-pin")
-    assert {:error, %{code: :invalid_call_definition}} = definition(input)
+    assert {:error, %{code: :invalid_call_spec}} = call_spec(input)
   end
 
-  defp definition(input),
-    do: CallDefinition.new(input, resource_id: "definition-pinned", revision: 1)
+  defp call_spec(input),
+    do: CallSpec.new(input, resource_id: "call-spec-pinned", revision: 1)
 
   defp source do
     phone = %{

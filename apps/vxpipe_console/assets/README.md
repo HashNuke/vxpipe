@@ -50,7 +50,7 @@ spoken through the configured Deepgram path.
 3. Verify the browser receives a join token and public locator, but no API key or
    initial-variable snapshot, then uses the token on the participant-session route.
 4. Verify that call becomes running only after the session response, retains one
-   room incarnation and original pinned definition revision, and has one admission
+   room incarnation and original pinned call spec revision, and has one admission
    for the caller.
 5. Choose **Connect** and complete one typed or spoken turn through the ordinary
    Small WebRTC/RTVI path.
@@ -105,7 +105,7 @@ ordinary negotiated audio tracks for private briefing and active room media.
 ## Local provider fixtures
 
 The default browser sample uses its provisioned Google/Deepgram tenant. Local model and Morse
-selections are explicit inline definition fields with host-configured adapters; environment
+selections are explicit inline call spec fields with host-configured adapters; environment
 profile switches are removed. See [local fixtures](../../../docs/development.md#local-fixtures)
 for the deterministic direct-PCM voice test. It verifies local STT and audible Morse output
 without provider credentials. Browser microphone RTP is Opus, while Morse STT takes linear16.

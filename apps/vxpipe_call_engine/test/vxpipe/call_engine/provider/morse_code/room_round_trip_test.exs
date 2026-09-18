@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     Diagnostics.AgentRuntimeModelProvider,
     Diagnostics.ModelFixture
   }
@@ -222,8 +222,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   end
 
   defp compile_plan do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(),
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(),
                resource_id: "morse-round-trip",
                revision: 1
              )
@@ -231,7 +231,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "morse-round-trip", revision: 1},
+                 call_spec: %{id: "morse-round-trip", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -241,13 +241,13 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                room_id: unique_id("room")
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
     plan
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",

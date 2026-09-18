@@ -15,7 +15,7 @@ Sources: [Developer console design](../developer-console-and-onboarding.md),
 
 ## Runnable outcome
 
-A developer selects a published definition route in their tenant and uses chat history/composer
+A developer selects a published call spec route in their tenant and uses chat history/composer
 or realtime voice in the same call. Agent audio and streaming text appear together, with currently
 spoken text highlighted when supported timing permits it. Metrics, logs, device controls,
 participant identity and transfer progress make the run understandable. Results remain visible
@@ -53,7 +53,7 @@ when the call ends. The same console will run Getting Started examples.
   credentials never enter public snapshots/logs. Cleanup is client-owned, not dependent on
   a React component staying mounted. Reuse working SDK behavior behind these boundaries.
 - Use existing tenant authentication for the first slice. Tenant `calls` authority permits
-  authorized preparation/inspection; definition administration still requires its own `admin`
+  authorized preparation/inspection; call spec administration still requires its own `admin`
   authority. A bounded safe published-route listing needs an explicit Calls authorization
   contract; it must not expose private source merely to populate a selector.
 - Browser session authentication is server-side; no tenant/platform/provider secret is passed
@@ -157,7 +157,7 @@ or presentation fields. Commit this slice with its focused query tests.
 - [x] Project lifecycle, configured participants, messages, semantic events, complete tool-call
   request/response state, latest variables, usage metrics and archive completeness. Preserve
   captured empty values versus unavailable data; do not expose tenant keys, credential selectors,
-  source policies or arbitrary definition source.
+  source policies or arbitrary call spec source.
 - [x] Remove `older_cursor` and `as_of` from this endpoint contract and from the matching Core
   baseline. Stable database identities and revisions still support later RTVI updates.
 
@@ -242,7 +242,7 @@ Exit: a developer can follow who is in the call and who spoke across existing ha
 - [ ] Red-test bounded RTVI event retention, repeated traffic, observed order, paused-follow,
   unavailable history links and an ended call with no live room.
 - [ ] Add the scoped Metrics view and the Conversation timeline's raw-log filter/selected-event
-  inspector, plus the read-only definition view. Reuse available timing/usage and bounded browser
+  inspector, plus the read-only call spec view. Reuse available timing/usage and bounded browser
   statistics; raw Logs items include only RTVI events.
   Link to existing authorized history for durable facts instead of inventing another log store.
 - [ ] Red-test and implement call-scoped metric observations for model-attempt duration/first
@@ -341,4 +341,4 @@ and consumer verification. It is not implemented or counted as production accept
 The participant follow-up keeps the configured roster visible in muted form before presence and
 adds the fourth Participants tab. The prototype shows authorized capabilities, system prompt,
 transfer policies and tools for a selected roster identity. This remains fixture-backed; the
-private definition projection and live roster adapter are still production checkpoint work.
+private call spec projection and live roster adapter are still production checkpoint work.

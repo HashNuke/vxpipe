@@ -32,14 +32,14 @@ afterEach(() => {
 
 const context = {
   tenant: { key: "tn_demo_01", name: "Demo workspace" },
-  definition: {
+  callSpec: {
     id: "delivery-rescheduling",
     name: "Delivery rescheduling",
     latestRevision: 4,
     publishedRevision: 3,
   },
   callId: "call-1",
-  definitionRevision: 3,
+  callSpecRevision: 3,
 };
 
 const controller = {
@@ -65,8 +65,8 @@ test("uses the existing header labels as return links without adding workspace t
   expect(screen.getByTestId("console-header")).toHaveTextContent("Delivery rescheduling");
   expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Tenants" })).toHaveAttribute("href", "/admin");
-  expect(screen.getByRole("link", { name: "Demo workspace" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/definitions");
-  expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling");
+  expect(screen.getByRole("link", { name: "Demo workspace" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/call-specs");
+  expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling");
   expect(screen.queryByRole("navigation", { name: "Tenant workspace" })).not.toBeInTheDocument();
   expect(screen.getByText("call-1")).toBeVisible();
   expect(screen.getByTestId("call-console")).toHaveTextContent(
@@ -138,8 +138,8 @@ test("the individual story return links load working admin previews", () => {
   expect(screen.getByText("Delivery rescheduling")).toBeVisible();
   for (const [name, path] of [
     ["Tenants", "/admin"],
-    ["Demo workspace", "/admin/tenants/tn_demo_01/definitions"],
-    ["Delivery rescheduling", "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling"],
+    ["Demo workspace", "/admin/tenants/tn_demo_01/call-specs"],
+    ["Delivery rescheduling", "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling"],
   ]) {
     const link = screen.getByRole("link", { name });
     const url = new URL(link.getAttribute("href")!, window.location.origin);

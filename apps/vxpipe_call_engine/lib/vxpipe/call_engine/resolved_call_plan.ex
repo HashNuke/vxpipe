@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   A self-contained immutable call plan pinned before live room startup.
   """
 
-  alias Vxpipe.CallEngine.CallDefinition.TransferPolicy
+  alias Vxpipe.CallEngine.CallSpec.TransferPolicy
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.{
     CallVariables,
@@ -15,8 +15,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   }
 
   @enforce_keys [
-    :definition_id,
-    :definition_revision,
+    :call_spec_id,
+    :call_spec_revision,
     :schema_version,
     :tenant_id,
     :actor_id,
@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   ]
   defstruct @enforce_keys ++
               [
-                wait_sounds: %Vxpipe.CallEngine.CallDefinition.WaitSounds{},
+                wait_sounds: %Vxpipe.CallEngine.CallSpec.WaitSounds{},
                 wait_sound_assets: nil
               ]
 
@@ -51,24 +51,24 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
     CallVariables,
     Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio,
     Vxpipe.CallEngine.ResolvedCallPlan.VariableSection,
-    Vxpipe.CallEngine.CallDefinition.Participant,
-    Vxpipe.CallEngine.CallDefinition.ConnectionIntent,
-    Vxpipe.CallEngine.CallDefinition.NumberFromVariable,
-    Vxpipe.CallEngine.CallDefinition.CapabilitySelection,
-    Vxpipe.CallEngine.CallDefinition.ToolSelection,
-    Vxpipe.CallEngine.CallDefinition.ToolVisibility,
-    Vxpipe.CallEngine.CallDefinition.OpeningAudio,
-    Vxpipe.CallEngine.CallDefinition.TransferHistory,
+    Vxpipe.CallEngine.CallSpec.Participant,
+    Vxpipe.CallEngine.CallSpec.ConnectionIntent,
+    Vxpipe.CallEngine.CallSpec.NumberFromVariable,
+    Vxpipe.CallEngine.CallSpec.CapabilitySelection,
+    Vxpipe.CallEngine.CallSpec.ToolSelection,
+    Vxpipe.CallEngine.CallSpec.ToolVisibility,
+    Vxpipe.CallEngine.CallSpec.OpeningAudio,
+    Vxpipe.CallEngine.CallSpec.TransferHistory,
     TransferPolicy,
-    Vxpipe.CallEngine.CallDefinition.VariablePermissions,
-    Vxpipe.CallEngine.CallDefinition.WaitSounds,
+    Vxpipe.CallEngine.CallSpec.VariablePermissions,
+    Vxpipe.CallEngine.CallSpec.WaitSounds,
     Vxpipe.CallEngine.RemoteMCP.ResolvedTool,
     Vxpipe.CallEngine.WaitSounds.PreparedAssets,
     Vxpipe.CallEngine.OpeningAudio.Asset,
     Vxpipe.CallEngine.OpeningAudio.WaveDecoder,
     Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding,
     Vxpipe.CallEngine.Telephony.ServiceReference,
-    Vxpipe.CallEngine.DefinitionCompiler,
+    Vxpipe.CallEngine.CallSpecCompiler,
     JSV.Root,
     JSV.Subschema,
     JSV.BooleanSchema,
@@ -82,8 +82,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   def ensure_data_loaded!, do: Enum.each(@data_modules, &Code.ensure_loaded!/1)
 
   @type t :: %__MODULE__{
-          definition_id: String.t(),
-          definition_revision: pos_integer(),
+          call_spec_id: String.t(),
+          call_spec_revision: pos_integer(),
           schema_version: String.t(),
           tenant_id: String.t(),
           actor_id: String.t(),
@@ -93,7 +93,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           entry_caller: String.t(),
           entry_receiver: String.t(),
           opening_audio: nil | Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio.t(),
-          wait_sounds: Vxpipe.CallEngine.CallDefinition.WaitSounds.t(),
+          wait_sounds: Vxpipe.CallEngine.CallSpec.WaitSounds.t(),
           wait_sound_assets: Vxpipe.CallEngine.WaitSounds.PreparedAssets.t() | nil,
           media_policy: MediaPolicy.t(),
           participants: %{String.t() => Participant.t()},

@@ -1,24 +1,24 @@
-defmodule Vxpipe.Persistence.DefinitionStore do
-  @moduledoc "Ecto adapter for immutable definition revisions and deployment routes."
+defmodule Vxpipe.Persistence.CallSpecStore do
+  @moduledoc "Ecto adapter for immutable call spec revisions and deployment routes."
 
-  @behaviour Vxpipe.Calls.DefinitionRepository
+  @behaviour Vxpipe.Calls.CallSpecRepository
 
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Vxpipe.Calls.{DefinitionRevision, ParticipantRoute, TelephonyRoute}
-  alias Vxpipe.Persistence.Schema.{CallDefinition, Tenant}
-  alias Vxpipe.Persistence.Schema.DefinitionRevision, as: StoredRevision
+  alias Vxpipe.Calls.{CallSpecRevision, ParticipantRoute, TelephonyRoute}
+  alias Vxpipe.Persistence.Schema.{CallSpec, Tenant}
+  alias Vxpipe.Persistence.Schema.CallSpecRevision, as: StoredRevision
   alias Vxpipe.Persistence.Schema.ParticipantRoute, as: StoredRoute
   alias Vxpipe.Persistence.Schema.TelephonyRoute, as: StoredTelephonyRoute
 
   @impl true
-  def next_revision(repo, tenant_key, definition_id) do
+  def next_revision(repo, tenant_key, call_spec_id) do
     query =
       from(revision in StoredRevision,
-        join: definition in assoc(revision, :call_definition),
-        join: tenant in assoc(definition, :tenant),
-        where: tenant.key == ^tenant_key and definition.public_id == ^definition_id,
+        join: call_spec in assoc(revision, :call_spec),
+        join: tenant in assoc(call_spec, :tenant),
+        where: tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id,
         select: max(revision.revision)
       )
 
@@ -30,12 +30,12 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     multi =
       Multi.new()
       |> Multi.run(:tenant, fn repo, _changes -> fetch_tenant(repo, tenant_key) end)
-      |> Multi.run(:definition, fn repo, %{tenant: tenant} ->
-        fetch_or_insert_definition(repo, tenant, revision.definition_id)
+      |> Multi.run(:call_spec, fn repo, %{tenant: tenant} ->
+        fetch_or_insert_call_spec(repo, tenant, revision.call_spec_id)
       end)
-      |> Multi.insert(:revision, fn %{definition: definition} ->
+      |> Multi.insert(:revision, fn %{call_spec: call_spec} ->
         StoredRevision.changeset(%StoredRevision{}, %{
-          call_definition_id: definition.id,
+          call_spec_id: call_spec.id,
           revision: revision.revision,
           schema_version: revision.schema_version,
           source: revision.source,
@@ -54,14 +54,14 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     case repo.transaction(multi) do
       {:ok,
        %{
-         definition: definition,
+         call_spec: call_spec,
          revision: stored_revision,
          routes: stored_routes,
          telephony_routes: stored_telephony_routes
        }} ->
         {:ok,
          to_revision(
-           definition,
+           call_spec,
            stored_revision,
            stored_routes,
            stored_telephony_routes,
@@ -79,26 +79,26 @@ defmodule Vxpipe.Persistence.DefinitionStore do
   end
 
   @impl true
-  def fetch_revision(repo, tenant_key, definition_id, revision_number) do
+  def fetch_revision(repo, tenant_key, call_spec_id, revision_number) do
     query =
       from(revision in StoredRevision,
-        join: definition in assoc(revision, :call_definition),
-        join: tenant in assoc(definition, :tenant),
+        join: call_spec in assoc(revision, :call_spec),
+        join: tenant in assoc(call_spec, :tenant),
         where:
-          tenant.key == ^tenant_key and definition.public_id == ^definition_id and
+          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
             revision.revision == ^revision_number,
         preload: [:participant_routes, :telephony_routes],
-        select: {definition, revision}
+        select: {call_spec, revision}
       )
 
     case repo.one(query) do
       nil ->
         {:error, :not_found}
 
-      {definition, revision} ->
+      {call_spec, revision} ->
         {:ok,
          to_revision(
-           definition,
+           call_spec,
            revision,
            revision.participant_routes,
            revision.telephony_routes,
@@ -108,61 +108,61 @@ defmodule Vxpipe.Persistence.DefinitionStore do
   end
 
   @impl true
-  def publish_revision(repo, tenant_key, definition_id, revision_number, published_at) do
+  def publish_revision(repo, tenant_key, call_spec_id, revision_number, published_at) do
     multi =
       Multi.new()
       |> Multi.run(:selection, fn repo, _changes ->
-        fetch_stored_revision(repo, tenant_key, definition_id, revision_number)
+        fetch_stored_revision(repo, tenant_key, call_spec_id, revision_number)
       end)
-      |> Multi.run(:disable_old_routes, fn repo, %{selection: {definition, _revision}} ->
-        route_query = routes_for_definition(definition.id)
+      |> Multi.run(:disable_old_routes, fn repo, %{selection: {call_spec, _revision}} ->
+        route_query = routes_for_call_spec(call_spec.id)
         {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
         {:ok, count}
       end)
       |> Multi.run(:disable_old_telephony_routes, fn repo,
-                                                     %{selection: {definition, _revision}} ->
-        route_query = telephony_routes_for_definition(definition.id)
+                                                     %{selection: {call_spec, _revision}} ->
+        route_query = telephony_routes_for_call_spec(call_spec.id)
         {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
         {:ok, count}
       end)
-      |> Multi.run(:enable_routes, fn repo, %{selection: {_definition, revision}} ->
+      |> Multi.run(:enable_routes, fn repo, %{selection: {_call_spec, revision}} ->
         route_query =
-          from(route in StoredRoute, where: route.definition_revision_id == ^revision.id)
+          from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id)
 
         {count, _rows} = repo.update_all(route_query, set: [published_at: published_at])
         {:ok, count}
       end)
-      |> Multi.run(:enable_telephony_routes, fn repo, %{selection: {_definition, revision}} ->
+      |> Multi.run(:enable_telephony_routes, fn repo, %{selection: {_call_spec, revision}} ->
         route_query =
           from(route in StoredTelephonyRoute,
-            where: route.definition_revision_id == ^revision.id
+            where: route.call_spec_revision_id == ^revision.id
           )
 
         {count, _rows} = repo.update_all(route_query, set: [published_at: published_at])
         {:ok, count}
       end)
-      |> Multi.update(:definition, fn %{selection: {definition, revision}} ->
-        CallDefinition.changeset(definition, %{
+      |> Multi.update(:call_spec, fn %{selection: {call_spec, revision}} ->
+        CallSpec.changeset(call_spec, %{
           published_revision_id: revision.id,
           published_at: published_at
         })
       end)
 
     case repo.transaction(multi) do
-      {:ok, %{definition: definition, selection: {_definition, revision}}} ->
+      {:ok, %{call_spec: call_spec, selection: {_call_spec, revision}}} ->
         routes =
           repo.all(
-            from(route in StoredRoute, where: route.definition_revision_id == ^revision.id)
+            from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id)
           )
 
         telephony_routes =
           repo.all(
             from(route in StoredTelephonyRoute,
-              where: route.definition_revision_id == ^revision.id
+              where: route.call_spec_revision_id == ^revision.id
             )
           )
 
-        {:ok, to_revision(definition, revision, routes, telephony_routes, tenant_key)}
+        {:ok, to_revision(call_spec, revision, routes, telephony_routes, tenant_key)}
 
       {:error, _operation, reason, _changes} ->
         {:error, reason}
@@ -174,20 +174,20 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     query =
       from(route in StoredRoute,
         join: tenant in assoc(route, :tenant),
-        join: revision in assoc(route, :definition_revision),
-        join: definition in assoc(revision, :call_definition),
+        join: revision in assoc(route, :call_spec_revision),
+        join: call_spec in assoc(revision, :call_spec),
         where:
           tenant.key == ^tenant_key and route.public_id == ^route_key and
-            not is_nil(route.published_at) and definition.published_revision_id == revision.id,
-        select: {route, tenant.key, definition.public_id, revision.revision}
+            not is_nil(route.published_at) and call_spec.published_revision_id == revision.id,
+        select: {route, tenant.key, call_spec.public_id, revision.revision}
       )
 
     case repo.one(query) do
       nil ->
         {:error, :route_unavailable}
 
-      {route, key, definition_id, definition_revision} ->
-        {:ok, to_route(route, key, definition_id, definition_revision)}
+      {route, key, call_spec_id, call_spec_revision} ->
+        {:ok, to_route(route, key, call_spec_id, call_spec_revision)}
     end
   end
 
@@ -196,20 +196,20 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     query =
       from(route in StoredTelephonyRoute,
         join: tenant in assoc(route, :tenant),
-        join: revision in assoc(route, :definition_revision),
-        join: definition in assoc(revision, :call_definition),
+        join: revision in assoc(route, :call_spec_revision),
+        join: call_spec in assoc(revision, :call_spec),
         where:
           route.service == ^service and route.number == ^number and
-            not is_nil(route.published_at) and definition.published_revision_id == revision.id,
-        select: {route, tenant.key, definition.public_id, revision.revision},
+            not is_nil(route.published_at) and call_spec.published_revision_id == revision.id,
+        select: {route, tenant.key, call_spec.public_id, revision.revision},
         limit: 2
       )
 
     matches = repo.all(scope_telephony_routes(query, scope))
 
     case matches do
-      [{route, tenant_key, definition_id, definition_revision}] ->
-        {:ok, to_telephony_route(route, tenant_key, definition_id, definition_revision)}
+      [{route, tenant_key, call_spec_id, call_spec_revision}] ->
+        {:ok, to_telephony_route(route, tenant_key, call_spec_id, call_spec_revision)}
 
       _none_or_ambiguous ->
         {:error, :route_unavailable}
@@ -223,20 +223,20 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     end
   end
 
-  defp fetch_or_insert_definition(repo, tenant, definition_id) do
+  defp fetch_or_insert_call_spec(repo, tenant, call_spec_id) do
     changeset =
-      CallDefinition.changeset(%CallDefinition{}, %{
+      CallSpec.changeset(%CallSpec{}, %{
         tenant_id: tenant.id,
-        public_id: definition_id
+        public_id: call_spec_id
       })
 
-    {:ok, _definition} =
+    {:ok, _call_spec} =
       repo.insert(changeset,
         on_conflict: :nothing,
         conflict_target: [:tenant_id, :public_id]
       )
 
-    {:ok, repo.get_by!(CallDefinition, tenant_id: tenant.id, public_id: definition_id)}
+    {:ok, repo.get_by!(CallSpec, tenant_id: tenant.id, public_id: call_spec_id)}
   end
 
   defp insert_routes(repo, tenant, revision, routes) do
@@ -247,7 +247,7 @@ defmodule Vxpipe.Persistence.DefinitionStore do
           participant_ref: route.participant_ref,
           published_at: nil,
           tenant_id: tenant.id,
-          definition_revision_id: revision.id
+          call_spec_revision_id: revision.id
         })
 
       case repo.insert(changeset) do
@@ -278,7 +278,7 @@ defmodule Vxpipe.Persistence.DefinitionStore do
           number: route.number,
           published_at: nil,
           tenant_id: tenant.id,
-          definition_revision_id: revision.id
+          call_spec_revision_id: revision.id
         })
 
       case repo.insert(changeset) do
@@ -295,15 +295,15 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     end
   end
 
-  defp fetch_stored_revision(repo, tenant_key, definition_id, revision_number) do
+  defp fetch_stored_revision(repo, tenant_key, call_spec_id, revision_number) do
     query =
       from(revision in StoredRevision,
-        join: definition in assoc(revision, :call_definition),
-        join: tenant in assoc(definition, :tenant),
+        join: call_spec in assoc(revision, :call_spec),
+        join: tenant in assoc(call_spec, :tenant),
         where:
-          tenant.key == ^tenant_key and definition.public_id == ^definition_id and
+          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
             revision.revision == ^revision_number,
-        select: {definition, revision}
+        select: {call_spec, revision}
       )
 
     case repo.one(query) do
@@ -312,26 +312,26 @@ defmodule Vxpipe.Persistence.DefinitionStore do
     end
   end
 
-  defp routes_for_definition(definition_id) do
+  defp routes_for_call_spec(call_spec_id) do
     from(route in StoredRoute,
-      join: revision in assoc(route, :definition_revision),
-      where: revision.call_definition_id == ^definition_id
+      join: revision in assoc(route, :call_spec_revision),
+      where: revision.call_spec_id == ^call_spec_id
     )
   end
 
-  defp telephony_routes_for_definition(definition_id) do
+  defp telephony_routes_for_call_spec(call_spec_id) do
     from(route in StoredTelephonyRoute,
-      join: revision in assoc(route, :definition_revision),
-      where: revision.call_definition_id == ^definition_id
+      join: revision in assoc(route, :call_spec_revision),
+      where: revision.call_spec_id == ^call_spec_id
     )
   end
 
-  defp to_revision(definition, revision, routes, telephony_routes, tenant_key) do
-    published? = definition.published_revision_id == revision.id
+  defp to_revision(call_spec, revision, routes, telephony_routes, tenant_key) do
+    published? = call_spec.published_revision_id == revision.id
 
-    %DefinitionRevision{
+    %CallSpecRevision{
       tenant_key: tenant_key,
-      definition_id: definition.public_id,
+      call_spec_id: call_spec.public_id,
       revision: revision.revision,
       schema_version: revision.schema_version,
       source: revision.source,
@@ -340,33 +340,33 @@ defmodule Vxpipe.Persistence.DefinitionStore do
       validation_errors: revision.validation_errors,
       routes:
         routes
-        |> Enum.map(&to_route(&1, tenant_key, definition.public_id, revision.revision))
+        |> Enum.map(&to_route(&1, tenant_key, call_spec.public_id, revision.revision))
         |> Enum.sort_by(& &1.participant_ref),
       telephony_routes:
         telephony_routes
-        |> Enum.map(&to_telephony_route(&1, tenant_key, definition.public_id, revision.revision))
+        |> Enum.map(&to_telephony_route(&1, tenant_key, call_spec.public_id, revision.revision))
         |> Enum.sort_by(& &1.participant_ref),
-      published_at: if(published?, do: definition.published_at),
+      published_at: if(published?, do: call_spec.published_at),
       inserted_at: revision.inserted_at
     }
   end
 
-  defp to_route(route, tenant_key, definition_id, definition_revision) do
+  defp to_route(route, tenant_key, call_spec_id, call_spec_revision) do
     %ParticipantRoute{
       key: route.public_id,
       tenant_key: tenant_key,
-      definition_id: definition_id,
-      definition_revision: definition_revision,
+      call_spec_id: call_spec_id,
+      call_spec_revision: call_spec_revision,
       participant_ref: route.participant_ref,
       published_at: route.published_at
     }
   end
 
-  defp to_telephony_route(route, tenant_key, definition_id, definition_revision) do
+  defp to_telephony_route(route, tenant_key, call_spec_id, call_spec_revision) do
     %TelephonyRoute{
       tenant_key: tenant_key,
-      definition_id: definition_id,
-      definition_revision: definition_revision,
+      call_spec_id: call_spec_id,
+      call_spec_revision: call_spec_revision,
       participant_ref: route.participant_ref,
       service: route.service,
       number: route.number,
@@ -375,7 +375,7 @@ defmodule Vxpipe.Persistence.DefinitionStore do
   end
 
   defp scope_telephony_routes(query, {:tenant, tenant_key}) do
-    from([_route, tenant, _revision, _definition] in query,
+    from([_route, tenant, _revision, _call_spec] in query,
       where: tenant.key == ^tenant_key
     )
   end

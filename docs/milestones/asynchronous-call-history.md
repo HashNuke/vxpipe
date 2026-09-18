@@ -51,7 +51,7 @@ finished. It is a structural gate for this milestone, not deferred cleanup:
 - [x] Leave authorization and ordering decisions at one clearly named owning
   boundary. Avoid cyclic synchronous process calls and do not let extracted modules
   reach through another umbrella application's private implementation.
-- [x] Run the existing participant, text, audio, TTS, tool, definition-driven call,
+- [x] Run the existing participant, text, audio, TTS, tool, call-spec-driven call,
   and archive suites during each extraction. Add focused tests only where an
   extracted project-owned contract is not already characterized.
 - [x] Finish with no callback-family implementation merely copied into another
@@ -156,7 +156,7 @@ Ecto transaction, closure, and authorized history against an empty, disposable
 PostgreSQL cluster. Presence-driven media policy, recording, retention cleanup and
 public inspection remain later milestones.
 
-The final acceptance checkpoint drives a definition-based Jido tool conversation and
+The final acceptance checkpoint drives a call-spec-based Jido tool conversation and
 a Call Variables update while the injected archive adapter repeatedly raises. Public
 tool/output/turn events and local variable reads remain responsive; the bounded handoff
 reports retained work and retries. After recovery, the room is stopped and the subscriber

@@ -9,13 +9,13 @@ defmodule Vxpipe.CallEngine.Error do
   @type code ::
           :agent_not_ready
           | :agent_busy
-          | :call_definition_resolution_failed
+          | :call_spec_resolution_failed
           | :call_variables_forbidden
           | :call_variables_revision_conflict
           | :connection_already_attached
           | :connection_not_attached
           | :deadline_exceeded
-          | :invalid_call_definition
+          | :invalid_call_spec
           | :invalid_call_variables_update
           | :invalid_call_invocation
           | :invalid_command

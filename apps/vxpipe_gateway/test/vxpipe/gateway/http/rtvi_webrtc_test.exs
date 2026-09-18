@@ -418,8 +418,8 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
             scopes: ["rooms:create", "rooms:join"]
           ],
           trusted_call: [
-            definition: TestTurnCall.definition(speech_to_text: true, text_to_speech: true),
-            resource_id: "audio-turn-definition",
+            call_spec: TestTurnCall.call_spec(speech_to_text: true, text_to_speech: true),
+            resource_id: "audio-turn-call-spec",
             revision: 1,
             host_tools: %{}
           ]

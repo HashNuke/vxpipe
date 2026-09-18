@@ -1,6 +1,6 @@
 import { CallRow } from "./CallRow";
 import type { CallDirectoryItem } from "./callTypes";
-import type { TenantContext } from "./definitionTypes";
+import type { TenantContext } from "./callSpecTypes";
 
 export function CallList({
   calls,

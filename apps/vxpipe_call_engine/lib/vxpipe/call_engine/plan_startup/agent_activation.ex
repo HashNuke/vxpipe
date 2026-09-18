@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.CallVariables.Binding
   alias Vxpipe.CallEngine.AgentRuntime.ModelContextSource
   alias Vxpipe.CallEngine.PlanStartup.AgentModel
@@ -174,7 +174,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
 
           name ->
             unsupported(
-              ["participants", receiver.definition_key, "tools", name],
+              ["participants", receiver.call_spec_key, "tools", name],
               "pinned remote MCP generation is no longer available"
             )
         end
@@ -183,7 +183,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
         {name, _remote} = List.first(remote_bindings)
 
         unsupported(
-          ["participants", receiver.definition_key, "tools", name],
+          ["participants", receiver.call_spec_key, "tools", name],
           "remote MCP integrations are unavailable"
         )
     end
@@ -233,7 +233,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
 
   defp unsupported_model(receiver) do
     unsupported(
-      ["participants", receiver.definition_key, "capabilities", "model_inference"],
+      ["participants", receiver.call_spec_key, "capabilities", "model_inference"],
       "must select a supported inline model with available tenant credentials"
     )
   end

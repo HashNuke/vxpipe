@@ -1,7 +1,7 @@
-defmodule Vxpipe.Calls.DefinitionRepository do
-  @moduledoc "Persistence port for immutable definitions and deployment routes."
+defmodule Vxpipe.Calls.CallSpecRepository do
+  @moduledoc "Persistence port for immutable call_specs and deployment routes."
 
-  alias Vxpipe.Calls.{DefinitionRevision, ParticipantRoute, TelephonyRoute}
+  alias Vxpipe.Calls.{CallSpecRevision, ParticipantRoute, TelephonyRoute}
 
   @type context :: term()
 
@@ -10,13 +10,13 @@ defmodule Vxpipe.Calls.DefinitionRepository do
   @callback insert_revision(
               context(),
               String.t(),
-              DefinitionRevision.t(),
+              CallSpecRevision.t(),
               [ParticipantRoute.t()]
-            ) :: {:ok, DefinitionRevision.t()} | {:error, term()}
+            ) :: {:ok, CallSpecRevision.t()} | {:error, term()}
   @callback fetch_revision(context(), String.t(), String.t(), pos_integer()) ::
-              {:ok, DefinitionRevision.t()} | {:error, :not_found}
+              {:ok, CallSpecRevision.t()} | {:error, :not_found}
   @callback publish_revision(context(), String.t(), String.t(), pos_integer(), DateTime.t()) ::
-              {:ok, DefinitionRevision.t()} | {:error, term()}
+              {:ok, CallSpecRevision.t()} | {:error, term()}
   @callback resolve_route(context(), String.t(), String.t()) ::
               {:ok, ParticipantRoute.t()} | {:error, :route_unavailable}
   @callback resolve_telephony_route(

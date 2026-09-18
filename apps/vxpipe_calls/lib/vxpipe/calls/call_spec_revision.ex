@@ -1,11 +1,11 @@
-defmodule Vxpipe.Calls.DefinitionRevision do
+defmodule Vxpipe.Calls.CallSpecRevision do
   @moduledoc "An immutable stored source revision and reusable validation metadata."
 
   alias Vxpipe.Calls.{ParticipantRoute, TelephonyRoute}
 
   @enforce_keys [
     :tenant_key,
-    :definition_id,
+    :call_spec_id,
     :revision,
     :schema_version,
     :source,
@@ -21,7 +21,7 @@ defmodule Vxpipe.Calls.DefinitionRevision do
 
   @type t :: %__MODULE__{
           tenant_key: String.t(),
-          definition_id: String.t(),
+          call_spec_id: String.t(),
           revision: pos_integer(),
           schema_version: String.t(),
           source: map(),

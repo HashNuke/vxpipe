@@ -1,7 +1,7 @@
 # Platform bootstrap and demo tenant
 
 Status: in progress. Requested 2026-09-16; first-run Storybook states completed 2026-09-18.
-Prerequisites: [Tenant administration](tenant-definitions-and-api-keys.md),
+Prerequisites: [Tenant administration](tenant-call-specs-and-api-keys.md),
 [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md), and
 [Operator login/admin dashboard](operator-login-and-admin-dashboard.md).
 The index delivers this after the [debug console](call-debug-console.md) so the first provisioned
@@ -15,7 +15,7 @@ A trusted developer issues a platform-level API key once and authenticates a pla
 An authenticated operator creates or adopts one demo tenant and provisions the existing speech/model
 credentials for that tenant through the React admin application.
 Repeating setup or restarting the process retains the same tenant and saved setup state. The
-existing published-definition/prepared-call workflow can then run through the debug console.
+existing published-call-spec/prepared-call workflow can then run through the debug console.
 
 ## Contracts
 
@@ -29,7 +29,7 @@ existing published-definition/prepared-call workflow can then run through the de
 - Platform HTTP operations live at a clearly separate Gateway boundary, proposed `/api/platform`.
   Initially expose only the operations needed for setup: authenticated status, demo-tenant
   create/adopt/lookup, provider provisioning metadata/write, and delegation to the existing
-  definition publication/preparation workflows. Select the target tenant explicitly every time.
+  call spec publication/preparation workflows. Select the target tenant explicitly every time.
   Do not expose raw provider-secret reads, arbitrary internal Calls methods or a general CRUD API.
 - Platform keys authenticate programmatic `/api/platform` operations only. They are not accepted by
   the operator login page and are never exchanged for a browser session. The existing operator
@@ -42,7 +42,7 @@ existing published-definition/prepared-call workflow can then run through the de
   untrusted display name. Concurrent creation converges on one tenant. An explicit adoption of
   configured `VXPIPE_DEV_TENANT` retains its exact identity and existing data.
 - Setup progress is derived from durable resources. An interrupted sequence resumes; a key,
-  credential or definition is never recreated solely because a browser progress flag was lost.
+  credential or call spec is never recreated solely because a browser progress flag was lost.
   A DB/keyring failure is a blocked step, not a fresh install or credential-free fallback.
 - Keep recoverable provider credentials in the existing encrypted tenant store. First-use input
   supports Google/Deepgram and the existing Zenmux alternative; one Deepgram credential can
@@ -80,11 +80,11 @@ Exit: the developer can perform a real authenticated platform operation without 
 - [ ] Red-test create/adopt, concurrent/retried setup, name collisions, missing resources and restart.
   Include existing configured demo tenants and interrupted credential setup.
 - [ ] Implement durable demo binding and narrow platform-to-tenant workflow delegation using
-  existing tenant provisioning, encrypted credential, definition and call-preparation boundaries.
+  existing tenant provisioning, encrypted credential, call spec and call-preparation boundaries.
 - [ ] Report locally provisioned STT/TTS/LLM requirements from metadata. Permit the same Deepgram
   binding for speech; return no secret on status/read. Upstream success is not inferred from save.
 - [ ] Prove a platform operator provisions the intended tenant, then uses a current inline
-  definition and the debug console's ordinary preparation path with exact tenant credentials.
+  call spec and the debug console's ordinary preparation path with exact tenant credentials.
   Another tenant's binding must not satisfy missing requirements.
 - [ ] Verify a restart/retry creates no duplicate demo tenant or unintended key/binding; failed
   steps have safe actionable results. Record migration and operator-command evidence.
@@ -97,7 +97,7 @@ Exit: platform-authenticated source setup yields one stable, tenant-bound runnab
   distinct authorities.
 - [ ] First issue is one-time output; existing/lost keys follow documented explicit local actions.
 - [ ] Two tabs, retry after response loss and fresh application processes converge on one demo
-  identity; adoption preserves existing definitions and credentials.
+  identity; adoption preserves existing call specs and credentials.
 - [ ] Missing/wrong platform authority and cross-tenant substitutions cause no mutation or disclosure.
 - [ ] Database/keyring failures preserve prior progress and never fall through to old provider env.
 - [ ] Focused Calls/Persistence/Gateway/Console checks and all common umbrella gates pass.

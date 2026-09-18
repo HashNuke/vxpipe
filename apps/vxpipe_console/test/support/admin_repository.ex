@@ -8,14 +8,14 @@ defmodule Vxpipe.Console.Test.AdminRepository do
   end
 
   @impl true
-  def list_definitions({owner, result}, tenant_key, limit, offset) do
-    send(owner, {:operator_definitions_requested, tenant_key, limit, offset})
+  def list_call_specs({owner, result}, tenant_key, limit, offset) do
+    send(owner, {:operator_call_specs_requested, tenant_key, limit, offset})
     result
   end
 
   @impl true
-  def list_calls({owner, result}, tenant_key, definition_id, limit, offset) do
-    send(owner, {:operator_calls_requested, tenant_key, definition_id, limit, offset})
+  def list_calls({owner, result}, tenant_key, call_spec_id, limit, offset) do
+    send(owner, {:operator_calls_requested, tenant_key, call_spec_id, limit, offset})
     result
   end
 

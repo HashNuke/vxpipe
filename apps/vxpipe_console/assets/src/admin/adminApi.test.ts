@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import {
   parseCallPage,
   parseCreatedCredential,
-  parseDefinitionPage,
+  parseCallSpecPage,
   parseDemoTenant,
   parseInstalledSamples,
   parseServiceDirectory,
@@ -132,11 +132,11 @@ test("rejects pagination metadata that contradicts the returned page", () => {
   }
 });
 
-test("validates and maps a tenant definition page", () => {
+test("validates and maps a tenant call spec page", () => {
   expect(
-    parseDefinitionPage({
+    parseCallSpecPage({
       tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-      definitions: [
+      call_specs: [
         {
           id: "delivery-rescheduling",
           name: "Delivery rescheduling",
@@ -150,7 +150,7 @@ test("validates and maps a tenant definition page", () => {
     }),
   ).toEqual({
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-    definitions: [
+    callSpecs: [
       {
         id: "delivery-rescheduling",
         name: "Delivery rescheduling",
@@ -164,19 +164,19 @@ test("validates and maps a tenant definition page", () => {
   });
 });
 
-test("rejects malformed definition summaries and contradictory definition pages", () => {
+test("rejects malformed call spec summaries and contradictory call spec pages", () => {
   expect(() =>
-    parseDefinitionPage({
+    parseCallSpecPage({
       tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-      definitions: [],
+      call_specs: [],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
     }),
-  ).toThrow("Invalid definition directory response");
+  ).toThrow("Invalid call spec directory response");
 
   expect(() =>
-    parseDefinitionPage({
+    parseCallSpecPage({
       tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-      definitions: [
+      call_specs: [
         {
           id: "delivery-rescheduling",
           name: "Delivery rescheduling",
@@ -188,24 +188,24 @@ test("rejects malformed definition summaries and contradictory definition pages"
       ],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
     }),
-  ).toThrow("Invalid definition directory response");
+  ).toThrow("Invalid call spec directory response");
 });
 
 test("validates and maps a filtered tenant call page", () => {
   expect(
     parseCallPage({
       tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-      definitions: [
+      call_specs: [
         { id: "delivery-rescheduling", name: "Delivery rescheduling" },
       ],
-      definitions_truncated: false,
-      selected_definition_id: "delivery-rescheduling",
+      call_specs_truncated: false,
+      selected_call_spec_id: "delivery-rescheduling",
       calls: [
         {
           id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
-          definition_id: "delivery-rescheduling",
-          definition_name: "Delivery rescheduling",
-          definition_revision: 3,
+          call_spec_id: "delivery-rescheduling",
+          call_spec_name: "Delivery rescheduling",
+          call_spec_revision: 3,
           state: "ongoing",
           created_at: "2026-09-17T02:20:00Z",
         },
@@ -214,17 +214,17 @@ test("validates and maps a filtered tenant call page", () => {
     }),
   ).toEqual({
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-    definitions: [
+    callSpecs: [
       { id: "delivery-rescheduling", name: "Delivery rescheduling" },
     ],
-    definitionsTruncated: false,
-    selectedDefinitionId: "delivery-rescheduling",
+    callSpecsTruncated: false,
+    selectedCallSpecId: "delivery-rescheduling",
     calls: [
       {
         id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
-        definitionId: "delivery-rescheduling",
-        definitionName: "Delivery rescheduling",
-        definitionRevision: 3,
+        callSpecId: "delivery-rescheduling",
+        callSpecName: "Delivery rescheduling",
+        callSpecRevision: 3,
         state: "ongoing",
         createdAt: "2026-09-17T02:20:00Z",
       },
@@ -233,20 +233,20 @@ test("validates and maps a filtered tenant call page", () => {
   });
 });
 
-test("rejects malformed calls, unknown selected definitions, and contradictory call pages", () => {
+test("rejects malformed calls, unknown selected call specs, and contradictory call pages", () => {
   const base = {
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-    definitions: [
+    call_specs: [
       { id: "delivery-rescheduling", name: "Delivery rescheduling" },
     ],
-    definitions_truncated: false,
-    selected_definition_id: "delivery-rescheduling",
+    call_specs_truncated: false,
+    selected_call_spec_id: "delivery-rescheduling",
     calls: [],
     pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 },
   };
 
   expect(() =>
-    parseCallPage({ ...base, selected_definition_id: "missing-definition" }),
+    parseCallPage({ ...base, selected_call_spec_id: "missing-call-spec" }),
   ).toThrow("Invalid call directory response");
 
   expect(() =>
@@ -270,9 +270,9 @@ test("rejects malformed calls, unknown selected definitions, and contradictory c
       calls: [
         {
           id: "call",
-          definition_id: "other-definition",
-          definition_name: "Other definition",
-          definition_revision: 1,
+          call_spec_id: "other-call-spec",
+          call_spec_name: "Other call spec",
+          call_spec_revision: 1,
           state: "ended",
           created_at: "2026-09-17T02:20:00Z",
         },
@@ -282,7 +282,7 @@ test("rejects malformed calls, unknown selected definitions, and contradictory c
   ).toThrow("Invalid call directory response");
 
   expect(() =>
-    parseCallPage({ ...base, definitions_truncated: "yes" }),
+    parseCallPage({ ...base, call_specs_truncated: "yes" }),
   ).toThrow("Invalid call directory response");
 });
 

@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Completion do
   @spec result(Request.t()) :: map()
   def result(%Request{} = request) do
     %{
-      "destination" => request.destination_definition_key,
+      "destination" => request.destination_call_spec_key,
       "status" => "completed"
     }
   end

@@ -1,29 +1,29 @@
 import type { CallConsoleController } from "@vxpipe/core";
 
-import type { DefinitionContext } from "./callTypes";
-import type { TenantContext } from "./definitionTypes";
+import type { CallSpecContext } from "./callTypes";
+import type { TenantContext } from "./callSpecTypes";
 
 type CallDetailsIdentity = {
   tenant: TenantContext;
   callId: string;
 };
 
-type KnownDefinition = {
-  definition: Pick<DefinitionContext, "id" | "name">;
-  definitionRevision: number;
+type KnownCallSpec = {
+  callSpec: Pick<CallSpecContext, "id" | "name">;
+  callSpecRevision: number;
 };
 
-type OptionalDefinition = {
-  definition: Pick<DefinitionContext, "id" | "name"> | null;
-  definitionRevision: number | null;
+type OptionalCallSpec = {
+  callSpec: Pick<CallSpecContext, "id" | "name"> | null;
+  callSpecRevision: number | null;
 };
 
 export type CallDetailsPageState = CallDetailsIdentity &
   (
-    | (OptionalDefinition & { status: "loading" })
-    | (OptionalDefinition & { status: "unavailable"; message: string })
-    | (OptionalDefinition & { status: "malformed"; message: string })
-    | (KnownDefinition & {
+    | (OptionalCallSpec & { status: "loading" })
+    | (OptionalCallSpec & { status: "unavailable"; message: string })
+    | (OptionalCallSpec & { status: "malformed"; message: string })
+    | (KnownCallSpec & {
         status: "ready";
         controller: CallConsoleController;
         completeness: "complete" | "incomplete" | "unconfirmed";

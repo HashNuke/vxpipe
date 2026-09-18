@@ -1,7 +1,7 @@
 defmodule Vxpipe.Gateway.TelephonyCallScenario do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
   alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
 
   alias Vxpipe.Gateway.Telephony.{
@@ -64,10 +64,10 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   defp compile_plan(provider, options) do
     id = System.unique_integer([:positive, :monotonic])
 
-    {:ok, definition} =
-      CallDefinition.new(
+    {:ok, call_spec} =
+      CallSpec.new(
         %{
-          schema_version: CallDefinition.schema_version(),
+          schema_version: CallSpec.schema_version(),
           entry_caller: "caller",
           entry_receiver: "reception",
           defaults: %{capabilities: %{}},
@@ -120,14 +120,14 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           transfer_policy: %{attempt_timeout_ms: 10_000},
           limits: %{max_duration_ms: 60_000}
         },
-        resource_id: "telephony-harness-definition",
+        resource_id: "telephony-harness-call-spec",
         revision: 1
       )
 
     {:ok, invocation} =
       CallInvocation.new(
         %{
-          call_definition: %{id: "telephony-harness-definition", revision: 1},
+          call_spec: %{id: "telephony-harness-call-spec", revision: 1},
           initial_variables: %{},
           transport: %{type: "telephony"}
         },
@@ -138,7 +138,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
       )
 
     {:ok, plan} =
-      DefinitionCompiler.compile(definition, invocation, %{
+      CallSpecCompiler.compile(call_spec, invocation, %{
         host_tools: %{}
       })
 
@@ -165,8 +165,8 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
     call = %PreparedCall{
       id: plan.call_id,
       tenant_key: plan.tenant_id,
-      definition_id: plan.definition_id,
-      definition_revision: plan.definition_revision,
+      call_spec_id: plan.call_spec_id,
+      call_spec_revision: plan.call_spec_revision,
       schema_version: plan.schema_version,
       participant_routes: %{},
       entry_caller: plan.entry_caller,

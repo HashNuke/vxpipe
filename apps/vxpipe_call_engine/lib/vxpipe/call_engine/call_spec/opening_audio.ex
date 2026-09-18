@@ -1,12 +1,12 @@
-defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
+defmodule Vxpipe.CallEngine.CallSpec.OpeningAudio do
   @moduledoc """
   A validated source for audio played before participant media is admitted.
 
   The custom inspection keeps configured text and URLs out of routine process logs.
   """
 
-  alias Vxpipe.CallEngine.DefinitionValidation
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpecValidation
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
 
   @derive {Inspect, only: [:type]}
   @enforce_keys [:type]
@@ -21,8 +21,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
           }
           | %__MODULE__{type: :file_url, text: nil, url: String.t(), text_to_speech: nil}
 
-  @code :invalid_call_definition
-  @message "The call definition is invalid."
+  @code :invalid_call_spec
+  @message "The call spec is invalid."
   @path ["opening_audio"]
 
   @spec new(nil | map()) :: {:ok, nil | t()} | {:error, Vxpipe.CallEngine.Error.t()}
@@ -30,7 +30,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
 
   def new(value) do
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(
+           CallSpecValidation.normalize_map(
              value,
              [:type, :text, :url, :text_to_speech],
              @code,
@@ -38,9 +38,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
              @path
            ),
          {:ok, type_input} <-
-           DefinitionValidation.fetch(input, :type, @code, @message, @path),
+           CallSpecValidation.fetch(input, :type, @code, @message, @path),
          {:ok, type} <-
-           DefinitionValidation.enum(
+           CallSpecValidation.enum(
              type_input,
              [text: "text", file_url: "file_url"],
              @code,
@@ -54,9 +54,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
   defp build(:text, input) do
     with :ok <- reject_present(input, :url),
          {:ok, text_input} <-
-           DefinitionValidation.fetch(input, :text, @code, @message, @path),
+           CallSpecValidation.fetch(input, :text, @code, @message, @path),
          {:ok, text} <-
-           DefinitionValidation.string(
+           CallSpecValidation.string(
              text_input,
              @code,
              @message,
@@ -64,7 +64,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
              maximum: 4_096
            ),
          {:ok, selection_input} <-
-           DefinitionValidation.fetch(input, :text_to_speech, @code, @message, @path),
+           CallSpecValidation.fetch(input, :text_to_speech, @code, @message, @path),
          {:ok, selection} <-
            CapabilitySelection.new(selection_input, :text_to_speech, @path ++ ["text_to_speech"]) do
       {:ok, %__MODULE__{type: :text, text: text, url: nil, text_to_speech: selection}}
@@ -75,7 +75,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
     with :ok <- reject_present(input, :text),
          :ok <- reject_present(input, :text_to_speech),
          {:ok, url_input} <-
-           DefinitionValidation.fetch(input, :url, @code, @message, @path),
+           CallSpecValidation.fetch(input, :url, @code, @message, @path),
          {:ok, url} <- valid_https_url(url_input) do
       {:ok, %__MODULE__{type: :file_url, text: nil, url: url}}
     end
@@ -91,7 +91,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
 
   defp valid_https_url(value) do
     with {:ok, url} <-
-           DefinitionValidation.string(
+           CallSpecValidation.string(
              value,
              @code,
              @message,
@@ -108,6 +108,6 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
   end
 
   defp invalid(relative_path, reason) do
-    DefinitionValidation.invalid(@code, @message, @path ++ relative_path, reason)
+    CallSpecValidation.invalid(@code, @message, @path ++ relative_path, reason)
   end
 end

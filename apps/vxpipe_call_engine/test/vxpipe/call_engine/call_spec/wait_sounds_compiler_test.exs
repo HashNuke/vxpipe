@@ -1,10 +1,10 @@
-defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.WaitSoundsCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, Error}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, Error}
 
   test "omitted slots resolve destination-specific defaults while explicit nil silences only its slot" do
-    assert CallDefinition.schema_version() == "20260915.01"
+    assert CallSpec.schema_version() == "20260915.01"
 
     for fields <- [%{}, %{wait_sounds: %{}}] do
       plan = compile(fields)
@@ -36,10 +36,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
     }
 
     input = Map.merge(input(), fields)
-    assert {:ok, authored} = CallDefinition.new(input, resource_id: "support", revision: 1)
+    assert {:ok, authored} = CallSpec.new(input, resource_id: "support", revision: 1)
 
     assert {:ok, json} =
-             CallDefinition.from_json(JSON.encode!(input), resource_id: "support", revision: 1)
+             CallSpec.from_json(JSON.encode!(input), resource_id: "support", revision: 1)
 
     assert json == authored
     plan = compile(fields)
@@ -50,11 +50,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
     refute inspect(plan) =~ "media.example.com"
   end
 
-  test "retired schema definitions require explicit conversion" do
+  test "retired schema call specs require explicit conversion" do
     assert {:error, %Error{details: %{"path" => ["schema_version"]}}} =
              input()
              |> Map.merge(%{schema_version: "20260913.01", wait_sounds: nil})
-             |> CallDefinition.new(resource_id: "support", revision: 1)
+             |> CallSpec.new(resource_id: "support", revision: 1)
   end
 
   test "rejects unknown slots and configured non-URLs at the authored path" do
@@ -78,20 +78,20 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
       assert {:error, %Error{details: %{"path" => ["wait_sounds", "transfer_joining"]}}} =
                input()
                |> Map.put(:wait_sounds, %{transfer_joining: value})
-               |> CallDefinition.new(resource_id: "support", revision: 1)
+               |> CallSpec.new(resource_id: "support", revision: 1)
     end
 
     for value <- [true, "https://media.example.com/a.wav", []] do
       assert {:error, %Error{details: %{"path" => ["wait_sounds"]}}} =
                input()
                |> Map.put(:wait_sounds, value)
-               |> CallDefinition.new(resource_id: "support", revision: 1)
+               |> CallSpec.new(resource_id: "support", revision: 1)
     end
 
     assert {:error, %Error{details: %{"path" => ["wait_sounds", "unknown"]}}} =
              input()
              |> Map.put(:wait_sounds, %{"unknown" => nil})
-             |> CallDefinition.new(resource_id: "support", revision: 1)
+             |> CallSpec.new(resource_id: "support", revision: 1)
   end
 
   test "prepares decoded current plans without rewriting their schema or identities" do
@@ -111,20 +111,20 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
   end
 
   defp compile(fields) do
-    assert {:ok, definition} =
+    assert {:ok, call_spec} =
              input()
              |> Map.merge(fields)
-             |> CallDefinition.new(resource_id: "support", revision: 1)
+             |> CallSpec.new(resource_id: "support", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
-               %{call_definition: %{id: "support", revision: 1}, transport: %{type: "web"}},
+               %{call_spec: %{id: "support", revision: 1}, transport: %{type: "web"}},
                tenant_id: "tenant-demo",
                actor_id: "actor-demo"
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 
@@ -133,7 +133,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSoundsCompilerTest do
 
   defp input do
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "support",
       participants:

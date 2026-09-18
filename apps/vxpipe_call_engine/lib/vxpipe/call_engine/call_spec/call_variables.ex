@@ -1,19 +1,19 @@
-defmodule Vxpipe.CallEngine.CallDefinition.CallVariables do
+defmodule Vxpipe.CallEngine.CallSpec.CallVariables do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.VariableSection
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpec.VariableSection
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   defstruct sections: %{}
 
   @type t :: %__MODULE__{sections: %{optional(String.t()) => VariableSection.t()}}
 
   def new(value) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, [:sections], code, message, [
+           CallSpecValidation.normalize_map(value, [:sections], code, message, [
              "call_variables"
            ]),
          {:ok, sections} <- sections(Map.get(input, :sections, %{}), code, message) do
@@ -33,9 +33,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariables do
 
       {_name, _section_input}, _acc ->
         {:halt,
-         DefinitionValidation.invalid(
-           :invalid_call_definition,
-           "The call definition is invalid.",
+         CallSpecValidation.invalid(
+           :invalid_call_spec,
+           "The call spec is invalid.",
            ["call_variables", "sections", "<invalid-key>"],
            "section names must be strings"
          )}
@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariables do
   end
 
   defp sections(_value, code, message) do
-    DefinitionValidation.invalid(
+    CallSpecValidation.invalid(
       code,
       message,
       ["call_variables", "sections"],

@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.CallInspectionPresenter do
   @moduledoc "Converts database call-inspection records into the versioned JSON response."
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
 
@@ -79,12 +79,12 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
   defp participants(%PreparedCall{plan: %ResolvedCallPlan{} = plan}, history) do
     plan.participants
-    |> Enum.sort_by(fn {definition_key, _participant} ->
-      participant_order(definition_key, plan)
+    |> Enum.sort_by(fn {call_spec_key, _participant} ->
+      participant_order(call_spec_key, plan)
     end)
-    |> Enum.map(fn {definition_key, participant} ->
+    |> Enum.map(fn {call_spec_key, participant} ->
       participant_entity(
-        definition_key,
+        call_spec_key,
         participant,
         plan,
         history
@@ -101,7 +101,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   end
 
   defp participant_entity(
-         definition_key,
+         call_spec_key,
          %Participant{} = participant,
          plan,
          history
@@ -113,8 +113,8 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       "revision" => participant_revision(id, history),
       "value" => %{
         "id" => id,
-        "name" => participant_name(definition_key, plan),
-        "role" => participant_role(definition_key, participant, plan),
+        "name" => participant_name(call_spec_key, plan),
+        "role" => participant_role(call_spec_key, participant, plan),
         "state" => participant_state(id, history),
         "description" => participant.description,
         "connection" => connection(participant.connection),
@@ -127,16 +127,16 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     }
   end
 
-  defp participant_name(definition_key, plan) do
-    if definition_key == plan.entry_caller, do: "Caller", else: humanize(definition_key)
+  defp participant_name(call_spec_key, plan) do
+    if call_spec_key == plan.entry_caller, do: "Caller", else: humanize(call_spec_key)
   end
 
-  defp participant_role(definition_key, _participant, plan)
-       when definition_key == plan.entry_caller,
+  defp participant_role(call_spec_key, _participant, plan)
+       when call_spec_key == plan.entry_caller,
        do: "caller"
 
-  defp participant_role(_id, %Participant{kind: :agent}, _definition), do: "agent"
-  defp participant_role(_id, %Participant{kind: :human}, _definition), do: "human"
+  defp participant_role(_id, %Participant{kind: :agent}, _call_spec), do: "agent"
+  defp participant_role(_id, %Participant{kind: :human}, _call_spec), do: "human"
 
   defp participant_state(id, %CallHistory{facts: facts}) do
     facts

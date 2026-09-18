@@ -1,8 +1,8 @@
-defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation}
 
   alias Vxpipe.CallEngine.RemoteMCP.{
     CatalogStore,
@@ -42,8 +42,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
         tenants: %{"tenant-demo" => %{"records" => integration}}
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 7)
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -54,8 +54,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
     store = start_supervised!({CatalogStore, catalog: integrations})
 
     assert {:ok, plan} =
-             CallEngine.compile_definition(
-               definition,
+             CallEngine.compile_call_spec(
+               call_spec,
                invocation,
                Map.delete(registries(integrations), :mcp_integrations),
                mcp_catalog_store: store
@@ -107,9 +107,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
     catalog
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "reception",
       defaults: %{
@@ -142,7 +142,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
 
   defp invocation_input do
     %{
-      call_definition: %{id: "support", revision: 7},
+      call_spec: %{id: "support", revision: 7},
       initial_variables: %{},
       transport: %{type: "web"}
     }

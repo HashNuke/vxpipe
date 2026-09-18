@@ -2,9 +2,9 @@ defmodule Vxpipe.CallEngine.Recording.EgressPolicyReadinessTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     RoomMixer,
     RoomRecording,
     TestRecordingWriter,
@@ -236,10 +236,10 @@ defmodule Vxpipe.CallEngine.Recording.EgressPolicyReadinessTest do
     participants = Map.new(["caller", "receiver", "restricted"], &{&1, human})
     participants = put_in(participants, ["restricted", :while_present], %{record_audio: false})
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  participants: participants
@@ -251,7 +251,7 @@ defmodule Vxpipe.CallEngine.Recording.EgressPolicyReadinessTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "recording-tap-policy", revision: 1},
+                 call_spec: %{id: "recording-tap-policy", revision: 1},
                  transport: %{type: "web"}
                },
                tenant_id: "tenant-recording",
@@ -259,7 +259,7 @@ defmodule Vxpipe.CallEngine.Recording.EgressPolicyReadinessTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

@@ -494,7 +494,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   defp human_pending?(pending, state) do
     case Map.get(
            state.participant_transfer_runtime.plan.participants,
-           pending.request.destination_definition_key
+           pending.request.destination_call_spec_key
          ) do
       %{
         kind: :human,

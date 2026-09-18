@@ -1,9 +1,9 @@
-defmodule Mix.Tasks.Vxpipe.Definition.Save do
+defmodule Mix.Tasks.Vxpipe.CallSpec.Save do
   use Mix.Task
 
   alias Vxpipe.Persistence.CLI
 
-  @shortdoc "Saves an immutable call-definition draft revision"
+  @shortdoc "Saves an immutable call-spec draft revision"
   @requirements ["app.config"]
 
   @impl true
@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Vxpipe.Definition.Save do
     options =
       CLI.options!(
         arguments,
-        [tenant: :string, file: :string, definition_id: :string],
+        [tenant: :string, file: :string, call_spec_id: :string],
         [:tenant, :file]
       )
 
@@ -19,13 +19,13 @@ defmodule Mix.Tasks.Vxpipe.Definition.Save do
     source = options |> Keyword.fetch!(:file) |> CLI.read_json_file!()
 
     workflow_options =
-      case Keyword.get(options, :definition_id) do
+      case Keyword.get(options, :call_spec_id) do
         nil -> []
-        definition_id -> [definition_id: definition_id]
+        call_spec_id -> [call_spec_id: call_spec_id]
       end
 
     revision =
-      Vxpipe.Calls.save_definition(
+      Vxpipe.Calls.save_call_spec(
         Keyword.fetch!(options, :tenant),
         source,
         workflow_options

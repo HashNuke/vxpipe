@@ -1,24 +1,24 @@
 import type {
   CallDirectoryItem,
   CallSummary,
-  DefinitionCallsPageState,
-  DefinitionContext,
+  CallSpecCallsPageState,
+  CallSpecContext,
 } from "./callTypes";
-import { definitions, demoTenant } from "./definitionFixtures";
+import { callSpecs, demoTenant } from "./callSpecFixtures";
 
-export const demoDefinition: DefinitionContext = {
-  id: definitions[0].id,
-  name: definitions[0].name,
-  latestRevision: definitions[0].latestRevision,
-  publishedRevision: definitions[0].publishedRevision,
+export const demoCallSpec: CallSpecContext = {
+  id: callSpecs[0].id,
+  name: callSpecs[0].name,
+  latestRevision: callSpecs[0].latestRevision,
+  publishedRevision: callSpecs[0].publishedRevision,
 };
 
 export const calls: CallSummary[] = [
   {
     id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
-    definitionId: definitions[0].id,
-    definitionName: definitions[0].name,
-    definitionRevision: 3,
+    callSpecId: callSpecs[0].id,
+    callSpecName: callSpecs[0].name,
+    callSpecRevision: 3,
     state: "running",
     createdAt: "2026-09-17T02:20:00.000Z",
     startedAt: "2026-09-17T02:20:03.000Z",
@@ -28,9 +28,9 @@ export const calls: CallSummary[] = [
   },
   {
     id: "018f27a2-51d5-77c9-a44f-e5c648bf8495",
-    definitionId: definitions[0].id,
-    definitionName: definitions[0].name,
-    definitionRevision: 2,
+    callSpecId: callSpecs[0].id,
+    callSpecName: callSpecs[0].name,
+    callSpecRevision: 2,
     state: "ended",
     createdAt: "2026-09-16T08:00:00.000Z",
     startedAt: "2026-09-16T08:00:02.000Z",
@@ -40,9 +40,9 @@ export const calls: CallSummary[] = [
   },
   {
     id: "018f2791-f803-781c-9e96-35cc46d612cc",
-    definitionId: definitions[0].id,
-    definitionName: definitions[0].name,
-    definitionRevision: 4,
+    callSpecId: callSpecs[0].id,
+    callSpecName: callSpecs[0].name,
+    callSpecRevision: 4,
     state: "failed",
     createdAt: "2026-09-16T06:10:00.000Z",
     startedAt: null,
@@ -52,9 +52,9 @@ export const calls: CallSummary[] = [
   },
   {
     id: "018f271e-4f94-7209-a69c-3df2d1523a3f",
-    definitionId: definitions[0].id,
-    definitionName: definitions[0].name,
-    definitionRevision: 3,
+    callSpecId: callSpecs[0].id,
+    callSpecName: callSpecs[0].name,
+    callSpecRevision: 3,
     state: "admitting",
     createdAt: "2026-09-15T12:00:00.000Z",
     startedAt: null,
@@ -64,9 +64,9 @@ export const calls: CallSummary[] = [
   },
   {
     id: "018f2708-76d2-72f5-885c-d2d62a8a8ea1",
-    definitionId: definitions[0].id,
-    definitionName: definitions[0].name,
-    definitionRevision: 1,
+    callSpecId: callSpecs[0].id,
+    callSpecName: callSpecs[0].name,
+    callSpecRevision: 1,
     state: "prepared",
     createdAt: "2026-09-15T09:30:00.000Z",
     startedAt: null,
@@ -76,55 +76,55 @@ export const calls: CallSummary[] = [
   },
 ];
 
-const definitionCalls: Record<string, CallSummary[]> = {
-  [definitions[0].id]: calls,
-  [definitions[1].id]: [
+const callSpecCalls: Record<string, CallSummary[]> = {
+  [callSpecs[0].id]: calls,
+  [callSpecs[1].id]: [
     {
       ...calls[1],
       id: "018f26f2-3bd6-73cd-b778-03150883006a",
-      definitionId: definitions[1].id,
-      definitionName: definitions[1].name,
-      definitionRevision: 2,
+      callSpecId: callSpecs[1].id,
+      callSpecName: callSpecs[1].name,
+      callSpecRevision: 2,
     },
     {
       ...calls[4],
       id: "018f26d9-1f04-7e4e-81c9-362cbab1d5f8",
-      definitionId: definitions[1].id,
-      definitionName: definitions[1].name,
-      definitionRevision: 1,
+      callSpecId: callSpecs[1].id,
+      callSpecName: callSpecs[1].name,
+      callSpecRevision: 1,
     },
   ],
-  [definitions[2].id]: [
+  [callSpecs[2].id]: [
     {
       ...calls[4],
       id: "018f26a1-76e8-74f0-bc09-f65a2f7e3002",
-      definitionId: definitions[2].id,
-      definitionName: definitions[2].name,
-      definitionRevision: 1,
+      callSpecId: callSpecs[2].id,
+      callSpecName: callSpecs[2].name,
+      callSpecRevision: 1,
     },
   ],
-  [definitions[3].id]: [
+  [callSpecs[3].id]: [
     {
       ...calls[1],
       id: "018f2677-b50a-75d7-9267-bd72827f4aa2",
-      definitionId: definitions[3].id,
-      definitionName: definitions[3].name,
-      definitionRevision: 7,
+      callSpecId: callSpecs[3].id,
+      callSpecName: callSpecs[3].name,
+      callSpecRevision: 7,
     },
   ],
 };
 
-function definitionContext(definitionId: string): DefinitionContext | null {
-  const definition = definitions.find(
-    (candidate) => candidate.id === definitionId,
+function callSpecContext(callSpecId: string): CallSpecContext | null {
+  const callSpec = callSpecs.find(
+    (candidate) => candidate.id === callSpecId,
   );
 
-  return definition
+  return callSpec
     ? {
-        id: definition.id,
-        name: definition.name,
-        latestRevision: definition.latestRevision,
-        publishedRevision: definition.publishedRevision,
+        id: callSpec.id,
+        name: callSpec.name,
+        latestRevision: callSpec.latestRevision,
+        publishedRevision: callSpec.publishedRevision,
       }
     : null;
 }
@@ -132,21 +132,21 @@ function definitionContext(definitionId: string): DefinitionContext | null {
 function directoryItem(call: CallSummary): CallDirectoryItem {
   return {
     id: call.id,
-    definitionId: call.definitionId,
-    definitionName: call.definitionName,
-    definitionRevision: call.definitionRevision,
+    callSpecId: call.callSpecId,
+    callSpecName: call.callSpecName,
+    callSpecRevision: call.callSpecRevision,
     state:
       call.state === "ended" || call.state === "failed" ? "ended" : "ongoing",
     createdAt: call.createdAt,
   };
 }
 
-export function callsForDefinition(definitionId: string): CallDirectoryItem[] {
-  return (definitionCalls[definitionId] ?? []).map(directoryItem);
+export function callsForCallSpec(callSpecId: string): CallDirectoryItem[] {
+  return (callSpecCalls[callSpecId] ?? []).map(directoryItem);
 }
 
 export function callsForTenant(): CallDirectoryItem[] {
-  return Object.values(definitionCalls)
+  return Object.values(callSpecCalls)
     .flat()
     .map(directoryItem)
     .sort(
@@ -155,15 +155,15 @@ export function callsForTenant(): CallDirectoryItem[] {
 }
 
 export function callContext(callId: string): {
-  definition: DefinitionContext;
+  callSpec: CallSpecContext;
   calls: CallSummary[];
 } | null {
-  for (const [definitionId, definitionCallList] of Object.entries(
-    definitionCalls,
+  for (const [callSpecId, callSpecCallList] of Object.entries(
+    callSpecCalls,
   )) {
-    if (definitionCallList.some((call) => call.id === callId)) {
-      const definition = definitionContext(definitionId);
-      return definition ? { definition, calls: definitionCallList } : null;
+    if (callSpecCallList.some((call) => call.id === callId)) {
+      const callSpec = callSpecContext(callSpecId);
+      return callSpec ? { callSpec, calls: callSpecCallList } : null;
     }
   }
 
@@ -184,11 +184,11 @@ export type CallFixtureScenario =
 
 export function callFixture(
   scenario: CallFixtureScenario,
-): DefinitionCallsPageState {
+): CallSpecCallsPageState {
   const context = {
     tenant: demoTenant,
-    definitions: definitions.map(({ id, name }) => ({ id, name })),
-    selectedDefinitionId: null,
+    callSpecs: callSpecs.map(({ id, name }) => ({ id, name })),
+    selectedCallSpecId: null,
   };
   switch (scenario) {
     case "loading":
@@ -199,15 +199,15 @@ export function callFixture(
       return {
         status: "ready",
         ...context,
-        selectedDefinitionId: definitions[1].id,
-        calls: callsForDefinition(definitions[1].id),
+        selectedCallSpecId: callSpecs[1].id,
+        calls: callsForCallSpec(callSpecs[1].id),
         pagination: null,
       };
     case "no-filter-matches":
       return {
         status: "ready",
         ...context,
-        selectedDefinitionId: definitions[1].id,
+        selectedCallSpecId: callSpecs[1].id,
         calls: [],
         pagination: null,
       };
@@ -215,7 +215,7 @@ export function callFixture(
       return {
         status: "ready",
         ...context,
-        selectedDefinitionId: "removed-definition",
+        selectedCallSpecId: "removed-call-spec",
         calls: [],
         pagination: null,
       };
@@ -230,7 +230,7 @@ export function callFixture(
       return {
         status: "ready",
         ...context,
-        definitionOptionsTruncated: true,
+        callSpecsTruncated: true,
         calls: callsForTenant(),
         pagination: null,
       };
@@ -241,13 +241,13 @@ export function callFixture(
           key: "tn_international_customer_experience_operations_southeast_asia_2026",
           name: "International customer experience and delivery operations",
         },
-        definitions: [
+        callSpecs: [
           {
             id: "international-priority-delivery-rescheduling-and-exception-resolution",
             name: "International priority delivery rescheduling and exception resolution",
           },
         ],
-        selectedDefinitionId: null,
+        selectedCallSpecId: null,
         calls: callsForTenant().slice(0, 4),
         pagination: null,
       };
@@ -259,9 +259,9 @@ export function callFixture(
           .slice(0, 4)
           .map((call) => ({
             ...call,
-            definitionId:
+            callSpecId:
               "international-priority-delivery-rescheduling-and-exception-resolution",
-            definitionName:
+            callSpecName:
               "International priority delivery rescheduling and exception resolution",
           })),
         pagination: {

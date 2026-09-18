@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
+defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.{CapabilityCatalog, DefinitionValidation}
+  alias Vxpipe.CallEngine.{CapabilityCatalog, CallSpecValidation}
 
   @enforce_keys [:kind, :provider, :model, :credential_name, :options, :provider_options]
   defstruct @enforce_keys
@@ -17,12 +17,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
           provider_options: map()
         }
 
-  @code :invalid_call_definition
-  @message "The call definition is invalid."
+  @code :invalid_call_spec
+  @message "The call spec is invalid."
   @fields [:provider, :model, :credential_name, :options, :provider_options]
 
   def new(input, kind, path) do
-    with {:ok, input} <- DefinitionValidation.normalize_map(input, @fields, @code, @message, path),
+    with {:ok, input} <- CallSpecValidation.normalize_map(input, @fields, @code, @message, path),
          {:ok, provider} <- required_string(input, :provider, path),
          {:ok, model} <- required_string(input, :model, path),
          {:ok, options} <- json_object(Map.get(input, :options, %{}), path ++ ["options"]),
@@ -58,8 +58,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
       String.valid?(selection.model) and byte_size(selection.model) in 1..256 and
       valid_binding?(selection) and is_map(selection.options) and
       is_map(selection.provider_options) and
-      not DefinitionValidation.private_data?(selection.options) and
-      not DefinitionValidation.private_data?(selection.provider_options)
+      not CallSpecValidation.private_data?(selection.options) and
+      not CallSpecValidation.private_data?(selection.provider_options)
   end
 
   defp valid_binding?(%{provider: provider, credential_name: name})
@@ -77,8 +77,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
   end
 
   defp required_string(input, key, path) do
-    with {:ok, value} <- DefinitionValidation.fetch(input, key, @code, @message, path) do
-      DefinitionValidation.string(value, @code, @message, path ++ [Atom.to_string(key)],
+    with {:ok, value} <- CallSpecValidation.fetch(input, key, @code, @message, path) do
+      CallSpecValidation.string(value, @code, @message, path ++ [Atom.to_string(key)],
         maximum: 256
       )
     end
@@ -91,7 +91,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
   end
 
   defp credential_name(input, _provider, path) do
-    DefinitionValidation.identifier(
+    CallSpecValidation.identifier(
       Map.get(input, :credential_name, "default"),
       @code,
       @message,
@@ -102,7 +102,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
   defp json_object(%_struct{}, path), do: invalid(path, "must contain only public JSON data")
 
   defp json_object(value, path) when is_map(value) do
-    if DefinitionValidation.private_data?(value) do
+    if CallSpecValidation.private_data?(value) do
       invalid(path, "must contain only public JSON data")
     else
       case value |> JSON.encode!() |> JSON.decode() do
@@ -116,5 +116,5 @@ defmodule Vxpipe.CallEngine.CallDefinition.CapabilitySelection do
 
   defp json_object(_value, path), do: invalid(path, "must be an object")
 
-  defp invalid(path, reason), do: DefinitionValidation.invalid(@code, @message, path, reason)
+  defp invalid(path, reason), do: CallSpecValidation.invalid(@code, @message, path, reason)
 end

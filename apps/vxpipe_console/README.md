@@ -63,7 +63,7 @@ requests for a compatible local object store. ExAws obtains credentials from its
 standard provider chain, including `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 For supplied temporary credentials, also set `AWS_SESSION_TOKEN`; ordinary long-lived keys
 leave it unset. See the visible root [`env.sample`](../../env.sample) for all platform settings.
-Do not put credentials, bucket settings, or endpoint settings in call definitions or
+Do not put credentials, bucket settings, or endpoint settings in call specs or
 client requests.
 
 ## Call-details publication composition
@@ -83,7 +83,7 @@ The former per-artifact S3 variables are removed and ignored. A configured datab
 finalization plus pending-revision recovery; without either one, automatic publication remains
 disabled. The endpoint accepts only a root HTTP(S) origin and uses path-style access. ExAws obtains
 credentials from its standard provider chain. These settings do not enable recording, and none of
-the bucket, endpoint, or credentials belong in a definition or browser request.
+the bucket, endpoint, or credentials belong in a call spec or browser request.
 
 Renaming variables does not move stored objects. Set the new bucket and endpoint to the existing
 artifact location to preserve recording playback: stored recording references contain object keys,

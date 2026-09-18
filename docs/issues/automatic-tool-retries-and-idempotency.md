@@ -68,5 +68,5 @@ contract in a separate integration lane before promising duplicate prevention.
 For now, planned tests only prove the approved no-automatic-retry baseline and
 distinct later invocations. No runtime changes or tests were made for this issue.
 
-Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
-[architecture](../architecture.md), and [G4 review](../call-definition-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).
+Related: [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
+[architecture](../architecture.md), and [G4 review](../call-spec-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).

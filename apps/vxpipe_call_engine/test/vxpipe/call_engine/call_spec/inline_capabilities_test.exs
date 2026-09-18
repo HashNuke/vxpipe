@@ -1,21 +1,21 @@
-defmodule Vxpipe.CallEngine.CallDefinition.InlineCapabilitiesTest do
+defmodule Vxpipe.CallEngine.CallSpec.InlineCapabilitiesTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
 
   test "compiles actual providers and whole-selection overrides without a profile registry" do
     source = source()
 
-    assert {:ok, definition} = CallDefinition.new(source, resource_id: "inline", revision: 1)
+    assert {:ok, call_spec} = CallSpec.new(source, resource_id: "inline", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
-               %{call_definition: %{id: "inline", revision: 1}, transport: %{type: "web"}},
+               %{call_spec: %{id: "inline", revision: 1}, transport: %{type: "web"}},
                tenant_id: "tenant-inline",
                actor_id: "operator-inline"
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
     selection = plan.participants["assistant"].capabilities.model_inference
     assert selection.provider == "google"
     assert selection.model == "gemini-2.5-flash"
@@ -30,8 +30,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.InlineCapabilitiesTest do
         model_inference: %{provider: "fixture", model: "echo", options: %{}}
       })
 
-    assert {:ok, definition} = CallDefinition.new(overridden, resource_id: "inline", revision: 1)
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
+    assert {:ok, call_spec} = CallSpec.new(overridden, resource_id: "inline", revision: 1)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
     selection = plan.participants["assistant"].capabilities.model_inference
     assert selection.provider == "fixture"
     assert selection.options == %{}
@@ -55,7 +55,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.InlineCapabilitiesTest do
           }
         ] do
       input = put_in(source(), [:defaults, :capabilities, :model_inference], selection)
-      assert {:error, error} = CallDefinition.new(input, resource_id: "inline", revision: 1)
+      assert {:error, error} = CallSpec.new(input, resource_id: "inline", revision: 1)
       assert Enum.take(error.details["path"], 3) == path
       refute inspect(error) =~ "private-marker"
     end
@@ -68,12 +68,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.InlineCapabilitiesTest do
         google_thinking_level: "high"
       })
 
-    assert {:error, _} = CallDefinition.new(input, resource_id: "inline", revision: 1)
+    assert {:error, _} = CallSpec.new(input, resource_id: "inline", revision: 1)
 
     input =
       put_in(source(), [:defaults, :capabilities, :speech_to_text, :options, :encoding], "mp3")
 
-    assert {:error, _} = CallDefinition.new(input, resource_id: "inline", revision: 1)
+    assert {:error, _} = CallSpec.new(input, resource_id: "inline", revision: 1)
   end
 
   defp source do

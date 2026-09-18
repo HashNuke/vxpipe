@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, PlanStartup}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
@@ -236,16 +236,16 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
       }
     }
 
-    {:ok, definition} = CallDefinition.new(source, resource_id: "activation", revision: 1)
+    {:ok, call_spec} = CallSpec.new(source, resource_id: "activation", revision: 1)
 
     {:ok, invocation} =
       CallInvocation.new(
-        %{call_definition: %{id: "activation", revision: 1}, transport: %{type: "web"}},
+        %{call_spec: %{id: "activation", revision: 1}, transport: %{type: "web"}},
         tenant_id: "tenant-inline",
         actor_id: "operator-inline"
       )
 
-    {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
+    {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
     plan
   end
 end

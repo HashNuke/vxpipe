@@ -4,7 +4,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   alias Vxpipe.Calls.{
     CallDirectoryPage,
     CallDirectorySummary,
-    DefinitionPage,
+    CallSpecPage,
     InstallationOperator,
     OperatorCallContext,
     ProviderAuth,
@@ -48,9 +48,9 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   def list_tenants(_authority, _options), do: {:error, :installation_operator_required}
 
-  @spec list_definitions(InstallationOperator.t(), String.t(), keyword()) ::
-          {:ok, DefinitionPage.t()} | {:error, term()}
-  def list_definitions(
+  @spec list_call_specs(InstallationOperator.t(), String.t(), keyword()) ::
+          {:ok, CallSpecPage.t()} | {:error, term()}
+  def list_call_specs(
         %InstallationOperator{grant: :installation_operator},
         tenant_key,
         options
@@ -60,13 +60,13 @@ defmodule Vxpipe.Calls.OperatorAdministration do
          {:ok, limit} <- page_size(options),
          {:ok, repository} <- Repositories.fetch(options, :admin_repository),
          offset = (page - 1) * limit,
-         {:ok, {tenant, definitions, total}} <-
-           Repositories.call(repository, :list_definitions, [tenant_key, limit, offset]),
-         {:ok, total_pages} <- page_range(page, total, limit, :definition_page_out_of_range) do
+         {:ok, {tenant, call_specs, total}} <-
+           Repositories.call(repository, :list_call_specs, [tenant_key, limit, offset]),
+         {:ok, total_pages} <- page_range(page, total, limit, :call_spec_page_out_of_range) do
       {:ok,
-       %DefinitionPage{
+       %CallSpecPage{
          tenant: tenant,
-         definitions: definitions,
+         call_specs: call_specs,
          page: page,
          page_size: limit,
          total: total,
@@ -75,10 +75,10 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     end
   end
 
-  def list_definitions(%InstallationOperator{}, _tenant_key, _options),
+  def list_call_specs(%InstallationOperator{}, _tenant_key, _options),
     do: {:error, :installation_operator_required}
 
-  def list_definitions(_authority, _tenant_key, _options),
+  def list_call_specs(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
 
   @spec list_calls(InstallationOperator.t(), String.t(), keyword()) ::
@@ -89,15 +89,15 @@ defmodule Vxpipe.Calls.OperatorAdministration do
         options
       )
       when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
-    with {:ok, definition_id} <- definition_filter(options),
+    with {:ok, call_spec_id} <- call_spec_filter(options),
          {:ok, page} <- positive_integer(options, :page, 1),
          {:ok, limit} <- page_size(options),
          {:ok, repository} <- Repositories.fetch(options, :admin_repository),
          offset = (page - 1) * limit,
-         {:ok, {tenant, definitions, definitions_truncated, calls, total}} <-
+         {:ok, {tenant, call_specs, call_specs_truncated, calls, total}} <-
            Repositories.call(repository, :list_calls, [
              tenant_key,
-             definition_id,
+             call_spec_id,
              limit,
              offset
            ]),
@@ -105,9 +105,9 @@ defmodule Vxpipe.Calls.OperatorAdministration do
       {:ok,
        %CallDirectoryPage{
          tenant: tenant,
-         definitions: definitions,
-         definitions_truncated: definitions_truncated,
-         selected_definition_id: definition_id,
+         call_specs: call_specs,
+         call_specs_truncated: call_specs_truncated,
+         selected_call_spec_id: call_spec_id,
          calls: calls,
          page: page,
          page_size: limit,
@@ -547,8 +547,8 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     end
   end
 
-  defp definition_filter(options) do
-    case Keyword.get(options, :definition_id) do
+  defp call_spec_filter(options) do
+    case Keyword.get(options, :call_spec_id) do
       nil ->
         {:ok, nil}
 

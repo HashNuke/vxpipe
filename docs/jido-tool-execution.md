@@ -80,7 +80,7 @@ still types and validates ReAct tool inputs as Action modules, derives ReqLLM de
 those modules, and dispatches by the resolved Action module. No public runtime descriptor/executor
 contract matching the requirements below was found. [Issue 282](https://github.com/agentjido/jido_ai/issues/282)
 also remains open; its proposed bounded `search_actions`/`run_action` facade deliberately differs
-from exposing each definition-selected local alias with its exact pinned schema. Neither the latest
+from exposing each call-spec-selected local alias with its exact pinned schema. Neither the latest
 release nor current upstream therefore lifts this blocker.
 
 ## Required Jido interface
@@ -142,7 +142,7 @@ Sources: [ExMCP 1.3.0](https://hex.pm/packages/ex_mcp/1.3.0),
 - **Jido Connect now:** not selected. The reviewed ExMCP-backed core replacement is an
   unpublished open migration, and its generic list/call bridge does not itself add runtime
   per-tool schemas to Jido AI. Re-evaluate a stable release if it removes meaningful work;
-  its future backend choice need not affect our public call-definition contract.
+  its future backend choice need not affect our public call-spec contract.
   [Migration](https://github.com/agentjido/jido_connect/pull/75).
 - **Generic model-visible `call_mcp(endpoint, tool, args)`:** rejected; loses exact local
   schemas and exposes selectors that belong in private authorized bindings.
@@ -154,11 +154,11 @@ Sources: [ExMCP 1.3.0](https://hex.pm/packages/ex_mcp/1.3.0),
 The Jido decision retained the then-existing milestone order. The current index has **23
 milestones** after two later observability slices were added:
 
-- The definition-driven slice proves Jido streaming and repeated host-tool rounds with
+- The call-spec-driven slice proves Jido streaming and repeated host-tool rounds with
   finite static Actions. Until the public binding extension exists, its explicitly limited
   subset accepts a local tool key only when it equals the Action's name; unsupported aliases
   fail before startup rather than being renamed silently. This is a rollout restriction,
-  not a change to the final call-definition alias contract.
+  not a change to the final call-spec alias contract.
 - Variables/background slices reuse those finite Actions and retain their approved
   authority/lifetime contracts. They do not need remote catalog generation.
 - The standalone MCP slice verifies ExMCP independently; it does not require a Jido agent

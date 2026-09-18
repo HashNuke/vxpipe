@@ -16,7 +16,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
   revision-barrier and bounded-delivery adapters; do not introduce FFmpeg when the negotiated
   format already matches the room sample rate.
 - Support human-only entry/continued rooms with active agent nil and one runtime participant per catalog key. Keep call duration/lifecycle independent of agent presence.
-- Compile normal media_policy and admitted participant while_present maps: audio_routes and transcript_routes map definition source keys to recipient arrays. Explicit maps are complete allowlists; an omitted policy field adds no restriction, but an omitted source inside an explicit route map is denied. An empty map permits none, with no implicit source/self/monitor grant. Intersect all active restrictions plus host ceiling; never deep-merge to restore omitted routes.
+- Compile normal media_policy and admitted participant while_present maps: audio_routes and transcript_routes map call spec source keys to recipient arrays. Explicit maps are complete allowlists; an omitted policy field adds no restriction, but an omitted source inside an explicit route map is denied. An empty map permits none, with no implicit source/self/monitor grant. Intersect all active restrictions plus host ceiling; never deep-merge to restore omitted routes.
 - record_audio/save_transcripts are independent room-wide interval permissions; false wins. Leaving removes only that contribution; raw transport loss does not clear authoritative presence. Permission never enables unconfigured STT/recording. Stop STT flows if neither permitted live nor storage consumer needs them.
 - Commit policy before main bridge/activation, including queued/late output and reactivation. Route enforcement, transcript projection and private archive gates use source-interval provenance. Denied intervals never reach storage queues/debug logs/exports or retrospectively replay after relaxation. Previously allowed history stays until retention.
 - Reserve a separately authorized private-preparation lane for the next transfer slice; it cannot become full-room audio. No per-packet SQL or RoomAuthority mixing. Bounded overload is explicit, and storage failure cannot block live media.
@@ -41,7 +41,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 
 ## Manual verification
 
-1. Join two distinct human definitions using authorized test clients; exchange simultaneous audio and inspect mix-minus.
+1. Join two distinct human call specs using authorized test clients; exchange simultaneous audio and inspect mix-minus.
 2. Join an explicitly authorized silent monitor and verify it cannot transmit or hear unauthorized sources.
 3. Admit a restrictive participant that permits only caller/specialist routes and denies recording/transcript storage.
 4. Inspect live recipients and private archive sink; remove the participant and confirm only its restrictions lift, with no historical replay.
@@ -60,7 +60,7 @@ No implicit full-room monitor privilege, capability-denial selectors, participan
 Implementation evidence (2026-09-11): schema `20260911.01` introduces the normal call-wide
 `media_policy` and participant-local `while_present` shapes. Omitted fields compile as `:inherit`,
 while explicit empty route maps/recipient lists and false storage permissions remain distinct.
-Route sources and recipients accept only declared participant definition keys, reject duplicates,
+Route sources and recipients accept only declared participant call spec keys, reject duplicates,
 and fail malformed values at exact paths. The compiler translates those keys once to immutable
 runtime participant IDs and `MapSet` recipient allowlists in the resolved plan. The focused test was
 written first and failed because both typed policy modules were absent; after implementation it
@@ -149,7 +149,7 @@ complete.
 
 Human-only planned startup is now executable. Schema `20260911.01` accepts a human
 `entry_receiver`; compilation gives both human entries stable runtime participant identities and
-no activation ID. Startup admits exactly those two definitions through the existing policy
+no activation ID. Startup admits exactly those two call specs through the existing policy
 barrier, selects STT independently per human identity, and permits attachment without fabricating
 an agent/text capability. The dedicated vertical test sends normalized PCM from both humans
 through the room's revision-two mixer, proves each mix-minus output contains only the other

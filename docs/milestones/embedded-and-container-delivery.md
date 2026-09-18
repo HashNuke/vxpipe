@@ -2,7 +2,7 @@
 
 Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
 Prerequisites: [Getting Started/example calls](getting-started-and-example-calls.md), including its debug-console and platform-bootstrap prerequisites; [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
-Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical definition boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
+Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical call spec boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](../gateway-console-boundary.md).
 
 ## Runnable outcome
@@ -39,8 +39,8 @@ user explicitly releases that hold.
   that components can be used as libraries inside users' Elixir applications,
   linking to working host/dependency examples without requiring the Docker image.
 - OTP namespaced application settings are canonical at application boundaries; reusable supervisors accept explicit options for embedded hosts. No runtime Mix.env branching or dependency config/<env>.exs assumptions. Read deployment environment only in config/runtime.exs and normalize once.
-- Use the platform environment contract from the credential milestone for the image/release runner. JSON call definitions and pinned resource references use the same typed compiler as embedded use. Add no deployment JSON/TOML loader or provider-global fallback. Closed catalogs reject unsupported provider/options and arbitrary module selection.
-- Document encrypted tenant provider provisioning through protected operator input and platform keyring injection through the runtime environment. Preserve the existing private MCP credential boundary. Public definitions/plans, errors, logs and image layers never contain credentials; no env-file contents committed. Distinguish provider credentials from gateway-issued hash-only API keys and one-time bootstrap output.
+- Use the platform environment contract from the credential milestone for the image/release runner. JSON call specs and pinned resource references use the same typed compiler as embedded use. Add no deployment JSON/TOML loader or provider-global fallback. Closed catalogs reject unsupported provider/options and arbitrary module selection.
+- Document encrypted tenant provider provisioning through protected operator input and platform keyring injection through the runtime environment. Preserve the existing private MCP credential boundary. public call specs/plans, errors, logs and image layers never contain credentials; no env-file contents committed. Distinguish provider credentials from gateway-issued hash-only API keys and one-time bootstrap output.
 - An embedded engine with inline trusted configuration can run without PostgreSQL; full durable tenant preparation/admission still requires configured persistence. Runtime archive is async, not a database-free admission guarantee. Reusable host app has no dependency on gateway, sample frontend or development Tailscale ingress.
 - A host may additionally embed `vxpipe_gateway` without Phoenix or `vxpipe_console`.
   Document its explicit supervision/configuration and mountable Plug/protocol interface,
@@ -62,7 +62,7 @@ user explicitly releases that hold.
 
 ## Implementation checklist
 
-- [ ] Red-test platform env/application-option parity, unavailable tenant credentials, unsupported definition/provider and embedded isolation.
+- [ ] Red-test platform env/application-option parity, unavailable tenant credentials, unsupported call spec/provider and embedded isolation.
 - [ ] Implement the release/image entrypoint, explicit migration/bootstrap commands and runtime health/shutdown integration using the established platform env and tenant DB configuration.
 - [ ] Add container build/run instructions with safe platform env and tenant provisioning examples and no real
   secrets; verify licenses and required notices for the pinned direct and transitive
@@ -71,7 +71,7 @@ user explicitly releases that hold.
   retain `HashNuke/vxpipe` as the source repository, and document Elixir library
   consumption with a runnable host example. Keep the source-development quick
   start in the development guide once the Docker quick start replaces it.
-- [ ] Smoke-test embedded inline engine and full durable container admission through the same definition fixture.
+- [ ] Smoke-test embedded inline engine and full durable container admission through the same call spec fixture.
 - [ ] Verify one image in both production-default and explicit demo modes, including direct demo
   endpoint denial when disabled and the authenticated setup-to-debug-console flow when enabled.
 - [ ] Smoke-test gateway-only host mounting and its optional standalone listener without
@@ -86,7 +86,7 @@ user explicitly releases that hold.
   Verify its linked Elixir library example runs in a consuming host without
   Docker. README commands must match the built/released artifact and the source
   repository must remain `HashNuke/vxpipe`.
-- [ ] Equivalent inline definitions produce equivalent plans/policies through hosted tenant storage and explicit embedded options, without ambient Mix.env behavior in a consuming app.
+- [ ] Equivalent inline call specs produce equivalent plans/policies through hosted tenant storage and explicit embedded options, without ambient Mix.env behavior in a consuming app.
 - [ ] Missing invalid config/secrets fail safely before unauthorized startup; image/build/logs contain no credentials and public strings cannot choose modules/atoms.
 - [ ] Embedded engine runs without Ecto/gateway/sample; full container does not claim durable admission when PG is unavailable.
 - [ ] Embedded gateway admission/signaling runs without console/Phoenix, using explicitly
@@ -99,7 +99,7 @@ user explicitly releases that hold.
   collectors cannot fail established calls, and the image contains no frontend dev server.
 - [ ] Readiness/liveness and post-admission archive outage differ; storage failure does not kill established calls.
 - [ ] Shutdown rejects new calls, drains permitted work within documented bounds and reports incomplete outcomes without a lossless promise or automatic call replay.
-- [ ] Complete final cross-slice regression using definition, private variables, remote tool, human transfer, permitted recording, usage/publication and retention.
+- [ ] Complete final cross-slice regression using call spec, private variables, remote tool, human transfer, permitted recording, usage/publication and retention.
 
 ## Manual verification
 
@@ -156,7 +156,7 @@ published by this follow-up, and no implementation checkbox is completed.
 ### Credential configuration scope review (2026-09-16)
 
 The approved credential milestone supersedes the deployment JSON-loader proposal. Delivery uses
-platform env plus encrypted tenant credentials; JSON remains call-definition data. The prerequisite
+platform env plus encrypted tenant credentials; JSON remains call-spec data. The prerequisite
 now includes that configuration cutover. The packaging hold, embedded library boundary and delivery
 acceptance remain unchanged. This is a specification correction, not implemented container support.
 

@@ -1,8 +1,8 @@
-defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
+defmodule Vxpipe.CallEngine.CallSpec.ConnectionIntent do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.NumberFromVariable
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpec.NumberFromVariable
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @phone_number ~r/\A\+[1-9][0-9]{1,14}\z/
 
@@ -18,11 +18,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
         }
 
   def new(value, path) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(
+           CallSpecValidation.normalize_map(
              value,
              [:service, :mode, :admission, :number, :number_from_variable],
              code,
@@ -30,11 +30,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
              path
            ),
          {:ok, service_input} <-
-           DefinitionValidation.fetch(input, :service, code, message, path),
+           CallSpecValidation.fetch(input, :service, code, message, path),
          {:ok, service} <- service(service_input, code, message, path),
-         {:ok, mode_input} <- DefinitionValidation.fetch(input, :mode, code, message, path),
+         {:ok, mode_input} <- CallSpecValidation.fetch(input, :mode, code, message, path),
          {:ok, mode} <-
-           DefinitionValidation.enum(
+           CallSpecValidation.enum(
              mode_input,
              [receive: "receive", dial: "dial"],
              code,
@@ -58,7 +58,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
   defp service("web", _code, _message, _path), do: {:ok, :web}
 
   defp service(value, code, message, path) do
-    DefinitionValidation.identifier(value, code, message, path ++ ["service"])
+    CallSpecValidation.identifier(value, code, message, path ++ ["service"])
   end
 
   defp admission(input, :dial, code, message, path) do
@@ -70,7 +70,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
         {:ok, :transfer}
 
       {:ok, _value} ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ ["admission"],
@@ -80,8 +80,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
   end
 
   defp admission(input, :receive, code, message, path) do
-    with {:ok, value} <- DefinitionValidation.fetch(input, :admission, code, message, path) do
-      DefinitionValidation.enum(
+    with {:ok, value} <- CallSpecValidation.fetch(input, :admission, code, message, path) do
+      CallSpecValidation.enum(
         value,
         [start_call: "start_call", transfer: "transfer"],
         code,
@@ -97,7 +97,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
         {:ok, nil, nil}
 
       field ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ [Atom.to_string(field)],
@@ -107,7 +107,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
   end
 
   defp destination(_input, :web, :dial, code, message, path) do
-    DefinitionValidation.invalid(
+    CallSpecValidation.invalid(
       code,
       message,
       path ++ ["mode"],
@@ -117,14 +117,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
 
   defp destination(input, _service, :receive, code, message, path) do
     if Map.has_key?(input, :number_from_variable) do
-      DefinitionValidation.invalid(
+      CallSpecValidation.invalid(
         code,
         message,
         path ++ ["number_from_variable"],
         "is only supported for dial mode"
       )
     else
-      with {:ok, number_input} <- DefinitionValidation.fetch(input, :number, code, message, path),
+      with {:ok, number_input} <- CallSpecValidation.fetch(input, :number, code, message, path),
            {:ok, number} <- phone_number(number_input, code, message, path ++ ["number"]) do
         {:ok, number, nil}
       end
@@ -134,7 +134,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
   defp destination(input, _service, :dial, code, message, path) do
     case {Map.fetch(input, :number), Map.fetch(input, :number_from_variable)} do
       {{:ok, _number}, {:ok, _source}} ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ ["number_from_variable"],
@@ -142,7 +142,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
         )
 
       {:error, :error} ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ ["number"],
@@ -166,11 +166,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
     if Regex.match?(@phone_number, value) do
       {:ok, value}
     else
-      DefinitionValidation.invalid(code, message, path, "must be an E.164 telephone number")
+      CallSpecValidation.invalid(code, message, path, "must be an E.164 telephone number")
     end
   end
 
   defp phone_number(_value, code, message, path) do
-    DefinitionValidation.invalid(code, message, path, "must be an E.164 telephone number")
+    CallSpecValidation.invalid(code, message, path, "must be an E.164 telephone number")
   end
 end

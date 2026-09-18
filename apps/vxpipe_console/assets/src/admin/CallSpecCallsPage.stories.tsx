@@ -1,16 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
-import { DefinitionCallsStory } from "./DefinitionCallsStory";
+import { CallSpecCallsStory } from "./CallSpecCallsStory";
 
 const meta = {
   title: "vxpipe_console/Calls",
-  component: DefinitionCallsStory,
+  component: CallSpecCallsStory,
   parameters: {
     layout: "fullscreen",
     docs: {
       description: {
         component:
-          "All calls for one tenant, with an optional URL-backed definition filter. Use Admin / Full journey to review the linked flow.",
+          "All calls for one tenant, with an optional URL-backed call spec filter. Use Admin / Full journey to review the linked flow.",
       },
     },
   },
@@ -34,9 +34,9 @@ const meta = {
     theme: { control: "select", options: ["dark", "light"] },
   },
   render: (args) => (
-    <DefinitionCallsStory key={`${args.theme}-${args.scenario}`} {...args} />
+    <CallSpecCallsStory key={`${args.theme}-${args.scenario}`} {...args} />
   ),
-} satisfies Meta<typeof DefinitionCallsStory>;
+} satisfies Meta<typeof CallSpecCallsStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

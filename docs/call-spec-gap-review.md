@@ -1,11 +1,11 @@
-# Call-definition gap review
+# Call Spec gap review
 
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-08 UTC
 Status: G1 and G2's web routes, initial variables, API-key admission with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, common preparation/token/join for all API clients, explicit
-entry participants/startup, and one participant per definition key per call approved;
+entry participants/startup, and one participant per call spec key per call approved;
 R01–R05 now approve OTP/CLI key bootstrap, tenant-bound `admin`/`calls` scopes,
 multiple independently revocable keys, key revocation without invalidating
 issued join tokens or established connections, and five-minute default tokens
@@ -48,7 +48,7 @@ conversational confirmation and the application/MCP owns enforceable business
 authorization. Prompts are not security checks; Vxpipe tool-access checks remain.
 G5's call-level client tool visibility and explicitly full-visibility sample
 calls are approved, with all tool events hidden when visibility is unspecified.
-Per-tool overrides are also approved: target the participant definition key plus
+Per-tool overrides are also approved: target the participant call spec key plus
 its local configured tool key, with the call-wide default as fallback. Independent
 tool-history storage always saves observed metadata, arguments/request payloads,
 and responses/results/errors, with existing credential/header exclusions. Available
@@ -123,7 +123,7 @@ or every engineering choice is selected, including the compaction execution mode
 | ID | Background | Decision / review status |
 | --- | --- | --- |
 | R01 | G2 | **Resolved:** trusted OTP/CLI administration creates the first API key without an existing key. |
-| R02 | G2 | **Resolved:** keys are tenant-bound with `admin` and `calls` scopes; no per-definition allowlist or arbitrary per-operation permission scheme is approved. |
+| R02 | G2 | **Resolved:** keys are tenant-bound with `admin` and `calls` scopes; no per-call-spec allowlist or arbitrary per-operation permission scheme is approved. |
 | R03 | G2 | **Resolved:** multiple independently revocable keys are allowed, including overlap during rotation. |
 | R04 | G2 | **Resolved:** revocation blocks further use of that API key, not previously issued join tokens or established connections; tokens are not coupled to API keys for revocation. |
 | R05 | G2 | **Resolved:** tokens default to five minutes from issuance; the authenticated requester may request a longer lifetime, with no additional maximum approved here. |
@@ -138,7 +138,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R14 | G4 | **Resolved:** no automatic tool/MCP executor retries initially, including known non-submission failures; return the outcome and treat any later model-requested call as a separate invocation. |
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
-| R17 | G5 | **Resolved:** `tool_visibility` is `hidden`, `metadata`, or `full`; optional `tool_visibility_overrides` maps participant definition key to local tool binding key to level. Binding overrides win; omission hides events; trusted creation may replace the definition policy pair. |
+| R17 | G5 | **Resolved:** `tool_visibility` is `hidden`, `metadata`, or `full`; optional `tool_visibility_overrides` maps participant call spec key to local tool binding key to level. Binding overrides win; omission hides events; trusted creation may replace the call spec policy pair. |
 | R18 | G5 | **Resolved:** qualified by R38 to store permitted available transcripts, turn details, usage/model/cost observations, full variable snapshots, and complete observed tool history. R41 archives locally accepted updates asynchronously. Room-wide transcript/audio storage booleans are distinct from live sharing; recording must be enabled/permitted, without new category toggles or invented data. |
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
@@ -151,7 +151,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R27 | G7 | **Resolved:** configurable 30-second required provider/connection readiness deadline from post-join startup; fail early on terminal failure or abort/release resources on expiry; deliberate opening playback is not a readiness failure. |
 | R28 | G7 | **Resolved:** configurable 15-second idle notification only while an agent genuinely waits for caller input; instructions choose nudge/wait/permitted hangup, not automatic silence termination or repeated announcements. |
 | R29 | G7 | **Resolved:** no automatic periodic long-tool progress speech; instructions own kickoff/results and ordinary background conversation. Startup/tool wait music is deferred in its own issue. |
-| R30 | G7 | **Resolved:** limits.max_duration_ms defaults to 1800000; definition overrides tenant, then application, then platform default. Pin it per call, measure from actual started_at without transfer/recovery reset, and end with a clear duration-limit reason. |
+| R30 | G7 | **Resolved:** limits.max_duration_ms defaults to 1800000; call spec overrides tenant, then application, then platform default. Pin it per call, measure from actual started_at without transfer/recovery reset, and end with a clear duration-limit reason. |
 | R31 | G7 | **Resolved:** agent instructions own closing wording and when to invoke existing hangup; no platform speak-then-end API, drain deadline, or automatic pending-hangup cancellation on interruption. No prompt-based playback guarantee. |
 | R32 | G7 | **Resolved:** when configured provider AMD reports machine, disconnect that outbound destination leg, preserving a transfer's caller/source; unknown still needs explicit acceptance within the existing deadline. Detection is optional, uncertainty remains honest, and voicemail-message delivery is deferred to its issue. |
 | R33 | G8 | **Resolved:** call-level transfer_policy holds shared defaults; source transfers remains allowed participant refs and destination-specific connection/acceptance requirements stay with the destination; no named/source-default/per-pair machinery. |
@@ -168,7 +168,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R44 | G12 | **Resolved:** retain observations and derive effective usage per operation attempt/component; distinguish deltas from cumulative totals and estimate/final/correction status. Identity-proven duplicates do not add again; final supersedes estimates, explicit corrections may decrease/increase, and failed/interrupted usage is retained without invented zero. |
 | R45 | G12 | **Resolved:** always call-scoped with honest optional participant/service-interval/turn attribution, no forced allocation or duplicate charges. Keep usage separate from unavailable cost and preserve real namespaced provider IDs for optional asynchronous supported billing lookup outside the live call. |
 | R46 | G12 | **Resolved:** retain provider-reported estimate/final cost when available, otherwise unknown price with actual provider IDs and observed usage. TTS input-text characters/generated-audio duration and STT audio duration/recognized-text characters are retained when observed and permitted, with exact units/provenance and no invented IDs, billable units, or local pricing catalog. |
-| R47 | G13 | **Resolved:** provider-supported settings belong to reusable configured services/profiles; conversation/interruption/duration policy stays engine-owned. Reject known unsupported combinations during definition validation, with provider-discovered failures handled normally at startup/runtime; no new config layer or arbitrary executable/provider payload. |
+| R47 | G13 | **Resolved:** provider-supported settings belong to reusable configured services/profiles; conversation/interruption/duration policy stays engine-owned. Reject known unsupported combinations during call spec validation, with provider-discovered failures handled normally at startup/runtime; no new config layer or arbitrary executable/provider payload. |
 | R48 | G13 | **Resolved:** before each inference compare total input with usable input budget after output reserve; compact older completed conversation at 75%, targeting below 50%. Preserve protected instructions/tools/recent messages/unresolved interactions and pairing, grants, source-interval privacy, variables, and full permitted history. Targets do not guarantee fit; summarizer execution/model and config encoding are not selected. |
 | R49 | G13 | **Resolved:** configurable decoded/decompressed MCP response limit defaults to 1 MiB (1,048,576 bytes), enforced incrementally and cumulatively for streaming. Stop excess receipt/processing with honest bounded outcome details, no automatic retry or full-body archive claim. Archive accepted permitted responses; model-too-large yields explicit projection omission, not remote failure, chopped JSON, or automatic result summarization. |
 | R50 | G13 | **Resolved:** allow explicitly configured provider-native/router LLM fallback only where the selected agent-runtime/ReqLLM provider surface supports it; no Vxpipe fallback schema/chain/coordinator or new STT/TTS fallback. Preserve permissions/tool/privacy constraints and observed attribution without inventing upstream attempts or replaying emitted speech/actions. |
@@ -197,7 +197,7 @@ rather than silently inflating or hiding the review backlog.
 
 ## Conclusion and scope
 
-Keep the participant-first definition, `entry_caller` and `entry_receiver`,
+Keep the participant-first call spec, `entry_caller` and `entry_receiver`,
 direct `transfers` ref lists, agent-scoped tool enablement, room-owned variables,
 and immutable resolved plan. The scenarios below do not require nodes, edges,
 named transfers, or a general expression language. R01–R50's numbered review is
@@ -205,11 +205,11 @@ complete; the remaining work is implementing the approved contracts and separate
 addressing deferred features/engineering choices, not silently adding another
 approval batch or claiming a deployed public schema.
 
-This reviews the [call-definition labnote][design] and
+This reviews the [call-spec labnote][design] and
 [runtime architecture][architecture] at Vxpipe commit
 `e7a769e0ce4ec3cc0bb39faf300f759f125d9c4e`. Source inspection confirms that
-`CreateRoom` still selects a preset, not a call definition; tools are trusted
-Elixir modules; there is no definition compiler, call variables, remote MCP client,
+`CreateRoom` still selects a preset, not a call spec; tools are trusted
+Elixir modules; there is no call spec compiler, call variables, remote MCP client,
 telephony transfer, database adapter, or room mixer implementing the proposal.
 “Design fit” below must not be read as “works in today's playground.”
 
@@ -226,7 +226,7 @@ integration examples, not proof that every advertised behavior is enforced.
 | Scenario and concrete evidence | What our design can express | Missing work or limitation |
 | --- | --- | --- |
 | Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. A timeout without a definitive remote result reports unknown. Conversational confirmation belongs in agent instructions; enforceable business authorization belongs to the application/MCP, with no generic platform confirmation now. Business-time interpretation belongs to application/agent instructions with date tooling; automatic retry/idempotency enhancements and late recovery notifications are deferred. The external scheduling system remains the booking authority. |
-| Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent definitions transfer by ref | Personalization uses agent instructions and permitted variable reads. Retain trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
+| Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent call specs transfer by ref | Personalization uses agent instructions and permitted variable reads. Retain trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
 | Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Configured provider detection reporting machine ends the attempted destination leg; transfer source/caller remain, unknown still requires explicit acceptance within the existing deadline, and leaving a message is deferred. Closing wording and choosing hangup belong to agent instructions, without a platform speak-then-end or guaranteed-playout workflow. |
 | SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification variables, provider-neutral external action | Requires an external verification service or trusted host implementation. That service owns verification, expiry, attempt limits, recipient binding, and replay protection; the agent can record its returned outcome in permitted call variables. Storing an outcome does not override the service's rules. Do not run JSON-provided JavaScript. |
 
@@ -254,7 +254,7 @@ P2 is required before claiming the relevant telephony or archive feature.
 ### G1 — Resolved in documentation: one agent tools map
 
 At the review baseline, the MCP example used an `agents` root and nested
-`integrations.<alias>.tools`, while the representative definition used
+`integrations.<alias>.tools`, while the representative call spec used
 `participants` and direct MCP bindings in `tools`. The two examples also granted
 `billing` different access to `intake`. They did not describe one grammar.
 
@@ -280,14 +280,14 @@ their existing grants; tool aliases must not collide with generated names.
 G1's authoring ambiguity is resolved. Schema `20260910.03` implements the first closed
 platform-tool compiler subset: `get_current_time` and immediate `hangup` can be selected under
 local aliases beside host and MCP entries. Unknown platform names fail resolution, and no module
-or executable identifier is accepted from definition input. Broader platform tools still need
+or executable identifier is accepted from call spec input. Broader platform tools still need
 their own vertical checkpoints; the representative JSON is not a commitment to implement every
 illustrated operation at once.
 
 ### G2 — Resolved for the initial scope: admission, authentication, and entry roles
 
 At baseline, `transport.type: web` did not map an incoming connection to a
-participant definition. The original `entrypoint` identified only the initial
+participant call spec. The original `entrypoint` identified only the initial
 handler, not necessarily that connection's human participant. The approved
 entry-role refinement below makes both initial participants explicit.
 
@@ -303,11 +303,11 @@ POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/jo
 
 Use a 16-character cryptographically random URL-safe tenant key, UUID participant
 connection keys, and UUID call IDs, separate from database primary keys. The
-preparation route selects a deployment/definition and initiating participant,
-which must match that definition's `entry_caller`; it stores the pinned plan and
+preparation route selects a deployment/call spec and initiating participant,
+which must match that call spec's `entry_caller`; it stores the pinned plan and
 variables and returns a scoped join token without starting the room. A join route
 must identify the particular tenant and call and resolve the participant using
-that call's pinned definition.
+that call's pinned call spec.
 It cannot choose a call from a reusable support key alone. Authorization precedes
 issuing the call-specific transport session.
 The `join-tokens` route is backend-only and API-key-authenticated, with no CORS
@@ -316,15 +316,15 @@ call record, not a newly created call, and does not itself start a room. The
 separate browser-facing join operation consumes the token.
 WebRTC is the first browser transport; routing can also serve a future WebSocket
 adapter. These are generic gateway handlers backed by route records, not code
-or room processes created for every saved definition. See the
+or room processes created for every saved call spec. See the
 [approved web admission contract][web-admission]. No runtime implementation was
 authorized by this documentation decision.
 
 **Approved entry roles and startup:** replace `entrypoint` with `entry_caller`
 and `entry_receiver`. Both are required string refs to different existing keys
-in the same `participants` map; neither embeds a participant definition. The
+in the same `participants` map; neither embeds a participant call spec. The
 caller stays in the catalog with the receiver and possible transfer targets.
-Validate refs when parsing/saving the definition and retain resolved refs in the
+Validate refs when parsing/saving the call spec and retain resolved refs in the
 pinned call plan. The benefit is explicit intent, not an assumption that runtime
 must otherwise repeatedly scan the catalog or query the database.
 
@@ -344,12 +344,12 @@ or originates a carrier leg; connection configuration retains that job. See the
 [approved entry and startup contract][entry-participants]. No runtime startup
 behavior was implemented.
 
-**Approved participant cardinality:** each definition key binds at most one
+**Approved participant cardinality:** each call spec key binds at most one
 runtime participant per call, for humans and agents alike. Once a staff member
 occupies `human-support-agent`, another person cannot join under that key, share
 its identity, or replace their connection. Permitted agent re-entry retains its
 participant identity and receives a fresh activation; same-call caller
-reconnection is deferred. Different staff roles use different definition
+reconnection is deferred. Different staff roles use different call spec
 keys, and another call gets its own independent participants.
 
 Enforce the binding during admission and transfer preparation, including races
@@ -361,14 +361,14 @@ cardinality itself is resolved. See the
 [approved one-participant contract][participant-cardinality].
 
 **Approved initial variables:** the integrating application's backend supplies
-values directly in the section structure declared by the call definition. Drop
+values directly in the section structure declared by the call spec. Drop
 the separate `input_schema` and JSON Pointer initialization mappings. For order
-`ORD-1042`, it supplies `initial_variables: {order: {id: "ORD-1042"}}` to a definition
+`ORD-1042`, it supplies `initial_variables: {order: {id: "ORD-1042"}}` to a call spec
 declaring that section. Admission initializes it; several agents can read it
-while none has write access. The definition declares the data shape and
+while none has write access. the call spec declares the data shape and
 permissions, not a second remapping layer. The authorized backend may prefill
 any declared section, including one that no agent can write. Initial variables
-cannot override providers, tools, either entry ref, tenant, or other definition
+cannot override providers, tools, either entry ref, tenant, or other call spec
 policy.
 There are no variable defaults: only values supplied at call setup prefill it.
 Schemas describe the allowed structure; they do not manufacture initial values.
@@ -417,7 +417,7 @@ receives neither keys nor join tokens.
 **Approved key administration and scopes (R01–R03):** use trusted OTP/CLI
 administration to create the first key without an existing API credential.
 Each key is tenant-bound and permissions use `admin` and `calls` scopes. Do not
-introduce per-definition allowlists or arbitrary per-operation grants from the
+introduce per-call-spec allowlists or arbitrary per-operation grants from the
 earlier proposal. This scope split does not decide that `admin` implies `calls`
 or specify a complete admin HTTP API/endpoint matrix. Multiple independently
 revocable keys may coexist for a tenant. Rotation can issue a replacement,
@@ -485,7 +485,7 @@ previously issued tokens do not inherit that key's revocation. Recheck eligibili
 at token claim; issuance does not guarantee that a later join is still allowed.
 A caller's old token or public call ID alone never authorizes fresh-token issuance.
 
-Issuance preserves the existing call record and pinned definition/variables. For
+Issuance preserves the existing call record and pinned call spec/variables. For
 an eligible prepared call, subsequent joining activates the room once. The same
 route may authorize first admission of an eligible transfer destination or other
 not-yet-admitted participant into an existing live call, without restarting that
@@ -507,7 +507,7 @@ No blanket rule ends the room when any participant disconnects, and no browser
 session-tracking mechanism is added.
 
 **Approved token-only expiry:** a prepared call is only a database record with
-its pinned definition and initial variables, not a live call process tree. It has
+its pinned call spec and initial variables, not a live call process tree. It has
 no separate automatic admission deadline. Token expiry rejects use of that token
 but does not expire or delete the unstarted record; an authorized backend can
 obtain a fresh token for the same eligible record and later joining starts its
@@ -563,7 +563,7 @@ creator, integrating backend, or trusted ingress adapter supplies any known
 declared `initial_variables` when creating the call. A telephony adapter uses
 that same contract; there is no additional required automatic customer lookup or
 admission resolver. Unknown values stay unfilled for the normal permitted variable
-tools to populate. This does not require complete variables or definition
+tools to populate. This does not require complete variables or call spec
 defaults. Provider caller number remains ingress/contact metadata, not silently
 verified customer identity. R10 repeated an existing contract, rather than
 requiring a new admission feature.
@@ -588,10 +588,10 @@ never both. These are direct declared section/variable keys, not expressions or
 paths. The trusted backend chooses an authorized number and supplies it through
 `initial_variables`; it must not blindly relay a caller-selected destination.
 
-Reject definitions granting any agent write access to a routing section referenced
+Reject call specs granting any agent write access to a routing section referenced
 this way. Read permission is optional and not needed for engine resolution;
 existing section grants suffice without a new per-variable permission type.
-The engine resolves the pinned definition/reference against protected initialized
+The engine resolves the pinned call spec/reference against protected initialized
 data. Missing/null/invalid values fail before dialing through the existing typed
 transfer failure, retaining the source agent without inventing a default number.
 
@@ -602,7 +602,7 @@ model may choose timing and among permitted roles; arbitrary destination choice
 is not delegated. Business timing restrictions, if needed, belong outside the
 LLM. No generic outbound region/allowlist matrix, runtime routing-variable update
 API, or expression system is approved. Literal-number behavior remains supported;
-this is candidate definition syntax, not implemented runtime.
+this is candidate call spec syntax, not implemented runtime.
 
 The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
@@ -646,7 +646,7 @@ The same section grants, room/agent identity, revision, and size checks apply.
 
 This defers required-variable completeness checks, not datatype or other
 supplied-value validation. It applies to both initial variables and updates;
-there is no new final-completeness gate or configuration toggle. Call-definition
+there is no new final-completeness gate or configuration toggle. Call Spec
 structure, tool argument envelopes, and external tools' own required inputs
 remain separate contracts. The labnote examples remove their variables `required`
 lists while retaining datatype and value constraints.
@@ -681,7 +681,7 @@ variable-level permission system. Error responses must not expose hidden values.
 
 **Approved permission simplification:** agent section grants are `["read"]` or
 `["read", "write"]`; an omitted section grants no access. Standalone
-`["write"]` is invalid at definition compilation, not silently expanded into
+`["write"]` is invalid at call spec compilation, not silently expanded into
 read+write. Every writable section is readable, with its value and revision in
 the normal model projection and its resulting value in successful update results.
 Ungranted sections expose neither values nor revision metadata in that projection.
@@ -715,7 +715,7 @@ keys and planned module names are aligned with Call Variables; runtime code is
 unchanged.
 
 **Approved addressing:** keys at the root of variable data are section names;
-direct keys within each section object are variable names. The definition's schema
+direct keys within each section object are variable names. the call spec's schema
 wrapper is now `call_variables.sections`; its shape and revision metadata are
 unchanged. `update_variable` selects
 one exact declared direct variable; it does not interpret dots, JSON Pointers, or
@@ -768,7 +768,7 @@ evidence. This resolves G3; the write-only error proposal is already withdrawn.
 
 **Approved naming and MCP result flow:** use Call Variables for the collection,
 section for a group such as `booking`, and variable for a value such as `status`.
-The definition uses `call_variables.sections`, invocation data uses
+the call spec uses `call_variables.sections`, invocation data uses
 `initial_variables`, and an agent's section grants use `variable_permissions`.
 Tools are `read_variables(sections)`, `update_variables(section_name, data)`, and
 `update_variable(section_name, variable_name, value)`. Conversation history means
@@ -896,7 +896,7 @@ to the integrating application/MCP. Prompts are not a security guarantee, and
 Vxpipe still enforces its tool allowlists, trusted identity, and argument checks.
 The earlier proposal for confirmation bound to arguments, participant, variable
 revision, and expiry is out of scope. No confirmation token, approval endpoint,
-call-definition option, or generic confirmation state is required for this slice.
+call-spec option, or generic confirmation state is required for this slice.
 
 Do not introduce tool classification now (R15 resolved). Any future classification
 or retry exception belongs to the deferred issue; explicit cancellation also
@@ -913,9 +913,9 @@ This is a concrete integration hazard, not just an omitted future feature.
 but reusing that path for private variables or verification defeats the proposed
 section permissions even if variable-update events contain only metadata.
 
-**Approved call-level client visibility:** the call definition declares whether
+**Approved call-level client visibility:** the call spec declares whether
 clients can observe tool calls and payloads. The authorized backend/OTP host may
-explicitly select visibility when creating the call, overriding the definition's
+explicitly select visibility when creating the call, overriding the call spec's
 value. Resolve and pin the effective policy with the call record/resolved plan;
 joining browsers do not set or upgrade it. Keep private execution payloads
 separate from client projections and filter before transport delivery.
@@ -923,19 +923,19 @@ separate from client projections and filter before transport delivery.
 The policy supports hiding tool events entirely, exposing lifecycle metadata
 without payloads, or including arguments/results. This replaces a mandatory
 metadata-only projection plus special debug-session authorization. When both
-definition and creation omit visibility, hide tool events entirely. Metadata
+call spec and creation omit visibility, hide tool events entirely. Metadata
 and full visibility require explicit selection. The call-wide key is
 `tool_visibility`, with values `hidden`, `metadata`, or `full`. Optional
-`tool_visibility_overrides` maps participant definition key to local configured
+`tool_visibility_overrides` maps participant call spec key to local configured
 tool key to that same level, without an additional container or schema variant.
 For example, `{"tool_visibility":"hidden","tool_visibility_overrides":{"reception":{"lookup_order":"metadata","create_booking":"full"}}}`
 exposes only the two named reception bindings at their selected levels.
 Omitting both means hidden with no overrides. An explicit trusted creation
-selection replaces this effective policy pair; omission inherits the definition.
+selection replaces this effective policy pair; omission inherits the call spec.
 No deep-merge/patch API is implied, and binding overrides in the effective pair
 still take precedence over its default.
 
-**Approved per-tool targeting:** an override identifies the participant definition
+**Approved per-tool targeting:** an override identifies the participant call spec
 key plus its configured local key in that participant's `tools` map. It selects
 hidden, metadata-only, or full visibility for that binding and takes precedence
 over the call-wide default; other tools inherit that default. Resolve this identity
@@ -952,14 +952,14 @@ changing one visibility override must not expose the other's events or payloads.
 **Approved sample configuration:** calls created for the Console playground explicitly select
 full tool visibility for the debug UI through effective `{"tool_visibility":"full"}`
 with no overrides, using the same trusted call-creation mechanism. Replace the
-policy pair so restrictive definition overrides are not accidentally inherited;
+policy pair so restrictive call spec overrides are not accidentally inherited;
 merely changing the default to full would not override a hidden binding.
 No frontend-specific exception or additional debug-session grant is
 required. A browser flag, route, or visual concealment cannot change that policy.
 Existing credential/header exclusions still apply. The detailed failed-transfer
 restoration cause is internal even for samples/full visibility. Visibility grants
 neither tool execution nor additional agent variable or cross-call access. The
-definition-driven gateway path implements the policy in schema `20260910.01`:
+call-spec-driven gateway path implements the policy in schema `20260910.01`:
 it pins runtime participant/tool selections in a private one-time session and
 filters the RTVI projection before transport delivery.
 
@@ -1059,7 +1059,7 @@ without changing another tenant's period. Periods are not agent/client settings.
 string `"forever"` or a finite duration object such as `{"seconds":2592000}` for
 30 days. Application omission defaults to `"forever"`; tenant omission inherits
 the application value, while explicit tenant `"forever"` overrides a finite
-application period. This is not a call-definition, creation, or participant field
+application period. This is not a call-spec, creation, or participant field
 and adds no per-call policy copy, human-readable duration parser, or null sentinel.
 
 **Approved retention clock:** for completed calls, finite retention starts at
@@ -1092,7 +1092,7 @@ events, tool calls/results, all variable snapshots including the latest,
 participant/leg and admission records, usage/cost history, recordings if present,
 artifact metadata, and published exports. Delete call-specific copies as well;
 keeping a summary row or hiding the call with a soft-delete flag is insufficient.
-Shared definitions and application/tenant configuration remain. This does not
+shared call specs and application/tenant configuration remain. This does not
 claim control over independent copies held by integrating apps or providers.
 
 For example, expiring a recorded call removes its database rows, latest-snapshot
@@ -1148,7 +1148,7 @@ event does not redact sensitive input already in the transcript or audio.
 The configured-versus-enabled distinction is already strong. It does not mean
 the example HTTP webhooks, native SMS, or code tools are MCP endpoints. Keep
 those behind a remote MCP facade or an explicitly registered host tool; do not
-add arbitrary HTTP/JavaScript execution to the call-definition JSON.
+add arbitrary HTTP/JavaScript execution to the call-spec JSON.
 
 **Approved R22, revised by integration selection:** use `ex_mcp` directly for the
 `2025-11-25` Streamable HTTP profile, accepting JSON and SSE.
@@ -1313,7 +1313,7 @@ while regular conversation can continue during background execution.
 no new audio option or transfer-consultation behavior approved.
 
 **Approved R30 duration:** whole-live-call `limits.max_duration_ms` defaults to
-`1800000` (30 minutes). Resolve explicit definition, then tenant, then application,
+`1800000` (30 minutes). Resolve explicit call spec, then tenant, then application,
 then platform default, and pin the effective limit in the call plan. Do not use
 retention's current-policy semantics here. Clock from actual `started_at`, excluding
 prepared wait and preserving the deadline across transfers/recovery and human-only
@@ -1441,7 +1441,7 @@ approved format. See the [capability ownership terminology][terms] and the
 [approved policy/example][presence].
 
 Audio maps are complete publisher-to-recipient allowlists using human/agent
-participant-definition keys. Only listed sources may publish room audio, to listed
+participant call spec keys. Only listed sources may publish room audio, to listed
 recipients; empty arrays grant no other participant access, and self-loops/monitor
 access are not implicit. Transcript maps independently route live derived transcripts
 from the speech-source participant, with explicit self recipients if desired.
@@ -1487,7 +1487,7 @@ Distinguish webhook-delivery deduplication from call admission deduplication:
 multiple lifecycle events for one provider leg are not multiple new calls.
 Namespace keys by trusted tenant/integration and normalized leg identity. A
 transfer-created leg must attach through the pending transfer/participant ID,
-not re-enter number-to-definition admission. Single-use token claims and same-call
+not re-enter number-to-call-spec admission. Single-use token claims and same-call
 admission exclusion still prevent duplicate startup of that same call; these are
 not deduplication of separate API creation requests.
 
@@ -1666,7 +1666,7 @@ which options exist or how incompatibilities fail. [Scheduling][scheduling],
 
 R47 puts provider-supported options in reusable configured services/profiles;
 conversation, interruption, and call-duration policy belong to the engine. Reject
-known unsupported options/combinations during definition validation instead of
+known unsupported options/combinations during call spec validation instead of
 silently dropping them. Provider-discovered failures follow normal startup/runtime
 handling. No new configuration layer, arbitrary provider payload, or executable
 timing policy is added; hosted endpointing and the no-local-VAD/no-local-model scope remain.
@@ -1733,19 +1733,19 @@ to change runtime or implement deferred features. The numbered review is complet
    persistence, and artifact boundaries; add G10–G12 incrementally. No Repo/S3
    calls enter the room's state-transition callback.
 
-Use scenario fixtures rather than copying complete third-party definitions:
+Use scenario fixtures rather than copying complete third-party call specs:
 
 | Future acceptance test | Evidence of success |
 | --- | --- |
-| Two staff members try to join as the same definition | Only the original authorized participant is retained; the second person's admission fails without takeover; another definition or call has its own independent participant |
-| Race admissions/transfers and re-enter an agent definition | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
-| Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
+| Two staff members try to join as the same call spec | Only the original authorized participant is retained; the second person's admission fails without takeover; another call spec or call has its own independent participant |
+| Race admissions/transfers and re-enter an agent call spec | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
+| Compile two distinct entry refs and start a caller/reception/billing/support call spec | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
 | Declare schemas with no variable defaults and supply partial initial variables | Supplied datatypes/value constraints validate before startup; missing variables do not fail, including in nested objects; intake stays unfilled; variable defaults fail; capability defaults still work; explicit empty section objects are accepted without filling values |
 | Prepare private order variables using a backend API key, then join from the browser using only a token | Preparation pins/stores variables without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and variables fail |
 | Prepare from an authenticated backend, then join separately with browser and backend clients | Both clients use the same token-admission contract; neither an API key on a media socket nor first-message initial variables bypass preparation; browser Origin and HTTP CORS remain separate; existing WebRTC stays supported; no removed direct-setup limits are implicitly adopted |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
-| Bootstrap a fresh installation and use separate tenant-scoped keys | Trusted OTP/CLI administration creates the first key; tenant boundaries and the `admin`/`calls` scope split are enforced without assuming a scope hierarchy or definition allowlists |
+| Bootstrap a fresh installation and use separate tenant-scoped keys | Trusted OTP/CLI administration creates the first key; tenant boundaries and the `admin`/`calls` scope split are enforced without assuming a scope hierarchy or call spec allowlists |
 | Overlap two keys during rotation, then revoke only one | Further authentication with the revoked key fails, including token issuance; other keys and established connections continue; already-issued unused tokens still pass their independent admission checks |
 | Issue default and explicitly longer-lived tokens using a fake clock | Default expiry is five minutes from issuance; an authenticated fifteen-minute request remains valid after five minutes and expires at fifteen; applies to preparation and existing-call tokens; the browser cannot extend an issued deadline |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
@@ -1753,7 +1753,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Create a call through an authorized backend or trusted telephony ingress with known/unknown initial variables | Supplied declared values initialize through the existing contract; missing values remain unfilled for permitted tools; no new automatic lookup/resolver, completeness/default requirement, or verified identity inferred from caller number |
 | Request a fresh token for an unstarted prepared call, then admit a new transfer destination into a separate live call | Backend API-key authorization preserves each call record; issuance starts no room; joining starts the prepared call once or first-admits the eligible destination without resetting the live room or variables |
 | Disconnect an admitted caller, then attempt same-call joining; separately end a call and create another | Fresh tokens do not authorize caller reconnection in this slice; an ended call cannot resume, and a newly authorized call has a new record/identity; do not infer that temporary transport loss or another participant leaving ended the call |
-| Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/variables remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
+| Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned call spec/variables remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
 | Create a record well before joining, delay persistence of live start, and later transfer/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; transfer/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/unauthorized access and takeover fail; a revoked API key cannot request fresh tokens but does not invalidate issued ones; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
@@ -1773,8 +1773,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Explicitly request another tool call after an unknown timeout | A separate agent-requested invocation is distinguishable from an executor retry; no exactly-once or external deduplication guarantee is implied |
 | After a separately approved idempotency/reconciliation policy, exercise a retry | Verify any promised duplicate prevention against that policy and provider behavior; it is not guaranteed by the executor's no-automatic-retry default alone |
 | Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
-| Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned definition value and a joining browser cannot change it; credential/header exclusions still apply |
-| Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
+| Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned call spec value and a joining browser cannot change it; credential/header exclusions still apply |
+| Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant call spec key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Save permitted available facts with honest provenance/usage; explicit transcript/audio retention is independent from live sharing under R38, not inferred recognition shutdown, and tool/variable/usage requirements stay intact; audio requires enabled/permitted recording and the opening input gate |
@@ -1785,13 +1785,13 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration neither starts processing/recording nor changes client visibility; cleanup follows the approved periodic external-first whole-call contract |
 | Create a record before its call starts, then end it with finite retention | Expiry is computed from ended_at plus the current application/tenant period, not created_at or storage-write time; active calls are not expired, later archive writes do not reset the clock, forever has no expiry, and missing ended_at does not fall back to creation time |
 | Change retention after calls already exist | The current setting applies to past and future calls without per-call policy copies; shortening 90 days to seven makes a 14-day-old completed call eligible, increasing the period or choosing forever changes eligibility only for remaining data, and an explicit tenant override still wins over application changes |
-| Configure `call_retention` as `"forever"` or `{"seconds":2592000}` | Application omission retains forever; tenant omission inherits; explicit tenant forever overrides finite application retention; the seconds object denotes 30 days and is not copied into call definitions or records |
-| Expire a call with retained history, snapshots, recordings, and exports | Remove the call record and all call-owned rows and objects, including latest snapshots and call-specific copies; no summary-only row remains; shared definitions/configuration and other calls remain untouched; incomplete object deletion is not complete cleanup, and late publication must not recreate purged data |
+| Configure `call_retention` as `"forever"` or `{"seconds":2592000}` | Application omission retains forever; tenant omission inherits; explicit tenant forever overrides finite application retention; the seconds object denotes 30 days and is not copied into call specs or records |
+| Expire a call with retained history, snapshots, recordings, and exports | Remove the call record and all call-owned rows and objects, including latest snapshots and call-specific copies; no summary-only row remains; shared call specs/configuration and other calls remain untouched; incomplete object deletion is not complete cleanup, and late publication must not recreate purged data |
 | Cross the retention threshold, run a sweep, and interrupt external/database deletion | Eligibility alone does not run an instant timer; the sweep uses current settings and deletes all external objects first, then database data; definitive key-not-found is success, actual failures retain records/references for later sweeps, and repeated missing-object deletion safely resumes without a new progress journal |
 | Race a late publisher against retention cleanup | Writer/cleanup coordination prevents recreation after purge; ordering alone is not treated as proof; no permanent call summary/tombstone remains after complete cleanup |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
-| Dial a participant using a literal number or protected creation-time routing variable | Exactly one number source is accepted; the trusted initialized value resolves without agent read permission; any agent write grant to its section rejects the definition; missing/null/invalid values fail before dialing and retain source responsibility |
+| Dial a participant using a literal number or protected creation-time routing variable | Exactly one number source is accepted; the trusted initialized value resolves without agent read permission; any agent write grant to its section rejects the call spec; missing/null/invalid values fail before dialing and retain source responsibility |
 | Ask transfer to use arbitrary dial data or bypass its participant allowlist | Number/provider/URL/variable-ref arguments and unlisted destinations fail; executor rechecks the source allowlist; permitted role selection uses only its pinned connection source, with no new expression or outbound policy matrix |
 | Receive configured provider AMD evidence, busy, no answer, or a human decline | Machine disconnects only the attempted destination leg and returns a typed transfer failure with source/caller retained; initial outbound-only attempts end appropriately; unknown/disabled/unavailable is not machine/human proof, explicit acceptance still governs transfer within its unchanged deadline, and no voicemail message or false `transfer.completed` appears |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; privacy boundaries and submitted-variable lifetimes remain intact |
@@ -1804,7 +1804,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Exercise trusted remote endpoints, changed DNS answers, private targets, and redirects | Verified HTTPS and connect-time address policy hold; tenant settings cannot bypass host private-network authorization; metadata/link-local restrictions remain, redirects are not followed and credentials are not forwarded; no Go SDK enforcement is assumed |
 | Stall required startup readiness, return a terminal error, and separately play long opening audio | The configurable 30-second readiness clock begins after join/startup, terminal errors fail early, expiry releases resources with clear failure, and deliberate playback is not truncated or mistaken for provider failure; timestamps and input gating remain honest |
 | Wait for caller input, play output, dial/hold, and run a long tool | Only genuine agent waiting produces the configurable 15-second idle notification; instructions decide the next action, no automatic hangup/progress cadence or wait music appears, and background conversation retains one voice |
-| Resolve duration at each scope, then transfer/recover into human-only conversation | Definition wins over tenant/application/default 1800000, the resolved limit stays pinned despite later settings changes, actual started_at anchors the deadline without preparation wait/reset, and expiry ends with a clear reason without unapproved closing grace |
+| Resolve duration at each scope, then transfer/recover into human-only conversation | Call Spec wins over tenant/application/default 1800000, the resolved limit stays pinned despite later settings changes, actual started_at anchors the deadline without preparation wait/reset, and expiry ends with a clear reason without unapproved closing grace |
 | Configure fixed text opening audio and reuse/change its resolved voice binding | Require an explicit opening TTS profile independent of participants/defaults; support a human initial receiver. Capability warmup need not wait but ordinary conversation and participant media do; changed text/profile/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no fallback voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow a recording upload or history store | Keep SQL/disk/S3 work outside live mixing; storage failure itself does not fail/stop the room or undo accepted variables, unavailable sinks do not backpressure media/authority, and bounded storage reports incompleteness rather than claiming durability |
@@ -1875,7 +1875,7 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   identity as interchangeable authority.
 - Do not duplicate the call-variable schema with a second call-input schema and
   initialization map. The backend can supply the declared variables shape directly.
-- Do not populate variables from definition defaults, merge in fallback values,
+- Do not populate variables from call spec defaults, merge in fallback values,
   or store empty objects or nulls for omitted values. Only supplied setup data
   prefills variables; later writes still need their existing grants. Returning
   null for a missing requested value is a read representation, not a default.
@@ -1908,7 +1908,7 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   initial roles explicitly. Listing a participant does not make it live.
 - The earlier client-ID/HMAC contract is superseded: no signature envelope or
   canonicalization is needed for these backend API-key flows. Never put API keys
-  in browsers, definitions, or plaintext database variables. Reversible storage is
+  in browsers, call specs, or plaintext database variables. Reversible storage is
   also rejected for Vxpipe-issued keys: keep only a one-way hash. Recoverable
   upstream credentials remain a separate concern. Hash storage does not replace
   TLS, scoped-token lifecycle, or credential management.
@@ -1943,7 +1943,7 @@ implementation. The labnote records the follow-up's documentation-check results.
 The subsequent entry-role follow-up checks both examples for distinct resolvable
 string refs, removes the obsolete entry field/type proposal, and records future
 startup/readiness checks. A separate subsequent decision approves one participant
-per definition key per call and adds future duplicate/reconnect/race acceptance
+per call spec key per call and adds future duplicate/reconnect/race acceptance
 cases. Runtime tests remain out of scope; the labnote records documentation
 verification separately from those unimplemented checks.
 The API-key follow-up supersedes the HMAC wire contract, separates prepared-call
@@ -2010,12 +2010,12 @@ writes populate a declared section; later writes collect variables iteratively.
 This supersedes earlier required-variable completeness checks mentioned in the
 historical checkpoints above, while retaining datatype and supplied-value
 validation. Variable-tool argument shapes must also allow partial objects. The
-two definition illustrations remove only their variables `required` lists, and
+two call spec illustrations remove only their variables `required` lists, and
 planned acceptance steps now cover absence, partial/nested collection, and wrong
 datatypes. G3's read/first-write questions are resolved; other G3 questions keep
 the count at 12 open groups. No runtime implementation was changed.
 Verification parsed all 13 JSON examples, confirmed the only example changes
-are the two variables `required` removals, and checked both definition contracts,
+are the two variables `required` removals, and checked both call spec contracts,
 unrelated write checks, 20 local links/anchors, routes, review counts, and
 documentation hygiene. `git diff --check` passed; no runtime/browser tests ran.
 The permission follow-up limits agent section access to read-only or read+write,
@@ -2025,7 +2025,7 @@ aligns update results and planned acceptance steps, and preserves ungranted
 section privacy. Existing JSON examples already match this decision. Other G3
 questions remain, leaving 12 open groups; no runtime implementation changed.
 Verification confirmed all 13 JSON examples are unchanged and parse, both
-definitions use supported grants, all seven write-authorization checks remain,
+call specs use supported grants, all seven write-authorization checks remain,
 and all 20 local links/anchors resolve. Superseded write-only paths, routes,
 review counts, documentation hygiene, and `git diff --check` were checked;
 no runtime or browser tests were run.
@@ -2045,7 +2045,7 @@ At that naming checkpoint, schema-complexity bounds remained open in G3;
 naming and MCP result handling did not. The count was therefore 12 numbered
 groups, not 12 individual questions.
 Verification covered all 15 JSON examples across the design and architecture
-documents, confirming only the approved key renames, unchanged definition and
+documents, confirming only the approved key renames, unchanged call spec and
 authority semantics, and all 31 local links/anchors. External source URLs,
 routes, resolved-review markers, terminology, and `git diff --check` passed.
 No runtime or browser tests were run for this documentation-only checkpoint.
@@ -2062,7 +2062,7 @@ Additional schema-complexity limits are not adopted now. G3 is resolved in
 documentation and the current count is 11 open numbered groups, G2 and G4–G13.
 Ownership, lifecycle, persistence descriptions, and planned tests are synchronized
 with the original labnote and architecture. Verification confirms all 15 JSON
-examples and both complete definition fixtures are unchanged, all 31 local
+examples and both complete call spec fixtures are unchanged, all 31 local
 links/anchors resolve, and API routes/external references are unchanged. Ownership,
 lifecycle, review counts, terminology, local-path hygiene, and whitespace checks
 pass. No runtime implementation, tests, or published schema changed; no runtime
@@ -2080,7 +2080,7 @@ The contradictory planned remote-cancellation assertion is replaced and new
 barrier-based acceptance steps cover request completion, timeout, and output
 isolation. Other G4 policies remain proposals; the group is partly resolved and
 the overall count remains 11. Verification confirms all 15 JSON examples and two
-definition fixtures are unchanged and valid, all 31 local links/anchors resolve,
+call spec fixtures are unchanged and valid, all 31 local links/anchors resolve,
 and routes/external references are unchanged. G3's authorization transaction and
 implemented-runtime descriptions are preserved; interruption/review consistency,
 terminology, path hygiene, and whitespace checks pass. No runtime or browser tests
@@ -2093,7 +2093,7 @@ definitive. Retry policy is explicitly still unapproved, alongside reconciliatio
 and storage; no wire schema or runtime behavior changed. The lost-booking-response
 acceptance case and active design summaries are synchronized. G4 remains partly
 resolved with 11 open groups. Verification confirms 15 unchanged valid JSON
-examples, both definition fixtures, 31 local links/anchors, unchanged routes and
+examples, both call spec fixtures, 31 local links/anchors, unchanged routes and
 external references, and preserved G3 and implemented-runtime contracts.
 Timeout/interruption policy, retry-review boundaries, terminology, path hygiene,
 and whitespace checks pass. No runtime or browser tests were run.
@@ -2105,7 +2105,7 @@ guarantees. No metadata-based retry exception is approved. Active design summari
 and the one-invocation/separate-invocation acceptance steps are synchronized with
 the original labnote and architecture. Other G4 questions remain open and the
 count stays at 11. Verification confirms 15 unchanged valid JSON examples, both
-definition fixtures, all 31 local links/anchors, and unchanged routes/external
+call spec fixtures, all 31 local links/anchors, and unchanged routes/external
 references. Prior G3 and implemented-runtime descriptions are preserved; retry
 scope, remaining-review status, terminology, path hygiene, and whitespace checks
 pass. No runtime changes or runtime/browser tests.
@@ -2119,7 +2119,7 @@ behavior, and agent handling belong to that future design. Active scope and
 acceptance requirements are synchronized with the original labnote and architecture;
 timeout/unknown/no-automatic-retry behavior remains unchanged. G4 is still partly
 resolved and the count remains 11. Verification confirms 15 unchanged valid JSON
-examples, both definition fixtures, all 31 local links/anchors, unchanged routes
+examples, both call spec fixtures, all 31 local links/anchors, unchanged routes
 and external references, and preserved G3/implemented-runtime contracts.
 Deferred scope, prior MCP policies, remaining-review status, terminology, path
 hygiene, and whitespace checks pass. No runtime or browser tests were run.
@@ -2132,7 +2132,7 @@ proposal and its test requirement are removed from this slice, without adding
 an endpoint, schema option, or state machine. Original labnote, architecture,
 review status, and acceptance scope are synchronized. G4 is still partly resolved
 with 11 open groups. Verification confirms 15 unchanged valid JSON examples, both
-definition fixtures, all 31 local links/anchors, unchanged routes/external
+call spec fixtures, all 31 local links/anchors, unchanged routes/external
 references, and preserved G3/implemented-runtime contracts. Confirmation scope,
 tool-access boundaries, review status, terminology, path hygiene, and whitespace
 checks pass. No runtime or browser tests were run.
@@ -2141,7 +2141,7 @@ The R01–R05 follow-up approves OTP/CLI first-key creation, tenant-bound
 `admin`/`calls` scopes, multiple independently revocable keys, and revocation
 without invalidating issued tokens or established connections. Tokens default
 to five minutes; the authenticated requester may request longer. No token/key
-revocation coupling, extra TTL cap, per-definition key allowlist, scope hierarchy,
+revocation coupling, extra TTL cap, per-call-spec key allowlist, scope hierarchy,
 or complete admin API is introduced. Original admission/recovery contracts,
 architecture, backlog statuses, and future acceptance checks are synchronized.
 At that checkpoint there were 45 pending individual decisions, R06–R50;
@@ -2248,7 +2248,7 @@ valid JSON examples, links/anchors, active-rule consistency, prior contracts,
 statuses/count, terminology/path hygiene, and whitespace. Documentation only.
 
 R17 now specifies `tool_visibility` plus `tool_visibility_overrides`, keyed by
-participant definition and local tool binding. Trusted creation can replace the
+participant call spec and local tool binding. Trusted creation can replace the
 policy pair; an effective binding override still wins over its default. Samples
 use full with no overrides, not a browser grant. Complete observed tool storage
 is unchanged. At that checkpoint: 30 individual decisions, R18 and R22–R50. Checked
@@ -2280,7 +2280,7 @@ statuses/count, terminology/path hygiene, and whitespace. Documentation only.
 The 2026-09-08 follow-up resolves R26–R30: SDK-aligned safeguards at Vxpipe's
 outbound endpoint boundary, configurable 30-second startup readiness and 15-second
 agent idle notification, no automatic long-tool progress speech, and a pinned
-30-minute default duration with definition/tenant/application precedence. Added
+30-minute default duration with call spec/tenant/application precedence. Added
 the deferred wait-music issue without playback implementation. At that checkpoint:
 20 individual decisions, R31–R50; next five R31–R35 remained unapproved. Verified
 exact four-file scope, 18 unchanged JSON examples/fences, existing/new links and

@@ -19,9 +19,9 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, ProviderCredentials}
-  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, DefinitionStore}
+  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, CallSpecStore}
   alias Vxpipe.Persistence.ProviderCredentialStore
-  alias Vxpipe.Persistence.Schema.{CallDefinition, DefinitionRevision, ParticipantRoute}
+  alias Vxpipe.Persistence.Schema.{CallSpec, CallSpecRevision, ParticipantRoute}
 
   @moduletag capture_log: true
 
@@ -31,7 +31,7 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
 
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
       registries: %{host_tools: %{}}
@@ -56,13 +56,13 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
   test "a healthy entry credential cannot replace the separate opening credential", ctx do
     before = row_counts()
 
-    assert {:error, error} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:error, error} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
     assert error.code == :provider_credential_unavailable
     assert error.details == %{"path" => ["opening_audio", "text_to_speech"]}
     assert row_counts() == before
 
     provision(ctx, "opening")
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
     assert draft.validation_errors == []
   end
 
@@ -186,11 +186,11 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
   end
 
   defp prepare(ctx, name \\ "opening") do
-    assert {:ok, draft} = Calls.save_definition(ctx.tenant.key, source(name), ctx.options)
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(name), ctx.options)
     assert draft.validation_errors == []
 
     assert {:ok, published} =
-             Calls.publish_definition(ctx.tenant.key, draft.definition_id, 1, ctx.options)
+             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, 1, ctx.options)
 
     route = Enum.find(published.routes, &(&1.participant_ref == "caller"))
     assert {:ok, call, token} = Calls.prepare_call(ctx.principal, route.key, %{}, ctx.options)
@@ -306,7 +306,7 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
   defp row_counts,
     do:
       Enum.map(
-        [CallDefinition, DefinitionRevision, ParticipantRoute],
+        [CallSpec, CallSpecRevision, ParticipantRoute],
         &Repo.aggregate(&1, :count)
       )
 

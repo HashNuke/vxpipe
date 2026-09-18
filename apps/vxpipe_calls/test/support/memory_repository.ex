@@ -8,7 +8,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
       %{
         tenants: %{},
         keys: %{},
-        definitions: %{},
+        call_specs: %{},
         routes: %{},
         telephony_routes: [],
         calls: %{},
@@ -21,7 +21,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   end
 
   def credential_repository(agent), do: {__MODULE__, agent}
-  def definition_repository(agent), do: {__MODULE__, agent}
+  def call_spec_repository(agent), do: {__MODULE__, agent}
   def call_repository(agent), do: {__MODULE__, agent}
 
   def bootstrap_tenant(agent, tenant, api_key) do
@@ -81,23 +81,23 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
-  def next_revision(agent, tenant_key, definition_id) do
+  def next_revision(agent, tenant_key, call_spec_id) do
     Agent.get(agent, fn state ->
-      revisions = Map.get(state.definitions, {tenant_key, definition_id}, %{})
+      revisions = Map.get(state.call_specs, {tenant_key, call_spec_id}, %{})
       {:ok, revisions |> Map.keys() |> Enum.max(fn -> 0 end) |> Kernel.+(1)}
     end)
   end
 
   def insert_revision(agent, tenant_key, revision, routes) do
     Agent.get_and_update(agent, fn state ->
-      key = {tenant_key, revision.definition_id}
-      revisions = Map.get(state.definitions, key, %{})
+      key = {tenant_key, revision.call_spec_id}
+      revisions = Map.get(state.call_specs, key, %{})
 
       if Map.has_key?(revisions, revision.revision) do
         {{:error, :revision_conflict}, state}
       else
-        definitions =
-          Map.put(state.definitions, key, Map.put(revisions, revision.revision, revision))
+        call_specs =
+          Map.put(state.call_specs, key, Map.put(revisions, revision.revision, revision))
 
         route_records =
           Map.new(routes, fn route ->
@@ -107,7 +107,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
         {{:ok, %{revision | routes: routes}},
          %{
            state
-           | definitions: definitions,
+           | call_specs: call_specs,
              routes: Map.merge(state.routes, route_records),
              telephony_routes: state.telephony_routes ++ revision.telephony_routes
          }}
@@ -115,14 +115,14 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
-  def fetch_revision(agent, tenant_key, definition_id, revision_number) do
+  def fetch_revision(agent, tenant_key, call_spec_id, revision_number) do
     Agent.get(agent, fn state ->
-      with {:ok, revisions} <- Map.fetch(state.definitions, {tenant_key, definition_id}),
+      with {:ok, revisions} <- Map.fetch(state.call_specs, {tenant_key, call_spec_id}),
            {:ok, revision} <- Map.fetch(revisions, revision_number) do
-        routes = routes_for(state, tenant_key, definition_id, revision_number)
+        routes = routes_for(state, tenant_key, call_spec_id, revision_number)
 
         telephony_routes =
-          telephony_routes_for(state, tenant_key, definition_id, revision_number)
+          telephony_routes_for(state, tenant_key, call_spec_id, revision_number)
 
         {:ok, %{revision | routes: routes, telephony_routes: telephony_routes}}
       else
@@ -131,21 +131,21 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
-  def publish_revision(agent, tenant_key, definition_id, revision_number, published_at) do
+  def publish_revision(agent, tenant_key, call_spec_id, revision_number, published_at) do
     Agent.get_and_update(agent, fn state ->
-      with {:ok, revisions} <- Map.fetch(state.definitions, {tenant_key, definition_id}),
+      with {:ok, revisions} <- Map.fetch(state.call_specs, {tenant_key, call_spec_id}),
            {:ok, revision} <- Map.fetch(revisions, revision_number) do
         routes =
           Map.new(state.routes, fn {route_key, route} ->
-            same_definition? =
-              route.tenant_key == tenant_key and route.definition_id == definition_id
+            same_call_spec? =
+              route.tenant_key == tenant_key and route.call_spec_id == call_spec_id
 
             route =
               cond do
-                same_definition? and route.definition_revision == revision_number ->
+                same_call_spec? and route.call_spec_revision == revision_number ->
                   %{route | published_at: published_at}
 
-                same_definition? ->
+                same_call_spec? ->
                   %{route | published_at: nil}
 
                 true ->
@@ -157,14 +157,14 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
 
         telephony_routes =
           Enum.map(state.telephony_routes, fn route ->
-            same_definition? =
-              route.tenant_key == tenant_key and route.definition_id == definition_id
+            same_call_spec? =
+              route.tenant_key == tenant_key and route.call_spec_id == call_spec_id
 
             cond do
-              same_definition? and route.definition_revision == revision_number ->
+              same_call_spec? and route.call_spec_revision == revision_number ->
                 %{route | published_at: published_at}
 
-              same_definition? ->
+              same_call_spec? ->
                 %{route | published_at: nil}
 
               true ->
@@ -174,21 +174,21 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
 
         published = %{revision | published_at: revision.published_at || published_at}
 
-        definitions =
+        call_specs =
           Map.put(
-            state.definitions,
-            {tenant_key, definition_id},
+            state.call_specs,
+            {tenant_key, call_spec_id},
             Map.put(revisions, revision_number, published)
           )
 
         result_routes =
-          routes_for(%{state | routes: routes}, tenant_key, definition_id, revision_number)
+          routes_for(%{state | routes: routes}, tenant_key, call_spec_id, revision_number)
 
         result_telephony_routes =
           telephony_routes_for(
             %{state | telephony_routes: telephony_routes},
             tenant_key,
-            definition_id,
+            call_spec_id,
             revision_number
           )
 
@@ -200,7 +200,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
           }},
          %{
            state
-           | definitions: definitions,
+           | call_specs: call_specs,
              routes: routes,
              telephony_routes: telephony_routes
          }}
@@ -458,21 +458,21 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
-  defp routes_for(state, tenant_key, definition_id, revision_number) do
+  defp routes_for(state, tenant_key, call_spec_id, revision_number) do
     state.routes
     |> Map.values()
     |> Enum.filter(fn route ->
-      route.tenant_key == tenant_key and route.definition_id == definition_id and
-        route.definition_revision == revision_number
+      route.tenant_key == tenant_key and route.call_spec_id == call_spec_id and
+        route.call_spec_revision == revision_number
     end)
     |> Enum.sort_by(& &1.participant_ref)
   end
 
-  defp telephony_routes_for(state, tenant_key, definition_id, revision_number) do
+  defp telephony_routes_for(state, tenant_key, call_spec_id, revision_number) do
     state.telephony_routes
     |> Enum.filter(fn route ->
-      route.tenant_key == tenant_key and route.definition_id == definition_id and
-        route.definition_revision == revision_number
+      route.tenant_key == tenant_key and route.call_spec_id == call_spec_id and
+        route.call_spec_revision == revision_number
     end)
     |> Enum.sort_by(& &1.participant_ref)
   end

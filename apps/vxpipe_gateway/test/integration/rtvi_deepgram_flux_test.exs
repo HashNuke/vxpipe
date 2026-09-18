@@ -35,9 +35,9 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
                       room_creation: [
                         enabled: true,
                         trusted_call: [
-                          definition:
-                            TestTurnCall.definition(speech_to_text: true, text_to_speech: true),
-                          resource_id: "live-speech-definition",
+                          call_spec:
+                            TestTurnCall.call_spec(speech_to_text: true, text_to_speech: true),
+                          resource_id: "live-speech-call-spec",
                           revision: 1,
                           host_tools: %{}
                         ],

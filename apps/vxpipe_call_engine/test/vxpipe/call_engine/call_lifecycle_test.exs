@@ -121,8 +121,8 @@ defmodule Vxpipe.CallEngine.CallLifecycleTest do
 
   defp plan do
     %ResolvedCallPlan{
-      definition_id: "definition-lifecycle",
-      definition_revision: 1,
+      call_spec_id: "call-spec-lifecycle",
+      call_spec_revision: 1,
       schema_version: "20260913.01",
       tenant_id: "tenant-lifecycle",
       actor_id: "actor-lifecycle",
@@ -134,7 +134,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleTest do
       opening_audio: nil,
       media_policy: Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy.inherit(),
       participants: %{},
-      transfer_policy: %Vxpipe.CallEngine.CallDefinition.TransferPolicy{
+      transfer_policy: %Vxpipe.CallEngine.CallSpec.TransferPolicy{
         attempt_timeout_ms: 30_000
       },
       call_variables: nil,

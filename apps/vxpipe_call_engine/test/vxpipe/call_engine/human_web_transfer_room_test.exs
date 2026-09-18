@@ -7,11 +7,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     CallVariables,
     ConnectionAttachment,
-    DefinitionCompiler,
+    CallSpecCompiler,
     TestAudioOutputSink,
     TestTransferConnection,
     TestCollectingArchiveWriter,
@@ -1450,7 +1450,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                  fact.activation_id == nil and
                  fact.payload["provider"]["name"] == "deepgram" and
                  fact.payload["provider"]["integration_id"] ==
-                   Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                   Vxpipe.CallEngine.CallSpec.CapabilitySelection.identity(
                      plan.participants[plan.entry_receiver].capabilities.text_to_speech,
                      plan.tenant_id
                    ) and
@@ -2098,10 +2098,10 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         policy -> Map.put(support, :while_present, policy)
       end
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  wait_sounds:
                    case Keyword.get(options, :wait_sounds, %{}) do
                      nil -> nil
@@ -2148,14 +2148,14 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                  },
                  limits: %{max_duration_ms: 60_000}
                },
-               resource_id: "human-transfer-definition",
+               resource_id: "human-transfer-call-spec",
                revision: 1
              )
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "human-transfer-definition", revision: 1},
+                 call_spec: %{id: "human-transfer-call-spec", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -2166,7 +2166,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 
@@ -2184,7 +2184,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              attachment_command(plan, room, participant, connection_id),
              output_sink
            ) do
-      if participant.definition_key == plan.entry_caller,
+      if participant.call_spec_key == plan.entry_caller,
         do: Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
 
       {:ok, attachment}

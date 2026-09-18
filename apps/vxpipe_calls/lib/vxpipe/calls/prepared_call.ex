@@ -7,8 +7,8 @@ defmodule Vxpipe.Calls.PreparedCall do
   @enforce_keys [
     :id,
     :tenant_key,
-    :definition_id,
-    :definition_revision,
+    :call_spec_id,
+    :call_spec_revision,
     :schema_version,
     :participant_routes,
     :entry_caller,
@@ -31,8 +31,8 @@ defmodule Vxpipe.Calls.PreparedCall do
   @type t :: %__MODULE__{
           id: String.t(),
           tenant_key: String.t(),
-          definition_id: String.t(),
-          definition_revision: pos_integer(),
+          call_spec_id: String.t(),
+          call_spec_revision: pos_integer(),
           schema_version: String.t(),
           participant_routes: %{String.t() => String.t()},
           entry_caller: String.t(),

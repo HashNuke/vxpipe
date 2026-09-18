@@ -37,7 +37,7 @@ opaque output sink. Raw audio still bypasses the room authority. Provider
 completion and sink playout completion are distinct; room-sequenced agent
 speaking/completion events follow sink acknowledgements.
 
-Inline agent definitions select a provider-neutral conversational model and prompt.
+Inline agent call specs select a provider-neutral conversational model and prompt.
 Hosted Google selections resolve tenant credentials and use ReqLLM internally;
 local fixtures require no provider key. Agent Runtime retains bounded conversation
 history and serializes provider work outside the room authority.
@@ -51,7 +51,7 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260915.01`. It selects upstream
+The call-spec-driven compiler's current schema is `20260915.01`. It selects upstream
 providers and provider-local models inline, with tenant credentials supplied at capability
 creation through an injected source. See [inline selections](../../docs/inline-provider-selections.md). It retains web human transfer
 destinations alongside the normal call-wide `media_policy` and each participant's optional
@@ -60,7 +60,7 @@ destinations alongside the normal call-wide `media_policy` and each participant'
 generated transfer tool require a bounded private briefing reason. Each independently
 optional policy field preserves omission as `:inherit`; explicit audio/transcript route maps are
 complete direct participant-key allowlists, including meaningful empty maps and recipient arrays.
-Unknown or duplicate references and malformed storage booleans fail at their exact definition path.
+Unknown or duplicate references and malformed storage booleans fail at their exact call spec path.
 Compilation pins every route to runtime participant IDs so later admission and media enforcement do
 not reinterpret public JSON. This checkpoint does not yet apply or intersect those policies at
 runtime. Planned rooms now supervise a separate, significant media-policy authority. It owns the
@@ -79,7 +79,7 @@ continues to select only a compiler-allowlisted participant ref, never a service
 the definition/compiler boundary; provider adapters and live phone legs are implemented by the
 telephony milestone rather than inferred from accepting the schema.
 
-The schema also accepts validated definition-local participant transfer allowlists, derives one private default-blocking transfer binding
+The schema also accepts validated call-spec-local participant transfer allowlists, derives one private default-blocking transfer binding
 for each non-empty list, pins the call-level total transfer-attempt deadline, and pins each agent's
 inbound `transfer_history` policy. Omission selects the privacy-safe `fresh` mode; the closed set is
 `fresh`, `all_spoken`, `last_n_spoken` with a positive `turns` value, and `selected`.
@@ -106,7 +106,7 @@ added explicitly selected platform
 tools to the participant's unified `tools` map. The fixed initial catalog contains
 `get_current_time` and
 immediate `hangup`; local aliases and conversation mode are pinned into the resolved plan without
-accepting modules from definition input. Schema `20260910.02` added
+accepting modules from call spec input. Schema `20260910.02` added
 an optional, closed `opening_audio` source that is pinned into the resolved call plan. A text
 source carries fixed text and a file source carries an HTTPS URL without embedded credentials or a fragment;
 configured values are omitted from routine struct inspection. The preceding `20260910.01`
@@ -116,7 +116,7 @@ operation remains pending. This is independent of execution placement: every ope
 handed to an independently supervised Call Engine worker. The schema retains the pinned
 client tool-visibility policy from the earlier `20260909.01` shape. Trusted
 hosts supply resource and tenant identity separately
-from JSON-safe definition and invocation maps. The compiler validates a closed
+from JSON-safe call spec and invocation maps. The compiler validates a closed
 supported participant/transport combinations and pins inline capability selections, host-tool bindings,
 typed Call Variables schemas/grants/partial initial values, runtime participant
 identities, call limits, and resolved participant-local visibility overrides into
@@ -129,7 +129,7 @@ the application-configured bounded HTTPS/WAV asset pipeline and a temporary room
 so it does not require TTS. Both forms keep caller text and audio closed until the attached output
 sink confirms actual playout completion; required playback failure ends the room.
 
-Each definition-driven room with declared Call Variables starts one authoritative
+Each call-spec-driven room with declared Call Variables starts one authoritative
 `CallVariables` process beside `RoomAuthority`. Generated `read_variables`,
 `update_variables`, and `update_variable` Actions call that owner directly with
 engine-bound identity, section grants, revisions, schema checks, deadlines, and size bounds.
@@ -139,7 +139,7 @@ Public tool events are hidden by default and are filtered to configured metadata
 detail at the gateway before delivery. The trusted Console sample selects full visibility and
 prefills a synthetic read-only order so this path can be exercised on the shared Phoenix port.
 
-Definition-driven agent participants run through the standalone `Vxpipe.AgentRuntime`; the Call
+Call-Spec-driven agent participants run through the standalone `Vxpipe.AgentRuntime`; the Call
 Engine no longer starts or depends on Jido. Each activation owns one request supervisor,
 coordinator, `Tool.InvocationSupervisor`, invocation registry, and Agent Runtime Session under one
 bounded one-for-all restart budget. A participant supervisor owns that activation unit, so
@@ -175,7 +175,7 @@ Authority applies the effect and terminates the room. It never ends the call inl
 agent/runtime process or before the tool lifecycle can be archived.
 
 `CreateRoom` supports empty rooms and deterministic text. Model and speech calls use a compiled
-inline definition and `start_call`; the legacy model preset and automatic global speech readers
+inline call spec and `start_call`; the legacy model preset and automatic global speech readers
 have been removed. Embedded fixture/Morse selections remain available without provider credentials.
 See [credential reader boundaries](../../docs/credential-reader-boundaries.md).
 
@@ -203,7 +203,7 @@ TTS, gateway projection, and Telemetry paths without a hosted model request. It 
 a fixed set of success, delayed success, provider failure, and invalid no-output outcomes.
 An armed outcome is consumed atomically by one request and resets to the configured
 default. The fixture is disabled in base configuration; its control never appears in a
-call definition, invocation, command, or RTVI message.
+call spec, invocation, command, or RTVI message.
 
 ## Local Morse audio providers
 
@@ -211,8 +211,8 @@ call definition, invocation, command, or RTVI message.
 implementations of the ordinary speech capability contracts. They encode and decode controlled
 International Morse tones; they do not recognize spoken language, run VAD, or use a hosted API.
 The application must register each implementation under the relevant speech setting's closed
-`:providers` map. The definition selects `%{provider: "morse", model: "morse"}` with
-optional public signal settings under `options`; modules never enter definition input.
+`:providers` map. The call spec selects `%{provider: "morse", model: "morse"}` with
+optional public signal settings under `options`; modules never enter call spec input.
 
 The direct signal format is signed 16-bit little-endian mono PCM. Supported sample rates are
 8, 16, 24, and 48 kHz. Defaults are 16 kHz, a 700 Hz tone, amplitude 4,096, a 60 ms dot unit,
@@ -242,7 +242,7 @@ attributed transcript, runs a local model response, collects real TTS output, an
 decodes it. It requires no speech credential or network access. Browser microphone audio is
 currently Opus and is outside this decoder's direct-PCM contract; no lossy-codec, acoustic echo,
 ordinary microphone, or general noise-robustness claim is made. Embedded hosts select Morse
-explicitly in inline definitions; the Console has no speech-profile switch.
+explicitly in inline call specs; the Console has no speech-profile switch.
 
 ## Embedded telemetry consumer
 

@@ -1,7 +1,7 @@
 # Prepared calls and single-use joining
 
 Status: complete (2026-09-09). Specification review: approved (2026-09-08).
-Prerequisites: [Tenant definitions/API keys](tenant-definitions-and-api-keys.md); [Call Variables](call-variables-and-tool-visibility.md).
+Prerequisites: [tenant call specs/API keys](tenant-call-specs-and-api-keys.md); [Call Variables](call-variables-and-tool-visibility.md).
 Sources: [Web routes](../../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing); [single-use tokens](../../labnotes/20260905-0405-call-definition-design.md#single-use-join-tokens-and-existing-call-recovery--approved-g2-decisions); [timing](../../labnotes/20260905-0405-call-definition-design.md#record-creation-and-actual-call-start--approved-timing-contract).
 
 ## Runnable outcome
@@ -52,7 +52,7 @@ failure to mark an already-running call must not tear it down or start another r
 1. Prepare through a backend with a synthetic read-only order ID; inspect that no room exists yet.
 2. Pass only the returned token to the browser and join through the existing console.
 3. Verify the agent reads the order while browser responses contain no preparation snapshot.
-4. Repeat with expired and competing tokens, a revoked issuer key, and a newly published definition; the prepared call retains its original plan.
+4. Repeat with expired and competing tokens, a revoked issuer key, and a newly published call spec; the prepared call retains its original plan.
 5. Observe started_at only at actual live start and ended_at only at logical end.
 
 ## Scope boundaries
@@ -78,7 +78,7 @@ prove private input/credentials stay out of responses, browser overrides/query c
 rejected, pre-live startup failure is safe, post-start session setup failure remains recorded as
 live, and projection failure cannot tear down a live session.
 The final checkpoint adds the Console-owned managed development sample. With PostgreSQL
-configured it bootstraps a private development tenant/key and published definition through
+configured it bootstraps a private development tenant/key and published call specs through
 Calls, prepares one durable call per browser action, and returns only a safe locator plus join
 token. The browser then uses the standard tenant participant-session route; neither initial
 variables nor the API key cross into it. With persistence absent, the existing database-free
@@ -92,7 +92,7 @@ to call creation. A real ExWebRTC boundary test proves signal-before-termination
 rendered durable call proved no retry or HTTP 409 after agent hangup.
 
 Acceptance coverage additionally proves all three URL scope components, ended-call rejection,
-separate repeated preparations, unchanged pinned plans after a newer definition publication,
+separate repeated preparations, unchanged pinned plans after a newer call spec publication,
 and an eligible second participant joining an existing room incarnation without room restart or
 start-time reset. The production adapter/engine test exercises that live-call join rather than
 only a gateway double.

@@ -13,7 +13,7 @@ startup failure, claimant loss before binding, and connection termination releas
 admission. A live bound connection outlives the credential's claim TTL. Failed persistence release
 stays closed to further admission and is retried; never reopen on an uncertain database result.
 The runtime still authorizes the current transfer attempt and enforces private media/acceptance.
-This does not introduce a UI retry bypass, an automatic redial or a new call-definition field.
+This does not introduce a UI retry bypass, an automatic redial or a new call-spec field.
 
 Rejected alternatives: deleting the admission loses history; allowing unrestricted simultaneous
 claims weakens admission exclusion; checking only room process existence races connection startup;

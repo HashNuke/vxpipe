@@ -1,12 +1,12 @@
-defmodule Vxpipe.Calls.DefinitionsTest do
+defmodule Vxpipe.Calls.CallSpecsTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.Calls.{Administration, Definitions}
+  alias Vxpipe.Calls.{Administration, CallSpecs}
   alias Vxpipe.Calls.TestMemoryRepository
 
   test "rejects application-wide carrier routing before repository lookup" do
     assert {:error, :invalid_telephony_route} =
-             Definitions.resolve_telephony_route(:application, "phone", "+15550001000", [])
+             CallSpecs.resolve_telephony_route(:application, "phone", "+15550001000", [])
   end
 
   setup do
@@ -14,7 +14,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
 
     options = [
       credential_repository: TestMemoryRepository.credential_repository(repository),
-      definition_repository: TestMemoryRepository.definition_repository(repository),
+      call_spec_repository: TestMemoryRepository.call_spec_repository(repository),
       registries: registries()
     ]
 
@@ -38,7 +38,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     tenant: tenant,
     options: options
   } do
-    assert {:ok, draft} = Definitions.save(tenant.key, definition_input(), options)
+    assert {:ok, draft} = CallSpecs.save(tenant.key, call_spec_input(), options)
     assert draft.revision == 1
     assert draft.published_at == nil
     assert draft.validation_errors == []
@@ -48,16 +48,16 @@ defmodule Vxpipe.Calls.DefinitionsTest do
              ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_route(tenant.key, route.key, options)
+             CallSpecs.resolve_route(tenant.key, route.key, options)
 
     assert {:ok, published} =
-             Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
 
     assert %DateTime{} = published.published_at
 
-    assert {:ok, resolved} = Definitions.resolve_route(tenant.key, route.key, options)
-    assert resolved.definition_id == draft.definition_id
-    assert resolved.definition_revision == 1
+    assert {:ok, resolved} = CallSpecs.resolve_route(tenant.key, route.key, options)
+    assert resolved.call_spec_id == draft.call_spec_id
+    assert resolved.call_spec_revision == 1
     assert resolved.participant_ref == "caller"
   end
 
@@ -66,26 +66,26 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     other_tenant: other_tenant,
     options: options
   } do
-    assert {:ok, first} = Definitions.save(tenant.key, definition_input(), options)
-    assert {:ok, first} = Definitions.publish(tenant.key, first.definition_id, 1, options)
+    assert {:ok, first} = CallSpecs.save(tenant.key, call_spec_input(), options)
+    assert {:ok, first} = CallSpecs.publish(tenant.key, first.call_spec_id, 1, options)
     assert [first_route] = first.routes
 
-    changed = Map.put(definition_input(), :name, "Changed")
+    changed = Map.put(call_spec_input(), :name, "Changed")
 
     assert {:ok, second} =
-             Definitions.save(
+             CallSpecs.save(
                tenant.key,
                changed,
-               Keyword.put(options, :definition_id, first.definition_id)
+               Keyword.put(options, :call_spec_id, first.call_spec_id)
              )
 
     assert second.revision == 2
-    assert {:ok, stored_first} = Definitions.fetch(tenant.key, first.definition_id, 1, options)
+    assert {:ok, stored_first} = CallSpecs.fetch(tenant.key, first.call_spec_id, 1, options)
     assert stored_first.source["name"] == "Example"
     assert second.source["name"] == "Changed"
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_route(other_tenant.key, first_route.key, options)
+             CallSpecs.resolve_route(other_tenant.key, first_route.key, options)
   end
 
   test "rejects unsupported inline selections before saving", %{
@@ -93,19 +93,19 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     options: options
   } do
     unsupported =
-      put_in(definition_input(), [:defaults, :capabilities, :model_inference], "missing-model")
+      put_in(call_spec_input(), [:defaults, :capabilities, :model_inference], "missing-model")
 
-    assert {:error, %Vxpipe.CallEngine.Error{code: :invalid_call_definition}} =
-             Definitions.save(tenant.key, unsupported, options)
+    assert {:error, %Vxpipe.CallEngine.Error{code: :invalid_call_spec}} =
+             CallSpecs.save(tenant.key, unsupported, options)
   end
 
-  test "rejects private material instead of persisting it in a definition revision", %{
+  test "rejects private material instead of persisting it in a call spec revision", %{
     tenant: tenant,
     options: options
   } do
-    source = Map.put(definition_input(), :api_key, "must-not-be-stored")
+    source = Map.put(call_spec_input(), :api_key, "must-not-be-stored")
 
-    assert {:error, :private_definition_material} = Definitions.save(tenant.key, source, options)
+    assert {:error, :private_call_spec_material} = CallSpecs.save(tenant.key, source, options)
   end
 
   test "stores provider-neutral phone intent metadata without creating a web join route", %{
@@ -113,7 +113,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     options: options
   } do
     source =
-      definition_input()
+      call_spec_input()
       |> put_in([:participants, "assistant", :transfers], ["phone-support"])
       |> put_in([:participants, "phone-support"], %{
         type: "human",
@@ -124,7 +124,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
         }
       })
 
-    assert {:ok, draft} = Definitions.save(tenant.key, source, options)
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, options)
 
     assert %{
              "admission" => "transfer",
@@ -142,14 +142,14 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     options: options
   } do
     source =
-      put_in(definition_input(), [:participants, "caller", :connection], %{
+      put_in(call_spec_input(), [:participants, "caller", :connection], %{
         service: "primary-phone",
         mode: "receive",
         admission: "start_call",
         number: "+15550001000"
       })
 
-    assert {:ok, draft} = Definitions.save(tenant.key, source, options)
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, options)
     assert draft.routes == []
 
     assert [route] = draft.telephony_routes
@@ -158,7 +158,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     assert route.participant_ref == "caller"
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                {:tenant, tenant.key},
                "primary-phone",
                "+15550001000",
@@ -166,39 +166,39 @@ defmodule Vxpipe.Calls.DefinitionsTest do
              )
 
     assert {:ok, _published} =
-             Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
 
     assert {:ok, resolved} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                {:tenant, tenant.key},
                "primary-phone",
                "+15550001000",
                options
              )
 
-    assert resolved.definition_id == draft.definition_id
-    assert resolved.definition_revision == draft.revision
+    assert resolved.call_spec_id == draft.call_spec_id
+    assert resolved.call_spec_revision == draft.revision
 
     assert {:error, :invalid_telephony_route} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                :application,
                "primary-phone",
                "+15550001000",
                options
              )
 
-    assert {:ok, other_draft} = Definitions.save(other_tenant.key, source, options)
+    assert {:ok, other_draft} = CallSpecs.save(other_tenant.key, source, options)
 
     assert {:ok, _other_published} =
-             Definitions.publish(
+             CallSpecs.publish(
                other_tenant.key,
-               other_draft.definition_id,
+               other_draft.call_spec_id,
                other_draft.revision,
                options
              )
 
     assert {:ok, ^resolved} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                {:tenant, tenant.key},
                "primary-phone",
                "+15550001000",
@@ -206,7 +206,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
              )
 
     assert {:ok, other_resolved} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                {:tenant, other_tenant.key},
                "primary-phone",
                "+15550001000",
@@ -222,7 +222,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     }
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: "20260915.01",
       name: "Example",

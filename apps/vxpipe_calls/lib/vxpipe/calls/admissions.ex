@@ -3,7 +3,7 @@ defmodule Vxpipe.Calls.Admissions do
 
   alias Vxpipe.Calls.{
     AdmissionClaim,
-    DefinitionCredentials,
+    CallSpecCredentials,
     IssuedJoinToken,
     JoinToken,
     PreparedCall,
@@ -22,26 +22,26 @@ defmodule Vxpipe.Calls.Admissions do
   def prepare(%Principal{} = principal, participant_key, initial_variables, options)
       when is_binary(participant_key) and is_map(initial_variables) do
     with :ok <- authorize(principal),
-         {:ok, definition_repository} <-
-           Repositories.fetch(options, :definition_repository),
+         {:ok, call_spec_repository} <-
+           Repositories.fetch(options, :call_spec_repository),
          {:ok, call_repository} <- Repositories.fetch(options, :call_repository),
          {:ok, route} <-
-           Repositories.call(definition_repository, :resolve_route, [
+           Repositories.call(call_spec_repository, :resolve_route, [
              principal.tenant_key,
              participant_key
            ]),
          {:ok, revision} <-
-           Repositories.call(definition_repository, :fetch_revision, [
+           Repositories.call(call_spec_repository, :fetch_revision, [
              principal.tenant_key,
-             route.definition_id,
-             route.definition_revision
+             route.call_spec_id,
+             route.call_spec_revision
            ]),
          {:ok, call} <- PreparedCallFactory.build(revision, initial_variables, :web, options),
          :ok <- entry_caller(route.participant_ref, call.entry_caller),
          {:ok, token_pair} <-
            build_token(call.plan, participant_key, route.participant_ref, options),
          {:ok, stored_call, _stored_token} <-
-           DefinitionCredentials.with_active(revision, call.plan, options, fn ->
+           CallSpecCredentials.with_active(revision, call.plan, options, fn ->
              Repositories.call(call_repository, :insert_prepared_call, [call, token_pair.stored])
            end) do
       {:ok, stored_call, token_pair.issued}

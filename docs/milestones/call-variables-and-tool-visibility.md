@@ -5,13 +5,13 @@ Jido Action follow-up (2026-09-08).
 Forward-runtime note (2026-09-10): Jido Action references below describe the completed
 implementation. The [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md) migrates the
 same permission, schema, privacy and tool-result contracts to data-backed runtime tools.
-Prerequisites: [Definition-driven call](definition-driven-call.md), including its Jido-backed
+Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md), including its Jido-backed
 agent loop and action boundary.
 Sources: [Call Variables](../../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned); [authorization](../../labnotes/20260905-0405-call-definition-design.md#authorization-transaction); [client visibility](../../labnotes/20260905-0405-call-definition-design.md#tool-event-visibility-and-sample-debugging--approved-g5-decision).
 
 ## Runnable outcome
 
-During the definition-driven call, the agent reads a prefilled read-only order section and incrementally updates an intake section through generated tools. The sample can deliberately show tool activity, while an ordinary client receives no tool events by default.
+During the call-spec-driven call, the agent reads a prefilled read-only order section and incrementally updates an intake section through generated tools. The sample can deliberately show tool activity, while an ordinary client receives no tool events by default.
 
 ## Specification
 
@@ -20,7 +20,7 @@ During the definition-driven call, the agent reads a prefilled read-only order s
 - Derive `read_variables(sections)` from read grants and
   `update_variables(section,data)`/`update_variable(section,variable,value)` from read+write
   grants as a finite set of application-owned Jido Action modules; authors do not separately
-  list these generated bindings and no definition-derived module is created. Register only
+  list these generated bindings and no call-spec-derived module is created. Register only
   the applicable actions on the activation's Jido agent. Their strict project-owned input
   schemas cover the stable tool envelopes; the handlers enforce the pinned per-call section
   schemas and grants before calling the room-owned variables process rather than storing
@@ -104,7 +104,7 @@ merge, array replacement, nullable clearing, atomic schema failure, deadlines an
 optimistic revision races, caller termination after submission, RoomAuthority independence,
 Jido round continuation, and exact snapshot attribution.
 
-Checkpoint `31e3abf` released call-definition schema `20260909.01` and implemented the
+Checkpoint `31e3abf` released call-spec schema `20260909.01` and implemented the
 independent gateway projection policy. Compiler, session, endpoint, and RTVI projection tests
 prove hidden-by-default behavior, metadata/full differences, participant-local override
 resolution, same-name isolation, private session state, trusted replacement, and rejection of

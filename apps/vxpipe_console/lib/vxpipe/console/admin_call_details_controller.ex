@@ -12,12 +12,12 @@ defmodule Vxpipe.Console.AdminCallDetailsController do
     with {:ok, context} <- Vxpipe.Calls.fetch_operator_call(authority, tenant_key, call_id),
          {:ok, access} <- Vxpipe.Calls.operator_call_access(authority, tenant_key),
          {:ok, result} <- CallInspectionQuery.run(access, call_id),
-         true <- context.call.definition_id == result.call.definition_id,
-         true <- context.call.definition_revision == result.call.definition_revision do
+         true <- context.call.call_spec_id == result.call.call_spec_id,
+         true <- context.call.call_spec_revision == result.call.call_spec_revision do
       respond(conn, :ok, %{
         tenant: %{key: context.tenant.key, name: context.tenant.name},
-        definition: %{id: context.call.definition_id, name: context.call.definition_name},
-        definition_revision: context.call.definition_revision,
+        call_spec: %{id: context.call.call_spec_id, name: context.call.call_spec_name},
+        call_spec_revision: context.call.call_spec_revision,
         inspection: CallInspectionPresenter.present(result)
       })
     else

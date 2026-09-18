@@ -16,7 +16,7 @@ defmodule Vxpipe.Persistence.Integration.DestinationCredentialActivationTest do
     CredentialCipher,
     CredentialKeyring,
     CredentialStore,
-    DefinitionStore,
+    CallSpecStore,
     ProviderCredentialStore,
     TestTenantGoogleStream
   }
@@ -32,7 +32,7 @@ defmodule Vxpipe.Persistence.Integration.DestinationCredentialActivationTest do
 
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
       registries: %{host_tools: %{}}
@@ -60,10 +60,10 @@ defmodule Vxpipe.Persistence.Integration.DestinationCredentialActivationTest do
       end)
 
     configure_adapters(Map.get(tags, :model_reply, false))
-    assert {:ok, draft} = Calls.save_definition(tenant.key, source(), options)
+    assert {:ok, draft} = Calls.save_call_spec(tenant.key, source(), options)
 
     assert {:ok, published} =
-             Calls.publish_definition(tenant.key, draft.definition_id, 1, options)
+             Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, options)
 
     assert [route] = published.routes
     assert {:ok, prepared, _token} = Calls.prepare_call(principal, route.key, %{}, options)
@@ -290,7 +290,7 @@ defmodule Vxpipe.Persistence.Integration.DestinationCredentialActivationTest do
   end
 
   defp source do
-    TestTurnCall.definition()
+    TestTurnCall.call_spec()
     |> put_in([:participants, "receiver", :transfers], ["destination"])
     |> put_in([:participants, "destination"], %{
       type: "agent",

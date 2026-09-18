@@ -114,8 +114,8 @@ defmodule Vxpipe.Console.CallInspectionPresentationTest do
     %CallSummary{
       id: "call-id",
       tenant_key: "tenant-key",
-      definition_id: "definition-id",
-      definition_revision: 1,
+      call_spec_id: "call-spec-id",
+      call_spec_revision: 1,
       state: :running,
       created_at: ~U[2026-09-09 16:30:00Z],
       started_at: ~U[2026-09-09 16:30:01Z],

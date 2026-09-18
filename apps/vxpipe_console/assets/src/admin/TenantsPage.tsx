@@ -30,7 +30,7 @@ export function TenantsPage({
         className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
       >
         <PageHeader
-          description="Choose a tenant to inspect its call definitions and calls."
+          description="Choose a tenant to inspect its call specs and calls."
           title="Tenants"
         />
         <section

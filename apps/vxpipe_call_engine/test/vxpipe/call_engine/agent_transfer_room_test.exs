@@ -8,10 +8,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     CallVariables,
-    DefinitionCompiler,
+    CallSpecCompiler,
     RoomAuthority,
     RoomParticipantSupervisor,
     TestCollectingArchiveWriter,
@@ -1020,10 +1020,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     {call_variables, initial_variables, reception_permissions, billing_permissions} =
       variable_setup(options)
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
@@ -1062,14 +1062,14 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                  },
                  limits: %{max_duration_ms: 60_000}
                },
-               resource_id: "transfer-definition",
+               resource_id: "transfer-call-spec",
                revision: 1
              )
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "transfer-definition", revision: 1},
+                 call_spec: %{id: "transfer-call-spec", revision: 1},
                  initial_variables: initial_variables,
                  transport: %{type: "web"}
                },
@@ -1080,7 +1080,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 
@@ -1241,11 +1241,11 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
          room,
          caller,
          input,
-         source_definition_key,
+         source_call_spec_key,
          destination,
          tool_call_id
        ) do
-    source = Map.fetch!(plan.participants, source_definition_key)
+    source = Map.fetch!(plan.participants, source_call_spec_key)
     source_monitor = monitor_active_participant(plan, source.participant_id)
 
     assert :ok = CallEngine.send_text(send_command(plan, room, caller, input))
@@ -1351,9 +1351,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
         assert payload ==
                  Map.merge(
                    %{
-                     "destination_definition_key" => destination.definition_key,
+                     "destination_call_spec_key" => destination.call_spec_key,
                      "destination_participant_id" => destination.participant_id,
-                     "source_definition_key" => source.definition_key
+                     "source_call_spec_key" => source.call_spec_key
                    },
                    additional_payload
                  )

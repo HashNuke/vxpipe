@@ -1,6 +1,6 @@
 import { classNames } from "./classNames";
-import type { DefinitionSummary } from "./definitionTypes";
-import { getDefinitionStatus } from "./getDefinitionStatus";
+import type { CallSpecSummary } from "./callSpecTypes";
+import { getCallSpecStatus } from "./getCallSpecStatus";
 
 const labels = {
   draft: "Draft",
@@ -8,17 +8,17 @@ const labels = {
   "draft-changes": "Draft changes",
 };
 
-export function DefinitionStatusBadge({
-  definition,
+export function CallSpecStatusBadge({
+  callSpec,
 }: {
-  definition: DefinitionSummary;
+  callSpec: CallSpecSummary;
 }) {
-  const status = getDefinitionStatus(definition);
+  const status = getCallSpecStatus(callSpec);
   const title =
     status === "published"
-      ? `Published version v${definition.publishedRevision}`
+      ? `Published version v${callSpec.publishedRevision}`
       : status === "draft-changes"
-        ? `Latest version v${definition.latestRevision}; published version v${definition.publishedRevision}`
+        ? `Latest version v${callSpec.latestRevision}; published version v${callSpec.publishedRevision}`
         : "No version has been published";
   return (
     <span

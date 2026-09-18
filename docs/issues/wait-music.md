@@ -45,5 +45,5 @@ authorized routing, prompt stop/yield behavior, no forbidden STT/recording input
 and unchanged startup, tool, and whole-call time limits. The current checkpoint
 adds documentation only; no audio playback or browser checks were performed.
 
-Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
-[architecture](../architecture.md), and [gap review](../call-definition-gap-review.md).
+Related: [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
+[architecture](../architecture.md), and [gap review](../call-spec-gap-review.md).

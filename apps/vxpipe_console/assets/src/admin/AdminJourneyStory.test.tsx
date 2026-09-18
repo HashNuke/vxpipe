@@ -24,7 +24,7 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-test("links the tenant directory to definitions and back", () => {
+test("links the tenant directory to call specs and back", () => {
   window.history.replaceState({}, "", "/iframe.html?id=admin-full-journey");
   render(<AdminJourneyStory theme="dark" />);
 
@@ -32,9 +32,9 @@ test("links the tenant directory to definitions and back", () => {
   fireEvent.click(screen.getByRole("link", { name: /open demo workspace/i }));
 
   expect(
-    screen.getByRole("heading", { name: "Call definitions" }),
+    screen.getByRole("heading", { name: "Call specs" }),
   ).toBeVisible();
-  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/call-specs");
 
   fireEvent.click(
     screen.getByRole("link", {
@@ -43,7 +43,7 @@ test("links the tenant directory to definitions and back", () => {
   );
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
+    "#/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling",
   );
   expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
   expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(5);
@@ -52,13 +52,13 @@ test("links the tenant directory to definitions and back", () => {
   expect(call).toHaveAttribute("target", "_blank");
   fireEvent.click(call);
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
+    "#/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling",
   );
   expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
 
   fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
   expect(
-    screen.getByRole("heading", { name: "Call definitions" }),
+    screen.getByRole("heading", { name: "Call specs" }),
   ).toBeVisible();
 
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
@@ -67,7 +67,7 @@ test("links the tenant directory to definitions and back", () => {
   expect(window.location.hash).toBe("#/admin");
 });
 
-test("keeps a non-default definition context when a call route is reloaded", () => {
+test("keeps a non-default call spec context when a call route is reloaded", () => {
   window.history.replaceState({}, "", "/iframe.html?id=admin-full-journey");
   const view = render(<AdminJourneyStory theme="dark" />);
 
@@ -91,18 +91,18 @@ test("keeps a non-default definition context when a call route is reloaded", () 
 
   expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
   expect(screen.getByText("Appointment reminders")).toBeVisible();
-  const definition = screen.getByRole("link", {
+  const callSpec = screen.getByRole("link", {
     name: "Appointment reminders",
   });
   expect(
-    new URL(definition.getAttribute("href")!, window.location.origin).hash,
+    new URL(callSpec.getAttribute("href")!, window.location.origin).hash,
   ).toBe(
-    "#/admin/tenants/tn_demo_01/calls?definition_id=appointment-reminders",
+    "#/admin/tenants/tn_demo_01/calls?call_spec_id=appointment-reminders",
   );
   expect(screen.queryByText("Delivery rescheduling")).not.toBeInTheDocument();
 });
 
-test("does not substitute the default definition for an unknown call route", () => {
+test("does not substitute the default call spec for an unknown call route", () => {
   window.history.replaceState(
     {},
     "",
@@ -122,7 +122,7 @@ test("does not substitute the default definition for an unknown call route", () 
   expect(screen.getByRole("link", { name: "Demo workspace" })).toBeVisible();
 });
 
-test("moves between sibling definitions and all tenant calls", () => {
+test("moves between sibling call specs and all tenant calls", () => {
   window.history.replaceState({}, "", "/iframe.html?id=admin-full-journey");
   render(<AdminJourneyStory theme="dark" />);
 
@@ -137,8 +137,8 @@ test("moves between sibling definitions and all tenant calls", () => {
     screen.getAllByRole("link", { name: /^open call/i }).length,
   ).toBeGreaterThan(5);
 
-  fireEvent.click(screen.getByRole("link", { name: "Call definitions" }));
-  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
+  fireEvent.click(screen.getByRole("link", { name: "Call specs" }));
+  expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/call-specs");
 });
 
 test("reaches services through the tenant workspace", () => {

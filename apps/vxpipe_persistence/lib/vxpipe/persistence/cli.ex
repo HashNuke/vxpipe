@@ -1,7 +1,7 @@
 defmodule Vxpipe.Persistence.CLI do
   @moduledoc false
 
-  alias Vxpipe.Calls.DefinitionRevision
+  alias Vxpipe.Calls.CallSpecRevision
   alias Vxpipe.Persistence.Repo
 
   def ensure_ready! do
@@ -59,7 +59,7 @@ defmodule Vxpipe.Persistence.CLI do
          {:ok, value} when is_map(value) <- JSON.decode(contents) do
       value
     else
-      _error -> Mix.raise("definition file must contain a readable JSON object")
+      _error -> Mix.raise("call spec file must contain a readable JSON object")
     end
   end
 
@@ -77,9 +77,9 @@ defmodule Vxpipe.Persistence.CLI do
     Mix.raise("Vxpipe operation failed: #{format_reason(reason)}")
   end
 
-  def revision_summary(%DefinitionRevision{} = revision, include_source? \\ false) do
+  def revision_summary(%CallSpecRevision{} = revision, include_source? \\ false) do
     summary = %{
-      "definition_id" => revision.definition_id,
+      "call_spec_id" => revision.call_spec_id,
       "revision" => revision.revision,
       "schema_version" => revision.schema_version,
       "source_digest" => revision.source_digest,

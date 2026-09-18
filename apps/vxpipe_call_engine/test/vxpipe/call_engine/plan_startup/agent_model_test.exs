@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.PlanStartup.AgentModelTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.PlanStartup.AgentModel
   alias Vxpipe.CallEngine.TestTenantCredentialSource
 

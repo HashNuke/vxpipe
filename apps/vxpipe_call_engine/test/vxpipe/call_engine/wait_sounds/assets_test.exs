@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.WaitSounds.AssetsTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition.WaitSounds
+  alias Vxpipe.CallEngine.CallSpec.WaitSounds
   alias Vxpipe.CallEngine.OpeningAudio.{AssetCache, Download, Settings}
   alias Vxpipe.CallEngine.TestOpeningAudioFetcher
   alias Vxpipe.CallEngine.WaitSounds.Assets

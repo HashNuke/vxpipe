@@ -4893,7 +4893,7 @@ failed-attempt outcomes. G7/G8's initial-scope decisions are resolved; deferred
 voicemail delivery and broader consultation features remain separate from approved work.
 The completed numbered decision register is in the focused review document.
 Detailed reasoning and evidence live in the
-[call-definition gap review](../docs/call-definition-gap-review.md).
+[call-definition gap review](../docs/call-spec-gap-review.md).
 
 ### Remaining review count — 2026-09-08
 

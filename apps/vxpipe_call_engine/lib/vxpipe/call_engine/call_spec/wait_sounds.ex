@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.WaitSounds do
+defmodule Vxpipe.CallEngine.CallSpec.WaitSounds do
   @moduledoc "Call-level wait sources, resolved from omitted defaults, URLs, or explicit silence."
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @defaults [
     call_setup: :phone_ring,
@@ -21,8 +21,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSounds do
           transfer_joining: source()
         }
 
-  @code :invalid_call_definition
-  @message "The call definition is invalid."
+  @code :invalid_call_spec
+  @message "The call spec is invalid."
 
   @spec from_optional(:error | {:ok, term()}) ::
           {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
@@ -31,7 +31,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSounds do
 
   def from_optional({:ok, value}) do
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, @slots, @code, @message, ["wait_sounds"]),
+           CallSpecValidation.normalize_map(value, @slots, @code, @message, ["wait_sounds"]),
          {:ok, selections} <- selections(input) do
       {:ok, struct!(__MODULE__, selections)}
     end
@@ -49,7 +49,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSounds do
   defp source(nil, _path), do: {:ok, nil}
 
   defp source(value, path) do
-    with {:ok, url} <- DefinitionValidation.string(value, @code, @message, path, maximum: 2_048),
+    with {:ok, url} <- CallSpecValidation.string(value, @code, @message, path, maximum: 2_048),
          {:ok, uri} <- URI.new(url),
          true <- uri.scheme in ["http", "https"],
          true <- is_binary(uri.host) and uri.host != "",
@@ -58,7 +58,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.WaitSounds do
       {:ok, url}
     else
       _invalid ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           @code,
           @message,
           path,

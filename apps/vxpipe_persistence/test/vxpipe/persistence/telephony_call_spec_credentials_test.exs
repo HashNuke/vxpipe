@@ -1,13 +1,13 @@
-defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
+defmodule Vxpipe.Persistence.TelephonyCallSpecCredentialsTest do
   use Vxpipe.Persistence.DataCase, async: false
 
   import Ecto.Query
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, ProviderCredentials, TelephonyServices}
-  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, DefinitionStore}
+  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, CallSpecStore}
   alias Vxpipe.Persistence.{ProviderCredentialStore, TelephonyServiceStore}
-  alias Vxpipe.Persistence.Schema.{Call, DefinitionRevision, ParticipantRoute, ProviderCredential}
+  alias Vxpipe.Persistence.Schema.{Call, CallSpecRevision, ParticipantRoute, ProviderCredential}
 
   setup do
     {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
@@ -15,7 +15,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
 
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, context},
       telephony_service_repository: {TelephonyServiceStore, context},
@@ -23,7 +23,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
     ]
 
     {:ok, tenant, issued} =
-      Administration.bootstrap_tenant("Phone definitions", [:calls], options)
+      Administration.bootstrap_tenant("Phone call_specs", [:calls], options)
 
     {:ok, principal} = Administration.authenticate(tenant.key, issued.secret, :calls, options)
     {:ok, other, _} = Administration.bootstrap_tenant("Other phone tenant", [:calls], options)
@@ -32,7 +32,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
 
   test "a missing later phone destination is a hard save failure with no revision or route",
        data do
-    assert {:error, error} = Calls.save_definition(data.tenant.key, source(), data.options)
+    assert {:error, error} = Calls.save_call_spec(data.tenant.key, source(), data.options)
     assert error.code == :provider_credential_unavailable
     assert error.details["path"] == ["participants", "phone", "connection", "service"]
     assert row_counts() == [0, 0, 0]
@@ -42,7 +42,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
     register(data.other.key, data.options)
 
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Calls.save_definition(data.tenant.key, source(), data.options)
+             Calls.save_call_spec(data.tenant.key, source(), data.options)
 
     assert row_counts() == [0, 0, 0]
   end
@@ -50,11 +50,11 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
   test "saved and prepared phone intent requires the current active credential without persisting it",
        data do
     {credential, _service} = register(data.tenant.key, data.options)
-    assert {:ok, draft} = Calls.save_definition(data.tenant.key, source(), data.options)
+    assert {:ok, draft} = Calls.save_call_spec(data.tenant.key, source(), data.options)
     assert draft.validation_errors == []
 
     assert {:ok, published} =
-             Calls.publish_definition(data.tenant.key, draft.definition_id, 1, data.options)
+             Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, 1, data.options)
 
     assert [route] = published.routes
     assert {:ok, call, _token} = Calls.prepare_call(data.principal, route.key, %{}, data.options)
@@ -72,23 +72,23 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
     before = row_counts()
 
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Calls.publish_definition(data.tenant.key, draft.definition_id, 1, data.options)
+             Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, 1, data.options)
 
     assert {:error, %{code: :provider_credential_unavailable}} =
              Calls.prepare_call(data.principal, route.key, %{}, data.options)
 
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Calls.save_definition(data.tenant.key, source(), data.options)
+             Calls.save_call_spec(data.tenant.key, source(), data.options)
 
     assert row_counts() == before
   end
 
   test "revocation after preflight prevents the final revision or prepared-call write", data do
     register(data.tenant.key, data.options)
-    assert {:ok, draft} = Calls.save_definition(data.tenant.key, source(), data.options)
+    assert {:ok, draft} = Calls.save_call_spec(data.tenant.key, source(), data.options)
 
     assert {:ok, published} =
-             Calls.publish_definition(data.tenant.key, draft.definition_id, 1, data.options)
+             Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, 1, data.options)
 
     assert [route] = published.routes
 
@@ -106,7 +106,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
 
       result =
         case operation do
-          :save -> Calls.save_definition(data.tenant.key, source(), options)
+          :save -> Calls.save_call_spec(data.tenant.key, source(), options)
           :prepare -> Calls.prepare_call(data.principal, route.key, %{}, options)
         end
 
@@ -126,7 +126,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
     assert reference.credential_id == credential.id
     assert reference.tenant_id == data.tenant.key
     assert stored.plan == call.plan
-    assert stored.definition_revision == published.revision
+    assert stored.call_spec_revision == published.revision
 
     assert stored.plan_digest ==
              :crypto.hash(:sha256, :erlang.term_to_binary(stored.plan, [:deterministic]))
@@ -223,7 +223,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
         Keyword.put(data.options, :telephony_service_repository, {TelephonyServiceStore, context})
 
       assert {:error, %{code: :provider_credential_unavailable}} =
-               Calls.save_definition(data.tenant.key, source(), options)
+               Calls.save_call_spec(data.tenant.key, source(), options)
 
       assert {:error, _reason} =
                TelephonyServices.with_active(
@@ -328,7 +328,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
 
   defp assert_rejected_plan(revision, plan, options) do
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Vxpipe.Calls.DefinitionCredentials.with_active(revision, plan, options, fn ->
+             Vxpipe.Calls.CallSpecCredentials.with_active(revision, plan, options, fn ->
                send(self(), :unexpected_plan_write)
                :ok
              end)
@@ -337,10 +337,10 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
   end
 
   defp publish(data, input) do
-    {:ok, draft} = Calls.save_definition(data.tenant.key, input, data.options)
+    {:ok, draft} = Calls.save_call_spec(data.tenant.key, input, data.options)
 
     {:ok, published} =
-      Calls.publish_definition(data.tenant.key, draft.definition_id, 1, data.options)
+      Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, 1, data.options)
 
     [route] = published.routes
     {published, route}
@@ -381,7 +381,7 @@ defmodule Vxpipe.Persistence.TelephonyDefinitionCredentialsTest do
       )
 
   defp row_counts,
-    do: Enum.map([DefinitionRevision, ParticipantRoute, Call], &Repo.aggregate(&1, :count))
+    do: Enum.map([CallSpecRevision, ParticipantRoute, Call], &Repo.aggregate(&1, :count))
 
   defp source do
     %{

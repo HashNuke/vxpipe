@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.TrustedCallTest do
   test "trusted input uses inline selections with only the host-tool registry" do
     assert {:ok, trusted} = TrustedCall.new(options())
     assert trusted.registries == %{host_tools: %{}}
-    assert trusted.definition.default_capabilities.model_inference.provider == "fixture"
+    assert trusted.call_spec.default_capabilities.model_inference.provider == "fixture"
   end
 
   test "the retired capability-profile configuration is rejected" do
@@ -19,7 +19,7 @@ defmodule Vxpipe.Gateway.TrustedCallTest do
       resource_id: "trusted-inline",
       revision: 1,
       host_tools: %{},
-      definition: %{
+      call_spec: %{
         schema_version: "20260915.01",
         entry_caller: "caller",
         entry_receiver: "assistant",

@@ -1,9 +1,9 @@
 defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding do
   @moduledoc false
 
-  @derive {Inspect, only: [:source_definition_key]}
+  @derive {Inspect, only: [:source_call_spec_key]}
   @enforce_keys [
-    :source_definition_key,
+    :source_call_spec_key,
     :source_participant_id,
     :source_activation_id,
     :targets
@@ -11,14 +11,14 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding do
   defstruct @enforce_keys
 
   @type target :: %{
-          required(:definition_key) => String.t(),
+          required(:call_spec_key) => String.t(),
           required(:participant_id) => String.t(),
           required(:description) => nil | String.t(),
           required(:reason_required) => boolean()
         }
 
   @type t :: %__MODULE__{
-          source_definition_key: String.t(),
+          source_call_spec_key: String.t(),
           source_participant_id: String.t(),
           source_activation_id: String.t(),
           targets: %{required(String.t()) => target()}

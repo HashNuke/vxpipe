@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.SpokenHistoryTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition.TransferHistory
+  alias Vxpipe.CallEngine.CallSpec.TransferHistory
   alias Vxpipe.CallEngine.RoomAuthority.SpokenHistory
 
   test "projects only confirmed user and played assistant utterances under the pinned mode" do

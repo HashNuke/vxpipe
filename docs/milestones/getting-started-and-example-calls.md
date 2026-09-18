@@ -6,7 +6,7 @@ Prerequisites: [Call debug console](call-debug-console.md),
 [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md), and the existing
 [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md).
 Sources: [First-use design](../developer-console-and-onboarding.md#first-use-flow),
-[Operator's Bench](../../DESIGN.md), [Inline definitions](../inline-provider-selections.md).
+[Operator's Bench](../../DESIGN.md), [inline call specs](../inline-provider-selections.md).
 
 ## Runnable outcome
 
@@ -47,7 +47,7 @@ requirements. Refresh, partial failure and restart preserve completed work.
   `last_validated_at`, and link later provider rejection back to the relevant setup step. Validation
   proves authentication at that time; it does not claim that every model, voice or call path works.
 - Catalog entries have stable IDs/version/content digests, purpose, participants, requirement
-  metadata and a checked-in inline definition. Supported selections use the current schema and
+  metadata and a checked-in inline call spec. Supported selections use the current schema and
   existing provider catalog; no provider keys, route IDs or tenant IDs live in portable templates.
 - Initial catalog: voice conversation; agent-to-agent handoff; human handoff with an explicit
   support seat. These reuse implemented flows. First call needs no S3, telephony, external MCP
@@ -55,7 +55,7 @@ requirements. Refresh, partial failure and restart preserve completed work.
 - Installation is explicit and idempotent per tenant/example/version. Save/publish through Calls,
   store the installed revision/route mapping, and report per-example success/failure. Concurrency
   and lost responses do not duplicate revisions/routes. Preserve user edits; offer an explicit
-  new version/copy action instead of overwriting or silently republishing an edited definition.
+  new version/copy action instead of overwriting or silently republishing an edited call spec.
 - Replace the old managed SampleCall auto-provisioning path for these examples. Reuse/adopt the
   intended development tenant; do not leave a second startup seeder issuing keys/revisions.
   Explicit embedded fixtures stay separate, never an anonymous fallback for hosted setup failure.
@@ -86,13 +86,13 @@ Exit: a new developer completes the existing setup workflows through an understa
 - [ ] Define/review the three entries and their requirement manifests against current schema,
   provider bindings and existing agent/human-transfer APIs. Use only allowlisted local tools.
 - [ ] Red-test first installation, repeat/concurrent installation, partial failure, response loss,
-  explicit version updates, edited installed definitions and foreign-tenant route substitution.
+  explicit version updates, edited installed call specs and foreign-tenant route substitution.
 - [ ] Implement installation through existing save/publish workflows with durable version/revision
   mapping. Expose per-example status and safe fix/retry actions; never treat a draft as callable.
 - [ ] Remove the competing managed-sample startup provisioning path, and update old sample routes
   to an authorized delegate or explicit retired response. No hosted DB/provider failure may reach
   the anonymous in-memory sample fallback. Preserve separately configured library/fixture use.
-- [ ] Verify installation and publication survive restart with stable definitions/routes; exercise
+- [ ] Verify installation and publication survive restart with stable call specs/routes; exercise
   each example's required existing flow using controlled adapters and the tagged browser lane.
 
 Exit: the demo tenant has three discoverable, published examples that can be installed safely again.
@@ -102,7 +102,7 @@ Exit: the demo tenant has three discoverable, published examples that can be ins
 - [ ] Build the persistent checklist/gallery with purpose, participant summary, current requirement
   state and one clear action per example. An individually ready example is runnable while another
   remains blocked; temporary lookup failure is unavailable, not permission to reseed anything.
-- [ ] Deep-link into the existing debug console with a preselected safe definition/route.
+- [ ] Deep-link into the existing debug console with a preselected safe call spec/route.
   Preview does not start media/provider work, and missing requirements link back to their fix.
 - [ ] Show useful loading, empty, blocked, provider-rejected and unavailable states; after the
   run preserve results and offer another example or a fresh run without reseeding anything.
@@ -121,7 +121,7 @@ Exit: the home page teaches a new developer enough to run and understand their f
 - [ ] One setup survives refresh/restart/retry without duplicate keys, tenants or revisions.
 - [ ] Three capability requirements are satisfied using current supported tenant credentials;
   STT/TTS reuse a binding and no unsupported-provider authentication is introduced.
-- [ ] The three real catalog definitions publish, render meaningful previews and run through
+- [ ] The three real catalog call specs publish, render meaningful previews and run through
   the same debug console; human acceptance uses the existing separately authorized seat.
 - [ ] Demo off is the default; same-build on/off behavior and direct-route denial pass. Disabling
   preserves resources/admitted calls. Unauthorized/cross-tenant requests cannot configure or run

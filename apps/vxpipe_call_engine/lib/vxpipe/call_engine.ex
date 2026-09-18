@@ -11,9 +11,9 @@ defmodule Vxpipe.CallEngine do
     SendText
   }
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
   alias Vxpipe.CallEngine.ConnectionAttachment
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress, NormalizedFrame}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
@@ -23,12 +23,12 @@ defmodule Vxpipe.CallEngine do
   alias Vxpipe.CallEngine.RoomAudioHandle
   alias Vxpipe.CallEngine.RoomMixer.Subscription
 
-  @spec compile_definition(CallDefinition.t(), CallInvocation.t(), map(), keyword()) ::
+  @spec compile_call_spec(CallSpec.t(), CallInvocation.t(), map(), keyword()) ::
           {:ok, ResolvedCallPlan.t()} | {:error, Error.t()}
-  def compile_definition(definition, invocation, registries, options \\ [])
+  def compile_call_spec(call_spec, invocation, registries, options \\ [])
 
-  def compile_definition(
-        %CallDefinition{} = definition,
+  def compile_call_spec(
+        %CallSpec{} = call_spec,
         %CallInvocation{} = invocation,
         registries,
         options
@@ -39,7 +39,7 @@ defmodule Vxpipe.CallEngine do
 
     with {:ok, integrations} <- catalog_snapshot(catalog_store) do
       registries = Map.put(registries, :mcp_integrations, integrations)
-      DefinitionCompiler.compile(definition, invocation, registries, compiler_options)
+      CallSpecCompiler.compile(call_spec, invocation, registries, compiler_options)
     end
   end
 
@@ -361,9 +361,9 @@ defmodule Vxpipe.CallEngine do
   end
 
   defp unavailable_catalog do
-    DefinitionValidation.invalid(
-      :call_definition_resolution_failed,
-      "The call definition could not be resolved.",
+    CallSpecValidation.invalid(
+      :call_spec_resolution_failed,
+      "The call spec could not be resolved.",
       ["registries", "mcp_integrations"],
       "is unavailable"
     )

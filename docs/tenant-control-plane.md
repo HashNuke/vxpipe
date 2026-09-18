@@ -1,6 +1,6 @@
 # Tenant control-plane operations
 
-Vxpipe keeps tenant credentials and reusable call definitions in an optional
+Vxpipe keeps tenant credentials and reusable call specs in an optional
 PostgreSQL control plane. `vxpipe_calls` owns the database-neutral workflows and
 repository contracts; `vxpipe_persistence` owns Ecto, PostgreSQL schemas,
 migrations, constraints, and transactions. The gateway and call engine never
@@ -29,6 +29,17 @@ mix ecto.migrate
 The repository disables ordinary Ecto query logging because bound query values
 will include API-key digests and may later include other sensitive control-plane
 data. Operational query measurements should use bounded, payload-free telemetry.
+
+### Upgrade notes for the Call Specs rename
+
+The rename is delivered by a new reversible migration for the two Call Spec tables
+and their related columns and constraints. Existing migrations retain their historical
+filenames and contents. This requires a coordinated application-and-migration deployment;
+old binaries cannot use the renamed tables. Callers must update the changed `/call-specs`
+routes and `call_spec*` JSON, API, and CLI names. Existing published JSON remains
+byte-for-byte exact, and a safe legacy resolved-plan reader keeps pre-rename stored plans
+usable after migration. Take the usual database backup before upgrading, and use the new
+migration's down operation only for a deliberate rollback.
 
 ## Bootstrap a tenant
 
@@ -79,12 +90,12 @@ Join tokens are introduced by the prepared-call milestone.
 Google, Deepgram and Telnyx credentials have separate encrypted tenant storage and trusted
 provision/list commands. See [provider credential storage](provider-credential-storage.md)
 for platform encryption settings, protected stdin input and metadata output. Inline Google/Deepgram
-definitions resolve these records at save, publication, preparation and capability creation.
+call specs resolve these records at save, publication, preparation and capability creation.
 Trusted [Telnyx service registration](tenant-telephony-services.md) links connection/verification
 metadata to the matching tenant credential. Live carrier DB readers remain in progress.
 API-key issuance and authentication above remain independent.
 
-## Save and publish call definitions
+## Save and publish call specs
 
 Select supported providers and provider-local models inline, provision their tenant
 credentials, and configure any referenced host tools before saving. Invalid selections
@@ -94,32 +105,32 @@ or missing credentials prevent saving. Other unsupported host references remain 
 Save the first immutable revision from a JSON file:
 
 ```shell
-mix vxpipe.definition.save \
+mix vxpipe.call_spec.save \
   --tenant TENANT_KEY \
-  --file examples/call-definitions/development.json
+  --file examples/call-specs/development.json
 ```
 
 That tracked example selects Google Gemini inline and requires the tenant’s `google/default`
-credential. Deployments should provide their own definition and configured host tools.
+credential. Deployments should provide their own call spec and configured host tools.
 
-The output contains a generated `definition_id`, revision number, source digest,
+The output contains a generated `call_spec_id`, revision number, source digest,
 validation results, and draft participant route UUIDs. Draft routes are not
-callable. To edit a definition, save the changed JSON under its existing public
+callable. To edit a call spec, save the changed JSON under its existing public
 ID; Vxpipe inserts the next revision rather than updating the old source:
 
 ```shell
-mix vxpipe.definition.save \
+mix vxpipe.call_spec.save \
   --tenant TENANT_KEY \
-  --definition-id DEFINITION_ID \
-  --file path/to/call-definition.json
+  --call-spec-id CALL_SPEC_ID \
+  --file path/to/call-spec.json
 ```
 
 Publish an error-free revision explicitly:
 
 ```shell
-mix vxpipe.definition.publish \
+mix vxpipe.call_spec.publish \
   --tenant TENANT_KEY \
-  --definition-id DEFINITION_ID \
+  --call-spec-id CALL_SPEC_ID \
   --revision 1
 ```
 
@@ -127,14 +138,14 @@ Only the selected revision's deployment routes resolve. Read any immutable
 revision, including its portable source and credential-free compiled metadata:
 
 ```shell
-mix vxpipe.definition.show \
+mix vxpipe.call_spec.show \
   --tenant TENANT_KEY \
-  --definition-id DEFINITION_ID \
+  --call-spec-id CALL_SPEC_ID \
   --revision 1
 ```
 
 Provider/MCP credentials and private credential leases are rejected from portable
-definition JSON. Recoverable upstream credentials belong to their separate
+call spec JSON. Recoverable upstream credentials belong to their separate
 application or tenant secret boundary.
 
 ## Design implications and rejected alternatives
@@ -145,7 +156,7 @@ application or tenant secret boundary.
 - API keys are high-entropy bearer credentials with one-way storage. Reversible
   API-key encryption and plaintext database storage were rejected because Vxpipe
   never needs to recover these values.
-- Definition revisions are append-only source records. Updating published JSON or
+- Call Spec revisions are append-only source records. Updating published JSON or
   making draft routes callable implicitly was rejected because active/prepared
   calls must be able to pin an exact revision.
 - Putting Repo queries in the gateway or realtime engine was rejected to preserve

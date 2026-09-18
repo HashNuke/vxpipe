@@ -1,10 +1,10 @@
-defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicy do
+defmodule Vxpipe.CallEngine.CallSpec.MediaPolicy do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
-  @code :invalid_call_definition
-  @message "The call definition is invalid."
+  @code :invalid_call_spec
+  @message "The call spec is invalid."
   @fields [:audio_routes, :transcript_routes, :record_audio, :save_transcripts]
 
   @enforce_keys @fields
@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicy do
 
   defp new(value, path) do
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, @fields, @code, @message, path),
+           CallSpecValidation.normalize_map(value, @fields, @code, @message, path),
          {:ok, audio_routes} <- routes(Map.fetch(input, :audio_routes), path ++ ["audio_routes"]),
          {:ok, transcript_routes} <-
            routes(Map.fetch(input, :transcript_routes), path ++ ["transcript_routes"]),
@@ -152,10 +152,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicy do
   end
 
   defp identifier(value, path) do
-    DefinitionValidation.identifier(value, @code, @message, path)
+    CallSpecValidation.identifier(value, @code, @message, path)
   end
 
   defp invalid(path, reason) do
-    DefinitionValidation.invalid(@code, @message, path, reason)
+    CallSpecValidation.invalid(@code, @message, path, reason)
   end
 end

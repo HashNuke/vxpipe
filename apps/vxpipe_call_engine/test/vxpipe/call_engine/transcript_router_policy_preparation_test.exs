@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.TranscriptRouterPolicyPreparationTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, TranscriptRouter}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, TranscriptRouter}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer}
   alias Vxpipe.CallEngine.Readiness.Collector
 
@@ -166,10 +166,10 @@ defmodule Vxpipe.CallEngine.TranscriptRouterPolicyPreparationTest do
         save_transcripts: false
       })
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  defaults: %{capabilities: %{}},
@@ -183,7 +183,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouterPolicyPreparationTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "transcript-preparation", revision: 1},
+                 call_spec: %{id: "transcript-preparation", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -194,7 +194,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouterPolicyPreparationTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

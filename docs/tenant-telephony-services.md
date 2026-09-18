@@ -1,7 +1,7 @@
 # Tenant telephony service storage
 
 Status: trusted Telnyx/Twilio registration, the operator CLI, private credential resolution,
-canonical prepared-plan bindings, tenant-scoped incoming claims and definition
+canonical prepared-plan bindings, tenant-scoped incoming claims and call spec
 save/publish/web/incoming write guards are implemented. Twilio media authentication retains
 the initialized leg configuration. Gateway now resolves new Telnyx/Twilio legs from tenant storage in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
@@ -17,7 +17,7 @@ A service stores a canonical public UUID, tenant-local name, globally unique ing
 provider connection ID, public verification key, optional originating number and existing carrier
 options. It references the credential's stable public UUID. The database foreign key includes
 credential ID, tenant and provider, so changing one cannot select another tenant/provider's key.
-The alias is what a definition names; it is distinct from the canonical service identity that the
+The alias is what a call spec names; it is distinct from the canonical service identity that the
 reader cutover pins in prepared plans.
 
 Existing Telnyx and Twilio configuration is accepted here. Credentials are provisioned separately through
@@ -102,20 +102,20 @@ authorize a provider request or authenticate a webhook. The live reader resolves
 authentication and checks the exact pinned service/account at those boundaries. The ingress key
 is a locator, not authentication.
 
-## Private resolution and definition checks
+## Private resolution and call spec checks
 
 `TelephonyServices.resolve(tenant_key, name)` returns a private snapshot of the service and its
 exact linked credential. It locks both rows, checks tenant/provider/active status and decrypts
 the credential using the existing authenticated store. A same-name credential with a different
 public ID is not an equivalent binding. The snapshot's inspection hides private authentication;
-definitions and prepared plans never retain its payload.
+call specs and prepared plans never retain its payload.
 
-Definition save, publish and web preparation check every phone service, including later transfer
+call spec save, publish and web preparation check every phone service, including later transfer
 destinations. Missing, other-tenant, inactive or undecryptable credentials return a safe error at
 the participant's service path. The final database write runs under the active service/credential
 locks; revocation between preflight and that write prevents persistence. Repositories called by
 the guarded operation must share its transaction context. Existing write errors, including
-duplicate call IDs, retain their original meaning. Credential-free web definitions need no service
+duplicate call IDs, retain their original meaning. credential-free web call specs need no service
 repository.
 
 Incoming preparation shares the preflight check and canonical plan binding. Calls supplies its
@@ -123,7 +123,7 @@ existing active-credential/reference guard as a mandatory repository callback. P
 it inside the call/leg insertion transaction, before either write, and retains the service and
 credential locks until commit. Only an authorization marker enters the transaction's results.
 Revocation, unreadable credentials or a service/account/credential rebind after compilation
-prevent both rows. The same final check covers model/speech credentials required by the definition.
+prevent both rows. The same final check covers model/speech credentials required by the call spec.
 
 Already stored duplicates skip this new-write callback. If two events race past duplicate lookup,
 the losing insert rolls back before the existing duplicate-recovery query runs. Wrapping the whole
@@ -189,7 +189,7 @@ atoms. The codec now asks the Engine plan type to load its fixed data and enum o
 using the unchanged safe decoder. The list includes existing prepared-audio, transfer and
 call-variable validator data. Stored bytes never select a module to load. A fresh subprocess
 test covers a pinned plan with bounded call variables and rejects unknown external atoms without
-interning them. A disposable DB fetch also passes before any definition compilation or service
+interning them. A disposable DB fetch also passes before any call spec compilation or service
 lookup in the reader process; both current and legacy plan representations remain readable.
 
 Keeping only an alias would permit account changes after preparation. Storing private snapshots
@@ -271,7 +271,7 @@ The 11 focused checks and 98-test Persistence suite pass. Full umbrella acceptan
 one existing native WebRTC Morse-decoding case failed in the 1,543-test run and reproduced in isolation.
 The existing Telnyx call-flow milestone remains the owner of full carrier/audio acceptance.
 
-The [definition-guard evidence](../labnotes/20260916-0057-telephony-credential-gates.md) records
+The [call-spec guard evidence](../labnotes/20260916-0057-telephony-credential-gates.md) records
 13 passing focused database tests, 81 Calls tests and 106 Persistence tests (6 excluded), plus
 independent implementation review. Format, warnings-as-errors compilation and strict Credo pass.
 

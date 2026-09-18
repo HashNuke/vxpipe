@@ -4,7 +4,7 @@ Status: complete. The standalone package, provider-neutral loop, production ReqL
 activation-owned Call Engine integration, supervised tool execution, blocking/non-blocking
 conversation policy, Jido removal, rendered sample, and tagged-provider lane are implemented and
 verified.
-Prerequisites: [Definition-driven call](definition-driven-call.md),
+Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
 Sources: [runtime decision](../reqllm-agent-runtime.md),
@@ -76,7 +76,7 @@ process or dependency is used.
   engine-origin observation carrying the same invocation ID; it is not a second result
   attached to the old tool exchange and does not create public caller speech.
 - Each authored platform/built-in, host, or MCP tool binding takes its tool-specific
-  `conversation_mode` from its call-definition `tools` entry. The only values are `blocking`
+  `conversation_mode` from its call-spec `tools` entry. The only values are `blocking`
   and `non_blocking`; omission resolves to `blocking`. Blocking is Call Engine admission
   policy only: the current acknowledgement round may finish, then subsequent caller turns
   receive a deterministic holding response without entering the LLM until the terminal
@@ -532,7 +532,7 @@ Implementation evidence:
   path. Its test was written first and observed an old Jido `agent_server`, proving that Plan Startup
   ignored the selection. After implementation, Plan Startup builds and validates the selected model
   provider config, retains the resolved host-tool map for neutral descriptor compilation, and pins
-  the existing call-definition prompt and model in the activation options.
+  the existing call-spec prompt and model in the activation options.
 - Room Authority records the selected coordinator module behind its existing text-capability map.
   Normal response, interruption, and participant-owned shutdown therefore use the same room
   contracts for both migration graphs. A focused room test starts a planned call, proves that the
@@ -554,14 +554,14 @@ Implementation evidence:
   Agent Runtime provider contract, and maps fixture failure or missing content to bounded provider
   errors without fabricating an answer. Its focused suite passes 2 tests.
 - The test environment explicitly retains the Jido graph for the remaining legacy `expect_react`
-  scenarios; the earlier definition-driven Agent Runtime room test continues to override that seam
+  scenarios; the earlier call-spec-driven Agent Runtime room test continues to override that seam
   and exercise the new path. The complete Call Engine suite passes 242 tests with 2 integration
   exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
   pass. Umbrella `mix test` stops before execution because the local PostgreSQL SCRAM password is
   absent; no credential source was inspected. This is temporary test migration scaffolding, not a
   supported production fallback.
 - Checkpoint 4q adds focused room-level acceptance for the two conversation modes. Both scenarios
-  compile the same deliberately blocked host operation from the participant's call-definition
+  compile the same deliberately blocked host operation from the participant's call-spec
   `tools` map and observe execution in a process distinct from the model request. Omission resolves
   to blocking: the acknowledgement round receives no tool surface, later caller input receives the
   deterministic hold without model admission, and admission reopens only after the private terminal
@@ -577,7 +577,7 @@ Implementation evidence:
   turn's process lifetime.
 - Checkpoint 4q red evidence was two room tests timing out on the absent `ToolCallStarted` event even
   though both independent workers had started. The focused two-scenario suite passes, the complete
-  definition-driven suite passes 18 tests, and the complete Call Engine suite passes 244 tests with
+  call-spec-driven suite passes 18 tests, and the complete Call Engine suite passes 244 tests with
   2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
   unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
@@ -605,15 +605,15 @@ Implementation evidence:
   test passed in isolation, and the complete Call Engine suite passed at seed `365486` with 244 tests
   and 2 integration exclusions. Removing that obsolete compatibility surface remains part of this
   milestone rather than masking it in the new runtime tests.
-- Checkpoint 4t removes the final Jido test API usage from the 18-scenario definition-driven room
+- Checkpoint 4t removes the final Jido test API usage from the 18-scenario call-spec-driven room
   suite. The archive-outage scenario now proves that Agent Runtime tool execution, live inspection,
   Call Variables, and buffered archive recovery remain independent. The Call Variables scenario
   drives a default-blocking read worker, consumes its private result, starts a separate
   default-blocking update worker, and consumes that result before the final response. Both retain
   the existing room events and archive snapshot attribution.
-- The two focused scenarios, the complete definition-driven suite, and the complete Call Engine
+- The two focused scenarios, the complete call-spec-driven suite, and the complete Call Engine
   suite pass; the latter reports 244 tests with 2 integration exclusions at seed `365486`. The
-  definition-driven module no longer imports or references Jido. Legacy unit and tagged integration
+  call-spec-driven module no longer imports or references Jido. Legacy unit and tagged integration
   tests plus the temporary test configuration still remain before dependency removal. Umbrella
   format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
   `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
@@ -746,7 +746,7 @@ Implementation evidence:
   `CreateRoom` model-inference preset is now text-only, always advertises an empty tool list, and
   classifies buffered or streamed tool responses as invalid without executing or publishing a tool
   lifecycle. The orphaned generic `Tool.Executor` and its tests are deleted. Current tool-enabled
-  definition-driven calls therefore have one execution path: Agent Runtime submits every accepted
+  call-spec-driven calls therefore have one execution path: Agent Runtime submits every accepted
   invocation to an independently supervised Call Engine worker. Focused legacy capability/room
   coverage passes 16 tests; the complete Call Engine suite passes 215 tests with 1 integration
   exclusion at seed `678417`. The Call Engine README, architecture history, and tool-execution
@@ -775,7 +775,7 @@ Implementation evidence:
   `maximum_tool_invocations` and its per-worker deadline `tool_invocation_timeout_ms`. The old
   background-only names were removed rather than retained as aliases because blocking and
   non-blocking bindings always use the same pool. Existing activation, participant, and complete
-  definition-driven startup coverage went red when the focused fixture adopted the new contract,
+  call-spec-driven startup coverage went red when the focused fixture adopted the new contract,
   then passed 24 tests after the runtime graph, plan adapter, and application/test configuration
   changed together.
   The complete Call Engine suite remains green at 221 tests with one tagged integration exclusion.

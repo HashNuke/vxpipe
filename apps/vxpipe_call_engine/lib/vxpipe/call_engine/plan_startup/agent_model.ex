@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModel do
 
   alias Vxpipe.AgentRuntime.{ProviderSelection, Provider.ReqLLM}
   alias Vxpipe.CallEngine.{CredentialSource, ProviderCredential}
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
 
   @derive {Inspect, only: [:model, :provider]}
   @enforce_keys [:model, :provider, :configuration]
@@ -41,7 +41,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModel do
     with {adapter, fixture_options}
          when is_atom(adapter) and adapter != ReqLLM and is_list(fixture_options) <-
            Keyword.get(settings, :fixture),
-         false <- Vxpipe.CallEngine.DefinitionValidation.private_data?(fixture_options),
+         false <- Vxpipe.CallEngine.CallSpecValidation.private_data?(fixture_options),
          {:ok, configuration} <-
            initialize(adapter, Keyword.put(fixture_options, :model, model), options) do
       {:ok, %__MODULE__{model: model, provider: adapter, configuration: configuration}}

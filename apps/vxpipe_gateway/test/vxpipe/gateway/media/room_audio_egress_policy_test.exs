@@ -2,10 +2,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressPolicyTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     ConnectionAttachment,
-    DefinitionCompiler,
+    CallSpecCompiler,
     RoomAudioHandle,
     RoomMixer
   }
@@ -239,10 +239,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressPolicyTest do
     participants =
       put_in(participants["destination"][:while_present], restriction)
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  defaults: %{capabilities: %{}},
@@ -257,7 +257,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressPolicyTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "output-policy", revision: 1},
+                 call_spec: %{id: "output-policy", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -268,7 +268,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressPolicyTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

@@ -1,9 +1,9 @@
-defmodule Mix.Tasks.Vxpipe.Definition.Publish do
+defmodule Mix.Tasks.Vxpipe.CallSpec.Publish do
   use Mix.Task
 
   alias Vxpipe.Persistence.CLI
 
-  @shortdoc "Publishes one validated call-definition revision"
+  @shortdoc "Publishes one validated call-spec revision"
   @requirements ["app.config"]
 
   @impl true
@@ -11,17 +11,17 @@ defmodule Mix.Tasks.Vxpipe.Definition.Publish do
     options =
       CLI.options!(
         arguments,
-        [tenant: :string, definition_id: :string, revision: :string],
-        [:tenant, :definition_id, :revision]
+        [tenant: :string, call_spec_id: :string, revision: :string],
+        [:tenant, :call_spec_id, :revision]
       )
 
     CLI.ensure_ready!()
     revision_number = CLI.positive_integer!(Keyword.fetch!(options, :revision), "revision")
 
     revision =
-      Vxpipe.Calls.publish_definition(
+      Vxpipe.Calls.publish_call_spec(
         Keyword.fetch!(options, :tenant),
-        Keyword.fetch!(options, :definition_id),
+        Keyword.fetch!(options, :call_spec_id),
         revision_number
       )
       |> CLI.unwrap!()

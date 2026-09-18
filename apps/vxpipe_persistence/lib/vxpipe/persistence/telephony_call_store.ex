@@ -6,8 +6,8 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
   alias Ecto.Multi
   alias Vxpipe.Calls.TelephonyAdmissionClaim
   alias Vxpipe.Persistence.PreparedCallRecord
-  alias Vxpipe.Persistence.Schema.{CallDefinition, Tenant}
-  alias Vxpipe.Persistence.Schema.DefinitionRevision, as: StoredRevision
+  alias Vxpipe.Persistence.Schema.{CallSpec, Tenant}
+  alias Vxpipe.Persistence.Schema.CallSpecRevision, as: StoredRevision
   alias Vxpipe.Persistence.Schema.TelephonyLeg, as: StoredTelephonyLeg
 
   @spec claim(module(), TelephonyAdmissionClaim.t(), (-> {:ok, :authorized} | {:error, term()})) ::
@@ -53,14 +53,14 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     multi =
       Multi.new()
       |> Multi.run(:selection, fn repo, _changes ->
-        fetch_selection(repo, call.tenant_key, call.definition_id, call.definition_revision)
+        fetch_selection(repo, call.tenant_key, call.call_spec_id, call.call_spec_revision)
       end)
       |> Multi.run(:credentials, fn _repo, _changes -> authorize.() end)
-      |> Multi.insert(:call, fn %{selection: {tenant, _definition, revision}} ->
+      |> Multi.insert(:call, fn %{selection: {tenant, _call_spec, revision}} ->
         PreparedCallRecord.changeset(call, tenant, revision)
       end)
       |> Multi.insert(:telephony_leg, fn %{
-                                           selection: {tenant, _definition, _revision},
+                                           selection: {tenant, _call_spec, _revision},
                                            call: stored_call
                                          } ->
         leg_changeset(claim, tenant, stored_call)
@@ -87,21 +87,21 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     end
   end
 
-  defp fetch_selection(repo, tenant_key, definition_id, revision_number) do
+  defp fetch_selection(repo, tenant_key, call_spec_id, revision_number) do
     query =
       from(revision in StoredRevision,
-        join: definition in CallDefinition,
-        on: definition.id == revision.call_definition_id,
+        join: call_spec in CallSpec,
+        on: call_spec.id == revision.call_spec_id,
         join: tenant in Tenant,
-        on: tenant.id == definition.tenant_id,
+        on: tenant.id == call_spec.tenant_id,
         where:
-          tenant.key == ^tenant_key and definition.public_id == ^definition_id and
+          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
             revision.revision == ^revision_number,
-        select: {tenant, definition, revision}
+        select: {tenant, call_spec, revision}
       )
 
     case repo.one(query) do
-      nil -> {:error, :definition_revision_not_found}
+      nil -> {:error, :call_spec_revision_not_found}
       selection -> {:ok, selection}
     end
   end
@@ -174,14 +174,14 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
       from(leg in StoredTelephonyLeg,
         join: call in assoc(leg, :call),
         join: tenant in assoc(call, :tenant),
-        join: revision in assoc(call, :definition_revision),
-        join: definition in assoc(revision, :call_definition),
+        join: revision in assoc(call, :call_spec_revision),
+        join: call_spec in assoc(revision, :call_spec),
         where:
           tenant.key == ^claim.call.tenant_key and leg.tenant_id == tenant.id and
             leg.service_id == ^claim.service_id and
             leg.provider == ^Atom.to_string(claim.provider) and
             field(leg, ^field_name) == ^value,
-        select: {leg, call, {tenant, definition, revision}}
+        select: {leg, call, {tenant, call_spec, revision}}
       )
 
     case repo.one(query) do
@@ -236,8 +236,8 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
       from(leg in StoredTelephonyLeg,
         join: call in assoc(leg, :call),
         join: tenant in assoc(call, :tenant),
-        join: revision in assoc(call, :definition_revision),
-        join: definition in assoc(revision, :call_definition),
+        join: revision in assoc(call, :call_spec_revision),
+        join: call_spec in assoc(revision, :call_spec),
         where:
           tenant.key == ^claim.call.tenant_key and leg.tenant_id == tenant.id and
             leg.service_id == ^claim.service_id and
@@ -245,13 +245,13 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
             leg.service == ^claim.service and
             leg.provider_call_leg_id == ^claim.provider_call_leg_id,
         lock: "FOR UPDATE",
-        select: {leg, call, {tenant, definition, revision}}
+        select: {leg, call, {tenant, call_spec, revision}}
       )
 
     repo.one(query)
   end
 
-  defp matching_claim(leg, call, {tenant, _definition, _revision}, claim) do
+  defp matching_claim(leg, call, {tenant, _call_spec, _revision}, claim) do
     if leg.provider_event_id == claim.provider_event_id and
          leg.provider_connection_id == claim.provider_connection_id and
          leg.provider_call_control_id == claim.provider_call_control_id and

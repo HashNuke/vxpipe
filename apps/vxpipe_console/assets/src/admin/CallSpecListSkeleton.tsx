@@ -1,11 +1,11 @@
-export function DefinitionListSkeleton() {
+export function CallSpecListSkeleton() {
   return (
     <div
-      aria-label="Loading call definitions"
+      aria-label="Loading call specs"
       className="animate-pulse motion-reduce:animate-none"
       role="status"
     >
-      <span className="sr-only">Loading call definitions</span>
+      <span className="sr-only">Loading call specs</span>
       <div className="h-10 border-b border-[var(--admin-line)] bg-[var(--admin-panel)]" />
       {[0, 1, 2, 3].map((row) => (
         <div

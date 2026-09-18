@@ -1,12 +1,12 @@
-defmodule Vxpipe.Calls.Definitions do
-  @moduledoc "Definition revision and participant-route workflows."
+defmodule Vxpipe.Calls.CallSpecs do
+  @moduledoc "Call spec revision and participant-route workflows."
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, Error}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, Error}
 
   alias Vxpipe.Calls.{
     CallPlanCompiler,
-    DefinitionCredentials,
-    DefinitionRevision,
+    CallSpecCredentials,
+    CallSpecRevision,
     ParticipantRoute,
     PrivateMaterial,
     PublicId,
@@ -16,7 +16,7 @@ defmodule Vxpipe.Calls.Definitions do
 
   @maximum_attempts 4
 
-  @spec save(String.t(), map(), keyword()) :: {:ok, DefinitionRevision.t()} | {:error, term()}
+  @spec save(String.t(), map(), keyword()) :: {:ok, CallSpecRevision.t()} | {:error, term()}
   def save(tenant_key, source, options \\ [])
 
   def save(tenant_key, source, options) when is_map(source) do
@@ -24,49 +24,49 @@ defmodule Vxpipe.Calls.Definitions do
          {:ok, credential_repository} <- Repositories.fetch(options, :credential_repository),
          {:ok, _tenant} <-
            Repositories.call(credential_repository, :fetch_tenant, [tenant_key]),
-         {:ok, definition_repository} <-
-           Repositories.fetch(options, :definition_repository),
+         {:ok, call_spec_repository} <-
+           Repositories.fetch(options, :call_spec_repository),
          {:ok, source} <- json_safe(source) do
-      definition_id = Keyword.get_lazy(options, :definition_id, fn -> uuid(options) end)
+      call_spec_id = Keyword.get_lazy(options, :call_spec_id, fn -> uuid(options) end)
 
       attempt_save(
-        definition_repository,
+        call_spec_repository,
         tenant_key,
-        definition_id,
+        call_spec_id,
         source,
         options,
         @maximum_attempts
       )
     else
-      true -> {:error, :private_definition_material}
+      true -> {:error, :private_call_spec_material}
       {:error, :not_found} -> {:error, :tenant_not_found}
       {:error, _reason} = error -> error
     end
   end
 
-  def save(_tenant_key, _source, _options), do: {:error, :invalid_definition_source}
+  def save(_tenant_key, _source, _options), do: {:error, :invalid_call_spec_source}
 
   @spec fetch(String.t(), String.t(), pos_integer(), keyword()) ::
-          {:ok, DefinitionRevision.t()} | {:error, term()}
-  def fetch(tenant_key, definition_id, revision, options \\ []) do
-    with {:ok, repository} <- Repositories.fetch(options, :definition_repository) do
-      Repositories.call(repository, :fetch_revision, [tenant_key, definition_id, revision])
+          {:ok, CallSpecRevision.t()} | {:error, term()}
+  def fetch(tenant_key, call_spec_id, revision, options \\ []) do
+    with {:ok, repository} <- Repositories.fetch(options, :call_spec_repository) do
+      Repositories.call(repository, :fetch_revision, [tenant_key, call_spec_id, revision])
     end
   end
 
   @spec publish(String.t(), String.t(), pos_integer(), keyword()) ::
-          {:ok, DefinitionRevision.t()} | {:error, term()}
-  def publish(tenant_key, definition_id, revision, options \\ []) do
-    with {:ok, repository} <- Repositories.fetch(options, :definition_repository),
+          {:ok, CallSpecRevision.t()} | {:error, term()}
+  def publish(tenant_key, call_spec_id, revision, options \\ []) do
+    with {:ok, repository} <- Repositories.fetch(options, :call_spec_repository),
          {:ok, stored} <-
-           Repositories.call(repository, :fetch_revision, [tenant_key, definition_id, revision]),
+           Repositories.call(repository, :fetch_revision, [tenant_key, call_spec_id, revision]),
          :ok <- publishable(stored),
-         {:ok, definition} <-
-           CallDefinition.new(stored.source, resource_id: definition_id, revision: revision) do
-      DefinitionCredentials.with_active(definition, tenant_key, options, fn ->
+         {:ok, call_spec} <-
+           CallSpec.new(stored.source, resource_id: call_spec_id, revision: revision) do
+      CallSpecCredentials.with_active(call_spec, tenant_key, options, fn ->
         Repositories.call(repository, :publish_revision, [
           tenant_key,
-          definition_id,
+          call_spec_id,
           revision,
           now(options)
         ])
@@ -77,7 +77,7 @@ defmodule Vxpipe.Calls.Definitions do
   @spec resolve_route(String.t(), String.t(), keyword()) ::
           {:ok, ParticipantRoute.t()} | {:error, term()}
   def resolve_route(tenant_key, route_key, options \\ []) do
-    with {:ok, repository} <- Repositories.fetch(options, :definition_repository) do
+    with {:ok, repository} <- Repositories.fetch(options, :call_spec_repository) do
       Repositories.call(repository, :resolve_route, [tenant_key, route_key])
     end
   end
@@ -92,7 +92,7 @@ defmodule Vxpipe.Calls.Definitions do
     with :ok <- telephony_scope(scope),
          true <- is_binary(service) and byte_size(service) > 0,
          true <- is_binary(number) and byte_size(number) > 0,
-         {:ok, repository} <- Repositories.fetch(options, :definition_repository) do
+         {:ok, repository} <- Repositories.fetch(options, :call_spec_repository) do
       Repositories.call(repository, :resolve_telephony_route, [scope, service, number])
     else
       false -> {:error, :invalid_telephony_route}
@@ -100,27 +100,27 @@ defmodule Vxpipe.Calls.Definitions do
     end
   end
 
-  defp attempt_save(_repository, _tenant_key, _definition_id, _source, _options, 0),
+  defp attempt_save(_repository, _tenant_key, _call_spec_id, _source, _options, 0),
     do: {:error, :revision_generation_exhausted}
 
-  defp attempt_save(repository, tenant_key, definition_id, source, options, attempts_left) do
+  defp attempt_save(repository, tenant_key, call_spec_id, source, options, attempts_left) do
     with {:ok, revision_number} <-
-           Repositories.call(repository, :next_revision, [tenant_key, definition_id]),
-         {:ok, definition} <-
-           CallDefinition.new(source, resource_id: definition_id, revision: revision_number),
-         :ok <- DefinitionCredentials.check(definition, tenant_key, options) do
-      validation_errors = validate_support(definition, tenant_key, options)
-      routes = participant_routes(definition, tenant_key, options)
-      telephony_routes = telephony_routes(definition, tenant_key)
+           Repositories.call(repository, :next_revision, [tenant_key, call_spec_id]),
+         {:ok, call_spec} <-
+           CallSpec.new(source, resource_id: call_spec_id, revision: revision_number),
+         :ok <- CallSpecCredentials.check(call_spec, tenant_key, options) do
+      validation_errors = validate_support(call_spec, tenant_key, options)
+      routes = participant_routes(call_spec, tenant_key, options)
+      telephony_routes = telephony_routes(call_spec, tenant_key)
 
-      revision = %DefinitionRevision{
+      revision = %CallSpecRevision{
         tenant_key: tenant_key,
-        definition_id: definition_id,
+        call_spec_id: call_spec_id,
         revision: revision_number,
-        schema_version: definition.schema_version,
+        schema_version: call_spec.schema_version,
         source: source,
         source_digest: source_digest(source),
-        compiled_metadata: compiled_metadata(definition),
+        compiled_metadata: compiled_metadata(call_spec),
         validation_errors: validation_errors,
         routes: routes,
         telephony_routes: telephony_routes,
@@ -129,7 +129,7 @@ defmodule Vxpipe.Calls.Definitions do
       }
 
       result =
-        DefinitionCredentials.with_active(definition, tenant_key, options, fn ->
+        CallSpecCredentials.with_active(call_spec, tenant_key, options, fn ->
           Repositories.call(repository, :insert_revision, [tenant_key, revision, routes])
         end)
 
@@ -138,7 +138,7 @@ defmodule Vxpipe.Calls.Definitions do
           attempt_save(
             repository,
             tenant_key,
-            definition_id,
+            call_spec_id,
             source,
             options,
             attempts_left - 1
@@ -150,9 +150,9 @@ defmodule Vxpipe.Calls.Definitions do
     end
   end
 
-  defp validate_support(definition, tenant_key, options) do
+  defp validate_support(call_spec, tenant_key, options) do
     invocation_input = %{
-      call_definition: %{id: definition.resource_id, revision: definition.revision},
+      call_spec: %{id: call_spec.resource_id, revision: call_spec.revision},
       initial_variables: %{},
       transport: %{type: "web"}
     }
@@ -160,11 +160,11 @@ defmodule Vxpipe.Calls.Definitions do
     with {:ok, invocation} <-
            CallInvocation.new(invocation_input,
              tenant_id: tenant_key,
-             actor_id: "definition-validation",
-             call_id: "definition-validation-call",
-             room_id: "definition-validation-room"
+             actor_id: "call_spec-validation",
+             call_id: "call_spec-validation-call",
+             room_id: "call_spec-validation-room"
            ),
-         {:ok, _plan} <- CallPlanCompiler.compile(definition, invocation, options) do
+         {:ok, _plan} <- CallPlanCompiler.compile(call_spec, invocation, options) do
       []
     else
       {:error, %Error{} = error} -> [Error.to_public(error)]
@@ -172,8 +172,8 @@ defmodule Vxpipe.Calls.Definitions do
     end
   end
 
-  defp participant_routes(definition, tenant_key, options) do
-    definition.participants
+  defp participant_routes(call_spec, tenant_key, options) do
+    call_spec.participants
     |> Enum.filter(fn {_ref, participant} ->
       participant.connection && participant.connection.service == :web
     end)
@@ -181,8 +181,8 @@ defmodule Vxpipe.Calls.Definitions do
       %ParticipantRoute{
         key: uuid(options),
         tenant_key: tenant_key,
-        definition_id: definition.resource_id,
-        definition_revision: definition.revision,
+        call_spec_id: call_spec.resource_id,
+        call_spec_revision: call_spec.revision,
         participant_ref: participant_ref,
         published_at: nil
       }
@@ -190,16 +190,16 @@ defmodule Vxpipe.Calls.Definitions do
     |> Enum.sort_by(& &1.participant_ref)
   end
 
-  defp telephony_routes(definition, tenant_key) do
-    definition.participants
+  defp telephony_routes(call_spec, tenant_key) do
+    call_spec.participants
     |> Enum.filter(fn {_ref, participant} -> inbound_telephony?(participant.connection) end)
     |> Enum.map(fn {participant_ref, participant} ->
       connection = participant.connection
 
       %TelephonyRoute{
         tenant_key: tenant_key,
-        definition_id: definition.resource_id,
-        definition_revision: definition.revision,
+        call_spec_id: call_spec.resource_id,
+        call_spec_revision: call_spec.revision,
         participant_ref: participant_ref,
         service: connection.service,
         number: connection.number,
@@ -223,9 +223,9 @@ defmodule Vxpipe.Calls.Definitions do
   defp telephony_scope({:tenant, tenant_key}) when is_binary(tenant_key), do: :ok
   defp telephony_scope(_invalid), do: {:error, :invalid_telephony_route}
 
-  defp compiled_metadata(definition) do
+  defp compiled_metadata(call_spec) do
     participants =
-      Map.new(definition.participants, fn {ref, participant} ->
+      Map.new(call_spec.participants, fn {ref, participant} ->
         connection =
           if participant.connection do
             connection_metadata(participant.connection)
@@ -239,10 +239,10 @@ defmodule Vxpipe.Calls.Definitions do
       end)
 
     %{
-      "entry_caller" => definition.entry_caller,
-      "entry_receiver" => definition.entry_receiver,
+      "entry_caller" => call_spec.entry_caller,
+      "entry_receiver" => call_spec.entry_receiver,
       "participants" => participants,
-      "schema_version" => definition.schema_version
+      "schema_version" => call_spec.schema_version
     }
   end
 
@@ -281,14 +281,14 @@ defmodule Vxpipe.Calls.Definitions do
       |> JSON.encode!()
       |> JSON.decode()
     rescue
-      _error -> {:error, :invalid_definition_source}
+      _error -> {:error, :invalid_call_spec_source}
     end
   end
 
-  defp publishable(%DefinitionRevision{validation_errors: []}), do: :ok
+  defp publishable(%CallSpecRevision{validation_errors: []}), do: :ok
 
-  defp publishable(%DefinitionRevision{validation_errors: errors}),
-    do: {:error, {:definition_not_publishable, errors}}
+  defp publishable(%CallSpecRevision{validation_errors: errors}),
+    do: {:error, {:call_spec_not_publishable, errors}}
 
   defp now(options), do: Keyword.get_lazy(options, :now, &DateTime.utc_now/0)
 

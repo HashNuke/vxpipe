@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.MediaPolicy, as: DefinitionPolicy
+  alias Vxpipe.CallEngine.CallSpec.MediaPolicy, as: CallSpecPolicy
 
   @enforce_keys [:audio_routes, :transcript_routes, :record_audio, :save_transcripts]
   defstruct @enforce_keys
@@ -16,8 +16,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy do
           save_transcripts: permission()
         }
 
-  @spec resolve(DefinitionPolicy.t(), %{String.t() => String.t()}) :: {:ok, t()} | :error
-  def resolve(%DefinitionPolicy{} = policy, participant_ids) when is_map(participant_ids) do
+  @spec resolve(CallSpecPolicy.t(), %{String.t() => String.t()}) :: {:ok, t()} | :error
+  def resolve(%CallSpecPolicy{} = policy, participant_ids) when is_map(participant_ids) do
     with {:ok, audio_routes} <- resolve_routes(policy.audio_routes, participant_ids),
          {:ok, transcript_routes} <- resolve_routes(policy.transcript_routes, participant_ids),
          :ok <- validate_permission(policy.record_audio),

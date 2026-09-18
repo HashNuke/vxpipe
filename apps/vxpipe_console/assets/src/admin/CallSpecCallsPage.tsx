@@ -4,7 +4,7 @@ import { AdminShell } from "./AdminShell";
 import { CallList } from "./CallList";
 import { CallListSkeleton } from "./CallListSkeleton";
 import { CallSpecCombobox } from "./CallSpecCombobox";
-import type { DefinitionCallsPageState } from "./callTypes";
+import type { CallSpecCallsPageState } from "./callTypes";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
 import {
@@ -12,13 +12,13 @@ import {
   type TenantDestination,
 } from "./TenantWorkspaceNavigation";
 
-export function DefinitionCallsPage({
+export function CallSpecCallsPage({
   state,
   theme = "dark",
   onSelectTenants,
   onSelectTenant,
   onSelectWorkspace,
-  onSelectDefinition,
+  onSelectCallSpec,
   callHref,
   onPreviousPage,
   onNextPage,
@@ -26,12 +26,12 @@ export function DefinitionCallsPage({
   workspaceDestinations,
   linkCallDetails,
 }: {
-  state: DefinitionCallsPageState;
+  state: CallSpecCallsPageState;
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectTenant?: () => void;
   onSelectWorkspace?: (destination: TenantDestination) => void;
-  onSelectDefinition?: (definitionId: string | null) => void;
+  onSelectCallSpec?: (callSpecId: string | null) => void;
   callHref?: (callId: string) => string;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
@@ -39,11 +39,11 @@ export function DefinitionCallsPage({
   workspaceDestinations?: TenantDestination[];
   linkCallDetails?: boolean;
 }) {
-  const selectedDefinition = state.selectedDefinitionId
-    ? state.definitions.find(({ id }) => id === state.selectedDefinitionId)
+  const selectedCallSpec = state.selectedCallSpecId
+    ? state.callSpecs.find(({ id }) => id === state.selectedCallSpecId)
     : null;
   const unknownFilter = Boolean(
-    state.selectedDefinitionId && !selectedDefinition,
+    state.selectedCallSpecId && !selectedCallSpec,
   );
 
   return (
@@ -74,23 +74,23 @@ export function DefinitionCallsPage({
           <div className="grid w-full min-w-0 max-w-full gap-1.5 text-xs font-semibold text-[var(--admin-muted)] sm:w-80">
             <span>Call spec</span>
             <CallSpecCombobox
-              onSelect={onSelectDefinition}
-              options={state.definitions}
-              selectedId={state.selectedDefinitionId}
+              onSelect={onSelectCallSpec}
+              options={state.callSpecs}
+              selectedId={state.selectedCallSpecId}
               unknownSelection={unknownFilter}
             />
           </div>
           <button
             className="h-10 rounded-sm border border-[var(--admin-line)] bg-transparent px-3 text-sm font-semibold text-[var(--admin-muted)] hover:bg-[var(--admin-soft)] hover:text-[var(--admin-ink)] disabled:opacity-40"
-            disabled={!state.selectedDefinitionId}
-            onClick={() => onSelectDefinition?.(null)}
+            disabled={!state.selectedCallSpecId}
+            onClick={() => onSelectCallSpec?.(null)}
             type="button"
           >
             Show all calls
           </button>
-          {state.definitionOptionsTruncated ? (
+          {state.callSpecsTruncated ? (
             <p className="basis-full text-xs text-[var(--admin-muted)]">
-              Showing the first 100 call specs. Open Call definitions to find
+              Showing the first 100 call specs. Open Call specs to find
               another.
             </p>
           ) : null}
@@ -117,11 +117,11 @@ export function DefinitionCallsPage({
             <PageNotice
               kind="empty"
               message={
-                selectedDefinition
+                selectedCallSpec
                   ? "Calls using this call spec will appear here."
                   : "Calls for this tenant will appear here."
               }
-              title={selectedDefinition ? "No matching calls" : "No calls yet"}
+              title={selectedCallSpec ? "No matching calls" : "No calls yet"}
             />
           ) : null}
           {state.status === "ready" &&

@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
 
   alias Vxpipe.Calls.{
     Administration,
-    Definitions,
+    CallSpecs,
     InstallationOperator,
     ProviderCredentials,
     TelephonyServices
@@ -15,7 +15,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     AdminStore,
     CredentialKeyring,
     CredentialStore,
-    DefinitionStore,
+    CallSpecStore,
     ProviderCredentialStore,
     Repo,
     TelephonyServiceStore
@@ -23,9 +23,9 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
 
   alias Vxpipe.Persistence.Schema.{
     Call,
-    CallDefinition,
+    CallSpec,
     CallDetailsPublication,
-    DefinitionRevision,
+    CallSpecRevision,
     ProviderCredential,
     Tenant
   }
@@ -73,7 +73,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
              AdminStore.list_tenants(TestUnavailableAdminRepo, 25, 0)
 
     assert {:error, :repository_unavailable} =
-             AdminStore.list_definitions(TestUnavailableAdminRepo, "AAAAAAAAAAAAAAAA", 25, 0)
+             AdminStore.list_call_specs(TestUnavailableAdminRepo, "AAAAAAAAAAAAAAAA", 25, 0)
 
     assert {:error, :repository_unavailable} =
              AdminStore.list_calls(TestUnavailableAdminRepo, "AAAAAAAAAAAAAAAA", nil, 25, 0)
@@ -200,10 +200,10 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert List.last(credentials).name == "credential-100"
   end
 
-  test "lists one tenant's definitions with latest and published versions and call totals" do
+  test "lists one tenant's call_specs with latest and published versions and call totals" do
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       tenant_key_generator: fn -> "AAAAAAAAAAAAAAAA" end,
       api_key_generator: fn -> "vxp_test-secret-value" end,
       uuid_generator:
@@ -226,18 +226,18 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
         Vxpipe.Calls.TestTelephonyServiceRepository.repository([tenant])
       )
 
-    assert {:ok, first} = Definitions.save(tenant.key, definition_input("First name"), options)
-    assert {:ok, _published} = Definitions.publish(tenant.key, first.definition_id, 1, options)
+    assert {:ok, first} = CallSpecs.save(tenant.key, call_spec_input("First name"), options)
+    assert {:ok, _published} = CallSpecs.publish(tenant.key, first.call_spec_id, 1, options)
 
     assert {:ok, second} =
-             Definitions.save(
+             CallSpecs.save(
                tenant.key,
-               definition_input("Current name"),
-               Keyword.put(options, :definition_id, first.definition_id)
+               call_spec_input("Current name"),
+               Keyword.put(options, :call_spec_id, first.call_spec_id)
              )
 
-    definition = Repo.get_by!(CallDefinition, public_id: first.definition_id)
-    revision = Repo.get_by!(DefinitionRevision, call_definition_id: definition.id, revision: 2)
+    call_spec = Repo.get_by!(CallSpec, public_id: first.call_spec_id)
+    revision = Repo.get_by!(CallSpecRevision, call_spec_id: call_spec.id, revision: 2)
 
     Repo.insert!(
       Call.changeset(%Call{}, %{
@@ -251,17 +251,17 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
         state: :prepared,
         room_id: "33333333-3333-4333-8333-333333333333",
         created_at: ~U[2026-09-17 04:00:00Z],
-        tenant_id: definition.tenant_id,
-        definition_revision_id: revision.id
+        tenant_id: call_spec.tenant_id,
+        call_spec_revision_id: revision.id
       })
     )
 
     assert {:ok, {listed_tenant, [summary], 1}} =
-             AdminStore.list_definitions(Repo, tenant.key, 25, 0)
+             AdminStore.list_call_specs(Repo, tenant.key, 25, 0)
 
     assert listed_tenant.key == tenant.key
     assert listed_tenant.name == "Example tenant"
-    assert summary.id == first.definition_id
+    assert summary.id == first.call_spec_id
     assert summary.name == "Current name"
     assert summary.latest_revision == second.revision
     assert summary.published_revision == 1
@@ -269,23 +269,23 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert summary.updated_at == second.inserted_at
 
     assert {:ok, {^listed_tenant, [], 1}} =
-             AdminStore.list_definitions(Repo, tenant.key, 25, 25)
+             AdminStore.list_call_specs(Repo, tenant.key, 25, 25)
 
     assert {:error, :tenant_not_found} =
-             AdminStore.list_definitions(Repo, "BBBBBBBBBBBBBBBB", 25, 0)
+             AdminStore.list_call_specs(Repo, "BBBBBBBBBBBBBBBB", 25, 0)
   end
 
-  test "lists tenant calls across immutable definition revisions with exact filtering" do
+  test "lists tenant calls across immutable call spec revisions with exact filtering" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
     other_tenant = insert_tenant("BBBBBBBBBBBBBBBB", "Other tenant")
 
-    definition = insert_definition(tenant, "delivery-rescheduling")
-    old_revision = insert_revision(definition, 1, "Original delivery name")
-    current_revision = insert_revision(definition, 2, "Delivery rescheduling")
-    other_definition = insert_definition(tenant, "appointment-reminders")
-    reminder_revision = insert_revision(other_definition, 1, "Appointment reminders")
-    foreign_definition = insert_definition(other_tenant, "foreign-definition")
-    foreign_revision = insert_revision(foreign_definition, 1, "Foreign definition")
+    call_spec = insert_call_spec(tenant, "delivery-rescheduling")
+    old_revision = insert_revision(call_spec, 1, "Original delivery name")
+    current_revision = insert_revision(call_spec, 2, "Delivery rescheduling")
+    other_call_spec = insert_call_spec(tenant, "appointment-reminders")
+    reminder_revision = insert_revision(other_call_spec, 1, "Appointment reminders")
+    foreign_call_spec = insert_call_spec(other_tenant, "foreign-call-spec")
+    foreign_revision = insert_revision(foreign_call_spec, 1, "Foreign call spec")
 
     older =
       insert_call(
@@ -326,20 +326,20 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     attach_publication(older, :complete, "complete-publication")
     attach_publication(reminder, :incomplete, "incomplete-publication")
 
-    assert {:ok, {listed_tenant, definitions, false, calls, 2}} =
-             AdminStore.list_calls(Repo, tenant.key, definition.public_id, 25, 0)
+    assert {:ok, {listed_tenant, call_specs, false, calls, 2}} =
+             AdminStore.list_calls(Repo, tenant.key, call_spec.public_id, 25, 0)
 
     assert listed_tenant.key == tenant.key
 
-    assert Enum.map(definitions, &{&1.id, &1.name}) == [
+    assert Enum.map(call_specs, &{&1.id, &1.name}) == [
              {"appointment-reminders", "Appointment reminders"},
              {"delivery-rescheduling", "Delivery rescheduling"}
            ]
 
     assert Enum.map(calls, & &1.id) == [newer.public_id, older.public_id]
-    assert Enum.map(calls, & &1.definition_revision) == [2, 1]
+    assert Enum.map(calls, & &1.call_spec_revision) == [2, 1]
 
-    assert Enum.map(calls, & &1.definition_name) == [
+    assert Enum.map(calls, & &1.call_spec_name) == [
              "Delivery rescheduling",
              "Original delivery name"
            ]
@@ -350,8 +350,8 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
              AdminStore.fetch_call_context(Repo, tenant.key, newer.public_id)
 
     assert selected_call.id == newer.public_id
-    assert selected_call.definition_name == "Delivery rescheduling"
-    assert selected_call.definition_revision == 2
+    assert selected_call.call_spec_name == "Delivery rescheduling"
+    assert selected_call.call_spec_revision == 2
 
     assert {:error, :call_not_found} =
              AdminStore.fetch_call_context(
@@ -360,41 +360,41 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
                "44444444-4444-4444-8444-444444444444"
              )
 
-    assert {:ok, {^listed_tenant, _definitions, false, all_calls, 3}} =
+    assert {:ok, {^listed_tenant, _call_specs, false, all_calls, 3}} =
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 0)
 
     assert Enum.map(all_calls, & &1.id) == [newer.public_id, older.public_id, reminder.public_id]
     assert List.last(all_calls).archive_state == :incomplete
 
-    assert {:ok, {^listed_tenant, _definitions, false, [], 3}} =
+    assert {:ok, {^listed_tenant, _call_specs, false, [], 3}} =
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 25)
 
-    assert {:error, :definition_not_found} =
-             AdminStore.list_calls(Repo, tenant.key, foreign_definition.public_id, 25, 0)
+    assert {:error, :call_spec_not_found} =
+             AdminStore.list_calls(Repo, tenant.key, foreign_call_spec.public_id, 25, 0)
 
     assert {:error, :tenant_not_found} =
              AdminStore.list_calls(Repo, "CCCCCCCCCCCCCCCC", nil, 25, 0)
   end
 
-  test "bounds definition filter options and reports truncation without breaking a deep link" do
+  test "bounds call spec filter options and reports truncation without breaking a deep link" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
 
     for number <- 1..101 do
-      public_id = "definition-#{String.pad_leading(Integer.to_string(number), 3, "0")}"
-      definition = insert_definition(tenant, public_id)
-      insert_revision(definition, 1, "Definition #{number}")
+      public_id = "call-spec-#{String.pad_leading(Integer.to_string(number), 3, "0")}"
+      call_spec = insert_call_spec(tenant, public_id)
+      insert_revision(call_spec, 1, "Call spec #{number}")
     end
 
-    assert {:ok, {_tenant, definitions, true, [], 0}} =
+    assert {:ok, {_tenant, call_specs, true, [], 0}} =
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 0)
 
-    assert length(definitions) == 100
-    refute Enum.any?(definitions, &(&1.id == "definition-099"))
+    assert length(call_specs) == 100
+    refute Enum.any?(call_specs, &(&1.id == "call-spec-099"))
 
-    assert {:ok, {_tenant, selected_definitions, true, [], 0}} =
-             AdminStore.list_calls(Repo, tenant.key, "definition-099", 25, 0)
+    assert {:ok, {_tenant, selected_call_specs, true, [], 0}} =
+             AdminStore.list_calls(Repo, tenant.key, "call-spec-099", 25, 0)
 
-    assert Enum.any?(selected_definitions, &(&1.id == "definition-099"))
+    assert Enum.any?(selected_call_specs, &(&1.id == "call-spec-099"))
   end
 
   defp sequence(values) do
@@ -408,7 +408,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     end
   end
 
-  defp definition_input(name) do
+  defp call_spec_input(name) do
     %{
       schema_version: "20260915.01",
       name: name,
@@ -436,16 +436,16 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     |> Repo.insert!()
   end
 
-  defp insert_definition(tenant, public_id) do
-    %CallDefinition{}
-    |> CallDefinition.changeset(%{tenant_id: tenant.id, public_id: public_id})
+  defp insert_call_spec(tenant, public_id) do
+    %CallSpec{}
+    |> CallSpec.changeset(%{tenant_id: tenant.id, public_id: public_id})
     |> Repo.insert!()
   end
 
-  defp insert_revision(definition, revision, name) do
-    %DefinitionRevision{}
-    |> DefinitionRevision.changeset(%{
-      call_definition_id: definition.id,
+  defp insert_revision(call_spec, revision, name) do
+    %CallSpecRevision{}
+    |> CallSpecRevision.changeset(%{
+      call_spec_id: call_spec.id,
       revision: revision,
       schema_version: "20260915.01",
       source: %{"name" => name},
@@ -477,7 +477,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
       ended_at: ended_at,
       terminal_reason: terminal_reason,
       tenant_id: tenant.id,
-      definition_revision_id: revision.id
+      call_spec_revision_id: revision.id
     })
     |> Repo.insert!()
   end

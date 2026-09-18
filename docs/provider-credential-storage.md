@@ -2,7 +2,7 @@
 
 Trusted operators can provision Google, Deepgram, Zenmux and Telnyx API keys, plus Twilio Account
 SID/Auth Token credentials, in PostgreSQL and list their metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
-Inline Google/Deepgram/Zenmux definitions now resolve this store at save, publication, preparation
+Inline Google/Deepgram/Zenmux call specs now resolve this store at save, publication, preparation
 and capability creation; see [inline selections](inline-provider-selections.md). Telnyx credential
 provisioning and trusted Telnyx/Twilio service registration are available; live carrier DB readers
 remain checkpoints 3 and 4 work.
@@ -86,7 +86,7 @@ management endpoint must enforce its own authenticated tenant/admin boundary.
 
 Set `VXPIPE_DEV_TENANT=TENANT_KEY` alongside the platform keyring and database settings,
 then run `bin/dev` (which loads `.env`) or `mix run --no-halt` (which uses exported variables).
-The Console saves and publishes its inline Google/Deepgram definition for that tenant,
+The Console saves and publishes its inline Google/Deepgram call spec for that tenant,
 then issues a server-held call-scoped API key. It does not create another tenant on restart
 or copy provider keys from the environment. Without a selected tenant the managed sample
 is disabled; missing or unreadable bindings prevent sample setup and call creation.

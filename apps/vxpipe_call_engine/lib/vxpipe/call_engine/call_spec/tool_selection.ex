@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
+defmodule Vxpipe.CallEngine.CallSpec.ToolSelection do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @enforce_keys [:name, :type, :tool, :conversation_mode]
   defstruct @enforce_keys ++ [:integration]
@@ -15,31 +15,31 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
         }
 
   def new(name, value, path) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
-    with {:ok, name} <- DefinitionValidation.identifier(name, code, message, path),
+    with {:ok, name} <- CallSpecValidation.identifier(name, code, message, path),
          :ok <- reject_reserved(name, code, message, path),
          {:ok, input} <-
-           DefinitionValidation.normalize_map(
+           CallSpecValidation.normalize_map(
              value,
              [:type, :tool, :integration, :conversation_mode],
              code,
              message,
              path
            ),
-         {:ok, type_input} <- DefinitionValidation.fetch(input, :type, code, message, path),
+         {:ok, type_input} <- CallSpecValidation.fetch(input, :type, code, message, path),
          {:ok, type} <-
-           DefinitionValidation.enum(
+           CallSpecValidation.enum(
              type_input,
              [host: "host", mcp: "mcp", platform: "platform"],
              code,
              message,
              path ++ ["type"]
            ),
-         {:ok, tool_input} <- DefinitionValidation.fetch(input, :tool, code, message, path),
+         {:ok, tool_input} <- CallSpecValidation.fetch(input, :tool, code, message, path),
          {:ok, tool} <-
-           DefinitionValidation.identifier(tool_input, code, message, path ++ ["tool"]),
+           CallSpecValidation.identifier(tool_input, code, message, path ++ ["tool"]),
          {:ok, conversation_mode} <- conversation_mode(input, code, message, path),
          {:ok, integration} <- integration(type, input, code, message, path) do
       {:ok,
@@ -54,7 +54,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
   end
 
   defp conversation_mode(input, code, message, path) do
-    DefinitionValidation.enum(
+    CallSpecValidation.enum(
       Map.get(input, :conversation_mode, "blocking"),
       [blocking: "blocking", non_blocking: "non_blocking"],
       code,
@@ -64,14 +64,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
   end
 
   defp integration(:mcp, input, code, message, path) do
-    with {:ok, value} <- DefinitionValidation.fetch(input, :integration, code, message, path) do
-      DefinitionValidation.identifier(value, code, message, path ++ ["integration"])
+    with {:ok, value} <- CallSpecValidation.fetch(input, :integration, code, message, path) do
+      CallSpecValidation.identifier(value, code, message, path ++ ["integration"])
     end
   end
 
   defp integration(type, input, code, message, path) when type in [:host, :platform] do
     if Map.has_key?(input, :integration) do
-      DefinitionValidation.invalid(
+      CallSpecValidation.invalid(
         code,
         message,
         path ++ ["integration"],
@@ -84,7 +84,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
 
   defp reject_reserved(name, code, message, path)
        when name in ["transfer", "read_variables", "update_variables", "update_variable"] do
-    DefinitionValidation.invalid(code, message, path, "collides with a platform tool name")
+    CallSpecValidation.invalid(code, message, path, "collides with a platform tool name")
   end
 
   defp reject_reserved(_name, _code, _message, _path), do: :ok

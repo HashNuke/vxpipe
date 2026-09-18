@@ -4,8 +4,8 @@ import { parseAdminCallDetails } from "./adminCallDetailsApi";
 
 export const adminCallDetailsResponse = (state: "running" | "ended" = "running") => ({
   tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
-  definition: { id: "delivery-rescheduling", name: "Delivery rescheduling" },
-  definition_revision: 3,
+  call_spec: { id: "delivery-rescheduling", name: "Delivery rescheduling" },
+  call_spec_revision: 3,
   inspection: {
     schema_version: 1,
     call: {
@@ -36,11 +36,11 @@ test("validates call details context and inspection snapshot", () => {
   const parsed = parseAdminCallDetails(adminCallDetailsResponse());
 
   expect(parsed.tenant).toEqual({ key: "AAAAAAAAAAAAAAAA", name: "Example tenant" });
-  expect(parsed.definition).toEqual({
+  expect(parsed.callSpec).toEqual({
     id: "delivery-rescheduling",
     name: "Delivery rescheduling",
   });
-  expect(parsed.definitionRevision).toBe(3);
+  expect(parsed.callSpecRevision).toBe(3);
   expect(parsed.snapshot.call.id).toBe("call-public-id");
   expect(parsed.snapshot.completeness.state).toBe("unconfirmed");
 });
@@ -48,7 +48,7 @@ test("validates call details context and inspection snapshot", () => {
 test("rejects malformed context and inspection data", () => {
   const valid = adminCallDetailsResponse();
 
-  expect(() => parseAdminCallDetails({ ...valid, definition_revision: 0 })).toThrow(
+  expect(() => parseAdminCallDetails({ ...valid, call_spec_revision: 0 })).toThrow(
     "Invalid admin call details response",
   );
   expect(() =>

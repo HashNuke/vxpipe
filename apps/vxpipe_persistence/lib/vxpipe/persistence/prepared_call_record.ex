@@ -10,7 +10,7 @@ defmodule Vxpipe.Persistence.PreparedCallRecord do
     Call.changeset(%Call{}, %{
       public_id: call.id,
       tenant_id: tenant.id,
-      definition_revision_id: revision.id,
+      call_spec_revision_id: revision.id,
       participant_routes: call.participant_routes,
       entry_caller: call.entry_caller,
       entry_receiver: call.entry_receiver,
@@ -29,14 +29,14 @@ defmodule Vxpipe.Persistence.PreparedCallRecord do
 
   @spec load(Call.t(), {struct(), struct(), struct()}) ::
           {:ok, PreparedCall.t()} | {:error, term()}
-  def load(call, {tenant, definition, revision}) do
+  def load(call, {tenant, call_spec, revision}) do
     with {:ok, plan} <- ResolvedPlanCodec.decode(call.resolved_plan) do
       {:ok,
        %PreparedCall{
          id: call.public_id,
          tenant_key: tenant.key,
-         definition_id: definition.public_id,
-         definition_revision: revision.revision,
+         call_spec_id: call_spec.public_id,
+         call_spec_revision: revision.revision,
          schema_version: revision.schema_version,
          participant_routes: call.participant_routes,
          entry_caller: call.entry_caller,

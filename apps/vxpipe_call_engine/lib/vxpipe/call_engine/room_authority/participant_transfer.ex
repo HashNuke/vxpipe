@@ -67,7 +67,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     destination =
       Map.fetch!(
         state.participant_transfer_runtime.plan.participants,
-        request.destination_definition_key
+        request.destination_call_spec_key
       )
 
     initial_messages = projected_history(state.spoken_history, destination)

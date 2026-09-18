@@ -17,8 +17,8 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
 
   alias Vxpipe.Persistence.Schema.{
     Call,
-    CallDefinition,
-    DefinitionRevision,
+    CallSpec,
+    CallSpecRevision,
     Tenant,
     UsageAmount,
     UsageObservation
@@ -315,15 +315,15 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
       |> Tenant.changeset(%{key: @tenant_key, name: "Usage projection tenant"})
       |> Repo.insert!()
 
-    definition =
-      %CallDefinition{}
-      |> CallDefinition.changeset(%{tenant_id: tenant.id, public_id: "usage-definition"})
+    call_spec =
+      %CallSpec{}
+      |> CallSpec.changeset(%{tenant_id: tenant.id, public_id: "usage-call-spec"})
       |> Repo.insert!()
 
     revision =
-      %DefinitionRevision{}
-      |> DefinitionRevision.changeset(%{
-        call_definition_id: definition.id,
+      %CallSpecRevision{}
+      |> CallSpecRevision.changeset(%{
+        call_spec_id: call_spec.id,
         revision: 1,
         schema_version: "20260912.01",
         source: %{},
@@ -337,7 +337,7 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     |> Call.changeset(%{
       public_id: @call_id,
       tenant_id: tenant.id,
-      definition_revision_id: revision.id,
+      call_spec_revision_id: revision.id,
       participant_routes: %{},
       entry_caller: "caller",
       entry_receiver: "assistant",

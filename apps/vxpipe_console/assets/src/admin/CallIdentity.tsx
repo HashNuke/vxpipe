@@ -1,16 +1,16 @@
 export function CallIdentity({
   callId,
-  definitionRevision,
+  callSpecRevision,
 }: {
   callId: string;
-  definitionRevision: number | null;
+  callSpecRevision: number | null;
 }) {
   return (
     <span
       className="block truncate font-mono text-xs text-[var(--admin-muted)]"
       title={callId}
     >
-      {definitionRevision !== null ? `v${definitionRevision} · ` : null}
+      {callSpecRevision !== null ? `v${callSpecRevision} · ` : null}
       <code>{callId}</code>
     </span>
   );

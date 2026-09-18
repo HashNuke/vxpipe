@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.MediaPolicyAdmissionFailureTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     Error,
     RoomMixer,
     TranscriptRouter
@@ -72,7 +72,7 @@ defmodule Vxpipe.CallEngine.MediaPolicyAdmissionFailureTest do
     room_id = unique_id("room-policy-failure")
 
     input = %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -97,13 +97,13 @@ defmodule Vxpipe.CallEngine.MediaPolicyAdmissionFailureTest do
       limits: %{max_duration_ms: 30_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: resource_id, revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -114,7 +114,7 @@ defmodule Vxpipe.CallEngine.MediaPolicyAdmissionFailureTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

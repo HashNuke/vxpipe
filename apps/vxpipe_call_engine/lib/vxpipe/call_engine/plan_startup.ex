@@ -1,8 +1,8 @@
 defmodule Vxpipe.CallEngine.PlanStartup do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
-  alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.ConnectionIntent
   alias Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
@@ -171,7 +171,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       )
       when is_list(options) do
     unsupported(
-      ["participants", participant.definition_key, "type"],
+      ["participants", participant.call_spec_key, "type"],
       "must be an agent participant"
     )
   end
@@ -220,7 +220,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         _options
       ) do
     unsupported(
-      ["participants", participant.definition_key, "connection"],
+      ["participants", participant.call_spec_key, "connection"],
       "must be a supported receive/transfer or dial/transfer human participant"
     )
   end
@@ -237,10 +237,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp entry_participant(plan, field, definition_key, expected_kinds) do
+  defp entry_participant(plan, field, call_spec_key, expected_kinds) do
     expected_kinds = List.wrap(expected_kinds)
 
-    case Map.fetch(plan.participants, definition_key) do
+    case Map.fetch(plan.participants, call_spec_key) do
       {:ok, %ResolvedCallPlan.Participant{} = participant} ->
         if participant.kind in expected_kinds,
           do: {:ok, participant},
@@ -310,7 +310,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp supported_connection(caller) do
     unsupported(
-      ["participants", caller.definition_key, "connection"],
+      ["participants", caller.call_spec_key, "connection"],
       "must be a supported receive/start_call connection intent"
     )
   end
@@ -331,7 +331,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp supported_first_message(receiver) do
     unsupported(
-      ["participants", receiver.definition_key, "first_message", "mode"],
+      ["participants", receiver.call_spec_key, "first_message", "mode"],
       "must be a supported first-message mode"
     )
   end
@@ -391,7 +391,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
       {:error, _error} ->
         unsupported(
-          ["participants", participant.definition_key],
+          ["participants", participant.call_spec_key],
           "cannot be converted to a runtime participant"
         )
     end
@@ -535,7 +535,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       receiver.capabilities.text_to_speech,
       receiver,
       options,
-      ["participants", receiver.definition_key, "capabilities", "text_to_speech"]
+      ["participants", receiver.call_spec_key, "capabilities", "text_to_speech"]
     )
   end
 
@@ -650,7 +650,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp authenticate_speech(_options, _credential), do: {:error, :unsupported_provider_auth}
 
   defp current_plan(plan) do
-    if plan.schema_version == Vxpipe.CallEngine.CallDefinition.schema_version() do
+    if plan.schema_version == Vxpipe.CallEngine.CallSpec.schema_version() do
       validate_planned_selections(plan)
     else
       unsupported(["schema_version"], "must use the current inline capability schema")
@@ -705,7 +705,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp unsupported_speech_configuration(participant, kind) do
     unsupported(
-      ["participants", participant.definition_key, "capabilities", Atom.to_string(kind)],
+      ["participants", participant.call_spec_key, "capabilities", Atom.to_string(kind)],
       "must select a supported inline capability with available tenant credentials"
     )
   end

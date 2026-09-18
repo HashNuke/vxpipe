@@ -1,4 +1,4 @@
-# Call-definition implementation milestones
+# Call Spec implementation milestones
 
 Status: 31 milestone specifications: 23 complete and 8 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
@@ -57,7 +57,7 @@ Getting Started/examples. The debug
 console now has a database-backed read-only production host; its live interaction work and the
 other three milestones remain. The operator-admin Storybook is complete and approved. The operator
 login/admin milestone has **4 of 7 checkpoints complete**: durable login-challenge issuance, the
-installation-operator browser exchange, tenant browsing and definition browsing are available;
+installation-operator browser exchange, tenant browsing and call spec browsing are available;
 call, service and call-detail integration remains. The console builds on current tenant
 admission and RTVI/Vxpipe extensions, so it does not wait for platform keys. The home retains setup tracking and
 per-example readiness; the same image defaults to production behavior, with proposed
@@ -86,8 +86,8 @@ Implement in the order below. Product/operator entries describe runnable vertica
 the standalone MCP client/conformance entry is an enabling checkpoint for its live-call
 slice, not an end-to-end call feature. Dependencies inside a milestone are its direct prerequisites;
 the list gives a conservative total order, even where independent work is possible.
-Read the [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
-[decision register](../call-definition-gap-review.md), and [architecture](../architecture.md).
+Read the [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
+[decision register](../call-spec-gap-review.md), and [architecture](../architecture.md).
 Current approved decisions supersede historical proposals retained in the labnote.
 
 Keep every implementation checkbox unchecked until the corresponding work and evidence
@@ -97,12 +97,12 @@ progress without claiming the entire milestone is complete.
 
 ## Ordered implementation checklist
 
-1. [x] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through the selected agent runtime.
+1. [x] [Call-Spec-driven one-agent call](call-spec-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through the selected agent runtime.
 2. [x] [Observable sample call](observable-sample-call.md) — Run a sample conversation and inspect live timing, provider failures and VM health on a separate dashboard.
 3. [x] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
 4. [x] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
 5. [x] [Conversation during background tools](background-tool-conversation.md) — Keep conversation responsive while a submitted tool finishes.
-6. [x] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
+6. [x] [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md) — Save immutable call specs and bootstrap tenant-scoped administrative access.
 7. [x] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
 8. [x] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
 9. [x] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
@@ -114,7 +114,7 @@ progress without claiming the entire milestone is complete.
 15. [x] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
 16. [x] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then continue human-only audio and permitted transcripts.
 17. [x] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
-18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.
+18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant call specs or room control.
 19. [x] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
@@ -363,7 +363,7 @@ automatic tool retries/idempotency (R16), general MCP document inspection (R24),
 server-requested MCP interactions (R25), explicit cancellation, late external events,
 voicemail delivery, general redaction, and OAuth onboarding. Wait sounds now have a user-requested
 proposal above; implementation remains pending approval. See
-[the decision register](../call-definition-gap-review.md) and [issues](../issues/).
+[the decision register](../call-spec-gap-review.md) and [issues](../issues/).
 The optional Morse-code providers are deterministic tone encoders/decoders, not speech ML
 models. No local VAD/speech models, graph engine, new client protocol, or Vxpipe
 provider-fallback chain.
@@ -372,12 +372,12 @@ provider-fallback chain.
 
 This is a coverage map, not another approval or implementation checklist.
 
-- **Definition-driven one-agent call**: G1/G2; R10, R47; completed Jido-backed baseline whose behavior the intermediate runtime preserves.
+- **Call-Spec-driven one-agent call**: G1/G2; R10, R47; completed Jido-backed baseline whose behavior the intermediate runtime preserves.
 - **Observable sample call**: user-requested operational visibility; existing architecture telemetry goals, failure evidence and embedded reporter independence.
 - **Local Morse-code audio providers**: optional local verification capabilities requested during planning.
 - **Call Variables and private tool projections**: G3/G5; R17, R18.
 - **Conversation during background tools**: G4; R14–R16, R29.
-- **Tenant definitions and API-key administration**: G2/G10; R01–R04, R39.
+- **Tenant Call Specs and API-key administration**: G2/G10; R01–R04, R39.
 - **Prepared calls and single-use joining**: G2/G10; R05–R10, R39, R40.
 - **Asynchronous call history and variable snapshots**: G5/G11; R18, R41.
 - **Call inspection and debugging**: user-requested read-only operator workflow over G3/G5/G11; R17, R18, R38, R41; safe live/persisted distinctions.
@@ -399,7 +399,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Tenant-scoped provider credentials and platform configuration**: replace capability profiles/TOML with inline upstream selections and encrypted tenant credential readers, including existing Telnyx/Twilio control/webhook/media authentication; no application credential fallback, platform infrastructure env-backed and ReqLLM internal. The [scope correction](../credential-cutover-scope.md) excludes third-party API-key rotation and broad call-flow feature work, while retaining platform encryption-key rotation.
 - **Call debug console**: user-requested chat/voice workbench with metrics, RTVI-only event logs, devices, streaming and supported spoken text; isolated future client-JS/React packages over pluggable protocol/media boundaries, initially RTVI/WebRTC. Reuse tenant admission and existing authorized history links; no new call engine or SDK fork.
 - **Operator admin Storybook**: complete mocked tenant-to-call administration journey built from small React components and approved by the user for production integration.
-- **Operator login and admin dashboard**: short-lived local login challenge, installation-wide operator session and integration of the user-approved React administration over every tenant, definition and call; no users, teams or RBAC.
+- **Operator login and admin dashboard**: short-lived local login challenge, installation-wide operator session and integration of the user-approved React administration over every tenant, call spec and call; no users, teams or RBAC.
 - **Platform bootstrap and demo tenant**: explicit hash-only platform API-key authority and durable demo binding, preserving tenant boundaries and encrypted provider storage.
 - **Getting Started and example calls**: production-default runtime, explicit demo mode, persistent `/` setup checklist and per-example readiness, three versioned examples and safe debug-console launch.
 - **Embedded and container delivery**: Container/OTP boundary; complete approved scope.
@@ -417,12 +417,12 @@ in their own review sections; no independent-agent or implementation verificatio
 
 | Milestone | Review status | Evidence |
 | --- | --- | --- |
-| [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Reviewed; subset clarified | Prior agent review approved AgentServer readiness/teardown boundaries. Released-package probe verified repeated rounds and exposed alias loss; initial static keys must match Action names until the public binding extension exists. |
+| [Call-Spec-driven one-agent call](call-spec-driven-call.md#specification-review) | Reviewed; subset clarified | Prior agent review approved AgentServer readiness/teardown boundaries. Released-package probe verified repeated rounds and exposed alias loss; initial static keys must match Action names until the public binding extension exists. |
 | [Observable sample call](observable-sample-call.md#specification-review) | Complete; locally reviewed | Phoenix Console, mounted reusable gateway, bounded payload-free telemetry, live diagnostics, deterministic success/failure evidence, embedded-host event contract and Console-owned release assets are implemented and verified. |
 | [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Complete; independently reviewed | Real audio, independent fixtures, bounded streaming, explicit transport limits, closed selection, direct-PCM room round trip and optional credential-free sample profile are implemented and verified. |
 | [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Approved | Original behavior approved by milestone_review_b; focused Jido review added finite Action-module, strict-envelope and private-context gates. |
 | [Conversation during background tools](background-tool-conversation.md#specification-review) | Complete; independently reviewed | Activation-owned bounded workers, serialized private completion continuations, provider interoperability, room projection, operational telemetry and the runnable sample are implemented and verified. |
-| [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Complete; independently reviewed | Database-neutral Calls workflows, Ecto/PostgreSQL adapters, immutable publication routes, hash-only scoped keys, restart checks, and trusted operator commands are implemented and verified. |
+| [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md#specification-review) | Complete; independently reviewed | Database-neutral Calls workflows, Ecto/PostgreSQL adapters, immutable publication routes, hash-only scoped keys, restart checks, and trusted operator commands are implemented and verified. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
 | [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Complete; locally reviewed | Calls-owned bounded persisted/live projections and the Console-owned authenticated list/detail workflow are implemented and browser-verified. Storage outage, tool failure, authorization, disclosure, archive-gap, lifecycle and reconnection checks pass with the common implementation gates. |
@@ -444,7 +444,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md#specification-review) | Complete; specification, scope and final implementation independently reviewed | All seven credential/configuration checkpoints and all five final root gates pass. Existing provider readers, platform encryption-key rotation and configuration cleanup are verified. New provider/auth support, third-party credential rotation and broad call-flow demonstrations are excluded. Final root: 1,622 tests, zero failures, 39 excluded at `58d7b34`. |
 | [Call debug console](call-debug-console.md#specification-review) | In progress; specification and database inspection slice independently reviewed | Isolates client-JS/React source boundaries and pluggable protocol/media adapters. The authenticated read-only host renders the latest database snapshot through Core and React; live chat/voice, streaming/spoken text, devices and RTVI adapters remain. |
 | [Operator admin Storybook](operator-admin-storybook.md#specification-review) | Complete; all 7 checkpoints independently reviewed and user-approved 2026-09-17 | The complete mocked journey is approved for production integration in the next milestone. |
-| [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call definitions, calls, service credentials and responsive live/historical call inspection. |
+| [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | Planned; locally reviewed 2026-09-16 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity; no tenant-key promotion or third-party credential lifecycle. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Planned; locally reviewed 2026-09-16 | Confirmed persistent checklist/sample links and production-default/demo-opt-in behavior; per-example readiness, idempotent catalog publication and existing debug-console launch. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The packaging hold remains. |
@@ -482,8 +482,8 @@ standalone ExMCP verification from the live-MCP Jido interface gate. See
 [the decision](../jido-tool-execution.md) and [research log](../../labnotes/20260908-1344-jido-ai-evaluation.md).
 
 The subsequent observability update adds two user-requested slices, bringing the current
-index to 23. The early dashboard follows the definition-driven call; per-call inspection
-follows asynchronous history. Existing filenames, relative ordering and call-definition
+index to 23. The early dashboard follows the call-spec-driven call; per-call inspection
+follows asynchronous history. Existing filenames, relative ordering and call-spec
 contracts are preserved. The new specifications include automated/manual failure checks
 and rendered-browser gates. The later approved gateway/console split assigns Phoenix to
 the separate console, retaining gateway reuse; dashboard/authentication implementation

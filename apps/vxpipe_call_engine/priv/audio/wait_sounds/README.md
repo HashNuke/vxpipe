@@ -1,6 +1,6 @@
 # Bundled wait-sound sources
 
-Call Engine packages these assets for web, phone and embedded participants. Call definitions
+Call Engine packages these assets for web, phone and embedded participants. Call specs
 select defaults by omission, silence with null / Elixir `nil`, or a custom HTTP(S) file URL.
 Authored configuration never selects these local filenames. See the
 [transfer readiness milestone](../../../../../docs/milestones/transfer-readiness-and-wait-sounds.md).

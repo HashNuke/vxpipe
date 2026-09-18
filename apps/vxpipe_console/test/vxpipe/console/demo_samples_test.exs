@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.DemoSamplesTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.CallDefinition
+  alias Vxpipe.CallEngine.CallSpec
   alias Vxpipe.Calls.{Administration, InstallationOperator, ProviderCredentials, Tenant}
   alias Vxpipe.Console.DemoSamples
 
@@ -9,7 +9,7 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     AdminStore,
     CredentialKeyring,
     CredentialStore,
-    DefinitionStore,
+    CallSpecStore,
     ProviderCredentialStore,
     Repo
   }
@@ -20,7 +20,7 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
   end
 
-  test "ships three parseable, versioned sample call definitions" do
+  test "ships three parseable, versioned sample call specs" do
     entries = DemoSamples.catalog("google")
 
     assert Enum.map(entries, & &1.id) == [
@@ -32,17 +32,17 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     for entry <- entries do
       assert entry.version == 1
 
-      assert {:ok, definition} =
-               CallDefinition.new(entry.source, resource_id: entry.id, revision: 1)
+      assert {:ok, call_spec} =
+               CallSpec.new(entry.source, resource_id: entry.id, revision: 1)
 
-      assert definition.default_capabilities.model_inference.provider == "google"
+      assert call_spec.default_capabilities.model_inference.provider == "google"
     end
 
     assert Enum.all?(DemoSamples.catalog("zenmux"), fn entry ->
-             {:ok, definition} =
-               CallDefinition.new(entry.source, resource_id: entry.id, revision: 1)
+             {:ok, call_spec} =
+               CallSpec.new(entry.source, resource_id: entry.id, revision: 1)
 
-             definition.default_capabilities.model_inference.provider == "zenmux"
+             call_spec.default_capabilities.model_inference.provider == "zenmux"
            end)
   end
 
@@ -69,14 +69,14 @@ defmodule Vxpipe.Console.DemoSamplesTest do
              DemoSamples.install(:anonymous, "DEMOabcdefgh1234", [])
   end
 
-  test "installs and republishes the three definitions idempotently" do
+  test "installs and republishes the three call specs idempotently" do
     {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
     credential_context = [repo: Repo, keyring: keyring]
 
     options = [
       credential_repository: {CredentialStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, credential_context},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       admin_repository: {AdminStore, Repo}
     ]
 
@@ -116,9 +116,9 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     assert {:ok, second} = DemoSamples.install(authority, tenant.key, options)
     assert Enum.map(second, &{&1.id, &1.status, &1.revision}) == expected_installations()
 
-    assert {:ok, page} = Vxpipe.Calls.list_operator_definitions(authority, tenant.key, options)
+    assert {:ok, page} = Vxpipe.Calls.list_operator_call_specs(authority, tenant.key, options)
     assert page.total == 3
-    assert Enum.all?(page.definitions, &(&1.latest_revision == 1))
+    assert Enum.all?(page.call_specs, &(&1.latest_revision == 1))
   end
 
   defp expected_installations do

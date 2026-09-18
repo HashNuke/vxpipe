@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     Error,
     RoomAuthority,
     RoomMixer,
@@ -249,7 +249,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     room_id = unique_id("room-human-only")
 
     input = %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",
@@ -262,13 +262,13 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
       limits: %{max_duration_ms: 60_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "human-only", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "human-only", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "human-only", revision: 1},
+                 call_spec: %{id: "human-only", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -279,7 +279,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
              )
 
     registries = %{host_tools: %{}}
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 

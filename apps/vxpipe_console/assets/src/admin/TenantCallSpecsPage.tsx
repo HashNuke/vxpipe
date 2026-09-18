@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
-import { DefinitionList } from "./DefinitionList";
-import { DefinitionListSkeleton } from "./DefinitionListSkeleton";
-import type { TenantDefinitionsPageState } from "./definitionTypes";
+import { CallSpecList } from "./CallSpecList";
+import { CallSpecListSkeleton } from "./CallSpecListSkeleton";
+import type { TenantCallSpecsPageState } from "./callSpecTypes";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
 import { TenantWorkspaceNavigation, type TenantDestination } from "./TenantWorkspaceNavigation";
 
-export function TenantDefinitionsPage({
+export function TenantCallSpecsPage({
   state,
   theme = "dark",
   onSelectTenants,
-  onSelectDefinition,
+  onSelectCallSpec,
   onSelectWorkspace,
   onPreviousPage,
   onNextPage,
@@ -20,10 +20,10 @@ export function TenantDefinitionsPage({
   workspaceDestinations,
   linkCalls,
 }: {
-  state: TenantDefinitionsPageState;
+  state: TenantCallSpecsPageState;
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
-  onSelectDefinition?: (definitionId: string) => void;
+  onSelectCallSpec?: (callSpecId: string) => void;
   onSelectWorkspace?: (destination: TenantDestination) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
@@ -44,43 +44,43 @@ export function TenantDefinitionsPage({
         aria-busy={state.status === "loading" ? "true" : undefined}
         className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6"
       >
-        <h1 className="sr-only">Call definitions</h1>
+        <h1 className="sr-only">Call specs</h1>
         <TenantWorkspaceNavigation
-          active="definitions"
+          active="call-specs"
           destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
         <section
-          aria-label="Definition directory"
+          aria-label="Call spec directory"
           className="overflow-hidden"
         >
-          {state.status === "loading" ? <DefinitionListSkeleton /> : null}
+          {state.status === "loading" ? <CallSpecListSkeleton /> : null}
           {state.status === "unavailable" ? (
             <PageNotice
               kind="unavailable"
               message={state.message}
-              title="Call definitions unavailable"
+              title="Call specs unavailable"
             />
           ) : null}
-          {state.status === "ready" && state.definitions.length === 0 ? (
+          {state.status === "ready" && state.callSpecs.length === 0 ? (
             <PageNotice
               kind="empty"
-              message="Definitions saved for this tenant will appear here."
-              title="No call definitions yet"
+              message="Call specs saved for this tenant will appear here."
+              title="No call specs yet"
             />
           ) : null}
-          {state.status === "ready" && state.definitions.length > 0 ? (
+          {state.status === "ready" && state.callSpecs.length > 0 ? (
             <>
-              <DefinitionList
-                definitions={state.definitions}
+              <CallSpecList
+                callSpecs={state.callSpecs}
                 linkCalls={linkCalls}
-                onSelectDefinition={onSelectDefinition}
+                onSelectCallSpec={onSelectCallSpec}
                 tenant={state.tenant}
               />
               {state.pagination ? (
                 <Pagination
-                  ariaLabel="Definition pages"
+                  ariaLabel="Call spec pages"
                   onNext={onNextPage}
                   onPrevious={onPreviousPage}
                   pagination={state.pagination}

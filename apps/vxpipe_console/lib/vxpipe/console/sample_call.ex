@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.SampleCall do
     options =
       Keyword.validate!(options,
         backend: {SampleCallBackend, []},
-        definition: nil,
+        call_spec: nil,
         initial_variables: %{},
         name: __MODULE__,
         tenant_key: nil,
@@ -29,12 +29,12 @@ defmodule Vxpipe.Console.SampleCall do
 
   @impl true
   def init(options) do
-    definition = Keyword.fetch!(options, :definition)
+    call_spec = Keyword.fetch!(options, :call_spec)
     initial_variables = Keyword.fetch!(options, :initial_variables)
     tenant_key = Keyword.fetch!(options, :tenant_key)
     transfer_participant = Keyword.fetch!(options, :transfer_participant)
 
-    unless is_map(definition) and is_map(initial_variables) and is_binary(tenant_key) and
+    unless is_map(call_spec) and is_map(initial_variables) and is_binary(tenant_key) and
              byte_size(String.trim(tenant_key)) > 0 and
              valid_transfer_participant?(transfer_participant) do
       raise ArgumentError, "invalid trusted sample-call configuration"
@@ -42,7 +42,7 @@ defmodule Vxpipe.Console.SampleCall do
 
     state = %SampleCallState{
       backend: Keyword.fetch!(options, :backend),
-      definition: definition,
+      call_spec: call_spec,
       initial_variables: initial_variables,
       tenant_key: tenant_key,
       transfer_participant: transfer_participant,
@@ -94,11 +94,11 @@ defmodule Vxpipe.Console.SampleCall do
   defp provision(%SampleCallState{status: :ready} = state), do: state
 
   defp provision(%SampleCallState{} = state) do
-    with {:ok, draft} <- backend(state, :save_definition, [state.tenant_key, state.definition]),
+    with {:ok, draft} <- backend(state, :save_call_spec, [state.tenant_key, state.call_spec]),
          {:ok, published} <-
-           backend(state, :publish_definition, [
+           backend(state, :publish_call_spec, [
              state.tenant_key,
-             draft.definition_id,
+             draft.call_spec_id,
              draft.revision
            ]),
          {:ok, participant_key} <- entry_caller_route(published),

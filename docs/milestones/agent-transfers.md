@@ -11,7 +11,7 @@ A reception agent transfers the caller to a billing agent. Billing receives only
 ## Specification
 
 - Derive the transfer tool from the source's simple transfers list; no list means no tool. Model receives allowed participant refs/safe descriptions, never arbitrary runtime targets/numbers/URLs. Reject alias collisions and enforce allowlist/current source activation again at execution and room commit.
-- One participant identity per definition key per call; re-entry uses that identity with a fresh activation. Pinned entry refs do not change. Destination preparation starts only needed capabilities; it is not admission or conversational ownership.
+- One participant identity per call spec key per call; re-entry uses that identity with a fresh activation. Pinned entry refs do not change. Destination preparation starts only needed capabilities; it is not admission or conversational ownership.
 - Room-authorized prepare/commit keeps source responsible until destination conversation/capabilities are ready. Emit completed only after successful control/routing commit; then terminate the entire source execution subtree. Submitted CallVariables requests may finish independently.
 - Shared transfer_policy has one configurable 30s total attempt budget; phases do not reset it. Failure/timeout terminates destination attempt and returns a typed outcome to the source; late callbacks cannot commit or revive old output.
 - If permitted source capabilities need restoration, allow exactly one bounded attempt; restart loops cannot reset it. If none works and no usable conversation remains, end. Detailed cause stays internal even with full sample tool visibility; public/agent outcomes are generic.
@@ -70,7 +70,7 @@ No human bridge, arbitrary dialing, named transfers, graph/on_success hooks, gen
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Partial implementation evidence (2026-09-10): schema `20260910.04` accepts unique, non-empty
-definition-local agent transfer refs and rejects malformed, duplicate, missing, self, and human
+call-spec-local agent transfer refs and rejects malformed, duplicate, missing, self, and human
 destinations with indexed paths. The compiler derives one `transfer` descriptor only for a
 non-empty list, keeps runtime participant/activation identities in its private binding, projects
 only safe refs/descriptions, validates the destination with a closed JSON Schema, applies the
@@ -117,7 +117,7 @@ remain open; this checkpoint does not claim those behaviors.
 Schema `20260910.06` adds the destination-owned inbound `transfer_history` contract while keeping
 source allowlists as simple participant-ref arrays. Omission pins `fresh`; the other closed modes are
 `all_spoken`, `last_n_spoken` with a positive required `turns` value, and `selected`. Unsupported
-modes, missing/invalid `turns`, and a `turns` value on another mode fail at the exact definition
+modes, missing/invalid `turns`, and a `turns` value on another mode fail at the exact call spec
 path. The focused compiler file passes eight tests and the complete Call Engine suite passes 271
 tests with one tagged integration exclusion. Runtime projection remains open, so the combined
 history checklist item is not checked.
@@ -169,7 +169,7 @@ pass, each with one tagged integration exclusion where applicable. Selected mode
 is complete; re-entry and restoration remain open.
 
 Agent re-entry now uses room-incarnation state to distinguish a participant's first activation from
-a later activation. The immutable plan continues to pin one participant ID per definition key, while
+a later activation. The immutable plan continues to pin one participant ID per call spec key, while
 each re-entry materializes a fresh activation ID and rebinds activation-local transfer authority.
 Room authorization compares a request with the current active capability and the plan's stable
 participant/allowlist data; it no longer treats the plan's first activation ID as permanent.
@@ -268,7 +268,7 @@ setup failure because PostgreSQL SCRAM authentication needs a password absent fr
 credential source was inspected.
 
 The automated acceptance consolidation adds direct coverage for the remaining combined checklist
-claims. Authored `transfer` aliases fail at their exact definition path; an injected schema target,
+claims. Authored `transfer` aliases fail at their exact call spec path; an injected schema target,
 wrong source participant, stale activation, and duplicate preparation all fail before a second
 destination can start. Successful commit preserves the room/incarnation, Call Variables PID, and
 pinned entry refs while terminating the source participant subtree; a forged late source text event

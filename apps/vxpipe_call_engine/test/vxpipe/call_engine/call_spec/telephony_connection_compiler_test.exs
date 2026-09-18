@@ -1,13 +1,13 @@
-defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.TelephonyConnectionCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition
-  alias Vxpipe.CallEngine.CallDefinition.NumberFromVariable
+  alias Vxpipe.CallEngine.CallSpec
+  alias Vxpipe.CallEngine.CallSpec.NumberFromVariable
   alias Vxpipe.CallEngine.Error
 
   test "accepts provider-neutral receive and literal dial connection intents" do
     input =
-      base_definition()
+      base_call_spec()
       |> put_in([:participants, "caller", :connection], %{
         service: "primary-phone",
         mode: "receive",
@@ -25,8 +25,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
         }
       })
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 1)
 
     assert %{
              service: "primary-phone",
@@ -34,7 +34,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
              admission: :start_call,
              number: "+15550001000",
              number_from_variable: nil
-           } = definition.participants["caller"].connection
+           } = call_spec.participants["caller"].connection
 
     assert %{
              service: "primary-phone",
@@ -42,12 +42,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
              admission: :transfer,
              number: "+15550001001",
              number_from_variable: nil
-           } = definition.participants["human-support"].connection
+           } = call_spec.participants["human-support"].connection
   end
 
   test "accepts a protected string variable as the dial destination" do
     input =
-      base_definition()
+      base_call_spec()
       |> put_in([:participants, "reception", :transfers], ["human-support"])
       |> put_in([:participants, "reception", :variable_permissions], %{
         "routing" => ["read"]
@@ -64,16 +64,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
         }
       })
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 1)
 
     assert %NumberFromVariable{section: "routing", variable: "support_number"} =
-             definition.participants["human-support"].connection.number_from_variable
+             call_spec.participants["human-support"].connection.number_from_variable
   end
 
   test "rejects ambiguous, absent, misplaced, and malformed phone destinations" do
     base =
-      base_definition()
+      base_call_spec()
       |> put_in([:participants, "reception", :transfers], ["human-support"])
       |> put_in([:participants, "human-support"], %{
         type: "human",
@@ -111,14 +111,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
     for {input, path} <- cases do
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
+                code: :invalid_call_spec,
                 details: %{"path" => ^path}
-              }} = CallDefinition.new(input, resource_id: "support", revision: 1)
+              }} = CallSpec.new(input, resource_id: "support", revision: 1)
     end
   end
 
   test "rejects an undeclared, non-string, or agent-writable routing variable" do
-    dynamic = dynamic_definition()
+    dynamic = dynamic_call_spec()
 
     cases = [
       {put_in(
@@ -144,14 +144,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
     for {input, path} <- cases do
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
+                code: :invalid_call_spec,
                 details: %{"path" => ^path}
-              }} = CallDefinition.new(input, resource_id: "support", revision: 1)
+              }} = CallSpec.new(input, resource_id: "support", revision: 1)
     end
   end
 
-  defp dynamic_definition do
-    base_definition()
+  defp dynamic_call_spec do
+    base_call_spec()
     |> put_in([:participants, "reception", :transfers], ["human-support"])
     |> put_in([:participants, "human-support"], %{
       type: "human",
@@ -163,9 +163,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.TelephonyConnectionCompilerTest do
     })
   end
 
-  defp base_definition do
+  defp base_call_spec do
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "reception",
       call_variables: %{

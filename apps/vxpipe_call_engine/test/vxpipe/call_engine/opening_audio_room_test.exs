@@ -8,9 +8,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     Error,
     RoomAuthority,
     TestAgentRuntimeModelProvider,
@@ -1059,8 +1059,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         }
       end
 
-    definition_input = %{
-      schema_version: CallDefinition.schema_version(),
+    call_spec_input = %{
+      schema_version: CallSpec.schema_version(),
       wait_sounds: Keyword.get(options, :wait_sounds),
       entry_caller: "caller",
       entry_receiver: "receiver",
@@ -1098,13 +1098,13 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       limits: %{max_duration_ms: 60_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input, resource_id: "definition-opening", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input, resource_id: "call-spec-opening", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "definition-opening", revision: 1},
+                 call_spec: %{id: "call-spec-opening", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -1118,7 +1118,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       host_tools: %{}
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 

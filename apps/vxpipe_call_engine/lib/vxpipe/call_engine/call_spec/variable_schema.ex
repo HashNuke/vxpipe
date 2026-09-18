@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.VariableSchema do
+defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @keywords [
     "additionalProperties",
@@ -229,9 +229,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.VariableSchema do
   defp continue({:error, _error} = error), do: {:halt, error}
 
   defp invalid(path, reason) do
-    DefinitionValidation.invalid(
-      :invalid_call_definition,
-      "The call definition is invalid.",
+    CallSpecValidation.invalid(
+      :invalid_call_spec,
+      "The call spec is invalid.",
       path,
       reason
     )

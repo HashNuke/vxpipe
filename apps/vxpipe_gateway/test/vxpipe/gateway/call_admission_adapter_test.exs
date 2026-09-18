@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.CallDefinition.{ConnectionIntent, VariablePermissions}
+  alias Vxpipe.CallEngine.CallSpec.{ConnectionIntent, VariablePermissions}
   alias Vxpipe.CallEngine.Command.CreateRoom
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
@@ -247,8 +247,8 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     %PreparedCall{
       id: plan.call_id,
       tenant_key: plan.tenant_id,
-      definition_id: plan.definition_id,
-      definition_revision: plan.definition_revision,
+      call_spec_id: plan.call_spec_id,
+      call_spec_revision: plan.call_spec_revision,
       schema_version: plan.schema_version,
       participant_routes: %{},
       entry_caller: plan.entry_caller,
@@ -268,7 +268,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
 
   defp resolved_plan(tenant_id, room_id, participant_id, admission \\ :start_call) do
     participant = %Participant{
-      definition_key: "support",
+      call_spec_key: "support",
       participant_id: participant_id,
       activation_id: nil,
       kind: :human,
@@ -287,8 +287,8 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     }
 
     %ResolvedCallPlan{
-      definition_id: unique_id("definition"),
-      definition_revision: 1,
+      call_spec_id: unique_id("call-spec"),
+      call_spec_revision: 1,
       schema_version: "20260913.01",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
@@ -300,7 +300,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       opening_audio: nil,
       media_policy: Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy.inherit(),
       participants: %{"support" => participant},
-      transfer_policy: %Vxpipe.CallEngine.CallDefinition.TransferPolicy{
+      transfer_policy: %Vxpipe.CallEngine.CallSpec.TransferPolicy{
         attempt_timeout_ms: 30_000
       },
       call_variables: %CallVariables{},

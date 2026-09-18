@@ -5,7 +5,7 @@ tool/carrier capture, asynchronous structured persistence, tenant-safe report AP
 call-inspection presentation, and optional bounded billing enrichment are implemented.
 Specification review: approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
-Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
+Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
@@ -111,7 +111,7 @@ Implementation evidence (2026-09-11, completed model-round capture checkpoint):
   the deliberately absent `RoomAuthority` message clause, then timed out waiting for
   `usage_observed`.
 - Focused green evidence: 7 settlement tests, 2 projector tests, 20 coordinator tests, the
-  definition-driven room/archive case, and 5 activation-supervisor tests pass. The complete Call
+  call-spec-driven room/archive case, and 5 activation-supervisor tests pass. The complete Call
   Engine suite passes 369 tests with one existing integration exclusion. All root gates pass:
   formatting, warnings-as-errors compilation, strict Credo over 676 source files, all 857 tests
   across the eight umbrella apps, and the unused-dependency check.
@@ -146,7 +146,7 @@ settlement/operator totals, and billing enrichment were not claimed.
 
 Implementation evidence (2026-09-11, text-to-speech attempt checkpoint):
 
-- Definition-selected synthesis runtimes now pin a safe provider/profile identity alongside call,
+- Call Spec-selected synthesis runtimes now pin a safe provider/profile identity alongside call,
   participant, and activation identity. Provider adapters expose only their stable name and model;
   credentials remain in the existing inspected-redacted provider/transport configuration. The
   legacy room-command path has no pinned call/profile evidence and emits no usage rather than
@@ -168,8 +168,8 @@ Implementation evidence (2026-09-11, text-to-speech attempt checkpoint):
   capability tests then timed out waiting for successful, cancelled, and failed usage events; the
   room/runtime tests failed on an absent pinned runtime identity and no archived TTS facts; and the
   transport-boundary tests first returned `:ok` instead of the expected rejected command outcomes.
-- Focused green evidence: 3 attempt tests, 9 capability tests, the runtime contract, definition-
-  driven private archive cases, and a private human-briefing archive case pass. The complete Call
+- Focused green evidence: 3 attempt tests, 9 capability tests, the runtime contract, call-spec-driven
+  private archive cases, and a private human-briefing archive case pass. The complete Call
   Engine suite passes 377 tests with one integration exclusion. All root gates pass: formatting,
   warnings-as-errors compilation, strict Credo over 679 source files, all 866 tests across the eight
   umbrella apps, and the unused-dependency check.
@@ -179,7 +179,7 @@ settlement/operator totals, and billing enrichment were not claimed.
 
 Implementation evidence (2026-09-11, speech-to-text session checkpoint):
 
-- Definition-selected recognition runtimes now pin call, participant/optional activation,
+- Call Spec-selected recognition runtimes now pin call, participant/optional activation,
   configured profile, and provider-owned safe identity. Credentials remain inside the provider and
   transport configuration. The legacy application-configured room path lacks the call/profile
   evidence and remains unobserved rather than receiving guessed attribution.
@@ -206,7 +206,7 @@ Implementation evidence (2026-09-11, speech-to-text session checkpoint):
   separately failed until transport acceptance became provider-work evidence. Interval-boundary
   assertions then failed until start and terminal observations were added.
 - Focused green evidence: 3 session tests, 7 capability tests, 6 hosted-provider adapter tests, the
-  pinned runtime contract, and the definition-driven private archive path pass. The complete Call
+  pinned runtime contract, and the call-spec-driven private archive path pass. The complete Call
   Engine suite passes 385 tests with one existing integration exclusion. All root gates pass:
   formatting, warnings-as-errors compilation, strict Credo over 682 source files, all 874 tests
   across the eight umbrella apps, and the unused-dependency check.

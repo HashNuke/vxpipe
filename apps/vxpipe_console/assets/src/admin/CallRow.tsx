@@ -2,7 +2,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { CallStateBadge } from "./CallStateBadge";
 import type { CallDirectoryItem } from "./callTypes";
-import type { TenantContext } from "./definitionTypes";
+import type { TenantContext } from "./callSpecTypes";
 import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
 import {
   formatAdminLocalTimestamp,
@@ -33,12 +33,12 @@ export function CallRow({
       <span className="min-w-0">
         <span
           className="block truncate text-sm"
-          title={call.definitionName ?? call.definitionId}
+          title={call.callSpecName ?? call.callSpecId}
         >
-          {call.definitionName ?? call.definitionId}
+          {call.callSpecName ?? call.callSpecId}
         </span>
         <span className="mt-1 inline-flex rounded-sm bg-[var(--admin-soft)] px-1.5 py-0.5 font-mono text-[0.68rem] font-semibold uppercase tracking-[0.04em] text-[var(--admin-muted)]">
-          Version {call.definitionRevision}
+          Version {call.callSpecRevision}
         </span>
       </span>
       <span>

@@ -4,7 +4,7 @@ defmodule Vxpipe.Persistence.TestTelephonyAdmissionFixture do
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, ProviderCredentials, TelephonyServices}
-  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, DefinitionStore, Repo}
+  alias Vxpipe.Persistence.{CallStore, CredentialKeyring, CredentialStore, CallSpecStore, Repo}
   alias Vxpipe.Persistence.{ProviderCredentialStore, TelephonyServiceStore}
 
   def new do
@@ -15,7 +15,7 @@ defmodule Vxpipe.Persistence.TestTelephonyAdmissionFixture do
 
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, context},
       telephony_service_repository: {TelephonyServiceStore, context},
@@ -59,10 +59,10 @@ defmodule Vxpipe.Persistence.TestTelephonyAdmissionFixture do
     do: Calls.claim_incoming_telephony({:tenant, data.tenant.key}, "support", event(), options)
 
   def publish(data, input) do
-    {:ok, draft} = Calls.save_definition(data.tenant.key, input, data.options)
+    {:ok, draft} = Calls.save_call_spec(data.tenant.key, input, data.options)
 
     {:ok, published} =
-      Calls.publish_definition(data.tenant.key, draft.definition_id, 1, data.options)
+      Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, 1, data.options)
 
     published
   end

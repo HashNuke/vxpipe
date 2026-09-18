@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.SampleCallTest do
   alias Vxpipe.Console.{SampleCall, TestSampleCallBackend}
 
   @initial_variables %{"order" => %{"id" => "private-order-sentinel"}}
-  @definition %{
+  @call_spec %{
     "schema_version" => "20260915.01",
     "entry_caller" => "caller",
     "entry_receiver" => "assistant"
@@ -21,7 +21,7 @@ defmodule Vxpipe.Console.SampleCallTest do
         {SampleCall,
          name: :sample_call_contract_test,
          backend: TestSampleCallBackend.backend(backend),
-         definition: @definition,
+         call_spec: @call_spec,
          initial_variables: @initial_variables,
          tenant_key: TestSampleCallBackend.tenant_key()}
       )
@@ -34,8 +34,8 @@ defmodule Vxpipe.Console.SampleCallTest do
     assert call_id == TestSampleCallBackend.call_id()
 
     assert [
-             {:save_definition, tenant_key, @definition},
-             {:publish_definition, tenant_key, _definition_id, 1},
+             {:save_call_spec, tenant_key, @call_spec},
+             {:publish_call_spec, tenant_key, _call_spec_id, 1},
              {:issue_api_key, tenant_key},
              {:authenticate, tenant_key, api_key},
              {:prepare_call, tenant_key, participant_key, @initial_variables}
@@ -69,7 +69,7 @@ defmodule Vxpipe.Console.SampleCallTest do
         {SampleCall,
          name: :sample_transfer_call,
          backend: TestSampleCallBackend.backend(backend),
-         definition: @definition,
+         call_spec: @call_spec,
          initial_variables: @initial_variables,
          tenant_key: TestSampleCallBackend.tenant_key(),
          transfer_participant: "human-support"}
@@ -106,7 +106,7 @@ defmodule Vxpipe.Console.SampleCallTest do
         {SampleCall,
          name: :failing_sample_call,
          backend: TestSampleCallBackend.backend(backend),
-         definition: @definition,
+         call_spec: @call_spec,
          initial_variables: @initial_variables,
          tenant_key: TestSampleCallBackend.tenant_key()},
         restart: :temporary
@@ -127,7 +127,7 @@ defmodule Vxpipe.Console.SampleCallTest do
     options = [
       name: nil,
       backend: TestSampleCallBackend.backend(backend),
-      definition: @definition,
+      call_spec: @call_spec,
       initial_variables: @initial_variables,
       tenant_key: TestSampleCallBackend.tenant_key()
     ]
@@ -141,7 +141,7 @@ defmodule Vxpipe.Console.SampleCallTest do
     refute Enum.any?(TestSampleCallBackend.operations(backend), &match?({:bootstrap, _}, &1))
   end
 
-  test "a failed definition save does not issue a call key or create another tenant" do
+  test "a failed call spec save does not issue a call key or create another tenant" do
     backend =
       start_supervised!(
         {TestSampleCallBackend,
@@ -153,7 +153,7 @@ defmodule Vxpipe.Console.SampleCallTest do
         {SampleCall,
          name: nil,
          backend: TestSampleCallBackend.backend(backend),
-         definition: @definition,
+         call_spec: @call_spec,
          initial_variables: @initial_variables,
          tenant_key: TestSampleCallBackend.tenant_key()}
       )
@@ -163,7 +163,7 @@ defmodule Vxpipe.Console.SampleCallTest do
 
     assert Enum.all?(
              TestSampleCallBackend.operations(backend),
-             &match?({:save_definition, _, _}, &1)
+             &match?({:save_call_spec, _, _}, &1)
            )
   end
 end

@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.CapabilityCatalog do
   @moduledoc "Closed mapping from inline capability selections to internal adapters."
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.Provider.{Deepgram, MorseCode}
 
   @speech_keys [:encoding, :sample_rate]

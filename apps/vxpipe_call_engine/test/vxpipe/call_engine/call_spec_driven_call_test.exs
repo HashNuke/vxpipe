@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
+defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine
@@ -8,11 +8,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     CallVariables,
     ConnectionAttachment,
-    DefinitionCompiler,
+    CallSpecCompiler,
     Error,
     PlanStartup,
     RoomAuthority,
@@ -381,7 +381,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                fact.activation_id == caller.activation_id and
                fact.payload["provider"]["name"] == "deepgram" and
                fact.payload["provider"]["integration_id"] ==
-                 Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                 Vxpipe.CallEngine.CallSpec.CapabilitySelection.identity(
                    caller.capabilities.speech_to_text,
                    plan.tenant_id
                  ) and
@@ -437,7 +437,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                fact.activation_id == receiver.activation_id and
                fact.payload["provider"]["name"] == "deepgram" and
                fact.payload["provider"]["integration_id"] ==
-                 Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                 Vxpipe.CallEngine.CallSpec.CapabilitySelection.identity(
                    receiver.capabilities.text_to_speech,
                    plan.tenant_id
                  ) and
@@ -457,7 +457,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       })
     end
 
-    plan = compile_plan(room_id, definition_transform: transform)
+    plan = compile_plan(room_id, call_spec_transform: transform)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     restricted = Map.fetch!(plan.participants, "unused-agent")
 
@@ -832,7 +832,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                fact.public_sequence == nil and
                fact.payload["provider"]["name"] == "test" and
                fact.payload["provider"]["integration_id"] ==
-                 Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+                 Vxpipe.CallEngine.CallSpec.CapabilitySelection.identity(
                    receiver.capabilities.model_inference,
                    plan.tenant_id
                  ) and
@@ -924,7 +924,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                room_id: room_id,
                incarnation_id: room.incarnation_id,
                participant_id: caller.participant_id,
-               connection_id: "conn-definition-test",
+               connection_id: "conn-call-spec-test",
                deadline: future_deadline()
              )
 
@@ -939,7 +939,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                incarnation_id: room.incarnation_id,
                participant_id: caller.participant_id,
                connection_id: attach.connection_id,
-               correlation_id: "turn-definition-test",
+               correlation_id: "turn-call-spec-test",
                content: "What time is it?",
                deadline: future_deadline()
              )
@@ -1165,7 +1165,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert_receive {:DOWN, ^archive_monitor, :process, _subscriber, :normal}
   end
 
-  test "executes generated variable actions through the definition-driven Agent Runtime loop" do
+  test "executes generated variable actions through the call-spec-driven Agent Runtime loop" do
     configure_agent_runtime_provider(self())
     room_id = unique_id("room-variable-actions")
     plan = compile_variables_plan(room_id)
@@ -1382,7 +1382,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       plan =
         compile_plan(unique_id("room-late-human"),
           speech?: true,
-          definition_transform: fn input ->
+          call_spec_transform: fn input ->
             listener = %{
               Map.fetch!(input.participants, "caller")
               | capabilities: %{
@@ -1517,7 +1517,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert speech_to_text.usage_provider.name == "morse_code"
 
     assert speech_to_text.usage_provider.integration_id ==
-             Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+             Vxpipe.CallEngine.CallSpec.CapabilitySelection.identity(
                caller.capabilities.speech_to_text,
                plan.tenant_id
              )
@@ -1533,7 +1533,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert startup.text_to_speech.usage_provider.name == "morse_code"
 
     assert startup.text_to_speech.usage_provider.integration_id ==
-             Vxpipe.CallEngine.CallDefinition.CapabilitySelection.identity(
+             Vxpipe.CallEngine.CallSpec.CapabilitySelection.identity(
                receiver.capabilities.text_to_speech,
                plan.tenant_id
              )
@@ -1545,7 +1545,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   test "keeps the active agent pinned after source prompt and inline selection change" do
     configure_agent_runtime_provider(self())
     room_id = unique_id("room-pinned-source")
-    input = definition_input([])
+    input = call_spec_input([])
     plan = compile_plan_from(room_id, input)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
@@ -1781,7 +1781,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   test "starts an existing Zenmux entry agent with its named tenant credential" do
     plan =
       compile_plan(unique_id("room-zenmux-entry"),
-        definition_transform: fn source ->
+        call_spec_transform: fn source ->
           put_in(source, [:participants, "receiver", :capabilities, :model_inference], %{
             provider: "zenmux",
             model: "openai/gpt-5",
@@ -1872,8 +1872,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   defp compile_plan(room_id, options \\ []) do
-    transform = Keyword.get(options, :definition_transform, &Function.identity/1)
-    input = options |> definition_input() |> transform.()
+    transform = Keyword.get(options, :call_spec_transform, &Function.identity/1)
+    input = options |> call_spec_input() |> transform.()
     compile_plan_from(room_id, input, options)
   end
 
@@ -1954,22 +1954,22 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     end
 
     compile_plan(room_id,
-      definition_transform: transform,
+      call_spec_transform: transform,
       initial_variables: %{"order" => %{"id" => "order-1"}}
     )
   end
 
   defp compile_plan_from(room_id, input, options \\ []) do
-    assert {:ok, definition} =
-             CallDefinition.new(input,
-               resource_id: "definition-test",
+    assert {:ok, call_spec} =
+             CallSpec.new(input,
+               resource_id: "call-spec-test",
                revision: 1
              )
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "definition-test", revision: 1},
+                 call_spec: %{id: "call-spec-test", revision: 1},
                  initial_variables: Keyword.get(options, :initial_variables, %{}),
                  transport: %{type: "web"}
                },
@@ -1983,7 +1983,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       host_tools: %{"get_current_time" => CurrentTime}
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 
@@ -2007,7 +2007,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     }
   end
 
-  defp definition_input(options) do
+  defp call_spec_input(options) do
     speech? = Keyword.get(options, :speech?, false)
 
     speech_provider = Keyword.get(options, :speech_provider, :deepgram)
@@ -2023,7 +2023,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         else: %{}
 
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",

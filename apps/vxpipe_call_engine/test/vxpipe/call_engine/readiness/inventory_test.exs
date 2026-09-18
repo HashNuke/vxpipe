@@ -1,8 +1,8 @@
 defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
   alias Vxpipe.CallEngine.Readiness.{Collector, Inventory, Preparation, Resource, RoomInventory}
   alias Vxpipe.CallEngine.ResolvedCallPlan.Capabilities
@@ -321,7 +321,7 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
     plan = %{
       plan
       | participants: participants,
-        wait_sounds: %Vxpipe.CallEngine.CallDefinition.WaitSounds{call_setup: nil}
+        wait_sounds: %Vxpipe.CallEngine.CallSpec.WaitSounds{call_setup: nil}
     }
 
     assert {:ok, plan} = Vxpipe.CallEngine.prepare_call_audio(plan)
@@ -736,10 +736,10 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
          %{type: "human", connection: %{service: "web", mode: "receive", admission: "start_call"}}}
       end)
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "one",
                  entry_receiver: "departing",
                  participants: participants
@@ -750,13 +750,13 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
 
     assert {:ok, invocation} =
              CallInvocation.new(
-               %{call_definition: %{id: "inventory", revision: 1}, transport: %{type: "web"}},
+               %{call_spec: %{id: "inventory", revision: 1}, transport: %{type: "web"}},
                tenant_id: "tenant",
                actor_id: "actor"
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

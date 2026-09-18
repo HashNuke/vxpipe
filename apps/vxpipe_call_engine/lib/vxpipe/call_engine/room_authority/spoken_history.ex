@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpokenHistory do
   @moduledoc false
 
   alias Vxpipe.AgentRuntime.Message
-  alias Vxpipe.CallEngine.CallDefinition.TransferHistory
+  alias Vxpipe.CallEngine.CallSpec.TransferHistory
 
   @derive {Inspect, only: [:size]}
   @enforce_keys [:entries, :size]

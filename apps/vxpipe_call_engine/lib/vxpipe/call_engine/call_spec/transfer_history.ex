@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.TransferHistory do
+defmodule Vxpipe.CallEngine.CallSpec.TransferHistory do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @enforce_keys [:mode, :turns]
   defstruct @enforce_keys
@@ -16,14 +16,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.TransferHistory do
   def new(nil, _path), do: {:ok, %__MODULE__{mode: :fresh, turns: nil}}
 
   def new(value, path) when is_map(value) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, [:mode, :turns], code, message, path),
-         {:ok, mode_input} <- DefinitionValidation.fetch(input, :mode, code, message, path),
+           CallSpecValidation.normalize_map(value, [:mode, :turns], code, message, path),
+         {:ok, mode_input} <- CallSpecValidation.fetch(input, :mode, code, message, path),
          {:ok, mode} <-
-           DefinitionValidation.enum(
+           CallSpecValidation.enum(
              mode_input,
              [
                fresh: "fresh",
@@ -41,25 +41,25 @@ defmodule Vxpipe.CallEngine.CallDefinition.TransferHistory do
   end
 
   def new(_value, path) do
-    DefinitionValidation.invalid(
-      :invalid_call_definition,
-      "The call definition is invalid.",
+    CallSpecValidation.invalid(
+      :invalid_call_spec,
+      "The call spec is invalid.",
       path,
       "must be an object"
     )
   end
 
   defp turns(:last_n_spoken, input, code, message, path) do
-    with {:ok, value} <- DefinitionValidation.fetch(input, :turns, code, message, path),
+    with {:ok, value} <- CallSpecValidation.fetch(input, :turns, code, message, path),
          {:ok, turns} <-
-           DefinitionValidation.positive_integer(value, code, message, path ++ ["turns"]) do
+           CallSpecValidation.positive_integer(value, code, message, path ++ ["turns"]) do
       {:ok, turns}
     end
   end
 
   defp turns(_mode, input, code, message, path) do
     if Map.has_key?(input, :turns) do
-      DefinitionValidation.invalid(
+      CallSpecValidation.invalid(
         code,
         message,
         path ++ ["turns"],

@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
   import Phoenix.ConnTest
   import Plug.Conn, only: [get_resp_header: 2, put_req_header: 3]
 
-  alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.CallSpec.ConnectionIntent
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
 
@@ -66,12 +66,12 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
 
     assert response["tenant"] == %{"key" => @tenant_key, "name" => "Example tenant"}
 
-    assert response["definition"] == %{
-             "id" => "definition-public-id",
+    assert response["call_spec"] == %{
+             "id" => "call-spec-public-id",
              "name" => "Delivery rescheduling"
            }
 
-    assert response["definition_revision"] == 1
+    assert response["call_spec_revision"] == 1
     assert inspection["schema_version"] == 1
     assert inspection["call"]["id"] == @call_id
     assert inspection["participants"] |> List.first() |> Map.fetch!("id") == "caller-runtime"
@@ -229,9 +229,9 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
   defp call_directory_summary do
     %CallDirectorySummary{
       id: @call_id,
-      definition_id: "definition-public-id",
-      definition_name: "Delivery rescheduling",
-      definition_revision: 1,
+      call_spec_id: "call-spec-public-id",
+      call_spec_name: "Delivery rescheduling",
+      call_spec_revision: 1,
       state: :running,
       created_at: ~U[2026-09-16 09:00:00Z],
       started_at: ~U[2026-09-16 09:00:01Z],
@@ -265,8 +265,8 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
     %CallSummary{
       id: @call_id,
       tenant_key: @tenant_key,
-      definition_id: "definition-public-id",
-      definition_revision: 1,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 1,
       state: :running,
       created_at: ~U[2026-09-16 09:00:00Z],
       started_at: ~U[2026-09-16 09:00:01Z],
@@ -280,8 +280,8 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
     %PreparedCall{
       id: @call_id,
       tenant_key: @tenant_key,
-      definition_id: "definition-public-id",
-      definition_revision: 1,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 1,
       schema_version: "20260915.01",
       participant_routes: %{},
       entry_caller: "caller",
@@ -301,8 +301,8 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
 
   defp resolved_plan do
     %ResolvedCallPlan{
-      definition_id: "definition-public-id",
-      definition_revision: 1,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 1,
       schema_version: "20260915.01",
       tenant_id: @tenant_key,
       actor_id: "actor-public-id",
@@ -323,7 +323,7 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
 
   defp caller do
     %Participant{
-      definition_key: "caller",
+      call_spec_key: "caller",
       participant_id: "caller-runtime",
       activation_id: nil,
       kind: :human,

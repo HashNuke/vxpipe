@@ -95,7 +95,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
         initial_variables: %{
           "order" => %{"id" => "order-demo-1001"}
         },
-        definition: %{
+        call_spec: %{
           schema_version: "20260915.01",
           wait_sounds: %{},
           name: "Development sample",

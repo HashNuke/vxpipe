@@ -2,9 +2,9 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler
+    CallSpecCompiler
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
@@ -22,10 +22,10 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
   @twilio_stream_sid "MZ00000000000000000000000000000001"
 
   def compile_plan(provider \\ :telnyx) do
-    {:ok, definition} =
-      CallDefinition.new(
+    {:ok, call_spec} =
+      CallSpec.new(
         %{
-          schema_version: CallDefinition.schema_version(),
+          schema_version: CallSpec.schema_version(),
           wait_sounds: %{call_setup: nil},
           entry_caller: "caller",
           entry_receiver: "reception",
@@ -70,14 +70,14 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
           transfer_policy: %{attempt_timeout_ms: 10_000},
           limits: %{max_duration_ms: 60_000}
         },
-        resource_id: "outbound-phone-transfer-definition",
+        resource_id: "outbound-phone-transfer-call-spec",
         revision: 1
       )
 
     {:ok, invocation} =
       CallInvocation.new(
         %{
-          call_definition: %{id: "outbound-phone-transfer-definition", revision: 1},
+          call_spec: %{id: "outbound-phone-transfer-call-spec", revision: 1},
           initial_variables: %{},
           transport: %{type: "web"}
         },
@@ -88,7 +88,7 @@ defmodule Vxpipe.Gateway.PhoneTransferScenario do
       )
 
     {:ok, plan} =
-      DefinitionCompiler.compile(definition, invocation, %{
+      CallSpecCompiler.compile(call_spec, invocation, %{
         host_tools: %{}
       })
 

@@ -1,7 +1,7 @@
 # Explicit cancellation of background tool calls
 
 Status: deferred for later review. The proposal below is not approved for
-implementation or inclusion in the call-definition schema.
+implementation or inclusion in the call-spec schema.
 
 ## Problem and example
 
@@ -58,5 +58,5 @@ conversation, completion races, and no false claims about remote outcomes.
 Live MCP cancellation interoperability would need separate integration checks.
 No runtime behavior has been implemented or tested for this proposal.
 
-Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
-[architecture](../architecture.md), and [G4 review](../call-definition-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).
+Related: [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
+[architecture](../architecture.md), and [G4 review](../call-spec-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).

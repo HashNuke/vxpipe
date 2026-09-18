@@ -1,19 +1,19 @@
 import {
   callContext,
   callFixture,
-  callsForDefinition,
+  callsForCallSpec,
   callsForTenant,
 } from "./callFixtures";
 import { CallDetailsPage } from "./CallDetailsPage";
 import { callDetailsFixtureForCall } from "./callDetailsFixtures";
 import { adminStoryHref, callDetailsStoryHref } from "./adminStoryHref";
-import { DefinitionCallsPage } from "./DefinitionCallsPage";
-import { definitionFixture, definitions } from "./definitionFixtures";
-import { TenantDefinitionsPage } from "./TenantDefinitionsPage";
+import { CallSpecCallsPage } from "./CallSpecCallsPage";
+import { callSpecFixture, callSpecs } from "./callSpecFixtures";
+import { TenantCallSpecsPage } from "./TenantCallSpecsPage";
 import { applyCredentialCreation, serviceFixture } from "./serviceFixtures";
 import { TenantServicesPage } from "./TenantServicesPage";
 import type { AdminStoryRoute } from "./adminStoryRoute";
-import type { TenantContext } from "./definitionTypes";
+import type { TenantContext } from "./callSpecTypes";
 import { tenantFixture, tenants } from "./tenantFixtures";
 import { TenantsPage } from "./TenantsPage";
 import { useAdminStoryNavigation } from "./useAdminStoryNavigation";
@@ -37,7 +37,7 @@ function JourneyServicesPage({
       onCreateCredential={(draft) =>
         setState((current) => applyCredentialCreation(current, draft))
       }
-      onSelectTenant={() => navigate({ page: "definitions", tenantKey: tenant.key })}
+      onSelectTenant={() => navigate({ page: "call-specs", tenantKey: tenant.key })}
       onSelectTenants={() => navigate({ page: "tenants" })}
       onSelectWorkspace={(destination) =>
         navigate({ page: destination, tenantKey: tenant.key })
@@ -75,9 +75,9 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
           state={{
             status: "unavailable",
             tenant: selectedTenant,
-            definition: null,
+            callSpec: null,
             callId: route.callId,
-            definitionRevision: null,
+            callSpecRevision: null,
             message: "The selected call is not available in this review fixture.",
           }}
           theme={theme}
@@ -90,7 +90,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
         contextHref={(path) => adminStoryHref(path, theme)}
         state={callDetailsFixtureForCall(
           selectedCall,
-          pendingCallContext.definition,
+          pendingCallContext.callSpec,
           selectedTenant,
         )}
         theme={theme}
@@ -104,30 +104,30 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
       name: route.tenantKey,
     };
 
-    const definitionId = route.definitionId;
+    const callSpecId = route.callSpecId;
     const fixture = callFixture("populated");
     const state = {
       ...fixture,
       tenant: selectedTenant,
-      definitions: definitions.map(({ id, name }) => ({ id, name })),
-      selectedDefinitionId: definitionId ?? null,
-      calls: definitionId ? callsForDefinition(definitionId) : callsForTenant(),
+      callSpecs: callSpecs.map(({ id, name }) => ({ id, name })),
+      selectedCallSpecId: callSpecId ?? null,
+      calls: callSpecId ? callsForCallSpec(callSpecId) : callsForTenant(),
     };
 
     return (
-      <DefinitionCallsPage
+      <CallSpecCallsPage
         callHref={(callId) => callDetailsStoryHref(route.tenantKey, callId, theme)}
         onSelectTenant={() =>
-          navigate({ page: "definitions", tenantKey: route.tenantKey })
+          navigate({ page: "call-specs", tenantKey: route.tenantKey })
         }
         onSelectWorkspace={(destination) =>
           navigate({ page: destination, tenantKey: route.tenantKey })
         }
-        onSelectDefinition={(nextDefinitionId) =>
+        onSelectCallSpec={(nextCallSpecId) =>
           navigate({
             page: "calls",
             tenantKey: route.tenantKey,
-            ...(nextDefinitionId ? { definitionId: nextDefinitionId } : {}),
+            ...(nextCallSpecId ? { callSpecId: nextCallSpecId } : {}),
           })
         }
         onSelectTenants={() => navigate({ page: "tenants" })}
@@ -137,21 +137,21 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
     );
   }
 
-  if (route.page === "definitions") {
+  if (route.page === "call-specs") {
     const selectedTenant = tenants.find((tenant) => tenant.key === route.tenantKey) ?? {
       key: route.tenantKey,
       name: route.tenantKey,
     };
-    const fixture = definitionFixture("populated");
+    const fixture = callSpecFixture("populated");
     const state = { ...fixture, tenant: selectedTenant };
 
     return (
-      <TenantDefinitionsPage
-        onSelectDefinition={(definitionId) =>
+      <TenantCallSpecsPage
+        onSelectCallSpec={(callSpecId) =>
           navigate({
             page: "calls",
             tenantKey: route.tenantKey,
-            definitionId,
+            callSpecId,
           })
         }
         onSelectWorkspace={(destination) =>
@@ -167,7 +167,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
   return (
     <TenantsPage
       onSelectTenant={(tenantKey) =>
-        navigate({ page: "definitions", tenantKey })
+        navigate({ page: "call-specs", tenantKey })
       }
       state={tenantFixture("populated")}
       theme={theme}

@@ -7,9 +7,9 @@ defmodule Vxpipe.Calls.CallDetailsSource do
   @identity_fields [
     "call_id",
     "tenant_key",
-    "definition_id",
-    "definition_revision",
-    "definition_schema_version",
+    "call_spec_id",
+    "call_spec_revision",
+    "call_spec_schema_version",
     "plan_digest"
   ]
   @lifecycle_fields [

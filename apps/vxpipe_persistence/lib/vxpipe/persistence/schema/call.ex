@@ -6,7 +6,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     Admission,
     CallArtifact,
     CallDetailsPublication,
-    DefinitionRevision,
+    CallSpecRevision,
     JoinToken,
     TelephonyLeg,
     Tenant,
@@ -37,7 +37,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     )
 
     belongs_to(:tenant, Tenant)
-    belongs_to(:definition_revision, DefinitionRevision)
+    belongs_to(:call_spec_revision, CallSpecRevision)
     has_many(:join_tokens, JoinToken)
     has_many(:admissions, Admission)
     has_many(:telephony_legs, TelephonyLeg)
@@ -68,7 +68,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
       :incarnation_id,
       :terminal_reason,
       :tenant_id,
-      :definition_revision_id
+      :call_spec_revision_id
     ])
     |> validate_required([
       :public_id,
@@ -82,13 +82,13 @@ defmodule Vxpipe.Persistence.Schema.Call do
       :room_id,
       :created_at,
       :tenant_id,
-      :definition_revision_id
+      :call_spec_revision_id
     ])
     |> validate_length(:entry_caller, min: 1, max: 128)
     |> validate_length(:entry_receiver, min: 1, max: 128)
     |> validate_binary_size(:plan_digest, 32)
     |> foreign_key_constraint(:tenant_id)
-    |> foreign_key_constraint(:definition_revision_id)
+    |> foreign_key_constraint(:call_spec_revision_id)
     |> unique_constraint(:public_id)
   end
 

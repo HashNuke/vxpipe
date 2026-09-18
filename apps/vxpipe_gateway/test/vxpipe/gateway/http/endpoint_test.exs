@@ -139,8 +139,8 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
            } = JSON.decode!(conn.resp_body)
   end
 
-  test "starts a trusted definition call and issues its entry caller session" do
-    room_id = "room-definition-#{System.unique_integer([:positive, :monotonic])}"
+  test "starts a trusted call from a call spec and issues its entry caller session" do
+    room_id = "room-call-spec-#{System.unique_integer([:positive, :monotonic])}"
 
     conn =
       :post
@@ -180,9 +180,9 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
   test "pins trusted tool visibility and ignores a browser visibility field" do
     room_id = "room-visibility-#{System.unique_integer([:positive, :monotonic])}"
 
-    definition =
+    call_spec =
       trusted_call_options()
-      |> Keyword.fetch!(:definition)
+      |> Keyword.fetch!(:call_spec)
       |> Map.put(:tool_visibility, "hidden")
       |> Map.put(:tool_visibility_overrides, %{
         "receiver" => %{"get_current_time" => "hidden"}
@@ -196,7 +196,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
       )
       |> put_req_header("content-type", "application/json")
       |> Endpoint.call(
-        trusted_endpoint_options(definition: definition, tool_visibility: "metadata")
+        trusted_endpoint_options(call_spec: call_spec, tool_visibility: "metadata")
       )
 
     assert conn.status == 201
@@ -212,7 +212,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
 
   test "uses trusted initial variables instead of browser input" do
     room_id = "room-initial-variables-#{System.unique_integer([:positive, :monotonic])}"
-    definition = definition_with_order_variables()
+    call_spec = call_spec_with_order_variables()
 
     conn =
       :post
@@ -226,7 +226,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
       |> put_req_header("content-type", "application/json")
       |> Endpoint.call(
         trusted_endpoint_options(
-          definition: definition,
+          call_spec: call_spec,
           initial_variables: %{"order" => %{"id" => 123}}
         )
       )
@@ -235,7 +235,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
 
     assert %{
              "error" => %{
-               "code" => "call_definition_resolution_failed",
+               "code" => "call_spec_resolution_failed",
                "details" => %{"path" => ["initial_variables", "order"]}
              }
            } = JSON.decode!(conn.resp_body)
@@ -246,7 +246,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
 
     options =
       trusted_call_options()
-      |> Keyword.put(:definition, definition_with_order_variables())
+      |> Keyword.put(:call_spec, call_spec_with_order_variables())
       |> Keyword.put(:initial_variables, %{"order" => %{"id" => sentinel}})
 
     assert {:ok, trusted_call} = TrustedCall.new(options)
@@ -254,7 +254,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     refute inspect(trusted_call) =~ sentinel
   end
 
-  test "rejects a trusted definition call without a valid room ID" do
+  test "rejects a trusted call without a valid room ID" do
     conn =
       :post
       |> conn("/api/rooms", JSON.encode!(%{}))
@@ -341,7 +341,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     [
       resource_id: "sample-call",
       revision: 1,
-      definition: %{
+      call_spec: %{
         schema_version: "20260915.01",
         entry_caller: "caller",
         entry_receiver: "receiver",
@@ -371,9 +371,9 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     ]
   end
 
-  defp definition_with_order_variables do
+  defp call_spec_with_order_variables do
     trusted_call_options()
-    |> Keyword.fetch!(:definition)
+    |> Keyword.fetch!(:call_spec)
     |> Map.put(:call_variables, %{
       sections: %{
         "order" => %{

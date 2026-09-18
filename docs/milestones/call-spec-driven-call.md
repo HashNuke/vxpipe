@@ -1,6 +1,6 @@
-# Definition-driven one-agent call
+# Call-Spec-driven one-agent call
 
-Status: complete (2026-09-08). The typed definition/compiler, participant-owned Jido
+Status: complete (2026-09-08). The typed CallSpec/compiler, participant-owned Jido
 routing, plan-selected speech startup, trusted sample, failure cleanup, and complete
 text/speech/tool acceptance path are implemented and verified.
 Specification review: approved,
@@ -10,21 +10,21 @@ that completed this slice. The [ReqLLM agent-runtime milestone](reqllm-agent-run
 must preserve these observable contracts while replacing that mechanism; historical evidence
 is not rewritten as if it used the new runtime.
 Prerequisites: none; start from the existing runnable umbrella.
-Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
+Sources: [Canonical representation and minimal call spec](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
-A trusted embedded host loads a definition with a web caller and one receiving agent,
+A trusted embedded host loads a call spec with a web caller and one receiving agent,
 starts a room from its pinned plan, and completes the existing text/audio exchange and a
-small host-tool call through Jido AI in the sample. Editing the source definition afterward
+small host-tool call through Jido AI in the sample. Editing the source call spec afterward
 cannot change that live call.
 
 ## Specification
 
-- Add engine-owned typed constructors for `CallDefinition`, participant/connection/capability selections, `CallInvocation`, and `ResolvedCallPlan`; ordinary Elixir input and JSON decoding converge on the same validation. Raw JSON maps never become room state.
+- Add engine-owned typed constructors for `CallSpec`, participant/connection/capability selections, `CallInvocation`, and `ResolvedCallPlan`; ordinary Elixir input and JSON decoding converge on the same validation. Raw JSON maps never become room state.
 - Use the date-based `YYYYMMDD.NN` schema-version contract. Keep resource ID/revision distinct from schema version. Choose/document the first implemented schema release during implementation; the labnote's representative JSON is a candidate, not a released schema.
-- Require different existing string refs `entry_caller` and `entry_receiver` into `participants`; participant kind is human or agent. Initially run the web-caller/agent-receiver path. Do not activate the entire catalog. Keep definition key, runtime participant ID, connection ID, and fresh activation ID distinct.
-- Resolve prompts, capability defaults/overrides, and supported provider options once before live startup. Provider configuration stays separate from engine interruption/duration policy. Pin the resulting immutable plan; live orchestration must not consult mutable definitions.
+- Require different existing string refs `entry_caller` and `entry_receiver` into `participants`; participant kind is human or agent. Initially run the web-caller/agent-receiver path. Do not activate the entire catalog. Keep call spec key, runtime participant ID, connection ID, and fresh activation ID distinct.
+- Resolve prompts, capability defaults/overrides, and supported provider options once before live startup. Provider configuration stays separate from engine interruption/duration policy. Pin the resulting immutable plan; live orchestration must not consult mutable call specs.
 - Replace the current custom ReqLLM model/tool iteration process with one
   `Jido.AI.Agent`/AgentServer per active agent-participant activation. Start it through the
   participant subtree's owning supervisor and terminate it with that activation. Jido owns
@@ -36,7 +36,7 @@ cannot change that live call.
   the pinned plan before declaring it ready: initialize the selected model and context,
   set the resolved system prompt, register the supported action modules, and pass private
   execution context only at the request/action boundary. Use Jido's public APIs; do not
-  generate modules from definition input or mutate a ready agent piecemeal.
+  generate modules from call spec input or mutate a ready agent piecemeal.
 - An engine-owned coordinator serializes external and internal turns and maps Jido request
   handles/events into Vxpipe request/turn/participant identities, output pacing,
   interruption, visibility, and usage. Configure Jido request policy to reject overlapping
@@ -54,9 +54,9 @@ cannot change that live call.
   declared Action names. Reject differing aliases before startup until the public binding
   interface in the [ReqLLM runtime migration](reqllm-agent-runtime.md) is available. Current Jido AI loses
   map aliases when constructing model tools; do not silently rename or generate modules.
-  This temporary rollout restriction does not remove aliases from the final definition
+  This temporary rollout restriction does not remove aliases from the final call spec
   contract. The live-MCP slice owns the general runtime-binding interface gate.
-- Invocation cannot replace the definition's entry refs or the trusted tenant identity.
+- Invocation cannot replace the call spec's entry refs or the trusted tenant identity.
 - Reuse current room, gateway, model, STT, TTS, and sample components. Preserve existing runtime speech/interruption behavior. This milestone's trusted startup adapter is not the production API-key/token path built in the prepared-call admission slice.
 
 ## Implementation checklist
@@ -72,21 +72,21 @@ cannot change that live call.
 - [x] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
 - [x] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
 - [x] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
-- [x] Refactor duplicated preset configuration only after the definition-driven sample tests pass.
+- [x] Refactor duplicated preset configuration only after the call-spec-driven sample tests pass.
 
 ## Acceptance and failure checks
 
 - [x] Missing/identical/unknown/non-string entry refs fail before room/provider start; unused catalog entries start no processes or dials.
 - [x] Invocation attempts to replace entry refs or tenant identity fail; authored aliases that collide with reserved/generated tools fail before startup.
-- [x] Equivalent Elixir and JSON definitions normalize identically; unknown schema versions and unsupported provider combinations fail clearly.
-- [x] One call has one participant per definition key; no cross-call shared runtime identities.
-- [x] Change a source definition/profile after start: the active room retains its original resolved configuration.
+- [x] Equivalent Elixir and JSON call specs normalize identically; unknown schema versions and unsupported provider combinations fail clearly.
+- [x] One call has one participant per call spec key; no cross-call shared runtime identities.
+- [x] Change a source call spec/profile after start: the active room retains its original resolved configuration.
 - [x] A forced provider startup failure cleans up the attempted tree without silently switching providers.
 - [x] One host action completes through Jido Action and the ReAct continuation without
   duplicate tool/text events; invalid input fails before the action handler runs.
 - [x] A deterministic request completes two successive tool rounds and a final response
   through Jido's loop, with no engine-owned replacement model/tool loop. Tool names shown
-  to the model match accepted definition keys; unsupported aliases fail before startup.
+  to the model match accepted call spec keys; unsupported aliases fail before startup.
 - [x] Jido stream cancellation maps to the existing interrupted turn without ending the
   participant or granting Jido authority over room lifecycle. Configured tool retries are
   zero, and a stale event from a terminated activation cannot reach its replacement.
@@ -97,7 +97,7 @@ cannot change that live call.
 
 ## Manual verification
 
-1. Load a synthetic caller/reception definition through the documented trusted host/sample adapter.
+1. Load a synthetic caller/reception call spec through the documented trusted host/sample adapter.
 2. Join the existing sample console; exchange typed and spoken messages and invoke the
    synthetic host action once.
 3. Change the configured prompt for a subsequent call and confirm the existing room keeps its original plan while a new room uses the new input.
@@ -119,15 +119,15 @@ host; client-supplied tenant strings do not establish authority.
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence, checkpoint 1 (2026-09-08): released the first engine-owned
-schema identifier, `20260906.02`, and added typed definition, participant, connection,
+schema identifier, `20260906.02`, and added typed call spec, participant, connection,
 capability selection, invocation and resolved-plan structures. The pure compiler accepts
-equivalent fixed-key Elixir/JSON maps, keeps definition ID/revision and tenant/actor
+equivalent fixed-key Elixir/JSON maps, keeps call spec ID/revision and tenant/actor
 identity outside caller-controlled input, resolves profiles/tools only through closed
 trusted registries, assigns fresh runtime identities, and returns path-specific errors
 without rejected values. That first checkpoint accepted an empty variables object and
 empty transfer lists.
 
-Red: `mix test test/vxpipe/call_engine/call_definition/compiler_test.exs` from the
+Red: `mix test test/vxpipe/call_engine/call_spec/compiler_test.exs` from the
 call-engine child failed while compiling the test because the first typed struct did not
 exist. Green: the same focused command passed 7 tests. Full umbrella gate evidence is
 recorded in the implementation labnote and commit. Do not mark this slice complete.
@@ -138,12 +138,12 @@ initial section state to the resolved plan. The released schema uses a closed JS
 Schema-shaped subset compiled by JSV 0.22 with casting and external references unavailable.
 Variable defaults, unsupported schema keywords, malformed grants, unknown sections or
 variables, and datatype violations fail with value-free paths before room startup.
-Authored `required` lists remain in definition metadata but are removed only from the
+Authored `required` lists remain in call spec metadata but are removed only from the
 runtime validator, including nested schema nodes, so iterative population does not invent
 or require missing values. Explicit empty sections remain distinct from omitted sections.
 
 Red: the focused Call Variables compiler test first failed to compile because
-`CallDefinition.VariableSection` did not exist. A review-added malformed-`required` case
+`CallSpec.VariableSection` did not exist. A review-added malformed-`required` case
 then failed because the initial validator relaxation accepted it; the closed schema compiler
 fixed that defect. Green: the focused file passed 7 tests, and the original compiler file
 passed 7 tests. Full umbrella evidence is recorded in the implementation labnote. Runtime
@@ -262,7 +262,7 @@ transport adapters, ingress limits and output queue bounds remain outside the pu
 TTS starts with the receiver; STT starts for the caller's connection using the runtime pinned
 when the room began. The legacy `CreateRoom` path retains its application-default behavior.
 
-Red: the new definition-driven speech case timed out waiting for the TTS transport because
+Red: the new call-spec-driven speech case timed out waiting for the TTS transport because
 compiled speech selections were ignored. Green: the test proves the plan-selected TTS and
 STT models override different application defaults while both transports receive the
 application-owned credential. Ten repeated focused runs passed. A broader run exposed the
@@ -273,15 +273,15 @@ gate deterministic without changing runtime behavior.
 Checkpoint 5 umbrella gates pass: formatting, warnings-as-errors, call engine `96 tests,
 0 failures (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused
 dependencies. This completes the compiled-plan room-startup checklist item. End-to-end audio
-turn completion through the trusted definition sample and explicit startup diagnostics remain
+turn completion through the trusted call spec sample and explicit startup diagnostics remain
 for the next checkpoints.
 
 Implementation evidence, checkpoint 6 (2026-09-08): the development gateway now validates
-one trusted call definition and closed capability/tool registries during endpoint setup. Each
+one trusted call spec and closed capability/tool registries during endpoint setup. Each
 creation request builds a trusted invocation, compiles a fresh immutable plan, starts its entry
 caller/receiver, and issues a single-use gateway session for the already-started caller. The
 room, participant and session return atomically to the sample, so the browser does not supply
-definition/profile identity or create an extra participant. Legacy configured preset and
+call spec/profile identity or create an extra participant. Legacy configured preset and
 create-then-join behavior remains available outside this selected development path.
 
 Red: the gateway endpoint case received only a legacy room response, and the revised frontend
@@ -290,7 +290,7 @@ fixture response. A review-added missing-room case then reproduced a function-cl
 the trusted adapter now delegates arbitrary input to the typed invocation validator and maps
 that error to HTTP 400. Green: the focused gateway file passes 10 tests, the sample passes 2
 tests, and its production TypeScript/Vite build succeeds. A development-config probe validated the
-trusted definition with dummy secret fixtures; a live `bin/dev --http` request using the local
+trusted call spec with dummy secret fixtures; a live `bin/dev --http` request using the local
 ignored development environment returned the expected room, human entry participant and
 Small WebRTC session without exposing credentials.
 
@@ -311,7 +311,7 @@ Implementation evidence, checkpoint 7 (2026-09-08): the plan-start boundary now 
 process-free startup preflight before asking the room `DynamicSupervisor` to create a child.
 Valid schema fields whose behavior belongs to later slices no longer disappear silently:
 non-empty Call Variables sections and generated/fixed first messages return
-`unsupported_call_plan` with their definition path. A selected model profile whose provider is
+`unsupported_call_plan` with their call spec path. A selected model profile whose provider is
 not supported by the current Jido/ReqLLM runtime returns the same safe error at the receiver's
 model capability path. The existing closed constructors continue to reject `media_policy` and
 participant `while_present`, non-web connection service/mode/admission values, remote tool
@@ -319,16 +319,16 @@ types, aliases, and non-empty transfers before compilation.
 
 Red: generated greeting input started a room while ignoring the greeting, and an unsupported
 model provider collapsed to retryable `room_start_failed`. Green: both now fail before a room
-registry entry exists; focused compiler and end-to-end definition tests pass `13 tests,
+registry entry exists; focused compiler and end-to-end call spec tests pass `13 tests,
 0 failures`. Duplicate room identity is still checked first, preserving the existing conflict
 contract without weakening the process-start boundary. The error contains only a stable code,
-message, path, and fixed reason rather than definition values or private provider configuration.
+message, path, and fixed reason rather than call spec values or private provider configuration.
 Final checkpoint gates pass formatting, warnings-as-errors, dependency-use validation, call
 engine `99 tests, 0 failures (1 excluded)`, and gateway `39 tests, 0 failures (3 excluded)`.
 
-Implementation evidence, checkpoint 8 (2026-09-08): after the definition-driven gateway and
+Implementation evidence, checkpoint 8 (2026-09-08): after the call-spec-driven gateway and
 sample tests were green, repository development configuration stopped duplicating the old
-model-inference preset. The trusted definition/profile registry is now the only development
+model-inference preset. The trusted call spec/profile registry is now the only development
 owner of the prompt, model, host-tool selection, STT model/media format, and TTS voice/media
 format. Application configuration retains private Deepgram credentials, transport modules,
 media/queue bounds, and agent-runtime bounds. The reusable legacy model-inference setting falls
@@ -338,7 +338,7 @@ back to its disabled base value; embedded hosts can still configure and use the 
 This was a configuration-only refactor, so no red behavior test was required. A `MIX_ENV=dev`
 probe with explicit non-secret fixture values verified that legacy inference remains disabled,
 both speech runtimes receive only the runtime credential before plan merging, and the trusted
-gateway definition initializes. The existing runtime guard still requires both development
+gateway call spec initializes. The existing runtime guard still requires both development
 provider environment variables without printing or persisting them.
 Final checkpoint gates pass formatting, warnings-as-errors, dependency-use validation, call
 engine `99 tests, 0 failures (1 excluded)`, and gateway `39 tests, 0 failures (3 excluded)`.

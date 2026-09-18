@@ -1,19 +1,19 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { TenantDefinitionsPage } from "./TenantDefinitionsPage";
-import { TenantDefinitionsStory } from "./TenantDefinitionsStory";
-import type { TenantDefinitionsPageState } from "./definitionTypes";
+import { TenantCallSpecsPage } from "./TenantCallSpecsPage";
+import { TenantCallSpecsStory } from "./TenantCallSpecsStory";
+import type { TenantCallSpecsPageState } from "./callSpecTypes";
 
 afterEach(() => {
   cleanup();
   window.history.replaceState({}, "", "/");
 });
 
-const populated: TenantDefinitionsPageState = {
+const populated: TenantCallSpecsPageState = {
   status: "ready",
   tenant: { key: "tn_demo_01", name: "Demo workspace" },
-  definitions: [
+  callSpecs: [
     {
       id: "delivery-rescheduling",
       name: "Delivery rescheduling",
@@ -46,28 +46,28 @@ const populated: TenantDefinitionsPageState = {
   },
 };
 
-test("keeps tenant context and real definition links visible", () => {
-  const selectDefinition = vi.fn();
+test("keeps tenant context and real call spec links visible", () => {
+  const selectCallSpec = vi.fn();
 
   render(
-    <TenantDefinitionsPage
-      onSelectDefinition={selectDefinition}
+    <TenantCallSpecsPage
+      onSelectCallSpec={selectCallSpec}
       state={populated}
     />,
   );
 
-  expect(screen.getByRole("heading", { name: "Call definitions" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Call specs" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Name" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Version" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Calls" })).toBeVisible();
-  expect(screen.queryByText("Definition")).not.toBeInTheDocument();
+  expect(screen.queryByText("CallSpec")).not.toBeInTheDocument();
   expect(screen.queryByText("Revision")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Tenants" })).toHaveAttribute(
     "href",
     "/admin",
   );
   expect(screen.getByText("Demo workspace")).toBeVisible();
-  expect(screen.getByRole("link", { name: "Call definitions" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "Call specs" })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -76,20 +76,20 @@ test("keeps tenant context and real definition links visible", () => {
     "/admin/tenants/tn_demo_01/calls",
   );
 
-  const definitionCalls = screen.getByRole("link", {
+  const callSpecCalls = screen.getByRole("link", {
     name: /view 5 calls for delivery rescheduling/i,
   });
-  expect(definitionCalls).toHaveAttribute(
+  expect(callSpecCalls).toHaveAttribute(
     "href",
-    "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
+    "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling",
   );
 
-  fireEvent.click(definitionCalls);
-  expect(selectDefinition).toHaveBeenCalledWith("delivery-rescheduling");
+  fireEvent.click(callSpecCalls);
+  expect(selectCallSpec).toHaveBeenCalledWith("delivery-rescheduling");
 });
 
-test("distinguishes published, draft changes, and unpublished definitions", () => {
-  render(<TenantDefinitionsPage state={populated} />);
+test("distinguishes published, draft changes, and unpublished call specs", () => {
+  render(<TenantCallSpecsPage state={populated} />);
 
   expect(screen.getByText("Published")).toBeVisible();
   expect(screen.getByText("Draft changes")).toBeVisible();
@@ -99,43 +99,43 @@ test("distinguishes published, draft changes, and unpublished definitions", () =
   ).toBeVisible();
 });
 
-test("keeps empty and unavailable definition results distinct", () => {
+test("keeps empty and unavailable call spec results distinct", () => {
   const { rerender } = render(
-    <TenantDefinitionsPage
+    <TenantCallSpecsPage
       state={{
         status: "ready",
         tenant: populated.tenant,
-        definitions: [],
+        callSpecs: [],
         pagination: null,
       }}
     />,
   );
 
-  expect(screen.getByText("No call definitions yet")).toBeVisible();
+  expect(screen.getByText("No call specs yet")).toBeVisible();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
   rerender(
-    <TenantDefinitionsPage
+    <TenantCallSpecsPage
       state={{
         status: "unavailable",
         tenant: populated.tenant,
-        message: "Call definitions could not be loaded.",
+        message: "Call specs could not be loaded.",
       }}
     />,
   );
 
   expect(screen.getByRole("alert")).toHaveTextContent(
-    "Call definitions could not be loaded.",
+    "Call specs could not be loaded.",
   );
-  expect(screen.queryByText("No call definitions yet")).not.toBeInTheDocument();
+  expect(screen.queryByText("No call specs yet")).not.toBeInTheDocument();
 });
 
-test("definition pagination invokes only valid actions", () => {
+test("call spec pagination invokes only valid actions", () => {
   const previous = vi.fn();
   const next = vi.fn();
 
   render(
-    <TenantDefinitionsPage
+    <TenantCallSpecsPage
       onNextPage={next}
       onPreviousPage={previous}
       state={populated}
@@ -149,9 +149,9 @@ test("definition pagination invokes only valid actions", () => {
   expect(next).toHaveBeenCalledOnce();
 });
 
-test("loading removes stale definition actions", () => {
+test("loading removes stale call spec actions", () => {
   render(
-    <TenantDefinitionsPage
+    <TenantCallSpecsPage
       state={{ status: "loading", tenant: populated.tenant }}
     />,
   );
@@ -160,9 +160,9 @@ test("loading removes stale definition actions", () => {
   expect(screen.queryByRole("link", { name: /^view .* calls for /i })).not.toBeInTheDocument();
 });
 
-test("the paginated definition story reaches its advertised final page", () => {
+test("the paginated call spec story reaches its advertised final page", () => {
   render(
-    <TenantDefinitionsStory scenario="paginated" theme="dark" />,
+    <TenantCallSpecsStory scenario="paginated" theme="dark" />,
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Next page" }));
@@ -172,13 +172,13 @@ test("the paginated definition story reaches its advertised final page", () => {
   expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
 });
 
-test("definition story links record forward and back destinations without replacing the preview", () => {
+test("call spec story links record forward and back destinations without replacing the preview", () => {
   window.history.replaceState(
     {},
     "",
-    "/iframe.html?id=admin-tenant-definitions--populated",
+    "/iframe.html?id=admin-tenant-call-specs--populated",
   );
-  render(<TenantDefinitionsStory scenario="populated" theme="dark" />);
+  render(<TenantCallSpecsStory scenario="populated" theme="dark" />);
 
   fireEvent.click(
     screen.getByRole("link", {
@@ -187,7 +187,7 @@ test("definition story links record forward and back destinations without replac
   );
   expect(window.location.pathname).toBe("/iframe.html");
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
+    "#/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling",
   );
 
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));

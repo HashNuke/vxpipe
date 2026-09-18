@@ -1,31 +1,31 @@
-defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.CallVariablesCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition
-  alias Vxpipe.CallEngine.CallDefinition.VariableSection
+  alias Vxpipe.CallEngine.CallSpec
+  alias Vxpipe.CallEngine.CallSpec.VariableSection
   alias Vxpipe.CallEngine.CallInvocation
-  alias Vxpipe.CallEngine.DefinitionCompiler
+  alias Vxpipe.CallEngine.CallSpecCompiler
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
   @schema_version "20260915.01"
 
   test "compiles partial initial values and agent permissions into typed plan state" do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 1)
 
     assert %VariableSection{name: "customer", schema: schema} =
-             definition.call_variables.sections["customer"]
+             call_spec.call_variables.sections["customer"]
 
     assert schema["required"] == ["id", "profile"]
 
-    assert definition.participants["reception"].variable_permissions.grants == %{
+    assert call_spec.participants["reception"].variable_permissions.grants == %{
              "customer" => :read,
              "intake" => :read_write
            }
 
     invocation_input = %{
-      call_definition: %{id: "support", revision: 1},
+      call_spec: %{id: "support", revision: 1},
       initial_variables: %{
         "customer" => %{
           "id" => "customer-1",
@@ -42,7 +42,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
              )
 
     assert {:ok, %ResolvedCallPlan{} = plan} =
-             DefinitionCompiler.compile(definition, invocation, registries())
+             CallSpecCompiler.compile(call_spec, invocation, registries())
 
     assert plan.call_variables.sections["customer"].value == %{
              "id" => "customer-1",
@@ -59,21 +59,21 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
            }
   end
 
-  test "accepts equivalent JSON and Elixir variable definitions and invocations" do
-    definition_input = definition_input()
+  test "accepts equivalent JSON and Elixir variable call specs and invocations" do
+    call_spec_input = call_spec_input()
 
-    assert {:ok, elixir_definition} =
-             CallDefinition.new(definition_input, resource_id: "support", revision: 1)
+    assert {:ok, elixir_call_spec} =
+             CallSpec.new(call_spec_input, resource_id: "support", revision: 1)
 
-    assert {:ok, json_definition} =
-             definition_input
+    assert {:ok, json_call_spec} =
+             call_spec_input
              |> JSON.encode!()
-             |> CallDefinition.from_json(resource_id: "support", revision: 1)
+             |> CallSpec.from_json(resource_id: "support", revision: 1)
 
-    assert elixir_definition == json_definition
+    assert elixir_call_spec == json_call_spec
 
     invocation_input = %{
-      call_definition: %{id: "support", revision: 1},
+      call_spec: %{id: "support", revision: 1},
       initial_variables: %{"customer" => %{"id" => "customer-1"}},
       transport: %{type: "web"}
     }
@@ -98,7 +98,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
   test "rejects defaults anywhere in a variable schema without returning the value" do
     input =
       put_in(
-        definition_input(),
+        call_spec_input(),
         [
           :call_variables,
           :sections,
@@ -115,7 +115,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
 
     assert {:error,
             %Error{
-              code: :invalid_call_definition,
+              code: :invalid_call_spec,
               details: %{
                 "path" => [
                   "call_variables",
@@ -129,7 +129,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
                   "default"
                 ]
               }
-            } = error} = CallDefinition.new(input, resource_id: "support", revision: 1)
+            } = error} = CallSpec.new(input, resource_id: "support", revision: 1)
 
     refute inspect(error) =~ "private-city"
   end
@@ -137,35 +137,35 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
   test "rejects invalid or unsupported variable schemas before compilation" do
     cases = [
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:call_variables, :sections, "customer", :schema, "type"],
          "array"
        ), ["call_variables", "sections", "customer", "schema", "type"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:call_variables, :sections, "customer", :schema, "properties", "id", "type"],
          "not-a-json-schema-type"
        ), ["call_variables", "sections", "customer", "schema", "properties", "id", "type"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:call_variables, :sections, "customer", :schema, "required"],
          "id"
        ), ["call_variables", "sections", "customer", "schema", "required"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:call_variables, :sections, "customer", :schema, "allOf"],
          []
        ), ["call_variables", "sections", "customer", "schema", "allOf"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:call_variables, :sections, "customer", :schema, "$ref"],
          "https://example.invalid/schema"
        ), ["call_variables", "sections", "customer", "schema", "$ref"]}
     ]
 
     for {input, path} <- cases do
-      assert {:error, %Error{code: :invalid_call_definition, details: %{"path" => ^path}}} =
-               CallDefinition.new(input, resource_id: "support", revision: 1)
+      assert {:error, %Error{code: :invalid_call_spec, details: %{"path" => ^path}}} =
+               CallSpec.new(input, resource_id: "support", revision: 1)
     end
   end
 
@@ -184,13 +184,13 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
     for {permissions, path} <- cases do
       input =
         put_in(
-          definition_input(),
+          call_spec_input(),
           [:participants, "reception", :variable_permissions],
           permissions
         )
 
-      assert {:error, %Error{code: :invalid_call_definition, details: %{"path" => ^path}}} =
-               CallDefinition.new(input, resource_id: "support", revision: 1)
+      assert {:error, %Error{code: :invalid_call_spec, details: %{"path" => ^path}}} =
+               CallSpec.new(input, resource_id: "support", revision: 1)
     end
   end
 
@@ -202,12 +202,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
       {%{"customer" => %{"unknown" => true}}, ["initial_variables", "customer"]}
     ]
 
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 1)
 
     for {initial_variables, path} <- invalid_values do
       invocation_input = %{
-        call_definition: %{id: "support", revision: 1},
+        call_spec: %{id: "support", revision: 1},
         initial_variables: initial_variables,
         transport: %{type: "web"}
       }
@@ -218,18 +218,17 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
                  actor_id: "actor-demo"
                )
 
-      assert {:error,
-              %Error{code: :call_definition_resolution_failed, details: %{"path" => ^path}}} =
-               DefinitionCompiler.compile(definition, invocation, registries())
+      assert {:error, %Error{code: :call_spec_resolution_failed, details: %{"path" => ^path}}} =
+               CallSpecCompiler.compile(call_spec, invocation, registries())
     end
   end
 
   test "allows explicit empty sections and does not fill schema-required variables" do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 1)
 
     invocation_input = %{
-      call_definition: %{id: "support", revision: 1},
+      call_spec: %{id: "support", revision: 1},
       initial_variables: %{"customer" => %{}},
       transport: %{type: "web"}
     }
@@ -240,12 +239,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
                actor_id: "actor-demo"
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
     assert plan.call_variables.sections["customer"].value == %{}
     assert plan.call_variables.sections["intake"].value == nil
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: @schema_version,
       entry_caller: "caller",

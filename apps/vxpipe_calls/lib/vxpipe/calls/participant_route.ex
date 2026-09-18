@@ -4,8 +4,8 @@ defmodule Vxpipe.Calls.ParticipantRoute do
   @enforce_keys [
     :key,
     :tenant_key,
-    :definition_id,
-    :definition_revision,
+    :call_spec_id,
+    :call_spec_revision,
     :participant_ref,
     :published_at
   ]
@@ -14,8 +14,8 @@ defmodule Vxpipe.Calls.ParticipantRoute do
   @type t :: %__MODULE__{
           key: String.t(),
           tenant_key: String.t(),
-          definition_id: String.t(),
-          definition_revision: pos_integer(),
+          call_spec_id: String.t(),
+          call_spec_revision: pos_integer(),
           participant_ref: String.t(),
           published_at: nil | DateTime.t()
         }

@@ -29,15 +29,15 @@ Tool bindings have a separate conversation mode:
 There is no inline execution alternative behind this setting. `conversation_mode` changes
 only Call Engine conversation admission after submission; it does not change how or where the
 operation runs. The engine-owned tool-definition contract therefore has no execution-mode field;
-it describes the operation while the participant-local call-definition binding owns only the
+it describes the operation while the participant-local call-spec binding owns only the
 conversation mode.
 
-## Call-definition shape
+## Call Spec shape
 
 Conversation mode belongs to the agent's local tool binding because two agents may use the
 same underlying operation with different conversational behavior. Each authored platform/
-built-in, host, or MCP binding obtains its tool-specific mode from that entry in the call
-definition's participant `tools` map. Omission defaults to `blocking`; only the exception
+built-in, host, or MCP binding obtains its tool-specific mode from that entry in the
+call spec's participant `tools` map. Omission defaults to `blocking`; only the exception
 needs to be authored:
 
 ```json
@@ -76,7 +76,7 @@ policy.
 The current dated compiler implements this field for explicitly authored platform, host, and MCP
 selections. Permission-derived Call Variables tools compile with the default `blocking` mode.
 Platform names resolve through a closed engine catalog rather than an application registry or
-definition-supplied module. The initial catalog exposes `get_current_time` and `hangup`.
+call-spec-supplied module. The initial catalog exposes `get_current_time` and `hangup`.
 
 ## Submission and conversation flow
 
@@ -238,7 +238,7 @@ running-result pair and invocation ID.
 ## Migration and verification
 
 The migration removed the old `execute`/`submit` split, Jido dispatcher, and background-only
-completion protocol after submit-only tests were green. The selected definition-driven runtime
+completion protocol after submit-only tests were green. The selected call-spec-driven runtime
 has one activation-owned invocation supervisor, registry, worker, and private-continuation path.
 The optional legacy `CreateRoom` model-inference preset is now text-only: it advertises no tools
 and rejects unsolicited provider tool calls without execution.

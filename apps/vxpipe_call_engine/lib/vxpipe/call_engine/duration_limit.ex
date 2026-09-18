@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.DurationLimit do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @platform_default_ms 1_800_000
   @minimum_ms 1_000
@@ -9,11 +9,11 @@ defmodule Vxpipe.CallEngine.DurationLimit do
 
   @spec resolve(nil | pos_integer(), keyword()) ::
           {:ok, pos_integer()} | {:error, Vxpipe.CallEngine.Error.t()}
-  def resolve(definition_value, options) when is_list(options) do
+  def resolve(call_spec_value, options) when is_list(options) do
     with {:ok, limits} <- limits(options),
          {:ok, tenant_value} <- optional_duration(limits, :tenant),
          {:ok, application_value} <- optional_duration(limits, :application) do
-      {:ok, definition_value || tenant_value || application_value || @platform_default_ms}
+      {:ok, call_spec_value || tenant_value || application_value || @platform_default_ms}
     end
   end
 
@@ -49,9 +49,9 @@ defmodule Vxpipe.CallEngine.DurationLimit do
   end
 
   defp invalid(path, reason) do
-    DefinitionValidation.invalid(
-      :call_definition_resolution_failed,
-      "The call definition could not be resolved.",
+    CallSpecValidation.invalid(
+      :call_spec_resolution_failed,
+      "The call spec could not be resolved.",
       path,
       reason
     )

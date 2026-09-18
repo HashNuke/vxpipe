@@ -82,5 +82,5 @@ explore the library APIs.
 ## Next steps
 
 - [Sample walkthroughs](../apps/vxpipe_console/assets/README.md) cover tools, human transfers, and diagnostics.
-- [Tenants and call definitions](tenant-control-plane.md) covers persistent storage and your own call definitions.
+- [Tenants and call specs](tenant-control-plane.md) covers persistent storage and your own call specs.
 - [Development guide](development.md) covers reloading, HTTPS, fixtures, and working on Vxpipe itself.

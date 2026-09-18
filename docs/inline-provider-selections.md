@@ -20,7 +20,7 @@ use their upstream provider selection and the tenant credential source.
 Calls checks credentials separately from ordinary draft support validation. Missing, revoked,
 unreadable or mismatched credentials prevent save; publication and preparation check again.
 Capability startup resolves a fresh private snapshot inside the existing preparation worker.
-The snapshot can live for its activation, but must not enter a definition or serialized plan.
+The snapshot can live for its activation, but must not enter a call spec or serialized plan.
 Save, publication and web preparation also use the credential repository's `with_active`
 transaction boundary for the final database write. It acquires shared row locks in provider/name
 order and checks/decrypts the current binding while those locks are held. Revocation/rotation cannot
@@ -87,16 +87,16 @@ This choice belongs to the adapter; it does not add a public transport switch.
 
 Selection identity hashes tenant, provider, model, options and credential binding name for usage
 and TTS caching. Runtime rejects old schema plans and malformed selections instead of restoring
-profile support. Replace old definitions and prepare fresh calls through the existing administration
+profile support. Replace old call specs and prepare fresh calls through the existing administration
 workflow below; no profile-conversion or call-draining subsystem is required.
 
-## Replace old definitions and prepared calls
+## Replace old call specs and prepared calls
 
 1. Provision each required tenant provider binding through [credential setup](provider-credential-storage.md).
    Register any phone services through [tenant telephony setup](tenant-telephony-services.md).
-2. Author a current `20260915.01` definition with inline selections, replacing old profile references.
+2. Author a current `20260915.01` call spec with inline selections, replacing old profile references.
    Save it as a new immutable revision and publish it through the existing
-   [definition administration](tenant-control-plane.md). Missing credentials reject the write.
+   [call spec administration](tenant-control-plane.md). Missing credentials reject the write.
 3. Prepare new calls from the published routes. Hosted preparation pins safe carrier service
    identity, and activation resolves current tenant credentials.
 4. Preserve old revisions and call history. Old-schema or unbound hosted phone plans cannot start;

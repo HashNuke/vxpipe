@@ -49,5 +49,5 @@ correct-leg isolation, permission checks, honest delivery status, bounded waitin
 and unchanged source/caller responsibilities. Current verification is documentation
 only; no outbound call, message playback, or runtime test was performed.
 
-Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
-[architecture](../architecture.md), and [gap review](../call-definition-gap-review.md).
+Related: [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
+[architecture](../architecture.md), and [gap review](../call-spec-gap-review.md).

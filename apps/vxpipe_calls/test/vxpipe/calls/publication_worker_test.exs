@@ -276,9 +276,9 @@ defmodule Vxpipe.Calls.PublicationWorkerTest do
         "identity" => %{
           "call_id" => @call_id,
           "tenant_key" => @tenant_key,
-          "definition_id" => "support",
-          "definition_revision" => 3,
-          "definition_schema_version" => "20260908.01",
+          "call_spec_id" => "support",
+          "call_spec_revision" => 3,
+          "call_spec_schema_version" => "20260908.01",
           "plan_digest" => "sha256:0123456789abcdef"
         },
         "lifecycle" => %{

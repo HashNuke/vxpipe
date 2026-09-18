@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.CredentialSource do
   @moduledoc "Host-injected tenant authentication boundary, invoked in capability preparation workers."
 
   alias Vxpipe.CallEngine.{CapabilityCatalog, ProviderCredential}
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
 
   @callback resolve(term(), String.t(), String.t(), String.t()) ::
               {:ok, ProviderCredential.t()} | {:error, atom()}

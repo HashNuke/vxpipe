@@ -14,7 +14,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
 
     options = [
       credential_repository: TestMemoryRepository.credential_repository(repository),
-      definition_repository: TestMemoryRepository.definition_repository(repository),
+      call_spec_repository: TestMemoryRepository.call_spec_repository(repository),
       call_repository: TestMemoryRepository.call_repository(repository),
       registries: registries(),
       now: @now,
@@ -33,15 +33,15 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
         Vxpipe.Calls.TestTelephonyServiceRepository.repository([tenant])
       )
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, definition_input(), options)
+    assert {:ok, draft} = Calls.save_call_spec(tenant.key, call_spec_input(), options)
 
     assert {:ok, _published} =
-             Calls.publish_definition(tenant.key, draft.definition_id, 1, options)
+             Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, options)
 
     %{tenant: tenant, options: options}
   end
 
-  test "atomically claims one incoming provider leg for the pinned published definition",
+  test "atomically claims one incoming provider leg for the pinned published call spec",
        context do
     event = incoming_event()
 
@@ -61,7 +61,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
 
     assert call.state == :admitting
     assert call.plan.transport == :telephony
-    assert call.definition_revision == 1
+    assert call.call_spec_revision == 1
     assert call.started_at == nil
     assert claim.participant_id == call.plan.participants["caller"].participant_id
 
@@ -225,7 +225,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
     }
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: "20260915.01",
       name: "Inbound phone",

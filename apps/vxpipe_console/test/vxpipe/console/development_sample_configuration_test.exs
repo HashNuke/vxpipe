@@ -23,7 +23,7 @@ defmodule Vxpipe.Console.DevelopmentSampleConfigurationTest do
     |> Keyword.fetch!(:http)
     |> Keyword.fetch!(:room_creation)
     |> Keyword.fetch!(:trusted_call)
-    |> Keyword.fetch!(:definition)
+    |> Keyword.fetch!(:call_spec)
     |> Map.fetch!(:participants)
   end
 end

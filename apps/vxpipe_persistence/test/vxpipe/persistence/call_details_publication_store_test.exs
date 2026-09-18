@@ -20,9 +20,9 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
 
   alias Vxpipe.Persistence.Schema.{
     Call,
-    CallDefinition,
+    CallSpec,
     CallDetailsPublication,
-    DefinitionRevision,
+    CallSpecRevision,
     Tenant
   }
 
@@ -325,9 +325,9 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
                  "identity" => %{
                    "call_id" => @call_id,
                    "tenant_key" => @tenant_key,
-                   "definition_id" => "publication-definition",
-                   "definition_revision" => 1,
-                   "definition_schema_version" => "20260912.01",
+                   "call_spec_id" => "publication-call-spec",
+                   "call_spec_revision" => 1,
+                   "call_spec_schema_version" => "20260912.01",
                    "plan_digest" => "sha256:publication-plan"
                  },
                  "lifecycle" => %{
@@ -379,15 +379,15 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
       |> Tenant.changeset(%{key: @tenant_key, name: "Publication tenant"})
       |> Repo.insert!()
 
-    definition =
-      %CallDefinition{}
-      |> CallDefinition.changeset(%{tenant_id: tenant.id, public_id: "publication-definition"})
+    call_spec =
+      %CallSpec{}
+      |> CallSpec.changeset(%{tenant_id: tenant.id, public_id: "publication-call-spec"})
       |> Repo.insert!()
 
     revision =
-      %DefinitionRevision{}
-      |> DefinitionRevision.changeset(%{
-        call_definition_id: definition.id,
+      %CallSpecRevision{}
+      |> CallSpecRevision.changeset(%{
+        call_spec_id: call_spec.id,
         revision: 1,
         schema_version: "20260912.01",
         source: %{},
@@ -401,7 +401,7 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
     |> Call.changeset(%{
       public_id: @call_id,
       tenant_id: tenant.id,
-      definition_revision_id: revision.id,
+      call_spec_revision_id: revision.id,
       participant_routes: %{},
       entry_caller: "caller",
       entry_receiver: "assistant",

@@ -9,7 +9,7 @@ lookup/configuration evidence below is historical and superseded. See
 this milestone still owns its original carrier/audio acceptance.
 
 Prerequisites: [Telnyx/common telephony slice](telnyx-calls.md), including its tested provider-neutral adapter contract.
-Sources: [Common telephony boundary](../../labnotes/20260905-0405-call-definition-design.md#keep-telephony-provider-neutral-and-pin-the-resolved-definition-in-the-room); [transfer and machine behavior](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [R32](../call-definition-gap-review.md).
+Sources: [Common telephony boundary](../../labnotes/20260905-0405-call-definition-design.md#keep-telephony-provider-neutral-and-pin-the-resolved-definition-in-the-room); [transfer and machine behavior](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [R32](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
@@ -19,7 +19,7 @@ Switch a configured telephony service to Twilio and run the same inbound-agent a
 
 - Implement a second adapter for the same receive/dial/adopt/media/accept/end contracts. Resolve vendor details from application/tenant service configuration; do not embed Twilio command payloads or credentials in participants.
 - Verify current vendor webhook/control-response/media APIs during implementation; adapt their real flow rather than assuming the first provider's webhook/API sequence. Prove bidirectional media and usable caller/destination audio through Vxpipe mixing before declaring support.
-- Gateway adapter authenticates vendor ingress and normalizes provider/session/leg IDs. Calls selects/pins initial definitions and shared admission; active transfers resolve their existing in-memory participant target, never reselect deployment from a phone number.
+- Gateway adapter authenticates vendor ingress and normalizes provider/session/leg IDs. Calls selects/pins initial call specs and shared admission; active transfers resolve their existing in-memory participant target, never reselect deployment from a phone number.
 - Preserve protected initial-variable dialing, explicit destination-leg press-1 acceptance, isolated briefing/optional notice, privacy-before-bridge, total deadline, one bounded permitted source restoration and internal-only technical reasons.
 - Use optional provider AMD where configured; machine disconnects attempted leg, unknown waits acceptance without resetting deadline. Duplicate/out-of-order/late callbacks cannot redial, re-admit or complete another transfer. Unknown submission is not remote failure or permission to retry.
 - Normalize provenance for media clocks and future usage/request IDs without inventing equivalence across carriers. Shared models/interfaces change only if a genuine common requirement is discovered and covered for both adapters.
@@ -34,7 +34,7 @@ Switch a configured telephony service to Twilio and run the same inbound-agent a
 
 ## Acceptance and failure checks
 
-- [x] Same portable participant definition works by resolving another configured service; no provider-specific room logic is required.
+- [x] Same portable participant call spec works by resolving another configured service; no provider-specific room logic is required.
 - [x] Tampered/cross-tenant media or callbacks reject; duplicates/out-of-order events keep one mapped attempt and no speculative retries.
 - [x] Protected-number violations reject before dial; only destination press-1 accepts and briefing remains private.
 - [x] Machine/unknown/busy/no-answer/timeout outcomes preserve the common source/cleanup rules and privacy restrictions.
@@ -327,7 +327,7 @@ milestone can be marked complete.
 ## Checkpoint 8: outbound private-transfer parity
 
 The existing outbound human-transfer slice now runs unchanged for both configured carriers. One
-provider-neutral scenario builds the call definition, resolves the configured phone service,
+provider-neutral scenario builds the call spec, resolves the configured phone service,
 constructs normalized media/DTMF/AMD events, and supplies the same participant and transfer
 semantics to the room. Carrier-specific test code is limited to credentials, exact provider
 identities, and the fake adapter/socket messages at the transport boundary.

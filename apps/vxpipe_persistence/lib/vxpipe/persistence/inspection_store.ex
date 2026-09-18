@@ -7,7 +7,7 @@ defmodule Vxpipe.Persistence.InspectionStore do
 
   alias Vxpipe.Calls.{ArchiveStatus, CallListCursor, CallSummary, HistoryCursor}
   alias Vxpipe.Persistence.ArchiveRecordCodec
-  alias Vxpipe.Persistence.Schema.{Call, CallDefinition, DefinitionRevision, Tenant}
+  alias Vxpipe.Persistence.Schema.{Call, CallSpec, CallSpecRevision, Tenant}
   alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredSnapshot
 
@@ -17,16 +17,16 @@ defmodule Vxpipe.Persistence.InspectionStore do
       from(call in Call,
         join: tenant in Tenant,
         on: tenant.id == call.tenant_id,
-        join: revision in DefinitionRevision,
-        on: revision.id == call.definition_revision_id,
-        join: definition in CallDefinition,
-        on: definition.id == revision.call_definition_id,
+        join: revision in CallSpecRevision,
+        on: revision.id == call.call_spec_revision_id,
+        join: call_spec in CallSpec,
+        on: call_spec.id == revision.call_spec_id,
         left_join: latest_snapshot in StoredSnapshot,
         on: latest_snapshot.id == call.latest_variables_snapshot_id,
         where: tenant.key == ^tenant_key,
         order_by: [desc: call.created_at, desc: call.public_id],
         limit: ^limit,
-        select: {call, definition.public_id, revision.revision, latest_snapshot.global_revision}
+        select: {call, call_spec.public_id, revision.revision, latest_snapshot.global_revision}
       )
 
     calls =
@@ -44,14 +44,14 @@ defmodule Vxpipe.Persistence.InspectionStore do
       from(call in Call,
         join: tenant in Tenant,
         on: tenant.id == call.tenant_id,
-        join: revision in DefinitionRevision,
-        on: revision.id == call.definition_revision_id,
-        join: definition in CallDefinition,
-        on: definition.id == revision.call_definition_id,
+        join: revision in CallSpecRevision,
+        on: revision.id == call.call_spec_revision_id,
+        join: call_spec in CallSpec,
+        on: call_spec.id == revision.call_spec_id,
         left_join: latest_snapshot in StoredSnapshot,
         on: latest_snapshot.id == call.latest_variables_snapshot_id,
         where: tenant.key == ^tenant_key and call.public_id == ^call_id,
-        select: {call, definition.public_id, revision.revision, latest_snapshot.global_revision}
+        select: {call, call_spec.public_id, revision.revision, latest_snapshot.global_revision}
       )
 
     case repo.one(query) do
@@ -95,7 +95,7 @@ defmodule Vxpipe.Persistence.InspectionStore do
   defp after_cursor(query, nil), do: query
 
   defp after_cursor(query, %CallListCursor{} = cursor) do
-    from([call, _tenant, _revision, _definition, _latest_snapshot] in query,
+    from([call, _tenant, _revision, _call_spec, _latest_snapshot] in query,
       where:
         call.created_at < ^cursor.created_at or
           (call.created_at == ^cursor.created_at and call.public_id < ^cursor.call_id)
@@ -228,14 +228,14 @@ defmodule Vxpipe.Persistence.InspectionStore do
   end
 
   defp to_summary(
-         {call, definition_id, definition_revision, latest_variable_revision},
+         {call, call_spec_id, call_spec_revision, latest_variable_revision},
          tenant_key
        ) do
     %CallSummary{
       id: call.public_id,
       tenant_key: tenant_key,
-      definition_id: definition_id,
-      definition_revision: definition_revision,
+      call_spec_id: call_spec_id,
+      call_spec_revision: call_spec_revision,
       state: call.state,
       created_at: call.created_at,
       started_at: call.started_at,

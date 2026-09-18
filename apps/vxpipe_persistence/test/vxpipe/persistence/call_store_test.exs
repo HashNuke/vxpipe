@@ -18,7 +18,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     ArtifactStore,
     CallStore,
     CredentialStore,
-    DefinitionStore,
+    CallSpecStore,
     EctoStorage,
     InspectionStore,
     Repo,
@@ -34,7 +34,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   @tenant_key "AAAAAAAAAAAAAAAA"
   @key_id "11111111-1111-4111-8111-111111111111"
-  @definition_id "22222222-2222-4222-8222-222222222222"
+  @call_spec_id "22222222-2222-4222-8222-222222222222"
   @route_id "33333333-3333-4333-8333-333333333333"
   @support_route_id "34343434-3434-4434-8434-343434343434"
   @call_id "44444444-4444-4444-8444-444444444444"
@@ -48,14 +48,14 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   setup context do
     repository_options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       archive_repository: {ArchiveStore, Repo},
       artifact_repository: {ArtifactStore, Repo},
       inspection_repository: {InspectionStore, Repo},
       usage_repository: {UsageStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
-      uuid_generator: sequence([@key_id, @definition_id, @route_id, @support_route_id]),
+      uuid_generator: sequence([@key_id, @call_spec_id, @route_id, @support_route_id]),
       api_key_generator: fn -> @api_key end,
       registries: registries()
     ]
@@ -73,19 +73,19 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     input =
       if context[:opening_audio] do
-        Map.put(definition_input(), :opening_audio, %{
+        Map.put(call_spec_input(), :opening_audio, %{
           type: "text",
           text: "A private opening.",
           text_to_speech: %{provider: "morse", model: "morse"}
         })
       else
-        definition_input()
+        call_spec_input()
       end
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, input, repository_options)
+    assert {:ok, draft} = Calls.save_call_spec(tenant.key, input, repository_options)
 
     assert {:ok, published} =
-             Calls.publish_definition(tenant.key, draft.definition_id, 1, repository_options)
+             Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, repository_options)
 
     assert route = Enum.find(published.routes, &(&1.participant_ref == "caller"))
     assert support_route = Enum.find(published.routes, &(&1.participant_ref == "support"))
@@ -177,8 +177,8 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert {:ok, first_page} = Calls.list_calls(context.principal, context.options ++ [limit: 1])
     assert [summary] = first_page.calls
     assert summary.id == second.id
-    assert summary.definition_id == second.definition_id
-    assert summary.definition_revision == second.definition_revision
+    assert summary.call_spec_id == second.call_spec_id
+    assert summary.call_spec_revision == second.call_spec_revision
     assert summary.state == :prepared
     assert summary.created_at == DateTime.add(@now, 30, :second)
     refute inspect(summary) =~ "must-not-appear-in-summary"
@@ -1137,7 +1137,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     }
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: "20260915.01",
       name: "Persistence admission",

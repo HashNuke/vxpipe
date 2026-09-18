@@ -4,7 +4,7 @@ Status: complete; all seven checkpoints and acceptance gates pass.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
-[Tenant administration](tenant-definitions-and-api-keys.md),
+[Tenant administration](tenant-call-specs-and-api-keys.md),
 [Call inspection](call-inspection-and-debugging.md), and the completed database-snapshot/Core/React
 host slices of the in-progress [Call debug console](call-debug-console.md). Its pending live-call
 controls and RTVI/WebRTC adapters do not block operator login or historical browsing.
@@ -19,7 +19,7 @@ eight-digit code. The URL opens a server-rendered code-entry page. A correct cod
 operator session and redirects to `/admin`.
 
 The authenticated admin application is React. It lets the operator browse every tenant, move among
-one tenant's call definitions, calls and services, optionally filter calls by definition, configure
+one tenant's call specs, calls and services, optionally filter calls by call spec, configure
   credentials for providers Vxpipe already supports, and open an ongoing or ended call in the existing
 debug console. This first operator role has installation-wide visibility; it does not introduce
 users, teams, tenant memberships or RBAC.
@@ -30,7 +30,7 @@ users, teams, tenant memberships or RBAC.
   tokens and provider credentials. Platform and tenant keys remain programmatic API credentials;
   neither is a UI sign-in credential.
 - A valid operator session may inspect every tenant and the resources exposed by this milestone.
-  Tenant and definition identifiers select resources; they do not narrow the operator's identity.
+  Tenant and call spec identifiers select resources; they do not narrow the operator's identity.
 - This milestone has one installation-wide operator grant. It adds no user records, email or
   password login, signup, invitations, teams, memberships, roles, RBAC, OIDC or SSO.
 - Console owns the login pages, operator session and `/admin` application. Calls owns authorized
@@ -40,7 +40,7 @@ users, teams, tenant memberships or RBAC.
   workflows and the create-only provider-credential mutation. Console passes that authority plus
   selected tenant/resource identifiers; it never fabricates a tenant `Principal`, tenant API-key ID
   or wildcard tenant to reuse existing checks, and it never writes through Persistence directly.
-- Anonymous requests and expired sessions disclose no tenant, definition or call data. Missing and
+- Anonymous requests and expired sessions disclose no tenant, call spec or call data. Missing and
   cross-resource identifiers return the same safe not-found result.
 - Lists are bounded and have stable pagination. Empty, loading, unavailable and partial states are
   truthful; the UI never turns an unavailable query into an empty list.
@@ -113,20 +113,20 @@ users, teams, tenant memberships or RBAC.
 - JSON access stays same-origin and cookie-authenticated. Frontend code receives no API key,
   challenge token, session token or provider secret in HTML configuration, local storage or URLs.
 - Page loaders cancel or ignore obsolete requests during navigation. A late response for one tenant,
-  definition or call cannot replace the currently selected resource.
+  call spec or call cannot replace the currently selected resource.
 
 ## Admin information architecture
 
 | Route | React page | Minimum content |
 | --- | --- | --- |
 | `/admin` | Tenants | Bounded tenant list, stable identity and link to each tenant. |
-| `/admin/tenants/:tenant_key` | Tenant workspace entry | Redirects to the tenant's Call definitions destination. |
-| `/admin/tenants/:tenant_key/definitions` | Call definitions | Tenant context and bounded published/draft definition summaries. |
-| `/admin/tenants/:tenant_key/calls` | Calls | Bounded tenant calls with an optional `definition_id` filter. |
+| `/admin/tenants/:tenant_key` | Tenant workspace entry | Redirects to the tenant's Call Specs destination. |
+| `/admin/tenants/:tenant_key/call-specs` | Call Specs | Tenant context and bounded published/draft call spec summaries. |
+| `/admin/tenants/:tenant_key/calls` | Calls | Bounded tenant calls with an optional `call_spec_id` filter. |
 | `/admin/tenants/:tenant_key/services` | Services | Metadata-only service inventory and write-only credential setup for supported providers. |
 | `/admin/tenants/:tenant_key/calls/:call_id` | Call details | Existing live or historical debug console populated from the authorized inspection snapshot. |
 
-Tenant creation, definition editing, provider expansion and demo installation belong to later
+Tenant creation, call spec editing, provider expansion and demo installation belong to later
 milestones and will extend this shell.
 
 ## Checkpoint 1 — Persist and issue one login challenge
@@ -213,25 +213,25 @@ unrelated Call Engine live-inspection failure after 698 tests;
 that unchanged test also fails alone because killing its inspection buffer removes the participant it
 then expects to remain.
 
-## Checkpoint 4 — Browse one tenant's definitions and workspace
+## Checkpoint 4 — Browse one tenant's call specs and workspace
 
-- [x] Red-test a bounded tenant-definition summary query and endpoint with stable pagination,
+- [x] Red-test a bounded tenant-call spec summary query and endpoint with stable pagination,
   current publication state, missing tenant and persistence failure.
-- [x] Connect the approved Tenant definitions page without changing its presentation contract.
+- [x] Connect the approved tenant call specs page without changing its presentation contract.
   Preserve tenant context in navigation and reject a stale response after switching tenants.
-- [x] Move the destination to `/admin/tenants/:tenant_key/definitions`. The tenant root redirects
+- [x] Move the destination to `/admin/tenants/:tenant_key/call-specs`. The tenant root redirects
   there without losing the selected tenant; Calls and Services links are not exposed yet.
 - [x] Verify direct URL load, refresh, back/forward, empty/populated/unavailable states and long
-  definition names in automated and rendered browser checks.
+  call spec names in automated and rendered browser checks.
 
-Exit: an authenticated operator can select any tenant and browse its call definitions. Commit this
+Exit: an authenticated operator can select any tenant and browse its call specs. Commit this
 vertical slice separately.
 
-Evidence: Calls exposes the bounded definition-summary workflow only to installation-operator
+Evidence: Calls exposes the bounded call-spec-summary workflow only to installation-operator
 authority. Persistence returns tenant identity, a deterministically ordered page, its total, latest
 saved version/name, published version and call count in one statement; missing tenants remain distinct
-from empty definition lists and storage failure. Console serves the tenant-scoped JSON endpoint and
-the React application restores canonical definition URLs, page history and tenant switches while
+from empty call spec lists and storage failure. Console serves the tenant-scoped JSON endpoint and
+the React application restores canonical call spec URLs, page history and tenant switches while
 ignoring stale responses. Production displays call counts without linking to the unfinished Calls
 route; the approved Storybook contract retains those links for checkpoint 5. Calls (95 tests), Persistence (147 tests, 11 excluded), Console (174 tests,
 one excluded), and Console assets (90 tests) pass. Headless Chrome verified real PostgreSQL data at
@@ -243,25 +243,25 @@ after identifying and verifying the unfinished-link boundary. Root `mix test` co
 unrelated Gateway WebRTC handoff timing failure; that exact test passed alone immediately afterward
 (one test, zero failures, 67 excluded), while every application changed here passed in the root run.
 
-## Checkpoint 5 — Browse tenant calls with an optional definition filter
+## Checkpoint 5 — Browse tenant calls with an optional call spec filter
 
-- [x] Red-test a bounded tenant call-summary query whose optional definition filter matches the exact
-  definition identity across immutable revisions. Another tenant's call or definition never appears.
+- [x] Red-test a bounded tenant call-summary query whose optional call spec filter matches the exact
+  call spec identity across immutable revisions. Another tenant's call or call spec never appears.
 - [x] Expose the operator-only endpoint and connect the approved Calls page, including optional
-  `definition_id`, filter reset, lifecycle/archive status, pagination and truthful unavailable fields.
-- [x] Connect the approved shared tenant navigation with working Call definitions and Calls
+  `call_spec_id`, filter reset, lifecycle/archive status, pagination and truthful unavailable fields.
+- [x] Connect the approved shared tenant navigation with working Call Specs and Calls
   destinations. Do not expose Services until checkpoint 6 supplies its page and endpoints.
 - [x] Verify direct URL load, refresh, back/forward, empty/populated/unavailable data, stale-response
   protection and cross-resource failures.
 
-Exit: an operator can browse all tenant calls or follow a definition deep-link to the same page with
-that definition selected. Commit this vertical slice separately.
+Exit: an operator can browse all tenant calls or follow a call spec deep-link to the same page with
+that call spec selected. Commit this vertical slice separately.
 
-Evidence: Calls joins each call through its pinned immutable definition revision while the optional
-filter matches the definition's stable public identity. Persistence returns a deterministic bounded
+Evidence: Calls joins each call through its pinned immutable call spec revision while the optional
+filter matches the call spec's stable public identity. Persistence returns a deterministic bounded
 page, tenant-scoped filter options, pinned version/name, lifecycle state and latest archive
 completeness without reading archive payloads. The selector uses a limit-plus-one query, discloses
-when more than 100 definitions exist and keeps a direct selection outside that window available.
+when more than 100 call specs exist and keeps a direct selection outside that window available.
 Console exposes only the installation-operator endpoint. The typed React client rejects malformed
 pagination, tenant/filter contradictions and call rows that contradict an active filter; URL-backed
 navigation handles reset, recovery and obsolete responses. Calls (97), Persistence (149; 11
@@ -371,10 +371,10 @@ warnings-as-errors compilation, strict Credo and unused-dependency checks also p
   persist, and expiry/attempt/concurrency behavior passes after application restart.
 - [x] The Phoenix-rendered auth flow is the only non-React user page introduced here. Every `/admin`
   page comes from the completed and explicitly user-approved Storybook milestone.
-- [x] One operator session sees every tenant, definition and tenant call without user, team,
+- [x] One operator session sees every tenant, call spec and tenant call without user, team,
   membership or RBAC records.
-- [x] Tenant Calls defaults to all calls and accepts an isolated definition filter; shared tenant
-  navigation reaches Call definitions, Calls and Services on direct load and through browser history.
+- [x] Tenant Calls defaults to all calls and accepts an isolated call spec filter; shared tenant
+  navigation reaches Call Specs, Calls and Services on direct load and through browser history.
 - [x] The Services page lists metadata and accepts supported provider credentials through write-only,
   CSRF-protected actions; no endpoint or UI reveals stored credential values.
 - [x] Platform and tenant API keys remain API credentials and cannot sign into the UI.
@@ -387,7 +387,7 @@ warnings-as-errors compilation, strict Credo and unused-dependency checks also p
 ## Scope boundaries
 
 No user directory, email/password authentication, password reset, signup, invitation, team,
-membership, RBAC, OIDC/SSO, audit identity, tenant CRUD, definition editor, new provider/auth method,
+membership, RBAC, OIDC/SSO, audit identity, tenant CRUD, call spec editor, new provider/auth method,
 API-key redesign, billing, credential reveal, third-party credential rotation schedule, package
 publication or container release is included.
 

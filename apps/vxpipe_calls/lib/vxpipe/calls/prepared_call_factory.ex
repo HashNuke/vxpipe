@@ -1,28 +1,28 @@
 defmodule Vxpipe.Calls.PreparedCallFactory do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, ResolvedCallPlan}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, ResolvedCallPlan}
 
   alias Vxpipe.Calls.{
     CallPlanCompiler,
-    DefinitionCredentials,
-    DefinitionRevision,
+    CallSpecCredentials,
+    CallSpecRevision,
     PreparedCall,
     PublicId
   }
 
-  @spec build(DefinitionRevision.t(), map(), :web | :telephony, keyword()) ::
+  @spec build(CallSpecRevision.t(), map(), :web | :telephony, keyword()) ::
           {:ok, PreparedCall.t()} | {:error, term()}
-  def build(%DefinitionRevision{} = revision, initial_variables, transport, options)
+  def build(%CallSpecRevision{} = revision, initial_variables, transport, options)
       when is_map(initial_variables) and transport in [:web, :telephony] and is_list(options) do
-    with {:ok, definition} <-
-           CallDefinition.new(revision.source,
-             resource_id: revision.definition_id,
+    with {:ok, call_spec} <-
+           CallSpec.new(revision.source,
+             resource_id: revision.call_spec_id,
              revision: revision.revision
            ),
-         :ok <- DefinitionCredentials.check(definition, revision.tenant_key, options),
+         :ok <- CallSpecCredentials.check(call_spec, revision.tenant_key, options),
          {:ok, invocation} <- invocation(revision, initial_variables, transport, options),
-         {:ok, plan} <- CallPlanCompiler.compile(definition, invocation, options),
+         {:ok, plan} <- CallPlanCompiler.compile(call_spec, invocation, options),
          {:ok, plan} <- Vxpipe.CallEngine.prepare_call_audio(plan, options) do
       {:ok, prepared_call(plan, revision.routes, initial_variables, options)}
     end
@@ -31,7 +31,7 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
   defp invocation(revision, initial_variables, transport, options) do
     CallInvocation.new(
       %{
-        call_definition: %{id: revision.definition_id, revision: revision.revision},
+        call_spec: %{id: revision.call_spec_id, revision: revision.revision},
         initial_variables: initial_variables,
         transport: %{type: Atom.to_string(transport)}
       },
@@ -46,8 +46,8 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
     %PreparedCall{
       id: plan.call_id,
       tenant_key: plan.tenant_id,
-      definition_id: plan.definition_id,
-      definition_revision: plan.definition_revision,
+      call_spec_id: plan.call_spec_id,
+      call_spec_revision: plan.call_spec_revision,
       schema_version: plan.schema_version,
       participant_routes: Map.new(routes, &{&1.key, &1.participant_ref}),
       entry_caller: plan.entry_caller,

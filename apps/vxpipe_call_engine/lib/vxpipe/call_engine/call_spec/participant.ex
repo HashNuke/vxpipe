@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.Participant do
+defmodule Vxpipe.CallEngine.CallSpec.Participant do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.{
+  alias Vxpipe.CallEngine.CallSpec.{
     Capabilities,
     ConnectionIntent,
     MediaPolicy,
@@ -10,7 +10,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     VariablePermissions
   }
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @all_fields [
     :type,
@@ -48,7 +48,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   ]
 
   @enforce_keys [
-    :definition_key,
+    :call_spec_key,
     :kind,
     :description,
     :connection,
@@ -66,7 +66,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          definition_key: String.t(),
+          call_spec_key: String.t(),
           kind: :human | :agent,
           description: nil | String.t(),
           connection: nil | ConnectionIntent.t(),
@@ -82,18 +82,18 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
           variable_permissions: VariablePermissions.t()
         }
 
-  def new(definition_key, value) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
-    path = ["participants", definition_key]
+  def new(call_spec_key, value) do
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
+    path = ["participants", call_spec_key]
 
-    with {:ok, definition_key} <-
-           DefinitionValidation.identifier(definition_key, code, message, path),
+    with {:ok, call_spec_key} <-
+           CallSpecValidation.identifier(call_spec_key, code, message, path),
          {:ok, input} <-
-           DefinitionValidation.normalize_map(value, @all_fields, code, message, path),
-         {:ok, type_input} <- DefinitionValidation.fetch(input, :type, code, message, path),
+           CallSpecValidation.normalize_map(value, @all_fields, code, message, path),
+         {:ok, type_input} <- CallSpecValidation.fetch(input, :type, code, message, path),
          {:ok, kind} <-
-           DefinitionValidation.enum(
+           CallSpecValidation.enum(
              type_input,
              [human: "human", agent: "agent"],
              code,
@@ -114,7 +114,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
        struct!(
          __MODULE__,
          Map.merge(attributes, %{
-           definition_key: definition_key,
+           call_spec_key: call_spec_key,
            kind: kind,
            description: description,
            capabilities: capabilities,
@@ -132,7 +132,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
         :ok
 
       field ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ [Atom.to_string(field)],
@@ -142,7 +142,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   end
 
   defp optional_description(input, code, message, path) do
-    DefinitionValidation.optional_string(
+    CallSpecValidation.optional_string(
       Map.get(input, :description),
       code,
       message,
@@ -153,10 +153,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
 
   defp kind_attributes(:human, input, code, message, path) do
     with {:ok, connection_input} <-
-           DefinitionValidation.fetch(input, :connection, code, message, path),
+           CallSpecValidation.fetch(input, :connection, code, message, path),
          {:ok, connection} <- ConnectionIntent.new(connection_input, path ++ ["connection"]),
          {:ok, transfer_notice} <-
-           DefinitionValidation.optional_string(
+           CallSpecValidation.optional_string(
              Map.get(input, :transfer_notice),
              code,
              message,
@@ -179,9 +179,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   end
 
   defp kind_attributes(:agent, input, code, message, path) do
-    with {:ok, prompt_input} <- DefinitionValidation.fetch(input, :prompt, code, message, path),
+    with {:ok, prompt_input} <- CallSpecValidation.fetch(input, :prompt, code, message, path),
          {:ok, prompt} <-
-           DefinitionValidation.string(prompt_input, code, message, path ++ ["prompt"],
+           CallSpecValidation.string(prompt_input, code, message, path ++ ["prompt"],
              maximum: 32_768
            ),
          {:ok, first_message, first_message_text} <-
@@ -219,10 +219,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     first_path = path ++ ["first_message"]
 
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, [:mode, :text], code, message, first_path),
-         {:ok, mode_input} <- DefinitionValidation.fetch(input, :mode, code, message, first_path),
+           CallSpecValidation.normalize_map(value, [:mode, :text], code, message, first_path),
+         {:ok, mode_input} <- CallSpecValidation.fetch(input, :mode, code, message, first_path),
          {:ok, mode} <-
-           DefinitionValidation.enum(
+           CallSpecValidation.enum(
              mode_input,
              [wait_for_input: "wait_for_input", generated: "generated", fixed: "fixed"],
              code,
@@ -234,18 +234,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   end
 
   defp first_message_text(:fixed, input, code, message, path) do
-    with {:ok, text_input} <- DefinitionValidation.fetch(input, :text, code, message, path),
+    with {:ok, text_input} <- CallSpecValidation.fetch(input, :text, code, message, path),
          {:ok, text} <-
-           DefinitionValidation.string(text_input, code, message, path ++ ["text"],
-             maximum: 4_096
-           ) do
+           CallSpecValidation.string(text_input, code, message, path ++ ["text"], maximum: 4_096) do
       {:ok, :fixed, text}
     end
   end
 
   defp first_message_text(mode, input, code, message, path) do
     if Map.has_key?(input, :text) do
-      DefinitionValidation.invalid(
+      CallSpecValidation.invalid(
         code,
         message,
         path ++ ["text"],
@@ -268,7 +266,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   end
 
   defp tools(_value, code, message, path) do
-    DefinitionValidation.invalid(code, message, path ++ ["tools"], "must be an object")
+    CallSpecValidation.invalid(code, message, path ++ ["tools"], "must be an object")
   end
 
   defp transfers(value, code, message, path) when is_list(value) do
@@ -277,11 +275,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     |> Enum.reduce_while({:ok, [], MapSet.new()}, fn {target, index}, {:ok, targets, seen} ->
       target_path = path ++ ["transfers", Integer.to_string(index)]
 
-      case DefinitionValidation.identifier(target, code, message, target_path) do
+      case CallSpecValidation.identifier(target, code, message, target_path) do
         {:ok, target} ->
           if MapSet.member?(seen, target) do
             {:halt,
-             DefinitionValidation.invalid(code, message, target_path, "must not be duplicated")}
+             CallSpecValidation.invalid(code, message, target_path, "must not be duplicated")}
           else
             {:cont, {:ok, [target | targets], MapSet.put(seen, target)}}
           end
@@ -297,7 +295,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   end
 
   defp transfers(_value, code, message, path) do
-    DefinitionValidation.invalid(
+    CallSpecValidation.invalid(
       code,
       message,
       path ++ ["transfers"],

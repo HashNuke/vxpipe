@@ -5,11 +5,11 @@ import {
   type LocalSessionSnapshot,
 } from "@vxpipe/core";
 
-import { calls, demoDefinition } from "./callFixtures";
-import type { CallSummary, DefinitionContext } from "./callTypes";
+import { calls, demoCallSpec } from "./callFixtures";
+import type { CallSummary, CallSpecContext } from "./callTypes";
 import type { CallDetailsPageState } from "./callDetailsTypes";
-import { demoTenant } from "./definitionFixtures";
-import type { TenantContext } from "./definitionTypes";
+import { demoTenant } from "./callSpecFixtures";
+import type { TenantContext } from "./callSpecTypes";
 
 export type CallDetailsFixtureScenario =
   | "ongoing"
@@ -25,8 +25,8 @@ const longTenant: TenantContext = {
   name: "Regional delivery and customer experience operations — Southeast Asia",
 };
 
-const longDefinition: DefinitionContext = {
-  ...demoDefinition,
+const longCallSpec: CallSpecContext = {
+  ...demoCallSpec,
   id: "international-delivery-rescheduling-and-customer-resolution",
   name: "International delivery rescheduling and customer resolution",
 };
@@ -304,7 +304,7 @@ function liveController(
 function readyState(
   selectedCall: CallSummary,
   completeness: "complete" | "incomplete" | "unconfirmed",
-  definition: DefinitionContext = demoDefinition,
+  callSpec: CallSpecContext = demoCallSpec,
   tenant: TenantContext = demoTenant,
   content: "default" | "long" = "default",
 ): CallDetailsPageState {
@@ -319,9 +319,9 @@ function readyState(
   return {
     status: "ready",
     tenant,
-    definition,
+    callSpec,
     callId: details.call.id,
-    definitionRevision: selectedCall.definitionRevision,
+    callSpecRevision: selectedCall.callSpecRevision,
     controller,
     completeness,
   };
@@ -334,15 +334,15 @@ export function callDetailsFixture(
   if (scenario === "ended") return readyState(calls[1], "complete");
   if (scenario === "partial-archive") return readyState(calls[1], "incomplete");
   if (scenario === "long-content") {
-    return readyState(calls[0], "unconfirmed", longDefinition, longTenant, "long");
+    return readyState(calls[0], "unconfirmed", longCallSpec, longTenant, "long");
   }
 
   const call = calls[0];
   const context = {
     tenant: demoTenant,
-    definition: demoDefinition,
+    callSpec: demoCallSpec,
     callId: call.id,
-    definitionRevision: call.definitionRevision,
+    callSpecRevision: call.callSpecRevision,
   };
   if (scenario === "loading") return { status: "loading", ...context };
   if (scenario === "unavailable") {
@@ -361,8 +361,8 @@ export function callDetailsFixture(
 
 export function callDetailsFixtureForCall(
   call: CallSummary,
-  definition: DefinitionContext,
+  callSpec: CallSpecContext,
   tenant: TenantContext,
 ): CallDetailsPageState {
-  return readyState(call, call.archiveState, definition, tenant);
+  return readyState(call, call.archiveState, callSpec, tenant);
 }

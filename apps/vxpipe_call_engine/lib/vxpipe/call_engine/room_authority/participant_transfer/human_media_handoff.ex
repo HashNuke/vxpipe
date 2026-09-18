@@ -558,7 +558,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     connections
     |> Enum.group_by(fn {_id, connection} -> connection.identity.participant_id end)
     |> Enum.reduce_while({:ok, %{}}, fn {participant, outputs}, {:ok, players} ->
-      destination = Map.fetch!(binding.plan.participants, request.destination_definition_key)
+      destination = Map.fetch!(binding.plan.participants, request.destination_call_spec_key)
 
       slot =
         cond do

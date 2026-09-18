@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
 
   @derive {Inspect, only: [:type]}
   @enforce_keys [:type, :text, :url, :text_to_speech]

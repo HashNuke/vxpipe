@@ -17,8 +17,8 @@ export function CallDetailsPage({
   theme?: "dark" | "light";
   contextHref?: (path: string) => string;
 }) {
-  const definitionLabel = state.definition
-    ? state.definition.name ?? state.definition.id
+  const callSpecLabel = state.callSpec
+    ? state.callSpec.name ?? state.callSpec.id
     : null;
   const header = (
     <CallDetailsConsoleHeader
@@ -26,12 +26,12 @@ export function CallDetailsPage({
         { label: "Tenants", href: contextHref("/admin") },
         {
           label: state.tenant.name ?? state.tenant.key,
-          href: contextHref(`/admin/tenants/${encodeURIComponent(state.tenant.key)}/definitions`),
+          href: contextHref(`/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs`),
         },
-        ...(state.definition && definitionLabel
+        ...(state.callSpec && callSpecLabel
           ? [{
-              label: definitionLabel,
-              href: contextHref(`/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?definition_id=${encodeURIComponent(state.definition.id)}`),
+              label: callSpecLabel,
+              href: contextHref(`/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?call_spec_id=${encodeURIComponent(state.callSpec.id)}`),
             }]
           : []),
       ]}
@@ -40,7 +40,7 @@ export function CallDetailsPage({
   const callIdentity = (
     <CallIdentity
       callId={state.callId}
-      definitionRevision={state.definitionRevision}
+      callSpecRevision={state.callSpecRevision}
     />
   );
   const callContext = (

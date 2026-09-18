@@ -10,7 +10,7 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
   alias Vxpipe.Persistence.{
     CredentialKeyring,
     CredentialStore,
-    DefinitionStore,
+    CallSpecStore,
     ProviderCredentialStore,
     Repo
   }
@@ -30,7 +30,7 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
     options = [
       credential_repository: {CredentialStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, context},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       registries: %{host_tools: %{}}
     ]
 
@@ -60,10 +60,10 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
        ctx do
     observer = self()
     requirements = [%{provider: "google", name: "default", path: ["model_inference"]}]
-    {:ok, initial} = Calls.save_definition(ctx.tenant.key, source(), ctx.options)
+    {:ok, initial} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
 
     routes =
-      Enum.map(initial.routes, &%{&1 | key: Vxpipe.Calls.PublicId.uuid(), definition_revision: 2})
+      Enum.map(initial.routes, &%{&1 | key: Vxpipe.Calls.PublicId.uuid(), call_spec_revision: 2})
 
     revision = %{initial | revision: 2, routes: routes}
 
@@ -74,7 +74,7 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
             send(observer, {:credential_write_held, self()})
 
             receive do
-              :write -> DefinitionStore.insert_revision(Repo, ctx.tenant.key, revision, routes)
+              :write -> CallSpecStore.insert_revision(Repo, ctx.tenant.key, revision, routes)
             after
               2_000 -> {:error, :test_write_timeout}
             end
@@ -106,9 +106,9 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
     assert {1, _} = revoke(ctx.credential.id)
 
     assert {:error, %{code: :provider_credential_unavailable}} =
-             Calls.publish_definition(
+             Calls.publish_call_spec(
                ctx.tenant.key,
-               draft.definition_id,
+               draft.call_spec_id,
                draft.revision,
                ctx.options
              )

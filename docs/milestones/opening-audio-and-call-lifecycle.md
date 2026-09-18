@@ -9,7 +9,7 @@ Sources: [Current opening-audio contract](../opening-audio-contract.md); [greeti
 A caller hears optional configured opening audio before normal conversation. The agent then follows its greeting mode, can use current time/hangup tools, and respects readiness, idle, and whole-call duration rules.
 
 The tenant-credential milestone supersedes this milestone's historical profile representation with
-inline selections in schema `20260915.01`. Its current definition/authentication contract is in
+inline selections in schema `20260915.01`. Its current call spec/authentication contract is in
 [Opening audio](../opening-audio-contract.md); lifecycle and playout acceptance below remain in force.
 
 ## Specification
@@ -19,7 +19,7 @@ inline selections in schema `20260915.01`. Its current definition/authentication
 - The [opening-audio contract](../opening-audio-contract.md) specifies source format, fetch/cache, transport completion and failure behavior. Text with an absent/unavailable opening TTS profile fails explicitly. File playback requires no TTS. Failed/incomplete playback ends the attempt with input closed; no text barge-in is admitted.
 - Each agent's first activation chooses wait, fixed greeting, or generated greeting; wait for opening completion and readiness. Re-entry does not replay greeting. Hard hangup/closing wording is agent instructions, not a platform speak-then-end/drain workflow.
 - Required startup readiness defaults 30s after join/start attempt, fails early on terminal errors; deliberate opening playback is not a 30s file limit. Genuine caller-idle notification defaults 15s, excluding opening, own speech, holding/dialing/tool wait; instructions choose action, no automatic repeated nudge/hangup.
-- limits.max_duration_ms defaults 1800000, definition > tenant > app > platform, pinned per call from actual started_at; includes human-only/held time without reset on transfer. No unapproved unlimited mode/grace warning. Date/current-time tool uses permitted instructions/application time context; no timezone hierarchy or personalization engine.
+- limits.max_duration_ms defaults 1800000, call spec > tenant > app > platform, pinned per call from actual started_at; includes human-only/held time without reset on transfer. No unapproved unlimited mode/grace warning. Date/current-time tool uses permitted instructions/application time context; no timezone hierarchy or personalization engine.
 
 ## Implementation checklist
 
@@ -55,7 +55,7 @@ inline selections in schema `20260915.01`. Its current definition/authentication
   opening playback is not mistaken for failed readiness. Duplicate readiness never repeats a greeting.
 - [x] Idle excludes opening/output/hold/dial/tool wait and only notifies instructions; it does
   not automatically nudge or hang up.
-- [x] Duration precedence is pinned and invocation overrides fail; later definition/tenant/
+- [x] Duration precedence is pinned and invocation overrides fail; later call spec/tenant/
   application edits cannot reset the running call's deadline.
 
 ## Manual verification
@@ -173,7 +173,7 @@ Dialing is not available in this milestone; its later implementation must use th
 boundary rather than treating transfer setup as caller silence.
 
 Duration resolution now preserves an omitted authored limit until compilation. Call Engine applies
-explicit definition, tenant, application, then platform-default precedence and pins the resulting
+explicit call spec, tenant, application, then platform-default precedence and pins the resulting
 1,000–86,400,000 millisecond value in `ResolvedCallPlan`. `vxpipe_calls` obtains application and
 tenant values from its trusted `:call_duration` OTP setting while preparing the call; the tenant
 map is keyed by the public tenant key. The invocation schema continues to reject a caller-supplied
@@ -242,7 +242,7 @@ PostgreSQL password. Rendered diagnostics checks at 1440×1000 and 390×844 show
 the existing workbench without horizontal overflow; the browser accessibility audit reported zero
 violations.
 
-Pre-delivery review checkpoint (2026-09-12): the runnable development definition now grants its two
+Pre-delivery review checkpoint (2026-09-12): the runnable development call spec now grants its two
 sample agents the existing platform `hangup` tool and explicitly instructs them to use it when the
 caller asks to end the call. A focused configuration contract prevents that manual lifecycle path
 from disappearing. Engine coverage now also proves that the permitted tool completion terminates

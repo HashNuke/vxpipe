@@ -3,7 +3,7 @@ import type {
   ServiceInventoryItem,
   TenantServicesPageState,
 } from "./serviceTypes";
-import { demoTenant } from "./definitionFixtures";
+import { demoTenant } from "./callSpecFixtures";
 
 export const services: ServiceInventoryItem[] = [
   {

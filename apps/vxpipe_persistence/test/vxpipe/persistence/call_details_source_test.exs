@@ -20,7 +20,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     CallDetailsPublicationStore,
     CallStore,
     CredentialStore,
-    DefinitionStore,
+    CallSpecStore,
     Repo,
     TestPublicationArtifactWriter,
     TestPublicationClock,
@@ -46,10 +46,10 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert {:ok, principal} =
              Administration.authenticate(tenant.key, issued_key.secret, :calls, options)
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, definition(), options)
+    assert {:ok, draft} = Calls.save_call_spec(tenant.key, call_spec(), options)
 
     assert {:ok, published} =
-             Calls.publish_definition(tenant.key, draft.definition_id, 1, options)
+             Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, options)
 
     route = Enum.find(published.routes, &(&1.participant_ref == "caller"))
 
@@ -92,9 +92,9 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
 
     assert source.call["identity"] == %{
              "call_id" => @call_id,
-             "definition_id" => context.call.definition_id,
-             "definition_revision" => 1,
-             "definition_schema_version" => "20260915.01",
+             "call_spec_id" => context.call.call_spec_id,
+             "call_spec_revision" => 1,
+             "call_spec_schema_version" => "20260915.01",
              "plan_digest" => "sha256:" <> Base.encode16(context.call.plan_digest, case: :lower),
              "tenant_key" => @tenant_key
            }
@@ -106,9 +106,9 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert source.call["lifecycle"]["route"]["participant"] == "caller"
     assert source.call["lifecycle"]["route"]["service"] == "web"
 
-    assert Enum.map(source.participants, & &1["definition_key"]) == ["assistant", "caller"]
+    assert Enum.map(source.participants, & &1["call_spec_key"]) == ["assistant", "caller"]
 
-    assistant = Enum.find(source.participants, &(&1["definition_key"] == "assistant"))
+    assistant = Enum.find(source.participants, &(&1["call_spec_key"] == "assistant"))
     assert assistant["type"] == "agent"
 
     assert assistant["activation_ids"] == [
@@ -455,7 +455,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
   defp repository_options do
     [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       archive_repository: {ArchiveStore, Repo},
       artifact_repository: {ArtifactStore, Repo},
@@ -474,7 +474,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     ]
   end
 
-  defp definition do
+  defp call_spec do
     %{
       schema_version: "20260915.01",
       name: "Support call",

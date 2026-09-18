@@ -7,7 +7,7 @@ Prerequisites: [Asynchronous history](asynchronous-call-history.md), including i
 background-tool and tenant admission prerequisites; [MCP client integration and
 conformance](mcp-client-library.md); [ReqLLM agent runtime](reqllm-agent-runtime.md).
 See the [runtime/tool-binding decision](../reqllm-agent-runtime.md).
-Sources: [Configured integrations](../../labnotes/20260905-0405-call-definition-design.md#applicationtenant-mcp-integrations-and-agent-enablement); [remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [R22–R26/R49](../call-definition-gap-review.md).
+Sources: [Configured integrations](../../labnotes/20260905-0405-call-definition-design.md#applicationtenant-mcp-integrations-and-agent-enablement); [remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [R22–R26/R49](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
@@ -35,7 +35,7 @@ updates permitted variables. Another agent/tenant cannot use that binding or its
   paired private binding inside the current activation.
 - Keep platform and runtime remote bindings in the same agent-runtime loop. Prove two
   local aliases can share a handler while retaining independent schemas and private grants.
-  This lifts the historical Jido Action-name restriction without changing the definition
+  This lifts the historical Jido Action-name restriction without changing the call spec
   contract. Do not introduce a second production model/tool loop inside Call Engine or MCP.
 - Auth variants are none, bearer, or validated custom headers; transport-owned headers cannot be overridden. Secrets stay in the private integration boundary, recoverable through configured secret storage, never tool arguments/plan projections. Authorization-scoped discovery/cache/health/concurrency state must not cross tenant/integration/credential generation.
 - Follow ExMCP and MCP SDK security guidance at Vxpipe's actual outbound boundary:
@@ -110,7 +110,7 @@ inspection was not applicable.
 
 ### Implementation progress
 
-- [x] The call-definition parser accepts an MCP selection as a model-visible local alias
+- [x] The call-spec parser accepts an MCP selection as a model-visible local alias
   containing only `integration` and remote `tool` identifiers. It rejects configuration and
   credentials through the closed input grammar. An unresolved MCP selection now fails at its
   exact participant/tool path instead of raising. Focused compiler tests pass 11/11 and the
@@ -182,7 +182,7 @@ inspection was not applicable.
   remains the explicit mechanism that invalidates an active generation. Automatic TTL scheduling
   and configuration-source integration remain pending. The Call Engine suite passes 197 tests;
   the deterministic umbrella suite passes 412, with nine tagged network integrations excluded.
-- [x] Calls definition validation and prepared-call compilation now use a narrow Call Engine
+- [x] Calls' Call Spec validation and prepared-call compilation now use a narrow Call Engine
   facade that resolves the current catalog snapshot internally. Calls supplies only its ordinary
   public registries and an optional opaque store reference; it receives only the safe immutable
   plan, never the private integration catalog or connection settings. Both Calls workflows share

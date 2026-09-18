@@ -87,9 +87,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
 
   defp identity_payload(request) do
     %{
-      "destination_definition_key" => request.destination_definition_key,
+      "destination_call_spec_key" => request.destination_call_spec_key,
       "destination_participant_id" => request.destination_participant_id,
-      "source_definition_key" => request.source_definition_key
+      "source_call_spec_key" => request.source_call_spec_key
     }
   end
 

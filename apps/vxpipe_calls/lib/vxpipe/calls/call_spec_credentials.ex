@@ -1,11 +1,11 @@
-defmodule Vxpipe.Calls.DefinitionCredentials do
+defmodule Vxpipe.Calls.CallSpecCredentials do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.{CallDefinition, Error, ResolvedCallPlan}
-  alias Vxpipe.CallEngine.CallDefinition.CapabilityRequirements
+  alias Vxpipe.CallEngine.{CallSpec, Error, ResolvedCallPlan}
+  alias Vxpipe.CallEngine.CallSpec.CapabilityRequirements
 
   alias Vxpipe.Calls.{
-    DefinitionRevision,
+    CallSpecRevision,
     ProviderAuth,
     ProviderCredentials,
     Repositories,
@@ -14,29 +14,29 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     TelephonyServices
   }
 
-  def with_active(%DefinitionRevision{} = revision, options, operation) do
-    with {:ok, definition} <-
-           CallDefinition.new(revision.source,
-             resource_id: revision.definition_id,
+  def with_active(%CallSpecRevision{} = revision, options, operation) do
+    with {:ok, call_spec} <-
+           CallSpec.new(revision.source,
+             resource_id: revision.call_spec_id,
              revision: revision.revision
            ) do
-      with_active(definition, revision.tenant_key, options, operation)
+      with_active(call_spec, revision.tenant_key, options, operation)
     end
   end
 
   def with_active(
-        %DefinitionRevision{} = revision,
+        %CallSpecRevision{} = revision,
         %ResolvedCallPlan{} = plan,
         options,
         operation
       ) do
     with true <- revision.tenant_key == plan.tenant_id,
-         {:ok, definition} <-
-           CallDefinition.new(revision.source,
-             resource_id: revision.definition_id,
+         {:ok, call_spec} <-
+           CallSpec.new(revision.source,
+             resource_id: revision.call_spec_id,
              revision: revision.revision
            ) do
-      with_active_capabilities(definition, revision.tenant_key, options, fn ->
+      with_active_capabilities(call_spec, revision.tenant_key, options, fn ->
         TelephonyPlanBindings.with_active(plan, options, operation)
       end)
     else
@@ -45,15 +45,15 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     end
   end
 
-  def with_active(%CallDefinition{} = definition, tenant_key, options, operation) do
-    with_active_capabilities(definition, tenant_key, options, fn ->
-      with_active_services(definition, tenant_key, options, operation)
+  def with_active(%CallSpec{} = call_spec, tenant_key, options, operation) do
+    with_active_capabilities(call_spec, tenant_key, options, fn ->
+      with_active_services(call_spec, tenant_key, options, operation)
     end)
   end
 
-  defp with_active_capabilities(definition, tenant_key, options, operation) do
+  defp with_active_capabilities(call_spec, tenant_key, options, operation) do
     requirements =
-      definition
+      call_spec
       |> CapabilityRequirements.credentials()
       |> Enum.map(fn {selection, path} ->
         %{provider: selection.provider, name: selection.credential_name, path: path}
@@ -77,9 +77,9 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     end
   end
 
-  def check(%CallDefinition{} = definition, tenant_key, options) do
-    with :ok <- check_capabilities(definition, tenant_key, options) do
-      definition
+  def check(%CallSpec{} = call_spec, tenant_key, options) do
+    with :ok <- check_capabilities(call_spec, tenant_key, options) do
+      call_spec
       |> service_requirements()
       |> Enum.reduce_while(:ok, fn requirement, :ok ->
         case TelephonyServices.resolve(tenant_key, requirement.name, options) do
@@ -90,8 +90,8 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     end
   end
 
-  defp check_capabilities(definition, tenant_key, options) do
-    definition
+  defp check_capabilities(call_spec, tenant_key, options) do
+    call_spec
     |> CapabilityRequirements.credentials()
     |> Enum.reduce_while(:ok, fn {selection, path}, :ok ->
       case resolve(tenant_key, selection, options) do
@@ -101,8 +101,8 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     end)
   end
 
-  defp with_active_services(definition, tenant_key, options, operation) do
-    case service_requirements(definition) do
+  defp with_active_services(call_spec, tenant_key, options, operation) do
+    case service_requirements(call_spec) do
       [] ->
         operation.()
 
@@ -121,8 +121,8 @@ defmodule Vxpipe.Calls.DefinitionCredentials do
     end
   end
 
-  defp service_requirements(definition) do
-    definition.participants
+  defp service_requirements(call_spec) do
+    call_spec.participants
     |> Enum.flat_map(fn
       {ref, %{connection: %{service: service}}} when is_binary(service) ->
         [%{name: service, path: ["participants", ref, "connection", "service"]}]

@@ -326,7 +326,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
 
   defp participant_policies(participants) when is_map(participants) do
     Enum.reduce_while(participants, {:ok, %{}}, fn
-      {_definition_key, %Participant{participant_id: participant_id, while_present: policy}},
+      {_call_spec_key, %Participant{participant_id: participant_id, while_present: policy}},
       {:ok, policies}
       when is_binary(participant_id) ->
         if Map.has_key?(policies, participant_id) or not MediaPolicy.valid?(policy) do
@@ -335,7 +335,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
           {:cont, {:ok, Map.put(policies, participant_id, policy)}}
         end
 
-      {_definition_key, _participant}, _acc ->
+      {_call_spec_key, _participant}, _acc ->
         {:halt, {:error, :invalid_policy}}
     end)
   end

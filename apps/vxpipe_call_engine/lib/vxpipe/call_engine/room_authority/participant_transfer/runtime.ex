@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime do
 
   def source_text_to_speech(%__MODULE__{} = runtime, %Request{} = request) do
     with true <- runtime.plan.tenant_id == request.tenant_id,
-         {:ok, source} <- Map.fetch(runtime.plan.participants, request.source_definition_key),
+         {:ok, source} <- Map.fetch(runtime.plan.participants, request.source_call_spec_key),
          true <- source.participant_id == request.source_participant_id,
          source = %{source | activation_id: request.source_activation_id},
          {:ok, %TextToSpeechRuntime{} = speech} <-

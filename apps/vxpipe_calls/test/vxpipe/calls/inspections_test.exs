@@ -167,8 +167,8 @@ defmodule Vxpipe.Calls.InspectionsTest do
     %CallSummary{
       id: id,
       tenant_key: tenant_key,
-      definition_id: "definition-1",
-      definition_revision: 1,
+      call_spec_id: "call-spec-1",
+      call_spec_revision: 1,
       state: :running,
       created_at: created_at,
       started_at: DateTime.add(created_at, 1, :second),

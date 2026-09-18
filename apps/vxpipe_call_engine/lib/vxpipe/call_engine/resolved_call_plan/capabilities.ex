@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.ResolvedCallPlan.Capabilities do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
 
   defstruct speech_to_text: nil, model_inference: nil, text_to_speech: nil
 

@@ -1,21 +1,21 @@
-import { DefinitionRow } from "./DefinitionRow";
-import type { DefinitionSummary, TenantContext } from "./definitionTypes";
+import { CallSpecRow } from "./CallSpecRow";
+import type { CallSpecSummary, TenantContext } from "./callSpecTypes";
 
-export function DefinitionList({
-  definitions,
+export function CallSpecList({
+  callSpecs,
   tenant,
-  onSelectDefinition,
+  onSelectCallSpec,
   linkCalls,
 }: {
-  definitions: DefinitionSummary[];
+  callSpecs: CallSpecSummary[];
   tenant: TenantContext;
-  onSelectDefinition?: (definitionId: string) => void;
+  onSelectCallSpec?: (callSpecId: string) => void;
   linkCalls?: boolean;
 }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[900px] table-fixed border-collapse text-left">
-        <caption className="sr-only">Call definitions</caption>
+        <caption className="sr-only">Call specs</caption>
         <colgroup>
           <col className="w-[28%]" />
           <col className="w-[25%]" />
@@ -35,12 +35,12 @@ export function DefinitionList({
           </tr>
         </thead>
         <tbody>
-          {definitions.map((definition) => (
-            <DefinitionRow
-              definition={definition}
-              key={definition.id}
+          {callSpecs.map((callSpec) => (
+            <CallSpecRow
+              callSpec={callSpec}
+              key={callSpec.id}
               linkCalls={linkCalls}
-              onSelect={onSelectDefinition}
+              onSelect={onSelectCallSpec}
               tenant={tenant}
             />
           ))}

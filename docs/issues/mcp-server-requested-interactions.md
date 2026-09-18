@@ -46,7 +46,7 @@ conversation is not an implemented MCP elicitation response.
   behavior, instead of acquiring ambient authority?
 
 No user-interaction UI, sampling adapter, continuation worker, automatic retry,
-or new call-definition fields are approved by this issue.
+or new call-spec fields are approved by this issue.
 
 ## Future verification
 
@@ -56,6 +56,6 @@ identity, and lifecycle failures. Initially verify that unsupported capabilities
 are not advertised, produce clear missing-capability outcomes, and cause no
 unauthorized model request or participant interaction. No runtime tests here.
 
-Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
-[architecture](../architecture.md), [gap review](../call-definition-gap-review.md),
+Related: [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
+[architecture](../architecture.md), [gap review](../call-spec-gap-review.md),
 and [automatic tool retry issue](automatic-tool-retries-and-idempotency.md).

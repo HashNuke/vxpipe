@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequestResolver do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.{ConnectionIntent, NumberFromVariable}
+  alias Vxpipe.CallEngine.CallSpec.{ConnectionIntent, NumberFromVariable}
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Participant, VariableSection}
   alias Vxpipe.CallEngine.Telephony.OutboundLegRequest

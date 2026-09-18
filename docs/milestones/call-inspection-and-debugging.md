@@ -45,7 +45,7 @@ call ends, the same page remains useful from stored history without a live room 
   safe tool status plus permitted arguments/results, variable revisions/snapshots and
   available correlated timings. Source time/order matters; receipt order does not prove
   causality. Missing metrics, unknown tool outcomes and incomplete events remain explicit.
-- Reuse the early telemetry definitions for units and boundaries. Preserve available
+- Reuse the early telemetry call specs for units and boundaries. Preserve available
   per-call timing facts through the existing permitted archival path where needed for
   ended-call inspection; do not reconstruct exact timings from aggregate charts or make
   general metrics the transcript/tool database. Mark unsupported earlier history unavailable.
@@ -185,7 +185,7 @@ Implementation evidence to date:
   live revision/loss and an unknown tool outcome explicit. A focused endpoint test first
   failed because the unavailable persisted read prevented any live read; the corrected
   endpoint file passes 14 tests and the complete Console suite passes 50 tests.
-- The existing definition-driven archive-recovery scenario now also reads the real room's
+- The existing call-spec-driven archive-recovery scenario now also reads the real room's
   live-inspection buffer while the writer is repeatedly failing. It verifies the completed
   host tool and accepted variable revision with their original participant/turn/tool
   correlation, after conversation already continued. Recovery still drains each retained

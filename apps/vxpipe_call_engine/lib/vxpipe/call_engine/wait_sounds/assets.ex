@@ -1,8 +1,8 @@
 defmodule Vxpipe.CallEngine.WaitSounds.Assets do
   @moduledoc "Bounded preparation of call-level wait audio and the required transfer connection cue."
 
-  alias Vxpipe.CallEngine.CallDefinition.WaitSounds
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpec.WaitSounds
+  alias Vxpipe.CallEngine.CallSpecValidation
   alias Vxpipe.CallEngine.OpeningAudio.{AssetCache, AssetLoader, Settings, WaveDecoder}
   alias Vxpipe.CallEngine.WaitSounds.PreparedAssets
 
@@ -85,7 +85,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Assets do
   end
 
   defp unavailable(slot) do
-    DefinitionValidation.invalid(
+    CallSpecValidation.invalid(
       :wait_sound_unavailable,
       "The call audio could not be prepared.",
       ["wait_sounds", Atom.to_string(slot)],

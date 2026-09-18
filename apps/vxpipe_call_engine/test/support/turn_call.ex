@@ -3,9 +3,9 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
 
   import ExUnit.Assertions
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, TestCallStartup}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, TestCallStartup}
 
-  def definition(options \\ []) do
+  def call_spec(options \\ []) do
     input =
       if Keyword.get(options, :speech_to_text, false),
         do: %{speech_to_text: speech("flux-general-en", "opus")},
@@ -54,13 +54,13 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
   end
 
   def start(room_id, options \\ []) do
-    assert {:ok, definition} =
-             CallDefinition.new(definition(options), resource_id: "turn-definition", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec(options), resource_id: "turn-call-spec", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "turn-definition", revision: 1},
+                 call_spec: %{id: "turn-call-spec", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -70,7 +70,7 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
                room_id: room_id
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
     assert {:ok, room} = TestCallStartup.start_call(plan)
     {plan, room, Map.fetch!(plan.participants, plan.entry_caller)}
   end

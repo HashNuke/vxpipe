@@ -1,5 +1,5 @@
-defmodule Vxpipe.Calls.DefinitionSummary do
-  @moduledoc "Installation-operator summary of one call definition."
+defmodule Vxpipe.Calls.CallSpecSummary do
+  @moduledoc "Installation-operator summary of one call spec."
 
   @enforce_keys [
     :id,

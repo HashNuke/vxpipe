@@ -5,12 +5,12 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding
 
-  @derive {Inspect, only: [:source_definition_key, :destination_definition_key]}
+  @derive {Inspect, only: [:source_call_spec_key, :destination_call_spec_key]}
   @enforce_keys [
     :tenant_id,
     :room_id,
     :incarnation_id,
-    :source_definition_key,
+    :source_call_spec_key,
     :source_participant_id,
     :source_activation_id,
     :source_capability,
@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
     :command_id,
     :correlation_id,
     :tool_call_id,
-    :destination_definition_key,
+    :destination_call_spec_key,
     :destination_participant_id,
     :reason
   ]
@@ -29,7 +29,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
           tenant_id: String.t(),
           room_id: String.t(),
           incarnation_id: String.t(),
-          source_definition_key: String.t(),
+          source_call_spec_key: String.t(),
           source_participant_id: String.t(),
           source_activation_id: String.t(),
           source_capability: pid(),
@@ -38,7 +38,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
           command_id: String.t(),
           correlation_id: String.t(),
           tool_call_id: String.t(),
-          destination_definition_key: String.t(),
+          destination_call_spec_key: String.t(),
           destination_participant_id: String.t(),
           reason: nil | String.t()
         }
@@ -57,7 +57,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
          tenant_id: context.tenant_id,
          room_id: context.room_id,
          incarnation_id: context.incarnation_id,
-         source_definition_key: binding.source_definition_key,
+         source_call_spec_key: binding.source_call_spec_key,
          source_participant_id: binding.source_participant_id,
          source_activation_id: binding.source_activation_id,
          source_capability: source_capability,
@@ -66,7 +66,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
          command_id: context.command_id,
          correlation_id: context.correlation_id,
          tool_call_id: tool_call_id,
-         destination_definition_key: target.definition_key,
+         destination_call_spec_key: target.call_spec_key,
          destination_participant_id: target.participant_id,
          reason: reason
        }}

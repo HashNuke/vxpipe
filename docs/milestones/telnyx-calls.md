@@ -13,11 +13,11 @@ Sources: [Common telephony intent](../../labnotes/20260905-0405-call-definition-
 
 ## Runnable outcome
 
-A verified incoming phone leg starts the pinned definition and speaks to reception; reception can dial a configured support participant, privately brief them, accept press-1, and bridge the two humans through the existing room mixer.
+A verified incoming phone leg starts the pinned call spec and speaks to reception; reception can dial a configured support participant, privately brief them, accept press-1, and bridge the two humans through the existing room mixer.
 
 ## Specification
 
-- Implement Telnyx as an adapter to common receive/originate/adopt-leg/media/readiness/acceptance/end operations. Keep provider-specific webhook schemas, authentication, call-control commands and media transport handling outside room state/definition JSON. Verify current vendor API/SDK behavior in implementation before claiming interoperability.
+- Implement Telnyx as an adapter to common receive/originate/adopt-leg/media/readiness/acceptance/end operations. Keep provider-specific webhook schemas, authentication, call-control commands and media transport handling outside room state/call spec JSON. Verify current vendor API/SDK behavior in implementation before claiming interoperability.
 - A human participant references configured service, receive/dial mode, and literal number or protected number_from_variable(section,variable), mutually exclusive. Receive start_call routes resolve an enabled deployment; receiving into an existing call requires explicit call/participant/provider-leg correlation, never number-only guessing.
 - Trusted backend initial routing variables are declared string-compatible values, and no agent may write their section. Tool selects allowed participant ref only; validate any dynamic number before dialing. Missing/null/invalid destination fails without an outgoing request, not automatic lookup. Caller number is not verified identity.
 - Persist/claim admission before activating initial legs; hold pinned plan in memory. Verify incoming webhook/media identity, map provider call/leg IDs to tenant/call/participant/incarnation/attempt, handle duplicate/out-of-order events, and never adopt another tenant's leg.
@@ -27,7 +27,7 @@ A verified incoming phone leg starts the pinned definition and speaks to recepti
 
 number_from_variable is dial-only, not an inbound-route selector. Transfer-created callbacks
 must correlate to the existing pending call/participant/leg; they cannot re-enter the
-number-to-definition start path even if the number matches a published inbound route.
+number-to-call-spec start path even if the number matches a published inbound route.
 Live leg/DTMF/media/transfer handling uses the in-memory pinned mappings, not synchronous
 PostgreSQL lookups or writes. Real vendor integration requires configured provider-reachable
 webhook/media ingress; the development tailnet URL is not assumed publicly reachable.
@@ -37,12 +37,12 @@ webhook/media ingress; the development tailnet URL is not assumed publicly reach
 - [x] Define/test the common telephony adapter contract with fake receive/dial/answer/media/DTMF/AMD/end events before vendor code.
 - [x] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
 - [x] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
-- [x] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.
+- [x] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or call spec semantics.
 - [x] Add fixtures for vendor webhook/media authentication and a separate tagged real-provider lane using authorized test endpoints.
 
 ## Acceptance and failure checks
 
-- [x] Receive routes select only published matching definitions; spoofed/tampered/cross-tenant callbacks/media fail before adoption.
+- [x] Receive routes select only published matching call specs; spoofed/tampered/cross-tenant callbacks/media fail before adoption.
 - [x] Duplicate/out-of-order events cannot duplicate rooms/dials/acceptance; uncertain command response never triggers speculative second dial.
 - [x] Literal/protected variable destinations work; invalid/missing/mutated-by-agent source fails before dialing; model cannot supply numbers.
 - [x] Private briefing is isolated; only destination-leg press-1 accepts, then privacy barrier precedes human bridge.
@@ -71,7 +71,7 @@ No arbitrary model-supplied numbers, generic outbound routing-policy matrix, aut
 Implementation evidence: the provider-neutral adapter contract, Telnyx raw-webhook verifier,
 bounded Voice API v2 event normalization, configured service registry, and raw-body HTTP ingress
 are implemented with deterministic focused tests. Published inbound telephony routes now pin a
-configured service ref plus literal number to one immutable definition revision and participant;
+configured service ref plus literal number to one immutable call spec revision and participant;
 tenant lookups remain scoped and ambiguous application-wide matches fail closed. Calls now claims a
 normalized incoming event against that route, compiles the pinned revision for telephony transport,
 and atomically persists the call in `admitting` state with its provider leg. Exact event/leg retries
@@ -147,7 +147,7 @@ media admission. The signed correlated outgoing event remains the fallback when 
 submission is unknown. Outbound leg ownership and dial submission remain pending.
 Configured services can now pin an optional validated E.164 origination number. Outbound service
 selection resolves an exact tenant-scoped service ID before its application-wide fallback and
-cannot select another tenant's configuration. The service ref remains in the call definition while
+cannot select another tenant's configuration. The service ref remains in the call spec while
 credentials, provider connection identity, and the `from` number remain deployment settings.
 One temporary supervised outbound leg now validates the exact room destination, reserves its media
 URL, and submits a single dial. Concurrent starts for the same opaque leg ID share the owner and
@@ -194,7 +194,7 @@ verification remain pending.
 ## Checkpoint 37: configured carrier detection mode
 
 Answering-machine detection is now a reusable configured-service option rather than part of a
-call definition or room-authored outbound request. Omission resolves to `disabled`; the only other
+call spec or room-authored outbound request. Omission resolves to `disabled`; the only other
 accepted value is `detect`. Invalid values fail the service configuration closed. When enabled, the
 Gateway copies the pinned service choice into the common dial command sent to the carrier adapter.
 

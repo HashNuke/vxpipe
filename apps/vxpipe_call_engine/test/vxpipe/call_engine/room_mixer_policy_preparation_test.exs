@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, RoomMixer}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, RoomMixer}
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Readiness.Collector
@@ -427,10 +427,10 @@ defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
     participants = Map.new(["caller", "receiver", "joining", "observer"], &{&1, human})
     participants = put_in(participants["joining"][:while_present], joining_policy)
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  defaults: %{capabilities: %{}},
@@ -445,7 +445,7 @@ defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "mixer-preparation", revision: 1},
+                 call_spec: %{id: "mixer-preparation", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -456,7 +456,7 @@ defmodule Vxpipe.CallEngine.RoomMixerPolicyPreparationTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

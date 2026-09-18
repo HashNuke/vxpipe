@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     RemoteMCPFixture,
     Error,
@@ -353,8 +353,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
   end
 
   defp compile_plan(store, options \\ []) do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(options),
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(options),
                resource_id: "remote-live",
                revision: 1
              )
@@ -362,7 +362,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "remote-live", revision: 1},
+                 call_spec: %{id: "remote-live", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -377,22 +377,22 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     }
 
     assert {:ok, plan} =
-             CallEngine.compile_definition(definition, invocation, registries,
+             CallEngine.compile_call_spec(call_spec, invocation, registries,
                mcp_catalog_store: store
              )
 
     plan
   end
 
-  defp definition_input(options) do
-    {call_variables, variable_permissions} = variables_definition(options)
+  defp call_spec_input(options) do
+    {call_variables, variable_permissions} = variables_call_spec(options)
 
     receiver_capabilities =
       %{model_inference: %{provider: "fixture", model: "test:scripted"}}
       |> maybe_enable_speech(options)
 
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "reception",
@@ -437,7 +437,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     end
   end
 
-  defp variables_definition(options) do
+  defp variables_call_spec(options) do
     if Keyword.get(options, :variables, false) do
       sections = %{
         "customer" => %{

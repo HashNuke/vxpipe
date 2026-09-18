@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.SampleCallState do
   @derive {Inspect, except: [:api_key, :initial_variables]}
   @enforce_keys [
     :backend,
-    :definition,
+    :call_spec,
     :initial_variables,
     :tenant_key,
     :transfer_participant,
@@ -17,7 +17,7 @@ defmodule Vxpipe.Console.SampleCallState do
 
   @type t :: %__MODULE__{
           backend: {module(), term()},
-          definition: map(),
+          call_spec: map(),
           initial_variables: map(),
           transfer_participant: nil | String.t(),
           status: status(),

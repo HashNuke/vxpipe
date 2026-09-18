@@ -41,9 +41,9 @@ defmodule Vxpipe.Calls.EngineArchiveProjectionTest do
       occurred_at: ~U[2026-09-11 00:00:00.000Z],
       source_policy: %{"revision" => 1},
       payload: %{
-        "destination_definition_key" => "billing",
+        "destination_call_spec_key" => "billing",
         "destination_participant_id" => "part-billing",
-        "source_definition_key" => "reception"
+        "source_call_spec_key" => "reception"
       }
     )
   end

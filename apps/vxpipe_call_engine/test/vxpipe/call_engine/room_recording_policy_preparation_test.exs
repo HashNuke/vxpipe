@@ -2,9 +2,9 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     RoomMixer,
     RoomRecording,
     TestRecordingWriter
@@ -451,10 +451,10 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
       |> put_in(["observer", :while_present], %{save_transcripts: false})
       |> put_in(["restricted", :while_present], %{record_audio: false})
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "joining",
                  defaults: %{capabilities: %{}},
@@ -468,7 +468,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "recording-preparation", revision: 1},
+                 call_spec: %{id: "recording-preparation", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -479,7 +479,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

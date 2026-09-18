@@ -3,9 +3,9 @@ defmodule Vxpipe.Calls.CallDirectorySummary do
 
   @enforce_keys [
     :id,
-    :definition_id,
-    :definition_name,
-    :definition_revision,
+    :call_spec_id,
+    :call_spec_name,
+    :call_spec_revision,
     :state,
     :created_at,
     :started_at,
@@ -17,9 +17,9 @@ defmodule Vxpipe.Calls.CallDirectorySummary do
 
   @type t :: %__MODULE__{
           id: String.t(),
-          definition_id: String.t(),
-          definition_name: String.t() | nil,
-          definition_revision: pos_integer(),
+          call_spec_id: String.t(),
+          call_spec_name: String.t() | nil,
+          call_spec_revision: pos_integer(),
           state: :prepared | :admitting | :running | :ended | :failed,
           created_at: DateTime.t(),
           started_at: DateTime.t() | nil,

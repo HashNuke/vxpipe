@@ -8,7 +8,7 @@ stays closed during opening playback, and all opening output is labeled private.
 
 ## Decision
 
-Call-definition schema `20260915.01` supports one optional call-level `opening_audio` value.
+Call Spec schema `20260915.01` supports one optional call-level `opening_audio` value.
 Fixed text requires its own inline TTS selection:
 
 ```json
@@ -35,7 +35,7 @@ exact tenant/provider binding; omission selects `default`. It supplies no model 
 The compiler pins the public selection independently of participant capabilities and defaults.
 Opening preparation resolves current credentials through the tenant source before starting its
 TTS capability. It works with an initial human receiver and needs no agent activation or global
-provider credentials. Missing opening credentials block definition save even when caller speech
+provider credentials. Missing opening credentials block call spec save even when caller speech
 is fully configured. A cached asset cannot bypass credential validation for a new activation.
 
 The object is closed. A text source must contain a supported `text_to_speech` selection;
@@ -44,7 +44,7 @@ require no TTS. Text and URL cannot be mixed, unknown types and keys fail, text 
 non-empty UTF-8 value of at most 4096 bytes, and URLs are HTTPS values of at most 2048 bytes
 with a host and without user information or fragments. Query strings remain syntactically
 valid because ordinary asset CDNs use them, but operators must not put credentials or signed
-URLs into definitions. The typed source is copied into the immutable resolved plan before a
+URLs into call specs. The typed source is copied into the immutable resolved plan before a
 room starts and its routine inspection exposes only the source type.
 
 Omission means there is no opening-audio phase. Required call startup still waits for its
@@ -98,8 +98,8 @@ names. Provision the selected tenant credential and supply `opening_audio.text_t
 text opening. There is no fallback to participant capabilities, call defaults, another agent,
 application provider settings or an invented voice.
 
-Old profile-based definitions and prepared plans cannot run through the current parser/runtime.
-Before deployment over existing data, replace affected definitions through existing administration
+Old profile-based call specs and prepared plans cannot run through the current parser/runtime.
+Before deployment over existing data, replace affected call specs through existing administration
 and cancel old prepared calls so they cannot activate. Historical revisions and completed-call
 plans remain immutable. The credential milestone requires a concrete cutover, not a general
 profile-conversion framework. Omitted openings and file URLs need no TTS selection.
@@ -143,7 +143,7 @@ only the destination sink's correlated playout-completion acknowledgement does t
 ## Alternatives rejected
 
 - A single untagged string is ambiguous between fixed text and a URL and cannot evolve safely.
-- Accepting both text and URL and choosing one by precedence hides definition mistakes.
+- Accepting both text and URL and choosing one by precedence hides call spec mistakes.
 - LLM-generated notices are nondeterministic and can change the meaning of a fixed opening.
 - Inheriting the initial agent's TTS couples call-level playback to an optional participant.
   Requiring an independent inline selection makes human entry work and prevents implicit voice selection.
@@ -154,7 +154,7 @@ only the destination sink's correlated playout-completion acknowledgement does t
 
 ## Implications
 
-The definition parser owns syntax and source safety. The implemented asset layer separates DNS
+The call spec parser owns syntax and source safety. The implemented asset layer separates DNS
 resolution/address policy, bounded HTTP fetching, WAV decoding, and cache ownership. A temporary
 worker under the room capability supervisor owns file preparation, bounded output, and playback
 tracking. A separate text-preparation boundary owns rendered-asset lookup and synthesis submission,

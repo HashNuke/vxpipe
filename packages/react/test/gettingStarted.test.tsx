@@ -53,14 +53,14 @@ test("setup progress follows service configuration and example installation", ()
   });
   fireEvent.click(screen.getByRole("button", { name: "Validate credentials" }));
   expect(screen.getByText("3 of 4 steps complete")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Load sample definitions" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load sample call specs" }));
   expect(screen.getByText("Setup complete")).toBeVisible();
   expect(
     screen.getByRole("button", { name: "Try voice conversation" }),
   ).toBeEnabled();
 });
 
-test("onboarding validates selected services before offering sample definitions", () => {
+test("onboarding validates selected services before offering sample call specs", () => {
   render(<GettingStarted ready={false} onTry={() => {}} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Rename tenant" }));
@@ -87,5 +87,5 @@ test("onboarding validates selected services before offering sample definitions"
 
   expect(screen.getByText(/All selected services validated/)).toBeVisible();
   expect(screen.getAllByText(/Last validated just now/)[0]).toBeVisible();
-  expect(screen.getByRole("button", { name: "Load sample definitions" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Load sample call specs" })).toBeEnabled();
 });

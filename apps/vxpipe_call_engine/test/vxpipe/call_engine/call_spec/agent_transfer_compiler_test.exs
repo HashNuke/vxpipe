@@ -1,12 +1,12 @@
-defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.AgentRuntime.ToolDescriptor
   alias Vxpipe.AgentRuntime.ToolRegistry
   alias Vxpipe.CallEngine.AgentRuntime.ToolDescriptors
-  alias Vxpipe.CallEngine.CallDefinition
+  alias Vxpipe.CallEngine.CallSpec
   alias Vxpipe.CallEngine.CallInvocation
-  alias Vxpipe.CallEngine.DefinitionCompiler
+  alias Vxpipe.CallEngine.CallSpecCompiler
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.PlanStartup
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
@@ -15,14 +15,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding
 
   test "derives one default-blocking transfer tool from an agent allowlist" do
-    assert {:ok, definition} =
-             transfer_definition()
-             |> CallDefinition.new(resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             transfer_call_spec()
+             |> CallSpec.new(resource_id: "support", revision: 7)
 
-    assert definition.participants["reception"].transfers == ["billing"]
+    assert call_spec.participants["reception"].transfers == ["billing"]
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     reception = plan.participants["reception"]
     billing = plan.participants["billing"]
@@ -34,13 +34,13 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
              transfer: %Binding{} = binding
            } = reception.tools["transfer"]
 
-    assert binding.source_definition_key == "reception"
+    assert binding.source_call_spec_key == "reception"
     assert binding.source_participant_id == reception.participant_id
     assert binding.source_activation_id == reception.activation_id
 
     assert %{
              "billing" => %{
-               definition_key: "billing",
+               call_spec_key: "billing",
                participant_id: billing.participant_id,
                description: "A billing specialist",
                reason_required: false
@@ -84,13 +84,13 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
   end
 
   test "an empty transfer list exposes no generated tool" do
-    input = put_in(transfer_definition(), [:participants, "reception", :transfers], [])
+    input = put_in(transfer_call_spec(), [:participants, "reception", :transfers], [])
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     assert plan.participants["reception"].tools == %{}
     assert {:ok, []} = ToolDescriptors.compile(plan.participants["reception"].tools)
@@ -99,57 +99,57 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
   test "rejects an authored tool that collides with the generated transfer alias" do
     input =
       put_in(
-        transfer_definition(),
+        transfer_call_spec(),
         [:participants, "reception", :tools],
         %{"transfer" => %{type: "platform", tool: "hangup"}}
       )
 
     assert {:error,
             %Error{
-              code: :invalid_call_definition,
+              code: :invalid_call_spec,
               details: %{"path" => ["participants", "reception", "tools", "transfer"]}
-            }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+            }} = CallSpec.new(input, resource_id: "support", revision: 7)
   end
 
   test "pins a call-level total transfer attempt timeout" do
-    assert {:ok, default_definition} =
-             transfer_definition()
-             |> CallDefinition.new(resource_id: "support", revision: 7)
+    assert {:ok, default_call_spec} =
+             transfer_call_spec()
+             |> CallSpec.new(resource_id: "support", revision: 7)
 
-    assert default_definition.transfer_policy.attempt_timeout_ms == 30_000
+    assert default_call_spec.transfer_policy.attempt_timeout_ms == 30_000
 
-    input = Map.put(transfer_definition(), :transfer_policy, %{attempt_timeout_ms: 12_000})
+    input = Map.put(transfer_call_spec(), :transfer_policy, %{attempt_timeout_ms: 12_000})
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
-    assert definition.transfer_policy.attempt_timeout_ms == 12_000
+    assert call_spec.transfer_policy.attempt_timeout_ms == 12_000
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     assert plan.transfer_policy.attempt_timeout_ms == 12_000
 
     for invalid <- [0, 999, 120_001, "30000"] do
-      input = Map.put(transfer_definition(), :transfer_policy, %{attempt_timeout_ms: invalid})
+      input = Map.put(transfer_call_spec(), :transfer_policy, %{attempt_timeout_ms: invalid})
 
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
+                code: :invalid_call_spec,
                 details: %{
                   "path" => ["transfer_policy", "attempt_timeout_ms"]
                 }
-              }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+              }} = CallSpec.new(input, resource_id: "support", revision: 7)
     end
   end
 
   test "pins each destination agent's inbound transfer history policy" do
-    assert {:ok, default_definition} =
-             transfer_definition()
-             |> CallDefinition.new(resource_id: "support", revision: 7)
+    assert {:ok, default_call_spec} =
+             transfer_call_spec()
+             |> CallSpec.new(resource_id: "support", revision: 7)
 
-    assert default_definition.participants["billing"].transfer_history.mode == :fresh
-    assert default_definition.participants["billing"].transfer_history.turns == nil
+    assert default_call_spec.participants["billing"].transfer_history.mode == :fresh
+    assert default_call_spec.participants["billing"].transfer_history.turns == nil
 
     cases = [
       {%{mode: "fresh"}, %{mode: :fresh, turns: nil}},
@@ -160,16 +160,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
     for {authored, expected} <- cases do
       input =
-        put_in(transfer_definition(), [:participants, "billing", :transfer_history], authored)
+        put_in(transfer_call_spec(), [:participants, "billing", :transfer_history], authored)
 
-      assert {:ok, definition} =
-               CallDefinition.new(input, resource_id: "support", revision: 7)
+      assert {:ok, call_spec} =
+               CallSpec.new(input, resource_id: "support", revision: 7)
 
-      assert Map.take(definition.participants["billing"].transfer_history, [:mode, :turns]) ==
+      assert Map.take(call_spec.participants["billing"].transfer_history, [:mode, :turns]) ==
                expected
 
       assert {:ok, plan} =
-               DefinitionCompiler.compile(definition, invocation(), registries())
+               CallSpecCompiler.compile(call_spec, invocation(), registries())
 
       assert Map.take(plan.participants["billing"].transfer_history, [:mode, :turns]) == expected
     end
@@ -178,16 +178,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
   test "requires an explicit bounded reason only for selected-history destinations" do
     input =
       put_in(
-        transfer_definition(),
+        transfer_call_spec(),
         [:participants, "billing", :transfer_history],
         %{mode: "selected"}
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     reception = plan.participants["reception"]
     assert {:ok, [descriptor]} = ToolDescriptors.compile(reception.tools)
@@ -226,7 +226,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
   test "pins a web human transfer destination and requires a private briefing reason" do
     input =
-      transfer_definition()
+      transfer_call_spec()
       |> put_in([:participants, "reception", :transfers], ["human-support"])
       |> put_in(
         [:participants, "human-support"],
@@ -238,14 +238,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
         }
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
-    assert definition.participants["human-support"].connection.admission == :transfer
-    assert definition.participants["human-support"].transfer_notice == "This call is recorded."
+    assert call_spec.participants["human-support"].connection.admission == :transfer
+    assert call_spec.participants["human-support"].transfer_notice == "This call is recorded."
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     reception = plan.participants["reception"]
     support = plan.participants["human-support"]
@@ -272,7 +272,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
   test "projects mixed transfer argument requirements without provider combinators" do
     input =
-      transfer_definition()
+      transfer_call_spec()
       |> put_in(
         [:participants, "reception", :transfers],
         ["billing", "human-support"]
@@ -287,11 +287,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
         }
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     assert {:ok, [descriptor]} =
              plan.participants["reception"].tools
@@ -321,7 +321,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
   test "rejects a human transfer target whose connection is an entry admission" do
     input =
-      transfer_definition()
+      transfer_call_spec()
       |> put_in([:participants, "reception", :transfers], ["human-support"])
       |> put_in(
         [:participants, "human-support"],
@@ -333,11 +333,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
     assert {:error,
             %Error{
-              code: :invalid_call_definition,
+              code: :invalid_call_spec,
               details: %{
                 "path" => ["participants", "reception", "transfers", "0"]
               }
-            }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+            }} = CallSpec.new(input, resource_id: "support", revision: 7)
   end
 
   test "rejects malformed destination transfer history policies at their exact path" do
@@ -351,28 +351,28 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
     for {authored, path} <- cases do
       input =
-        put_in(transfer_definition(), [:participants, "billing", :transfer_history], authored)
+        put_in(transfer_call_spec(), [:participants, "billing", :transfer_history], authored)
 
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
+                code: :invalid_call_spec,
                 details: %{"path" => ^path}
-              }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+              }} = CallSpec.new(input, resource_id: "support", revision: 7)
     end
   end
 
   test "the supervised invocation timeout encloses the total transfer budget" do
     input =
-      transfer_definition()
+      transfer_call_spec()
       |> put_in([:defaults, :capabilities], %{
         model_inference: %{provider: "fixture", model: "default"}
       })
       |> Map.put(:transfer_policy, %{attempt_timeout_ms: 120_000})
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
@@ -396,15 +396,15 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
   test "a generated transfer tool accepts the ordinary participant-local visibility override" do
     input =
-      Map.put(transfer_definition(), :tool_visibility_overrides, %{
+      Map.put(transfer_call_spec(), :tool_visibility_overrides, %{
         "reception" => %{"transfer" => "metadata"}
       })
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation(), registries())
+             CallSpecCompiler.compile(call_spec, invocation(), registries())
 
     reception = plan.participants["reception"]
     assert plan.tool_visibility.overrides[reception.participant_id] == %{"transfer" => :metadata}
@@ -420,20 +420,20 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
     ]
 
     for {transfers, path} <- cases do
-      input = put_in(transfer_definition(), [:participants, "reception", :transfers], transfers)
+      input = put_in(transfer_call_spec(), [:participants, "reception", :transfers], transfers)
 
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
-                message: "The call definition is invalid.",
+                code: :invalid_call_spec,
+                message: "The call spec is invalid.",
                 details: %{"path" => ^path}
-              }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+              }} = CallSpec.new(input, resource_id: "support", revision: 7)
     end
   end
 
-  defp transfer_definition do
+  defp transfer_call_spec do
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "reception",
       defaults: %{
@@ -468,7 +468,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
     {:ok, invocation} =
       CallInvocation.new(
         %{
-          call_definition: %{id: "support", revision: 7},
+          call_spec: %{id: "support", revision: 7},
           initial_variables: %{},
           transport: %{type: "web"}
         },

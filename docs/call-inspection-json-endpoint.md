@@ -86,7 +86,7 @@ future RTVI adapter can buffer and reapply only newer live updates during that r
 - Invalid requests produce `400`; unavailable database dependencies produce `503`.
 - Responses set `Cache-Control: private, no-store`.
 - The operator session remains server-side. API keys, provider credentials, signed artifact URLs,
-  source policies and arbitrary private definition source never enter the response.
+  source policies and arbitrary private call spec source never enter the response.
 - The prepared plan is required because it supplies the runtime participant identities used by
   persisted facts. Usage unavailability is represented explicitly and does not convert an
   otherwise inspectable call into a false `404`.

@@ -8,10 +8,10 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
   alias Vxpipe.CallEngine.LiveInspection.{Buffer, Port}
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     CallVariables,
-    DefinitionCompiler
+    CallSpecCompiler
   }
 
   @identity %{
@@ -190,9 +190,9 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
 
   defp resolved_plan do
     suffix = System.unique_integer([:positive, :monotonic])
-    resource_id = "inspection-definition-#{suffix}"
+    resource_id = "inspection-call-spec-#{suffix}"
 
-    definition_input = %{
+    call_spec_input = %{
       schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
@@ -234,13 +234,13 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
       }
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input, resource_id: resource_id, revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input, resource_id: resource_id, revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{"order" => %{"id" => "order-1"}},
                  transport: %{type: "web"}
                },
@@ -254,7 +254,7 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
       host_tools: %{}
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 

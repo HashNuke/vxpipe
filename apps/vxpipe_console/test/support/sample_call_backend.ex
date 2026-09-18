@@ -3,12 +3,12 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
 
   @behaviour Vxpipe.Console.SampleCallBackend
 
-  alias Vxpipe.Calls.{DefinitionRevision, IssuedApiKey, IssuedJoinToken, ParticipantRoute}
+  alias Vxpipe.Calls.{CallSpecRevision, IssuedApiKey, IssuedJoinToken, ParticipantRoute}
   alias Vxpipe.Calls.Principal
 
   @api_key "vxp_test-only-sample-backend-key"
   @tenant_key "BBBBBBBBBBBBBBBB"
-  @definition_id "10000000-0000-4000-8000-000000000001"
+  @call_spec_id "10000000-0000-4000-8000-000000000001"
   @participant_key "20000000-0000-4000-8000-000000000002"
   @transfer_participant_key "20000000-0000-4000-8000-000000000006"
   @call_id "30000000-0000-4000-8000-000000000003"
@@ -28,12 +28,12 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   def backend(agent), do: {__MODULE__, agent}
   def operations(agent), do: Agent.get(agent, &Enum.reverse(&1.operations))
 
-  def save_definition(agent, tenant_key, definition) do
-    operation(agent, {:save_definition, tenant_key, definition})
+  def save_call_spec(agent, tenant_key, call_spec) do
+    operation(agent, {:save_call_spec, tenant_key, call_spec})
 
     if Agent.get(agent, & &1.save_error?),
       do: {:error, :provider_credential_unavailable},
-      else: {:ok, revision(definition, [])}
+      else: {:ok, revision(call_spec, [])}
   end
 
   def issue_api_key(agent, tenant_key) do
@@ -52,14 +52,14 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
      }}
   end
 
-  def publish_definition(agent, tenant_key, definition_id, revision) do
-    operation(agent, {:publish_definition, tenant_key, definition_id, revision})
+  def publish_call_spec(agent, tenant_key, call_spec_id, revision) do
+    operation(agent, {:publish_call_spec, tenant_key, call_spec_id, revision})
 
     caller_route = %ParticipantRoute{
       key: @participant_key,
       tenant_key: @tenant_key,
-      definition_id: @definition_id,
-      definition_revision: 1,
+      call_spec_id: @call_spec_id,
+      call_spec_revision: 1,
       participant_ref: "caller",
       published_at: ~U[2026-09-09 13:00:01.000000Z]
     }
@@ -67,8 +67,8 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
     transfer_route = %ParticipantRoute{
       key: @transfer_participant_key,
       tenant_key: @tenant_key,
-      definition_id: @definition_id,
-      definition_revision: 1,
+      call_spec_id: @call_spec_id,
+      call_spec_revision: 1,
       participant_ref: "human-support",
       published_at: caller_route.published_at
     }
@@ -142,9 +142,9 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   def tenant_key, do: @tenant_key
 
   defp revision(source, routes) do
-    %DefinitionRevision{
+    %CallSpecRevision{
       tenant_key: @tenant_key,
-      definition_id: @definition_id,
+      call_spec_id: @call_spec_id,
       revision: 1,
       schema_version: "20260915.01",
       source: source,

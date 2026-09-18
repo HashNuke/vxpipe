@@ -1,7 +1,7 @@
 defmodule Vxpipe.Persistence.CallDetailsCallProjection do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.CallSpec.ConnectionIntent
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.Calls.PreparedCall
 
@@ -21,9 +21,9 @@ defmodule Vxpipe.Persistence.CallDetailsCallProjection do
       "identity" => %{
         "call_id" => call.id,
         "tenant_key" => call.tenant_key,
-        "definition_id" => call.definition_id,
-        "definition_revision" => call.definition_revision,
-        "definition_schema_version" => call.schema_version,
+        "call_spec_id" => call.call_spec_id,
+        "call_spec_revision" => call.call_spec_revision,
+        "call_spec_schema_version" => call.schema_version,
         "plan_digest" => "sha256:" <> Base.encode16(call.plan_digest, case: :lower)
       },
       "lifecycle" => %{
@@ -42,13 +42,13 @@ defmodule Vxpipe.Persistence.CallDetailsCallProjection do
   def participants(%CallDetailsSourceRead{} = read) do
     read.call.plan.participants
     |> Map.values()
-    |> Enum.sort_by(& &1.definition_key)
+    |> Enum.sort_by(& &1.call_spec_key)
     |> Enum.map(&participant(&1, read))
   end
 
   defp participant(%Participant{} = participant, read) do
     compact(%{
-      "definition_key" => participant.definition_key,
+      "call_spec_key" => participant.call_spec_key,
       "participant_id" => participant.participant_id,
       "type" => Atom.to_string(participant.kind),
       "description" => participant.description,
@@ -98,9 +98,9 @@ defmodule Vxpipe.Persistence.CallDetailsCallProjection do
     participant.connection
     |> connection()
     |> Map.merge(%{
-      "participant" => participant.definition_key,
+      "participant" => participant.call_spec_key,
       "participant_id" => participant.participant_id,
-      "participant_key" => Map.get(call.participant_routes, participant.definition_key)
+      "participant_key" => Map.get(call.participant_routes, participant.call_spec_key)
     })
     |> compact()
   end

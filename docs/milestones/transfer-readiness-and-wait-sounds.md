@@ -53,7 +53,7 @@ checkpoint passed all five root gates with 1,306 tests, zero failures and 15 exc
 `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
-## Call-definition changes
+## Call Spec changes
 
 Add one call-level `wait_sounds` object. Each configured value is an absolute audio-file URL or
 null (`nil` in Elixir). Omission selects the built-in default for that scenario. Configuration is
@@ -73,7 +73,7 @@ The transfer defaults above reflect the user's follow-up: AI-to-AI uses café-bo
 uses phone-ring for the caller/audience and café-bossa for the receiving human. The implementation authorization also accepts phone-ring for initial caller setup. The audible connection beep is a separate mandatory handoff action, not a wait
 sound; setting a wait slot to null does not disable readiness gates or the beep.
 
-Definition syntax in schema `20260914.01`:
+call spec syntax in schema `20260914.01`:
 
 ```json
 {
@@ -131,7 +131,7 @@ Omit `wait_sounds` entirely to use the defaults; URLs above are illustrative, no
 - Preserve missing versus explicitly null during parsing/serialization; use presence-aware
   resolution rather than treating both as the same absent value. Reject booleans, bare asset
   names, local/file/data URLs, unknown slots, objects in place of a URL, and malformed values at
-  their exact definition paths. There is no public asset registry to configure for a URL.
+  their exact call spec paths. There is no public asset registry to configure for a URL.
 - The built-in defaults resolve privately to the packaged local WAVs, with no HTTP request.
   Configured URLs use the existing bounded audio fetch/address policy, response limits and cache
   primitives. Support the existing PCM WAV format plus the supplied stereo PCM16/48 kHz format;
@@ -139,7 +139,7 @@ Omit `wait_sounds` entirely to use the defaults; URLs above are illustrative, no
   unsupported or oversized file is an explicit asset-preparation failure, not fallback to a default.
 - Fetch and prepare all configured wait assets during call preparation, before dependent runtime
   setup/transfer phases need immediate playback. Keep network/decode work out of RoomAuthority,
-  Gateway receive loops and the pure definition compiler. Reuse cached bytes for all listeners;
+  Gateway receive loops and the pure call spec compiler. Reuse cached bytes for all listeners;
   do not refetch on every loop or participant start. Cold preparation may delay admission, but must
   never claim a custom sound is available or silently play a different sound.
 - Pin URL/source selection in the compiled plan and pin content digest, format, duration and
@@ -152,9 +152,9 @@ Omit `wait_sounds` entirely to use the defaults; URLs above are illustrative, no
 - The mandatory built-in connection cue is finite and validated for audibility. Failed cue playback
   cannot silently open the bridge. Cue customization is not part of `wait_sounds`.
 - Introduce a new schema revision and explicit compatibility parsing for current `20260913.01`
-  definitions. Old JSON still rejects unknown fields; new calls resolve its omitted sounds to the
+  call specs. Old JSON still rejects unknown fields; new calls resolve its omitted sounds to the
   approved defaults. Existing saved revisions/history remain immutable, and running calls retain
-  their pinned plan. Cover stored-definition loading and plan serialization in the migration.
+  their pinned plan. Cover stored-call-spec loading and plan serialization in the migration.
 
 ## Readiness contract
 
@@ -227,7 +227,7 @@ the affected intervals and queues, as required by incremental policy enforcement
 
 ## Initial call sequence
 
-1. Pin the definition and establish the minimal room/participant identity plus caller output path.
+1. Pin the call spec and establish the minimal room/participant identity plus caller output path.
    Refactor startup so expensive capability initialization does not precede all usable caller media.
    In the browser, this begins after the caller grants media access/connects; a page that has not
    established audio cannot yet hear a server sound. Phone legs follow the same early output gate.
@@ -770,7 +770,7 @@ Acceptance and commit tasks:
 - [ ] Confirm all checkpoint commits, current root gates and required audible/provider evidence.
   Update the milestone and its index together only when the full approved outcome is verified.
 
-Expected ownership remains unchanged: `CallDefinition`/`DefinitionCompiler`/`ResolvedCallPlan` own
+Expected ownership remains unchanged: `CallSpec`/`CallSpecCompiler`/`ResolvedCallPlan` own
 schema; `PlanStartup` and participant-transfer modules own orchestration; readiness and playback
 components own their respective state; Gateway owns media ordering and transport acknowledgements;
 Calls owns prepared admission/persistence; Console owns human-facing phases. Provider startup and
@@ -827,7 +827,7 @@ and distinguishes controlled providers, real WebRTC traffic and live carrier evi
 
 | Contract | Owning evidence |
 | --- | --- |
-| URL/null/default configuration, compatibility and immutable assets | Engine `call_definition/wait_sounds_compiler_test.exs`, `wait_sounds/assets_test.exs` and `opening_audio/asset_pipeline_test.exs` cover parsing, plan restoration, fetch limits, tenant cache isolation and pinned bytes. Native configuration matrices exercise the resulting selections. |
+| URL/null/default configuration, compatibility and immutable assets | Engine `call_spec/wait_sounds_compiler_test.exs`, `wait_sounds/assets_test.exs` and `opening_audio/asset_pipeline_test.exs` cover parsing, plan restoration, fetch limits, tenant cache isolation and pinned bytes. Native configuration matrices exercise the resulting selections. |
 | Independent cursors, shared sinks, connection changes and finite drain | Engine `wait_sounds/player_test.exs` checks exact PCM positions, loop boundaries, stale acknowledgements, retained cursors and every sink's final drain. The native changing-listener call verifies the same contract over real connections. |
 | Complete readiness and selective resource replacement | Engine `readiness/{barrier,collector,inventory}_test.exs` covers every required scope, missing/unsupported resources, stale attempts/generations and retained evidence. Native model/voice/tool/MCP, remaining-human STT and recording delays exercise the live barrier. |
 | Private audio, held input, cue ordering and unchanged media | Gateway `http/human_transfer_webrtc_test.exs` verifies received audio, transcripts, recording and retained bindings. `media/output_arbiter_test.exs` verifies one encoder/RTP clock, held generations, clear/drain and stale-output rejection under controlled backpressure. |
@@ -850,7 +850,7 @@ and distinguishes controlled providers, real WebRTC traffic and live carrier evi
   bounded attempt clock and expose which required stage is still preparing.
 - This extends the current contracts; it does not mark historical implemented milestones incomplete.
   The user authorized this runtime and the revised acceptance window on 2026-09-14. No new
-  named-transfer graph, arbitrary dialing, provider-specific definition format or indefinite hold
+  named-transfer graph, arbitrary dialing, provider-specific call-spec format or indefinite hold
   behavior is needed.
 
 ## Planning evidence and design review
@@ -922,7 +922,7 @@ Acceptance still waits for an in-flight audience refresh before starting the han
 Gateway grants the preparer only the initial hold operation, with the existing incarnation,
 attempt and deadline checks. Sharing a single blocked worker, moving preparation into the room
 authority, and adding a new coordinator/supervisor were rejected. This fills an existing audience
-contract and does not add a call-definition field or change milestone order. The native blocked
+contract and does not add a call-spec field or change milestone order. The native blocked
 model regression and owning transfer checks provide verification; the checkpoint labnote records
 fixture corrections and full-root results separately from this design review.
 

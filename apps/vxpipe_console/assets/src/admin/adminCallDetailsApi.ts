@@ -1,41 +1,41 @@
 import type { CallDetailsSnapshot } from "@vxpipe/core";
 
 import { parseCallInspectionResponse } from "../callInspection";
-import type { DefinitionContext } from "./callTypes";
-import type { TenantContext } from "./definitionTypes";
+import type { CallSpecContext } from "./callTypes";
+import type { TenantContext } from "./callSpecTypes";
 
 export type AdminCallDetails = {
   tenant: TenantContext;
-  definition: Pick<DefinitionContext, "id" | "name">;
-  definitionRevision: number;
+  callSpec: Pick<CallSpecContext, "id" | "name">;
+  callSpecRevision: number;
   snapshot: CallDetailsSnapshot;
 };
 
 export function parseAdminCallDetails(value: unknown): AdminCallDetails {
   if (
     !record(value) ||
-    !exactKeys(value, ["tenant", "definition", "definition_revision", "inspection"]) ||
+    !exactKeys(value, ["tenant", "call_spec", "call_spec_revision", "inspection"]) ||
     !record(value.tenant) ||
     !exactKeys(value.tenant, ["key", "name"]) ||
     typeof value.tenant.key !== "string" ||
     value.tenant.key.length === 0 ||
     typeof value.tenant.name !== "string" ||
     value.tenant.name.length === 0 ||
-    !record(value.definition) ||
-    !exactKeys(value.definition, ["id", "name"]) ||
-    typeof value.definition.id !== "string" ||
-    value.definition.id.length === 0 ||
-    !(value.definition.name === null || typeof value.definition.name === "string") ||
-    !Number.isSafeInteger(value.definition_revision) ||
-    Number(value.definition_revision) <= 0
+    !record(value.call_spec) ||
+    !exactKeys(value.call_spec, ["id", "name"]) ||
+    typeof value.call_spec.id !== "string" ||
+    value.call_spec.id.length === 0 ||
+    !(value.call_spec.name === null || typeof value.call_spec.name === "string") ||
+    !Number.isSafeInteger(value.call_spec_revision) ||
+    Number(value.call_spec_revision) <= 0
   ) {
     throw new Error("Invalid admin call details response");
   }
 
   return {
     tenant: { key: value.tenant.key, name: value.tenant.name },
-    definition: { id: value.definition.id, name: value.definition.name },
-    definitionRevision: Number(value.definition_revision),
+    callSpec: { id: value.call_spec.id, name: value.call_spec.name },
+    callSpecRevision: Number(value.call_spec_revision),
     snapshot: parseCallInspectionResponse(value.inspection),
   };
 }

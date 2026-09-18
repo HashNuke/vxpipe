@@ -1,9 +1,9 @@
-defmodule Vxpipe.Persistence.DefinitionStoreTest do
+defmodule Vxpipe.Persistence.CallSpecStoreTest do
   use Vxpipe.Persistence.DataCase, async: false
 
-  alias Vxpipe.Calls.{Administration, Definitions}
-  alias Vxpipe.Persistence.{CredentialStore, DefinitionStore, Repo}
-  alias Vxpipe.Persistence.Schema.{DefinitionRevision, ParticipantRoute, TelephonyRoute}
+  alias Vxpipe.Calls.{Administration, CallSpecs}
+  alias Vxpipe.Persistence.{CredentialStore, CallSpecStore, Repo}
+  alias Vxpipe.Persistence.Schema.{CallSpecRevision, ParticipantRoute, TelephonyRoute}
 
   @tenant_key "AAAAAAAAAAAAAAAA"
   @key_id "11111111-1111-4111-8111-111111111111"
@@ -11,7 +11,7 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
   setup do
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
       uuid_generator:
         sequence([
@@ -41,44 +41,44 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     tenant: tenant,
     options: options
   } do
-    assert {:ok, first} = Definitions.save(tenant.key, definition_input(), options)
+    assert {:ok, first} = CallSpecs.save(tenant.key, call_spec_input(), options)
     assert [first_route] = first.routes
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_route(tenant.key, first_route.key, options)
+             CallSpecs.resolve_route(tenant.key, first_route.key, options)
 
-    assert {:ok, published} = Definitions.publish(tenant.key, first.definition_id, 1, options)
+    assert {:ok, published} = CallSpecs.publish(tenant.key, first.call_spec_id, 1, options)
     assert [published_route] = published.routes
     assert published_route.key == first_route.key
     assert %DateTime{} = published_route.published_at
 
-    changed = Map.put(definition_input(), :name, "Second")
+    changed = Map.put(call_spec_input(), :name, "Second")
 
     assert {:ok, second} =
-             Definitions.save(
+             CallSpecs.save(
                tenant.key,
                changed,
-               Keyword.put(options, :definition_id, first.definition_id)
+               Keyword.put(options, :call_spec_id, first.call_spec_id)
              )
 
     assert second.revision == 2
-    assert {:ok, stored_first} = Definitions.fetch(tenant.key, first.definition_id, 1, options)
+    assert {:ok, stored_first} = CallSpecs.fetch(tenant.key, first.call_spec_id, 1, options)
     assert stored_first.source["name"] == "First"
     assert second.source["name"] == "Second"
 
     assert {:ok, published_second} =
-             Definitions.publish(tenant.key, second.definition_id, 2, options)
+             CallSpecs.publish(tenant.key, second.call_spec_id, 2, options)
 
     assert [second_route] = published_second.routes
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_route(tenant.key, first_route.key, options)
+             CallSpecs.resolve_route(tenant.key, first_route.key, options)
 
     assert {:ok, resolved_second} =
-             Definitions.resolve_route(tenant.key, second_route.key, options)
+             CallSpecs.resolve_route(tenant.key, second_route.key, options)
 
-    assert resolved_second.definition_revision == 2
-    assert Repo.aggregate(DefinitionRevision, :count) == 2
+    assert resolved_second.call_spec_revision == 2
+    assert Repo.aggregate(CallSpecRevision, :count) == 2
     assert Repo.aggregate(ParticipantRoute, :count) == 2
   end
 
@@ -86,17 +86,17 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     tenant: tenant,
     options: options
   } do
-    assert {:ok, draft} = Definitions.save(tenant.key, definition_input(), options)
+    assert {:ok, draft} = CallSpecs.save(tenant.key, call_spec_input(), options)
     assert [route] = draft.routes
-    assert {:ok, _published} = Definitions.publish(tenant.key, draft.definition_id, 1, options)
+    assert {:ok, _published} = CallSpecs.publish(tenant.key, draft.call_spec_id, 1, options)
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_route("BBBBBBBBBBBBBBBB", route.key, options)
+             CallSpecs.resolve_route("BBBBBBBBBBBBBBBB", route.key, options)
 
-    duplicate = %{route | definition_revision: 2}
+    duplicate = %{route | call_spec_revision: 2}
 
     assert {:error, :participant_route_key_conflict} =
-             DefinitionStore.insert_revision(
+             CallSpecStore.insert_revision(
                Repo,
                tenant.key,
                %{draft | revision: 2, routes: [duplicate]},
@@ -108,13 +108,13 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     tenant: tenant,
     options: options
   } do
-    assert {:ok, draft} = Definitions.save(tenant.key, phone_definition_input(), options)
+    assert {:ok, draft} = CallSpecs.save(tenant.key, phone_call_spec_input(), options)
     assert draft.routes == []
     assert [route] = draft.telephony_routes
     assert Repo.aggregate(TelephonyRoute, :count) == 1
 
     assert {:error, :route_unavailable} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                {:tenant, tenant.key},
                route.service,
                route.number,
@@ -122,10 +122,10 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
              )
 
     assert {:ok, _published} =
-             Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
 
     assert {:ok, resolved} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                {:tenant, tenant.key},
                route.service,
                route.number,
@@ -133,10 +133,10 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
              )
 
     assert resolved.participant_ref == "caller"
-    assert resolved.definition_revision == draft.revision
+    assert resolved.call_spec_revision == draft.revision
 
     assert {:error, :invalid_telephony_route} =
-             Definitions.resolve_telephony_route(
+             CallSpecs.resolve_telephony_route(
                :application,
                route.service,
                route.number,
@@ -161,7 +161,7 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     }
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: "20260915.01",
       name: "First",
@@ -183,8 +183,8 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     }
   end
 
-  defp phone_definition_input do
-    put_in(definition_input(), [:participants, "caller", :connection], %{
+  defp phone_call_spec_input do
+    put_in(call_spec_input(), [:participants, "caller", :connection], %{
       service: "primary-phone",
       mode: "receive",
       admission: "start_call",

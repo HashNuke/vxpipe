@@ -94,7 +94,7 @@ if database_url do
     telephony_service_repository:
       {Vxpipe.Persistence.TelephonyServiceStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
-    definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
+    call_spec_repository: {Vxpipe.Persistence.CallSpecStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo},
     call_details_inspection_repository:
       {Vxpipe.Persistence.CallDetailsInspectionStore, Vxpipe.Persistence.Repo},
@@ -235,7 +235,7 @@ if config_env() == :dev do
 
     config :vxpipe_console, :sample_call,
       enabled: not is_nil(sample_tenant),
-      definition: Keyword.fetch!(trusted_call, :definition),
+      call_spec: Keyword.fetch!(trusted_call, :call_spec),
       initial_variables: Keyword.fetch!(trusted_call, :initial_variables),
       tenant_key: sample_tenant,
       transfer_participant: "human-support"

@@ -22,7 +22,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Progress do
     started_at = pending.deadline_ms - timeout
 
     progress = %{
-      destination: pending.request.destination_definition_key,
+      destination: pending.request.destination_call_spec_key,
       phase: phase,
       blockers: blockers |> Enum.filter(&(&1 in @blockers)) |> Enum.uniq() |> Enum.sort(),
       elapsed_ms: max(System.monotonic_time(:millisecond) - started_at, 0)

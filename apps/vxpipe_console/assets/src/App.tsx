@@ -26,13 +26,13 @@ import {
 import {
   parseCallPage,
   parseCreatedCredential,
-  parseDefinitionPage,
+  parseCallSpecPage,
   parseDemoTenant,
   parseInstalledSamples,
   parseServiceDirectory,
   parseTenantPage,
 } from "./admin/adminApi";
-import { DefinitionCallsPage } from "./admin/DefinitionCallsPage";
+import { CallSpecCallsPage } from "./admin/CallSpecCallsPage";
 import { OnboardingPage } from "./admin/OnboardingPage";
 import {
   onboardingProvider,
@@ -45,9 +45,9 @@ import {
   type AdminCallDetails,
 } from "./admin/adminCallDetailsApi";
 import type { CallDetailsPageState } from "./admin/callDetailsTypes";
-import type { DefinitionCallsPageState } from "./admin/callTypes";
-import { TenantDefinitionsPage } from "./admin/TenantDefinitionsPage";
-import type { TenantDefinitionsPageState } from "./admin/definitionTypes";
+import type { CallSpecCallsPageState } from "./admin/callTypes";
+import { TenantCallSpecsPage } from "./admin/TenantCallSpecsPage";
+import type { TenantCallSpecsPageState } from "./admin/callSpecTypes";
 import type {
   CredentialDraft,
   ServiceInventoryItem,
@@ -62,8 +62,8 @@ type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 type AdminRoute =
   | { kind: "onboarding" }
   | { kind: "tenants"; page: number }
-  | { kind: "definitions"; tenantKey: string; page: number }
-  | { kind: "calls"; tenantKey: string; definitionId: string | null; page: number }
+  | { kind: "call-specs"; tenantKey: string; page: number }
+  | { kind: "calls"; tenantKey: string; callSpecId: string | null; page: number }
   | { kind: "call-details"; tenantKey: string; callId: string }
   | { kind: "services"; tenantKey: string };
 
@@ -83,7 +83,7 @@ export function App(props: AppProps) {
         <Route path="/admin/onboarding" element={<RoutedApp {...props} route={{ kind: "onboarding" }} />} />
         <Route path="/admin" element={<TenantDirectoryRoute {...props} />} />
         <Route path="/admin/tenants/:tenantKey" element={<TenantWorkspaceRedirect />} />
-        <Route path="/admin/tenants/:tenantKey/definitions" element={<DefinitionsRoute {...props} />} />
+        <Route path="/admin/tenants/:tenantKey/call-specs" element={<CallSpecsRoute {...props} />} />
         <Route path="/admin/tenants/:tenantKey/calls" element={<CallsRoute {...props} />} />
         <Route path="/admin/tenants/:tenantKey/calls/:callId" element={<CallDetailsRoute {...props} />} />
         <Route path="/admin/tenants/:tenantKey/services" element={<ServicesRoute {...props} />} />
@@ -98,13 +98,13 @@ function TenantDirectoryRoute(props: AppProps) {
   return <RoutedApp {...props} route={{ kind: "tenants", page: readPage(searchParams) }} />;
 }
 
-function DefinitionsRoute(props: AppProps) {
+function CallSpecsRoute(props: AppProps) {
   const { tenantKey = "" } = useParams();
   const [searchParams] = useSearchParams();
   return (
     <RoutedApp
       {...props}
-      route={{ kind: "definitions", tenantKey, page: readPage(searchParams) }}
+      route={{ kind: "call-specs", tenantKey, page: readPage(searchParams) }}
     />
   );
 }
@@ -118,7 +118,7 @@ function CallsRoute(props: AppProps) {
       route={{
         kind: "calls",
         tenantKey,
-        definitionId: readDefinitionFilter(searchParams),
+        callSpecId: readCallSpecFilter(searchParams),
         page: readPage(searchParams),
       }}
     />
@@ -137,7 +137,7 @@ function ServicesRoute(props: AppProps) {
 
 function TenantWorkspaceRedirect() {
   const { tenantKey = "" } = useParams();
-  return <Navigate replace to={`/admin/tenants/${encodeURIComponent(tenantKey)}/definitions`} />;
+  return <Navigate replace to={`/admin/tenants/${encodeURIComponent(tenantKey)}/call-specs`} />;
 }
 
 function RoutedApp({
@@ -153,17 +153,17 @@ function RoutedApp({
     providers: [],
     samples: { status: "blocked", items: onboardingSamples },
   });
-  const [definitions, setDefinitions] = useState<TenantDefinitionsPageState>(() => ({
+  const [callSpecs, setCallSpecs] = useState<TenantCallSpecsPageState>(() => ({
     status: "loading",
     tenant:
-      route.kind === "definitions" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
+      route.kind === "call-specs" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
   }));
-  const [calls, setCalls] = useState<DefinitionCallsPageState>(() => ({
+  const [calls, setCalls] = useState<CallSpecCallsPageState>(() => ({
     status: "loading",
     tenant: route.kind === "calls" ? tenantPlaceholder(route.tenantKey) : tenantPlaceholder(""),
-    definitions: [],
-    definitionOptionsTruncated: false,
-    selectedDefinitionId: route.kind === "calls" ? route.definitionId : null,
+    callSpecs: [],
+    callSpecsTruncated: false,
+    selectedCallSpecId: route.kind === "calls" ? route.callSpecId : null,
   }));
   const [services, setServices] = useState<TenantServicesPageState>(() => ({
     status: "loading",
@@ -176,8 +176,8 @@ function RoutedApp({
       route.kind === "call-details"
         ? tenantPlaceholder(route.tenantKey)
         : tenantPlaceholder(""),
-    definition: null,
-    definitionRevision: null,
+    callSpec: null,
+    callSpecRevision: null,
     callId: route.kind === "call-details" ? route.callId : "",
   }));
   const callDetailsControllerRef = useRef<CallDetailsController | undefined>(undefined);
@@ -274,8 +274,8 @@ function RoutedApp({
             });
           }
         });
-    } else if (route.kind === "definitions") {
-      setDefinitions((state) => ({
+    } else if (route.kind === "call-specs") {
+      setCallSpecs((state) => ({
         status: "loading",
         tenant:
           state.tenant.key === route.tenantKey
@@ -283,7 +283,7 @@ function RoutedApp({
             : tenantPlaceholder(route.tenantKey),
       }));
 
-      loadDefinitions(
+      loadCallSpecs(
         route,
         controller.signal,
         fetchImpl,
@@ -295,15 +295,15 @@ function RoutedApp({
         },
       )
         .then((state) => {
-          if (current && state) setDefinitions(state);
+          if (current && state) setCallSpecs(state);
         })
         .catch((error: unknown) => {
           if (current && !aborted(error)) {
-            setDefinitions((state) => ({
+            setCallSpecs((state) => ({
               status: "unavailable",
               tenant: state.tenant,
               message:
-                "Call definitions could not be loaded. Try again after storage is available.",
+                "Call specs could not be loaded. Try again after storage is available.",
             }));
           }
         });
@@ -314,12 +314,12 @@ function RoutedApp({
           state.tenant.key === route.tenantKey
             ? state.tenant
             : tenantPlaceholder(route.tenantKey),
-        definitions: state.tenant.key === route.tenantKey ? state.definitions : [],
-        definitionOptionsTruncated:
+        callSpecs: state.tenant.key === route.tenantKey ? state.callSpecs : [],
+        callSpecsTruncated:
           state.tenant.key === route.tenantKey
-            ? state.definitionOptionsTruncated
+            ? state.callSpecsTruncated
             : false,
-        selectedDefinitionId: route.definitionId,
+        selectedCallSpecId: route.callSpecId,
       }));
 
       loadCalls(
@@ -341,9 +341,9 @@ function RoutedApp({
             setCalls((state) => ({
               status: "unavailable",
               tenant: state.tenant,
-              definitions: state.definitions,
-              definitionOptionsTruncated: state.definitionOptionsTruncated,
-              selectedDefinitionId: route.definitionId,
+              callSpecs: state.callSpecs,
+              callSpecsTruncated: state.callSpecsTruncated,
+              selectedCallSpecId: route.callSpecId,
               message: "Calls could not be loaded. Try again after storage is available.",
             }));
           }
@@ -378,8 +378,8 @@ function RoutedApp({
       setCallDetails({
         status: "loading",
         tenant: tenantPlaceholder(route.tenantKey),
-        definition: null,
-        definitionRevision: null,
+        callSpec: null,
+        callSpecRevision: null,
         callId: route.callId,
       });
 
@@ -394,8 +394,8 @@ function RoutedApp({
             setCallDetails({
               status: "unavailable",
               tenant: tenantPlaceholder(route.tenantKey),
-              definition: null,
-              definitionRevision: null,
+              callSpec: null,
+              callSpecRevision: null,
               callId: route.callId,
               message: "Call inspection is unavailable. Try again after storage is available.",
             });
@@ -414,7 +414,7 @@ function RoutedApp({
   }, [csrfToken, fetchImpl, navigate, onSessionExpired, route]);
 
   const headerActions = <SignOut csrfToken={csrfToken} />;
-  const workspaceDestinations = ["definitions", "calls", "services"] as const;
+  const workspaceDestinations = ["call-specs", "calls", "services"] as const;
 
   if (route.kind === "onboarding") {
     return (
@@ -462,25 +462,25 @@ function RoutedApp({
     );
   }
 
-  if (route.kind === "definitions") {
+  if (route.kind === "call-specs") {
     return (
-      <TenantDefinitionsPage
+      <TenantCallSpecsPage
         headerActions={headerActions}
         linkCalls
         onNextPage={() => navigate({ ...route, page: route.page + 1 })}
         onPreviousPage={() => navigate({ ...route, page: Math.max(1, route.page - 1) })}
-        onSelectDefinition={(definitionId) =>
-          navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId, page: 1 })
+        onSelectCallSpec={(callSpecId) =>
+          navigate({ kind: "calls", tenantKey: route.tenantKey, callSpecId, page: 1 })
         }
         onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
         onSelectWorkspace={(destination) => {
           if (destination === "calls") {
-            navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 });
+            navigate({ kind: "calls", tenantKey: route.tenantKey, callSpecId: null, page: 1 });
           } else if (destination === "services") {
             navigate({ kind: "services", tenantKey: route.tenantKey });
           }
         }}
-        state={definitions}
+        state={callSpecs}
         workspaceDestinations={[...workspaceDestinations]}
       />
     );
@@ -488,21 +488,21 @@ function RoutedApp({
 
   if (route.kind === "calls") {
     return (
-      <DefinitionCallsPage
+      <CallSpecCallsPage
         headerActions={headerActions}
         linkCallDetails
         onNextPage={() => navigate({ ...route, page: route.page + 1 })}
         onPreviousPage={() => navigate({ ...route, page: Math.max(1, route.page - 1) })}
-        onSelectDefinition={(definitionId) =>
-          navigate({ ...route, definitionId, page: 1 })
+        onSelectCallSpec={(callSpecId) =>
+          navigate({ ...route, callSpecId, page: 1 })
         }
         onSelectTenant={() =>
-          navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 })
+          navigate({ kind: "call-specs", tenantKey: route.tenantKey, page: 1 })
         }
         onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
         onSelectWorkspace={(destination) => {
-          if (destination === "definitions") {
-            navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 });
+          if (destination === "call-specs") {
+            navigate({ kind: "call-specs", tenantKey: route.tenantKey, page: 1 });
           } else if (destination === "services") {
             navigate({ kind: "services", tenantKey: route.tenantKey });
           }
@@ -558,14 +558,14 @@ function RoutedApp({
           }));
         }}
         onSelectTenant={() =>
-          navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 })
+          navigate({ kind: "call-specs", tenantKey: route.tenantKey, page: 1 })
         }
         onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
         onSelectWorkspace={(destination) => {
-          if (destination === "definitions") {
-            navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 });
+          if (destination === "call-specs") {
+            navigate({ kind: "call-specs", tenantKey: route.tenantKey, page: 1 });
           } else if (destination === "calls") {
-            navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 });
+            navigate({ kind: "calls", tenantKey: route.tenantKey, callSpecId: null, page: 1 });
           }
         }}
         state={services}
@@ -579,7 +579,7 @@ function RoutedApp({
       headerActions={headerActions}
       onNextPage={() => navigate({ kind: "tenants", page: route.page + 1 })}
       onPreviousPage={() => navigate({ kind: "tenants", page: Math.max(1, route.page - 1) })}
-      onSelectTenant={(tenantKey) => navigate({ kind: "definitions", tenantKey, page: 1 })}
+      onSelectTenant={(tenantKey) => navigate({ kind: "call-specs", tenantKey, page: 1 })}
       state={tenants}
     />
   );
@@ -843,17 +843,17 @@ async function installOnboardingSamples(
   }
 }
 
-async function loadDefinitions(
-  selected: Extract<AdminRoute, { kind: "definitions" }>,
+async function loadCallSpecs(
+  selected: Extract<AdminRoute, { kind: "call-specs" }>,
   signal: AbortSignal,
   fetchImpl: Fetch,
   onSessionExpired: () => void,
   isCurrent: () => boolean,
   recoverFirstPage: () => void,
-): Promise<TenantDefinitionsPageState | undefined> {
+): Promise<TenantCallSpecsPageState | undefined> {
   const encodedTenant = encodeURIComponent(selected.tenantKey);
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodedTenant}/definitions?page=${selected.page}`,
+    `/admin/api/tenants/${encodedTenant}/call-specs?page=${selected.page}`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -877,15 +877,15 @@ async function loadDefinitions(
     };
   }
 
-  if (!response.ok) throw new Error("Definition directory unavailable");
-  const result = parseDefinitionPage(await response.json());
+  if (!response.ok) throw new Error("Call spec directory unavailable");
+  const result = parseCallSpecPage(await response.json());
   if (!isCurrent()) return;
   if (result.tenant.key !== selected.tenantKey) throw new Error("Unexpected tenant response");
 
   return {
     status: "ready",
     tenant: result.tenant,
-    definitions: result.definitions,
+    callSpecs: result.callSpecs,
     pagination: paginationModel(result.pagination),
   };
 }
@@ -897,10 +897,10 @@ async function loadCalls(
   onSessionExpired: () => void,
   isCurrent: () => boolean,
   recoverFirstPage: () => void,
-): Promise<DefinitionCallsPageState | undefined> {
+): Promise<CallSpecCallsPageState | undefined> {
   const encodedTenant = encodeURIComponent(selected.tenantKey);
   const query = new URLSearchParams({ page: String(selected.page) });
-  if (selected.definitionId) query.set("definition_id", selected.definitionId);
+  if (selected.callSpecId) query.set("call_spec_id", selected.callSpecId);
 
   const response = await fetchImpl(
     `/admin/api/tenants/${encodedTenant}/calls?${query.toString()}`,
@@ -923,10 +923,10 @@ async function loadCalls(
     return {
       status: "unavailable",
       tenant: tenantPlaceholder(selected.tenantKey),
-      definitions: [],
-      definitionOptionsTruncated: false,
-      selectedDefinitionId: selected.definitionId,
-      message: "This tenant or call definition could not be found.",
+      callSpecs: [],
+      callSpecsTruncated: false,
+      selectedCallSpecId: selected.callSpecId,
+      message: "This tenant or call spec could not be found.",
     };
   }
 
@@ -934,16 +934,16 @@ async function loadCalls(
   const result = parseCallPage(await response.json());
   if (!isCurrent()) return;
   if (result.tenant.key !== selected.tenantKey) throw new Error("Unexpected tenant response");
-  if (result.selectedDefinitionId !== selected.definitionId) {
+  if (result.selectedCallSpecId !== selected.callSpecId) {
     throw new Error("Unexpected call filter response");
   }
 
   return {
     status: "ready",
     tenant: result.tenant,
-    definitions: result.definitions,
-    definitionOptionsTruncated: result.definitionsTruncated,
-    selectedDefinitionId: result.selectedDefinitionId,
+    callSpecs: result.callSpecs,
+    callSpecsTruncated: result.callSpecsTruncated,
+    selectedCallSpecId: result.selectedCallSpecId,
     calls: result.calls,
     pagination: paginationModel(result.pagination),
   };
@@ -1012,8 +1012,8 @@ async function loadCallDetails(
 
     const context = {
       tenant: tenantPlaceholder(selected.tenantKey),
-      definition: null,
-      definitionRevision: null,
+      callSpec: null,
+      callSpecRevision: null,
       callId: selected.callId,
     };
 
@@ -1067,8 +1067,8 @@ async function loadCallDetails(
     state: {
       status: "ready",
       tenant: result.tenant,
-      definition: result.definition,
-      definitionRevision: result.definitionRevision,
+      callSpec: result.callSpec,
+      callSpecRevision: result.callSpecRevision,
       callId: selected.callId,
       controller: { details: controller, history: controller },
       completeness: result.snapshot.completeness.state,
@@ -1302,8 +1302,8 @@ function routeUrl(route: AdminRoute) {
   ) {
     query.set("page", String(route.page));
   }
-  if (route.kind === "calls" && route.definitionId) {
-    query.set("definition_id", route.definitionId);
+  if (route.kind === "calls" && route.callSpecId) {
+    query.set("call_spec_id", route.callSpecId);
   }
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
 
@@ -1323,9 +1323,9 @@ function readPage(searchParams: URLSearchParams) {
   return Number.isSafeInteger(page) && page > 0 ? page : 1;
 }
 
-function readDefinitionFilter(searchParams: URLSearchParams) {
-  const definitionId = searchParams.get("definition_id");
-  return definitionId && definitionId.length <= 256 ? definitionId : null;
+function readCallSpecFilter(searchParams: URLSearchParams) {
+  const callSpecId = searchParams.get("call_spec_id");
+  return callSpecId && callSpecId.length <= 256 ? callSpecId : null;
 }
 
 function tenantPlaceholder(key: string) {

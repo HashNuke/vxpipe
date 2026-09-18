@@ -8,7 +8,7 @@ tagged-provider, HTTPS/WebRTC, and responsive browser evidence is recorded
 below. The guarded live Zenmux check remains unrun because its credential is not
 configured. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
-Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
+Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-spec-gap-review.md).
 
 ## Runnable outcome
 

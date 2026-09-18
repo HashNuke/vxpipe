@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.DefinitionValidation do
+defmodule Vxpipe.CallEngine.CallSpecValidation do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Error

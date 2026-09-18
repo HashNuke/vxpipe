@@ -110,8 +110,8 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
       call: %CallSummary{
         id: "call-public-id",
         tenant_key: @tenant_key,
-        definition_id: "definition-public-id",
-        definition_revision: 3,
+        call_spec_id: "call-spec-public-id",
+        call_spec_revision: 3,
         state: :running,
         created_at: ~U[2026-09-16 09:00:00Z],
         started_at: ~U[2026-09-16 09:00:01Z],
@@ -134,8 +134,8 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
     %PreparedCall{
       id: "call-public-id",
       tenant_key: @tenant_key,
-      definition_id: "definition-public-id",
-      definition_revision: 3,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 3,
       schema_version: "20260915.01",
       participant_routes: %{},
       entry_caller: "caller",

@@ -2,7 +2,7 @@ defmodule Vxpipe.Persistence.Schema.ParticipantRoute do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Vxpipe.Persistence.Schema.{DefinitionRevision, Tenant}
+  alias Vxpipe.Persistence.Schema.{CallSpecRevision, Tenant}
 
   schema "participant_routes" do
     field :public_id, Ecto.UUID
@@ -10,7 +10,7 @@ defmodule Vxpipe.Persistence.Schema.ParticipantRoute do
     field :published_at, :utc_datetime_usec
 
     belongs_to :tenant, Tenant
-    belongs_to :definition_revision, DefinitionRevision
+    belongs_to :call_spec_revision, CallSpecRevision
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -22,15 +22,15 @@ defmodule Vxpipe.Persistence.Schema.ParticipantRoute do
       :participant_ref,
       :published_at,
       :tenant_id,
-      :definition_revision_id
+      :call_spec_revision_id
     ])
-    |> validate_required([:public_id, :participant_ref, :tenant_id, :definition_revision_id])
+    |> validate_required([:public_id, :participant_ref, :tenant_id, :call_spec_revision_id])
     |> validate_length(:participant_ref, min: 1, max: 128)
     |> foreign_key_constraint(:tenant_id)
-    |> foreign_key_constraint(:definition_revision_id)
+    |> foreign_key_constraint(:call_spec_revision_id)
     |> unique_constraint(:public_id)
     |> unique_constraint(:participant_ref,
-      name: :participant_routes_definition_revision_id_participant_ref_index
+      name: :participant_routes_call_spec_revision_id_participant_ref_index
     )
   end
 end

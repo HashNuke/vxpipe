@@ -1,9 +1,9 @@
-defmodule Vxpipe.CallEngine.CallDefinition do
+defmodule Vxpipe.CallEngine.CallSpec do
   @moduledoc """
-  A validated, versioned definition of reusable call behavior.
+  A validated, versioned call spec of reusable call behavior.
   """
 
-  alias Vxpipe.CallEngine.CallDefinition.{
+  alias Vxpipe.CallEngine.CallSpec.{
     CallVariables,
     Capabilities,
     MediaPolicy,
@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     WaitSounds
   }
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @schema_version "20260915.01"
   @fields [
@@ -75,28 +75,28 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   @spec new(map(), keyword()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
   def new(value, options) when is_list(options) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
     with {:ok, resource_id_input} <- trusted_option(options, :resource_id, code, message),
          {:ok, resource_id} <-
-           DefinitionValidation.identifier(resource_id_input, code, message, ["resource_id"]),
+           CallSpecValidation.identifier(resource_id_input, code, message, ["resource_id"]),
          {:ok, revision_input} <- trusted_option(options, :revision, code, message),
          {:ok, revision} <-
-           DefinitionValidation.positive_integer(revision_input, code, message, ["revision"]),
-         {:ok, input} <- DefinitionValidation.normalize_map(value, @fields, code, message, []),
+           CallSpecValidation.positive_integer(revision_input, code, message, ["revision"]),
+         {:ok, input} <- CallSpecValidation.normalize_map(value, @fields, code, message, []),
          {:ok, schema_input} <-
-           DefinitionValidation.fetch(input, :schema_version, code, message, []),
+           CallSpecValidation.fetch(input, :schema_version, code, message, []),
          :ok <- validate_schema(schema_input, code, message),
          {:ok, name} <- optional_name(input, code, message),
          {:ok, caller_input} <-
-           DefinitionValidation.fetch(input, :entry_caller, code, message, []),
+           CallSpecValidation.fetch(input, :entry_caller, code, message, []),
          {:ok, entry_caller} <-
-           DefinitionValidation.identifier(caller_input, code, message, ["entry_caller"]),
+           CallSpecValidation.identifier(caller_input, code, message, ["entry_caller"]),
          {:ok, receiver_input} <-
-           DefinitionValidation.fetch(input, :entry_receiver, code, message, []),
+           CallSpecValidation.fetch(input, :entry_receiver, code, message, []),
          {:ok, entry_receiver} <-
-           DefinitionValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
+           CallSpecValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
          {:ok, opening_audio} <- OpeningAudio.new(Map.get(input, :opening_audio)),
          {:ok, wait_sounds} <- WaitSounds.from_optional(Map.fetch(input, :wait_sounds)),
@@ -104,7 +104,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
            MediaPolicy.from_optional(Map.fetch(input, :media_policy), ["media_policy"]),
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
-           DefinitionValidation.fetch(input, :participants, code, message, []),
+           CallSpecValidation.fetch(input, :participants, code, message, []),
          {:ok, participants} <- participants(participants_input, code, message),
          :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
          :ok <- validate_transfers(participants, code, message),
@@ -151,14 +151,14 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   defp trusted_option(options, key, code, message) do
     case Keyword.fetch(options, key) do
       {:ok, value} -> {:ok, value}
-      :error -> DefinitionValidation.invalid(code, message, [Atom.to_string(key)], "is required")
+      :error -> CallSpecValidation.invalid(code, message, [Atom.to_string(key)], "is required")
     end
   end
 
   defp validate_schema(@schema_version, _code, _message), do: :ok
 
   defp validate_schema(_value, code, message) do
-    DefinitionValidation.invalid(
+    CallSpecValidation.invalid(
       code,
       message,
       ["schema_version"],
@@ -167,7 +167,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   end
 
   defp optional_name(input, code, message) do
-    DefinitionValidation.optional_string(
+    CallSpecValidation.optional_string(
       Map.get(input, :name),
       code,
       message,
@@ -178,7 +178,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp defaults(value, code, message) do
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, [:capabilities], code, message, ["defaults"]),
+           CallSpecValidation.normalize_map(value, [:capabilities], code, message, ["defaults"]),
          {:ok, capabilities} <-
            Capabilities.new(Map.get(input, :capabilities, %{}), ["defaults", "capabilities"]) do
       {:ok, capabilities}
@@ -195,7 +195,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
       {_key, _participant_input}, _acc ->
         {:halt,
-         DefinitionValidation.invalid(
+         CallSpecValidation.invalid(
            code,
            message,
            ["participants", "<invalid-key>"],
@@ -205,13 +205,13 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   end
 
   defp participants(_value, code, message) do
-    DefinitionValidation.invalid(code, message, ["participants"], "must be a non-empty object")
+    CallSpecValidation.invalid(code, message, ["participants"], "must be a non-empty object")
   end
 
   defp validate_entries(caller, receiver, participants, code, message) do
     cond do
       not Map.has_key?(participants, caller) ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           ["entry_caller"],
@@ -219,7 +219,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         )
 
       not Map.has_key?(participants, receiver) ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           ["entry_receiver"],
@@ -227,7 +227,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         )
 
       caller == receiver ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           ["entry_receiver"],
@@ -235,7 +235,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         )
 
       participants[caller].kind != :human ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           ["entry_caller"],
@@ -249,7 +249,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp limits(value, code, message) do
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(value, [:max_duration_ms], code, message, ["limits"]),
+           CallSpecValidation.normalize_map(value, [:max_duration_ms], code, message, ["limits"]),
          {:ok, duration} <- duration(input, code, message) do
       {:ok, duration}
     end
@@ -257,8 +257,8 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp validate_transfers(participants, code, message) do
     participants
-    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
-    |> Enum.reduce_while(:ok, fn {_definition_key, participant}, :ok ->
+    |> Enum.sort_by(fn {call_spec_key, _participant} -> call_spec_key end)
+    |> Enum.reduce_while(:ok, fn {_call_spec_key, participant}, :ok ->
       case validate_transfer_targets(participant, participants, code, message) do
         :ok -> {:cont, :ok}
         {:error, _error} = error -> {:halt, error}
@@ -268,11 +268,11 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp validate_media_policies(media_policy, participants) do
     with :ok <- MediaPolicy.validate_references(media_policy, participants, ["media_policy"]) do
-      Enum.reduce_while(participants, :ok, fn {definition_key, participant}, :ok ->
+      Enum.reduce_while(participants, :ok, fn {call_spec_key, participant}, :ok ->
         case MediaPolicy.validate_references(
                participant.while_present,
                participants,
-               ["participants", definition_key, "while_present"]
+               ["participants", call_spec_key, "while_present"]
              ) do
           :ok -> {:cont, :ok}
           {:error, _error} = error -> {:halt, error}
@@ -285,15 +285,15 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     participant.transfers
     |> Enum.with_index()
     |> Enum.reduce_while(:ok, fn {target, index}, :ok ->
-      path = ["participants", participant.definition_key, "transfers", Integer.to_string(index)]
+      path = ["participants", participant.call_spec_key, "transfers", Integer.to_string(index)]
 
       result =
         case Map.fetch(participants, target) do
           :error ->
-            DefinitionValidation.invalid(code, message, path, "must reference a participant")
+            CallSpecValidation.invalid(code, message, path, "must reference a participant")
 
-          {:ok, _destination} when target == participant.definition_key ->
-            DefinitionValidation.invalid(
+          {:ok, _destination} when target == participant.call_spec_key ->
+            CallSpecValidation.invalid(
               code,
               message,
               path,
@@ -306,7 +306,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           {:ok,
            %{
              kind: :human,
-             connection: %Vxpipe.CallEngine.CallDefinition.ConnectionIntent{
+             connection: %Vxpipe.CallEngine.CallSpec.ConnectionIntent{
                service: :web,
                mode: :receive,
                admission: :transfer
@@ -317,7 +317,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           {:ok,
            %{
              kind: :human,
-             connection: %Vxpipe.CallEngine.CallDefinition.ConnectionIntent{
+             connection: %Vxpipe.CallEngine.CallSpec.ConnectionIntent{
                service: service,
                mode: :dial,
                admission: :transfer
@@ -327,7 +327,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
             :ok
 
           {:ok, _destination} ->
-            DefinitionValidation.invalid(
+            CallSpecValidation.invalid(
               code,
               message,
               path,
@@ -353,12 +353,12 @@ defmodule Vxpipe.CallEngine.CallDefinition do
               {:cont, :ok}
             else
               {:halt,
-               DefinitionValidation.invalid(
+               CallSpecValidation.invalid(
                  code,
                  message,
                  [
                    "participants",
-                   participant.definition_key,
+                   participant.call_spec_key,
                    "variable_permissions",
                    section
                  ],
@@ -377,7 +377,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp validate_dial_destinations(participants, call_variables, code, message) do
     participants
-    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
+    |> Enum.sort_by(fn {call_spec_key, _participant} -> call_spec_key end)
     |> Enum.reduce_while(:ok, fn {_key, participant}, :ok ->
       case validate_dial_destination(participant, participants, call_variables, code, message) do
         :ok -> {:cont, :ok}
@@ -388,8 +388,8 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp validate_dial_destination(
          %Participant{
-           connection: %Vxpipe.CallEngine.CallDefinition.ConnectionIntent{
-             number_from_variable: %Vxpipe.CallEngine.CallDefinition.NumberFromVariable{} = source
+           connection: %Vxpipe.CallEngine.CallSpec.ConnectionIntent{
+             number_from_variable: %Vxpipe.CallEngine.CallSpec.NumberFromVariable{} = source
            }
          } = participant,
          participants,
@@ -397,7 +397,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          code,
          message
        ) do
-    path = ["participants", participant.definition_key, "connection", "number_from_variable"]
+    path = ["participants", participant.call_spec_key, "connection", "number_from_variable"]
 
     with {:ok, section} <-
            fetch_dial_section(call_variables, source.section, code, message, path),
@@ -422,7 +422,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         {:ok, section}
 
       :error ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ ["section"],
@@ -437,7 +437,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         if string_compatible_schema?(variable_schema) do
           :ok
         else
-          DefinitionValidation.invalid(
+          CallSpecValidation.invalid(
             code,
             message,
             path ++ ["variable"],
@@ -446,7 +446,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         end
 
       :error ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           path ++ ["variable"],
@@ -464,8 +464,8 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   defp protected_dial_section(participants, section, code, message) do
     participants
-    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
-    |> Enum.find(fn {_definition_key, participant} ->
+    |> Enum.sort_by(fn {call_spec_key, _participant} -> call_spec_key end)
+    |> Enum.find(fn {_call_spec_key, participant} ->
       participant.kind == :agent and
         Map.get(participant.variable_permissions.grants, section) == :read_write
     end)
@@ -473,11 +473,11 @@ defmodule Vxpipe.CallEngine.CallDefinition do
       nil ->
         :ok
 
-      {definition_key, _participant} ->
-        DefinitionValidation.invalid(
+      {call_spec_key, _participant} ->
+        CallSpecValidation.invalid(
           code,
           message,
-          ["participants", definition_key, "variable_permissions", section],
+          ["participants", call_spec_key, "variable_permissions", section],
           "must not grant write access to a dial-routing section"
         )
     end
@@ -492,7 +492,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         {:ok, value}
 
       {:ok, _value} ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           code,
           message,
           ["limits", "max_duration_ms"],
@@ -502,9 +502,9 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   end
 
   defp invalid(path, reason) do
-    DefinitionValidation.invalid(
-      :invalid_call_definition,
-      "The call definition is invalid.",
+    CallSpecValidation.invalid(
+      :invalid_call_spec,
+      "The call spec is invalid.",
       path,
       reason
     )

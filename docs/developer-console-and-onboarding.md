@@ -3,7 +3,7 @@
 Status: proposed production design, 2026-09-16. A private-package Storybook prototype is available;
 production protocol, setup and route integration remain unimplemented.
 The user requested an extractable client-JS/React debug console first, followed by operator login
-and administration, platform API access, a demo tenant, provider credentials, example definitions
+and administration, platform API access, a demo tenant, provider credentials, example call specs
 and a Getting Started home.
 
 ## Decision and delivery order
@@ -34,7 +34,7 @@ subject to their existing review hold. Existing incomplete live-carrier gates re
 | [RTVI codec](../apps/vxpipe_gateway/lib/vxpipe/gateway/rtvi/codec.ex) | The server advertises RTVI 2.1.0, emits ordinary transcripts/output, and carries versioned `vxpipe.turn`/`vxpipe.transfer` server messages. Ordinary bot output lacks participant identity, and RTVI has no standard call-variable message. Add the reviewed correlated participant projection and authorized `vxpipe.variables` snapshot envelope. |
 | [Tenant principal](../apps/vxpipe_calls/lib/vxpipe/calls/principal.ex) | Existing API keys are tenant-bound with independent `admin`/`calls` scopes. A platform key is a separate programmatic authority contract. Neither key type authenticates the operator UI. |
 | [Call inspection](milestones/call-inspection-and-debugging.md) | Authorized live/persisted facts, variable snapshots, pagination and gap reporting already exist. Reuse them; a debug page is not a new archive or privileged inspection channel for participants. |
-| [SampleCall](../apps/vxpipe_console/lib/vxpipe/console/sample_call.ex) | Startup saves/publishes a definition and issues an in-memory sample key. The new persistent setup must replace this provisioning path for managed examples instead of running both. |
+| [SampleCall](../apps/vxpipe_console/lib/vxpipe/console/sample_call.ex) | Startup saves/publishes a call spec and issues an in-memory sample key. The new persistent setup must replace this provisioning path for managed examples instead of running both. |
 | [Provider inventory](existing-provider-credentials.md) | Google, Deepgram, Zenmux, Telnyx and Twilio are supported. First voice setup uses Google plus Deepgram; STT/TTS share a Deepgram binding. No new provider/auth modes are required. |
 
 `PRODUCT.md` contains older implementation-status prose. Current source and completed milestones
@@ -42,7 +42,7 @@ are the authority for this plan; changing unrelated product/design metadata is o
 
 ## Experience and visual direction
 
-Audience: a developer checking that a definition works, then asking who spoke, what happened,
+Audience: a developer checking that a call spec works, then asking who spoke, what happened,
 and why a call is waiting or failed. Visitor mode: **Operate**. Success is a first completed call
 with understandable evidence and a clear next action.
 
@@ -71,7 +71,7 @@ Assistant          Of course. Let's find a time that works for you.
                    [Type a message…                       ] [Send]
 ```
 
-Conversation is the default focus. Event details are secondary and collapsible; the definition
+Conversation is the default focus. Event details are secondary and collapsible; the call spec
 is read-only in this milestone. Leave preserves the run view. A separate, explicitly authorized
 end-call action may be shown only if backed by an existing supported command; never relabel a
 local disconnect as ending the whole room. A completed call offers **Run again** (a fresh call)
@@ -272,7 +272,7 @@ There is no automatic demo default in development and no `DEMO` alias to keep sy
 
 One production-built artifact can implement these states: the flag changes route/features at
 runtime, not `MIX_ENV`, build assets, database selection, authentication, TLS or credential
-protection. Flipping it off preserves stored tenants/credentials/definitions and does not end
+protection. Flipping it off preserves stored tenants/credentials/call-specs and does not end
 already admitted calls; it disables new demo setup/launch actions. Normal authenticated platform/
 tenant APIs, reusable Gateway operation and separately configured inspection/diagnostics keep their
 own access contracts. Demo mode does not auto-enable those diagnostic surfaces or grant access.
@@ -288,10 +288,10 @@ The future container milestone proves the same image in both modes; no new image
 3. **Provider setup.** Show three requirements: speech recognition (STT), speech synthesis (TTS)
    and model (LLM). Group inputs by provider: one Deepgram credential can satisfy both speech
    requirements, plus Google for the first LLM example; Zenmux remains an existing supported
-   alternative. Keep provider/model choices in definitions and keys in encrypted tenant records.
+   alternative. Keep provider/model choices in call specs and keys in encrypted tenant records.
    Saving proves local readiness, not upstream validity; only a successful request verifies that.
-4. **Install examples.** Explicit, retry-safe installation of versioned checked-in definitions.
-   Never overwrite an edited definition or silently change a published revision. Report a
+4. **Install examples.** Explicit, retry-safe installation of versioned checked-in call specs.
+   Never overwrite an edited call spec or silently change a published revision. Report a
    per-example result; refresh/retry resumes safely after partial completion.
 5. **Try an example.** Choose an example, see its participants/purpose/requirements, then open
    the same debug console preselected to its published route. **Start call** is the deliberate
@@ -313,7 +313,7 @@ You → Assistant             You → Reception → Expert  You → Agent → Su
 Use a focused setup checklist and one next action, then a small ordered example gallery.
 Each example has a meaningful title, one sentence, participant summary, requirements and a clear
 ready/blocked/unknown state with a fix link. Compute readiness from that demo tenant's active
-credential metadata, saved service requirements and exact published definition/route. Re-evaluate
+credential metadata, saved service requirements and exact published call spec/route. Re-evaluate
 it on authorized reads and revalidate on launch; stale browser state cannot bypass admission. Show no invented metrics, decorative dashboards, or generic
 placeholder cards. Preserve entered non-secret fields after errors; clear secret fields after
 submission. Show exactly which saved provider binding covers which capabilities.
@@ -343,7 +343,7 @@ wildcard tenant or accept platform keys at ordinary participant endpoints.
 Rejected alternatives: another generic SDK console (cannot express Vxpipe attribution/state), a
 new transport or Python server (duplicates working boundaries), rebuilding call inspection,
 anonymous first-visitor platform ownership, API-key UI login, automatic provisioning on every page load, one key
-field per capability, and a visual definition editor or comprehensive tenant-management product.
+field per capability, and a visual call spec editor or comprehensive tenant-management product.
 No provider/auth expansion, third-party credential rotation, new call-flow engine, billing UI,
 SSO/RBAC framework, arbitrary tool execution, package publication, a second real protocol/transport,
 or container packaging work is included.

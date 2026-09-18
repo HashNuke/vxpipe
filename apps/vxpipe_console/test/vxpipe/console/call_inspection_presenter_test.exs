@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.CallInspectionPresenterTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ConnectionIntent}
+  alias Vxpipe.CallEngine.CallSpec.{CapabilitySelection, ConnectionIntent}
 
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
@@ -344,8 +344,8 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     %CallSummary{
       id: "call-public-id",
       tenant_key: @tenant_key,
-      definition_id: "definition-public-id",
-      definition_revision: 3,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 3,
       state: :ended,
       created_at: ~U[2026-09-16 09:00:00Z],
       started_at: ~U[2026-09-16 09:00:01Z],
@@ -440,8 +440,8 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     %PreparedCall{
       id: "call-public-id",
       tenant_key: @tenant_key,
-      definition_id: "definition-public-id",
-      definition_revision: 3,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 3,
       schema_version: "20260915.01",
       participant_routes: %{},
       entry_caller: "caller",
@@ -461,8 +461,8 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
 
   defp resolved_plan do
     %ResolvedCallPlan{
-      definition_id: "definition-public-id",
-      definition_revision: 3,
+      call_spec_id: "call-spec-public-id",
+      call_spec_revision: 3,
       schema_version: "20260915.01",
       tenant_id: @tenant_key,
       actor_id: "actor-public-id",
@@ -527,9 +527,9 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     }
   end
 
-  defp participant(definition_key, participant_id, kind, connection, capabilities, options \\ []) do
+  defp participant(call_spec_key, participant_id, kind, connection, capabilities, options \\ []) do
     %Participant{
-      definition_key: definition_key,
+      call_spec_key: call_spec_key,
       participant_id: participant_id,
       activation_id: nil,
       kind: kind,

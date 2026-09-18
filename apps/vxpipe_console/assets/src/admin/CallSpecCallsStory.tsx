@@ -2,10 +2,10 @@ import { useState } from "react";
 
 import {
   callFixture,
-  callsForDefinition,
+  callsForCallSpec,
   type CallFixtureScenario,
 } from "./callFixtures";
-import { DefinitionCallsPage } from "./DefinitionCallsPage";
+import { CallSpecCallsPage } from "./CallSpecCallsPage";
 import { callDetailsStoryHref } from "./adminStoryHref";
 
 function shiftTimestamp(value: string, days: number): string;
@@ -18,7 +18,7 @@ function shiftTimestamp(value: string | null, days: number): string | null {
   return timestamp.toISOString();
 }
 
-export function DefinitionCallsStory({
+export function CallSpecCallsStory({
   scenario,
   theme,
 }: {
@@ -54,9 +54,9 @@ export function DefinitionCallsStory({
           },
         }
       : baseState;
-  const selectedDefinitionId =
+  const selectedCallSpecId =
     selectedOverride === undefined
-      ? pagedState.selectedDefinitionId
+      ? pagedState.selectedCallSpecId
       : selectedOverride;
   const allCallsState = callFixture("populated");
   const selectedCalls =
@@ -64,8 +64,8 @@ export function DefinitionCallsStory({
       ? pagedState.status === "ready"
         ? pagedState.calls
         : []
-      : selectedDefinitionId
-        ? callsForDefinition(selectedDefinitionId)
+      : selectedCallSpecId
+        ? callsForCallSpec(selectedCallSpecId)
         : allCallsState.status === "ready"
           ? allCallsState.calls
           : [];
@@ -73,24 +73,24 @@ export function DefinitionCallsStory({
     pagedState.status === "ready"
       ? {
           ...pagedState,
-          selectedDefinitionId,
+          selectedCallSpecId,
           calls: selectedCalls,
           pagination:
             selectedOverride === undefined ? pagedState.pagination : null,
         }
-      : { ...pagedState, selectedDefinitionId };
+      : { ...pagedState, selectedCallSpecId };
 
   return (
-    <DefinitionCallsPage
+    <CallSpecCallsPage
       onNextPage={() => setPage((current) => Math.min(3, current + 1))}
       onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
-      onSelectDefinition={(definitionId) => {
-        setSelectedOverride(definitionId);
+      onSelectCallSpec={(callSpecId) => {
+        setSelectedOverride(callSpecId);
         setPage(1);
         window.history.pushState(
-          { definitionId },
+          { callSpecId },
           "",
-          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls${definitionId ? `?definition_id=${encodeURIComponent(definitionId)}` : ""}`,
+          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls${callSpecId ? `?call_spec_id=${encodeURIComponent(callSpecId)}` : ""}`,
         );
       }}
       callHref={(callId) =>
@@ -100,7 +100,7 @@ export function DefinitionCallsStory({
         window.history.pushState(
           { tenantKey: state.tenant.key },
           "",
-          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/definitions`,
+          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs`,
         );
       }}
       onSelectTenants={() => window.history.pushState({}, "", "#/admin")}

@@ -4,20 +4,20 @@ defmodule Vxpipe.Gateway.TrustedCall do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     ResolvedCallPlan
   }
 
-  alias Vxpipe.CallEngine.CallDefinition.ToolVisibility
+  alias Vxpipe.CallEngine.CallSpec.ToolVisibility
 
   @derive {Inspect, except: [:initial_variables]}
-  @enforce_keys [:definition, :registries, :initial_variables]
+  @enforce_keys [:call_spec, :registries, :initial_variables]
   defstruct @enforce_keys ++ [tool_visibility_override: nil]
 
   @type t :: %__MODULE__{
-          definition: CallDefinition.t(),
+          call_spec: CallSpec.t(),
           registries: map(),
           initial_variables: map(),
           tool_visibility_override: nil | ToolVisibility.t()
@@ -29,7 +29,7 @@ defmodule Vxpipe.Gateway.TrustedCall do
          [] <-
            Keyword.keys(options) --
              [
-               :definition,
+               :call_spec,
                :resource_id,
                :revision,
                :host_tools,
@@ -37,21 +37,21 @@ defmodule Vxpipe.Gateway.TrustedCall do
                :tool_visibility,
                :tool_visibility_overrides
              ],
-         definition_input when is_map(definition_input) <- Keyword.get(options, :definition),
+         call_spec_input when is_map(call_spec_input) <- Keyword.get(options, :call_spec),
          resource_id when is_binary(resource_id) <- Keyword.get(options, :resource_id),
          revision when is_integer(revision) and revision > 0 <- Keyword.get(options, :revision),
          host_tools when is_map(host_tools) <- Keyword.get(options, :host_tools),
          initial_variables when is_map(initial_variables) <-
            Keyword.get(options, :initial_variables, %{}),
-         {:ok, definition} <-
-           CallDefinition.new(definition_input,
+         {:ok, call_spec} <-
+           CallSpec.new(call_spec_input,
              resource_id: resource_id,
              revision: revision
            ),
-         {:ok, tool_visibility_override} <- tool_visibility_override(options, definition) do
+         {:ok, tool_visibility_override} <- tool_visibility_override(options, call_spec) do
       {:ok,
        %__MODULE__{
-         definition: definition,
+         call_spec: call_spec,
          registries: %{host_tools: host_tools},
          initial_variables: initial_variables,
          tool_visibility_override: tool_visibility_override
@@ -69,10 +69,10 @@ defmodule Vxpipe.Gateway.TrustedCall do
            Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility.t()}
           | {:error, Vxpipe.CallEngine.Error.t()}
   def start(%__MODULE__{} = trusted_call, principal, room_id) when is_list(principal) do
-    definition = trusted_call.definition
+    call_spec = trusted_call.call_spec
 
     invocation_input = %{
-      call_definition: %{id: definition.resource_id, revision: definition.revision},
+      call_spec: %{id: call_spec.resource_id, revision: call_spec.revision},
       initial_variables: trusted_call.initial_variables,
       transport: %{type: "web"}
     }
@@ -84,8 +84,8 @@ defmodule Vxpipe.Gateway.TrustedCall do
              room_id: room_id
            ),
          {:ok, %ResolvedCallPlan{} = plan} <-
-           DefinitionCompiler.compile(
-             definition,
+           CallSpecCompiler.compile(
+             call_spec,
              invocation,
              trusted_call.registries,
              compiler_options(trusted_call)
@@ -102,13 +102,13 @@ defmodule Vxpipe.Gateway.TrustedCall do
     end
   end
 
-  defp tool_visibility_override(options, definition) do
+  defp tool_visibility_override(options, call_spec) do
     if Keyword.has_key?(options, :tool_visibility) or
          Keyword.has_key?(options, :tool_visibility_overrides) do
       ToolVisibility.new(
         Keyword.get(options, :tool_visibility, "hidden"),
         Keyword.get(options, :tool_visibility_overrides, %{}),
-        definition.participants
+        call_spec.participants
       )
     else
       {:ok, nil}

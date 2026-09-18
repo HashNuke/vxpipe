@@ -105,7 +105,7 @@ defmodule Vxpipe.Console.Router do
          :install_samples
 
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
-    get "/tenants/:tenant_key/definitions", Vxpipe.Console.AdminDefinitionsController, :index
+    get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
     get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index

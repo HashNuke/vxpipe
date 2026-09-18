@@ -1,9 +1,9 @@
-defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.CompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition
+  alias Vxpipe.CallEngine.CallSpec
 
-  alias Vxpipe.CallEngine.CallDefinition.{
+  alias Vxpipe.CallEngine.CallSpec.{
     CapabilitySelection,
     ConnectionIntent,
     Participant,
@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   }
 
   alias Vxpipe.CallEngine.CallInvocation
-  alias Vxpipe.CallEngine.DefinitionCompiler
+  alias Vxpipe.CallEngine.CallSpecCompiler
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility, as: ResolvedToolVisibility
@@ -21,16 +21,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   @schema_version "20260915.01"
 
-  test "Elixir and JSON inputs produce the same typed definition" do
-    input = definition_input()
+  test "Elixir and JSON inputs produce the same typed call spec" do
+    input = call_spec_input()
 
     assert {:ok, from_elixir} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
     assert {:ok, from_json} =
              input
              |> JSON.encode!()
-             |> CallDefinition.from_json(resource_id: "support", revision: 7)
+             |> CallSpec.from_json(resource_id: "support", revision: 7)
 
     assert from_elixir == from_json
     assert from_elixir.schema_version == @schema_version
@@ -59,25 +59,25 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   test "rejects invalid entry references with paths before compilation" do
     cases = [
-      {Map.delete(definition_input(), :entry_caller), ["entry_caller"]},
-      {%{definition_input() | entry_caller: 12}, ["entry_caller"]},
-      {%{definition_input() | entry_caller: "missing"}, ["entry_caller"]},
-      {%{definition_input() | entry_receiver: "caller"}, ["entry_receiver"]}
+      {Map.delete(call_spec_input(), :entry_caller), ["entry_caller"]},
+      {%{call_spec_input() | entry_caller: 12}, ["entry_caller"]},
+      {%{call_spec_input() | entry_caller: "missing"}, ["entry_caller"]},
+      {%{call_spec_input() | entry_receiver: "caller"}, ["entry_receiver"]}
     ]
 
     for {input, path} <- cases do
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
-                message: "The call definition is invalid.",
+                code: :invalid_call_spec,
+                message: "The call spec is invalid.",
                 details: %{"path" => ^path}
-              }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+              }} = CallSpec.new(input, resource_id: "support", revision: 7)
     end
   end
 
   test "accepts a human entry receiver without inventing an agent activation" do
     input =
-      put_in(definition_input(), [:participants, "reception"], %{
+      put_in(call_spec_input(), [:participants, "reception"], %{
         type: "human",
         description: "The receiving person",
         connection: %{
@@ -87,10 +87,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
         }
       })
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "human-support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "human-support", revision: 1)
 
-    assert definition.participants["reception"].kind == :human
+    assert call_spec.participants["reception"].kind == :human
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -100,48 +100,48 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     invocation = %{
       invocation
-      | definition_id: "human-support",
-        definition_revision: 1
+      | call_spec_id: "human-support",
+        call_spec_revision: 1
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
     assert plan.participants["reception"].kind == :human
     assert plan.participants["reception"].activation_id == nil
   end
 
   test "rejects unsupported schema versions, fields, and participant options" do
     cases = [
-      {%{definition_input() | schema_version: "20260906.02"}, ["schema_version"]},
-      {Map.put(definition_input(), :provider_api_key, "do-not-echo-me"), ["provider_api_key"]},
-      {put_in(definition_input(), [:participants, "caller", :prompt], "wrong kind"),
+      {%{call_spec_input() | schema_version: "20260906.02"}, ["schema_version"]},
+      {Map.put(call_spec_input(), :provider_api_key, "do-not-echo-me"), ["provider_api_key"]},
+      {put_in(call_spec_input(), [:participants, "caller", :prompt], "wrong kind"),
        ["participants", "caller", "prompt"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:participants, "caller", :connection, :service],
          "bad service"
        ), ["participants", "caller", "connection", "service"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:participants, "reception", :tools, "get_current_time", :type],
          "mcp"
        ), ["participants", "reception", "tools", "get_current_time", "integration"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:participants, "reception", :tools, "get_current_time", :conversation_mode],
          "inline"
        ), ["participants", "reception", "tools", "get_current_time", "conversation_mode"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:participants, "reception", :tools],
          %{"transfer" => %{type: "host", tool: "get_current_time"}}
        ), ["participants", "reception", "tools", "transfer"]},
-      {put_in(definition_input(), [:participants, "reception", :transfers], ["caller"]),
+      {put_in(call_spec_input(), [:participants, "reception", :transfers], ["caller"]),
        ["participants", "reception", "transfers", "0"]}
     ]
 
     for {input, path} <- cases do
-      assert {:error, %Error{code: :invalid_call_definition, details: details}} =
-               CallDefinition.new(input, resource_id: "support", revision: 7)
+      assert {:error, %Error{code: :invalid_call_spec, details: details}} =
+               CallSpec.new(input, resource_id: "support", revision: 7)
 
       assert details["path"] == path
       refute inspect(details) =~ "do-not-echo-me"
@@ -151,7 +151,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   test "parses a remote MCP operation under its model-visible local alias" do
     input =
       put_in(
-        definition_input(),
+        call_spec_input(),
         [:participants, "reception", :tools],
         %{
           "customer_lookup" => %{
@@ -162,15 +162,15 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
         }
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
     assert %ToolSelection{
              name: "customer_lookup",
              type: :mcp,
              integration: "records",
              tool: "lookup_customer"
-           } = definition.participants["reception"].tools["customer_lookup"]
+           } = call_spec.participants["reception"].tools["customer_lookup"]
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -180,19 +180,19 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     assert {:error,
             %Error{
-              code: :call_definition_resolution_failed,
+              code: :call_spec_resolution_failed,
               details: %{
                 "path" => ["participants", "reception", "tools", "customer_lookup"]
               }
-            }} = DefinitionCompiler.compile(definition, invocation, registries())
+            }} = CallSpecCompiler.compile(call_spec, invocation, registries())
   end
 
   test "defaults tool conversation admission to blocking and accepts an explicit non-blocking opt-out" do
-    assert {:ok, blocking_definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+    assert {:ok, blocking_call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 7)
 
     assert %ToolSelection{conversation_mode: :blocking} =
-             blocking_definition.participants["reception"].tools["get_current_time"]
+             blocking_call_spec.participants["reception"].tools["get_current_time"]
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -201,26 +201,26 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
              )
 
     assert {:ok, blocking_plan} =
-             DefinitionCompiler.compile(blocking_definition, invocation, registries())
+             CallSpecCompiler.compile(blocking_call_spec, invocation, registries())
 
     assert %ToolBinding{conversation_mode: :blocking} =
              blocking_plan.participants["reception"].tools["get_current_time"]
 
     non_blocking_input =
       put_in(
-        definition_input(),
+        call_spec_input(),
         [:participants, "reception", :tools, "get_current_time", :conversation_mode],
         "non_blocking"
       )
 
-    assert {:ok, non_blocking_definition} =
-             CallDefinition.new(non_blocking_input, resource_id: "support", revision: 7)
+    assert {:ok, non_blocking_call_spec} =
+             CallSpec.new(non_blocking_input, resource_id: "support", revision: 7)
 
     assert %ToolSelection{conversation_mode: :non_blocking} =
-             non_blocking_definition.participants["reception"].tools["get_current_time"]
+             non_blocking_call_spec.participants["reception"].tools["get_current_time"]
 
     assert {:ok, non_blocking_plan} =
-             DefinitionCompiler.compile(non_blocking_definition, invocation, registries())
+             CallSpecCompiler.compile(non_blocking_call_spec, invocation, registries())
 
     assert %ToolBinding{conversation_mode: :non_blocking} =
              non_blocking_plan.participants["reception"].tools["get_current_time"]
@@ -228,7 +228,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   test "invocation identity comes from trusted options and entry overrides are rejected" do
     input = %{
-      call_definition: %{id: "support", revision: 7},
+      call_spec: %{id: "support", revision: 7},
       transport: %{type: "web"},
       initial_variables: %{}
     }
@@ -243,8 +243,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     assert invocation.tenant_id == "tenant-demo"
     assert invocation.actor_id == "actor-demo"
-    assert invocation.definition_id == "support"
-    assert invocation.definition_revision == 7
+    assert invocation.call_spec_id == "support"
+    assert invocation.call_spec_revision == 7
     assert invocation.transport == :web
 
     for forbidden <- [:tenant_id, :entry_caller, :entry_receiver, :limits] do
@@ -276,8 +276,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   end
 
   test "compiles a pinned plan from inline capabilities and the host-tool registry" do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 7)
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -290,10 +290,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     registries = registries()
 
     assert {:ok, %ResolvedCallPlan{} = plan} =
-             DefinitionCompiler.compile(definition, invocation, registries)
+             CallSpecCompiler.compile(call_spec, invocation, registries)
 
-    assert plan.definition_id == "support"
-    assert plan.definition_revision == 7
+    assert plan.call_spec_id == "support"
+    assert plan.call_spec_revision == 7
     assert plan.schema_version == @schema_version
     assert plan.tenant_id == "tenant-demo"
     assert plan.call_id == "call-one"
@@ -305,8 +305,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     caller = plan.participants["caller"]
     receiver = plan.participants["reception"]
 
-    assert caller.definition_key == "caller"
-    assert receiver.definition_key == "reception"
+    assert caller.call_spec_key == "caller"
+    assert receiver.call_spec_key == "reception"
     assert caller.participant_id != receiver.participant_id
     assert caller.activation_id == nil
     assert String.starts_with?(receiver.activation_id, "act_")
@@ -335,7 +335,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     changed =
       put_in(
-        definition_input(),
+        call_spec_input(),
         [:participants, "reception", :capabilities, :model_inference, :model],
         "changed"
       )
@@ -344,13 +344,13 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     assert receiver.capabilities.model_inference.model == "careful"
   end
 
-  test "resolves and pins definition, tenant, application, and platform duration precedence" do
-    omitted_input = Map.delete(definition_input(), :limits)
+  test "resolves and pins call spec, tenant, application, and platform duration precedence" do
+    omitted_input = Map.delete(call_spec_input(), :limits)
 
-    assert {:ok, omitted_definition} =
-             CallDefinition.new(omitted_input, resource_id: "support", revision: 7)
+    assert {:ok, omitted_call_spec} =
+             CallSpec.new(omitted_input, resource_id: "support", revision: 7)
 
-    assert omitted_definition.max_duration_ms == nil
+    assert omitted_call_spec.max_duration_ms == nil
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -361,29 +361,29 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
              )
 
     assert {:ok, tenant_plan} =
-             DefinitionCompiler.compile(omitted_definition, invocation, registries(),
+             CallSpecCompiler.compile(omitted_call_spec, invocation, registries(),
                duration_limits: [tenant: 90_000, application: 120_000]
              )
 
     assert tenant_plan.max_duration_ms == 90_000
 
     assert {:ok, application_plan} =
-             DefinitionCompiler.compile(omitted_definition, invocation, registries(),
+             CallSpecCompiler.compile(omitted_call_spec, invocation, registries(),
                duration_limits: [application: 120_000]
              )
 
     assert application_plan.max_duration_ms == 120_000
 
     assert {:ok, platform_plan} =
-             DefinitionCompiler.compile(omitted_definition, invocation, registries())
+             CallSpecCompiler.compile(omitted_call_spec, invocation, registries())
 
     assert platform_plan.max_duration_ms == 1_800_000
 
-    assert {:ok, explicit_definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+    assert {:ok, explicit_call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 7)
 
     assert {:ok, explicit_plan} =
-             DefinitionCompiler.compile(explicit_definition, invocation, registries(),
+             CallSpecCompiler.compile(explicit_call_spec, invocation, registries(),
                duration_limits: [tenant: 90_000, application: 120_000]
              )
 
@@ -391,10 +391,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   end
 
   test "validates and resolves participant-local tool visibility overrides" do
-    reception = get_in(definition_input(), [:participants, "reception"])
+    reception = get_in(call_spec_input(), [:participants, "reception"])
 
     input =
-      definition_input()
+      call_spec_input()
       |> Map.put(:tool_visibility, "full")
       |> Map.put(:tool_visibility_overrides, %{
         "reception" => %{"get_current_time" => "metadata"},
@@ -402,10 +402,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
       })
       |> put_in([:participants, "billing"], reception)
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 7)
 
-    assert definition.tool_visibility == %ToolVisibility{
+    assert call_spec.tool_visibility == %ToolVisibility{
              default: :full,
              overrides: %{
                "reception" => %{"get_current_time" => :metadata},
@@ -419,7 +419,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
                actor_id: "actor-demo"
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
 
     reception_id = plan.participants["reception"].participant_id
     billing_id = plan.participants["billing"].participant_id
@@ -435,32 +435,31 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   test "rejects invalid tool visibility policies with precise paths" do
     cases = [
-      {Map.put(definition_input(), :tool_visibility, "verbose"), ["tool_visibility"]},
-      {Map.put(definition_input(), :tool_visibility_overrides, []),
-       ["tool_visibility_overrides"]},
-      {Map.put(definition_input(), :tool_visibility_overrides, %{"missing" => %{}}),
+      {Map.put(call_spec_input(), :tool_visibility, "verbose"), ["tool_visibility"]},
+      {Map.put(call_spec_input(), :tool_visibility_overrides, []), ["tool_visibility_overrides"]},
+      {Map.put(call_spec_input(), :tool_visibility_overrides, %{"missing" => %{}}),
        ["tool_visibility_overrides", "missing"]},
-      {Map.put(definition_input(), :tool_visibility_overrides, %{"caller" => %{}}),
+      {Map.put(call_spec_input(), :tool_visibility_overrides, %{"caller" => %{}}),
        ["tool_visibility_overrides", "caller"]},
-      {Map.put(definition_input(), :tool_visibility_overrides, %{"reception" => []}),
+      {Map.put(call_spec_input(), :tool_visibility_overrides, %{"reception" => []}),
        ["tool_visibility_overrides", "reception"]},
-      {Map.put(definition_input(), :tool_visibility_overrides, %{
+      {Map.put(call_spec_input(), :tool_visibility_overrides, %{
          "reception" => %{"missing" => "full"}
        }), ["tool_visibility_overrides", "reception", "missing"]},
-      {Map.put(definition_input(), :tool_visibility_overrides, %{
+      {Map.put(call_spec_input(), :tool_visibility_overrides, %{
          "reception" => %{"get_current_time" => "verbose"}
        }), ["tool_visibility_overrides", "reception", "get_current_time"]}
     ]
 
     for {input, path} <- cases do
-      assert {:error, %Error{code: :invalid_call_definition, details: %{"path" => ^path}}} =
-               CallDefinition.new(input, resource_id: "support", revision: 7)
+      assert {:error, %Error{code: :invalid_call_spec, details: %{"path" => ^path}}} =
+               CallSpec.new(input, resource_id: "support", revision: 7)
     end
   end
 
   test "creates fresh runtime participant and activation identities for every call" do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 7)
 
     assert {:ok, first_invocation} =
              CallInvocation.new(invocation_input(),
@@ -474,8 +473,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
                actor_id: "actor-demo"
              )
 
-    assert {:ok, first} = DefinitionCompiler.compile(definition, first_invocation, registries())
-    assert {:ok, second} = DefinitionCompiler.compile(definition, second_invocation, registries())
+    assert {:ok, first} = CallSpecCompiler.compile(call_spec, first_invocation, registries())
+    assert {:ok, second} = CallSpecCompiler.compile(call_spec, second_invocation, registries())
 
     refute first.call_id == second.call_id
     refute first.room_id == second.room_id
@@ -490,17 +489,17 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   test "fails safely when a tool is unavailable or aliases do not match" do
     cases = [
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:participants, "reception", :tools],
          %{"clock" => %{type: "host", tool: "get_current_time"}}
        ), registries(), ["participants", "reception", "tools", "clock"]},
-      {definition_input(), put_in(registries(), [:host_tools], %{}),
+      {call_spec_input(), put_in(registries(), [:host_tools], %{}),
        ["participants", "reception", "tools", "get_current_time"]}
     ]
 
     for {input, registry, path} <- cases do
-      assert {:ok, definition} =
-               CallDefinition.new(input, resource_id: "support", revision: 7)
+      assert {:ok, call_spec} =
+               CallSpec.new(input, resource_id: "support", revision: 7)
 
       assert {:ok, invocation} =
                CallInvocation.new(invocation_input(),
@@ -508,14 +507,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
                  actor_id: "actor-demo"
                )
 
-      assert {:error, %Error{code: :call_definition_resolution_failed, details: details}} =
-               DefinitionCompiler.compile(definition, invocation, registry)
+      assert {:error, %Error{code: :call_spec_resolution_failed, details: details}} =
+               CallSpecCompiler.compile(call_spec, invocation, registry)
 
       assert details["path"] == path
     end
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: @schema_version,
       name: "Customer support",
@@ -556,7 +555,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   defp invocation_input do
     %{
-      call_definition: %{id: "support", revision: 7},
+      call_spec: %{id: "support", revision: 7},
       initial_variables: %{},
       transport: %{type: "web"}
     }

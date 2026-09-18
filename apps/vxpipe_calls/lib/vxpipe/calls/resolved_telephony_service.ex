@@ -1,5 +1,5 @@
 defmodule Vxpipe.Calls.ResolvedTelephonyService do
-  @moduledoc "Private service and credential snapshot. Never persist in a definition or call plan."
+  @moduledoc "Private service and credential snapshot. Never persist in a call_spec or call plan."
 
   @derive {Inspect, only: [:service]}
   @enforce_keys [:service, :credential]

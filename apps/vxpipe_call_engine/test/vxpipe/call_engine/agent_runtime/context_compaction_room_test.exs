@@ -10,9 +10,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
   alias Vxpipe.CallEngine.TestArchiveWriter
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     TestAgentRuntimeInputTokenCounter,
     TestAgentRuntimeModelProvider
   }
@@ -144,13 +144,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
       limits: %{max_duration_ms: 60_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "compaction-definition", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "compaction-call-spec", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "compaction-definition", revision: 1},
+                 call_spec: %{id: "compaction-call-spec", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -164,7 +164,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
       host_tools: %{}
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 

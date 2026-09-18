@@ -2,7 +2,7 @@
 
 Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
 Prerequisites: [Call-details publications](call-details-publications.md), including all persisted history/artifact owners; the [pre-delivery review hold](index.md#pre-delivery-review-hold); and [Embedded/container delivery](embedded-and-container-delivery.md). This is intentionally the final implementation milestone.
-Sources: [Retention](../../labnotes/20260905-0405-call-definition-design.md#retention-periods--approved-application-and-tenant-policy); [R19–R21](../call-definition-gap-review.md).
+Sources: [Retention](../../labnotes/20260905-0405-call-definition-design.md#retention-periods--approved-application-and-tenant-policy); [R19–R21](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
@@ -20,7 +20,7 @@ have landed, and embedded/container delivery is complete.
 - Evaluate current policy against ended_at plus period on each sweep. Never use created_at, started_at, snapshot/publication/billing times as fallback. Active/unstarted/missing-ended_at calls are excluded; later writes do not reset retention.
 - Select work periodically, not exact threshold timers. Choose/document a configurable deployment cadence at implementation; no preapproved hourly default or deletion SLA.
 - Delete every managed call-owned external object/copy first: tracks, mixes, manifests, all publication revisions/derivatives and temporary owned uploads. Definitive not-found means absent; timeout/auth/network/unknown is not success. Keep DB references until all external objects are absent.
-- Then delete all call-owned SQL data including call/plan copies, participant/leg/admission/token rows, events/transcripts/tools/usage, baseline/all/latest variables, artifacts/publications and jobs. No retained summary/tombstone/soft-delete/latest snapshot. Shared definitions/tenant config/reusable opening assets remain.
+- Then delete all call-owned SQL data including call/plan copies, participant/leg/admission/token rows, events/transcripts/tools/usage, baseline/all/latest variables, artifacts/publications and jobs. No retained summary/tombstone/soft-delete/latest snapshot. Shared Call Spec/tenant config/reusable opening assets remain.
 - Sweep failures retain existing records for retry; repeated missing-object deletion is safe. Coordinate existing publishers, recorders, billing/history workers and concurrent sweeps so no late writer can recreate deleted objects/rows. External-first ordering alone is not coordination; select/test a bounded implementation using existing ownership/records, not a new permanent journal/recovery feature.
 - Internal cleanup retries are not tool/MCP retries. Only Vxpipe-managed copies are in scope; do not claim deletion of independent provider/client data.
 
@@ -38,7 +38,7 @@ have landed, and embedded/container delivery is complete.
 - [ ] Only ended_at starts age; active/unstarted/missing-ended_at and forever records remain, even with old created_at.
 - [ ] Missing object permits progress; unknown/error retains DB references. Crash between external and DB deletion safely resumes next sweep.
 - [ ] Concurrent late snapshot/billing/upload/publication and sweeps cannot resurrect rows/objects; DB failure retains retryable records.
-- [ ] Every call-owned table/object/revision is absent after success, including latest pointers; shared definition/opening assets remain.
+- [ ] Every call-owned table/object/revision is absent after success, including latest pointers; shared Call Spec/opening assets remain.
 - [ ] Two tenants with different policies and adjacent/similar object keys remain isolated:
   sweep deletes only the eligible call. App policy edits affect inheriting tenants, not explicit overrides.
 

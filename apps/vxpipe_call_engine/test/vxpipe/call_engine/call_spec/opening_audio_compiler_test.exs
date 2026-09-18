@@ -1,12 +1,12 @@
-defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, Error}
-  alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, Error}
+  alias Vxpipe.CallEngine.CallSpec.OpeningAudio
 
   test "resolves the opening's explicit TTS selection with a human initial receiver" do
     input =
-      definition_input()
+      call_spec_input()
       |> put_in([:participants, "reception"], %{
         type: "human",
         connection: %{service: "web", mode: "receive", admission: "start_call"}
@@ -17,8 +17,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
         text_to_speech: %{provider: "morse", model: "morse"}
       })
 
-    assert {:ok, definition} = CallDefinition.new(input, resource_id: "support", revision: 7)
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries())
+    assert {:ok, call_spec} = CallSpec.new(input, resource_id: "support", revision: 7)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation(), registries())
     assert plan.opening_audio.text_to_speech.provider == "morse"
     assert plan.opening_audio.text_to_speech.model == "morse"
     assert Map.fetch!(plan.participants, "reception").capabilities.text_to_speech == nil
@@ -26,12 +26,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
 
   test "text opening requires its own selection even when the agent has a default voice" do
     input =
-      definition_input()
+      call_spec_input()
       |> put_in([:defaults, :capabilities, :text_to_speech], %{provider: "morse", model: "morse"})
       |> Map.put(:opening_audio, %{type: "text", text: "Notice"})
 
     assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
-             CallDefinition.new(input, resource_id: "support", revision: 7)
+             CallSpec.new(input, resource_id: "support", revision: 7)
   end
 
   test "rejects legacy, wrong-kind, and malformed opening selections without inheriting defaults" do
@@ -44,19 +44,19 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
           %{provider: "fixture", model: "test"}
         ] do
       input =
-        Map.put(definition_input(), :opening_audio, %{
+        Map.put(call_spec_input(), :opening_audio, %{
           type: "text",
           text: "Notice",
           text_to_speech: selection
         })
 
       assert {:error, %Error{details: %{"path" => ["opening_audio", "text_to_speech"]}}} =
-               CallDefinition.new(input, resource_id: "support", revision: 7)
+               CallSpec.new(input, resource_id: "support", revision: 7)
     end
   end
 
   test "pins supported text and HTTPS file sources into the resolved plan" do
-    assert CallDefinition.schema_version() == "20260915.01"
+    assert CallSpec.schema_version() == "20260915.01"
 
     for {input, expected} <- [
           {%{
@@ -68,7 +68,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
              type: :text,
              text: "This call may be recorded.",
              url: nil,
-             text_to_speech: %Vxpipe.CallEngine.CallDefinition.CapabilitySelection{
+             text_to_speech: %Vxpipe.CallEngine.CallSpec.CapabilitySelection{
                kind: :text_to_speech,
                provider: "morse",
                model: "morse",
@@ -84,13 +84,13 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
              url: "https://assets.example.test/opening.wav"
            }}
         ] do
-      assert {:ok, definition} =
-               definition_input()
+      assert {:ok, call_spec} =
+               call_spec_input()
                |> Map.put(:opening_audio, input)
-               |> CallDefinition.new(resource_id: "support", revision: 7)
+               |> CallSpec.new(resource_id: "support", revision: 7)
 
-      assert definition.opening_audio == expected
-      assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries())
+      assert call_spec.opening_audio == expected
+      assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation(), registries())
       assert plan.opening_audio.type == expected.type
       assert plan.opening_audio.text == expected.text
       assert plan.opening_audio.url == expected.url
@@ -98,10 +98,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
   end
 
   test "omission adds no opening audio and malformed sources fail at their exact path" do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 7)
 
-    assert definition.opening_audio == nil
+    assert call_spec.opening_audio == nil
 
     for {opening_audio, path} <- [
           {%{type: "text", text: ""}, ["opening_audio", "text"]},
@@ -117,16 +117,16 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
            }, ["opening_audio", "text_to_speech"]},
           {%{type: "unknown", text: "hello"}, ["opening_audio", "type"]}
         ] do
-      assert {:error, %Error{code: :invalid_call_definition, details: %{"path" => ^path}}} =
-               definition_input()
+      assert {:error, %Error{code: :invalid_call_spec, details: %{"path" => ^path}}} =
+               call_spec_input()
                |> Map.put(:opening_audio, opening_audio)
-               |> CallDefinition.new(resource_id: "support", revision: 7)
+               |> CallSpec.new(resource_id: "support", revision: 7)
     end
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "reception",
       defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
@@ -151,7 +151,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "support", revision: 7},
+                 call_spec: %{id: "support", revision: 7},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },

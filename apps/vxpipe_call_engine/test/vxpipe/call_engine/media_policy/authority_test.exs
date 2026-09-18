@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition.{TransferPolicy, VariablePermissions}
+  alias Vxpipe.CallEngine.CallSpec.{TransferPolicy, VariablePermissions}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
   alias Vxpipe.CallEngine.TestMediaPolicyEnforcer
 
@@ -179,9 +179,9 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
   end
 
   test "candidate commit rejects expired, forged, foreign and stale evidence without applying policy" do
-    definition = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
-    server = start_authority(definition)
-    foreign = start_authority(definition)
+    call_spec = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
+    server = start_authority(call_spec)
+    foreign = start_authority(call_spec)
     assert {:ok, current} = Authority.admit(server, "caller")
     enforcer = start_enforcer()
     assert {:ok, ^current} = Authority.register_enforcer(server, enforcer)
@@ -330,9 +330,9 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
   end
 
   test "candidate validation fences the authority, live policy and recomputed result" do
-    definition = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
-    server = start_authority(definition)
-    other = start_authority(definition)
+    call_spec = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
+    server = start_authority(call_spec)
+    other = start_authority(call_spec)
     assert {:ok, current} = Authority.admit(server, "caller")
 
     assert {:ok, candidate} =
@@ -580,8 +580,8 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
       end)
 
     %ResolvedCallPlan{
-      definition_id: "definition-policy-authority",
-      definition_revision: 1,
+      call_spec_id: "call-spec-policy-authority",
+      call_spec_revision: 1,
       schema_version: "20260913.01",
       tenant_id: "tenant-policy",
       actor_id: "actor-policy",
@@ -602,7 +602,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
 
   defp participant(participant_id, presence_policy) do
     %Participant{
-      definition_key: participant_id,
+      call_spec_key: participant_id,
       participant_id: participant_id,
       activation_id: nil,
       kind: :human,

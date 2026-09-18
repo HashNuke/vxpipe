@@ -25,7 +25,7 @@ export function TenantServicesStory({
         window.history.pushState(
           {},
           "",
-          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/definitions`,
+          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs`,
         )
       }
       onSelectTenants={() => window.history.pushState({}, "", "#/admin")}

@@ -2,7 +2,7 @@
 
 Status: complete (2026-09-11). Specification review: approved (2026-09-08).
 Prerequisites: [Live mixing/media policy](live-mixing-and-media-policy.md); [Asynchronous history](asynchronous-call-history.md).
-Sources: [Live recording split](../../labnotes/20260905-0405-call-definition-design.md#mix-live-record-participant-tracks-and-the-live-mix); [R38/R41](../call-definition-gap-review.md).
+Sources: [Live recording split](../../labnotes/20260905-0405-call-definition-design.md#mix-live-record-participant-tracks-and-the-live-mix); [R38/R41](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
@@ -124,7 +124,7 @@ mix test test/vxpipe/call_engine/room_mixer_test.exs \
 ```
 
 This checkpoint supplies only the authorized mixer tap. It does not start a recorder, hand chunks
-to an artifact writer, or enable recording in a call definition.
+to an artifact writer, or enable recording in a call spec.
 
 Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 804
 umbrella tests, and the unused-dependency check pass.
@@ -162,8 +162,8 @@ mix test test/vxpipe/call_engine/room_recording_test.exs \
 # 11 tests, 0 failures
 ```
 
-This checkpoint does not yet wire a concrete artifact writer, select recordings from a call
-definition, capture connection-qualified individual tracks, publish metadata, or add operator
+This checkpoint does not yet wire a concrete artifact writer, select recordings from a
+call spec, capture connection-qualified individual tracks, publish metadata, or add operator
 playback. Those remain required before the milestone checklist can advance.
 
 Root formatting, compilation with warnings as errors, strict Credo over 619 source files, all 805
@@ -238,8 +238,8 @@ umbrella tests, and the unused-dependency check pass.
 
 Trusted call-start options can now explicitly enable recording and supply its target list, bounded
 pull size, and writer adapter. Recording remains disabled by default. Gateway admission forwards
-the same application/tenant-owned settings for web and telephony starts; client payloads and call
-definitions do not gain storage credentials or adapter options.
+the same application/tenant-owned settings for web and telephony starts; client payloads and
+call specs do not gain storage credentials or adapter options.
 
 The room-incarnation supervisor creates one fresh reference per enabled room and injects it into
 only the room mixer and its temporary `RoomRecording` sibling. It starts the recorder after the
@@ -265,7 +265,7 @@ mix test test/vxpipe/gateway/call_admission/call_engine_options_test.exs \
 # 5 tests, 0 failures
 ```
 
-This checkpoint does not add a call-definition recording shape, select the concrete S3 adapter in
+This checkpoint does not add a call-spec recording shape, select the concrete S3 adapter in
 the Console runtime, capture connection-qualified individual tracks, publish artifact metadata, or
 serve operator playback. Those remain later parts of this milestone.
 
@@ -312,7 +312,7 @@ umbrella tests, and the unused-dependency check pass.
 ## Checkpoint 8: selected individual track artifacts
 
 Trusted recording targets can now combine `:full_mix` with all individual tracks or with individual
-tracks selected by stable participant definition keys. Room startup resolves selected keys against
+tracks selected by stable participant call spec keys. Room startup resolves selected keys against
 the pinned call plan and passes only the resulting participant IDs into the private mixer
 subscription. Unknown or malformed selections fail an explicitly enabled recording setup rather
 than silently widening capture.
@@ -331,7 +331,7 @@ conversion or external process is introduced.
 The engine test was first red because only full-mix targets were valid. It now proves a selected
 source opens lazily, preserves exact identity and PCM, shares offset zero with the full mix, remains
 absent for an unselected source, and obeys the same deny/resume policy intervals. The planned-room
-test separately proves stable definition-key resolution. The artifacts test was run red against the
+test separately proves stable call-spec-key resolution. The artifacts test was run red against the
 old full-mix locator before adding the individual mapping:
 
 ```text
@@ -434,8 +434,8 @@ umbrella tests, and the unused-dependency check pass.
 
 ## Checkpoint 11: trusted Console recording composition
 
-The repository development host can now select the concrete recording path without changing a call
-definition or client contract. Recording remains disabled by default. An explicit runtime switch
+The repository development host can now select the concrete recording path without changing a
+call spec or client contract. Recording remains disabled by default. An explicit runtime switch
 requires both PostgreSQL-backed persistence and an S3 bucket, then Console injects the existing
 artifacts recording writer, multipart S3 object store, and asynchronous Ecto metadata adapter into
 the Gateway's ordinary web/telephony call-admission backend.
@@ -445,7 +445,7 @@ pull at most 16 mixer frames per coordinator pass, admit at most 100 pending wri
 seconds with the current 20 ms room frame), and allow a terminating writer up to 30 seconds to drain.
 ExAws retains credential discovery and request signing. Optional trusted region and root HTTP(S)
 endpoint settings support AWS and path-style S3-compatible stores without putting secrets, storage
-options, or adapter modules in client payloads or call definitions.
+options, or adapter modules in client payloads or call specs.
 
 `vxpipe_console` now declares the artifacts and persistence applications as runtime dependencies
 because it is the executable composition host. Call Engine remains storage-neutral, Gateway remains

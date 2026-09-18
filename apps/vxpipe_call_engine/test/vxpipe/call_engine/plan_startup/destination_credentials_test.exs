@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, PlanStartup}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{DestinationPreparer, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
@@ -175,7 +175,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
 
   defp plan(tenant) do
     source =
-      TestTurnCall.definition()
+      TestTurnCall.call_spec()
       |> put_in([:defaults, :capabilities], %{
         model_inference: %{
           provider: "google",
@@ -210,17 +210,17 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       })
       |> put_in([:participants, "receiver", :transfers], ["agent", "human"])
 
-    assert {:ok, definition} =
-             CallDefinition.new(source, resource_id: "destinations", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(source, resource_id: "destinations", revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
-               %{call_definition: %{id: "destinations", revision: 1}, transport: %{type: "web"}},
+               %{call_spec: %{id: "destinations", revision: 1}, transport: %{type: "web"}},
                tenant_id: tenant,
                actor_id: "operator"
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, %{host_tools: %{}})
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
     plan
   end
 
@@ -240,7 +240,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       tenant_id: plan.tenant_id,
       room_id: plan.room_id,
       incarnation_id: "not-started",
-      source_definition_key: source.definition_key,
+      source_call_spec_key: source.call_spec_key,
       source_participant_id: source.participant_id,
       source_activation_id: source.activation_id,
       source_capability: self(),
@@ -249,7 +249,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       command_id: "command-destination",
       correlation_id: "turn-destination",
       tool_call_id: "transfer",
-      destination_definition_key: destination.definition_key,
+      destination_call_spec_key: destination.call_spec_key,
       destination_participant_id: destination.participant_id,
       reason: "Help the caller."
     }

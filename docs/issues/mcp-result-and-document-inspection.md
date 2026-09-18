@@ -52,6 +52,6 @@ The protocol supports structured results and heterogeneous content including
 resource links; that does not supply Vxpipe's model projection or inspection
 policy. [MCP tool results](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
-Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
+Related: [call-spec design](../../labnotes/20260905-0405-call-definition-design.md),
 [architecture](../architecture.md), and
-[gap review](../call-definition-gap-review.md).
+[gap review](../call-spec-gap-review.md).

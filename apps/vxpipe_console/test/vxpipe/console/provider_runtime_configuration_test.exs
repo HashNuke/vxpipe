@@ -122,10 +122,10 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
       |> Keyword.fetch!(:trusted_call)
 
     refute Keyword.has_key?(trusted, :capability_profiles)
-    definition = Keyword.fetch!(trusted, :definition)
-    assert definition.schema_version == "20260915.01"
-    assert definition.defaults.capabilities.speech_to_text.provider == "deepgram"
-    assert definition.defaults.capabilities.text_to_speech.provider == "deepgram"
-    assert definition.defaults.capabilities.model_inference.provider == "google"
+    call_spec = Keyword.fetch!(trusted, :call_spec)
+    assert call_spec.schema_version == "20260915.01"
+    assert call_spec.defaults.capabilities.speech_to_text.provider == "deepgram"
+    assert call_spec.defaults.capabilities.text_to_speech.provider == "deepgram"
+    assert call_spec.defaults.capabilities.model_inference.provider == "google"
   end
 end

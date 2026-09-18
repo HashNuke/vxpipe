@@ -10,8 +10,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
         %Request{} = request,
         %State{participant_transfer_runtime: %Runtime{} = runtime} = state
       ) do
-    source = Map.get(runtime.plan.participants, request.source_definition_key)
-    destination = Map.get(runtime.plan.participants, request.destination_definition_key)
+    source = Map.get(runtime.plan.participants, request.source_call_spec_key)
+    destination = Map.get(runtime.plan.participants, request.destination_call_spec_key)
     connection = Map.get(state.connections, request.connection_id)
 
     if state.snapshot.tenant_id == request.tenant_id and
@@ -23,7 +23,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
          GenServer.whereis(state.text_capability.pid) == request.source_capability and
          source != nil and source.kind == :agent and
          source.participant_id == request.source_participant_id and
-         request.destination_definition_key in source.transfers and
+         request.destination_call_spec_key in source.transfers and
          transferable_destination?(destination) and
          destination.participant_id == request.destination_participant_id and
          not MapSet.member?(state.participant_ids, request.destination_participant_id) and

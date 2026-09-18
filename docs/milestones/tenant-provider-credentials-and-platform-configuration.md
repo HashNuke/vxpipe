@@ -9,7 +9,7 @@ selections, tenant credential storage and platform configuration/encryption-key 
 Local providers remain credential-free. No new provider authentication support is required.
 
 Prerequisites: the implemented workflows in
-[Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md),
+[Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Prepared calls](prepared-call-admission.md), [ReqLLM agent runtime](reqllm-agent-runtime.md),
 [Local Morse providers](morse-code-audio-providers.md), [Opening audio](opening-audio-and-call-lifecycle.md),
 [Agent transfers](agent-transfers.md), [Human transfers](human-web-transfers.md),
@@ -45,7 +45,7 @@ website logos and historical review findings do not create new feature requireme
 
 ## Outcome and configuration ownership
 
-A tenant provisions an encrypted provider credential, then saves and runs a definition that
+A tenant provisions an encrypted provider credential, then saves and runs a call spec that
 selects the actual provider and model. Saving fails before a revision is written if a required
 tenant credential is unavailable. Telnyx and Twilio use the same tenant credential boundary for
 carrier commands and ingress authentication. Platform infrastructure uses deployment environment
@@ -53,7 +53,7 @@ variables. There is no runtime TOML file or capability-profile lookup.
 
 | Configuration | Owner and source |
 | --- | --- |
-| Speech/model provider, model, common options, provider-specific options | Inline call-definition data, persisted as immutable revisions |
+| Speech/model provider, model, common options, provider-specific options | Inline call-spec data, persisted as immutable revisions |
 | AI/speech credentials, including Google and Deepgram | Encrypted tenant records in PostgreSQL |
 | Telnyx API key; Twilio account SID and auth token | Tenant provider records; secret payloads encrypted |
 | Carrier account/connection identity, verification configuration, ingress key, originating number | Tenant telephony service binding in PostgreSQL, linked to its tenant credential |
@@ -68,7 +68,7 @@ Telnyx's webhook public key is verification metadata, not a private signing key;
 the tenant service and version it with the authentication configuration.
 
 This decision supersedes the discarded runtime TOML proposal and the older proposed
-deployment-config-file contract. Definition JSON remains the portable behavior
+deployment-config-file contract. call spec JSON remains the portable behavior
 document. Removal applies to provider env/global-application fallbacks as well as TOML.
 
 Removal means deleting the old provider configuration readers, merges and fallback branches,
@@ -76,7 +76,7 @@ not retaining them behind precedence rules, deprecation warnings, feature flags 
 modes. This covers provider credentials and provider/model/option settings from environment
 variables, TOML, global application configuration and capability profiles, including
 `provider_api_key_environment`. Internal adapters receive explicit tenant DB credentials and
-definition-owned options; their libraries' ambient credential discovery must never be reached by
+call-spec-owned options; their libraries' ambient credential discovery must never be reached by
 Vxpipe calls. Platform infrastructure env settings remain supported, but cannot supply tenant
 provider credentials. Missing tenant credentials fail closed even if old settings are present.
 Explicit migration tooling and read-only historical inspection are not live configuration sources
@@ -131,9 +131,9 @@ since-discarded uncommitted TOML work. They identify the vertical slices’ inte
 
 | Reviewed code | Pre-cutover behavior and planned change |
 | --- | --- |
-| [Capabilities](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_definition/capabilities.ex), [OpeningAudio](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_definition/opening_audio.ex) | Parse profile strings. Replace them with inline selections in defaults, participant overrides and independent opening TTS. |
-| [DefinitionCompiler](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/definition_compiler.ex), [CapabilitySelection](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_definition/capability_selection.ex) | Resolve a required `capability_profiles` registry and retain `profile`. Remove that lookup/field and separate public provider identity from adapter identity. |
-| [Definitions](../../apps/vxpipe_calls/lib/vxpipe/calls/definitions.ex) | Saves unsupported catalog references as draft validation errors; publishing checks the stored errors only. Add hard credential gates before save and fresh checks at publication/preparation. |
+| [Capabilities](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_spec/capabilities.ex), [OpeningAudio](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_spec/opening_audio.ex) | Parse profile strings. Replace them with inline selections in defaults, participant overrides and independent opening TTS. |
+| [CallSpecCompiler](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_spec_compiler.ex), [CapabilitySelection](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_spec/capability_selection.ex) | Resolve a required `capability_profiles` registry and retain `profile`. Remove that lookup/field and separate public provider identity from adapter identity. |
+| [Call Specs](../../apps/vxpipe_calls/lib/vxpipe/calls/call_specs.ex) | Saves unsupported catalog references as draft validation errors; publishing checks the stored errors only. Add hard credential gates before save and fresh checks at publication/preparation. |
 | [PrivateMaterial](../../apps/vxpipe_calls/lib/vxpipe/calls/private_material.ex) | Rejects keys such as `credential`, `api_key`, and `token`. Add a typed non-secret reference without weakening payload rejection. |
 | [CredentialRepository](../../apps/vxpipe_calls/lib/vxpipe/calls/credential_repository.ex), [CredentialStore](../../apps/vxpipe_persistence/lib/vxpipe/persistence/credential_store.ex) | Store tenant identity and hash-only Vxpipe API keys. Provider encryption needs a separate concept and port; recoverable storage does not exist here today. |
 | [PreparedCallFactory](../../apps/vxpipe_calls/lib/vxpipe/calls/prepared_call_factory.ex), [PreparedCallRecord](../../apps/vxpipe_persistence/lib/vxpipe/persistence/prepared_call_record.ex), [ResolvedPlanCodec](../../apps/vxpipe_persistence/lib/vxpipe/persistence/resolved_plan_codec.ex) | Compile, encode and reload complete plans. Keep secrets out and explicitly handle old serialized selections at cutover. |
@@ -147,7 +147,7 @@ since-discarded uncommitted TOML work. They identify the vertical slices’ inte
 | [TrustedCall](../../apps/vxpipe_gateway/lib/vxpipe/gateway/trusted_call.ex), [SampleCallBackend](../../apps/vxpipe_console/lib/vxpipe/console/sample_call_backend.ex), [dev.exs](../../config/dev.exs) | Supply profiles and bootstrap a fresh sample tenant. Remove profile inputs and make credential provisioning target the actual sample tenant before save. |
 | [runtime.exs](../../config/runtime.exs) | Loads TOML into provider/global settings. Currently reads `VXPIPE_DATABASE_URL`, with a development URL from `dev.exs` and pool default 10. Replace that name/TOML pool input with the approved platform alias pairs and preserve env-free development. |
 
-## Definition contract: upstream providers, no capability profiles
+## Call Spec contract: upstream providers, no capability profiles
 
 Schema `20260915.01` uses inline selections. Example:
 
@@ -195,7 +195,7 @@ with the existing model/options contracts recorded in the provider inventory.
 - Optional `credential_name` selects a credential inside the tenant/provider scope; omission
   selects `default`. It never selects model/options. The earlier draft's `credential` key
   conflicts with the current private-material guard.
-- Definition defaults provide reuse. A participant override replaces the complete selection for
+- call spec defaults provide reuse. A participant override replaces the complete selection for
   that capability kind, preventing options from one provider merging into another.
   `opening_audio.text_to_speech` has its own inline selection and still inherits no voice.
 - The code-owned catalog maps capability kind/provider to the supported adapter, credential
@@ -220,7 +220,7 @@ The service references the stable credential identity; a new leg resolves its cu
 version and supplies it to the existing leg configuration.
 Public callback/media origins remain platform settings, with routes derived from the stored binding.
 
-The call definition continues to carry phone intent, literal/protected-variable destination,
+The call spec continues to carry phone intent, literal/protected-variable destination,
 transfer permissions and media policy. Saving resolves every non-web connection service for its
 tenant and requires active matching carrier credentials, including outbound transfer destinations.
 There is no tenant-to-application carrier fallback. Pin non-secret service identity with prepared
@@ -258,13 +258,13 @@ aliases in different tenants must never return another tenant's claim, including
   call-scoped keys cannot manage credentials. Supply secrets by protected input/file descriptor,
   never command-line secret flags or echoed output. Responses expose metadata only.
 - Vxpipe API keys remain SHA-256 digests. Their values cannot be recovered or used as provider keys.
-  No secret/ciphertext enters definitions, plans, archives, inspection, routine logs or telemetry.
+  No secret/ciphertext enters call specs, plans, archives, inspection, routine logs or telemetry.
 
 ### Save, publish, prepare and activate
 
 1. Parse and locally validate all effective participant selections, opening TTS and phone service
    requirements. Include transfer destinations, not just the initial caller/receiver.
-2. Before inserting any definition/revision/routes, check the tenant's active credential records
+2. Before inserting any call spec/revision/routes, check the tenant's active credential records
    and required auth metadata. Missing, revoked, wrong-provider, unsupported auth kind or
    wrong-tenant bindings are hard save failures with path-specific safe errors. Local capabilities
    require none. Provider validation performs no network calls or token exchange.
@@ -324,7 +324,7 @@ where necessary to prove the DB-to-adapter boundary; transfer readiness, cue pla
 bridging and media behavior remain owned by their existing milestones.
 
 Keep schema cutover explicit: reject old profile inputs and document how to replace affected
-local definitions/prepared calls through existing administration. Do not add a general legacy
+local call specs/prepared calls through existing administration. Do not add a general legacy
 profile conversion framework. Migrate in-repo fixtures and sample inputs with shared structures.
 
 ### Checkpoint 1 — Provision Google/Deepgram and run an inline tenant voice call
@@ -332,7 +332,7 @@ profile conversion framework. Migrate in-repo fixtures and sample inputs with sh
 Depends on the implemented prerequisites above.
 
 - [x] Write a failing workflow test: provision tenant Google/Deepgram credentials, save an inline
-  definition, publish/prepare/join and exchange a synthetic voice turn. The same save for another
+  call spec, publish/prepare/join and exchange a synthetic voice turn. The same save for another
   tenant fails with no new revision/route. Test adapters observe only the expected credentials.
 - [x] Deliver the minimum complete credential table/encryption, repository port, secret-source
   bridge and trusted provisioning/list-metadata operation required by this flow. Test ciphertext
@@ -344,12 +344,12 @@ Depends on the implemented prerequisites above.
   errors and prepared-plan secret exclusion. Keep Vxpipe API-key authentication unchanged.
 - [x] Replace current profile-dependent consumers when changing the shared selection structure,
   including opening parser, usage/cache identity and trusted input. Migrate affected tests/sample
-  definitions in this checkpoint so the umbrella compiles and the normal sample remains runnable.
+  call specs in this checkpoint so the umbrella compiles and the normal sample remains runnable.
 - [x] Remove global/TOML/env credential reads and boot-time provider-key requirements for this
   delivered flow. Credentials are read after the Repo starts, through the tenant resolver.
 - [x] Delete `VXPIPE_DEV_SPEECH_PROFILE` reads and both `speech_profile` switch branches in
   `config/runtime.exs`, plus obsolete launcher/sample/docs/test references. Select local Morse
-  through the inline definition. Test that setting the retired variable cannot change the selected
+  through the inline call spec. Test that setting the retired variable cannot change the selected
   provider or activate a legacy fallback. Removing only the line from `env.sample` is insufficient.
 - [x] Make Console sample setup select a stable provisioned development tenant through trusted
   operator setup; its call-scoped API key remains server-held. No startup import of provider env
@@ -375,7 +375,7 @@ Depends on checkpoint 1.
   tenant/binding cache isolation and rejection of an unavailable binding.
 - [x] Add focused tests at remaining reader/adapter boundaries for the selected tenant/provider/name,
   whole-selection overrides and missing/wrong-tenant/inactive credential failure. Check that a
-  later destination's missing binding blocks definition save before rows are written.
+  later destination's missing binding blocks call spec save before rows are written.
 - [x] Verify a new activation reads the DB credential and lookup failure enters the existing
   preparation-failure path before any provider request. Reuse the existing source-failure contract.
   - [x] Resolve fresh source speech credentials before private briefing and source replacement;
@@ -396,11 +396,11 @@ Depends on the credential store and existing Telnyx integration.
   Trusted OTP/CLI registration and metadata lookup are implemented; see [service storage](../tenant-telephony-services.md).
   - [x] Provision named Telnyx API keys through the encrypted tenant store and protected-input
     operator CLI; verify tenant isolation, metadata-only output and invalid-payload rejection.
-- [x] Resolve matching tenant service credentials during definition save/publish/prepare and
+- [x] Resolve matching tenant service credentials during call spec save/publish/prepare and
   existing leg construction. Pin safe service identity so an old plan cannot change accounts.
   - [x] Resolve the exact active service credential privately; check every phone destination at
     save/publish/web preparation and hold the binding through the final database write. Incoming
-    preparation initially shared preflight; its final insert guard and live construction are now complete. See [definition-guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
+    preparation initially shared preflight; its final insert guard and live construction are now complete. See [call-spec guard evidence](../../labnotes/20260916-0057-telephony-credential-gates.md).
   - [x] Pin canonical tenant/service/provider/account/credential identity in prepared plans.
     Resolve each alias once per host compile, include the metadata in the existing digest, and
     compare every participant's reference under final web-write locks. Post-compile rebinding
@@ -562,7 +562,7 @@ isolation and restart checks; add focused tests only for changed or uncovered bo
   reject removed public configuration fields; retain no compatibility switch or dormant path.
 - [x] Prove absence of fallback: populate conflicting old provider env/application settings and a
   legacy config file in isolated tests. Without an active tenant DB credential, save/preparation/
-  activation must fail with no provider request. With one, only that credential and the definition
+  activation must fail with no provider request. With one, only that credential and the call spec
   options are used; the old file is never read and SDK ambient discovery is never invoked.
 - [x] Restore and catalog platform database/pool, S3, listener/TLS, callback origin and encryption
   settings in `config/runtime.exs` and `env.sample` (keep `.env.example` synchronized or retire
@@ -583,12 +583,12 @@ isolation and restart checks; add focused tests only for changed or uncovered bo
   unset/blank values, invalid selected URL/pool values, the retired name alone and test-database
   isolation. Demonstrate development boot/provision/prepare using the default local database/pool
   with all four database env vars unset; verify non-development never defaults to `vxpipe_dev`.
-- [x] Document replacement of old profile-based definitions/prepared calls using existing
+- [x] Document replacement of old profile-based call specs/prepared calls using existing
   administration. Keep old-plan activation rejected and immutable history intact. Add a migration
   only for a demonstrated persisted-data requirement; no generic profile-conversion framework.
 - [x] Update architecture, tenant operations, developer/provider docs and the container delivery
   specification. Environment plus tenant DB replaces the proposed deployment JSON/TOML loader;
-  JSON call definitions remain. Preserve embedded fixture/local-provider use without Ecto.
+  JSON call specs remain. Preserve embedded fixture/local-provider use without Ecto.
 - [x] Obtain the requested independent agent review of the final implementation, fix findings,
   then run all five common root gates once the reviewed checkpoint is ready. Record exact results.
 - [x] Confirm existing evidence covers two-tenant persistence, unavailable/wrong encryption keys,
@@ -621,7 +621,7 @@ Map rows to existing valid evidence before adding tests or manual demonstrations
 | Twilio | Existing REST, webhook and WSS boundaries use matching tenant auth; failed authentication consumes no media token or waiter. |
 | Tenant service isolation | Live and persisted lookups cannot cross tenants with matching aliases or provider event/leg IDs. |
 | Reader failure | Missing/undecryptable/inactive credentials fail before new provider work; existing initialized clients retain their normal owned lifetime. |
-| Persistence/privacy | Recoverable credentials are encrypted; Vxpipe API keys remain hash-only; definitions, plans, archives, inspection and logs exclude credential payloads. |
+| Persistence/privacy | Recoverable credentials are encrypted; Vxpipe API keys remain hash-only; call specs, plans, archives, inspection and logs exclude credential payloads. |
 | Encryption-key rotation | Re-encryption and restart preserve the exact tenant credential values; verified completion permits removal of the old platform key. |
 | Platform env | Database/S3/HTTP/key settings load from env; required placeholders and commented optional settings appear in visible `env.sample`. |
 | Database aliases | Approved precedence/defaults, invalid-value failure and test-database isolation hold. |
@@ -635,12 +635,12 @@ Map rows to existing valid evidence before adding tests or manual demonstrations
   is included; it changes the storage protection, not the third-party credential values.
 - This includes tenant credentials for hosted AI/speech and Telnyx/Twilio. It does not move
   platform S3 credentials to tenant storage or introduce platform-shared provider accounts.
-- Capability profiles and public adapter fields are removed. Definition defaults supply reuse;
+- Capability profiles and public adapter fields are removed. call spec defaults supply reuse;
   a new preset/template system is not required.
 - Carrier service bindings retain routing/account semantics. Internal carrier `ServiceProfile`
   validators may remain or be renamed for clarity; they must not become user-configured model
   profiles or a back door to global credentials.
-- Definition save does not call providers, exchange tokens, or promise that credentials will remain
+- call spec save does not call providers, exchange tokens, or promise that credentials will remain
   usable upstream. It verifies local requirements; activation handles later failure explicitly.
 - No general OAuth onboarding, arbitrary secret-file reads, cross-provider fallback, automatic
   redial, new telephony protocol or unrelated MCP credential migration is included.
@@ -693,7 +693,7 @@ and all five common root gates pass on the final source at `58d7b34`: **1,622 te
 The pending work and gate results below describe each recorded checkpoint at the time. The current
 ledger and final implementation review supersede their progress and review status.
 
-Checkpoint 3 definition-guard follow-up: private exact service resolution and final
+Checkpoint 3 call-spec guard follow-up: private exact service resolution and final
 save/publish/web-preparation guards pass 13 focused database tests, Calls 81 and Persistence 106
 tests (6 excluded), root static gates and independent GPT 6 Astra xhigh review. Incoming admission
 shared preflight only at that checkpoint; its final insert guard, canonical plan references and

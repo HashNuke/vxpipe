@@ -123,7 +123,7 @@ engine does not run a separate detector.
 
 ### Call variables, conversation history, and model context
 
-The approved call-definition design uses **Call Variables** for typed, shared
+The approved call-spec design uses **Call Variables** for typed, shared
 values grouped into sections. For example, `booking` is a section and `status`
 is a variable within it. Use "variable", not "field", for these named values.
 Object-valued variables may contain nested data without adding a path language.
@@ -160,7 +160,7 @@ variable semantics to this object; Call Engine must supply only the active agent
 Within the package loop, an accepted running exchange is durable for the Session lifetime
 even if the following provider generation fails. Later turns retain that exchange once and
 combine it with the current engine-owned pending projection; a provider failure cannot trigger
-resubmission or erase accepted work. Definition-driven live calls use this path.
+resubmission or erase accepted work. Call-Spec-driven live calls use this path.
 
 Session cancellation respects that barrier. It may terminate provisional provider work
 immediately, but cancellation arriving during host submission is deferred until the complete
@@ -264,7 +264,7 @@ continuation that is never projected as caller speech. A chat provider may still
 non-model input to use its ordinary user wire role; provider role is not Vxpipe participant
 attribution. Room Authority creates no participant or caller-transcript event for this request.
 
-The released definition uses `call_variables.sections`, invocation values use
+The released call spec uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
 The tools are `read_variables(sections)`, `update_variables(section_name, data)`,
 and `update_variable(section_name, variable_name, value)`. Sections are read-only
@@ -296,7 +296,7 @@ For a remote MCP booking, the agent receives the tool result and separately call
 our variable-update tool. The remote MCP does not need Vxpipe-specific knowledge,
 and no automatic result-mapping layer is required. These are approved design
 contracts, not newly implemented runtime features; see the
-[call-definition design](../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned).
+[call-spec design](../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned).
 
 Personalization belongs in agent instructions. Agents use their existing
 permitted `read_variables` tools to obtain known values and handle missing
@@ -339,7 +339,7 @@ credential generation, allowed-operation set, private client settings, and bound
 discovery/invocation policy; its inspection omits the private settings. The separate
 `RemoteMCP.CatalogLoader` opens the exact scoped reusable `vxpipe_mcp` connection and
 publishes an integration snapshot only after complete bounded `tools/list` discovery and
-allowed-operation validation. It does not compile a call or expose model tools. Definition
+allowed-operation validation. It does not compile a call or expose model tools. Call Spec
 compilation then resolves from those snapshots and copies only the selected public schema
 and generation identity into the immutable plan. Catalog TTL/refresh orchestration and the
 configuration source remain outside the loader rather than becoming another concern of an
@@ -348,7 +348,7 @@ agent activation.
 `RemoteMCP.CatalogStore` owns only the current immutable application/tenant catalog
 snapshot. A configuration owner loads and validates every replacement before one atomic
 publication; network discovery never runs in the store's GenServer callback and cannot
-delay readers. New definition compilation sees the published replacement. An activation
+delay readers. New call spec compilation sees the published replacement. An activation
 already started from an earlier snapshot retains its own exact runtime binding, schema and
 connection until that activation ends or its credential generation is revoked. Publication
 does not mutate a running activation or silently switch its remote operation. The initial
@@ -356,12 +356,12 @@ store does not schedule TTL refreshes or decide how application/tenant configura
 retrieved.
 
 The public Call Engine compilation facade acquires that current snapshot and injects it only
-for the duration of pure definition compilation. `vxpipe_calls` centralizes definition-save
+for the duration of pure call spec compilation. `vxpipe_calls` centralizes Call Spec save
 and call-preparation compilation through its small `CallPlanCompiler` boundary: it supplies
 ordinary provider/tool registries and, when embedding requires it, an opaque catalog-store
 server reference. It never receives an integration snapshot, endpoint, header or credential.
 Only the resulting safe immutable call plan crosses back into Calls and later Gateway paths.
-An unavailable store fails definition resolution instead of accepting a definition against a
+An unavailable store fails call spec resolution instead of accepting a call spec against a
 stale caller-supplied MCP registry. Live room startup must obtain exact private bindings again
 inside Call Engine; it must not route a private catalog through a prepared-call or gateway
 record.
@@ -404,7 +404,7 @@ immediately and repeats it after the configured refresh interval. Each cycle run
 explicitly named `CatalogRefreshTaskSupervisor`, outside both the refresher and catalog-store
 callbacks, and has a separate wall-clock timeout. A transient source/discovery failure retains the
 last good snapshot. If no complete refresh succeeds within `stale_after_ms`, the refresher
-atomically publishes an empty catalog so new definition compilation fails closed; a later complete
+atomically publishes an empty catalog so new call spec compilation fails closed; a later complete
 success restores service. A successful empty configuration is an intentional removal and is
 published immediately rather than waiting for staleness. The stale interval must be longer than
 the refresh interval. Timing state retains only normalized outcomes, while fetched private
@@ -536,7 +536,7 @@ subtree, then returns a correlated running acknowledgement as the model's only
 ordinary tool response. Agent Runtime never executes even a fast platform or Call
 Variables operation inline. The acknowledgement is not a successful business result.
 
-The agent's local call-definition binding defaults to blocking later caller
+The agent's local call-spec binding defaults to blocking later caller
 conversation and may explicitly select `non_blocking`. A non-blocking invocation
 allows unrelated model turns while pending, each retaining the committed running
 acknowledgement. A blocking invocation allows its current acknowledgement response
@@ -576,19 +576,19 @@ a fast completion cannot overtake its authoritative running record. Only acknowl
 capacity. Thin Call Engine adapters now implement Agent Runtime's submit and pending-context
 contracts: submission can only delegate to this registry, and pending projection maps only safe
 status values after verifying the request correlation belongs to the same registry. Host, Call
-Variables, and remote MCP handlers plus definition-driven activation wiring select this substrate
+Variables, and remote MCP handlers plus call-spec-driven activation wiring select this substrate
 in live calls.
 
 For each resolved host-tool map, Call Engine compiles a deterministic name-ordered Agent Runtime
 descriptor list. Each descriptor copies only the host definition's exact name, description, and
 JSON input schema into the model-visible projection. Its opaque invocation binding privately pins
-the host action and the call definition's conversation mode. A map key that differs from the
+the host action and the call spec's conversation mode. A map key that differs from the
 resolved binding or host definition name is rejected rather than silently changing routing. This
 compilation does not create an inline path: both conversation modes submit through the same
 invocation registry and supervised worker boundary.
 
 Schema `20260910.03` adds explicitly selected `platform` bindings to that unified tools map.
-Their canonical names resolve through a closed Call Engine catalog; definition input supplies
+Their canonical names resolve through a closed Call Engine catalog; call spec input supplies
 neither a module nor executable routing data. The initial catalog exposes current UTC time and
 immediate hangup, while preserving a participant-local model-visible alias and the same pinned
 conversation mode. Platform tools use the ordinary activation-owned invocation worker. Hangup
@@ -642,7 +642,7 @@ endpoint, or generic confirmation state machine is introduced.
 
 R47 keeps provider-supported settings in validated inline capability selections and tenant carrier services;
 conversation, interruption, and call-duration policy remain engine-owned. Reject
-known unsupported options/combinations during definition validation rather than
+known unsupported options/combinations during call spec validation rather than
 silently dropping them. Failures discoverable only from the provider use normal
 startup/runtime failure handling. No new configuration layer, arbitrary provider
 payload, or executable policy is introduced.
@@ -800,7 +800,7 @@ handles; Room Authority owns neither clock and mirrors only whether startup inpu
 deadline that fires before authority binding is retained and delivered after binding rather than
 lost. Because the lifecycle child is temporary and significant, its failure shuts down the room
 incarnation instead of restarting it with fresh deadlines. Legacy ad-hoc rooms do not receive
-this definition-driven lifecycle child.
+this call-spec-driven lifecycle child.
 
 For the current web caller, attachment marks readiness when the plan selects no STT runtime. If
 STT is selected, its capability and ingress must start and bind before readiness is marked. The
@@ -851,7 +851,7 @@ startup or tool waiting is [deferred](issues/wait-music.md); no playback option 
 introduced.
 
 The whole live call defaults to a 30-minute limit (`1800000` ms). Resolve
-`limits.max_duration_ms` from an explicit call-definition value, otherwise tenant
+`limits.max_duration_ms` from an explicit call-spec value, otherwise tenant
 settings, otherwise application settings, otherwise that platform default. Pin
 the effective limit in the resolved call plan; unlike retention, later settings
 changes do not change an active call's limit. Measure from actual `started_at`,
@@ -860,7 +860,7 @@ to human-only portions. At the limit, the engine ends with a clear duration-limi
 reason. No creation-time override, unlimited mode, warning/grace policy, or closing-
 speech guarantee is added. The current runtime starts its maximum-duration timer with the live
 planned-room subtree, uses only the value already pinned in `ResolvedCallPlan`, and never accepts
-a per-start duration override. The definition parser preserves omission rather than inserting a
+a per-start duration override. The call spec parser preserves omission rather than inserting a
 default. Before a prepared call is stored, `vxpipe_calls` resolves the tenant and application
 settings and supplies them to the pure Call Engine compiler; that compiler applies the complete
 precedence and pins the result.
@@ -959,7 +959,7 @@ no remote-outcome certainty or durable recovery framework.
 
 Schema `20260910.04` implements the authoring and compilation half of this boundary for
 agent-to-agent destinations. Each non-empty, unique `transfers` list must resolve to other agent
-participants in the same definition. Compilation adds one private participant-transfer binding
+participants in the same call spec. Compilation adds one private participant-transfer binding
 under the reserved `transfer` name, captures the source participant/activation and destination
 participant identities outside the model projection, and exposes only destination refs plus their
 safe descriptions in a closed input schema. The generated binding uses the ordinary tool-visibility
@@ -994,8 +994,8 @@ The resolved plan pins the connection intent and notice. This checkpoint defines
 compilation boundary.
 
 Schema `20260911.03` generalizes the human connection intent for configured telephony services
-without turning provider names into atoms or admitting credentials/provider commands into the call
-definition. A receive intent carries a literal E.164 number and an explicit admission. A dial intent
+without turning provider names into atoms or admitting credentials/provider commands into the
+call spec. A receive intent carries a literal E.164 number and an explicit admission. A dial intent
 uses exactly one literal E.164 number or one direct `number_from_variable` section/variable
 reference and normalizes to transfer admission. The referenced variable must be declared with a
 string-compatible schema, and every agent is forbidden write access to its routing section. The
@@ -1155,17 +1155,17 @@ close the media socket and invalidate unconsumed admission. This covers model/se
 original deadline expiry even before a caller establishes media. Carrier submission is still not
 proof of physical disconnection; actual provider acceptance remains in the explicit provider lane.
 
-Saving a definition now derives a separate durable inbound telephony route for each human
+Saving a call spec now derives a separate durable inbound telephony route for each human
 `receive`/`start_call` connection whose service is not `web`. The route binds the immutable
-definition revision and participant ref to the configured service ref plus literal E.164 number;
+call spec revision and participant ref to the configured service ref plus literal E.164 number;
 it stores no carrier credentials. Publication activates these routes in the same transaction that
-switches the definition's web routes, and publishing a later revision deactivates the earlier
+switches the call spec's web routes, and publishing a later revision deactivates the earlier
 revision's routes. Service lookup is constrained to the authenticated tenant; zero or multiple
 published matches fail closed. Application-wide carrier lookup is removed. This gives ingress a durable
-definition-selection boundary without using caller identity or a provider leg ID as the route.
+call-spec-selection boundary without using caller identity or a provider leg ID as the route.
 
 Calls claims each normalized incoming event against that published route before a room can start.
-The claim reconstructs and compiles the immutable definition revision with telephony transport,
+The claim reconstructs and compiles the immutable call spec revision with telephony transport,
 generates call/room/participant identities, verifies that the route names the entry caller, and
 persists the call in `admitting` state together with the initial provider leg in one transaction.
 `started_at` remains empty: provider ingress and durable admission do not claim that a live room
@@ -1211,7 +1211,7 @@ an automatic redial signal.
 
 After admission, the leg owner verifies provider connection, call-control, leg, and session IDs on
 every normalized callback and dispatches it through the pinned in-memory claim. These later events
-do not select a definition or query PostgreSQL. Unknown or mismatched legs fail before the live
+do not select a call spec or query PostgreSQL. Unknown or mismatched legs fail before the live
 backend. The owner is deliberately temporary under a dedicated dynamic supervisor, so an internal
 failure cannot restart a call from stale initialization data. Carrier-specific handling for the
 post-initiation event types is added with the media and call-control checkpoints; unsupported live
@@ -1495,9 +1495,9 @@ Normal call-wide permissions live in `media_policy`. Each participant's optional
 authoritatively admitted. Both use `audio_routes`, `transcript_routes`,
 `record_audio`, and `save_transcripts`. These replace public STT/TTS capability
 denials; earlier `presence_policy`/`capability_denials` examples are superseded.
-See the [approved definition example](../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology).
+See the [approved call spec example](../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology).
 
-`audio_routes` maps publisher participant-definition keys to recipient-key arrays,
+`audio_routes` maps publisher participant call spec keys to recipient-key arrays,
 including humans and agents. An explicit map is the complete allowlist: only
 listed sources may publish room audio, only to their listed recipients. An empty
 recipient list permits no other participant to hear that source. There is no
@@ -1650,7 +1650,7 @@ not expressions or a nested path language. The trusted integrating backend must
 choose an authorized destination and supply it through `initial_variables`, not
 blindly forward a caller-provided phone number.
 
-Reject a definition if any agent has write permission to a section referenced
+Reject a call spec if any agent has write permission to a section referenced
 for dialing this way. Agent read permission is optional and unnecessary for
 trusted engine resolution; no per-variable permission type is introduced.
 Resolve the pinned connection reference against that protected initialized data.
@@ -1728,7 +1728,7 @@ embedding contract nor the asynchronous live-storage design.
 
 The managed repository-development sample follows the same boundary. Console
 supervises a small trusted backend process that bootstraps a private development
-tenant/API key and publishes the configured definition through Calls. It retains
+tenant/API key and publishes the configured call spec through Calls. It retains
 the plaintext key and configured initial variables only in redacted process state.
 Its same-origin endpoint returns a public call locator plus join token; the browser
 then uses the reusable gateway's ordinary participant-session admission. Console
@@ -1737,10 +1737,10 @@ the sample process is absent and the browser retains the database-free trusted
 gateway fallback.
 
 The implemented control-plane baseline follows this boundary. `vxpipe_calls`
-defines credential and definition/deployment repository ports, while
+defines credential and call spec/deployment repository ports, while
 `vxpipe_persistence` supplies the optional PostgreSQL adapter. Its tenant/API-key,
-immutable definition-revision, and participant-route tables use private SQL keys;
-public tenant keys, API-key IDs, definition IDs, and route UUIDs remain separate.
+immutable call spec revision, and participant-route tables use private SQL keys;
+public tenant keys, API-key IDs, call spec IDs, and route UUIDs remain separate.
 Draft routes resolve only after explicit publication. See
 [tenant control-plane operations](tenant-control-plane.md) for migration and
 trusted bootstrap commands.
@@ -2144,7 +2144,7 @@ participants.
 API-key administration starts through trusted OTP/CLI operations, including
 creating the first key without an existing API key. Keys are bound to one tenant
 and use `admin` and `calls` permission scopes. This approves the tenant boundary
-and scope split, not per-definition allowlists, arbitrary per-operation grants,
+and scope split, not per-call-spec allowlists, arbitrary per-operation grants,
 an admin HTTP API, or an implicit relationship between the two scopes. Each
 tenant may have multiple independently revocable keys, allowing separate
 integrations and overlap while replacing a key. Show a generated key once and
@@ -2192,7 +2192,7 @@ call record nor ends an established call. Gateway authentication and persistence
 ports own credentials and token handling; the engine receives neither secret.
 
 An authorized backend may replace an expired token for an eligible unstarted
-call record, preserving its pinned definition and initial variables without
+call record, preserving its pinned call spec and initial variables without
 starting a room at issuance. Another token does not supersede earlier unused
 tokens: each keeps its own expiry and single-use status. Admission still enforces
 tenant/call/participant eligibility so distinct tokens cannot create duplicate
@@ -2229,16 +2229,16 @@ Public projections exclude:
 - unapproved provider-native payloads; and
 - transcript, tool, or media data outside the actor's visibility scope.
 
-Client tool-event visibility is a call-level policy declared in the call
-definition or explicitly selected by the authorized backend/OTP host when
-creating the call. A creation-time selection overrides the definition's value;
+Client tool-event visibility is a call-level policy declared in the
+call spec or explicitly selected by the authorized backend/OTP host when
+creating the call. A creation-time selection overrides the call spec's value;
 resolve and pin the effective policy with the call record/resolved plan before
 joining. The gateway applies it to that call's authorized client connections.
 The policy can hide tool events entirely, expose lifecycle metadata only, or
 include arguments/results. When neither source specifies visibility, hide all
 tool events. Both metadata and full payload visibility require explicit selection.
 Per-tool overrides select one of the same detail levels and take precedence over
-the call-wide default. Target each override by the participant definition key
+the call-wide default. Target each override by the participant call spec key
 plus its local key in that participant's `tools` map, not by a remote MCP operation
 name alone. The same local tool name on two agents is two independent targets;
 tools without an override inherit the call-wide default. Resolve each invocation's
@@ -2260,8 +2260,8 @@ for the call-wide `hidden`, `metadata`, or `full` default, and optional
 ```
 
 Omitting both means hidden with no overrides. An authorized creation-time
-selection replaces this effective policy pair from the definition; omitting
-the creation policy inherits the definition. This is not a deep-merge/patch API.
+selection replaces this effective policy pair from the call spec; omitting
+the creation policy inherits the call spec. This is not a deep-merge/patch API.
 Within the selected pair, a binding override still wins over the default.
 
 Calls created for the Console playground explicitly select full tool
@@ -2287,14 +2287,14 @@ interoperability surface, and every failed `transfer` projection is generic even
 visibility. This separation preserves operational evidence without granting a browser access to
 internal preparation or restoration causes.
 
-The gateway now implements this boundary for the trusted definition-driven call
-path. Schema `20260910.01` validates the definition policy and resolves participant
-definition keys to runtime participant IDs in the immutable call plan. Trusted
+The gateway now implements this boundary for the trusted call-spec-driven call
+path. Schema `20260910.01` validates the call spec policy and resolves participant
+call spec keys to runtime participant IDs in the immutable call plan. Trusted
 creation may replace the complete policy pair; the result is carried privately in
 the one-time transport session and is absent from its public response. The RTVI
 projection drops hidden events before transport, omits arguments/results at
 metadata level, and includes them only at full level. Preset/ad-hoc room joins
-without a pinned definition policy remain hidden. The Console development call
+without a pinned call spec policy remain hidden. The Console development call
 selects full visibility in trusted server configuration, not in browser input.
 
 Tool-history storage is independent of client visibility. Always retain all
@@ -2410,7 +2410,7 @@ and reports failure to the artifact writer. The in-memory upload buffer is bound
 one already-bounded mixer chunk, and no temporary file or transcoding process is involved.
 
 S3 bucket, endpoint, region, credential-provider overrides, encryption headers, and request options
-are trusted application/tenant configuration supplied to the adapter, never call-definition or
+are trusted application/tenant configuration supplied to the adapter, never call-spec or
 client payload data. The adapter state excludes those client options and buffered PCM from
 inspection. A completed object remains raw signed little-endian 16-bit PCM described by its
 artifact manifest; authenticated playback packaging belongs to the later operator boundary.
@@ -2442,7 +2442,7 @@ reports unique contributing participant IDs. This source identity is the prerequ
 separate recording artifacts whose manifests can name the exact participant, connection, and track.
 
 Trusted recording targets may request the full mix, all individual tracks, or individual tracks for
-specific participant definition keys. Room startup resolves those stable definition keys against
+specific participant call spec keys. Room startup resolves those stable call spec keys against
 the pinned plan; no caller supplies runtime participant IDs. The mixer uses one authorized wildcard
 recording subscription to emit a separate unmixed frame for every selected qualified source. The
 recorder opens each individual writer lazily on its first frame, because connection and track IDs do
@@ -2503,7 +2503,7 @@ main-room handoff.
 Development recording uses `VXPIPE_RECORDING_ENABLED` and the shared `STORAGE_BUCKET`, with
 optional `AWS_REGION` / `AWS_ENDPOINT`. Call-details documents use the same destination. The endpoint parser accepts
 only root HTTP(S) origins and forces S3 path-style requests for compatible local stores. Credentials
-remain in ExAws's standard provider chain; Console does not copy them into a call definition,
+remain in ExAws's standard provider chain; Console does not copy them into a call spec,
 prepared-call record, client response, or inspectable recording state. An embedding host can supply
 the same engine recording options directly without including Console.
 
@@ -2760,7 +2760,7 @@ already rejected its output, Agent Runtime hands off the response's usage before
 failure; rejected conversational output therefore cannot erase known incurred usage. Hosted speech,
 tool, and carrier capture were not part of that model checkpoint.
 
-The second runtime capture path covers definition-selected text-to-speech attempts. The resolved
+The second runtime capture path covers call-spec-selected text-to-speech attempts. The resolved
 runtime pins the call, participant activation, configured profile, and provider-owned safe identity;
 credentials remain in the existing provider/transport configuration. An attempt begins only after
 the transport accepts `Speak`. Text that remains queued, or a `Speak` command rejected locally,
@@ -2780,11 +2780,11 @@ The TTS GenServer delegates tracking/projection to focused attempt and adapter m
 `RoomAuthority` accepts observations only from the exact active synthesis capability or the exact
 prepared private-briefing capability, matching the pinned participant and optional activation. The
 same private asynchronous archive path used for model observations stores the facts; no client
-event or raw synthesis text is added. Definition-selected hosted and deterministic tone providers
+event or raw synthesis text is added. Call Spec-selected hosted and deterministic tone providers
 publish a safe provider identity. The legacy room command path lacks a pinned call/profile identity
 and remains unobserved rather than fabricating one.
 
-The third runtime capture path covers definition-selected speech-to-text sessions. The resolved
+The third runtime capture path covers call-spec-selected speech-to-text sessions. The resolved
 runtime pins call, participant/optional activation, configured profile, and a safe provider/model
 identity without copying credentials. Each concrete provider transport receives a fresh local
 `satt_` attempt and `sint_` service-interval identity. A transport-accepted audio submission or
@@ -3034,7 +3034,7 @@ same operation: an unchanged source digest resolves to the existing revision, wh
 facts receive a new identity, record timestamp, filename, and immutable object.
 
 The PostgreSQL implementation reads that assessment in one repeatable-read transaction. It resolves
-the pinned definition and plan, ordered archive facts and Variables snapshots, structured usage
+the pinned call spec and plan, ordered archive facts and Variables snapshots, structured usage
 observations/effective amounts, terminal recording metadata, and telephony legs through the
 tenant/call key. Small concern-specific projectors then expose lifecycle/route identity, safe
 participant and activation metadata, protected telephony-leg references, transcript delivery and
@@ -3161,7 +3161,7 @@ The setting is `call_retention`: use the JSON string `"forever"` or a finite
 duration object such as `{"seconds":2592000}` (30 days). Omitted application
 configuration defaults to `"forever"`; omitted tenant configuration inherits it,
 while explicit tenant `"forever"` overrides a finite application period. This is
-not a call-definition, creation, or participant option. No human-readable duration
+not a call-spec, creation, or participant option. No human-readable duration
 parser, null sentinel, or per-call policy copy is introduced.
 Forever means no age-based expiration by Vxpipe, not permission to start STT or
 recording, retain excluded credentials, or claim a backup/recovery guarantee.
@@ -3183,7 +3183,7 @@ Retention expiry deletes the entire call and all Vxpipe-managed data belonging
 to it: the call record, transcript, events, tool history, variable snapshots
 (including the latest), participant/leg records, usage/cost records, recordings,
 and exported artifacts. This is not a soft delete or a payload-only purge that
-keeps a call summary. Shared call definitions and application/tenant configuration
+keeps a call summary. Shared call specs and application/tenant configuration
 remain; call-specific copies and references do not. Database rows and stored
 objects are both in scope, not one cross-store database transaction. Pending or
 late archive/publication work must not recreate deleted call data.
@@ -3286,7 +3286,7 @@ duration aggregates, `startup.blockers` as counts of changed blocker observation
 are observations, not unique calls or current active-call gauges. The reporter sanitizes these events
 before queue admission and retains no call IDs, URLs, resource identities, audio, text or provider
 errors. Telemetry is operational evidence, not a durable call ledger; abrupt VM/process termination
-may prevent an observation. No startup UI component or additional call-definition field is required.
+may prevent an observation. No startup UI component or additional call-spec field is required.
 
 None of these events carries input/output text, audio, raw provider errors, model names,
 endpoint/tool identity, request arguments/results, credentials, tenant IDs, or integration
@@ -3301,7 +3301,7 @@ from the call-engine application setting `telemetry: [sample_interval_ms: ...]`.
 Two planned vertical slices make these goals runnable:
 
 - [Observable sample call](milestones/observable-sample-call.md) follows the
-  definition-driven call. A developer runs the existing sample and sees live timing,
+  call-spec-driven call. A developer runs the existing sample and sees live timing,
   safe provider failures and VM health on a separate dashboard, without waiting for
   persistence or expanding the voice console.
 - [Call inspection and debugging](milestones/call-inspection-and-debugging.md) follows
@@ -3341,7 +3341,7 @@ not applicable rather than inventing a gauge.
 
 An optional engine-owned local model fixture makes the early dashboard failure path
 deterministic. It is disabled in base application configuration and may be enabled only
-through trusted application/runtime settings; no call definition, invocation, browser
+through trusted application/runtime settings; no call spec, invocation, browser
 room-creation body, or RTVI command can select a fixture result. The supervised fixture
 atomically supplies one fixed success, delayed success, provider failure, or invalid empty
 result to the next Agent Runtime request, then resets to its configured default. Deliberate delay runs
@@ -3425,9 +3425,9 @@ applications start.
 
 Platform environment settings and encrypted tenant storage are the hosted configuration sources.
 The visible `env.sample` catalogs database, encryption keyring, shared bucket and listener/origin
-settings. Provider/model/options are inline call-definition data, while tenant credentials are
+settings. Provider/model/options are inline call-spec data, while tenant credentials are
 provisioned through the Calls/Persistence boundary. There is no deployment JSON/TOML loader or
-provider env/global fallback. JSON remains a supported representation of call definitions.
+provider env/global fallback. JSON remains a supported representation of call specs.
 
 Closed code-owned catalogs choose supported integrations; public input cannot select arbitrary
 BEAM modules. Each new provider client resolves its tenant binding. Existing clients retain their
@@ -3746,7 +3746,7 @@ the rejected PCMU path, and detailed evidence are in
 ### Historical Gemini model-inference slice
 
 This section records the original implementation. The tenant-credential cutover removed its
-`CreateRoom` preset and global provider readers. Current model/speech calls use inline definitions,
+`CreateRoom` preset and global provider readers. Current model/speech calls use inline call specs,
 Agent Runtime and the tenant credential source, including credential-free fixture/Morse embedding.
 See [credential reader boundaries](credential-reader-boundaries.md).
 
@@ -3799,9 +3799,9 @@ The detailed decision and verification evidence are in
 ### Superseded model tool-invocation slice
 
 This historical slice executed tools inside the old model request task. It has been superseded:
-definition-driven agents now use Agent Runtime and independently supervised invocation workers.
+call-spec-driven agents now use Agent Runtime and independently supervised invocation workers.
 The later tenant-credential cutover also removed the legacy `CreateRoom` model-inference preset;
-raw rooms now support empty/deterministic text operation, and model calls use inline definitions.
+raw rooms now support empty/deterministic text operation, and model calls use inline call specs.
 The numbered behavior below records the removed slice and is not current runtime behavior.
 
 The next slice closes the first model/action/model loop without moving tool
@@ -3908,7 +3908,7 @@ the existing room-wide interruption path:
 The implementation and verification evidence are detailed in
 [`spoken-barge-in.md`](spoken-barge-in.md).
 
-### Current definition-driven call runtime
+### Current call-spec-driven call runtime
 
 Current schema `20260915.01` uses inline provider/model/options and tenant credential bindings.
 The ReqLLM runtime supports the existing Google/Zenmux model integrations; speech uses Deepgram
@@ -3922,15 +3922,15 @@ and [tenant telephony services](tenant-telephony-services.md) for current contra
 The following records the original staged implementation, including superseded Jido, profile and
 global-credential behavior. It is not current configuration or setup guidance.
 
-The initial definition checkpoints released engine-owned schema `20260906.02`; the
+The initial call spec checkpoints released engine-owned schema `20260906.02`; the
 then-current schema was `20260910.01`. It added per-tool conversation admission: omission resolves
 to `blocking`, while only explicit `"non_blocking"` opts into later caller turns during
 pending work. Both modes always use the same independently supervised Call Engine worker
 path. Resource ID/revision and trusted
 tenant/actor identity are constructor metadata rather than fields accepted from
-definition or invocation documents. Fixed known keys are normalized without
+call spec or invocation documents. Fixed known keys are normalized without
 creating atoms from input; equivalent JSON and Elixir maps produce the same typed
-definition.
+call spec.
 
 The currently implemented subset validates one human web caller, one agent
 receiver, inline prompt/first-message policy, capability-profile refs, exact-name
@@ -4003,17 +4003,17 @@ remote-tool, transfer, and other connection modes remain closed-schema construct
 than ignored settings.
 
 The repository development gateway is the first trusted host for this path. Its startup
-configuration validates one definition plus closed capability/tool registries. For each
+configuration validates one call spec plus closed capability/tool registries. For each
 browser request, it creates a trusted invocation, compiles a fresh plan, starts the plan,
 reads the already-started entry caller through the engine API, and issues a gateway session
 bound to that participant. `POST /api/rooms` returns the room, participant, and session
-together; the browser neither supplies the definition/profiles nor admits a second human.
+together; the browser neither supplies the call spec/profiles nor admits a second human.
 The creation page accepts that atomic response and enters the unchanged responsive Pipecat
 console. The older preset create-then-join routes remain available as a development/embedding
 compatibility path and are not the production admission design.
 
-The repository's development configuration no longer duplicates the trusted definition as a
-legacy model-inference preset. The definition/profile registry owns the system prompt, model,
+The repository's development configuration no longer duplicates the trusted call spec as a
+legacy model-inference preset. The call spec/profile registry owns the system prompt, model,
 voice, STT model, tool surface, and public provider media options. Call-engine application
 settings own only runtime/provider integration concerns needed by this slice: private
 credentials, transport modules, ingress/queue bounds, and agent execution bounds. The default
@@ -4027,7 +4027,7 @@ configured. Hosted admission fails when persistence is unavailable; database-fre
 explicit embedding choice, not a hosted fallback:
 
 1. Console starts a trusted sample process before its endpoint. It selects the stable provisioned
-   `VXPIPE_DEV_TENANT`, issues a server-held call-scoped API key and publishes the sample definition
+   `VXPIPE_DEV_TENANT`, issues a server-held call-scoped API key and publishes the sample call spec
    through public Calls workflows. It does not bootstrap a replacement tenant on restart. Its inspect projection excludes the plaintext key and
    initial variables.
 2. `POST /sample/calls` authenticates with that server-held key, prepares a durable call,

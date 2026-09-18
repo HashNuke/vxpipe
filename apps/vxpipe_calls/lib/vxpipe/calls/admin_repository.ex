@@ -3,8 +3,8 @@ defmodule Vxpipe.Calls.AdminRepository do
 
   alias Vxpipe.Calls.{
     CallDirectorySummary,
-    CallFilterDefinition,
-    DefinitionSummary,
+    CallSpecFilter,
+    CallSpecSummary,
     ProviderCredential,
     TelephonyService,
     Tenant
@@ -15,8 +15,8 @@ defmodule Vxpipe.Calls.AdminRepository do
   @callback list_tenants(context(), pos_integer(), non_neg_integer()) ::
               {:ok, {[Tenant.t()], non_neg_integer()}} | {:error, term()}
 
-  @callback list_definitions(context(), String.t(), pos_integer(), non_neg_integer()) ::
-              {:ok, {Tenant.t(), [DefinitionSummary.t()], non_neg_integer()}} | {:error, term()}
+  @callback list_call_specs(context(), String.t(), pos_integer(), non_neg_integer()) ::
+              {:ok, {Tenant.t(), [CallSpecSummary.t()], non_neg_integer()}} | {:error, term()}
 
   @callback list_calls(
               context(),
@@ -26,7 +26,7 @@ defmodule Vxpipe.Calls.AdminRepository do
               non_neg_integer()
             ) ::
               {:ok,
-               {Tenant.t(), [CallFilterDefinition.t()], boolean(), [CallDirectorySummary.t()],
+               {Tenant.t(), [CallSpecFilter.t()], boolean(), [CallDirectorySummary.t()],
                 non_neg_integer()}}
               | {:error, term()}
 

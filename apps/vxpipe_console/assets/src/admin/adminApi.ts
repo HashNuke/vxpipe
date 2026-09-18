@@ -1,7 +1,7 @@
 import type { TenantSummary } from "./tenantTypes";
 import type { OnboardingSample } from "./onboardingTypes";
-import type { DefinitionSummary, TenantContext } from "./definitionTypes";
-import type { CallDirectoryItem, DefinitionContext } from "./callTypes";
+import type { CallSpecSummary, TenantContext } from "./callSpecTypes";
+import type { CallDirectoryItem, CallSpecContext } from "./callTypes";
 import type {
   CredentialPreview,
   ServiceInventoryItem,
@@ -18,17 +18,17 @@ export type TenantDirectoryPage = {
   };
 };
 
-export type DefinitionDirectoryPage = {
+export type CallSpecDirectoryPage = {
   tenant: TenantContext;
-  definitions: DefinitionSummary[];
+  callSpecs: CallSpecSummary[];
   pagination: TenantDirectoryPage["pagination"];
 };
 
 export type CallDirectoryPage = {
   tenant: TenantContext;
-  definitions: Array<Pick<DefinitionContext, "id" | "name">>;
-  definitionsTruncated: boolean;
-  selectedDefinitionId: string | null;
+  callSpecs: Array<Pick<CallSpecContext, "id" | "name">>;
+  callSpecsTruncated: boolean;
+  selectedCallSpecId: string | null;
   calls: CallDirectoryItem[];
   pagination: TenantDirectoryPage["pagination"];
 };
@@ -113,21 +113,21 @@ export function parseTenantPage(value: unknown): TenantDirectoryPage {
   return { tenants, pagination: { page, pageSize, total, totalPages } };
 }
 
-export function parseDefinitionPage(value: unknown): DefinitionDirectoryPage {
+export function parseCallSpecPage(value: unknown): CallSpecDirectoryPage {
   if (
     !isRecord(value) ||
     !isRecord(value.tenant) ||
-    !Array.isArray(value.definitions) ||
+    !Array.isArray(value.call_specs) ||
     !isRecord(value.pagination) ||
     typeof value.tenant.key !== "string" ||
     value.tenant.key.length === 0 ||
     typeof value.tenant.name !== "string" ||
     value.tenant.name.length === 0
   ) {
-    throw invalidDefinitionResponse();
+    throw invalidCallSpecResponse();
   }
 
-  const definitions = value.definitions.map(parseDefinition);
+  const callSpecs = value.call_specs.map(parseCallSpec);
   const {
     page,
     page_size: pageSize,
@@ -135,13 +135,13 @@ export function parseDefinitionPage(value: unknown): DefinitionDirectoryPage {
     total_pages: totalPages,
   } = value.pagination;
 
-  if (!validPagination(page, pageSize, total, totalPages, definitions.length)) {
-    throw invalidDefinitionResponse();
+  if (!validPagination(page, pageSize, total, totalPages, callSpecs.length)) {
+    throw invalidCallSpecResponse();
   }
 
   return {
     tenant: { key: value.tenant.key, name: value.tenant.name },
-    definitions,
+    callSpecs,
     pagination: {
       page: Number(page),
       pageSize: Number(pageSize),
@@ -155,10 +155,10 @@ export function parseCallPage(value: unknown): CallDirectoryPage {
   if (
     !isRecord(value) ||
     !isRecord(value.tenant) ||
-    !Array.isArray(value.definitions) ||
+    !Array.isArray(value.call_specs) ||
     !Array.isArray(value.calls) ||
     !isRecord(value.pagination) ||
-    typeof value.definitions_truncated !== "boolean" ||
+    typeof value.call_specs_truncated !== "boolean" ||
     typeof value.tenant.key !== "string" ||
     value.tenant.key.length === 0 ||
     typeof value.tenant.name !== "string" ||
@@ -167,15 +167,15 @@ export function parseCallPage(value: unknown): CallDirectoryPage {
     throw invalidCallResponse();
   }
 
-  const definitions = value.definitions.map(parseCallDefinition);
-  const selectedDefinitionId = value.selected_definition_id;
+  const callSpecs = value.call_specs.map(parseCallSpecOption);
+  const selectedCallSpecId = value.selected_call_spec_id;
 
   if (
     !(
-      selectedDefinitionId === null ||
-      (typeof selectedDefinitionId === "string" &&
-        selectedDefinitionId.length > 0 &&
-        definitions.some(({ id }) => id === selectedDefinitionId))
+      selectedCallSpecId === null ||
+      (typeof selectedCallSpecId === "string" &&
+        selectedCallSpecId.length > 0 &&
+        callSpecs.some(({ id }) => id === selectedCallSpecId))
     )
   ) {
     throw invalidCallResponse();
@@ -184,8 +184,8 @@ export function parseCallPage(value: unknown): CallDirectoryPage {
   const calls = value.calls.map(parseCall);
 
   if (
-    selectedDefinitionId !== null &&
-    calls.some(({ definitionId }) => definitionId !== selectedDefinitionId)
+    selectedCallSpecId !== null &&
+    calls.some(({ callSpecId }) => callSpecId !== selectedCallSpecId)
   ) {
     throw invalidCallResponse();
   }
@@ -203,9 +203,9 @@ export function parseCallPage(value: unknown): CallDirectoryPage {
 
   return {
     tenant: { key: value.tenant.key, name: value.tenant.name },
-    definitions,
-    definitionsTruncated: value.definitions_truncated,
-    selectedDefinitionId,
+    callSpecs,
+    callSpecsTruncated: value.call_specs_truncated,
+    selectedCallSpecId,
     calls,
     pagination: {
       page: Number(page),
@@ -451,9 +451,9 @@ function providerLabel(provider: ServiceProvider) {
   }[provider];
 }
 
-function parseCallDefinition(
+function parseCallSpecOption(
   value: unknown,
-): Pick<DefinitionContext, "id" | "name"> {
+): Pick<CallSpecContext, "id" | "name"> {
   if (
     !isRecord(value) ||
     typeof value.id !== "string" ||
@@ -474,22 +474,22 @@ function parseCall(value: unknown): CallDirectoryItem {
     !isRecord(value) ||
     !exactKeys(value, [
       "id",
-      "definition_id",
-      "definition_name",
-      "definition_revision",
+      "call_spec_id",
+      "call_spec_name",
+      "call_spec_revision",
       "state",
       "created_at",
     ]) ||
     typeof value.id !== "string" ||
     value.id.length === 0 ||
-    typeof value.definition_id !== "string" ||
-    value.definition_id.length === 0 ||
+    typeof value.call_spec_id !== "string" ||
+    value.call_spec_id.length === 0 ||
     !(
-      value.definition_name === null ||
-      (typeof value.definition_name === "string" &&
-        value.definition_name.length > 0)
+      value.call_spec_name === null ||
+      (typeof value.call_spec_name === "string" &&
+        value.call_spec_name.length > 0)
     ) ||
-    !isPositiveInteger(value.definition_revision) ||
+    !isPositiveInteger(value.call_spec_revision) ||
     !member(value.state, ["ongoing", "ended"]) ||
     !validTimestamp(value.created_at)
   ) {
@@ -498,15 +498,15 @@ function parseCall(value: unknown): CallDirectoryItem {
 
   return {
     id: value.id,
-    definitionId: value.definition_id,
-    definitionName: value.definition_name,
-    definitionRevision: value.definition_revision,
+    callSpecId: value.call_spec_id,
+    callSpecName: value.call_spec_name,
+    callSpecRevision: value.call_spec_revision,
     state: value.state,
     createdAt: value.created_at,
   };
 }
 
-function parseDefinition(value: unknown): DefinitionSummary {
+function parseCallSpec(value: unknown): CallSpecSummary {
   if (
     !isRecord(value) ||
     typeof value.id !== "string" ||
@@ -525,7 +525,7 @@ function parseDefinition(value: unknown): DefinitionSummary {
     typeof value.updated_at !== "string" ||
     Number.isNaN(Date.parse(value.updated_at))
   ) {
-    throw invalidDefinitionResponse();
+    throw invalidCallSpecResponse();
   }
 
   return {
@@ -621,8 +621,8 @@ function invalidSampleInstallationResponse() {
   return new Error("Invalid sample installation response");
 }
 
-function invalidDefinitionResponse() {
-  return new Error("Invalid definition directory response");
+function invalidCallSpecResponse() {
+  return new Error("Invalid call spec directory response");
 }
 
 function invalidCallResponse() {

@@ -76,7 +76,7 @@ defmodule Vxpipe.Console.EndpointTest do
       start_supervised!(
         {SampleCall,
          backend: TestSampleCallBackend.backend(backend),
-         definition: %{
+         call_spec: %{
            "schema_version" => "20260913.01",
            "entry_caller" => "caller",
            "entry_receiver" => "assistant"
@@ -124,7 +124,7 @@ defmodule Vxpipe.Console.EndpointTest do
       start_supervised!(
         {SampleCall,
          backend: TestSampleCallBackend.backend(backend),
-         definition: %{
+         call_spec: %{
            "schema_version" => "20260913.01",
            "entry_caller" => "caller",
            "entry_receiver" => "assistant"

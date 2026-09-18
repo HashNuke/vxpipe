@@ -4,8 +4,8 @@ defmodule Vxpipe.Calls.CallSummary do
   @enforce_keys [
     :id,
     :tenant_key,
-    :definition_id,
-    :definition_revision,
+    :call_spec_id,
+    :call_spec_revision,
     :state,
     :created_at,
     :started_at,
@@ -18,8 +18,8 @@ defmodule Vxpipe.Calls.CallSummary do
   @type t :: %__MODULE__{
           id: String.t(),
           tenant_key: String.t(),
-          definition_id: String.t(),
-          definition_revision: pos_integer(),
+          call_spec_id: String.t(),
+          call_spec_revision: pos_integer(),
           state: :prepared | :admitting | :running | :ended | :failed,
           created_at: DateTime.t(),
           started_at: DateTime.t() | nil,

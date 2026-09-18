@@ -302,7 +302,7 @@ must be legible through more than decoration alone.
 
 Tenant administration uses two compact rows: a 48px app header with the brand,
 `Tenants › tenant name` breadcrumb and account actions, followed by sibling
-navigation for Call definitions, Calls and Services. The active destination is
+navigation for Call Specs, Calls and Services. The active destination is
 the only visible page label; retain a visually hidden level-one heading. Page
 actions sit to the right of the navigation on desktop and in a short row below
 it under 640px. Content follows with a 16px gap. Do not add a terminal page
@@ -316,7 +316,7 @@ workspace. Sibling navigation has only the active-tab underline, never a
 full-width divider directly above the ledger.
 
 Call details opens in a new tab as a standalone inspector. Its console-injected
-top bar uses the same Vxpipe brand and `Tenants › tenant › definition` breadcrumb
+top bar uses the same Vxpipe brand and `Tenants › tenant › call spec` breadcrumb
 pattern as the admin workspace. Each breadcrumb is a working return link; do not
 add sibling workspace tabs or a redundant Call details label. Keep call ID, version,
 partial-history warning and live controls in the console's existing toolbar.

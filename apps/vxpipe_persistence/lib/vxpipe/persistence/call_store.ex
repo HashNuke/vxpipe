@@ -8,8 +8,8 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Ecto.Multi
   alias Vxpipe.Calls.{AdmissionClaim, JoinToken, TelephonyAdmissionClaim}
   alias Vxpipe.Persistence.{PreparedCallRecord, TelephonyCallStore}
-  alias Vxpipe.Persistence.Schema.{Admission, Call, CallDefinition, Tenant}
-  alias Vxpipe.Persistence.Schema.DefinitionRevision, as: StoredRevision
+  alias Vxpipe.Persistence.Schema.{Admission, Call, CallSpec, Tenant}
+  alias Vxpipe.Persistence.Schema.CallSpecRevision, as: StoredRevision
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
@@ -17,13 +17,13 @@ defmodule Vxpipe.Persistence.CallStore do
     multi =
       Multi.new()
       |> Multi.run(:selection, fn repo, _changes ->
-        fetch_selection(repo, call.tenant_key, call.definition_id, call.definition_revision)
+        fetch_selection(repo, call.tenant_key, call.call_spec_id, call.call_spec_revision)
       end)
-      |> Multi.insert(:call, fn %{selection: {tenant, _definition, revision}} ->
+      |> Multi.insert(:call, fn %{selection: {tenant, _call_spec, revision}} ->
         PreparedCallRecord.changeset(call, tenant, revision)
       end)
       |> Multi.insert(:token, fn %{
-                                   selection: {tenant, _definition, _revision},
+                                   selection: {tenant, _call_spec, _revision},
                                    call: stored_call
                                  } ->
         token_changeset(token, tenant, stored_call)
@@ -196,20 +196,20 @@ defmodule Vxpipe.Persistence.CallStore do
     end)
   end
 
-  defp fetch_selection(repo, tenant_key, definition_id, revision_number) do
+  defp fetch_selection(repo, tenant_key, call_spec_id, revision_number) do
     query =
       from revision in StoredRevision,
-        join: definition in CallDefinition,
-        on: definition.id == revision.call_definition_id,
+        join: call_spec in CallSpec,
+        on: call_spec.id == revision.call_spec_id,
         join: tenant in Tenant,
-        on: tenant.id == definition.tenant_id,
+        on: tenant.id == call_spec.tenant_id,
         where:
-          tenant.key == ^tenant_key and definition.public_id == ^definition_id and
+          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
             revision.revision == ^revision_number,
-        select: {tenant, definition, revision}
+        select: {tenant, call_spec, revision}
 
     case repo.one(query) do
-      nil -> {:error, :definition_revision_not_found}
+      nil -> {:error, :call_spec_revision_not_found}
       selection -> {:ok, selection}
     end
   end
@@ -218,10 +218,10 @@ defmodule Vxpipe.Persistence.CallStore do
     query =
       from call in Call,
         join: tenant in assoc(call, :tenant),
-        join: revision in assoc(call, :definition_revision),
-        join: definition in assoc(revision, :call_definition),
+        join: revision in assoc(call, :call_spec_revision),
+        join: call_spec in assoc(revision, :call_spec),
         where: tenant.key == ^tenant_key and call.public_id == ^public_id,
-        select: {call, {tenant, definition, revision}}
+        select: {call, {tenant, call_spec, revision}}
 
     repo.one(with_lock(query, options))
   end
@@ -230,10 +230,10 @@ defmodule Vxpipe.Persistence.CallStore do
     query =
       from call in Call,
         join: tenant in assoc(call, :tenant),
-        join: revision in assoc(call, :definition_revision),
-        join: definition in assoc(revision, :call_definition),
+        join: revision in assoc(call, :call_spec_revision),
+        join: call_spec in assoc(revision, :call_spec),
         where: call.id == ^id,
-        select: {call, {tenant, definition, revision}}
+        select: {call, {tenant, call_spec, revision}}
 
     repo.one(with_lock(query, options))
   end
@@ -306,7 +306,7 @@ defmodule Vxpipe.Persistence.CallStore do
       else: {:error, :token_scope_mismatch}
   end
 
-  defp call_scope(call, {tenant, _definition, _revision}, token, expected_scope) do
+  defp call_scope(call, {tenant, _call_spec, _revision}, token, expected_scope) do
     if tenant.key == expected_scope.tenant_key and call.public_id == expected_scope.call_id and
          token.tenant_id == tenant.id and token.call_id == call.id,
       do: :ok,
@@ -345,7 +345,7 @@ defmodule Vxpipe.Persistence.CallStore do
     end
   end
 
-  defp selection_tenant({tenant, _definition, _revision}), do: tenant
+  defp selection_tenant({tenant, _call_spec, _revision}), do: tenant
 
   defp project_lifecycle(repo, claim, transition) do
     repo.transaction(fn ->

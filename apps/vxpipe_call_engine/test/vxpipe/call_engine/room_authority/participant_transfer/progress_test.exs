@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.ProgressTest do
         attempt_id: "handoff",
         deadline_ms: System.monotonic_time(:millisecond) + 5_000,
         destination_connection_id: "destination",
-        request: %{connection_id: "caller", destination_definition_key: "support"}
+        request: %{connection_id: "caller", destination_call_spec_key: "support"}
       )
 
     state =

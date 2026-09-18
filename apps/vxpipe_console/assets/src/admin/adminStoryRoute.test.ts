@@ -4,8 +4,8 @@ import { adminStoryPath, adminStoryRoute } from "./adminStoryRoute";
 
 test("uses explicit tenant workspace destinations", () => {
   expect(
-    adminStoryPath({ page: "definitions", tenantKey: "tn demo" }),
-  ).toBe("/admin/tenants/tn%20demo/definitions");
+    adminStoryPath({ page: "call-specs", tenantKey: "tn demo" }),
+  ).toBe("/admin/tenants/tn%20demo/call-specs");
   expect(adminStoryPath({ page: "calls", tenantKey: "tn demo" })).toBe(
     "/admin/tenants/tn%20demo/calls",
   );
@@ -18,30 +18,30 @@ test("uses explicit tenant workspace destinations", () => {
   });
 });
 
-test("round trips an optional definition filter on tenant calls", () => {
+test("round trips an optional call spec filter on tenant calls", () => {
   const path = adminStoryPath({
     page: "calls",
     tenantKey: "tn_demo_01",
-    definitionId: "delivery/rescheduling",
+    callSpecId: "delivery/rescheduling",
   });
 
   expect(path).toBe(
-    "/admin/tenants/tn_demo_01/calls?definition_id=delivery%2Frescheduling",
+    "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery%2Frescheduling",
   );
   expect(adminStoryRoute(`#${path}`)).toEqual({
     page: "calls",
     tenantKey: "tn_demo_01",
-    definitionId: "delivery/rescheduling",
+    callSpecId: "delivery/rescheduling",
   });
 });
 
-test("treats the tenant root as the definitions workspace entry", () => {
+test("treats the tenant root as the call specs workspace entry", () => {
   expect(adminStoryRoute("#/admin/tenants/tn_demo_01")).toEqual({
-    page: "definitions",
+    page: "call-specs",
     tenantKey: "tn_demo_01",
   });
-  expect(adminStoryRoute("#/admin/tenants/tn_demo_01/definitions")).toEqual({
-    page: "definitions",
+  expect(adminStoryRoute("#/admin/tenants/tn_demo_01/call-specs")).toEqual({
+    page: "call-specs",
     tenantKey: "tn_demo_01",
   });
 });

@@ -1,15 +1,15 @@
-defmodule Vxpipe.CallEngine.DefinitionCompiler do
+defmodule Vxpipe.CallEngine.CallSpecCompiler do
   @moduledoc """
-  Resolves a validated call definition and invocation through closed registries.
+  Resolves a validated call spec and invocation through closed registries.
   """
 
-  alias Vxpipe.CallEngine.CallDefinition
+  alias Vxpipe.CallEngine.CallSpec
 
-  alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ToolSelection}
+  alias Vxpipe.CallEngine.CallSpec.{CapabilitySelection, ToolSelection}
 
   alias Vxpipe.CallEngine.{
     CallInvocation,
-    DefinitionValidation,
+    CallSpecValidation,
     DurationLimit,
     Id,
     ResolvedCallPlan
@@ -28,61 +28,61 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy, as: ResolvedMediaPolicy
 
-  @code :call_definition_resolution_failed
-  @message "The call definition could not be resolved."
+  @code :call_spec_resolution_failed
+  @message "The call spec could not be resolved."
 
-  @spec compile(CallDefinition.t(), CallInvocation.t(), map(), keyword()) ::
+  @spec compile(CallSpec.t(), CallInvocation.t(), map(), keyword()) ::
           {:ok, ResolvedCallPlan.t()} | {:error, Vxpipe.CallEngine.Error.t()}
   def compile(
-        %CallDefinition{} = definition,
+        %CallSpec{} = call_spec,
         %CallInvocation{} = invocation,
         registries,
         options \\ []
       )
       when is_map(registries) and is_list(options) do
-    with :ok <- matching_definition(definition, invocation),
+    with :ok <- matching_call_spec(call_spec, invocation),
          {:ok, host_tools} <- registry(registries, :host_tools),
          {:ok, opening_audio} <-
-           resolve_opening_audio(definition.opening_audio),
+           resolve_opening_audio(call_spec.opening_audio),
          {:ok, call_variables} <-
-           resolve_call_variables(definition.call_variables, invocation.initial_variables),
+           resolve_call_variables(call_spec.call_variables, invocation.initial_variables),
          {:ok, base_participants} <-
            resolve_participants(
-             definition,
+             call_spec,
              host_tools,
              Map.get(registries, :mcp_integrations),
              invocation.tenant_id
            ),
          {:ok, media_policy} <-
            resolve_media_policy(
-             definition.media_policy,
+             call_spec.media_policy,
              participant_ids(base_participants),
              ["media_policy"]
            ),
          {:ok, participants} <- resolve_transfer_bindings(base_participants),
          {:ok, tool_visibility} <-
            resolve_tool_visibility(
-             Keyword.get(options, :tool_visibility, definition.tool_visibility),
+             Keyword.get(options, :tool_visibility, call_spec.tool_visibility),
              participants
            ),
-         {:ok, max_duration_ms} <- DurationLimit.resolve(definition.max_duration_ms, options) do
+         {:ok, max_duration_ms} <- DurationLimit.resolve(call_spec.max_duration_ms, options) do
       {:ok,
        %ResolvedCallPlan{
-         definition_id: definition.resource_id,
-         definition_revision: definition.revision,
-         schema_version: definition.schema_version,
+         call_spec_id: call_spec.resource_id,
+         call_spec_revision: call_spec.revision,
+         schema_version: call_spec.schema_version,
          tenant_id: invocation.tenant_id,
          actor_id: invocation.actor_id,
          call_id: invocation.call_id,
          room_id: invocation.room_id,
          transport: invocation.transport,
-         entry_caller: definition.entry_caller,
-         entry_receiver: definition.entry_receiver,
+         entry_caller: call_spec.entry_caller,
+         entry_receiver: call_spec.entry_receiver,
          opening_audio: opening_audio,
-         wait_sounds: definition.wait_sounds,
+         wait_sounds: call_spec.wait_sounds,
          media_policy: media_policy,
          participants: participants,
-         transfer_policy: definition.transfer_policy,
+         transfer_policy: call_spec.transfer_policy,
          call_variables: call_variables,
          tool_visibility: tool_visibility,
          max_duration_ms: max_duration_ms
@@ -92,7 +92,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   defp resolve_opening_audio(nil), do: {:ok, nil}
 
-  defp resolve_opening_audio(%CallDefinition.OpeningAudio{} = source) do
+  defp resolve_opening_audio(%CallSpec.OpeningAudio{} = source) do
     with {:ok, selection} <-
            resolve_capability(
              source.text_to_speech,
@@ -111,12 +111,12 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   end
 
   defp resolve_tool_visibility(
-         %CallDefinition.ToolVisibility{} = policy,
+         %CallSpec.ToolVisibility{} = policy,
          participants
        ) do
     overrides =
-      Map.new(policy.overrides, fn {definition_key, tool_levels} ->
-        participant = Map.fetch!(participants, definition_key)
+      Map.new(policy.overrides, fn {call_spec_key, tool_levels} ->
+        participant = Map.fetch!(participants, call_spec_key)
         {participant.participant_id, tool_levels}
       end)
 
@@ -127,13 +127,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     invalid(["tool_visibility"], "is not a validated trusted policy")
   end
 
-  defp matching_definition(definition, invocation) do
+  defp matching_call_spec(call_spec, invocation) do
     cond do
-      definition.resource_id != invocation.definition_id ->
-        invalid(["call_definition", "id"], "does not match the selected definition")
+      call_spec.resource_id != invocation.call_spec_id ->
+        invalid(["call_spec", "id"], "does not match the selected call spec")
 
-      definition.revision != invocation.definition_revision ->
-        invalid(["call_definition", "revision"], "does not match the selected definition")
+      call_spec.revision != invocation.call_spec_revision ->
+        invalid(["call_spec", "revision"], "does not match the selected call spec")
 
       true ->
         :ok
@@ -148,13 +148,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   end
 
   defp resolve_participants(
-         definition,
+         call_spec,
          host_tools,
          mcp_integrations,
          tenant_id
        ) do
     identities =
-      Map.new(definition.participants, fn {key, participant} ->
+      Map.new(call_spec.participants, fn {key, participant} ->
         activation_id = if participant.kind == :agent, do: Id.generate(:activation), else: nil
 
         {key, %{participant_id: Id.generate(:participant), activation_id: activation_id}}
@@ -163,10 +163,10 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     participant_ids =
       Map.new(identities, fn {key, identity} -> {key, identity.participant_id} end)
 
-    Enum.reduce_while(definition.participants, {:ok, %{}}, fn {key, participant}, {:ok, acc} ->
+    Enum.reduce_while(call_spec.participants, {:ok, %{}}, fn {key, participant}, {:ok, acc} ->
       case resolve_participant(
              participant,
-             definition.default_capabilities,
+             call_spec.default_capabilities,
              host_tools,
              mcp_integrations,
              tenant_id,
@@ -180,7 +180,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   end
 
   defp resolve_participant(
-         %CallDefinition.Participant{} = participant,
+         %CallSpec.Participant{} = participant,
          defaults,
          host_tools,
          mcp_integrations,
@@ -194,11 +194,11 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
            resolve_media_policy(
              participant.while_present,
              participant_ids,
-             ["participants", participant.definition_key, "while_present"]
+             ["participants", participant.call_spec_key, "while_present"]
            ) do
       {:ok,
        %ResolvedCallPlan.Participant{
-         definition_key: participant.definition_key,
+         call_spec_key: participant.call_spec_key,
          participant_id: identity.participant_id,
          activation_id: identity.activation_id,
          kind: participant.kind,
@@ -219,8 +219,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   end
 
   defp participant_ids(participants) do
-    Map.new(participants, fn {definition_key, participant} ->
-      {definition_key, participant.participant_id}
+    Map.new(participants, fn {call_spec_key, participant} ->
+      {call_spec_key, participant.participant_id}
     end)
   end
 
@@ -251,8 +251,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   defp resolve_transfer_bindings(participants) do
     participants
-    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
-    |> Enum.reduce_while({:ok, participants}, fn {definition_key, participant}, {:ok, acc} ->
+    |> Enum.sort_by(fn {call_spec_key, _participant} -> call_spec_key end)
+    |> Enum.reduce_while({:ok, participants}, fn {call_spec_key, participant}, {:ok, acc} ->
       case transfer_binding(participant, participants) do
         {:ok, nil} ->
           {:cont, {:ok, acc}}
@@ -261,7 +261,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
           if Map.has_key?(participant.tools, "transfer") do
             {:halt,
              invalid(
-               ["participants", definition_key, "tools", "transfer"],
+               ["participants", call_spec_key, "tools", "transfer"],
                "collides with the generated transfer tool"
              )}
           else
@@ -279,7 +279,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
               | tools: Map.put(participant.tools, "transfer", transfer_tool)
             }
 
-            {:cont, {:ok, Map.put(acc, definition_key, updated)}}
+            {:cont, {:ok, Map.put(acc, call_spec_key, updated)}}
           end
       end
     end)
@@ -290,12 +290,12 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   defp transfer_binding(%ResolvedCallPlan.Participant{} = source, participants) do
     targets =
-      Map.new(source.transfers, fn definition_key ->
-        destination = Map.fetch!(participants, definition_key)
+      Map.new(source.transfers, fn call_spec_key ->
+        destination = Map.fetch!(participants, call_spec_key)
 
-        {definition_key,
+        {call_spec_key,
          %{
-           definition_key: definition_key,
+           call_spec_key: call_spec_key,
            participant_id: destination.participant_id,
            description: destination.description,
            reason_required:
@@ -305,7 +305,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
     {:ok,
      %TransferBinding{
-       source_definition_key: source.definition_key,
+       source_call_spec_key: source.call_spec_key,
        source_participant_id: source.participant_id,
        source_activation_id: source.activation_id,
        targets: targets
@@ -348,13 +348,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   end
 
   defp effective_ref(participant, defaults, kind) do
-    participant_ref = CallDefinition.Capabilities.ref(participant.capabilities, kind)
+    participant_ref = CallSpec.Capabilities.ref(participant.capabilities, kind)
 
     if participant_ref do
       {participant_ref,
-       ["participants", participant.definition_key, "capabilities", Atom.to_string(kind)]}
+       ["participants", participant.call_spec_key, "capabilities", Atom.to_string(kind)]}
     else
-      {CallDefinition.Capabilities.ref(defaults, kind),
+      {CallSpec.Capabilities.ref(defaults, kind),
        ["defaults", "capabilities", Atom.to_string(kind)]}
     end
   end
@@ -389,7 +389,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     do: %{capabilities | text_to_speech: selection}
 
   defp resolve_tools(
-         %CallDefinition.Participant{kind: :human},
+         %CallSpec.Participant{kind: :human},
          _host_tools,
          _mcp_integrations,
          _tenant_id
@@ -397,13 +397,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
        do: {:ok, %{}}
 
   defp resolve_tools(
-         %CallDefinition.Participant{} = participant,
+         %CallSpec.Participant{} = participant,
          host_tools,
          mcp_integrations,
          tenant_id
        ) do
     Enum.reduce_while(participant.tools, {:ok, %{}}, fn {name, selection}, {:ok, acc} ->
-      path = ["participants", participant.definition_key, "tools", name]
+      path = ["participants", participant.call_spec_key, "tools", name]
 
       case resolve_tool(selection, host_tools, mcp_integrations, tenant_id, path) do
         {:ok, binding} -> {:cont, {:ok, Map.put(acc, name, binding)}}
@@ -499,9 +499,9 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   defp validate_action(name, action, conversation_mode, path) do
     if Code.ensure_loaded?(action) and function_exported?(action, :definition, 0) and
          function_exported?(action, :execute, 2) do
-      definition = action.definition()
+      tool_definition = action.definition()
 
-      if definition.name == name do
+      if tool_definition.name == name do
         {:ok,
          %ToolBinding{
            name: name,
@@ -521,9 +521,9 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   defp validate_platform_action(name, tool, action, conversation_mode, path) do
     if Code.ensure_loaded?(action) and function_exported?(action, :definition, 0) and
          function_exported?(action, :execute, 2) do
-      definition = action.definition()
+      tool_definition = action.definition()
 
-      if definition.name == tool do
+      if tool_definition.name == tool do
         {:ok,
          %ToolBinding{
            name: name,
@@ -540,5 +540,5 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end
   end
 
-  defp invalid(path, reason), do: DefinitionValidation.invalid(@code, @message, path, reason)
+  defp invalid(path, reason), do: CallSpecValidation.invalid(@code, @message, path, reason)
 end

@@ -5,7 +5,7 @@ export type TenantContext = {
   name: string;
 };
 
-export type DefinitionSummary = {
+export type CallSpecSummary = {
   id: string;
   name: string | null;
   latestRevision: number;
@@ -14,12 +14,12 @@ export type DefinitionSummary = {
   updatedAt: string;
 };
 
-export type TenantDefinitionsPageState =
+export type TenantCallSpecsPageState =
   | { status: "loading"; tenant: TenantContext }
   | { status: "unavailable"; tenant: TenantContext; message: string }
   | {
       status: "ready";
       tenant: TenantContext;
-      definitions: DefinitionSummary[];
+      callSpecs: CallSpecSummary[];
       pagination: PaginationModel | null;
     };

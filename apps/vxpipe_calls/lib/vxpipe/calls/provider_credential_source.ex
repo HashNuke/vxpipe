@@ -4,7 +4,7 @@ defmodule Vxpipe.Calls.ProviderCredentialSource do
   @behaviour Vxpipe.CallEngine.CredentialSource
 
   alias Vxpipe.CallEngine.ProviderCredential
-  alias Vxpipe.Calls.DefinitionCredentials
+  alias Vxpipe.Calls.CallSpecCredentials
 
   @impl true
   def resolve(:configured, tenant_id, provider, name),
@@ -13,7 +13,7 @@ defmodule Vxpipe.Calls.ProviderCredentialSource do
   def resolve(options, tenant_id, provider, name) when is_list(options) do
     selection = %{provider: provider, credential_name: name}
 
-    with {:ok, resolved} <- DefinitionCredentials.resolve(tenant_id, selection, options) do
+    with {:ok, resolved} <- CallSpecCredentials.resolve(tenant_id, selection, options) do
       credential = resolved.credential
 
       {:ok,

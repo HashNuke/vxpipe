@@ -5,10 +5,10 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     ConnectionAttachment,
-    DefinitionCompiler,
+    CallSpecCompiler,
     TestAudioOutputSink,
     TestTransferConnection,
     TestOutboundLegConnector,
@@ -281,10 +281,10 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
   defp compile_plan(options \\ []) do
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  wait_sounds: %{call_setup: nil},
                  entry_caller: "caller",
                  entry_receiver: "reception",
@@ -345,14 +345,14 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
                  transfer_policy: %{attempt_timeout_ms: transfer_timeout_ms},
                  limits: %{max_duration_ms: 60_000}
                },
-               resource_id: "phone-transfer-definition",
+               resource_id: "phone-transfer-call-spec",
                revision: 1
              )
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "phone-transfer-definition", revision: 1},
+                 call_spec: %{id: "phone-transfer-call-spec", revision: 1},
                  initial_variables: %{
                    "routing" => %{"support_number" => "+15550001001"}
                  },
@@ -365,7 +365,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 
@@ -407,7 +407,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
              )
 
     with {:ok, attachment} <- TestTransferConnection.attach(command, output_sink) do
-      if participant.definition_key == plan.entry_caller,
+      if participant.call_spec_key == plan.entry_caller,
         do: Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
 
       {:ok, attachment}

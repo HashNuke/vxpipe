@@ -4,7 +4,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls
   alias Vxpipe.Calls.Administration
-  alias Vxpipe.Persistence.{CallStore, CredentialStore, DefinitionStore, Repo}
+  alias Vxpipe.Persistence.{CallStore, CredentialStore, CallSpecStore, Repo}
   alias Vxpipe.Persistence.Schema.{Call, TelephonyLeg}
 
   @tenant_key "AAAAAAAAAAAAAAAA"
@@ -14,7 +14,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
   setup do
     options = [
       credential_repository: {CredentialStore, Repo},
-      definition_repository: {DefinitionStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
       uuid_generator:
@@ -40,10 +40,10 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
         Vxpipe.Calls.TestTelephonyServiceRepository.repository([tenant])
       )
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, definition_input(), options)
+    assert {:ok, draft} = Calls.save_call_spec(tenant.key, call_spec_input(), options)
 
     assert {:ok, _published} =
-             Calls.publish_definition(tenant.key, draft.definition_id, 1, options)
+             Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, options)
 
     %{tenant: tenant, options: options}
   end
@@ -220,7 +220,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
     }
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: "20260915.01",
       name: "Inbound phone",

@@ -12,7 +12,7 @@ defmodule Vxpipe.Calls do
     CallDetailsFinalization,
     CallDetailsPublications,
     DemoSetup,
-    Definitions,
+    CallSpecs,
     Inspections,
     OperatorAdministration,
     OperatorLoginChallenges,
@@ -34,8 +34,8 @@ defmodule Vxpipe.Calls do
   def list_operator_tenants(authority, options \\ []),
     do: OperatorAdministration.list_tenants(authority, options)
 
-  def list_operator_definitions(authority, tenant_key, options \\ []),
-    do: OperatorAdministration.list_definitions(authority, tenant_key, options)
+  def list_operator_call_specs(authority, tenant_key, options \\ []),
+    do: OperatorAdministration.list_call_specs(authority, tenant_key, options)
 
   def list_operator_calls(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_calls(authority, tenant_key, options)
@@ -138,20 +138,20 @@ defmodule Vxpipe.Calls do
   def revoke_api_key(tenant_key, api_key_id, options \\ []),
     do: Administration.revoke_api_key(tenant_key, api_key_id, options)
 
-  def save_definition(tenant_key, source, options \\ []),
-    do: Definitions.save(tenant_key, source, options)
+  def save_call_spec(tenant_key, source, options \\ []),
+    do: CallSpecs.save(tenant_key, source, options)
 
-  def fetch_definition(tenant_key, definition_id, revision, options \\ []),
-    do: Definitions.fetch(tenant_key, definition_id, revision, options)
+  def fetch_call_spec(tenant_key, call_spec_id, revision, options \\ []),
+    do: CallSpecs.fetch(tenant_key, call_spec_id, revision, options)
 
-  def publish_definition(tenant_key, definition_id, revision, options \\ []),
-    do: Definitions.publish(tenant_key, definition_id, revision, options)
+  def publish_call_spec(tenant_key, call_spec_id, revision, options \\ []),
+    do: CallSpecs.publish(tenant_key, call_spec_id, revision, options)
 
   def resolve_participant_route(tenant_key, route_key, options \\ []),
-    do: Definitions.resolve_route(tenant_key, route_key, options)
+    do: CallSpecs.resolve_route(tenant_key, route_key, options)
 
   def resolve_telephony_route(scope, service, number, options \\ []),
-    do: Definitions.resolve_telephony_route(scope, service, number, options)
+    do: CallSpecs.resolve_telephony_route(scope, service, number, options)
 
   def prepare_call(principal, participant_key, initial_variables, options \\ []),
     do: Admissions.prepare(principal, participant_key, initial_variables, options)

@@ -1,12 +1,12 @@
-defmodule Vxpipe.CallEngine.CallDefinition.ToolVisibility do
+defmodule Vxpipe.CallEngine.CallSpec.ToolVisibility do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.Participant
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpec.Participant
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @levels [hidden: "hidden", metadata: "metadata", full: "full"]
-  @code :invalid_call_definition
-  @message "The call definition is invalid."
+  @code :invalid_call_spec
+  @message "The call spec is invalid."
 
   @enforce_keys [:default, :overrides]
   defstruct @enforce_keys
@@ -95,10 +95,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolVisibility do
     do: Map.has_key?(tools, tool_key)
 
   defp level(value, path) do
-    DefinitionValidation.enum(value, @levels, @code, @message, path)
+    CallSpecValidation.enum(value, @levels, @code, @message, path)
   end
 
   defp invalid(path, reason) do
-    DefinitionValidation.invalid(@code, @message, path, reason)
+    CallSpecValidation.invalid(@code, @message, path, reason)
   end
 end

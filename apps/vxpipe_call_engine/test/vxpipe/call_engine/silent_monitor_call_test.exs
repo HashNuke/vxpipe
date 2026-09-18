@@ -4,10 +4,10 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
     ConnectionAttachment,
-    DefinitionCompiler
+    CallSpecCompiler
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, JoinParticipant}
@@ -91,7 +91,7 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
     room_id = unique_id("room-silent-monitor")
 
     input = %{
-      schema_version: CallDefinition.schema_version(),
+      schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
@@ -104,13 +104,13 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
       limits: %{max_duration_ms: 30_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: resource_id, revision: 1)
 
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -121,7 +121,7 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 

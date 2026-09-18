@@ -1,14 +1,14 @@
 defmodule Vxpipe.CallEngine.CallVariablesTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition
+  alias Vxpipe.CallEngine.CallSpec
   alias Vxpipe.CallEngine.CallInvocation
   alias Vxpipe.CallEngine.CallVariables
   alias Vxpipe.CallEngine.Archive.Handoff
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
-  alias Vxpipe.CallEngine.DefinitionCompiler
+  alias Vxpipe.CallEngine.CallSpecCompiler
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.TestArchiveWriter
 
@@ -480,11 +480,11 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   end
 
   defp resolved_plan do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 1)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 1)
 
     invocation_input = %{
-      call_definition: %{id: "support", revision: 1},
+      call_spec: %{id: "support", revision: 1},
       initial_variables: %{
         "customer" => %{
           "id" => "customer-1",
@@ -503,11 +503,11 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
                actor_id: "actor-demo"
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
     plan
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: @schema_version,
       entry_caller: "caller",

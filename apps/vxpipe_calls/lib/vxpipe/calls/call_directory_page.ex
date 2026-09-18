@@ -1,13 +1,13 @@
 defmodule Vxpipe.Calls.CallDirectoryPage do
-  @moduledoc "One bounded page of tenant calls and bounded definition filter options."
+  @moduledoc "One bounded page of tenant calls and bounded call spec filter options."
 
-  alias Vxpipe.Calls.{CallDirectorySummary, CallFilterDefinition, Tenant}
+  alias Vxpipe.Calls.{CallDirectorySummary, CallSpecFilter, Tenant}
 
   @enforce_keys [
     :tenant,
-    :definitions,
-    :definitions_truncated,
-    :selected_definition_id,
+    :call_specs,
+    :call_specs_truncated,
+    :selected_call_spec_id,
     :calls,
     :page,
     :page_size,
@@ -18,9 +18,9 @@ defmodule Vxpipe.Calls.CallDirectoryPage do
 
   @type t :: %__MODULE__{
           tenant: Tenant.t(),
-          definitions: [CallFilterDefinition.t()],
-          definitions_truncated: boolean(),
-          selected_definition_id: String.t() | nil,
+          call_specs: [CallSpecFilter.t()],
+          call_specs_truncated: boolean(),
+          selected_call_spec_id: String.t() | nil,
           calls: [CallDirectorySummary.t()],
           page: pos_integer(),
           page_size: pos_integer(),

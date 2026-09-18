@@ -253,7 +253,7 @@ prepared adoption, attachment promotion, waits/cues and acknowledged release rem
 ## Prospective requirements and room bindings
 
 `Readiness.Inventory.build/4` derives required paths from the pinned plan, the prospective policy
-and authorized connections. It indexes the plan by participant ID, rather than confusing definition
+and authorized connections. It indexes the plan by participant ID, rather than confusing call spec
 keys with runtime identities. Every resulting human remains required when disconnected; every
 authorized connection is selected when a participant has multiple sinks. A private destination
 connection is included only for the matching attempt. Its inclusion describes future demand and

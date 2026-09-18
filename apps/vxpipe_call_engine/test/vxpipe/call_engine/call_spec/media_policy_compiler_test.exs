@@ -1,10 +1,10 @@
-defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
+defmodule Vxpipe.CallEngine.CallSpec.MediaPolicyCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.CallDefinition
-  alias Vxpipe.CallEngine.CallDefinition.MediaPolicy
+  alias Vxpipe.CallEngine.CallSpec
+  alias Vxpipe.CallEngine.CallSpec.MediaPolicy
   alias Vxpipe.CallEngine.CallInvocation
-  alias Vxpipe.CallEngine.DefinitionCompiler
+  alias Vxpipe.CallEngine.CallSpecCompiler
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy, as: ResolvedMediaPolicy
 
@@ -12,46 +12,46 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
 
   test "preserves omitted fields and explicit empty route maps" do
     input =
-      definition_input()
+      call_spec_input()
       |> Map.put(:media_policy, %{audio_routes: %{}})
       |> put_in(
         [:participants, "specialist", :while_present],
         %{transcript_routes: %{}, record_audio: false}
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 8)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 8)
 
-    assert {:ok, ^definition} =
+    assert {:ok, ^call_spec} =
              input
              |> JSON.encode!()
-             |> CallDefinition.from_json(resource_id: "support", revision: 8)
+             |> CallSpec.from_json(resource_id: "support", revision: 8)
 
     assert %MediaPolicy{
              audio_routes: %{},
              transcript_routes: :inherit,
              record_audio: :inherit,
              save_transcripts: :inherit
-           } = definition.media_policy
+           } = call_spec.media_policy
 
     assert %MediaPolicy{
              audio_routes: :inherit,
              transcript_routes: %{},
              record_audio: false,
              save_transcripts: :inherit
-           } = definition.participants["specialist"].while_present
+           } = call_spec.participants["specialist"].while_present
 
     assert %MediaPolicy{
              audio_routes: :inherit,
              transcript_routes: :inherit,
              record_audio: :inherit,
              save_transcripts: :inherit
-           } = definition.participants["caller"].while_present
+           } = call_spec.participants["caller"].while_present
   end
 
-  test "compiles direct definition-key routes to immutable runtime participant identities" do
+  test "compiles direct call-spec-key routes to immutable runtime participant identities" do
     input =
-      definition_input()
+      call_spec_input()
       |> Map.put(:media_policy, %{
         audio_routes: %{
           "caller" => ["reception"],
@@ -79,8 +79,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
         }
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(input, resource_id: "support", revision: 8)
+    assert {:ok, call_spec} =
+             CallSpec.new(input, resource_id: "support", revision: 8)
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -88,7 +88,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
                actor_id: "actor-demo"
              )
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries())
 
     caller_id = plan.participants["caller"].participant_id
     reception_id = plan.participants["reception"].participant_id
@@ -130,24 +130,24 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
 
   test "rejects malformed policies and unknown participant references at their exact paths" do
     cases = [
-      {Map.put(definition_input(), :media_policy, nil), ["media_policy"]},
-      {Map.put(definition_input(), :media_policy, %{unknown: true}), ["media_policy", "unknown"]},
-      {Map.put(definition_input(), :media_policy, %{audio_routes: []}),
+      {Map.put(call_spec_input(), :media_policy, nil), ["media_policy"]},
+      {Map.put(call_spec_input(), :media_policy, %{unknown: true}), ["media_policy", "unknown"]},
+      {Map.put(call_spec_input(), :media_policy, %{audio_routes: []}),
        ["media_policy", "audio_routes"]},
-      {Map.put(definition_input(), :media_policy, %{audio_routes: %{"caller" => "reception"}}),
+      {Map.put(call_spec_input(), :media_policy, %{audio_routes: %{"caller" => "reception"}}),
        ["media_policy", "audio_routes", "caller"]},
-      {Map.put(definition_input(), :media_policy, %{
+      {Map.put(call_spec_input(), :media_policy, %{
          audio_routes: %{"caller" => ["reception", "reception"]}
        }), ["media_policy", "audio_routes", "caller", "1"]},
-      {Map.put(definition_input(), :media_policy, %{audio_routes: %{"missing" => []}}),
+      {Map.put(call_spec_input(), :media_policy, %{audio_routes: %{"missing" => []}}),
        ["media_policy", "audio_routes", "missing"]},
-      {Map.put(definition_input(), :media_policy, %{
+      {Map.put(call_spec_input(), :media_policy, %{
          transcript_routes: %{"caller" => ["missing"]}
        }), ["media_policy", "transcript_routes", "caller", "0"]},
-      {Map.put(definition_input(), :media_policy, %{record_audio: "false"}),
+      {Map.put(call_spec_input(), :media_policy, %{record_audio: "false"}),
        ["media_policy", "record_audio"]},
       {put_in(
-         definition_input(),
+         call_spec_input(),
          [:participants, "specialist", :while_present],
          %{save_transcripts: 0}
        ), ["participants", "specialist", "while_present", "save_transcripts"]}
@@ -156,18 +156,18 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
     for {input, path} <- cases do
       assert {:error,
               %Error{
-                code: :invalid_call_definition,
+                code: :invalid_call_spec,
                 details: %{"path" => ^path}
-              }} = CallDefinition.new(input, resource_id: "support", revision: 8)
+              }} = CallSpec.new(input, resource_id: "support", revision: 8)
     end
   end
 
   test "compiler rejects a forged media policy instead of trusting constructed structs" do
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "support", revision: 8)
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input(), resource_id: "support", revision: 8)
 
-    forged_policy = %{definition.media_policy | record_audio: :enabled}
-    forged_definition = %{definition | media_policy: forged_policy}
+    forged_policy = %{call_spec.media_policy | record_audio: :enabled}
+    forged_call_spec = %{call_spec | media_policy: forged_policy}
 
     assert {:ok, invocation} =
              CallInvocation.new(invocation_input(),
@@ -177,12 +177,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
 
     assert {:error,
             %Error{
-              code: :call_definition_resolution_failed,
+              code: :call_spec_resolution_failed,
               details: %{"path" => ["media_policy"]}
-            }} = DefinitionCompiler.compile(forged_definition, invocation, registries())
+            }} = CallSpecCompiler.compile(forged_call_spec, invocation, registries())
   end
 
-  defp definition_input do
+  defp call_spec_input do
     %{
       schema_version: @schema_version,
       entry_caller: "caller",
@@ -216,7 +216,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
 
   defp invocation_input do
     %{
-      call_definition: %{id: "support", revision: 8},
+      call_spec: %{id: "support", revision: 8},
       initial_variables: %{},
       transport: %{type: "web"}
     }

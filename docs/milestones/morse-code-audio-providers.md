@@ -1,7 +1,7 @@
 # Local Morse-code audio providers
 
 Status: complete as of 2026-09-09. Specification review: approved (2026-09-08).
-Prerequisites: [Definition-driven call](definition-driven-call.md). This early optional provider slice does not become a semantic prerequisite for later production features.
+Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md). This early optional provider slice does not become a semantic prerequisite for later production features.
 Sources: User-requested local testing/verification addition; [provider capability boundary](../architecture.md); [International Morse code, ITU-R M.1677-1](https://www.itu.int/rec/R-REC-M.1677-1-200910-I/en). Verify the normative timing/alphabet against the recommendation during implementation.
 
 ## Runnable outcome
@@ -17,7 +17,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 - Reuse real turn, participant, activation, playback generation and interruption boundaries. Cancelling speech clears unplayed tones and stale output cannot contaminate a later turn. Emit recognition/final-turn signals only from supported decoding outcomes. If word timing is exposed, derive it from actual generated sample offsets and the existing playout boundary, not invented text-character estimates.
 - No hosted speech API keys or network connection are needed. A fully offline conversation also uses a deterministic local model-inference fixture; selecting a hosted LLM still requires that LLM. Do not mislabel zero external speech charges as a provider-reported monetary value.
 - Keep deterministic PCM loopback separate from lossy codecs, browser microphone processing and acoustic echo. Prove the direct PCM contract first; explicitly test/document any supported codec/WebRTC path and tolerances. Injected/file-based encoded input is valid; ordinary microphone speech is not a Morse test.
-- Select providers through the same closed registry/typed definition path as other implementations. Keep default application voices unchanged. The sample can use a documented fixture/profile without adding persistent controls to its responsive console.
+- Select providers through the same closed registry/typed call spec path as other implementations. Keep default application voices unchanged. The sample can use a documented fixture/profile without adding persistent controls to its responsive console.
 
 ## Implementation checklist
 
@@ -118,7 +118,7 @@ passes `3 tests, 0 failures`: arbitrarily odd PCM chunks produce one attributed 
 `ET` drains in more than ten bounded 20 ms frames and the collected output independently decodes;
 and interrupting a paced long response starts its replacement without a later stale frame. A
 warnings-as-errors compile and the complete owning child suite pass with `131 tests, 0 failures
-(1 excluded)`. Closed-registry selection, a definition-driven room proof and explicit long/error
+(1 excluded)`. Closed-registry selection, a call-spec-driven room proof and explicit long/error
 boundary tests remain pending.
 
 Implementation evidence, checkpoint 6 (2026-09-09): extended each application-owned speech
@@ -133,12 +133,12 @@ existing startup path required the selected provider to equal the top-level defa
 resolves both local providers and their codec configuration from registered alternatives while
 asserting that the Deepgram defaults are unchanged. Development configuration registers
 `morse-code-stt` and `morse-code-tts` capability profiles and local runtimes but continues to
-select the existing hosted profiles by default. The definition-driven file passes `11 tests,
+select the existing hosted profiles by default. The call-spec-driven file passes `11 tests,
 0 failures`; a development-config probe confirms both registry entries load, and the complete
 owning child passes `132 tests, 0 failures (1 excluded)`. Credential-free sample selection and
 the complete room audio loop remain pending.
 
-Implementation evidence, checkpoint 7 (2026-09-09): a definition-driven test now compiles a
+Implementation evidence, checkpoint 7 (2026-09-09): a call-spec-driven test now compiles a
 Morse-selected plan, starts its real room and participant/agent trees, attaches the caller with
 the ordinary output sink, and injects `SOS` as arbitrarily chunked linear16 audio. The local STT
 provider emits an attributed audio turn and final transcript; the configured local model fixture
@@ -176,7 +176,7 @@ round-trip command is in [development](../development.md#local-fixtures).
 
 Implementation evidence, checkpoint 9 (2026-09-09): added the opt-in development
 `VXPIPE_DEV_SPEECH_PROFILE=morse` setting. Combined with the existing local model fixture, it
-starts without Gemini or Deepgram credentials, removes STT from the browser call definition, and
+starts without Gemini or Deepgram credentials, removes STT from the browser call spec, and
 selects 48 kHz Morse TTS for typed Console turns. The Deepgram profile remains the default. The
 browser limitation is intentional and explicit: current WebRTC ingress supplies Opus, while
 Morse STT accepts direct linear16 PCM; no implicit transcoding, microphone-speech recognition or

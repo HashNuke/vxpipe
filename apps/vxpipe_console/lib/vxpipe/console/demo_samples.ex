@@ -78,12 +78,12 @@ defmodule Vxpipe.Console.DemoSamples do
     with {:ok, directory} <- Vxpipe.Calls.list_operator_services(authority, tenant_key, options),
          {:ok, model_provider} <- sample_providers(directory.credentials),
          {:ok, page} <-
-           Vxpipe.Calls.list_operator_definitions(
+           Vxpipe.Calls.list_operator_call_specs(
              authority,
              tenant_key,
              Keyword.merge(options, page: 1, limit: 100)
            ) do
-      summaries = Map.new(page.definitions, &{&1.id, &1})
+      summaries = Map.new(page.call_specs, &{&1.id, &1})
 
       results =
         model_provider
@@ -102,13 +102,13 @@ defmodule Vxpipe.Console.DemoSamples do
   end
 
   defp create_entry(entry, tenant_key, options) do
-    save_options = Keyword.put(options, :definition_id, entry.id)
+    save_options = Keyword.put(options, :call_spec_id, entry.id)
 
-    with {:ok, draft} <- Vxpipe.Calls.save_definition(tenant_key, entry.source, save_options),
+    with {:ok, draft} <- Vxpipe.Calls.save_call_spec(tenant_key, entry.source, save_options),
          {:ok, published} <-
-           Vxpipe.Calls.publish_definition(
+           Vxpipe.Calls.publish_call_spec(
              tenant_key,
-             draft.definition_id,
+             draft.call_spec_id,
              draft.revision,
              options
            ) do
@@ -120,12 +120,12 @@ defmodule Vxpipe.Console.DemoSamples do
 
   defp resume_entry(entry, tenant_key, summary, options) do
     with {:ok, latest} <-
-           Vxpipe.Calls.fetch_definition(tenant_key, entry.id, summary.latest_revision, options),
+           Vxpipe.Calls.fetch_call_spec(tenant_key, entry.id, summary.latest_revision, options),
          true <- latest.source_digest == source_digest(entry.source) do
       if summary.published_revision == latest.revision do
         installed(entry, latest.revision)
       else
-        case Vxpipe.Calls.publish_definition(tenant_key, entry.id, latest.revision, options) do
+        case Vxpipe.Calls.publish_call_spec(tenant_key, entry.id, latest.revision, options) do
           {:ok, published} -> installed(entry, published.revision)
           {:error, reason} -> failed(entry, reason)
         end

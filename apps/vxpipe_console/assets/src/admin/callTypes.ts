@@ -1,7 +1,7 @@
 import type { PaginationModel } from "./tenantTypes";
-import type { TenantContext } from "./definitionTypes";
+import type { TenantContext } from "./callSpecTypes";
 
-export type DefinitionContext = {
+export type CallSpecContext = {
   id: string;
   name: string | null;
   latestRevision: number;
@@ -21,18 +21,18 @@ export type CallDirectoryState = "ongoing" | "ended";
 
 export type CallDirectoryItem = {
   id: string;
-  definitionId: string;
-  definitionName: string | null;
-  definitionRevision: number;
+  callSpecId: string;
+  callSpecName: string | null;
+  callSpecRevision: number;
   state: CallDirectoryState;
   createdAt: string;
 };
 
 export type CallSummary = {
   id: string;
-  definitionId: string;
-  definitionName: string | null;
-  definitionRevision: number;
+  callSpecId: string;
+  callSpecName: string | null;
+  callSpecRevision: number;
   state: CallLifecycleState;
   createdAt: string;
   startedAt: string | null;
@@ -43,12 +43,12 @@ export type CallSummary = {
 
 type TenantCallsContext = {
   tenant: TenantContext;
-  definitions: Array<Pick<DefinitionContext, "id" | "name">>;
-  definitionOptionsTruncated?: boolean;
-  selectedDefinitionId: string | null;
+  callSpecs: Array<Pick<CallSpecContext, "id" | "name">>;
+  callSpecsTruncated?: boolean;
+  selectedCallSpecId: string | null;
 };
 
-export type DefinitionCallsPageState = TenantCallsContext &
+export type CallSpecCallsPageState = TenantCallsContext &
   (
     | { status: "loading" }
     | { status: "unavailable"; message: string }

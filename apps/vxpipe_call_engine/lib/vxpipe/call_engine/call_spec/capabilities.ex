@@ -1,8 +1,8 @@
-defmodule Vxpipe.CallEngine.CallDefinition.Capabilities do
+defmodule Vxpipe.CallEngine.CallSpec.Capabilities do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
-  alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallSpecValidation
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
 
   @kinds [:speech_to_text, :model_inference, :text_to_speech]
 
@@ -15,10 +15,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.Capabilities do
         }
 
   def new(value, path) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
-    with {:ok, input} <- DefinitionValidation.normalize_map(value, @kinds, code, message, path),
+    with {:ok, input} <- CallSpecValidation.normalize_map(value, @kinds, code, message, path),
          {:ok, speech_to_text} <- optional_selection(input, :speech_to_text, path),
          {:ok, model_inference} <- optional_selection(input, :model_inference, path),
          {:ok, text_to_speech} <- optional_selection(input, :text_to_speech, path) do

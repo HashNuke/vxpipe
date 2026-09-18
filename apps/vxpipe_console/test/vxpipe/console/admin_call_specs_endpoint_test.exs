@@ -1,13 +1,13 @@
-defmodule Vxpipe.Console.AdminDefinitionsEndpointTest do
+defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
 
-  alias Vxpipe.Calls.{DefinitionSummary, Tenant}
+  alias Vxpipe.Calls.{CallSpecSummary, Tenant}
 
   @endpoint Vxpipe.Console.Endpoint
-  @secret String.duplicate("operator-admin-definitions-secret-", 3)
-  @token "operator-admin-definitions-token"
+  @secret String.duplicate("operator-admin-call-specs-secret-", 3)
+  @token "operator-admin-call-specs-token"
   @tenant_key "AAAAAAAAAAAAAAAA"
 
   setup do
@@ -24,15 +24,15 @@ defmodule Vxpipe.Console.AdminDefinitionsEndpointTest do
     :ok
   end
 
-  test "returns one tenant-scoped definition page to an installation operator" do
+  test "returns one tenant-scoped call spec page to an installation operator" do
     tenant = %Tenant{
       key: @tenant_key,
       name: "Example tenant",
       inserted_at: ~U[2026-09-17 01:00:00Z]
     }
 
-    definitions = [
-      %DefinitionSummary{
+    call_specs = [
+      %CallSpecSummary{
         id: "delivery-rescheduling",
         name: "Delivery rescheduling",
         latest_revision: 4,
@@ -42,16 +42,16 @@ defmodule Vxpipe.Console.AdminDefinitionsEndpointTest do
       }
     ]
 
-    configure_admin_repository({:ok, {tenant, definitions, 26}})
+    configure_admin_repository({:ok, {tenant, call_specs, 26}})
 
     conn =
       authenticate()
       |> recycle()
-      |> get("/admin/api/tenants/#{@tenant_key}/definitions?page=2")
+      |> get("/admin/api/tenants/#{@tenant_key}/call-specs?page=2")
 
     assert json_response(conn, 200) == %{
              "tenant" => %{"key" => @tenant_key, "name" => "Example tenant"},
-             "definitions" => [
+             "call_specs" => [
                %{
                  "id" => "delivery-rescheduling",
                  "name" => "Delivery rescheduling",
@@ -69,25 +69,25 @@ defmodule Vxpipe.Console.AdminDefinitionsEndpointTest do
              }
            }
 
-    assert_received {:operator_definitions_requested, @tenant_key, 25, 25}
+    assert_received {:operator_call_specs_requested, @tenant_key, 25, 25}
   end
 
   test "distinguishes missing tenant, unavailable storage, invalid pages, and anonymous access" do
     configure_admin_repository({:error, :tenant_not_found})
-    missing = authenticate() |> recycle() |> https_get("/admin/api/tenants/missing/definitions")
+    missing = authenticate() |> recycle() |> https_get("/admin/api/tenants/missing/call-specs")
     assert json_response(missing, 404) == %{"error" => %{"code" => "tenant_not_found"}}
-    assert_received {:operator_definitions_requested, "missing", 25, 0}
+    assert_received {:operator_call_specs_requested, "missing", 25, 0}
 
     configure_admin_repository({:error, :database_unavailable})
 
     unavailable =
-      authenticate() |> recycle() |> https_get("/admin/api/tenants/#{@tenant_key}/definitions")
+      authenticate() |> recycle() |> https_get("/admin/api/tenants/#{@tenant_key}/call-specs")
 
     assert json_response(unavailable, 503) == %{
-             "error" => %{"code" => "definition_directory_unavailable"}
+             "error" => %{"code" => "call_spec_directory_unavailable"}
            }
 
-    assert_received {:operator_definitions_requested, @tenant_key, 25, 0}
+    assert_received {:operator_call_specs_requested, @tenant_key, 25, 0}
 
     configure_admin_repository(
       {:ok,
@@ -97,12 +97,12 @@ defmodule Vxpipe.Console.AdminDefinitionsEndpointTest do
     invalid =
       authenticate()
       |> recycle()
-      |> get("/admin/api/tenants/#{@tenant_key}/definitions?page[]=1")
+      |> get("/admin/api/tenants/#{@tenant_key}/call-specs?page[]=1")
 
     assert json_response(invalid, 422) == %{"error" => %{"code" => "invalid_page"}}
-    refute_received {:operator_definitions_requested, _, _, _}
+    refute_received {:operator_call_specs_requested, _, _, _}
 
-    anonymous = https_get("/admin/api/tenants/#{@tenant_key}/definitions")
+    anonymous = https_get("/admin/api/tenants/#{@tenant_key}/call-specs")
     assert json_response(anonymous, 401) == %{"error" => %{"code" => "operator_session_required"}}
   end
 

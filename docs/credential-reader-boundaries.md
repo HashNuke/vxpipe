@@ -31,7 +31,7 @@ under the [approved scope correction](credential-cutover-scope.md).
 | Private destination STT | `PlanStartup.human_destination` → `resolve_provider` | Named tenant isolation, independent listener options and fresh construction checks; unavailable bindings fail before client startup. |
 | Private briefing TTS | `HumanDestinationPreparer` → transfer `Runtime.source_text_to_speech` → `PlanStartup.participant_text_to_speech` | Fresh named source binding before new transport/dial; missing binding preserves the existing source client. |
 | Source TTS replacement | `RoomTransferSupervisor.recover` → transfer `Runtime.source_text_to_speech` | Fresh lookup within the existing 750 ms budget; unavailable binding starts no transport and enters existing terminal failure handling. |
-| Hosted persistence bridge | Calls `ProviderCredentialSource` → `DefinitionCredentials` → encrypted repository | Tenant/provider/name/status/auth validation; persistence tests verify DB reads and safe errors. |
+| Hosted persistence bridge | Calls `ProviderCredentialSource` → `CallSpecCredentials` → encrypted repository | Tenant/provider/name/status/auth validation; persistence tests verify DB reads and safe errors. |
 | New incoming carrier leg | Stored ingress → `TelephonyServices.resolve` → private `ConfiguredService` → verification and activation | Telnyx/Twilio encrypted DB-to-HTTP and two-tenant signature checks. |
 | New outbound carrier leg | Pinned `ServiceReference` → `ServiceRegistry.fetch_for_tenant` → existing connector/adapter | Exact tenant REST auth, missing/revoked source and deadline checks. |
 | Existing carrier callbacks/media/cleanup | Initialized leg/admission configuration | Storage-outage callbacks, retained Twilio WSS auth and exact-owner retirement checks. |
@@ -42,7 +42,7 @@ under the [approved scope correction](credential-cutover-scope.md).
 `CreateRoom` admits empty rooms and the credential-free deterministic text agent. Its retired
 `:model_inference` selector is rejected; a stale manually constructed command fails room startup.
 Raw-room startup and attachment no longer construct speech clients from application settings.
-Model and speech calls compile an inline definition and use `start_call`, including embedded
+Model and speech calls compile an inline call spec and use `start_call`, including embedded
 fixture/Morse calls. Application settings still register adapters, transports and resource limits;
 inline selections and the tenant credential source supply provider request configuration.
 
@@ -66,7 +66,7 @@ supplied test key to its test tenant through a credential source; it requires se
   configuration; they do not prescribe a provider credential lifecycle.
 
 Destination boundary coverage now includes missing, other-tenant-only and inactive model/TTS/STT
-bindings before definition writes, plus named destination isolation and whole-selection overrides.
+bindings before call spec writes, plus named destination isolation and whole-selection overrides.
 Carrier readers and the existing Zenmux adapter are also migrated. The milestone ledger records
 checkpoint completion and umbrella gate results; final platform configuration remains separate.
 

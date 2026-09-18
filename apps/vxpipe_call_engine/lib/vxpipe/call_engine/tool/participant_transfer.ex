@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
   def definition(%Binding{} = binding) do
     targets =
       binding.targets
-      |> Enum.sort_by(fn {definition_key, _target} -> definition_key end)
+      |> Enum.sort_by(fn {call_spec_key, _target} -> call_spec_key end)
 
     %Definition{
       name: "transfer",
@@ -20,7 +20,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
 
   defp parameters(targets) do
     required_reason_targets =
-      Enum.filter(targets, fn {_definition_key, target} -> target.reason_required end)
+      Enum.filter(targets, fn {_call_spec_key, target} -> target.reason_required end)
 
     parameters = %{
       "type" => "object",
@@ -42,7 +42,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
 
   defp add_reason(parameters, required_targets, required_for_every_target?) do
     destination_keys =
-      Enum.map(required_targets, fn {definition_key, _target} -> definition_key end)
+      Enum.map(required_targets, fn {call_spec_key, _target} -> call_spec_key end)
 
     reason = %{
       "type" => "string",
@@ -61,25 +61,25 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
     end
   end
 
-  defp destination_label([definition_key]), do: "destination #{definition_key}"
-  defp destination_label(definition_keys), do: "destinations #{Enum.join(definition_keys, ", ")}"
+  defp destination_label([call_spec_key]), do: "destination #{call_spec_key}"
+  defp destination_label(call_spec_keys), do: "destinations #{Enum.join(call_spec_keys, ", ")}"
 
   defp destination_schema(targets) do
     label = if match?([_target], targets), do: "destination", else: "destinations"
 
     %{
       "type" => "string",
-      "enum" => Enum.map(targets, fn {definition_key, _target} -> definition_key end),
+      "enum" => Enum.map(targets, fn {call_spec_key, _target} -> call_spec_key end),
       "description" =>
         "Permitted #{label}: " <> Enum.map_join(targets, ", ", &describe_target/1) <> "."
     }
   end
 
-  defp describe_target({definition_key, %{description: description}})
+  defp describe_target({call_spec_key, %{description: description}})
        when is_binary(description),
-       do: "#{definition_key} (#{description})"
+       do: "#{call_spec_key} (#{description})"
 
-  defp describe_target({definition_key, _target}), do: definition_key
+  defp describe_target({call_spec_key, _target}), do: call_spec_key
 
   @spec execute(Binding.t(), map(), Context.t()) ::
           {:ok, PlatformResult.t()} | {:error, :tool_failed}

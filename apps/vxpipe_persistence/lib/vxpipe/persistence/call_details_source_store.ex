@@ -13,7 +13,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceStore do
 
   alias Vxpipe.Calls.PreparedCall
 
-  alias Vxpipe.Persistence.Schema.{Call, CallDefinition, DefinitionRevision, TelephonyLeg, Tenant}
+  alias Vxpipe.Persistence.Schema.{Call, CallSpec, CallSpecRevision, TelephonyLeg, Tenant}
 
   @spec read(module(), String.t(), String.t()) ::
           {:ok, CallDetailsSourceRead.t()} | {:error, term()}
@@ -43,20 +43,20 @@ defmodule Vxpipe.Persistence.CallDetailsSourceStore do
       from(call in Call,
         join: tenant in Tenant,
         on: tenant.id == call.tenant_id,
-        join: revision in DefinitionRevision,
-        on: revision.id == call.definition_revision_id,
-        join: definition in CallDefinition,
-        on: definition.id == revision.call_definition_id,
+        join: revision in CallSpecRevision,
+        on: revision.id == call.call_spec_revision_id,
+        join: call_spec in CallSpec,
+        on: call_spec.id == revision.call_spec_id,
         where: tenant.key == ^tenant_key and call.public_id == ^call_id,
-        select: {call, tenant, definition, revision}
+        select: {call, tenant, call_spec, revision}
       )
 
     case repo.one(query) do
       nil ->
         {:error, :call_not_found}
 
-      {stored, tenant, definition, revision} ->
-        with {:ok, call} <- PreparedCallRecord.load(stored, {tenant, definition, revision}) do
+      {stored, tenant, call_spec, revision} ->
+        with {:ok, call} <- PreparedCallRecord.load(stored, {tenant, call_spec, revision}) do
           {:ok, call, stored.id}
         end
     end

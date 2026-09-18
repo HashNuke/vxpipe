@@ -1,10 +1,10 @@
-import type { DefinitionSummary } from "./definitionTypes";
+import type { CallSpecSummary } from "./callSpecTypes";
 
-export function getDefinitionStatus(
-  definition: Pick<DefinitionSummary, "latestRevision" | "publishedRevision">,
+export function getCallSpecStatus(
+  callSpec: Pick<CallSpecSummary, "latestRevision" | "publishedRevision">,
 ) {
-  if (definition.publishedRevision === null) return "draft" as const;
-  if (definition.publishedRevision === definition.latestRevision) {
+  if (callSpec.publishedRevision === null) return "draft" as const;
+  if (callSpec.publishedRevision === callSpec.latestRevision) {
     return "published" as const;
   }
   return "draft-changes" as const;

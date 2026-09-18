@@ -11,13 +11,13 @@ The route table is:
 - `/admin`
 - `/admin/onboarding`
 - `/admin/tenants/:tenantKey`
-- `/admin/tenants/:tenantKey/definitions`
+- `/admin/tenants/:tenantKey/call-specs`
 - `/admin/tenants/:tenantKey/calls`
 - `/admin/tenants/:tenantKey/calls/:callId`
 - `/admin/tenants/:tenantKey/services`
 
-The tenant workspace root redirects to its definitions page. Unknown routes
-redirect to `/admin`. Pagination and call-definition filters remain URL search
+The tenant workspace root redirects to its Call Specs page. Unknown routes
+redirect to `/admin`. Pagination and call-spec filters remain URL search
 parameters so links are reloadable and browser navigation restores the selected
 view.
 

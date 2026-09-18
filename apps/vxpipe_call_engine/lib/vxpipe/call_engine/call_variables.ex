@@ -70,7 +70,7 @@ defmodule Vxpipe.CallEngine.CallVariables do
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
 
     grants =
-      Map.new(plan.participants, fn {_definition_key, participant} ->
+      Map.new(plan.participants, fn {_call_spec_key, participant} ->
         {participant.participant_id, participant.variable_permissions.grants}
       end)
 

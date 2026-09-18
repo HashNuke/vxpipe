@@ -1,5 +1,5 @@
-defmodule Vxpipe.Calls.CallFilterDefinition do
-  @moduledoc "One bounded definition option available to the operator call directory."
+defmodule Vxpipe.Calls.CallSpecFilter do
+  @moduledoc "One bounded call spec option available to the operator call directory."
 
   @enforce_keys [:id, :name]
   defstruct @enforce_keys

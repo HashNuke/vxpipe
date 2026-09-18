@@ -1,13 +1,13 @@
 defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
-  alias Vxpipe.CallEngine.CallDefinition.TransferHistory
-  alias Vxpipe.CallEngine.CallDefinition.VariablePermissions
+  alias Vxpipe.CallEngine.CallSpec.ConnectionIntent
+  alias Vxpipe.CallEngine.CallSpec.TransferHistory
+  alias Vxpipe.CallEngine.CallSpec.VariablePermissions
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, MediaPolicy, ToolBinding}
 
   @enforce_keys [
-    :definition_key,
+    :call_spec_key,
     :participant_id,
     :activation_id,
     :kind,
@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
   defstruct @enforce_keys ++ [telephony_service: nil]
 
   @type t :: %__MODULE__{
-          definition_key: String.t(),
+          call_spec_key: String.t(),
           participant_id: String.t(),
           activation_id: nil | String.t(),
           kind: :human | :agent,

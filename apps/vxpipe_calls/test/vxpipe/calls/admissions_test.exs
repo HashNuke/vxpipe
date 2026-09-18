@@ -16,7 +16,7 @@ defmodule Vxpipe.Calls.AdmissionsTest do
 
     base_options = [
       credential_repository: TestMemoryRepository.credential_repository(repository),
-      definition_repository: TestMemoryRepository.definition_repository(repository),
+      call_spec_repository: TestMemoryRepository.call_spec_repository(repository),
       call_repository: TestMemoryRepository.call_repository(repository),
       registries: registries()
     ]
@@ -30,16 +30,16 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     input =
       case Map.fetch(context, :wait_sounds) do
         {:ok, sounds} ->
-          Map.merge(definition_input(), %{schema_version: "20260915.01", wait_sounds: sounds})
+          Map.merge(call_spec_input(), %{schema_version: "20260915.01", wait_sounds: sounds})
 
         :error ->
-          definition_input()
+          call_spec_input()
       end
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, input, base_options)
+    assert {:ok, draft} = Calls.save_call_spec(tenant.key, input, base_options)
 
     assert {:ok, published} =
-             Calls.publish_definition(tenant.key, draft.definition_id, 1, base_options)
+             Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, base_options)
 
     assert [caller_route] = Enum.filter(published.routes, &(&1.participant_ref == "caller"))
 
@@ -84,7 +84,7 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     assert prepared_call.initial_variables == initial_variables
     assert prepared_call.plan.call_id == @call_id
     assert prepared_call.plan.room_id == @room_id
-    assert prepared_call.plan.definition_revision == 1
+    assert prepared_call.plan.call_spec_revision == 1
     assert prepared_call.plan.call_variables.sections["order"].value == initial_variables["order"]
     assert is_binary(prepared_call.plan_digest)
     assert byte_size(prepared_call.plan_digest) == 32
@@ -138,21 +138,21 @@ defmodule Vxpipe.Calls.AdmissionsTest do
                context.options
              )
 
-    assert error.code == :call_definition_resolution_failed
+    assert error.code == :call_spec_resolution_failed
   end
 
   test "rejects a published web route that is not the entry caller", context do
     assert {:ok, draft} =
-             Calls.save_definition(
+             Calls.save_call_spec(
                context.tenant.key,
-               definition_input("observer"),
-               Keyword.delete(context.options, :definition_id)
+               call_spec_input("observer"),
+               Keyword.delete(context.options, :call_spec_id)
              )
 
     assert {:ok, published} =
-             Calls.publish_definition(
+             Calls.publish_call_spec(
                context.tenant.key,
-               draft.definition_id,
+               draft.call_spec_id,
                draft.revision,
                context.options
              )
@@ -242,25 +242,25 @@ defmodule Vxpipe.Calls.AdmissionsTest do
              Calls.claim_join_token(token.secret, expected_scope, context.options)
   end
 
-  test "keeps the prepared plan pinned after a newer definition revision is published", context do
+  test "keeps the prepared plan pinned after a newer call spec revision is published", context do
     assert {:ok, call, _first_token} = prepare(context)
 
-    revised_definition =
-      put_in(definition_input(), [:participants, "assistant", :prompt], "Revised prompt.")
+    revised_call_spec =
+      put_in(call_spec_input(), [:participants, "assistant", :prompt], "Revised prompt.")
 
     assert {:ok, draft} =
-             Calls.save_definition(
+             Calls.save_call_spec(
                context.tenant.key,
-               revised_definition,
-               Keyword.put(context.options, :definition_id, call.definition_id)
+               revised_call_spec,
+               Keyword.put(context.options, :call_spec_id, call.call_spec_id)
              )
 
     assert draft.revision == 2
 
     assert {:ok, published} =
-             Calls.publish_definition(
+             Calls.publish_call_spec(
                context.tenant.key,
-               draft.definition_id,
+               draft.call_spec_id,
                draft.revision,
                context.options
              )
@@ -285,12 +285,12 @@ defmodule Vxpipe.Calls.AdmissionsTest do
                context.options
              )
 
-    assert claim.call.definition_revision == 1
-    assert claim.call.plan.definition_revision == 1
+    assert claim.call.call_spec_revision == 1
+    assert claim.call.plan.call_spec_revision == 1
     assert claim.call.plan.participants["assistant"].prompt == "Help the caller."
   end
 
-  test "pins the tenant call-duration setting while preparing an omitted definition limit",
+  test "pins the tenant call-duration setting while preparing an omitted call spec limit",
        context do
     duration_options =
       Keyword.put(context.options, :call_duration,
@@ -428,7 +428,7 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     }
   end
 
-  defp definition_input(extra_web_participant \\ nil) do
+  defp call_spec_input(extra_web_participant \\ nil) do
     participants = %{
       "caller" => %{
         type: "human",

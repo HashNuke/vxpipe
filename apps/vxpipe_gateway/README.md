@@ -91,7 +91,7 @@ Alternatively, an embedded caller can supervise
 `Vxpipe.Gateway.HTTP.Supervisor` directly with the standalone HTTP options.
 Do not run that listener when a host endpoint mounts the Plug on the same port.
 
-The repository's development configuration supplies a trusted typed call definition,
+The repository's development configuration supplies a trusted typed call spec,
 closed capability/tool registries, and a fixed development principal so the browser
 can exercise the complete path without claiming to implement authentication. The
 gateway compiles a fresh pinned plan for each development room, starts its existing

@@ -1,28 +1,28 @@
 import { useState } from "react";
 
 import {
-  definitionFixture,
-  type DefinitionFixtureScenario,
-} from "./definitionFixtures";
-import { TenantDefinitionsPage } from "./TenantDefinitionsPage";
+  callSpecFixture,
+  type CallSpecFixtureScenario,
+} from "./callSpecFixtures";
+import { TenantCallSpecsPage } from "./TenantCallSpecsPage";
 
-export function TenantDefinitionsStory({
+export function TenantCallSpecsStory({
   scenario,
   theme,
 }: {
-  scenario: DefinitionFixtureScenario;
+  scenario: CallSpecFixtureScenario;
   theme: "dark" | "light";
 }) {
   const [page, setPage] = useState(1);
-  const baseState = definitionFixture(scenario);
+  const baseState = callSpecFixture(scenario);
   const state =
     scenario === "paginated" && baseState.status === "ready" && page > 1
       ? {
           ...baseState,
-          definitions: baseState.definitions.map((definition, index) => ({
-            ...definition,
-            id: `${definition.id}-p${page}`,
-            name: `${definition.name ?? definition.id} · page ${page}`,
+          callSpecs: baseState.callSpecs.map((callSpec, index) => ({
+            ...callSpec,
+            id: `${callSpec.id}-p${page}`,
+            name: `${callSpec.name ?? callSpec.id} · page ${page}`,
             updatedAt: `2026-08-${String(24 - page * 4 - index).padStart(2, "0")}T09:00:00.000Z`,
           })),
           pagination: {
@@ -34,14 +34,14 @@ export function TenantDefinitionsStory({
       : baseState;
 
   return (
-    <TenantDefinitionsPage
+    <TenantCallSpecsPage
       onNextPage={() => setPage((current) => Math.min(3, current + 1))}
       onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
-      onSelectDefinition={(definitionId) => {
+      onSelectCallSpec={(callSpecId) => {
         window.history.pushState(
-          { definitionId },
+          { callSpecId },
           "",
-          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?definition_id=${encodeURIComponent(definitionId)}`,
+          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?call_spec_id=${encodeURIComponent(callSpecId)}`,
         );
       }}
       onSelectTenants={() => {

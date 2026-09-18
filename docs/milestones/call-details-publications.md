@@ -2,7 +2,7 @@
 
 Status: implemented (2026-09-12). Specification review: approved (2026-09-08).
 Prerequisites: [Streaming recordings](streaming-recordings.md); [Usage/billing observations](usage-and-billing-observations.md).
-Sources: [CallDetailsPublisher](../../labnotes/20260905-0405-call-definition-design.md#calldetailspublisher-is-a-final-projector-not-the-live-recorder); [R42/R43](../call-definition-gap-review.md).
+Sources: [CallDetailsPublisher](../../labnotes/20260905-0405-call-definition-design.md#calldetailspublisher-is-a-final-projector-not-the-live-recorder); [R42/R43](../call-spec-gap-review.md).
 
 ## Runnable outcome
 
@@ -15,11 +15,11 @@ After a call ends, an authorized operator gets a call-details JSON object with t
 - The reporting window neither keeps room alive, changes ended_at/retention, nor cancels uploads or billing/history work. If DB/object storage prevents publication, report pending/failure and retain/retry surviving publication work, never claim published because the window expired.
 - Each immutable publication has its own identity and persisted UTC record timestamp. Under a call-owned prefix use details-YYYYMMDDHHMMSSmmm.json, exactly three millisecond digits. Same snapshot retry reuses record/identity/content/filename; changed content creates a new revision/object, not a schema_version change for values alone.
 - Keep latest-publication pointer while retaining prior revisions. Timestamp is not identity/uniqueness proof: detect filename collisions before clobbering, use safe object-write semantics, never invent a timestamp or overwrite another revision. Record checksums/completeness and protected access references, not bearer URLs in logs.
-- Include pinned call/definition identity, participants/legs/activations, ordered observed transcript and delivery/interruption provenance, tool/transfer summaries, effective usage plus source observations, permitted variables/latest persisted snapshot and artifact references. Do not invent lost queued facts or claim an independent history backup from an export sourced from PG.
+- Include pinned call/call spec identity, participants/legs/activations, ordered observed transcript and delivery/interruption provenance, tool/transfer summaries, effective usage plus source observations, permitted variables/latest persisted snapshot and artifact references. Do not invent lost queued facts or claim an independent history backup from an export sourced from PG.
 - Preserve privacy by source interval and call-owned deletion coordination; late enrichments must not recreate purged data. Future repair/export import is operationally deferred, not a replay feature.
 
 Publication identity/details explicitly include lifecycle timestamps/status, direction, route,
-definition revision and resolved-plan digest, not only a generic call identifier.
+call spec revision and resolved-plan digest, not only a generic call identifier.
 
 ## Implementation checklist
 

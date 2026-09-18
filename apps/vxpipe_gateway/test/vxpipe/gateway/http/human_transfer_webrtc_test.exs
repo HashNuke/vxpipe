@@ -12,9 +12,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     TestSelectiveAgentRuntimeModelProvider,
     TestTextToSpeechTransport,
     TestSpeechToTextTransport
@@ -3878,12 +3878,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   defp compile_plan(options \\ []) do
-    resource_id = unique_id("human-transfer-definition")
+    resource_id = unique_id("human-transfer-call-spec")
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
@@ -3996,7 +3996,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: resource_id, revision: 1},
+                 call_spec: %{id: resource_id, revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -4007,7 +4007,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{"test_agent_tool" => CallEngine.TestAgentTool},
                mcp_integrations: Keyword.get(options, :mcp_integrations)
              })

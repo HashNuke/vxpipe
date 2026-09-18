@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
+    CallSpec,
     CallInvocation,
-    DefinitionCompiler,
+    CallSpecCompiler,
     TestCallLifecycleTimer
   }
 
@@ -44,7 +44,7 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
   end
 
   defp compile_plan do
-    definition_input = %{
+    call_spec_input = %{
       schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
@@ -73,8 +73,8 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
       limits: %{max_duration_ms: 1_000}
     }
 
-    assert {:ok, definition} =
-             CallDefinition.new(definition_input,
+    assert {:ok, call_spec} =
+             CallSpec.new(call_spec_input,
                resource_id: "inbound-phone",
                revision: 1
              )
@@ -82,7 +82,7 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "inbound-phone", revision: 1},
+                 call_spec: %{id: "inbound-phone", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "telephony"}
                },
@@ -96,7 +96,7 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
       host_tools: %{}
     }
 
-    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
+    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
     plan
   end
 end

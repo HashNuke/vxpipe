@@ -1,14 +1,14 @@
-defmodule Vxpipe.CallEngine.CallDefinition.TransferPolicy do
+defmodule Vxpipe.CallEngine.CallSpec.TransferPolicy do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @default_attempt_timeout_ms 30_000
   @minimum_attempt_timeout_ms 1_000
   @maximum_attempt_timeout_ms 120_000
   @path ["transfer_policy"]
-  @code :invalid_call_definition
-  @message "The call definition is invalid."
+  @code :invalid_call_spec
+  @message "The call spec is invalid."
 
   @enforce_keys [:attempt_timeout_ms]
   defstruct @enforce_keys
@@ -22,7 +22,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.TransferPolicy do
 
   def new(value) do
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(
+           CallSpecValidation.normalize_map(
              value,
              [:attempt_timeout_ms],
              @code,
@@ -45,7 +45,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.TransferPolicy do
         {:ok, value}
 
       {:ok, _invalid} ->
-        DefinitionValidation.invalid(
+        CallSpecValidation.invalid(
           @code,
           @message,
           @path ++ ["attempt_timeout_ms"],

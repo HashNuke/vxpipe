@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.CallDefinition.NumberFromVariable do
+defmodule Vxpipe.CallEngine.CallSpec.NumberFromVariable do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.DefinitionValidation
+  alias Vxpipe.CallEngine.CallSpecValidation
 
   @enforce_keys [:section, :variable]
   defstruct @enforce_keys
@@ -9,29 +9,29 @@ defmodule Vxpipe.CallEngine.CallDefinition.NumberFromVariable do
   @type t :: %__MODULE__{section: String.t(), variable: String.t()}
 
   def new(value, path) do
-    code = :invalid_call_definition
-    message = "The call definition is invalid."
+    code = :invalid_call_spec
+    message = "The call spec is invalid."
 
     with {:ok, input} <-
-           DefinitionValidation.normalize_map(
+           CallSpecValidation.normalize_map(
              value,
              [:section, :variable],
              code,
              message,
              path
            ),
-         {:ok, section_input} <- DefinitionValidation.fetch(input, :section, code, message, path),
+         {:ok, section_input} <- CallSpecValidation.fetch(input, :section, code, message, path),
          {:ok, section} <-
-           DefinitionValidation.identifier(
+           CallSpecValidation.identifier(
              section_input,
              code,
              message,
              path ++ ["section"]
            ),
          {:ok, variable_input} <-
-           DefinitionValidation.fetch(input, :variable, code, message, path),
+           CallSpecValidation.fetch(input, :variable, code, message, path),
          {:ok, variable} <-
-           DefinitionValidation.identifier(
+           CallSpecValidation.identifier(
              variable_input,
              code,
              message,

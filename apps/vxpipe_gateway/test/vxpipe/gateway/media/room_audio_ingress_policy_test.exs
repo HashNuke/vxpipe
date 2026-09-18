@@ -1,7 +1,7 @@
 defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
   alias Vxpipe.CallEngine.Media.{AudioFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer}
   alias Vxpipe.CallEngine.Readiness.Collector
@@ -299,10 +299,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
         Keyword.get(options, :restriction, %{record_audio: false})
       )
 
-    assert {:ok, definition} =
-             CallDefinition.new(
+    assert {:ok, call_spec} =
+             CallSpec.new(
                %{
-                 schema_version: CallDefinition.schema_version(),
+                 schema_version: CallSpec.schema_version(),
                  entry_caller: "caller",
                  entry_receiver: "receiver",
                  defaults: %{capabilities: %{}},
@@ -318,7 +318,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
     assert {:ok, invocation} =
              CallInvocation.new(
                %{
-                 call_definition: %{id: "input-policy", revision: 1},
+                 call_spec: %{id: "input-policy", revision: 1},
                  initial_variables: %{},
                  transport: %{type: "web"}
                },
@@ -329,7 +329,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
              )
 
     assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
+             CallSpecCompiler.compile(call_spec, invocation, %{
                host_tools: %{}
              })
 
