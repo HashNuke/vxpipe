@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Start here to review the linked admin experience. Follow Tenants → Call definitions → filtered Calls → Call details, or use the tenant navigation to review all Calls.",
+          "Start here to review the linked admin experience. Follow Tenants → Call definitions → filtered Calls, then open a call in its own inspection tab. The original directory keeps its filters and position. Use the tenant navigation to review all Calls or Services.",
       },
     },
   },

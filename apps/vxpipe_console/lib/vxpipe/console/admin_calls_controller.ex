@@ -65,18 +65,11 @@ defmodule Vxpipe.Console.AdminCallsController do
       definition_id: call.definition_id,
       definition_name: call.definition_name,
       definition_revision: call.definition_revision,
-      state: Atom.to_string(call.state),
-      created_at: DateTime.to_iso8601(call.created_at),
-      started_at: datetime_json(call.started_at),
-      ended_at: datetime_json(call.ended_at),
-      terminal_reason: atom_json(call.terminal_reason),
-      archive_state: Atom.to_string(call.archive_state)
+      state: directory_state(call.state),
+      created_at: DateTime.to_iso8601(call.created_at)
     }
   end
 
-  defp datetime_json(nil), do: nil
-  defp datetime_json(datetime), do: DateTime.to_iso8601(datetime)
-
-  defp atom_json(nil), do: nil
-  defp atom_json(atom), do: Atom.to_string(atom)
+  defp directory_state(state) when state in [:prepared, :admitting, :running], do: "ongoing"
+  defp directory_state(state) when state in [:ended, :failed], do: "ended"
 end

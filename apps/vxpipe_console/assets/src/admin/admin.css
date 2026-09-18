@@ -16,6 +16,8 @@ body,
   --admin-ink: oklch(0.985 0 0);
   --admin-muted: oklch(0.76 0.01 286);
   --admin-line: oklch(0.35 0.006 286);
+  /* Column headers stay distinct; internal list rows need less emphasis. */
+  --admin-row-line: color-mix(in oklch, var(--admin-line) 50%, transparent);
   --admin-blue: oklch(0.76 0.12 259);
   --admin-blue-soft: oklch(0.3 0.04 259);
   --admin-green: oklch(0.78 0.12 162);

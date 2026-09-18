@@ -1,4 +1,5 @@
 import type {
+  CallDirectoryItem,
   CallSummary,
   DefinitionCallsPageState,
   DefinitionContext,
@@ -114,7 +115,9 @@ const definitionCalls: Record<string, CallSummary[]> = {
 };
 
 function definitionContext(definitionId: string): DefinitionContext | null {
-  const definition = definitions.find((candidate) => candidate.id === definitionId);
+  const definition = definitions.find(
+    (candidate) => candidate.id === definitionId,
+  );
 
   return definition
     ? {
@@ -126,12 +129,29 @@ function definitionContext(definitionId: string): DefinitionContext | null {
     : null;
 }
 
-export function callsForDefinition(definitionId: string): CallSummary[] {
-  return definitionCalls[definitionId] ?? [];
+function directoryItem(call: CallSummary): CallDirectoryItem {
+  return {
+    id: call.id,
+    definitionId: call.definitionId,
+    definitionName: call.definitionName,
+    definitionRevision: call.definitionRevision,
+    state:
+      call.state === "ended" || call.state === "failed" ? "ended" : "ongoing",
+    createdAt: call.createdAt,
+  };
 }
 
-export function callsForTenant(): CallSummary[] {
-  return Object.values(definitionCalls).flat();
+export function callsForDefinition(definitionId: string): CallDirectoryItem[] {
+  return (definitionCalls[definitionId] ?? []).map(directoryItem);
+}
+
+export function callsForTenant(): CallDirectoryItem[] {
+  return Object.values(definitionCalls)
+    .flat()
+    .map(directoryItem)
+    .sort(
+      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt),
+    );
 }
 
 export function callContext(callId: string): {
@@ -162,7 +182,9 @@ export type CallFixtureScenario =
   | "long-content"
   | "paginated";
 
-export function callFixture(scenario: CallFixtureScenario): DefinitionCallsPageState {
+export function callFixture(
+  scenario: CallFixtureScenario,
+): DefinitionCallsPageState {
   const context = {
     tenant: demoTenant,
     definitions: definitions.map(({ id, name }) => ({ id, name })),
@@ -201,7 +223,8 @@ export function callFixture(scenario: CallFixtureScenario): DefinitionCallsPageS
       return {
         status: "unavailable",
         ...context,
-        message: "Calls could not be loaded. Try again after storage is available.",
+        message:
+          "Calls could not be loaded. Try again after storage is available.",
       };
     case "truncated-options":
       return {
@@ -232,13 +255,15 @@ export function callFixture(scenario: CallFixtureScenario): DefinitionCallsPageS
       return {
         status: "ready",
         ...context,
-        calls: calls.slice(0, 4).map((call) => ({
-          ...call,
-          definitionId:
-            "international-priority-delivery-rescheduling-and-exception-resolution",
-          definitionName:
-            "International priority delivery rescheduling and exception resolution",
-        })),
+        calls: callsForTenant()
+          .slice(0, 4)
+          .map((call) => ({
+            ...call,
+            definitionId:
+              "international-priority-delivery-rescheduling-and-exception-resolution",
+            definitionName:
+              "International priority delivery rescheduling and exception resolution",
+          })),
         pagination: {
           label: "1–4 of 12",
           hasPrevious: false,
@@ -246,6 +271,15 @@ export function callFixture(scenario: CallFixtureScenario): DefinitionCallsPageS
         },
       };
     case "populated":
-      return { status: "ready", ...context, calls: callsForTenant(), pagination: null };
+      return {
+        status: "ready",
+        ...context,
+        calls: callsForTenant(),
+        pagination: {
+          label: "1–9 of 27",
+          hasPrevious: false,
+          hasNext: true,
+        },
+      };
   }
 }

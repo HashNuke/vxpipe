@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { CallDetailsPage } from "./CallDetailsPage";
+import { adminStoryHref } from "./adminStoryHref";
 import {
   callDetailsFixture,
   type CallDetailsFixtureScenario,
@@ -14,19 +15,9 @@ export function CallDetailsStory({
   theme: "dark" | "light";
 }) {
   const state = useMemo(() => callDetailsFixture(scenario), [scenario]);
-  const tenantPath = `/admin/tenants/${encodeURIComponent(state.tenant.key)}`;
   return (
     <CallDetailsPage
-      onSelectDefinition={() => {
-        if (!state.definition) return;
-        window.history.pushState(
-          {},
-          "",
-          `#${tenantPath}/calls?definition_id=${encodeURIComponent(state.definition.id)}`,
-        );
-      }}
-      onSelectTenant={() => window.history.pushState({}, "", `#${tenantPath}`)}
-      onSelectTenants={() => window.history.pushState({}, "", "#/admin")}
+      contextHref={(path) => adminStoryHref(path, theme)}
       state={state}
       theme={theme}
     />

@@ -1,7 +1,12 @@
 import { useState } from "react";
 
-import { callFixture, callsForDefinition, type CallFixtureScenario } from "./callFixtures";
+import {
+  callFixture,
+  callsForDefinition,
+  type CallFixtureScenario,
+} from "./callFixtures";
 import { DefinitionCallsPage } from "./DefinitionCallsPage";
+import { callDetailsStoryHref } from "./adminStoryHref";
 
 function shiftTimestamp(value: string, days: number): string;
 function shiftTimestamp(value: string | null, days: number): string | null;
@@ -25,19 +30,25 @@ export function DefinitionCallsStory({
     string | null | undefined
   >(undefined);
   const baseState = callFixture(scenario);
+  const pagedScenario = scenario === "paginated" || scenario === "populated";
   const pagedState =
-    scenario === "paginated" && baseState.status === "ready" && page > 1
+    pagedScenario && baseState.status === "ready" && page > 1
       ? {
           ...baseState,
           calls: baseState.calls.map((call, index) => ({
             ...call,
             id: `${call.id.slice(0, -2)}${page}${index}`,
             createdAt: shiftTimestamp(call.createdAt, -28 * (page - 1)),
-            startedAt: shiftTimestamp(call.startedAt, -28 * (page - 1)),
-            endedAt: shiftTimestamp(call.endedAt, -28 * (page - 1)),
           })),
           pagination: {
-            label: page === 2 ? "5–8 of 12" : "9–12 of 12",
+            label:
+              scenario === "populated"
+                ? page === 2
+                  ? "10–18 of 27"
+                  : "19–27 of 27"
+                : page === 2
+                  ? "5–8 of 12"
+                  : "9–12 of 12",
             hasPrevious: true,
             hasNext: page < 3,
           },
@@ -82,13 +93,9 @@ export function DefinitionCallsStory({
           `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls${definitionId ? `?definition_id=${encodeURIComponent(definitionId)}` : ""}`,
         );
       }}
-      onSelectCall={(callId) => {
-        window.history.pushState(
-          { callId },
-          "",
-          `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls/${encodeURIComponent(callId)}`,
-        );
-      }}
+      callHref={(callId) =>
+        callDetailsStoryHref(state.tenant.key, callId, theme)
+      }
       onSelectTenant={() => {
         window.history.pushState(
           { tenantKey: state.tenant.key },

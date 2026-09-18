@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -42,15 +48,13 @@ test("links the tenant directory to definitions and back", () => {
   expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
   expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(5);
 
-  fireEvent.click(screen.getByRole("link", { name: /open call 018f27cb/i }));
+  const call = screen.getByRole("link", { name: /open call 018f27cb/i });
+  expect(call).toHaveAttribute("target", "_blank");
+  fireEvent.click(call);
   expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/calls/018f27cb-6f87-7d1c-a61f-8873cb667342",
+    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
   );
-  expect(
-    within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText(
-      "Call details",
-    ),
-  ).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Calls" })).toBeVisible();
 
   fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
   expect(
@@ -78,18 +82,23 @@ test("keeps a non-default definition context when a call route is reloaded", () 
   expect(screen.queryByText("r3")).not.toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(2);
 
-  fireEvent.click(screen.getAllByRole("link", { name: /open call/i })[0]);
-  expect(
-    within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText(
-      "Call details",
-    ),
-  ).toBeVisible();
-  expect(screen.getByRole("link", { name: "Appointment reminders" })).toBeVisible();
-
+  const destination = screen
+    .getAllByRole("link", { name: /open call/i })[0]
+    .getAttribute("href")!;
   view.unmount();
+  window.history.replaceState({}, "", destination);
   render(<AdminJourneyStory theme="dark" />);
 
-  expect(screen.getByRole("link", { name: "Appointment reminders" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
+  expect(screen.getByText("Appointment reminders")).toBeVisible();
+  const definition = screen.getByRole("link", {
+    name: "Appointment reminders",
+  });
+  expect(
+    new URL(definition.getAttribute("href")!, window.location.origin).hash,
+  ).toBe(
+    "#/admin/tenants/tn_demo_01/calls?definition_id=appointment-reminders",
+  );
   expect(screen.queryByText("Delivery rescheduling")).not.toBeInTheDocument();
 });
 
@@ -102,12 +111,15 @@ test("does not substitute the default definition for an unknown call route", () 
 
   render(<AdminJourneyStory theme="dark" />);
 
-  expect(screen.getByRole("heading", { name: "Call unavailable" })).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Call unavailable" }),
+  ).toBeVisible();
   expect(screen.queryByText("Delivery rescheduling")).not.toBeInTheDocument();
   expect(screen.queryByText(/revision r0/i)).not.toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
-  expect(screen.getByRole("heading", { name: "Call definitions" })).toBeVisible();
+  expect(screen.getByText("Demo workspace")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Tenants" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Demo workspace" })).toBeVisible();
 });
 
 test("moves between sibling definitions and all tenant calls", () => {
@@ -118,8 +130,12 @@ test("moves between sibling definitions and all tenant calls", () => {
   fireEvent.click(screen.getByRole("link", { name: "Calls" }));
 
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/calls");
-  expect(screen.getByRole("combobox", { name: "Call definition" })).toHaveValue("");
-  expect(screen.getAllByRole("link", { name: /^open call/i }).length).toBeGreaterThan(5);
+  expect(screen.getByRole("combobox", { name: "Call spec" })).toHaveTextContent(
+    "All call specs",
+  );
+  expect(
+    screen.getAllByRole("link", { name: /^open call/i }).length,
+  ).toBeGreaterThan(5);
 
   fireEvent.click(screen.getByRole("link", { name: "Call definitions" }));
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/definitions");
@@ -147,7 +163,9 @@ test("reaches services through the tenant workspace", () => {
 
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Credential stored");
-  expect(screen.getAllByText("zenmux")).not.toHaveLength(0);
+  expect(
+    screen.getByRole("button", { name: "Edit Zenmux credentials" }),
+  ).toBeVisible();
 
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
   expect(screen.getByLabelText("API key")).toHaveValue("");

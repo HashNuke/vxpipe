@@ -123,7 +123,7 @@ export function TenantServicesPage({
             Showing a partial inventory. More services are configured for this tenant.
           </p>
         ) : null}
-        <section aria-label="Service inventory" className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]">
+        <section aria-label="Service inventory" className="overflow-hidden">
           {state.status === "loading" ? <div className="min-h-56 animate-pulse bg-[var(--admin-soft)] motion-reduce:animate-none" /> : null}
           {state.status === "unavailable" ? <PageNotice kind="unavailable" message={state.message} title="Services unavailable" /> : null}
           {state.status === "ready" && state.services.length === 0 ? <PageNotice kind="empty" message="Configured provider services will appear here." title="No services yet" /> : null}
@@ -138,7 +138,7 @@ export function TenantServicesPage({
                 <h2 className="text-lg font-bold" id="credential-dialog-title">{editingService ? "Edit credential" : "Add credential"}</h2>
                 <Button aria-label="Close credential setup" onClick={closeSetup} type="button" variant="ghost"><X aria-hidden="true" className="size-4" /></Button>
               </header>
-              <ServiceCredentialForm initialProvider={editingService?.provider} message={freshAttempt ? undefined : state.setup.message} onCancel={closeSetup} onSubmit={(draft) => { setFreshAttempt(false); if (editingService) { onUpdateCredential?.(editingService, draft); } else { onCreateCredential?.(draft); } }} status={freshAttempt ? "idle" : state.setup.status} submitLabel={editingService ? "Update credential" : "Save credential"} />
+              <ServiceCredentialForm initialProvider={editingService?.provider} message={freshAttempt ? undefined : state.setup.message} onCancel={closeSetup} onSubmit={(draft) => { setFreshAttempt(false); if (editingService) { onUpdateCredential?.(editingService, draft); } else { onCreateCredential?.(draft); } }} providerLocked={Boolean(editingService)} status={freshAttempt ? "idle" : state.setup.status} submitLabel={editingService ? "Update credential" : "Save credential"} />
             </section>
           </div>
         ) : null}

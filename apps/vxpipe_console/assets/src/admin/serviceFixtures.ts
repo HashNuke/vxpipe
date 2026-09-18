@@ -8,6 +8,7 @@ import { demoTenant } from "./definitionFixtures";
 export const services: ServiceInventoryItem[] = [
   {
     id: "google-primary",
+    credentialId: "google-primary",
     name: "Google AI Studio",
     provider: "google",
     credentialName: "primary",
@@ -16,6 +17,7 @@ export const services: ServiceInventoryItem[] = [
   },
   {
     id: "vertex-ai-primary",
+    credentialId: "vertex-ai-primary",
     name: "Google Vertex AI",
     provider: "vertex_ai",
     credentialName: "primary",
@@ -24,6 +26,7 @@ export const services: ServiceInventoryItem[] = [
   },
   {
     id: "deepgram-realtime",
+    credentialId: "deepgram-realtime",
     name: "Deepgram",
     provider: "deepgram",
     credentialName: "realtime",
@@ -32,6 +35,7 @@ export const services: ServiceInventoryItem[] = [
   },
   {
     id: "telnyx-primary",
+    credentialId: "telnyx-primary",
     name: "Telnyx",
     provider: "telnyx",
     credentialName: "primary",
@@ -43,12 +47,13 @@ export const services: ServiceInventoryItem[] = [
   },
   {
     id: "twilio-backup",
+    credentialId: "twilio-backup",
     name: "Twilio",
     provider: "twilio",
     credentialName: "backup",
     credentialPreview: [
-      { label: "Client ID", format: "last_four", lastFour: "4566" },
-      { label: "Client secret", format: "masked" },
+      { label: "Account SID", format: "last_four", lastFour: "4566" },
+      { label: "Auth token", format: "masked" },
     ],
     updatedAt: "2026-09-12T07:30:00.000Z",
   },
@@ -111,7 +116,7 @@ export function serviceFixture(
         ],
       };
     case "validation-error":
-      return { status: "ready", tenant: demoTenant, services, setup: { open: true, status: "validation", resultVersion: 0, message: "Enter a credential name and every required credential field." } };
+      return { status: "ready", tenant: demoTenant, services, setup: { open: true, status: "validation", resultVersion: 0, message: "Enter every required credential field." } };
     case "submission-pending":
       return { status: "ready", tenant: demoTenant, services, setup: { open: true, status: "submitting", resultVersion: 0 } };
     case "save-failure":
@@ -126,7 +131,7 @@ export function serviceFixture(
         status: "ready",
         tenant: demoTenant,
         services,
-        setup: { open: true, status: "conflict", resultVersion: 0, message: "A credential with this provider and name already exists." },
+        setup: { open: true, status: "conflict", resultVersion: 0, message: "A credential for this provider already exists." },
       };
     case "save-success":
       return { status: "ready", tenant: demoTenant, services, setup: { open: false, status: "success", resultVersion: 1 } };
@@ -140,10 +145,7 @@ export function applyCredentialCreation(
   draft: CredentialDraft,
 ): TenantServicesPageState {
   if (state.status !== "ready") return state;
-  const duplicate = state.services.some(
-    (service) =>
-      service.provider === draft.provider && service.credentialName === draft.name,
-  );
+  const duplicate = state.services.some((service) => service.provider === draft.provider);
   if (duplicate) {
     return {
       ...state,
@@ -151,7 +153,7 @@ export function applyCredentialCreation(
         open: true,
         status: "conflict",
         resultVersion: state.setup.resultVersion + 1,
-        message: "A credential with this provider and name already exists.",
+        message: "A credential for this provider already exists.",
       },
     };
   }
@@ -166,13 +168,25 @@ export function applyCredentialCreation(
     services: [
       ...state.services,
       {
-        id: `${draft.provider}-${draft.name}`,
-        name: draft.name,
+        id: `${draft.provider}-credential`,
+        credentialId: `${draft.provider}-credential`,
+        name: providerLabel(draft.provider),
         provider: draft.provider,
-        credentialName: draft.name,
+        credentialName: draft.provider,
         credentialPreview: [],
         updatedAt: new Date().toISOString(),
       },
     ],
   };
+}
+
+function providerLabel(provider: CredentialDraft["provider"]) {
+  return {
+    google: "Google AI Studio",
+    vertex_ai: "Google Vertex AI",
+    zenmux: "Zenmux",
+    deepgram: "Deepgram",
+    telnyx: "Telnyx",
+    twilio: "Twilio",
+  }[provider];
 }

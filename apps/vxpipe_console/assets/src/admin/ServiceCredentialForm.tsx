@@ -19,6 +19,7 @@ const providers: Array<{ value: ServiceProvider; label: string }> = [
 
 export function ServiceCredentialForm({
   initialProvider = "google",
+  providerLocked = false,
   status,
   submitLabel = "Save credential",
   message,
@@ -26,6 +27,7 @@ export function ServiceCredentialForm({
   onSubmit,
 }: {
   initialProvider?: ServiceProvider;
+  providerLocked?: boolean;
   status: CredentialSetupStatus;
   submitLabel?: string;
   message?: string;
@@ -72,7 +74,6 @@ export function ServiceCredentialForm({
         event.preventDefault();
         const draft: CredentialDraft = {
           provider,
-          name: provider,
           values:
             provider === "twilio"
               ? { accountSid, authToken }
@@ -87,7 +88,7 @@ export function ServiceCredentialForm({
         Provider
         <select
           className={fieldClass}
-          disabled={pending}
+          disabled={pending || providerLocked}
           onChange={(event) => {
             setProvider(event.target.value as ServiceProvider);
             clearSecrets();

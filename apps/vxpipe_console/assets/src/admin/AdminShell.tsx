@@ -22,7 +22,7 @@ export function AdminShell({
       {showHeader ? (
         <header
           aria-hidden={headerInert ? "true" : undefined}
-          className="border-b border-[var(--admin-line)] bg-[var(--admin-panel)]"
+          className="bg-[var(--admin-panel)]"
           inert={headerInert ? true : undefined}
         >
           <div className="mx-auto flex min-h-12 w-full max-w-[1600px] items-center gap-3 px-4 sm:gap-6 sm:px-6">

@@ -145,7 +145,7 @@ config :esbuild,
   version: "0.25.4",
   vxpipe_console: [
     args:
-      ~w(app=src/main.tsx admin=src/adminMain.tsx debug_console=src/callInspectionMain.tsx live=src/live.ts home=css/home.css call_inspection=css/call_inspection.css diagnostics=css/diagnostics.css operator_login=css/operator_login.css --bundle --format=esm --target=es2022 --alias:react=./node_modules/react --alias:react-dom=./node_modules/react-dom --outdir=../priv/static/assets --entry-names=[name]),
+      ~w(app=src/main.tsx admin=src/adminMain.tsx debug_console=src/callInspectionMain.tsx live=src/live.ts home=css/home.css call_inspection=css/call_inspection.css diagnostics=css/diagnostics.css operator_login=css/operator_login.css --bundle --format=esm --target=es2022 --alias:react=./node_modules/react --alias:react-dom=./node_modules/react-dom --loader:.png=file --loader:.svg=file --asset-names=[name]-[hash] --outdir=../priv/static/assets --entry-names=[name]),
     cd: Path.expand("../apps/vxpipe_console/assets", __DIR__),
     env: %{
       "NODE_PATH" => Path.expand("../apps/vxpipe_console/assets/node_modules", __DIR__)

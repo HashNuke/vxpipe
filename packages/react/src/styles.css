@@ -99,8 +99,8 @@
 .vx-console-header {
   flex: 0 0 auto;
   min-height: 28px;
-  padding: 5px 12px;
-  border-bottom: 1px solid var(--vx-line);
+  padding: 5px 16px;
+  background: var(--vx-panel);
   color: var(--vx-muted);
   font: 11px/1.45 var(--vx-mono);
 }
@@ -454,7 +454,6 @@
   justify-content: space-between;
   gap: 16px;
   padding: 0 28px;
-  border-bottom: 1px solid var(--vx-line);
   min-height: 54px;
   flex: 0 0 auto;
 }
@@ -1645,12 +1644,12 @@ button.vx-tool-summary:hover {
   .vx-call-header {
     align-items: flex-start;
     flex-wrap: wrap;
-    padding: 16px;
-    gap: 12px;
+    padding: 10px 16px;
+    gap: 8px;
   }
   .vx-console-header {
     min-height: 26px;
-    padding: 4px 10px;
+    padding: 4px 16px;
     overflow: hidden;
   }
   .vx-call-context {

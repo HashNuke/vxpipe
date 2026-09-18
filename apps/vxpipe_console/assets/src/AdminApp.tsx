@@ -30,7 +30,11 @@ import type { CallDetailsPageState } from "./admin/callDetailsTypes";
 import type { DefinitionCallsPageState } from "./admin/callTypes";
 import { TenantDefinitionsPage } from "./admin/TenantDefinitionsPage";
 import type { TenantDefinitionsPageState } from "./admin/definitionTypes";
-import type { CredentialDraft, TenantServicesPageState } from "./admin/serviceTypes";
+import type {
+  CredentialDraft,
+  ServiceInventoryItem,
+  TenantServicesPageState,
+} from "./admin/serviceTypes";
 import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
@@ -307,18 +311,6 @@ export function AdminApp({
   if (route.kind === "call-details") {
     return (
       <CallDetailsPage
-        onSelectDefinition={() =>
-          navigate({
-            kind: "calls",
-            tenantKey: route.tenantKey,
-            definitionId: callDetails.definition?.id ?? null,
-            page: 1,
-          })
-        }
-        onSelectTenant={() =>
-          navigate({ kind: "calls", tenantKey: route.tenantKey, definitionId: null, page: 1 })
-        }
-        onSelectTenants={() => navigate({ kind: "tenants", page: 1 })}
         state={callDetails}
       />
     );
@@ -358,9 +350,6 @@ export function AdminApp({
         onSelectDefinition={(definitionId) =>
           navigate({ ...route, definitionId, page: 1 })
         }
-        onSelectCall={(callId) =>
-          navigate({ kind: "call-details", tenantKey: route.tenantKey, callId })
-        }
         onSelectTenant={() =>
           navigate({ kind: "definitions", tenantKey: route.tenantKey, page: 1 })
         }
@@ -383,9 +372,24 @@ export function AdminApp({
       <TenantServicesPage
         headerActions={headerActions}
         onCreateCredential={(draft) =>
-          createCredential(
+          saveCredential(
             route.tenantKey,
             draft,
+            undefined,
+            csrfToken,
+            fetchImpl,
+            onSessionExpired,
+            setServices,
+            routeRef,
+            submissionRef,
+            submissionSequenceRef,
+          )
+        }
+        onUpdateCredential={(service, draft) =>
+          saveCredential(
+            route.tenantKey,
+            draft,
+            service,
             csrfToken,
             fetchImpl,
             onSessionExpired,
@@ -750,9 +754,10 @@ class AdminCallDetailsError extends Error {
   }
 }
 
-async function createCredential(
+async function saveCredential(
   tenantKey: string,
   draft: CredentialDraft,
+  existing: ServiceInventoryItem | undefined,
   csrfToken: string,
   fetchImpl: Fetch,
   onSessionExpired: () => void,
@@ -779,8 +784,11 @@ async function createCredential(
 
   try {
     const encodedTenant = encodeURIComponent(tenantKey);
-    const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}/credentials`, {
-      method: "POST",
+    const credentialPath = existing
+      ? `/credentials/${encodeURIComponent(existing.credentialId)}`
+      : "/credentials";
+    const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}${credentialPath}`, {
+      method: existing ? "PATCH" : "POST",
       headers: {
         accept: "application/json",
         "content-type": "application/json",
@@ -795,14 +803,14 @@ async function createCredential(
       onSessionExpired();
       return;
     }
-    if (response.status === 409) {
+    if (!existing && response.status === 409) {
       setServices((state) => ({
         ...state,
         setup: {
           open: true,
           status: "conflict",
           resultVersion: state.setup.resultVersion,
-          message: "A credential with this provider and name already exists.",
+          message: "A credential for this provider already exists.",
         },
       }));
       return;
@@ -814,20 +822,25 @@ async function createCredential(
           open: true,
           status: "validation",
           resultVersion: state.setup.resultVersion,
-          message: "Enter a valid credential name and provider credential.",
+          message: "Enter valid provider credentials.",
         },
       }));
       return;
     }
     if (!response.ok) throw new Error("Credential store unavailable");
-    const created = parseCreatedCredential(await response.json());
+    const stored = parseCreatedCredential(await response.json());
     if (!currentSubmission(id, tenantKey, routeRef, submissionRef)) return;
 
     setServices((state) =>
       state.status === "ready"
         ? {
             ...state,
-            services: [...state.services, created].sort(compareServices),
+            services: (existing
+              ? state.services.map((service) =>
+                  service.credentialId === existing.credentialId ? stored : service,
+                )
+              : [...state.services, stored]
+            ).sort(compareServices),
             setup: {
               open: false,
               status: "success",
@@ -868,14 +881,12 @@ function credentialRequest(draft: CredentialDraft) {
   if ("apiKey" in draft.values) {
     return {
       provider: draft.provider,
-      name: draft.name,
       values: { api_key: draft.values.apiKey },
     };
   }
 
   return {
     provider: draft.provider,
-    name: draft.name,
     values: {
       account_sid: draft.values.accountSid,
       auth_token: draft.values.authToken,

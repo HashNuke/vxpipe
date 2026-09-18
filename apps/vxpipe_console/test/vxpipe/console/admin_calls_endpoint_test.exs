@@ -47,6 +47,18 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
         ended_at: nil,
         terminal_reason: nil,
         archive_state: :unconfirmed
+      },
+      %CallDirectorySummary{
+        id: "018f27a2-51d5-77c9-a44f-e5c648bf8495",
+        definition_id: "delivery-rescheduling",
+        definition_name: "Delivery rescheduling",
+        definition_revision: 2,
+        state: :failed,
+        created_at: ~U[2026-09-17 02:10:00Z],
+        started_at: ~U[2026-09-17 02:10:03Z],
+        ended_at: ~U[2026-09-17 02:10:04Z],
+        terminal_reason: :session_start_failed,
+        archive_state: :incomplete
       }
     ]
 
@@ -70,12 +82,16 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
                  "definition_id" => "delivery-rescheduling",
                  "definition_name" => "Delivery rescheduling",
                  "definition_revision" => 3,
-                 "state" => "running",
-                 "created_at" => "2026-09-17T02:20:00Z",
-                 "started_at" => "2026-09-17T02:20:03Z",
-                 "ended_at" => nil,
-                 "terminal_reason" => nil,
-                 "archive_state" => "unconfirmed"
+                 "state" => "ongoing",
+                 "created_at" => "2026-09-17T02:20:00Z"
+               },
+               %{
+                 "id" => "018f27a2-51d5-77c9-a44f-e5c648bf8495",
+                 "definition_id" => "delivery-rescheduling",
+                 "definition_name" => "Delivery rescheduling",
+                 "definition_revision" => 2,
+                 "state" => "ended",
+                 "created_at" => "2026-09-17T02:10:00Z"
                }
              ],
              "pagination" => %{

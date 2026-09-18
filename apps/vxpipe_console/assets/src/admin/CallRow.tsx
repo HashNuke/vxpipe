@@ -1,81 +1,61 @@
 import { ArrowUpRight } from "lucide-react";
-import type { MouseEvent } from "react";
 
-import { ArchiveStateBadge } from "./ArchiveStateBadge";
 import { CallStateBadge } from "./CallStateBadge";
-import type { CallSummary } from "./callTypes";
+import type { CallDirectoryItem } from "./callTypes";
 import type { TenantContext } from "./definitionTypes";
-import { formatAdminTimestamp } from "./formatAdminTimestamp";
-import { formatCallDuration } from "./formatCallDuration";
-import { humanizeIdentifier } from "./humanizeIdentifier";
-import { shouldInterceptNavigation } from "./shouldInterceptNavigation";
+import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
+import {
+  formatAdminLocalTimestamp,
+  formatAdminTimestamp,
+} from "./formatAdminTimestamp";
 
 export function CallRow({
   call,
   tenant,
-  onSelect,
+  href,
   linkDetails = true,
 }: {
-  call: CallSummary;
+  call: CallDirectoryItem;
   tenant: TenantContext;
-  onSelect?: (callId: string) => void;
+  href?: string;
   linkDetails?: boolean;
 }) {
-  const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/calls/${encodeURIComponent(call.id)}`;
-  const duration = formatCallDuration(call.startedAt, call.endedAt);
-  const compactTimestamp = call.startedAt
-    ? formatAdminTimestamp(call.startedAt)
-    : `Created ${formatAdminTimestamp(call.createdAt)}`;
-
-  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (!onSelect || !shouldInterceptNavigation(event)) return;
-    event.preventDefault();
-    onSelect(call.id);
-  }
-
   const content = (
     <>
       <span className="min-w-0">
-        <span className="block truncate font-mono text-sm font-semibold" title={call.id}>
+        <span
+          className="block truncate font-mono text-sm font-semibold"
+          title={call.id}
+        >
           {call.id}
         </span>
-        <span className="mt-1 block truncate text-xs text-[var(--admin-muted)] xl:hidden">
-          {call.definitionName ?? call.definitionId} · v{call.definitionRevision} ·{" "}
-          {compactTimestamp}
-          {duration ? ` · ${duration}` : ""}
-        </span>
-      </span>
-      <span
-        className="hidden truncate text-xs text-[var(--admin-muted)] xl:block"
-        title={call.definitionName ?? call.definitionId}
-      >
-        {call.definitionName ?? call.definitionId}
-      </span>
-      <span className="hidden font-mono text-xs tabular-nums text-[var(--admin-muted)] xl:block">
-        v{call.definitionRevision}
       </span>
       <span className="min-w-0">
-        <CallStateBadge state={call.state} />
-        {call.terminalReason ? (
-          <span className="mt-1 hidden truncate text-xs text-[var(--admin-muted)] xl:block">
-            {humanizeIdentifier(call.terminalReason)}
-          </span>
-        ) : null}
-      </span>
-      {call.startedAt ? (
-        <time
-          className="hidden text-sm text-[var(--admin-muted)] xl:block"
-          dateTime={call.startedAt}
+        <span
+          className="block truncate text-sm"
+          title={call.definitionName ?? call.definitionId}
         >
-          {formatAdminTimestamp(call.startedAt)}
-        </time>
-      ) : (
-        <span className="hidden text-sm text-[var(--admin-muted)] xl:block">—</span>
-      )}
-      <span className="hidden font-mono text-xs tabular-nums text-[var(--admin-muted)] xl:block">
-        {duration ?? "—"}
+          {call.definitionName ?? call.definitionId}
+        </span>
+        <span className="mt-1 inline-flex rounded-sm bg-[var(--admin-soft)] px-1.5 py-0.5 font-mono text-[0.68rem] font-semibold uppercase tracking-[0.04em] text-[var(--admin-muted)]">
+          Version {call.definitionRevision}
+        </span>
       </span>
-      <ArchiveStateBadge state={call.archiveState} />
+      <span>
+        <CallStateBadge state={call.state} />
+      </span>
+      <time
+        className="min-w-0"
+        dateTime={call.createdAt}
+        title={formatAdminLocalTimestamp(call.createdAt)}
+      >
+        <span className="block truncate text-sm text-[var(--admin-ink)]">
+          {formatAdminTimestamp(call.createdAt)}
+        </span>
+        <span className="mt-1 block text-xs text-[var(--admin-muted)]">
+          {formatAdminRelativeTime(call.createdAt)}
+        </span>
+      </time>
       {linkDetails ? (
         <ArrowUpRight
           aria-hidden="true"
@@ -84,24 +64,24 @@ export function CallRow({
       ) : (
         <span aria-hidden="true" />
       )}
-      {call.terminalReason ? (
-        <span className="col-span-4 truncate text-xs text-[var(--admin-muted)] xl:hidden">
-          {humanizeIdentifier(call.terminalReason)}
-        </span>
-      ) : null}
     </>
   );
 
-  const rowClass = `grid min-w-0 grid-cols-[minmax(0,1fr)_88px_104px_16px] items-center gap-3 border-t border-[var(--admin-line)] px-3 py-4 text-inherit no-underline sm:px-4 xl:grid-cols-[minmax(210px,1.25fr)_minmax(150px,1fr)_62px_110px_170px_80px_110px_16px] xl:gap-4${linkDetails ? " group transition-colors hover:bg-[var(--admin-soft)]" : ""}`;
+  const rowClass = `grid min-w-0 grid-cols-[minmax(220px,1.35fr)_minmax(180px,1fr)_104px_190px_16px] items-center gap-4 px-4 py-4 text-inherit no-underline${linkDetails ? " group transition-colors hover:bg-[var(--admin-soft)]" : ""}`;
 
   return (
     <li>
       {linkDetails ? (
         <a
-          aria-label={`Open call ${call.id}`}
+          aria-label={`Open call ${call.id} (opens in a new tab)`}
           className={rowClass}
-          href={href}
-          onClick={handleClick}
+          href={
+            href ??
+            `/admin/tenants/${encodeURIComponent(tenant.key)}/calls/${encodeURIComponent(call.id)}`
+          }
+          rel="noopener noreferrer"
+          target="_blank"
+          title="Open call in a new tab"
         >
           {content}
         </a>

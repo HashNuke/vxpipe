@@ -35,7 +35,9 @@ test("validates and maps the tenant directory response", () => {
 test("rejects malformed tenant data instead of rendering a partial response", () => {
   expect(() =>
     parseTenantPage({
-      tenants: [{ key: "AAAAAAAAAAAAAAAA", name: 42, created_at: "not-a-date" }],
+      tenants: [
+        { key: "AAAAAAAAAAAAAAAA", name: 42, created_at: "not-a-date" },
+      ],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
     }),
   ).toThrow("Invalid tenant directory response");
@@ -66,7 +68,9 @@ test("rejects pagination metadata that contradicts the returned page", () => {
       pagination: { page: 1, page_size: 25, total: 30, total_pages: 2 },
     },
   ]) {
-    expect(() => parseTenantPage(response)).toThrow("Invalid tenant directory response");
+    expect(() => parseTenantPage(response)).toThrow(
+      "Invalid tenant directory response",
+    );
   }
 });
 
@@ -144,12 +148,8 @@ test("validates and maps a filtered tenant call page", () => {
           definition_id: "delivery-rescheduling",
           definition_name: "Delivery rescheduling",
           definition_revision: 3,
-          state: "running",
+          state: "ongoing",
           created_at: "2026-09-17T02:20:00Z",
-          started_at: "2026-09-17T02:20:03Z",
-          ended_at: null,
-          terminal_reason: null,
-          archive_state: "unconfirmed",
         },
       ],
       pagination: { page: 2, page_size: 25, total: 26, total_pages: 2 },
@@ -167,12 +167,8 @@ test("validates and maps a filtered tenant call page", () => {
         definitionId: "delivery-rescheduling",
         definitionName: "Delivery rescheduling",
         definitionRevision: 3,
-        state: "running",
+        state: "ongoing",
         createdAt: "2026-09-17T02:20:00Z",
-        startedAt: "2026-09-17T02:20:03Z",
-        endedAt: null,
-        terminalReason: null,
-        archiveState: "unconfirmed",
       },
     ],
     pagination: { page: 2, pageSize: 25, total: 26, totalPages: 2 },
@@ -221,19 +217,15 @@ test("rejects malformed calls, unknown selected definitions, and contradictory c
           definition_revision: 1,
           state: "ended",
           created_at: "2026-09-17T02:20:00Z",
-          started_at: "2026-09-17T02:20:01Z",
-          ended_at: "2026-09-17T02:20:02Z",
-          terminal_reason: null,
-          archive_state: "complete",
         },
       ],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
     }),
   ).toThrow("Invalid call directory response");
 
-  expect(() => parseCallPage({ ...base, definitions_truncated: "yes" })).toThrow(
-    "Invalid call directory response",
-  );
+  expect(() =>
+    parseCallPage({ ...base, definitions_truncated: "yes" }),
+  ).toThrow("Invalid call directory response");
 });
 
 test("validates and projects metadata-only service inventory", () => {
@@ -248,6 +240,9 @@ test("validates and projects metadata-only service inventory", () => {
           name: "primary",
           auth_kind: "api_key",
           status: "active",
+          credential_preview: [
+            { label: "API key", format: "last_four", last_four: "8c4a" },
+          ],
           created_at: "2026-09-17T02:00:00Z",
           updated_at: "2026-09-17T02:00:00Z",
         },
@@ -257,6 +252,9 @@ test("validates and projects metadata-only service inventory", () => {
           name: "voice",
           auth_kind: "api_key",
           status: "active",
+          credential_preview: [
+            { label: "API key", format: "last_four", last_four: "7f2b" },
+          ],
           created_at: "2026-09-17T02:01:00Z",
           updated_at: "2026-09-17T02:01:00Z",
         },
@@ -278,16 +276,24 @@ test("validates and projects metadata-only service inventory", () => {
     services: [
       {
         id: "credential-google",
-        name: "primary",
+        credentialId: "credential-google",
+        name: "Google AI Studio",
         provider: "google",
         credentialName: "primary",
+        credentialPreview: [
+          { label: "API key", format: "last_four", lastFour: "8c4a" },
+        ],
         updatedAt: "2026-09-17T02:00:00Z",
       },
       {
-        id: "service-support",
-        name: "support",
+        id: "credential-telnyx",
+        credentialId: "credential-telnyx",
+        name: "Telnyx",
         provider: "telnyx",
         credentialName: "voice",
+        credentialPreview: [
+          { label: "API key", format: "last_four", lastFour: "7f2b" },
+        ],
         updatedAt: "2026-09-17T02:01:00Z",
       },
     ],
@@ -305,6 +311,7 @@ test("keeps credential update time when inventory is partial", () => {
         name: "voice",
         auth_kind: "api_key",
         status: "active",
+        credential_preview: [{ label: "API key", format: "masked" }],
         created_at: "2026-09-17T02:01:00Z",
         updated_at: "2026-09-17T02:01:00Z",
       },
@@ -365,6 +372,9 @@ test("maps a created credential response without accepting private response fiel
       name: "realtime",
       auth_kind: "api_key",
       status: "active",
+      credential_preview: [
+        { label: "API key", format: "last_four", last_four: "8c4a" },
+      ],
       created_at: "2026-09-17T02:00:00Z",
       updated_at: "2026-09-17T02:00:00Z",
     },
@@ -372,9 +382,13 @@ test("maps a created credential response without accepting private response fiel
 
   expect(parseCreatedCredential(response)).toEqual({
     id: "credential-deepgram",
-    name: "realtime",
+    credentialId: "credential-deepgram",
+    name: "Deepgram",
     provider: "deepgram",
     credentialName: "realtime",
+    credentialPreview: [
+      { label: "API key", format: "last_four", lastFour: "8c4a" },
+    ],
     updatedAt: "2026-09-17T02:00:00Z",
   });
 

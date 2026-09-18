@@ -6,6 +6,7 @@ import {
 } from "./callFixtures";
 import { CallDetailsPage } from "./CallDetailsPage";
 import { callDetailsFixtureForCall } from "./callDetailsFixtures";
+import { adminStoryHref, callDetailsStoryHref } from "./adminStoryHref";
 import { DefinitionCallsPage } from "./DefinitionCallsPage";
 import { definitionFixture, definitions } from "./definitionFixtures";
 import { TenantDefinitionsPage } from "./TenantDefinitionsPage";
@@ -70,6 +71,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
     if (!pendingCallContext || !selectedCall) {
       return (
         <CallDetailsPage
+          contextHref={(path) => adminStoryHref(path, theme)}
           state={{
             status: "unavailable",
             tenant: selectedTenant,
@@ -78,10 +80,6 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
             definitionRevision: null,
             message: "The selected call is not available in this review fixture.",
           }}
-          onSelectTenant={() =>
-            navigate({ page: "definitions", tenantKey: route.tenantKey })
-          }
-          onSelectTenants={() => navigate({ page: "tenants" })}
           theme={theme}
         />
       );
@@ -89,17 +87,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
 
     return (
       <CallDetailsPage
-        onSelectDefinition={() =>
-          navigate({
-            page: "calls",
-            tenantKey: route.tenantKey,
-            definitionId: pendingCallContext.definition.id,
-          })
-        }
-        onSelectTenant={() =>
-          navigate({ page: "definitions", tenantKey: route.tenantKey })
-        }
-        onSelectTenants={() => navigate({ page: "tenants" })}
+        contextHref={(path) => adminStoryHref(path, theme)}
         state={callDetailsFixtureForCall(
           selectedCall,
           pendingCallContext.definition,
@@ -128,9 +116,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
 
     return (
       <DefinitionCallsPage
-        onSelectCall={(callId) =>
-          navigate({ page: "call-details", tenantKey: route.tenantKey, callId })
-        }
+        callHref={(callId) => callDetailsStoryHref(route.tenantKey, callId, theme)}
         onSelectTenant={() =>
           navigate({ page: "definitions", tenantKey: route.tenantKey })
         }

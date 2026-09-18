@@ -2,8 +2,6 @@ import { CallConsole } from "@vxpipe/react";
 import { AlertTriangle } from "lucide-react";
 
 import { AdminShell } from "./AdminShell";
-import { Breadcrumbs } from "./Breadcrumbs";
-import { CallDetailsBackLink } from "./CallDetailsBackLink";
 import { CallDetailsConsoleHeader } from "./CallDetailsConsoleHeader";
 import { CallIdentity } from "./CallIdentity";
 import { CallDetailsSkeleton } from "./CallDetailsSkeleton";
@@ -13,47 +11,40 @@ import { PageNotice } from "./PageNotice";
 export function CallDetailsPage({
   state,
   theme = "dark",
-  onSelectDefinition,
-  onSelectTenant,
-  onSelectTenants,
+  contextHref = (path) => path,
 }: {
   state: CallDetailsPageState;
   theme?: "dark" | "light";
-  onSelectDefinition?: () => void;
-  onSelectTenant?: () => void;
-  onSelectTenants?: () => void;
+  contextHref?: (path: string) => string;
 }) {
   const definitionLabel = state.definition
     ? state.definition.name ?? state.definition.id
     : null;
-  const breadcrumbs = [
-    { label: "Tenants", href: "/admin", onSelect: onSelectTenants },
-    {
-      label: state.tenant.name ?? state.tenant.key,
-      href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}`,
-      onSelect: onSelectTenant,
-    },
-    ...(state.definition && definitionLabel
-      ? [
-          {
-            label: definitionLabel,
-            href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?definition_id=${encodeURIComponent(state.definition.id)}`,
-            onSelect: onSelectDefinition,
-          },
-        ]
-      : []),
-    { label: "Call details" },
-  ];
+  const header = (
+    <CallDetailsConsoleHeader
+      breadcrumbs={[
+        { label: "Tenants", href: contextHref("/admin") },
+        {
+          label: state.tenant.name ?? state.tenant.key,
+          href: contextHref(`/admin/tenants/${encodeURIComponent(state.tenant.key)}/definitions`),
+        },
+        ...(state.definition && definitionLabel
+          ? [{
+              label: definitionLabel,
+              href: contextHref(`/admin/tenants/${encodeURIComponent(state.tenant.key)}/calls?definition_id=${encodeURIComponent(state.definition.id)}`),
+            }]
+          : []),
+      ]}
+    />
+  );
   const callIdentity = (
     <CallIdentity
       callId={state.callId}
       definitionRevision={state.definitionRevision}
     />
   );
-  const callsBreadcrumb = [...breadcrumbs].reverse().find((item) => item.href);
   const callContext = (
     <div className="flex min-w-0 items-center gap-3">
-      {callsBreadcrumb ? <CallDetailsBackLink item={callsBreadcrumb} /> : null}
       {callIdentity}
       {state.status === "ready" && state.completeness === "incomplete" ? (
         <span
@@ -75,12 +66,7 @@ export function CallDetailsPage({
           <h1 className="sr-only">Call details</h1>
           <CallConsole
             controller={state.controller}
-            header={
-              <CallDetailsConsoleHeader
-                breadcrumbs={breadcrumbs}
-              />
-            }
-            headerVisibility="desktop"
+            header={header}
             headerContext={callContext}
             layout="fill"
             theme={theme}
@@ -94,22 +80,24 @@ export function CallDetailsPage({
     <AdminShell showHeader={false} theme={theme}>
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
-        className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6"
+        className="w-full"
       >
         <h1 className="sr-only">Call details</h1>
-        <Breadcrumbs items={breadcrumbs} />
-        <div className="mb-3">{callIdentity}</div>
-        {state.status === "loading" ? <CallDetailsSkeleton /> : null}
-        {state.status === "unavailable" ? (
-          <PageNotice kind="unavailable" message={state.message} title="Call unavailable" />
-        ) : null}
-        {state.status === "malformed" ? (
-          <PageNotice
-            kind="unavailable"
-            message={state.message}
-            title="Call data could not be read"
-          />
-        ) : null}
+        <div className="bg-[var(--admin-panel)] px-4 py-1 text-[var(--admin-muted)]">{header}</div>
+        <div className="px-4 py-3">
+          <div className="mb-4">{callIdentity}</div>
+          {state.status === "loading" ? <CallDetailsSkeleton /> : null}
+          {state.status === "unavailable" ? (
+            <PageNotice kind="unavailable" message={state.message} title="Call unavailable" />
+          ) : null}
+          {state.status === "malformed" ? (
+            <PageNotice
+              kind="unavailable"
+              message={state.message}
+              title="Call data could not be read"
+            />
+          ) : null}
+        </div>
       </main>
     </AdminShell>
   );

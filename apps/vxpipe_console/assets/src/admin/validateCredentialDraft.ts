@@ -1,6 +1,5 @@
 import type { CredentialDraft, ServiceProvider } from "./serviceTypes";
 
-const credentialNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 const apiKeyPattern = /^[\x21-\x7E]+$/;
 const twilioAccountSidPattern = /^AC[0-9a-fA-F]{32}$/;
 
@@ -13,13 +12,6 @@ function maximumApiKeyBytes(provider: ServiceProvider) {
 }
 
 export function validateCredentialDraft(draft: CredentialDraft): string | null {
-  if (
-    byteLength(draft.name) > 128 ||
-    !credentialNamePattern.test(draft.name)
-  ) {
-    return "Use letters, numbers, underscores or hyphens for the credential name.";
-  }
-
   if ("apiKey" in draft.values) {
     if (
       byteLength(draft.values.apiKey) > maximumApiKeyBytes(draft.provider) ||

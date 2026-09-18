@@ -3,10 +3,14 @@ import type { ReactNode } from "react";
 import { AdminShell } from "./AdminShell";
 import { CallList } from "./CallList";
 import { CallListSkeleton } from "./CallListSkeleton";
+import { CallSpecCombobox } from "./CallSpecCombobox";
 import type { DefinitionCallsPageState } from "./callTypes";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
-import { TenantWorkspaceNavigation, type TenantDestination } from "./TenantWorkspaceNavigation";
+import {
+  TenantWorkspaceNavigation,
+  type TenantDestination,
+} from "./TenantWorkspaceNavigation";
 
 export function DefinitionCallsPage({
   state,
@@ -15,7 +19,7 @@ export function DefinitionCallsPage({
   onSelectTenant,
   onSelectWorkspace,
   onSelectDefinition,
-  onSelectCall,
+  callHref,
   onPreviousPage,
   onNextPage,
   headerActions,
@@ -28,7 +32,7 @@ export function DefinitionCallsPage({
   onSelectTenant?: () => void;
   onSelectWorkspace?: (destination: TenantDestination) => void;
   onSelectDefinition?: (definitionId: string | null) => void;
-  onSelectCall?: (callId: string) => void;
+  callHref?: (callId: string) => string;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
   headerActions?: ReactNode;
@@ -38,7 +42,9 @@ export function DefinitionCallsPage({
   const selectedDefinition = state.selectedDefinitionId
     ? state.definitions.find(({ id }) => id === state.selectedDefinitionId)
     : null;
-  const unknownFilter = Boolean(state.selectedDefinitionId && !selectedDefinition);
+  const unknownFilter = Boolean(
+    state.selectedDefinitionId && !selectedDefinition,
+  );
 
   return (
     <AdminShell
@@ -65,24 +71,15 @@ export function DefinitionCallsPage({
           tenant={state.tenant}
         />
         <div className="mb-4 flex flex-wrap items-end gap-3">
-          <label className="grid w-full min-w-0 max-w-full gap-1.5 text-xs font-semibold text-[var(--admin-muted)] sm:w-80">
-            Call definition
-            <select
-              className="h-10 w-full min-w-0 max-w-full rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)] px-3 text-sm text-[var(--admin-ink)]"
-              onChange={(event) => onSelectDefinition?.(event.target.value || null)}
-              value={state.selectedDefinitionId ?? ""}
-            >
-              <option value="">All call definitions</option>
-              {unknownFilter ? (
-                <option value={state.selectedDefinitionId ?? ""}>Unknown definition</option>
-              ) : null}
-              {state.definitions.map((definition) => (
-                <option key={definition.id} value={definition.id}>
-                  {definition.name ?? definition.id}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid w-full min-w-0 max-w-full gap-1.5 text-xs font-semibold text-[var(--admin-muted)] sm:w-80">
+            <span>Call spec</span>
+            <CallSpecCombobox
+              onSelect={onSelectDefinition}
+              options={state.definitions}
+              selectedId={state.selectedDefinitionId}
+              unknownSelection={unknownFilter}
+            />
+          </div>
           <button
             className="h-10 rounded-sm border border-[var(--admin-line)] bg-transparent px-3 text-sm font-semibold text-[var(--admin-muted)] hover:bg-[var(--admin-soft)] hover:text-[var(--admin-ink)] disabled:opacity-40"
             disabled={!state.selectedDefinitionId}
@@ -93,14 +90,12 @@ export function DefinitionCallsPage({
           </button>
           {state.definitionOptionsTruncated ? (
             <p className="basis-full text-xs text-[var(--admin-muted)]">
-              Showing the first 100 definitions. Use Call definitions above to find another.
+              Showing the first 100 call specs. Open Call definitions to find
+              another.
             </p>
           ) : null}
         </div>
-        <section
-          aria-label="Call directory"
-          className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]"
-        >
+        <section aria-label="Call directory" className="overflow-hidden">
           {state.status === "loading" ? <CallListSkeleton /> : null}
           {state.status === "unavailable" ? (
             <PageNotice
@@ -112,23 +107,31 @@ export function DefinitionCallsPage({
           {state.status === "ready" && unknownFilter ? (
             <PageNotice
               kind="unavailable"
-              message="This call definition is not available for this tenant. Show all calls or choose another definition."
-              title="Unknown call definition"
+              message="This call spec is not available for this tenant. Show all calls or choose another call spec."
+              title="Unknown call spec"
             />
           ) : null}
-          {state.status === "ready" && !unknownFilter && state.calls.length === 0 ? (
+          {state.status === "ready" &&
+          !unknownFilter &&
+          state.calls.length === 0 ? (
             <PageNotice
               kind="empty"
-              message={selectedDefinition ? "Calls using this definition will appear here." : "Calls for this tenant will appear here."}
+              message={
+                selectedDefinition
+                  ? "Calls using this call spec will appear here."
+                  : "Calls for this tenant will appear here."
+              }
               title={selectedDefinition ? "No matching calls" : "No calls yet"}
             />
           ) : null}
-          {state.status === "ready" && !unknownFilter && state.calls.length > 0 ? (
+          {state.status === "ready" &&
+          !unknownFilter &&
+          state.calls.length > 0 ? (
             <>
               <CallList
                 calls={state.calls}
                 linkCallDetails={linkCallDetails}
-                onSelectCall={onSelectCall}
+                callHref={callHref}
                 tenant={state.tenant}
               />
               {state.pagination ? (

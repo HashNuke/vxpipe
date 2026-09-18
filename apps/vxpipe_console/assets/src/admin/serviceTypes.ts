@@ -10,6 +10,7 @@ export type ServiceProvider =
 
 export type ServiceInventoryItem = {
   id: string;
+  credentialId: string;
   name: string;
   provider: ServiceProvider;
   credentialName: string | null;
@@ -31,7 +32,6 @@ export type CredentialSetupStatus =
 
 export type CredentialDraft = {
   provider: ServiceProvider;
-  name: string;
   values: { apiKey: string } | { accountSid: string; authToken: string };
 };
 

@@ -29,7 +29,6 @@ test("submits provider credentials without rendering them as stored metadata", (
 
   expect(submit).toHaveBeenCalledWith({
     provider: "google",
-    name: "google",
     values: { apiKey: "secret-value" },
   });
   expect(screen.queryByText("secret-value")).not.toBeInTheDocument();

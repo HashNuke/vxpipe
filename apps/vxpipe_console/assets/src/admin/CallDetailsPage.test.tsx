@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { CallConsoleController } from "@vxpipe/core";
@@ -49,7 +49,7 @@ const controller = {
   },
 } as unknown as CallConsoleController;
 
-test("fills the ready page with a console-owned breadcrumb header", () => {
+test("uses the existing header labels as return links without adding workspace tabs", () => {
   render(
     <CallDetailsPage
       state={{ status: "ready", ...context, controller, completeness: "complete" }}
@@ -60,23 +60,14 @@ test("fills the ready page with a console-owned breadcrumb header", () => {
   expect(screen.getByRole("heading", { name: "Call details" })).toHaveClass(
     "sr-only",
   );
-  expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute(
-    "href",
-    "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
-  );
-  expect(
-    within(screen.getByTestId("console-header")).queryByRole("link", {
-      name: "Back to calls",
-    }),
-  ).not.toBeInTheDocument();
-  expect(
-    within(screen.getByTestId("console-header-context")).getByRole("link", {
-      name: "Back to calls",
-    }),
-  ).toHaveAttribute(
-    "href",
-    "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
-  );
+  expect(screen.getByTestId("console-header")).toHaveTextContent("Vxpipe");
+  expect(screen.getByTestId("console-header")).toHaveTextContent("Demo workspace");
+  expect(screen.getByTestId("console-header")).toHaveTextContent("Delivery rescheduling");
+  expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Tenants" })).toHaveAttribute("href", "/admin");
+  expect(screen.getByRole("link", { name: "Demo workspace" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/definitions");
+  expect(screen.getByRole("link", { name: "Delivery rescheduling" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling");
+  expect(screen.queryByRole("navigation", { name: "Tenant workspace" })).not.toBeInTheDocument();
   expect(screen.getByText("call-1")).toBeVisible();
   expect(screen.getByTestId("call-console")).toHaveTextContent(
     "v3 · call-1",
@@ -96,7 +87,6 @@ test("fills the ready page with a console-owned breadcrumb header", () => {
       headerContext: expect.anything(),
       theme: "light",
       header: expect.anything(),
-      headerVisibility: "desktop",
       layout: "fill",
     }),
   );
@@ -110,6 +100,10 @@ test("keeps loading, unavailable, and malformed states distinct", () => {
   );
   expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
   expect(screen.queryByTestId("call-console")).not.toBeInTheDocument();
+  expect(screen.getByText("Vxpipe")).toBeVisible();
+  expect(screen.getByText("Demo workspace")).toBeVisible();
+  expect(screen.getByText("Delivery rescheduling")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Tenants" })).toHaveAttribute("href", "/admin");
 
   view.rerender(
     <CallDetailsPage
@@ -118,6 +112,7 @@ test("keeps loading, unavailable, and malformed states distinct", () => {
   );
   expect(screen.getByRole("alert")).toHaveTextContent("Call unavailable");
   expect(screen.getByText("call-1")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Demo workspace" })).toBeVisible();
 
   view.rerender(
     <CallDetailsPage
@@ -138,18 +133,18 @@ test("warns when the inspection archive is partial", () => {
   expect(screen.getByRole("status")).toHaveTextContent("Partial history");
 });
 
-test("the individual story records breadcrumb destinations inside its preview", () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/iframe.html?id=admin-call-details--ongoing",
-  );
+test("the individual story return links load working admin previews", () => {
   render(<CallDetailsStory scenario="ongoing" theme="dark" />);
-
-  screen.getByRole("link", { name: "Delivery rescheduling" }).click();
-
-  expect(window.location.pathname).toBe("/iframe.html");
-  expect(window.location.hash).toBe(
-    "#/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling",
-  );
+  expect(screen.getByText("Delivery rescheduling")).toBeVisible();
+  for (const [name, path] of [
+    ["Tenants", "/admin"],
+    ["Demo workspace", "/admin/tenants/tn_demo_01/definitions"],
+    ["Delivery rescheduling", "/admin/tenants/tn_demo_01/calls?definition_id=delivery-rescheduling"],
+  ]) {
+    const link = screen.getByRole("link", { name });
+    const url = new URL(link.getAttribute("href")!, window.location.origin);
+    expect(url.pathname).toBe("/iframe.html");
+    expect(url.searchParams.get("id")).toBe("vxpipe-console-full-journey--review-flow");
+    expect(url.hash).toBe(`#${path}`);
+  }
 });

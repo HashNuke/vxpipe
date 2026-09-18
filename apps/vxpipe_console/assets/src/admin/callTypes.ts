@@ -17,6 +17,17 @@ export type CallLifecycleState =
 
 export type CallArchiveState = "complete" | "incomplete" | "unconfirmed";
 
+export type CallDirectoryState = "ongoing" | "ended";
+
+export type CallDirectoryItem = {
+  id: string;
+  definitionId: string;
+  definitionName: string | null;
+  definitionRevision: number;
+  state: CallDirectoryState;
+  createdAt: string;
+};
+
 export type CallSummary = {
   id: string;
   definitionId: string;
@@ -43,7 +54,7 @@ export type DefinitionCallsPageState = TenantCallsContext &
     | { status: "unavailable"; message: string }
     | {
         status: "ready";
-        calls: CallSummary[];
+        calls: CallDirectoryItem[];
         pagination: PaginationModel | null;
       }
   );
