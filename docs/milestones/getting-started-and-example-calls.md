@@ -42,8 +42,10 @@ requirements. Refresh, partial failure and restart preserve completed work.
   default model provider, with existing Zenmux as an explicit supported alternative. Show
   provider/name metadata and capability coverage, not saved secret values. Failed input remains
   locally recoverable without echoing secrets into errors/logs; clear secret fields after submit.
-- Distinguish “Saved / ready to try” from “Successfully used in a call”. Do not add a speculative
-  provider validation API. A first-call provider rejection links back to the relevant setup step.
+- Distinguish “Validated and saved” from “Successfully used in a call”. Validate submitted
+  credentials through provider-owned, non-billable authentication endpoints before saving, retain
+  `last_validated_at`, and link later provider rejection back to the relevant setup step. Validation
+  proves authentication at that time; it does not claim that every model, voice or call path works.
 - Catalog entries have stable IDs/version/content digests, purpose, participants, requirement
   metadata and a checked-in inline definition. Supported selections use the current schema and
   existing provider catalog; no provider keys, route IDs or tenant IDs live in portable templates.
@@ -142,3 +144,8 @@ Amendment review, 2026-09-17: the preceding operator-login milestone replaces pl
 exchange. The Getting Started page is React, uses that operator session, and must be composed from
 small components into complete Storybook states before production workflow integration. The
 production-default/demo-opt-in and per-example readiness contracts remain unchanged.
+
+Amendment review, 2026-09-18: the user explicitly selected upstream credential validation and a
+persisted last-validation timestamp. This supersedes the earlier prohibition on a validation API;
+validation remains provider-specific, non-billable, secret-safe and separately testable from a real
+call. The Storybook onboarding surface demonstrates the resulting progress and failure states.

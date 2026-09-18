@@ -20,6 +20,7 @@ const providers: Array<{ value: ServiceProvider; label: string }> = [
 export function ServiceCredentialForm({
   initialProvider = "google",
   providerLocked = false,
+  showCancel = true,
   status,
   submitLabel = "Save credential",
   message,
@@ -28,6 +29,7 @@ export function ServiceCredentialForm({
 }: {
   initialProvider?: ServiceProvider;
   providerLocked?: boolean;
+  showCancel?: boolean;
   status: CredentialSetupStatus;
   submitLabel?: string;
   message?: string;
@@ -123,7 +125,19 @@ export function ServiceCredentialForm({
       {message ? <p className="text-sm text-[var(--admin-red)]" role="alert">{message}</p> : null}
       {status === "success" ? <p className="text-sm text-[var(--admin-green)]" role="status">Credential stored.</p> : null}
       <div className="flex justify-end gap-2">
-        <Button disabled={pending} onClick={() => { clearSecrets(); onCancel(); }} type="button" variant="ghost">Cancel</Button>
+        {showCancel ? (
+          <Button
+            disabled={pending}
+            onClick={() => {
+              clearSecrets();
+              onCancel();
+            }}
+            type="button"
+            variant="ghost"
+          >
+            Cancel
+          </Button>
+        ) : null}
         <Button disabled={pending} type="submit">{pending ? "Saving…" : submitLabel}</Button>
       </div>
     </form>

@@ -1,6 +1,6 @@
 # Platform bootstrap and demo tenant
 
-Status: planned, not implemented. Requested 2026-09-16; local specification review recorded below.
+Status: in progress. Requested 2026-09-16; first-run Storybook states completed 2026-09-18.
 Prerequisites: [Tenant administration](tenant-definitions-and-api-keys.md),
 [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md), and
 [Operator login/admin dashboard](operator-login-and-admin-dashboard.md).
@@ -47,6 +47,10 @@ existing published-definition/prepared-call workflow can then run through the de
 - Keep recoverable provider credentials in the existing encrypted tenant store. First-use input
   supports Google/Deepgram and the existing Zenmux alternative; one Deepgram credential can
   cover STT and TTS. Preserve provider/name binding semantics and safe metadata responses.
+- Validate submitted credentials against a provider-owned, non-billable authentication endpoint
+  before replacing a stored credential. Persist `last_validated_at` only with a successful write,
+  clear prior validation evidence when credential material changes, and never return raw secrets.
+  Default tests use controlled adapters; live-provider checks remain in the tagged integration lane.
 - Add provider setup as React components in the Console admin application. Build small field,
   provider-configuration and error components and complete mocked Storybook states before connecting
   operator-authenticated writes. The login/code-entry page remains the only server-rendered UI.
@@ -71,7 +75,7 @@ Exit: the developer can perform a real authenticated platform operation without 
 
 ## Checkpoint 2 — Resume demo setup and provision a first call
 
-- [ ] Build and review the demo-workspace and provider-setup components and complete page states in
+- [x] Build and review the demo-workspace and provider-setup components and complete page states in
   Console Storybook before adding production endpoint calls.
 - [ ] Red-test create/adopt, concurrent/retried setup, name collisions, missing resources and restart.
   Include existing configured demo tenants and interrupted credential setup.
@@ -117,3 +121,9 @@ Amendment review, 2026-09-17: operator browser login is now owned by the precedi
 reviewed milestone. Platform keys remain programmatic credentials; Console setup actions use the
 separate operator session. Provider setup is React and must reach a complete mocked Storybook page
 before production integration. The original demo identity and credential-storage contracts remain.
+
+Implementation note, 2026-09-18: `vxpipe_console/Onboarding` now covers automatic DemoTenant
+creation, provider selection, credential entry, validation progress/failure, durable validation
+timestamps, optional three-example installation, completion, unavailability, light theme and narrow
+layout. Google Vertex AI is intentionally absent from the chooser until its project/service-account
+credential shape is implemented; presenting it as an API-key provider would be misleading.
