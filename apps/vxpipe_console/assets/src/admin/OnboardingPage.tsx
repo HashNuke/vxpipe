@@ -75,7 +75,7 @@ export function OnboardingPage({
         <header className="mb-6 max-w-[70ch]">
           <h1 className="text-2xl font-bold tracking-[-0.03em]">Set up your first call</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--admin-muted)]">
-            Vxpipe creates DemoTenant, checks the services you choose, then can load three sample
+            Vxpipe creates Demo, checks the services you choose, then can load three sample
             call specs. You can rename the tenant later.
           </p>
         </header>
@@ -187,7 +187,7 @@ function TenantSection({ tenant }: { tenant: OnboardingPageState["tenant"] }) {
             size={20}
           />
           <div>
-            <h2 className="text-lg font-bold" id="tenant-heading">Preparing DemoTenant</h2>
+            <h2 className="text-lg font-bold" id="tenant-heading">Preparing Demo</h2>
             <p className="mt-1 text-sm text-[var(--admin-muted)]">
               Creating the first tenant for this installation…
             </p>
@@ -203,7 +203,7 @@ function TenantSection({ tenant }: { tenant: OnboardingPageState["tenant"] }) {
         <div className="flex items-start gap-3" role="alert">
           <AlertTriangle aria-hidden="true" className="mt-0.5 text-[var(--admin-red)]" size={20} />
           <div>
-            <h2 className="text-lg font-bold" id="tenant-heading">DemoTenant could not be prepared</h2>
+            <h2 className="text-lg font-bold" id="tenant-heading">Demo tenant could not be prepared</h2>
             <p className="mt-1 text-sm text-[var(--admin-muted)]">{tenant.message}</p>
           </div>
         </div>
@@ -218,10 +218,10 @@ function TenantSection({ tenant }: { tenant: OnboardingPageState["tenant"] }) {
     >
       <div>
         <h2 className="text-lg font-bold" id="tenant-heading">
-          {tenant.name} is ready
+          {tenant.name} tenant is ready
         </h2>
         <p className="mt-1 text-sm text-[var(--admin-muted)]">
-          Your first tenant was created automatically. Its name can be changed later.
+          Your demo tenant is ready! You can rename the tenant later.
         </p>
       </div>
       <span className="font-mono text-xs text-[var(--admin-muted)]">{tenant.key}</span>
@@ -354,7 +354,7 @@ function SampleSection({
         <div className="max-w-[65ch]">
           <h2 className="text-lg font-bold" id="samples-heading">Start with sample call specs</h2>
           <p className="mt-1 text-sm leading-6 text-[var(--admin-muted)]">
-            Load three versioned examples into DemoTenant. This is optional and never overwrites
+            Load three versioned examples into Demo. This is optional and never overwrites
             an edited call spec.
           </p>
         </div>

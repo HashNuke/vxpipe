@@ -17,6 +17,7 @@ const providerDetails: Record<
   },
   google: { label: "Google AI Studio", services: ["Language model"] },
   zenmux: { label: "Zenmux", services: ["Language model"] },
+  rime: { label: "Rime", services: ["Text-to-speech"] },
   telnyx: { label: "Telnyx", services: ["Telephony"] },
   twilio: { label: "Twilio", services: ["Telephony"] },
 };
@@ -30,7 +31,7 @@ export function onboardingProvider(
 }
 
 export const readyOnboardingState: OnboardingPageState = {
-  tenant: { status: "ready", key: "demo-tenant", name: "DemoTenant" },
+  tenant: { status: "ready", key: "demo-tenant", name: "Demo" },
   providers: [
     onboardingProvider("deepgram", "valid", {
       lastValidatedAt: "2026-09-18T04:30:00Z",

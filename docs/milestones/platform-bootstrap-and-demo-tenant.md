@@ -122,8 +122,48 @@ reviewed milestone. Platform keys remain programmatic credentials; Console setup
 separate operator session. Provider setup is React and must reach a complete mocked Storybook page
 before production integration. The original demo identity and credential-storage contracts remain.
 
-Implementation note, 2026-09-18: `vxpipe_console/Onboarding` now covers automatic DemoTenant
+Implementation note, 2026-09-18: `vxpipe_console/Onboarding` now covers automatic Demo
 creation, provider selection, credential entry, validation progress/failure, durable validation
 timestamps, optional three-example installation, completion, unavailability, light theme and narrow
 layout. Google Vertex AI is intentionally absent from the chooser until its project/service-account
 credential shape is implemented; presenting it as an API-key provider would be misleading.
+
+Storybook refinement, 2026-09-18: the [tenant setup decision](../tenant-setup-experience.md)
+adds credential modals, three-capability coverage, a separate recipe screen and resumable
+tenant-directory entry points. Stories cover partial, ready, failure, provider
+choice and responsive/theme states. New demo tenants use the display name `Demo`;
+existing names are preserved. These revised pages remain prototypes pending user review
+and production integration. The platform-authority and durable readiness gates above
+remain incomplete; browser simulation is not evidence of those backend contracts.
+
+The user's follow-up makes this shared setup flow apply to every new tenant. The
+directory's name-only creation dialog proceeds directly to that tenant's services;
+incomplete tenants can resume it. Telephony is optional for WebRTC call specs.
+The creation/redirect behavior is prototyped in Storybook, with production wiring pending.
+
+Three-step refinement, 2026-09-18: shared tenant copy and navigation now separate
+Setup services, Create API Keys and Setup Call Specs. The API-key prototype offers
+`calls` or `admin` + `calls`, matching the independent grants in Administration.
+It shows a nonfunctional key once and retains tenant-specific metadata afterward.
+This is a reviewed-code permission mapping and frontend prototype, not a new
+issuance endpoint or completed platform-authority milestone.
+
+Service-picker refinement, 2026-09-18: compact AI provider cards, an optional
+Telephony section, connected-service management and a full-catalog service dropdown
+replace the capability checklist. Speech-to-speech readiness is demonstrated only
+in dedicated future-capability stories; the normal catalog and runtime integrations
+are unchanged. Local design review preserves credential ownership, tenant isolation,
+and the production implementation order. Per-recipe compatibility remains separate
+from overall service readiness. Verification is recorded in the
+[checkpoint labnotes](../../labnotes/20260918-2022-compact-service-picker.md).
+
+The follow-up makes Telephony always visible and explicitly optional. Connect a
+service uses a dropdown with inline provider-specific fields, replacing the earlier
+search/list picker. Switching services discards the previous credential draft.
+
+Service-picker review, 2026-09-18: onboarding now offers Deepgram, Rime, Google AI
+Studio and Telnyx. Other providers are deferred from this prototype UI. Telnyx uses
+one connection across AI and telephony sections; its public key is optional for
+AI use and required for the telephony credential state. Rime/Telnyx AI execution,
+production credential persistence and number routing remain unimplemented gates;
+see the [tenant setup decision](../tenant-setup-experience.md).

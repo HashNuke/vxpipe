@@ -20,7 +20,7 @@ defmodule Vxpipe.Calls.DemoSetupTest do
     authority = InstallationOperator.authority()
 
     assert {:ok, first} = DemoSetup.ensure_tenant(authority, context.options)
-    assert first.name == "DemoTenant"
+    assert first.name == "Demo"
     assert first.key == "DEMOabcdefgh1234"
     assert first.inserted_at == ~U[2026-09-18 05:00:00Z]
 

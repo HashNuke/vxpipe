@@ -7,7 +7,7 @@ import type { OnboardingPageState } from "./onboardingTypes";
 afterEach(cleanup);
 
 const readyState: OnboardingPageState = {
-  tenant: { status: "ready", key: "demo-tenant", name: "DemoTenant" },
+  tenant: { status: "ready", key: "demo-tenant", name: "Demo" },
   providers: [
     {
       provider: "deepgram",
@@ -34,17 +34,17 @@ const readyState: OnboardingPageState = {
   },
 };
 
-test("shows automatic DemoTenant creation as the first resumable step", () => {
+test("shows automatic Demo creation as the first resumable step", () => {
   render(
     <OnboardingPage
       onInstallSamples={vi.fn()}
       onSelectProviders={vi.fn()}
       onSubmitCredential={vi.fn()}
-      state={{ ...readyState, tenant: { status: "creating", name: "DemoTenant" } }}
+      state={{ ...readyState, tenant: { status: "creating", name: "Demo" } }}
     />,
   );
 
-  expect(screen.getByRole("heading", { name: "Preparing DemoTenant" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Preparing Demo" })).toBeVisible();
   expect(screen.getByText("Creating the first tenant for this installation…")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Load sample call specs" })).not.toBeInTheDocument();
 });

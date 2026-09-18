@@ -1,6 +1,7 @@
 import type { TenantContext } from "./callSpecTypes";
 
 export type ServiceProvider =
+  | "rime"
   | "google"
   | "vertex_ai"
   | "zenmux"
@@ -33,7 +34,9 @@ export type CredentialSetupStatus =
 
 export type CredentialDraft = {
   provider: ServiceProvider;
-  values: { apiKey: string } | { accountSid: string; authToken: string };
+  values:
+    | { apiKey: string; publicKey?: string }
+    | { accountSid: string; authToken: string };
 };
 
 type ServicesContext = {

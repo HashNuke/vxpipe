@@ -1,6 +1,7 @@
 # Getting Started and example calls
 
-Status: planned, not implemented. Requested 2026-09-16; local specification review recorded below.
+Status: production integration planned; tenant setup/recipe Storybook prototype refined
+2026-09-18. Requested 2026-09-16; local specification review recorded below.
 Prerequisites: [Call debug console](call-debug-console.md),
 [Operator login/admin dashboard](operator-login-and-admin-dashboard.md),
 [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md), and the existing
@@ -99,6 +100,9 @@ Exit: the demo tenant has three discoverable, published examples that can be ins
 
 ## Checkpoint 3 — Choose an example and complete a first call
 
+- [x] Prototype the tenant services-to-recipes journey with disabled missing-service
+  states, explicit model choice, recipe diagrams and resumable tenant entry points.
+  This is Storybook simulation only; the production tasks below remain open.
 - [ ] Build the persistent checklist/gallery with purpose, participant summary, current requirement
   state and one clear action per example. An individually ready example is runnable while another
   remains blocked; temporary lookup failure is unavailable, not permission to reseed anything.
@@ -149,3 +153,37 @@ Amendment review, 2026-09-18: the user explicitly selected upstream credential v
 persisted last-validation timestamp. This supersedes the earlier prohibition on a validation API;
 validation remains provider-specific, non-billable, secret-safe and separately testable from a real
 call. The Storybook onboarding surface demonstrates the resulting progress and failure states.
+
+Storybook amendment review, 2026-09-18: the user selected provider credential modals,
+capability coverage and recipe cards on a second screen, plus resumable per-tenant entry
+points on `/admin`. The [tenant setup decision](../tenant-setup-experience.md) records
+the prototype, rejected alternatives and verification. A checked-in provider/model catalog
+supports explicit choices without promising unsupported Google speech integration. These
+tenant setup surfaces do not implement the root-home/demo-mode policy or durable catalog
+publication; those acceptance gates remain unchecked. Local review only, pending the
+user's rendered design review.
+
+Follow-up, 2026-09-18: reuse service onboarding for every tenant. Name-only tenant
+creation leads into its own service setup; per-tenant progress is independent.
+Telephony remains optional because WebRTC callers can use the same call-spec path.
+The added creation/progress/error/new-tenant stories remain frontend simulations.
+
+The subsequent user revision separates onboarding into three pages: Setup services,
+Create API Keys, then Setup Call Specs. API keys use the existing independent
+`calls` and `admin` grants; sample recipes are confined to the third page. The
+[tenant setup decision](../tenant-setup-experience.md) records permission evidence,
+one-time display semantics and the still-pending production boundaries.
+
+Compact-service refinement, 2026-09-18: the mocked gallery now evaluates readiness
+per recipe. The dedicated speech-to-speech preview enables voice conversation;
+existing handoff recipes keep their separate speech/language requirements. This
+records an explicit prototype compatibility decision, not live audio-provider
+support or completed publication/debug-console launch gates. The service picker
+and readiness changes are documented in the [tenant setup decision](../tenant-setup-experience.md).
+
+Service-picker review, 2026-09-18: onboarding now offers Deepgram, Rime, Google AI
+Studio and Telnyx. Other providers are deferred from this prototype UI. Telnyx uses
+one connection across AI and telephony sections; its public key is optional for
+AI use and required for the telephony credential state. Rime/Telnyx AI execution,
+production credential persistence and number routing remain unimplemented gates;
+see the [tenant setup decision](../tenant-setup-experience.md).

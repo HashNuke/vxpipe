@@ -1,0 +1,8 @@
+# Label Google capabilities
+
+- Added Speech-to-text and Text-to-speech alongside LLM for Google AI Studio and Google Vertex AI in the onboarding catalog, credential modal and connected cards. Added missing Vertex AI to the Storybook picker using the existing API-key form and simulated connection flow.
+- Verified provider capabilities against official Google documentation: https://ai.google.dev/gemini-api/docs/transcribe, https://docs.cloud.google.com/vertex-ai/generative-ai/docs/samples/googlegenaisdk-textgen-transcript-with-gcs-audio, https://docs.cloud.google.com/text-to-speech/docs/gemini-tts.
+- Local CapabilityCatalog currently only adapts Google/Zenmux LLM and Deepgram STT/TTS; Vertex production credentials and Google speech are not implemented. Keep provider labels separate from runnable sample model mappings. providersFor now requires a model mapping, so labels alone do not unlock unsupported samples. Vertex has no sample mapping; no invented model defaults were added.
+- Red: both new Google label/connection cases failed (2 of 20). Green: 20 focused onboarding tests pass. Full frontend suite: 153 tests pass. TypeScript, lint, Storybook build and diff whitespace checks pass.
+- Headless Chrome checked AI Studio tags, Vertex picker/modal/connection, and connected-card wrapping at desktop 1440px and mobile 390px. Screenshots: ignored tmp/onboarding-storybook/google-*.png. Closed only the google-labels session; Storybook remains running.
+- Backend was inspected read-only; existing umbrella-check evidence from the preceding checkpoint remains applicable. No production backend edits, commits, or staging changes.

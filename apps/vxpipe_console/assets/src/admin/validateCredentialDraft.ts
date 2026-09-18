@@ -19,6 +19,17 @@ export function validateCredentialDraft(draft: CredentialDraft): string | null {
     ) {
       return "Enter a valid API key without spaces or line breaks.";
     }
+    if (draft.provider === "telnyx" && draft.values.publicKey !== undefined) {
+      try {
+        if (
+          !/^[A-Za-z0-9+/]{43}=$/.test(draft.values.publicKey) ||
+          atob(draft.values.publicKey).length !== 32
+        )
+          return "Enter a valid Telnyx public key (base64-encoded Ed25519 key).";
+      } catch {
+        return "Enter a valid Telnyx public key (base64-encoded Ed25519 key).";
+      }
+    }
     return null;
   }
 

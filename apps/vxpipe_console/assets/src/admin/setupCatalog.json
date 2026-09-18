@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "deepgram",
+      "name": "Deepgram",
+      "description": "Listen and speak with one service.",
+      "capabilities": ["stt", "tts"],
+      "defaultModels": {
+        "stt": "flux-general-multi",
+        "tts": "flux-hannah-en"
+      },
+      "sampleCapabilities": ["stt", "tts"]
+    },
+    {
+      "id": "rime",
+      "name": "Rime",
+      "description": "Connect Rime text-to-speech.",
+      "capabilities": ["tts"],
+      "defaultModels": {},
+      "sampleCapabilities": []
+    },
+    {
+      "id": "google",
+      "name": "Google AI Studio",
+      "description": "Connect Gemini language and speech services.",
+      "capabilities": ["stt", "llm", "tts", "s2s"],
+      "defaultModels": {
+        "stt": "gemini-3.5-transcribe-live",
+        "llm": "gemini-3.8-flash",
+        "tts": "gemini-3.1-flash-tts-preview",
+        "s2s": "gemini-3.8-live"
+      },
+      "sampleCapabilities": ["llm"]
+    },
+    {
+      "id": "vertex_ai",
+      "name": "Google Vertex AI",
+      "description": "Connect Google AI services through Vertex AI.",
+      "capabilities": ["stt", "llm", "tts", "s2s"],
+      "defaultModels": {
+        "stt": "gemini-3.5-transcribe-live",
+        "llm": "gemini-3.8-flash",
+        "tts": "gemini-3.1-flash-tts-preview",
+        "s2s": "gemini-3.8-live"
+      },
+      "sampleCapabilities": [],
+      "availableInSetup": false
+    },
+    {
+      "id": "zenmux",
+      "name": "Zenmux",
+      "description": "Connect a language model through Zenmux.",
+      "capabilities": ["llm"],
+      "defaultModels": {
+        "llm": "openai/gpt-5"
+      },
+      "sampleCapabilities": ["llm"],
+      "availableInSetup": false
+    },
+    {
+      "id": "telnyx",
+      "name": "Telnyx",
+      "description": "Connect AI and phone calls with one service.",
+      "capabilities": ["stt", "llm", "tts", "telephony"],
+      "defaultModels": {},
+      "sampleCapabilities": []
+    },
+    {
+      "id": "twilio",
+      "name": "Twilio",
+      "description": "Connect phone calls with Twilio.",
+      "capabilities": ["telephony"],
+      "defaultModels": {},
+      "sampleCapabilities": [],
+      "availableInSetup": false
+    }
+  ]
+}

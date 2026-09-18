@@ -49,7 +49,7 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
              }
            }
 
-    assert_received {:demo_tenant_requested, %Tenant{name: "DemoTenant"}}
+    assert_received {:demo_tenant_requested, %Tenant{name: "Demo"}}
   end
 
   test "rejects missing authority or CSRF and reports unavailable storage" do

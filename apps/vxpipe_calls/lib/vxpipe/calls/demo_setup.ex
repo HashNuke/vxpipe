@@ -3,7 +3,7 @@ defmodule Vxpipe.Calls.DemoSetup do
 
   alias Vxpipe.Calls.{InstallationOperator, PublicId, Repositories, Tenant}
 
-  @tenant_name "DemoTenant"
+  @tenant_name "Demo"
   @maximum_attempts 4
 
   @spec ensure_tenant(InstallationOperator.t(), keyword()) ::

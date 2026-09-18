@@ -172,7 +172,7 @@ test("loads the approved tenant page with a CSRF-protected sign-out action", asy
   );
 });
 
-test("starts the DemoTenant onboarding flow when the installation has no tenants", async () => {
+test("starts the Demo onboarding flow when the installation has no tenants", async () => {
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith("/admin/api/tenants?")) {
@@ -185,7 +185,7 @@ test("starts the DemoTenant onboarding flow when the installation has no tenants
       return response({
         tenant: {
           key: "DEMOabcdefgh1234",
-          name: "DemoTenant",
+          name: "Demo",
           created_at: "2026-09-18T05:00:00Z",
         },
       });
@@ -195,7 +195,7 @@ test("starts the DemoTenant onboarding flow when the installation has no tenants
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByRole("heading", { name: "DemoTenant is ready" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Demo tenant is ready" })).toBeVisible();
   expect(screen.getByRole("heading", { name: "Connect your services" })).toBeVisible();
   expect(window.location.pathname).toBe("/admin/onboarding");
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/onboarding/demo-tenant", {

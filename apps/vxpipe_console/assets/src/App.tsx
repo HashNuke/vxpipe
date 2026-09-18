@@ -149,7 +149,7 @@ function RoutedApp({
   const routerNavigate = useNavigate();
   const [tenants, setTenants] = useState<TenantsPageState>({ status: "loading" });
   const [onboarding, setOnboarding] = useState<OnboardingPageState>({
-    tenant: { status: "creating", name: "DemoTenant" },
+    tenant: { status: "creating", name: "Demo" },
     providers: [],
     samples: { status: "blocked", items: onboardingSamples },
   });
@@ -223,7 +223,7 @@ function RoutedApp({
 
     if (route.kind === "onboarding") {
       setOnboarding({
-        tenant: { status: "creating", name: "DemoTenant" },
+        tenant: { status: "creating", name: "Demo" },
         providers: [],
         samples: { status: "blocked", items: onboardingSamples },
       });
@@ -236,7 +236,7 @@ function RoutedApp({
             setOnboarding({
               tenant: {
                 status: "unavailable",
-                name: "DemoTenant",
+                name: "Demo",
                 message: "The setup endpoint is unavailable. Try again after the Console reconnects.",
               },
               providers: [],

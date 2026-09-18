@@ -442,6 +442,7 @@ function credentialInventory(
 
 function providerLabel(provider: ServiceProvider) {
   return {
+    rime: "Rime",
     google: "Google AI Studio",
     vertex_ai: "Google Vertex AI",
     zenmux: "Zenmux",

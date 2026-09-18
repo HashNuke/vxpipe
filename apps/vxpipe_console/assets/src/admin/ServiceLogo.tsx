@@ -8,6 +8,7 @@ import vertexAiLogo from "./assets/icons/vertex-ai.svg";
 import type { ServiceProvider } from "./serviceTypes";
 
 const serviceMarks: Record<ServiceProvider, string> = {
+  rime: "R",
   google: "G",
   vertex_ai: "V",
   zenmux: "Z",
@@ -19,6 +20,7 @@ const serviceMarks: Record<ServiceProvider, string> = {
 type LogoSource = "lobehub" | "official" | "avatar";
 
 const logoSources: Record<ServiceProvider, LogoSource> = {
+  rime: "avatar",
   google: "official",
   vertex_ai: "official",
   zenmux: "lobehub",
@@ -43,13 +45,13 @@ export function ServiceLogo({
   const [logoFailed, setLogoFailed] = useState(false);
   const source = logoSources[provider];
   const lobeLogo =
-    source === "lobehub"
-      ? provider === "google"
-        ? <GoogleColor size="2rem" />
-        : provider === "zenmux"
-          ? <ZenMuxMono size="2rem" />
-          : null
-      : null;
+    source === "lobehub" ? (
+      provider === "google" ? (
+        <GoogleColor size="2rem" />
+      ) : provider === "zenmux" ? (
+        <ZenMuxMono size="2rem" />
+      ) : null
+    ) : null;
   const officialLogo =
     source === "official" && !logoFailed && officialIconAssets[provider] ? (
       <img
