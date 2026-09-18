@@ -256,7 +256,14 @@ if config_env() == :dev do
       [http: [ip: console_ip, port: port], https: false]
     end
 
-  console_endpoint = [url: console_url] ++ console_listener
+  check_origin =
+    if console_host in ["localhost", "127.0.0.1"] do
+      for host <- ["localhost", "127.0.0.1"], do: "#{console_scheme}://#{host}:#{port}"
+    else
+      true
+    end
+
+  console_endpoint = [url: console_url, check_origin: check_origin] ++ console_listener
 
   console_endpoint =
     case nonempty_env.("SECRET_KEY_BASE") do

@@ -132,6 +132,11 @@ With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
 address must be available on this machine. Use `--tailscale` to discover the
 Tailscale hostname and address automatically.
 
+Local development accepts Phoenix socket connections from both `localhost` and
+`127.0.0.1` on the configured scheme and port, so either address supports live
+reload. Remote development hosts and production retain Phoenix's configured-host
+origin check.
+
 The visible repository-root `env.sample` documents platform settings. Goreman automatically loads `.env` from the repository
 root selected by `-basedir`, including when `bin/dev` is launched from another
 directory. Values reach its child processes without being exported into the
