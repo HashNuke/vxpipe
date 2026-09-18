@@ -25,7 +25,7 @@ test("incomplete setup explains the missing dependency and blocks sample launch"
   expect(
     screen.getByRole("button", { name: "Try voice conversation" }),
   ).toBeDisabled();
-  expect(screen.getByText("Speech + model services")).toBeVisible();
+  expect(screen.getByText("Service credentials")).toBeVisible();
   expect(onTry).not.toHaveBeenCalled();
 });
 
@@ -41,18 +41,51 @@ test("ready examples open the same console without automatically starting a call
 
 test("setup progress follows service configuration and example installation", () => {
   render(<GettingStarted ready={false} onTry={() => {}} />);
-  fireEvent.click(screen.getByRole("button", { name: "Configure services" }));
-  fireEvent.change(screen.getByLabelText(/Deepgram API key/), {
+  fireEvent.click(screen.getByRole("button", { name: "Choose services" }));
+  fireEvent.change(screen.getByLabelText("STT API key"), {
     target: { value: "sample" },
   });
-  fireEvent.change(screen.getByLabelText(/Google API key/), {
+  fireEvent.change(screen.getByLabelText("TTS API key"), {
     target: { value: "sample" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save credentials" }));
+  fireEvent.change(screen.getByLabelText("LLM API key"), {
+    target: { value: "sample" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Validate credentials" }));
   expect(screen.getByText("3 of 4 steps complete")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Install examples" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load sample definitions" }));
   expect(screen.getByText("Setup complete")).toBeVisible();
   expect(
     screen.getByRole("button", { name: "Try voice conversation" }),
   ).toBeEnabled();
+});
+
+test("onboarding validates selected services before offering sample definitions", () => {
+  render(<GettingStarted ready={false} onTry={() => {}} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Rename tenant" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Tenant name" }), {
+    target: { value: "Acme voice lab" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save tenant name" }));
+  fireEvent.click(screen.getByRole("button", { name: "Choose services" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Telephony" }));
+
+  fireEvent.change(screen.getByLabelText("STT API key"), {
+    target: { value: "stt-sample" },
+  });
+  fireEvent.change(screen.getByLabelText("TTS API key"), {
+    target: { value: "tts-sample" },
+  });
+  fireEvent.change(screen.getByLabelText("LLM API key"), {
+    target: { value: "llm-sample" },
+  });
+  fireEvent.change(screen.getByLabelText("Telephony API key"), {
+    target: { value: "telephony-sample" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Validate credentials" }));
+
+  expect(screen.getByText(/All selected services validated/)).toBeVisible();
+  expect(screen.getAllByText(/Last validated just now/)[0]).toBeVisible();
+  expect(screen.getByRole("button", { name: "Load sample definitions" })).toBeEnabled();
 });
