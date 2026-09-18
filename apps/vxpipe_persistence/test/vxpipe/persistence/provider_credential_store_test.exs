@@ -167,6 +167,32 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
     assert {:error, :tenant_not_found} = provision("AAAAAAAAAAAAAAAA", "third", data.options)
   end
 
+  test "replaces an exact credential with a new encrypted payload and safe hint", data do
+    assert {:ok, created} = provision(data.tenant.key, "first-secret-1234", data.options)
+
+    assert {:ok, updated} =
+             ProviderCredentials.replace(
+               data.tenant.key,
+               created.id,
+               "google",
+               "api_key",
+               %{"api_key" => "replacement-8c4a"},
+               data.options
+             )
+
+    assert updated.id == created.id
+    assert updated.version == created.version + 1
+    assert updated.secret_hints == %{"api_key" => "8c4a"}
+    assert DateTime.compare(updated.updated_at, created.updated_at) in [:eq, :gt]
+
+    assert {:ok, resolved} =
+             ProviderCredentials.resolve(data.tenant.key, "google", "default", data.options)
+
+    assert resolved.credential == updated
+    assert resolved.payload == %{"api_key" => "replacement-8c4a"}
+    refute inspect(updated) =~ "replacement-8c4a"
+  end
+
   test "missing keys prevent writes and fail resolution without leaking payloads", data do
     unavailable = options(Keyword.put(data.context, :keyring, nil))
 

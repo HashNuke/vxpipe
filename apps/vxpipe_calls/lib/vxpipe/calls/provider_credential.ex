@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls.ProviderCredential do
                 version: 1,
                 payload_schema_version: 1,
                 status: :active,
+                secret_hints: %{},
                 encryption_key_id: nil,
                 inserted_at: nil,
                 updated_at: nil
@@ -21,6 +22,7 @@ defmodule Vxpipe.Calls.ProviderCredential do
           version: pos_integer(),
           payload_schema_version: pos_integer(),
           status: :active | :revoked,
+          secret_hints: %{optional(String.t()) => String.t()},
           encryption_key_id: String.t() | nil,
           inserted_at: DateTime.t() | nil,
           updated_at: DateTime.t() | nil

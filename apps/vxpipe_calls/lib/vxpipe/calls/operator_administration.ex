@@ -9,6 +9,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     OperatorCallContext,
     ProviderAuth,
     ProviderCredential,
+    ProviderCredentialHints,
     PublicId,
     Repositories,
     ServiceDirectory,
@@ -207,7 +208,8 @@ defmodule Vxpipe.Calls.OperatorAdministration do
         tenant_key: tenant_key,
         provider: provider,
         name: name,
-        auth_kind: auth_kind
+        auth_kind: auth_kind,
+        secret_hints: ProviderCredentialHints.from_payload(auth_kind, payload)
       }
 
       repository
@@ -216,10 +218,59 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     end
   end
 
-  def create_credential(%InstallationOperator{}, _tenant, _provider, _name, _kind, _payload, _opts),
-    do: {:error, :installation_operator_required}
+  def create_credential(
+        %InstallationOperator{},
+        _tenant,
+        _provider,
+        _name,
+        _kind,
+        _payload,
+        _opts
+      ),
+      do: {:error, :installation_operator_required}
 
   def create_credential(_authority, _tenant, _provider, _name, _kind, _payload, _options),
+    do: {:error, :installation_operator_required}
+
+  @spec update_credential(
+          InstallationOperator.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          map(),
+          keyword()
+        ) :: {:ok, ProviderCredential.t()} | {:error, term()}
+  def update_credential(
+        %InstallationOperator{grant: :installation_operator},
+        tenant_key,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_binary(credential_id) and byte_size(credential_id) in 1..128 and is_list(options) do
+    with :ok <- ProviderAuth.binding(tenant_key, provider, provider),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      repository
+      |> Repositories.call(:replace, [
+        tenant_key,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        ProviderCredentialHints.from_payload(auth_kind, payload)
+      ])
+      |> validate_updated_credential(tenant_key, credential_id, provider, auth_kind)
+    end
+  end
+
+  def update_credential(%InstallationOperator{}, _tenant, _id, _provider, _kind, _payload, _opts),
+    do: {:error, :installation_operator_required}
+
+  def update_credential(_authority, _tenant, _id, _provider, _kind, _payload, _options),
     do: {:error, :installation_operator_required}
 
   defp generate_uuid(options) do
@@ -305,6 +356,27 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     do: {:error, :provider_credential_write_failed}
 
   defp validate_created_credential({:error, _reason} = error, _requested), do: error
+
+  defp validate_updated_credential(
+         {:ok,
+          %ProviderCredential{
+            id: credential_id,
+            tenant_key: tenant_key,
+            provider: provider,
+            auth_kind: auth_kind
+          } = stored},
+         tenant_key,
+         credential_id,
+         provider,
+         auth_kind
+       ),
+       do: {:ok, stored}
+
+  defp validate_updated_credential({:ok, _invalid}, _tenant, _id, _provider, _kind),
+    do: {:error, :provider_credential_write_failed}
+
+  defp validate_updated_credential({:error, _reason} = error, _tenant, _id, _provider, _kind),
+    do: error
 
   defp page_size(options) do
     with {:ok, limit} <- positive_integer(options, :limit, @default_page_size),

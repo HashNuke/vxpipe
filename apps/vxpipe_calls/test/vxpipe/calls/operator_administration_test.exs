@@ -340,7 +340,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
              )
   end
 
-  test "creates each currently supported credential contract without an overwrite path" do
+  test "creates each currently supported credential contract with a provider-owned name" do
     tenant_key = "AAAAAAAAAAAAAAAA"
 
     cases = [
@@ -362,7 +362,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
         id: "11111111-1111-4111-8111-#{suffix}",
         tenant_key: tenant_key,
         provider: provider,
-        name: "primary",
+        name: provider,
         auth_kind: auth_kind
       }
 
@@ -373,7 +373,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                  InstallationOperator.authority(),
                  tenant_key,
                  provider,
-                 "primary",
+                 provider,
                  auth_kind,
                  payload,
                  provider_credential_repository: repository,
@@ -384,13 +384,46 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
       assert provisioned.id == returned.id
       assert provisioned.tenant_key == tenant_key
       assert provisioned.provider == provider
-      assert provisioned.name == "primary"
+      assert provisioned.name == provider
       assert provisioned.auth_kind == auth_kind
     end
   end
 
+  test "replaces an operator credential without changing its identity" do
+    tenant_key = "AAAAAAAAAAAAAAAA"
+
+    returned = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_key: tenant_key,
+      provider: "google",
+      name: "google",
+      auth_kind: "api_key",
+      version: 2,
+      secret_hints: %{"api_key" => "8c4a"}
+    }
+
+    repository = TestOperatorCredentialRepository.repository(self(), {:ok, returned})
+
+    assert {:ok, ^returned} =
+             Vxpipe.Calls.update_operator_credential(
+               InstallationOperator.authority(),
+               tenant_key,
+               returned.id,
+               "google",
+               "api_key",
+               %{"api_key" => "replacement-8c4a"},
+               provider_credential_repository: repository
+             )
+
+    assert_received {:operator_credential_replaced, ^tenant_key, credential_id, "google",
+                     "api_key", %{"api_key" => "replacement-8c4a"}}
+
+    assert credential_id == returned.id
+  end
+
   test "credential creation preserves validation, duplicate, storage, and authority failures" do
     tenant_key = "AAAAAAAAAAAAAAAA"
+
     repository =
       TestOperatorCredentialRepository.repository(
         self(),
@@ -423,7 +456,11 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
 
     assert {:error, :installation_operator_required} =
              Vxpipe.Calls.create_operator_credential(
-               %Principal{tenant_key: tenant_key, api_key_id: "key", scopes: MapSet.new([:admin])},
+               %Principal{
+                 tenant_key: tenant_key,
+                 api_key_id: "key",
+                 scopes: MapSet.new([:admin])
+               },
                tenant_key,
                "google",
                "primary",

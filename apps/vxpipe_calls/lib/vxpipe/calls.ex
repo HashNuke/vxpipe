@@ -62,6 +62,26 @@ defmodule Vxpipe.Calls do
           options
         )
 
+  def update_operator_credential(
+        authority,
+        tenant_key,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        options \\ []
+      ),
+      do:
+        OperatorAdministration.update_credential(
+          authority,
+          tenant_key,
+          credential_id,
+          provider,
+          auth_kind,
+          payload,
+          options
+        )
+
   def bootstrap_tenant(name, scopes, options \\ []),
     do: Administration.bootstrap_tenant(name, scopes, options)
 

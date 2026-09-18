@@ -29,6 +29,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
         version: credential.version,
         payload_schema_version: credential.payload_schema_version,
         status: "active",
+        secret_hints: credential.secret_hints,
         encrypted_payload: encrypted,
         encryption_key_id: key_id
       }
@@ -40,6 +41,66 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
         {:ok, stored} -> {:ok, metadata(stored, tenant.key)}
         {:error, changeset} -> {:error, insertion_error(changeset)}
       end
+    end
+  rescue
+    error -> repository_error(error, __STACKTRACE__)
+  catch
+    :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
+      {:error, :provider_credentials_unavailable}
+  end
+
+  @impl true
+  def replace(context, tenant_key, credential_id, provider, auth_kind, payload, secret_hints) do
+    repo = Keyword.fetch!(context, :repo)
+
+    case repo.transaction(
+           fn ->
+             query =
+               from(c in ProviderCredential,
+                 join: t in assoc(c, :tenant),
+                 where:
+                   t.key == ^tenant_key and c.public_id == ^credential_id and
+                     c.provider == ^provider,
+                 lock: "FOR UPDATE"
+               )
+
+             stored =
+               repo.one(query, @private_query_options) ||
+                 repo.rollback(:provider_credential_not_found)
+
+             next = %{
+               metadata(stored, tenant_key)
+               | auth_kind: auth_kind,
+                 version: stored.version + 1,
+                 status: :active,
+                 secret_hints: secret_hints
+             }
+
+             with :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+                  {:ok, key_id, encrypted} <-
+                    CredentialCipher.encrypt(Keyword.get(context, :keyring), next, payload),
+                  {:ok, updated} <-
+                    repo.update(
+                      Ecto.Changeset.change(stored,
+                        auth_kind: auth_kind,
+                        version: next.version,
+                        status: "active",
+                        secret_hints: secret_hints,
+                        encrypted_payload: encrypted,
+                        encryption_key_id: key_id
+                      ),
+                      @private_query_options
+                    ) do
+               metadata(updated, tenant_key)
+             else
+               {:error, %Ecto.Changeset{}} -> repo.rollback(:provider_credential_write_failed)
+               {:error, reason} -> repo.rollback(reason)
+             end
+           end,
+           @private_query_options
+         ) do
+      {:ok, credential} -> {:ok, credential}
+      {:error, reason} -> {:error, reason}
     end
   rescue
     error -> repository_error(error, __STACKTRACE__)
@@ -291,6 +352,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
       payload_schema_version: stored.payload_schema_version,
       encryption_key_id: stored.encryption_key_id,
       status: status(stored.status),
+      secret_hints: stored.secret_hints || %{},
       inserted_at: stored.inserted_at,
       updated_at: stored.updated_at
     }

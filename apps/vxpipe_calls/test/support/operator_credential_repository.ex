@@ -10,6 +10,16 @@ defmodule Vxpipe.Calls.TestOperatorCredentialRepository do
   end
 
   @impl true
+  def replace({owner, result}, tenant_key, credential_id, provider, auth_kind, payload, _hints) do
+    send(
+      owner,
+      {:operator_credential_replaced, tenant_key, credential_id, provider, auth_kind, payload}
+    )
+
+    result
+  end
+
+  @impl true
   def list(_context, _tenant_key), do: {:error, :not_implemented}
 
   @impl true

@@ -139,6 +139,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
              AdminStore.list_services(Repo, tenant.key)
 
     assert listed_tenant.key == tenant.key
+
     assert Enum.map(credentials, &{&1.provider, &1.name}) == [
              {"google", "primary"},
              {"telnyx", "voice"}
@@ -146,6 +147,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
 
     assert Enum.map(services, &{&1.provider, &1.name}) == [{"telnyx", "support"}]
     assert List.first(credentials).id == google.id
+    assert List.first(credentials).secret_hints == %{"api_key" => "alue"}
     assert List.first(services).id == service.id
 
     rendered = inspect({credentials, services})
@@ -342,7 +344,11 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert selected_call.definition_revision == 2
 
     assert {:error, :call_not_found} =
-             AdminStore.fetch_call_context(Repo, tenant.key, "44444444-4444-4444-8444-444444444444")
+             AdminStore.fetch_call_context(
+               Repo,
+               tenant.key,
+               "44444444-4444-4444-8444-444444444444"
+             )
 
     assert {:ok, {^listed_tenant, _definitions, false, all_calls, 3}} =
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 0)

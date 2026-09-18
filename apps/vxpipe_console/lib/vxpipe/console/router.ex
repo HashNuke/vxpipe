@@ -99,6 +99,10 @@ defmodule Vxpipe.Console.Router do
     get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
     post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create
+
+    patch "/tenants/:tenant_key/credentials/:credential_id",
+          Vxpipe.Console.AdminServicesController,
+          :update
   end
 
   scope "/admin" do

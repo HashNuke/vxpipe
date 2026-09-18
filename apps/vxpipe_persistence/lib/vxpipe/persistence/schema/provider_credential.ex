@@ -12,6 +12,7 @@ defmodule Vxpipe.Persistence.Schema.ProviderCredential do
     field(:payload_schema_version, :integer)
     field(:version, :integer)
     field(:status, :string)
+    field(:secret_hints, :map, default: %{})
     belongs_to(:tenant, Vxpipe.Persistence.Schema.Tenant)
     timestamps(type: :utc_datetime_usec)
   end
@@ -27,6 +28,7 @@ defmodule Vxpipe.Persistence.Schema.ProviderCredential do
       :payload_schema_version,
       :version,
       :status,
+      :secret_hints,
       :tenant_id
     ]
 

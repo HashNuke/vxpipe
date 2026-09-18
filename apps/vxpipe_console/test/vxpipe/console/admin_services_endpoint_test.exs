@@ -36,6 +36,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       name: "voice",
       auth_kind: "api_key",
       status: :active,
+      secret_hints: %{"api_key" => "8c4a"},
       inserted_at: ~U[2026-09-17 02:00:00Z],
       updated_at: ~U[2026-09-17 02:00:00Z]
     }
@@ -70,6 +71,9 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                  "name" => "voice",
                  "auth_kind" => "api_key",
                  "status" => "active",
+                 "credential_preview" => [
+                   %{"format" => "last_four", "label" => "API key", "last_four" => "8c4a"}
+                 ],
                  "created_at" => "2026-09-17T02:00:00Z",
                  "updated_at" => "2026-09-17T02:00:00Z"
                }
@@ -116,7 +120,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
         id: "11111111-1111-4111-8111-111111111111",
         tenant_key: @tenant_key,
         provider: provider,
-        name: "primary",
+        name: provider,
         auth_kind: expected_kind,
         inserted_at: ~U[2026-09-17 02:00:00Z],
         updated_at: ~U[2026-09-17 02:00:00Z]
@@ -135,7 +139,6 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
             |> put_req_header("x-csrf-token", csrf)
             |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
               "provider" => provider,
-              "name" => "primary",
               "values" => values
             })
 
@@ -143,7 +146,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                    "credential" => %{
                      "id" => ^returned_id,
                      "provider" => ^provider,
-                     "name" => "primary",
+                     "name" => ^provider,
                      "auth_kind" => ^expected_kind,
                      "status" => "active"
                    }
@@ -156,7 +159,60 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       assert_received {:operator_credential_created, created, ^expected_payload}
       assert created.tenant_key == @tenant_key
       assert created.provider == provider
+      assert created.name == provider
     end
+  end
+
+  test "updates an exact credential and returns only safe preview metadata" do
+    returned = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_key: @tenant_key,
+      provider: "twilio",
+      name: "twilio",
+      auth_kind: "account_sid_auth_token",
+      version: 2,
+      secret_hints: %{"account_sid" => "1111"},
+      inserted_at: ~U[2026-09-17 02:00:00Z],
+      updated_at: ~U[2026-09-18 02:00:00Z]
+    }
+
+    configure_credential_repository({:ok, returned})
+    authenticated = authenticate()
+    csrf = admin_csrf(authenticated)
+    returned_id = returned.id
+
+    response =
+      authenticated
+      |> recycle()
+      |> put_req_header("x-csrf-token", csrf)
+      |> patch(
+        "https://localhost/admin/api/tenants/#{@tenant_key}/credentials/#{returned.id}",
+        %{
+          "provider" => "twilio",
+          "values" => %{
+            "account_sid" => "AC11111111111111111111111111111111",
+            "auth_token" => "replacement-private"
+          }
+        }
+      )
+
+    assert %{
+             "credential" => %{
+               "id" => ^returned_id,
+               "name" => "twilio",
+               "credential_preview" => [
+                 %{"format" => "last_four", "label" => "Account SID", "last_four" => "1111"},
+                 %{"format" => "masked", "label" => "Auth token"}
+               ]
+             }
+           } = json_response(response, 200)
+
+    refute response.resp_body =~ "replacement-private"
+
+    assert_received {:operator_credential_replaced, @tenant_key, credential_id, "twilio",
+                     "account_sid_auth_token", _payload}
+
+    assert credential_id == returned.id
   end
 
   test "preserves not-found, unavailable, conflict, invalid, CSRF, and anonymous outcomes" do
