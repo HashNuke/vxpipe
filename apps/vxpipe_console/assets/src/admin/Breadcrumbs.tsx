@@ -47,7 +47,7 @@ export function Breadcrumbs({
             ) : null}
             {item.href ? (
               <a
-                className="truncate rounded-sm text-inherit underline-offset-4 hover:text-[var(--admin-ink)] hover:underline"
+                className="max-w-[24ch] truncate rounded-sm text-inherit underline-offset-4 hover:text-[var(--admin-ink)] hover:underline"
                 href={item.href}
                 onClick={(event) => handleClick(event, item.onSelect)}
                 title={item.label}
@@ -55,7 +55,7 @@ export function Breadcrumbs({
                 {item.label}
               </a>
             ) : (
-              <span aria-current={current} className="truncate text-[var(--admin-ink)]" title={item.label}>
+              <span aria-current={current} className="max-w-[24ch] truncate text-[var(--admin-ink)]" title={item.label}>
                 {item.label}
               </span>
             )}

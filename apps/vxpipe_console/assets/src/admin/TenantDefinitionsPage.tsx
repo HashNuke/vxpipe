@@ -53,7 +53,7 @@ export function TenantDefinitionsPage({
         />
         <section
           aria-label="Definition directory"
-          className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]"
+          className="overflow-hidden"
         >
           {state.status === "loading" ? <DefinitionListSkeleton /> : null}
           {state.status === "unavailable" ? (

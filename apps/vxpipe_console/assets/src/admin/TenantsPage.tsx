@@ -35,7 +35,7 @@ export function TenantsPage({
         />
         <section
           aria-label="Tenant directory"
-          className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]"
+          className="overflow-hidden"
         >
           {state.status === "loading" ? <TenantListSkeleton /> : null}
           {state.status === "unavailable" ? (

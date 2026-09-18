@@ -23,7 +23,7 @@ export function TenantRow({
     <li>
       <a
         aria-label={`Open ${tenant.name}`}
-        className="group grid min-w-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] items-center gap-4 border-t border-[var(--admin-line)] px-3 py-4 text-inherit no-underline transition-colors hover:bg-[var(--admin-soft)] sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(120px,0.55fr)_auto] sm:px-4"
+        className="group grid min-w-0 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] items-center gap-4 px-3 py-4 text-inherit no-underline transition-colors hover:bg-[var(--admin-soft)] sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(120px,0.55fr)_auto] sm:px-4"
         href={href}
         onClick={handleClick}
       >

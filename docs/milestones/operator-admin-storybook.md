@@ -186,6 +186,18 @@ link before call identity in the control row. Status, device controls, duration 
 call action remain compact. See
 [refinement labnotes](../../labnotes/20260917-1207-full-bleed-call-page.md).
 
+The compact-header follow-up opens call details in a separate tab while retaining
+the shared `Tenants › tenant › definition` breadcrumb pattern in the injected bar.
+All breadcrumb destinations work in production and the standalone Storybook preview;
+no sibling workspace tabs or redundant Call details label are added. Mobile keeps
+the breadcrumb context visible. Admin inventories lose their outer boxes and stacked
+header/tab rules, retaining active underlines, column-header separators and quieter
+row separators. The 122 Console frontend tests, 39 shared package tests and 157
+Console ExUnit tests pass, as do TypeScript, ESLint, CSS and Storybook builds.
+The umbrella run encountered two gateway failures; both affected files passed a
+17-test focused retry, but the umbrella run is not recorded as green. See
+[checkpoint labnotes](../../labnotes/20260918-1023-compact-call-header.md).
+
 ## Checkpoint 5 — Complete the tenant workspace and Calls page
 
 - [x] Refactor the existing definition-scoped call prototype into a tenant Calls page; reuse the

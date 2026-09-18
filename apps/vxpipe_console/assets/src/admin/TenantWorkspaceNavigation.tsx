@@ -19,8 +19,8 @@ export function TenantWorkspaceNavigation({
   destinations?: TenantDestination[];
 }) {
   return (
-    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:border-b sm:border-[var(--admin-line)]">
-      <nav aria-label="Tenant workspace" className="min-w-0 border-b border-[var(--admin-line)] sm:flex-1 sm:border-0">
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <nav aria-label="Tenant workspace" className="min-w-0 sm:flex-1">
         <div className="flex gap-6">
           {destinations.map((destination) => {
             const label = destination === "definitions" ? "Call definitions" : destination === "calls" ? "Calls" : "Services";

@@ -6,7 +6,7 @@ export function PageHeader({
   description?: string;
 }) {
   return (
-    <header className="mb-6 flex flex-col gap-2 border-b border-[var(--admin-line)] pb-5 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+    <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 className="text-xl font-bold tracking-[-0.02em]">{title}</h1>
         {description ? (

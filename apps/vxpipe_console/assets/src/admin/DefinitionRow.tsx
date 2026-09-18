@@ -26,7 +26,7 @@ export function DefinitionRow({
   }
 
   return (
-    <tr className="border-t border-[var(--admin-line)] transition-colors hover:bg-[var(--admin-soft)]">
+    <tr className="border-t border-[var(--admin-row-line)] transition-colors first:border-t-0 hover:bg-[var(--admin-soft)]">
       <th className="truncate px-4 py-4 text-sm font-semibold" scope="row" title={label}>
         {label}
       </th>

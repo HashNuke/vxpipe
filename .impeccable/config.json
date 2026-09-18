@@ -99,6 +99,15 @@
         "value": "vx-streaming-bounce",
         "createdAt": "2026-09-16T03:35:37.127Z",
         "reason": "User explicitly requested sequential jumping dots for streaming output"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "apps/vxpipe_console/assets/src/admin/admin.css"
+        ],
+        "createdAt": "2026-09-18T03:39:22.200Z",
+        "reason": "Agent: DESIGN.md explicitly specifies Inter for this operational UI; this refinement preserves the incumbent typography."
       }
     ]
   }

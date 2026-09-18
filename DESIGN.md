@@ -308,7 +308,21 @@ actions sit to the right of the navigation on desktop and in a short row below
 it under 640px. Content follows with a 16px gap. Do not add a terminal page
 breadcrumb, a second visible page heading or an inert Admin navigation item.
 Long tenant names truncate within the header without displacing account actions.
-Call details retains its console-owned header, call identity and local return link.
+Every breadcrumb label, linked or current, is capped at 24ch with an ellipsis and
+can shrink further on narrow screens. Keep the full label in the DOM and `title`
+so assistive technology and hover inspection retain the complete name.
+The app header uses its background, not a bottom rule, to separate it from the
+workspace. Sibling navigation has only the active-tab underline, never a
+full-width divider directly above the ledger.
+
+Call details opens in a new tab as a standalone inspector. Its console-injected
+top bar uses the same Vxpipe brand and `Tenants › tenant › definition` breadcrumb
+pattern as the admin workspace. Each breadcrumb is a working return link; do not
+add sibling workspace tabs or a redundant Call details label. Keep call ID, version,
+partial-history warning and live controls in the console's existing toolbar.
+Retain this context on mobile and in loading/error states. The injected bar has
+no bottom rule; keep the workbench boundary and active-view underline without
+a full-width tab divider.
 
 - **Call workbench desktop:** Uppercase 12px mono tabs sit in a muted segmented track; the
   active tab returns to the base surface.
@@ -319,6 +333,9 @@ Call details retains its console-owned header, call identity and local return li
 
 - **Structure:** Collapse borders into one continuous surface. Use 12px uppercase
   mono headers, compact 14px rows, tabular numerals, and one-pixel cell dividers.
+  Admin inventories have no outer box or contrasting panel fill. Keep one
+  column-header separator; internal row separators use `--admin-row-line` at
+  half the opacity of `--admin-line` in both themes.
 - **Selection:** Use Selection Blue Soft across the selected row while retaining
   independent text and marker treatment for operational state.
 - **Responsive behavior:** Preserve primary identity and state, then hide or

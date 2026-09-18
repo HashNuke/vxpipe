@@ -314,6 +314,21 @@ three findings—bounded metadata projection, malformed-value filtering and dism
 and its follow-up findings about unusable oversized inventories and uncertain registration status
 were fixed and retested.
 
+Post-checkpoint credential-management follow-up (2026-09-18): the approved Services redesign now
+uses provider-owned names, server-generated masked previews and stable-ID credential replacement.
+The inventory read remains metadata-only because writes persist bounded non-secret last-four hints;
+raw payloads are still never returned. The replacement path locks and re-encrypts the complete
+payload at an incremented version. See [Console credential management](../console-credential-management.md)
+for the revised contract and rejected alternatives. This does not add provider-side validation or
+change Telnyx public service metadata through the credential form.
+
+Post-checkpoint call-directory follow-up (2026-09-18): the Calls directory now presents only ID,
+call spec and revision, the two operator-facing states `ongoing`/`ended`, and local/relative call
+time. The API no longer publishes archive or inspection-only lifecycle metadata in list rows;
+persistence retains stable newest-first paging. The URL-backed call-spec filter is now searchable,
+and the primary populated Storybook state exercises pagination. See
+[Console call directory](../console-call-directory.md) for the contract and rejected alternatives.
+
 ## Checkpoint 7 — Open live and historical call details
 
 - [x] Replace the old tenant-API-key browser authority on all Console call-inspection resources with

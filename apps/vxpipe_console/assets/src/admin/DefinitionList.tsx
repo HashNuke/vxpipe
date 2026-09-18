@@ -24,7 +24,7 @@ export function DefinitionList({
           <col className="w-[14%]" />
           <col className="w-[14%]" />
         </colgroup>
-        <thead>
+        <thead className="border-b border-[var(--admin-line)]">
           <tr className="font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)]">
             <th className="px-4 py-3" scope="col">Name</th>
             <th className="px-4 py-3" scope="col">ID</th>
