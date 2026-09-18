@@ -1,4 +1,5 @@
 import type { TenantSummary } from "./tenantTypes";
+import type { OnboardingSample } from "./onboardingTypes";
 import type { DefinitionSummary, TenantContext } from "./definitionTypes";
 import type { CallDirectoryItem, DefinitionContext } from "./callTypes";
 import type {
@@ -37,6 +38,48 @@ export type ServiceDirectory = {
   services: ServiceInventoryItem[];
   truncated: boolean;
 };
+
+export function parseDemoTenant(value: unknown): TenantSummary {
+  if (!isRecord(value) || !exactKeys(value, ["tenant"])) {
+    throw invalidDemoTenantResponse();
+  }
+
+  try {
+    return parseTenant(value.tenant);
+  } catch {
+    throw invalidDemoTenantResponse();
+  }
+}
+
+export function parseInstalledSamples(value: unknown): OnboardingSample[] {
+  if (!isRecord(value) || !exactKeys(value, ["samples"]) || !Array.isArray(value.samples)) {
+    throw invalidSampleInstallationResponse();
+  }
+
+  return value.samples.map((sample) => {
+    if (
+      !isRecord(sample) ||
+      !(
+        exactKeys(sample, ["id", "name", "status"]) ||
+        exactKeys(sample, ["id", "name", "status", "revision"])
+      ) ||
+      typeof sample.id !== "string" ||
+      sample.id.length === 0 ||
+      typeof sample.name !== "string" ||
+      sample.name.length === 0 ||
+      !member(sample.status, ["installed", "failed", "conflict"]) ||
+      ("revision" in sample && !isPositiveInteger(sample.revision))
+    ) {
+      throw invalidSampleInstallationResponse();
+    }
+
+    return {
+      id: sample.id,
+      name: sample.name,
+      status: sample.status === "installed" ? "installed" : "failed",
+    };
+  });
+}
 
 export function parseTenantPage(value: unknown): TenantDirectoryPage {
   if (
@@ -568,6 +611,14 @@ function member<T extends string>(
 
 function invalidResponse() {
   return new Error("Invalid tenant directory response");
+}
+
+function invalidDemoTenantResponse() {
+  return new Error("Invalid demo tenant response");
+}
+
+function invalidSampleInstallationResponse() {
+  return new Error("Invalid sample installation response");
 }
 
 function invalidDefinitionResponse() {

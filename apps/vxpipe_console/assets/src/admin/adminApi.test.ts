@@ -4,9 +4,67 @@ import {
   parseCallPage,
   parseCreatedCredential,
   parseDefinitionPage,
+  parseDemoTenant,
+  parseInstalledSamples,
   parseServiceDirectory,
   parseTenantPage,
 } from "./adminApi";
+
+test("validates the DemoTenant setup response", () => {
+  expect(
+    parseDemoTenant({
+      tenant: {
+        key: "DEMOabcdefgh1234",
+        name: "DemoTenant",
+        created_at: "2026-09-18T05:00:00Z",
+      },
+    }),
+  ).toEqual({
+    key: "DEMOabcdefgh1234",
+    name: "DemoTenant",
+    createdAt: "2026-09-18T05:00:00Z",
+  });
+
+  expect(() =>
+    parseDemoTenant({ tenant: { key: "", name: "DemoTenant" } }),
+  ).toThrow("Invalid demo tenant response");
+});
+
+test("validates sample installation results without accepting backend reasons", () => {
+  expect(
+    parseInstalledSamples({
+      samples: [
+        {
+          id: "sample-voice-conversation",
+          name: "Voice conversation",
+          status: "installed",
+          revision: 1,
+        },
+        {
+          id: "sample-human-handoff",
+          name: "Human handoff",
+          status: "conflict",
+        },
+      ],
+    }),
+  ).toEqual([
+    { id: "sample-voice-conversation", name: "Voice conversation", status: "installed" },
+    { id: "sample-human-handoff", name: "Human handoff", status: "failed" },
+  ]);
+
+  expect(() =>
+    parseInstalledSamples({
+      samples: [
+        {
+          id: "sample-human-handoff",
+          name: "Human handoff",
+          status: "failed",
+          reason: "must-not-render",
+        },
+      ],
+    }),
+  ).toThrow("Invalid sample installation response");
+});
 
 test("validates and maps the tenant directory response", () => {
   expect(

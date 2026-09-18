@@ -83,6 +83,34 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
            }
   end
 
+  test "keeps sample installation blocked until speech and model credentials exist" do
+    tenant = %Tenant{
+      key: "DEMOabcdefgh1234",
+      name: "DemoTenant",
+      inserted_at: ~U[2026-09-18 05:00:00Z]
+    }
+
+    put_calls_repository(
+      :admin_repository,
+      {Vxpipe.Console.Test.AdminRepository, {self(), {:ok, {tenant, [], [], false}}}}
+    )
+
+    configure_demo_repository({:ok, tenant})
+
+    authenticated = authenticate()
+    csrf = admin_csrf(authenticated)
+
+    response =
+      authenticated
+      |> recycle()
+      |> put_req_header("x-csrf-token", csrf)
+      |> post("https://localhost/admin/api/onboarding/demo-tenant/samples")
+
+    assert json_response(response, 422) == %{
+             "error" => %{"code" => "sample_prerequisites_missing"}
+           }
+  end
+
   defp authenticate do
     form = https_get("/auth/login-token/#{@token}")
 

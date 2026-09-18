@@ -94,6 +94,11 @@ defmodule Vxpipe.Console.Router do
 
     get "/session", Vxpipe.Console.AdminSessionController, :show
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant
+
+    post "/onboarding/demo-tenant/samples",
+         Vxpipe.Console.AdminOnboardingController,
+         :install_samples
+
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
     get "/tenants/:tenant_key/definitions", Vxpipe.Console.AdminDefinitionsController, :index
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index

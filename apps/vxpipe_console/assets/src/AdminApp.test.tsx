@@ -172,31 +172,51 @@ test("loads the approved tenant page with a CSRF-protected sign-out action", asy
   );
 });
 
-test("shows empty, unavailable, and expired-session outcomes truthfully", async () => {
+test("starts the DemoTenant onboarding flow when the installation has no tenants", async () => {
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith("/admin/api/tenants?")) {
+      return response({
+        tenants: [],
+        pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 },
+      });
+    }
+    if (url === "/admin/api/onboarding/demo-tenant") {
+      return response({
+        tenant: {
+          key: "DEMOabcdefgh1234",
+          name: "DemoTenant",
+          created_at: "2026-09-18T05:00:00Z",
+        },
+      });
+    }
+    return response(serviceDirectory("DEMOabcdefgh1234", false));
+  });
+
+  render(<AdminApp csrfToken="csrf" fetchImpl={fetchImpl} />);
+
+  expect(await screen.findByRole("heading", { name: "DemoTenant is ready" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Connect your services" })).toBeVisible();
+  expect(window.location.pathname).toBe("/admin/onboarding");
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/onboarding/demo-tenant", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "x-csrf-token": "csrf",
+    },
+    signal: expect.any(AbortSignal),
+  });
+});
+
+test("shows unavailable and expired-session outcomes truthfully", async () => {
   const expired = vi.fn();
   const { rerender } = render(
-    <AdminApp
-      csrfToken="csrf"
-      fetchImpl={() =>
-        response({
-          tenants: [],
-          pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 },
-        })
-      }
-      onSessionExpired={expired}
-    />,
-  );
-
-  expect(await screen.findByText("No tenants yet")).toBeVisible();
-
-  rerender(
     <AdminApp
       csrfToken="csrf"
       fetchImpl={() => Promise.reject(new Error("offline"))}
       onSessionExpired={expired}
     />,
   );
-  window.dispatchEvent(new PopStateEvent("popstate"));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Tenant data could not be loaded",

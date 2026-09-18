@@ -17,10 +17,18 @@ import {
   parseCallPage,
   parseCreatedCredential,
   parseDefinitionPage,
+  parseDemoTenant,
+  parseInstalledSamples,
   parseServiceDirectory,
   parseTenantPage,
 } from "./admin/adminApi";
 import { DefinitionCallsPage } from "./admin/DefinitionCallsPage";
+import { OnboardingPage } from "./admin/OnboardingPage";
+import {
+  onboardingProvider,
+  onboardingSamples,
+} from "./admin/onboardingFixtures";
+import type { OnboardingPageState } from "./admin/onboardingTypes";
 import { CallDetailsPage } from "./admin/CallDetailsPage";
 import {
   parseAdminCallDetails,
@@ -42,6 +50,7 @@ import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 type AdminRoute =
+  | { kind: "onboarding" }
   | { kind: "tenants"; page: number }
   | { kind: "definitions"; tenantKey: string; page: number }
   | { kind: "calls"; tenantKey: string; definitionId: string | null; page: number }
@@ -62,6 +71,11 @@ export function AdminApp({
 }) {
   const [route, setRoute] = useState(readRoute);
   const [tenants, setTenants] = useState<TenantsPageState>({ status: "loading" });
+  const [onboarding, setOnboarding] = useState<OnboardingPageState>({
+    tenant: { status: "creating", name: "DemoTenant" },
+    providers: [],
+    samples: { status: "blocked", items: onboardingSamples },
+  });
   const [definitions, setDefinitions] = useState<TenantDefinitionsPageState>(() => ({
     status: "loading",
     tenant:
@@ -133,7 +147,30 @@ export function AdminApp({
     let current = true;
     const isCurrent = () => current;
 
-    if (route.kind === "tenants") {
+    if (route.kind === "onboarding") {
+      setOnboarding({
+        tenant: { status: "creating", name: "DemoTenant" },
+        providers: [],
+        samples: { status: "blocked", items: onboardingSamples },
+      });
+      loadOnboarding(csrfToken, controller.signal, fetchImpl, onSessionExpired, isCurrent)
+        .then((state) => {
+          if (current && state) setOnboarding(state);
+        })
+        .catch((error: unknown) => {
+          if (current && !aborted(error)) {
+            setOnboarding({
+              tenant: {
+                status: "unavailable",
+                name: "DemoTenant",
+                message: "The setup endpoint is unavailable. Try again after the Console reconnects.",
+              },
+              providers: [],
+              samples: { status: "blocked", items: onboardingSamples },
+            });
+          }
+        });
+    } else if (route.kind === "tenants") {
       setTenants({ status: "loading" });
       loadTenants(
         route,
@@ -148,7 +185,15 @@ export function AdminApp({
         },
       )
         .then((state) => {
-          if (current && state) setTenants(state);
+          if (current && state) {
+            setTenants(state);
+            if (state.status === "ready" && state.tenants.length === 0) {
+              const next = { kind: "onboarding" } as const;
+              window.history.replaceState({}, "", routeUrl(next));
+              routeRef.current = next;
+              setRoute(next);
+            }
+          }
         })
         .catch((error: unknown) => {
           if (current && !aborted(error)) {
@@ -297,7 +342,7 @@ export function AdminApp({
         callDetailsControllerRef.current = undefined;
       }
     };
-  }, [fetchImpl, onSessionExpired, route]);
+  }, [csrfToken, fetchImpl, onSessionExpired, route]);
 
   function navigate(nextRoute: AdminRoute, replace = false) {
     window.history[replace ? "replaceState" : "pushState"]({}, "", routeUrl(nextRoute));
@@ -307,6 +352,44 @@ export function AdminApp({
 
   const headerActions = <SignOut csrfToken={csrfToken} />;
   const workspaceDestinations = ["definitions", "calls", "services"] as const;
+
+  if (route.kind === "onboarding") {
+    return (
+      <OnboardingPage
+        onInstallSamples={() =>
+          installOnboardingSamples(
+            onboarding,
+            csrfToken,
+            fetchImpl,
+            onSessionExpired,
+            setOnboarding,
+          )
+        }
+        onSelectProviders={(providers) =>
+          setOnboarding((state) => ({
+            ...state,
+            providers: providers.flatMap((provider) =>
+              provider === "vertex_ai"
+                ? []
+                : [onboardingProvider(provider, "needs_credentials")],
+            ),
+            samples: { status: "blocked", items: onboardingSamples },
+          }))
+        }
+        onSubmitCredential={(draft) =>
+          saveOnboardingCredential(
+            onboarding,
+            draft,
+            csrfToken,
+            fetchImpl,
+            onSessionExpired,
+            setOnboarding,
+          )
+        }
+        state={onboarding}
+      />
+    );
+  }
 
   if (route.kind === "call-details") {
     return (
@@ -473,6 +556,228 @@ async function loadTenants(
     tenants: result.tenants,
     pagination: paginationModel(result.pagination),
   };
+}
+
+async function loadOnboarding(
+  csrfToken: string,
+  signal: AbortSignal,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  isCurrent: () => boolean,
+): Promise<OnboardingPageState | undefined> {
+  const tenantResponse = await fetchImpl("/admin/api/onboarding/demo-tenant", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    signal,
+  });
+
+  if (!isCurrent()) return;
+  if (tenantResponse.status === 401) {
+    onSessionExpired();
+    return;
+  }
+  if (!tenantResponse.ok) throw new Error("Demo tenant unavailable");
+  const tenant = parseDemoTenant(await tenantResponse.json());
+
+  const serviceResponse = await fetchImpl(
+    `/admin/api/tenants/${encodeURIComponent(tenant.key)}/services`,
+    { headers: { accept: "application/json" }, signal },
+  );
+
+  if (!isCurrent()) return;
+  if (serviceResponse.status === 401) {
+    onSessionExpired();
+    return;
+  }
+  if (!serviceResponse.ok) throw new Error("Demo tenant services unavailable");
+  const directory = parseServiceDirectory(await serviceResponse.json());
+  if (directory.tenant.key !== tenant.key) throw new Error("Unexpected demo tenant response");
+
+  const providers = directory.services.flatMap((service) =>
+    service.provider === "vertex_ai"
+      ? []
+      : [
+          onboardingProvider(service.provider, "valid", {
+            lastValidatedAt: service.lastValidatedAt,
+          }),
+        ],
+  );
+
+  return {
+    tenant: { status: "ready", key: tenant.key, name: tenant.name },
+    providers,
+    samples: {
+      status: samplePrerequisitesMet(providers) ? "ready" : "blocked",
+      items: onboardingSamples,
+    },
+  };
+}
+
+async function saveOnboardingCredential(
+  current: OnboardingPageState,
+  draft: CredentialDraft,
+  csrfToken: string,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  setOnboarding: Dispatch<SetStateAction<OnboardingPageState>>,
+) {
+  if (current.tenant.status !== "ready") return;
+
+  setOnboarding((state) => ({
+    ...state,
+    providers: state.providers.map((provider) =>
+      provider.provider === draft.provider
+        ? { ...provider, status: "validating", message: undefined }
+        : provider,
+    ),
+  }));
+
+  try {
+    const response = await fetchImpl(
+      `/admin/api/tenants/${encodeURIComponent(current.tenant.key)}/credentials`,
+      {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify(credentialRequest(draft)),
+      },
+    );
+
+    if (response.status === 401) {
+      onSessionExpired();
+      return;
+    }
+
+    if (response.status === 422) {
+      setOnboardingProviderFailure(
+        setOnboarding,
+        draft.provider,
+        "invalid",
+        "The provider rejected these credentials. Check them and try again.",
+      );
+      return;
+    }
+
+    if (!response.ok) throw new Error("Credential validation unavailable");
+    const stored = parseCreatedCredential(await response.json());
+
+    setOnboarding((state) => {
+      const providers = state.providers.map((provider) =>
+        provider.provider === draft.provider
+          ? {
+              ...provider,
+              status: "valid" as const,
+              lastValidatedAt: stored.lastValidatedAt,
+              message: undefined,
+            }
+          : provider,
+      );
+
+      return {
+        ...state,
+        providers,
+        samples: {
+          ...state.samples,
+          status: samplePrerequisitesMet(providers)
+            ? "ready"
+            : "blocked",
+        },
+      };
+    });
+  } catch {
+    setOnboardingProviderFailure(
+      setOnboarding,
+      draft.provider,
+      "unavailable",
+      "Credential validation is temporarily unavailable. Try again.",
+    );
+  }
+}
+
+function samplePrerequisitesMet(providers: OnboardingPageState["providers"]) {
+  const valid = new Set(
+    providers
+      .filter((provider) => provider.status === "valid")
+      .map((provider) => provider.provider),
+  );
+  return valid.has("deepgram") && (valid.has("google") || valid.has("zenmux"));
+}
+
+function setOnboardingProviderFailure(
+  setOnboarding: Dispatch<SetStateAction<OnboardingPageState>>,
+  selectedProvider: CredentialDraft["provider"],
+  status: "invalid" | "unavailable",
+  message: string,
+) {
+  setOnboarding((state) => ({
+    ...state,
+    providers: state.providers.map((provider) =>
+      provider.provider === selectedProvider ? { ...provider, status, message } : provider,
+    ),
+    samples: { ...state.samples, status: "blocked" },
+  }));
+}
+
+async function installOnboardingSamples(
+  current: OnboardingPageState,
+  csrfToken: string,
+  fetchImpl: Fetch,
+  onSessionExpired: () => void,
+  setOnboarding: Dispatch<SetStateAction<OnboardingPageState>>,
+) {
+  if (current.tenant.status !== "ready") return;
+  setOnboarding((state) => ({
+    ...state,
+    samples: { ...state.samples, status: "loading", message: undefined },
+  }));
+
+  try {
+    const response = await fetchImpl("/admin/api/onboarding/demo-tenant/samples", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "x-csrf-token": csrfToken,
+      },
+    });
+
+    if (response.status === 401) {
+      onSessionExpired();
+      return;
+    }
+
+    if (response.status === 422) {
+      throw new Error("Sample prerequisites missing");
+    }
+    if (!response.ok) throw new Error("Sample installation unavailable");
+
+    const items = parseInstalledSamples(await response.json());
+    const complete = items.every((sample) => sample.status === "installed");
+    setOnboarding((state) => ({
+      ...state,
+      samples: {
+        status: complete ? "complete" : "error",
+        items,
+        message: complete
+          ? undefined
+          : "Some sample call specs were not installed. Existing edited specs were preserved.",
+      },
+    }));
+  } catch {
+    setOnboarding((state) => ({
+      ...state,
+      samples: {
+        ...state.samples,
+        status: "error",
+        message: "Sample call specs could not be loaded. Check the required services and retry.",
+      },
+    }));
+  }
 }
 
 async function loadDefinitions(
@@ -926,6 +1231,9 @@ function SignOut({ csrfToken }: { csrfToken: string }) {
 
 function readRoute(): AdminRoute {
   const page = readPage();
+  if (window.location.pathname.match(/^\/admin\/onboarding\/?$/)) {
+    return { kind: "onboarding" };
+  }
   const detailsMatch = window.location.pathname.match(
     /^\/admin\/tenants\/([^/]+)\/calls\/([^/]+)\/?$/,
   );
@@ -973,7 +1281,12 @@ function readRoute(): AdminRoute {
 
 function routeUrl(route: AdminRoute) {
   const query = new URLSearchParams();
-  if (route.kind !== "services" && route.kind !== "call-details" && route.page !== 1) {
+  if (
+    route.kind !== "onboarding" &&
+    route.kind !== "services" &&
+    route.kind !== "call-details" &&
+    route.page !== 1
+  ) {
     query.set("page", String(route.page));
   }
   if (route.kind === "calls" && route.definitionId) {
@@ -981,6 +1294,7 @@ function routeUrl(route: AdminRoute) {
   }
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
 
+  if (route.kind === "onboarding") return "/admin/onboarding";
   if (route.kind === "tenants") return `/admin${suffix}`;
   const tenant = encodeURIComponent(route.tenantKey);
   if (route.kind === "call-details") {

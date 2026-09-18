@@ -366,7 +366,7 @@ function SampleSection({
 
       {samples.status === "blocked" ? (
         <p className="mt-4 text-sm text-[var(--admin-muted)]">
-          Validate the selected services to enable sample loading.
+          Sample calls require validated Deepgram and either Google AI Studio or Zenmux credentials.
         </p>
       ) : null}
       {samples.status === "error" && samples.message ? (

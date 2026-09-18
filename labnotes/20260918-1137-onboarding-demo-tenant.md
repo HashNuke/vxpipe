@@ -73,3 +73,26 @@ The user required Storybook design before production endpoint work.
 - Calls suite: 109 tests, 0 failures.
 - Focused Persistence demo/admin store: 9 tests, 0 failures.
 - Console onboarding endpoint: 2 tests, 0 failures.
+
+## Checkpoint: connected Console onboarding and sample catalog
+
+- An empty tenant directory now canonicalizes to `/admin/onboarding`, creates or resumes the bound
+  DemoTenant, reloads existing credential metadata, and renders the Storybook-designed component.
+- Credential submissions use the existing provider-specific form shapes and validated Console API.
+  Samples unlock only with validated Deepgram plus Google AI Studio or Zenmux credentials.
+- Kept the checked-in catalog and installation policy in `vxpipe_console`; `vxpipe_calls` exposes only
+  the generic list/save/fetch/publish workflows used by the installer.
+- Added voice conversation, agent handoff and human handoff definitions. Stable IDs and source
+  digests make retries no-ops, edited definitions are preserved as conflicts, and a per-tenant global
+  lock makes concurrent Console requests converge.
+- The sample endpoint resolves the durable demo binding server-side, so its request cannot substitute
+  another tenant.
+
+### Test evidence
+
+- Console catalog: definitions parse; real encrypted credentials and PostgreSQL adapters install,
+  concurrently retry and retain exactly three revision-1 definitions.
+- Frontend: TypeScript check passes; 132 Vitest tests pass.
+- Root Storybook production build passes. `storybook-static/` remains ignored.
+- Browser: Chrome-rendered ready state at desktop width and credential-entry state at 390×844;
+  hierarchy, wrapping, forms and explicit sample prerequisites were inspected.
