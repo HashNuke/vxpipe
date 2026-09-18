@@ -11,9 +11,11 @@ export type BreadcrumbItem = {
 
 export function Breadcrumbs({
   compact = false,
+  current = "page",
   items,
 }: {
   compact?: boolean;
+  current?: "page" | "location";
   items: BreadcrumbItem[];
 }) {
   function handleClick(
@@ -37,7 +39,7 @@ export function Breadcrumbs({
       >
         {items.map((item, index) => (
           <li
-            className="flex min-w-0 items-center gap-1"
+            className={`flex min-w-0 items-center gap-1 ${index === 0 ? "shrink-0" : ""}`}
             key={`${item.label}-${index}`}
           >
             {index > 0 ? (
@@ -48,11 +50,12 @@ export function Breadcrumbs({
                 className="truncate rounded-sm text-inherit underline-offset-4 hover:text-[var(--admin-ink)] hover:underline"
                 href={item.href}
                 onClick={(event) => handleClick(event, item.onSelect)}
+                title={item.label}
               >
                 {item.label}
               </a>
             ) : (
-              <span aria-current="page" className="truncate text-[var(--admin-ink)]">
+              <span aria-current={current} className="truncate text-[var(--admin-ink)]" title={item.label}>
                 {item.label}
               </span>
             )}

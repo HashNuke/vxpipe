@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
-import { Breadcrumbs } from "./Breadcrumbs";
 import { DefinitionList } from "./DefinitionList";
 import { DefinitionListSkeleton } from "./DefinitionListSkeleton";
 import type { TenantDefinitionsPageState } from "./definitionTypes";
-import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
 import { TenantWorkspaceNavigation, type TenantDestination } from "./TenantWorkspaceNavigation";
@@ -34,26 +32,24 @@ export function TenantDefinitionsPage({
   linkCalls?: boolean;
 }) {
   return (
-    <AdminShell headerActions={headerActions} theme={theme}>
+    <AdminShell
+      breadcrumbs={[
+        { label: "Tenants", href: "/admin", onSelect: onSelectTenants },
+        { label: state.tenant.name },
+      ]}
+      headerActions={headerActions}
+      theme={theme}
+    >
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
-        className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
+        className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6"
       >
-        <Breadcrumbs
-          items={[
-            { label: "Tenants", href: "/admin", onSelect: onSelectTenants },
-            { label: state.tenant.name },
-          ]}
-        />
+        <h1 className="sr-only">Call definitions</h1>
         <TenantWorkspaceNavigation
           active="definitions"
           destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
-        />
-        <PageHeader
-          description={`Published and draft definitions for ${state.tenant.name}.`}
-          title="Call definitions"
         />
         <section
           aria-label="Definition directory"

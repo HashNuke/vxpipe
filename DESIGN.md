@@ -300,9 +300,19 @@ must be legible through more than decoration alone.
 
 ### Navigation
 
-- **Desktop:** Uppercase 12px mono tabs sit in a muted segmented track; the
+Tenant administration uses two compact rows: a 48px app header with the brand,
+`Tenants › tenant name` breadcrumb and account actions, followed by sibling
+navigation for Call definitions, Calls and Services. The active destination is
+the only visible page label; retain a visually hidden level-one heading. Page
+actions sit to the right of the navigation on desktop and in a short row below
+it under 640px. Content follows with a 16px gap. Do not add a terminal page
+breadcrumb, a second visible page heading or an inert Admin navigation item.
+Long tenant names truncate within the header without displacing account actions.
+Call details retains its console-owned header, call identity and local return link.
+
+- **Call workbench desktop:** Uppercase 12px mono tabs sit in a muted segmented track; the
   active tab returns to the base surface.
-- **Mobile:** A 48px bottom bar exposes the four primary work areas as equal
+- **Call workbench mobile:** A 48px bottom bar exposes the four primary work areas as equal
   targets. Icons require accessible names even when visible labels are omitted.
 
 ### Data Matrices / Ledgers

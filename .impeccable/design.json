@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-09T18:43:00Z",
+  "generatedAt": "2026-09-18T02:53:00Z",
   "title": "Design System: Vxpipe Operator's Bench",
   "extensions": {
     "colorMeta": {
@@ -173,10 +173,10 @@
       "css": ".ds-panel { overflow: hidden; min-height: 180px; border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.48 0.014 285.938)); box-shadow: none; } .ds-panel-header { padding: 12px; border-bottom: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; letter-spacing: 0.05em; } .ds-panel-body { display: grid; min-height: 136px; place-items: center; padding: 16px; font: 500 14px/20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; }"
     },
     {
-      "name": "Segmented Workspace Tabs",
+      "name": "Segmented Call Workbench Tabs",
       "kind": "nav",
       "refersTo": "segmented-tab",
-      "description": "A compact switch between sibling operational views.",
+      "description": "A compact switch between call workbench views. Tenant administration instead uses a two-row header: tenant context and account actions, then underlined destination links and page actions. See DESIGN.md Navigation.",
       "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Workspace view\"><button class=\"ds-tab is-active\" role=\"tab\" aria-selected=\"true\">CONVERSATION</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">METRICS</button></div>",
       "css": ".ds-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-muted, oklch(0.967 0.001 286.375)); } .ds-tab { height: 33px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; letter-spacing: 0.05em; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-tab:hover { background: color-mix(in oklch, var(--color-muted-foreground, oklch(0.48 0.014 285.938)) 10%, transparent); } .ds-tab.is-active { background: var(--color-background, oklch(1 0 0)); } .ds-tab:focus-visible { outline: 3px solid var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); outline-offset: 2px; }"
     },

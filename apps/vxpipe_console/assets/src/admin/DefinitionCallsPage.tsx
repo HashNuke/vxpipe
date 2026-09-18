@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
-import { Breadcrumbs } from "./Breadcrumbs";
 import { CallList } from "./CallList";
 import { CallListSkeleton } from "./CallListSkeleton";
 import type { DefinitionCallsPageState } from "./callTypes";
-import { PageHeader } from "./PageHeader";
 import { PageNotice } from "./PageNotice";
 import { Pagination } from "./Pagination";
 import { TenantWorkspaceNavigation, type TenantDestination } from "./TenantWorkspaceNavigation";
@@ -43,29 +41,29 @@ export function DefinitionCallsPage({
   const unknownFilter = Boolean(state.selectedDefinitionId && !selectedDefinition);
 
   return (
-    <AdminShell headerActions={headerActions} theme={theme}>
+    <AdminShell
+      breadcrumbs={[
+        { label: "Tenants", href: "/admin", onSelect: onSelectTenants },
+        {
+          label: state.tenant.name,
+          href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}`,
+          onSelect: onSelectTenant,
+        },
+      ]}
+      headerActions={headerActions}
+      theme={theme}
+    >
       <main
         aria-busy={state.status === "loading" ? "true" : undefined}
-        className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
+        className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6"
       >
-        <Breadcrumbs
-          items={[
-            { label: "Tenants", href: "/admin", onSelect: onSelectTenants },
-            {
-              label: state.tenant.name,
-              href: `/admin/tenants/${encodeURIComponent(state.tenant.key)}`,
-              onSelect: onSelectTenant,
-            },
-            { label: "Calls" },
-          ]}
-        />
+        <h1 className="sr-only">Calls</h1>
         <TenantWorkspaceNavigation
           active="calls"
           destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
-        <PageHeader title="Calls" />
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="grid w-full min-w-0 max-w-full gap-1.5 text-xs font-semibold text-[var(--admin-muted)] sm:w-80">
             Call definition
