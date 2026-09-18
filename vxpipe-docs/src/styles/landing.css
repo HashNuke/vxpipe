@@ -1,6 +1,30 @@
 /* SaaS hero: airy, centered, clear of the site header. */
 .sl-container > div.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding-block: clamp(4rem, 9vw, 6.5rem) clamp(2rem, 4vw, 3rem);
+  border-radius: 0.5rem;
+  background-color: color-mix(in srgb, var(--secondary) 32%, transparent);
+}
+
+.sl-container > div.hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-radial-gradient(
+    ellipse at 50% 115%,
+    transparent 0 2.5rem,
+    color-mix(in srgb, var(--foreground) 9%, transparent) 2.55rem 2.625rem,
+    transparent 2.675rem 5rem
+  );
+  mask-image: linear-gradient(to bottom, transparent, black 28%, black 78%, transparent);
+}
+
+.sl-container > div.hero .hero-image:empty {
+  display: none;
 }
 
 .sl-container > div.hero .hero-info {
