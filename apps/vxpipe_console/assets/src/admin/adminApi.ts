@@ -257,7 +257,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
     ]) ||
     typeof value.id !== "string" ||
     value.id.length === 0 ||
-    !member(value.provider, ["google", "zenmux", "deepgram", "telnyx", "twilio"]) ||
+    !member(value.provider, ["google", "vertex_ai", "zenmux", "deepgram", "telnyx", "twilio"]) ||
     typeof value.name !== "string" ||
     value.name.length === 0 ||
     !member(value.status, ["active", "revoked"]) ||

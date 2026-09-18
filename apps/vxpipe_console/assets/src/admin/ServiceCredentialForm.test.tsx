@@ -22,9 +22,6 @@ test("submits provider credentials without rendering them as stored metadata", (
   const submit = vi.fn();
   render(<ServiceCredentialForm onCancel={vi.fn()} onSubmit={submit} status="idle" />);
 
-  fireEvent.change(screen.getByLabelText("Credential name"), {
-    target: { value: "primary" },
-  });
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "secret-value" },
   });
@@ -32,7 +29,7 @@ test("submits provider credentials without rendering them as stored metadata", (
 
   expect(submit).toHaveBeenCalledWith({
     provider: "google",
-    name: "primary",
+    name: "google",
     values: { apiKey: "secret-value" },
   });
   expect(screen.queryByText("secret-value")).not.toBeInTheDocument();
@@ -46,7 +43,7 @@ test("does not submit incomplete credentials", () => {
 
   expect(submit).not.toHaveBeenCalled();
   expect(screen.getByRole("alert")).toHaveTextContent(
-    "Use letters, numbers, underscores or hyphens",
+    "Enter a valid API key without spaces or line breaks",
   );
 });
 
@@ -54,7 +51,6 @@ test("rejects malformed provider values before submission", () => {
   const submit = vi.fn();
   render(<ServiceCredentialForm onCancel={vi.fn()} onSubmit={submit} status="idle" />);
   fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "twilio" } });
-  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "phone" } });
   fireEvent.change(screen.getByLabelText("Account SID"), { target: { value: "not-a-sid" } });
   fireEvent.change(screen.getByLabelText("Auth token"), { target: { value: "token" } });
   fireEvent.submit(screen.getByRole("form", { name: "Credential setup" }));

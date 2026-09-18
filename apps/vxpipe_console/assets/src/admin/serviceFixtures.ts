@@ -8,23 +8,26 @@ import { demoTenant } from "./definitionFixtures";
 export const services: ServiceInventoryItem[] = [
   {
     id: "google-primary",
-    name: "Google",
+    name: "Google AI Studio",
     provider: "google",
     credentialName: "primary",
+    credentialPreview: [{ label: "API key", format: "last_four", lastFour: "8c4a" }],
     updatedAt: "2026-09-17T03:00:00.000Z",
   },
   {
-    id: "zenmux-fallback",
-    name: "Zenmux",
-    provider: "zenmux",
-    credentialName: null,
-    updatedAt: "2026-09-16T11:20:00.000Z",
+    id: "vertex-ai-primary",
+    name: "Google Vertex AI",
+    provider: "vertex_ai",
+    credentialName: "primary",
+    credentialPreview: [{ label: "API key", format: "last_four", lastFour: "7f2b" }],
+    updatedAt: "2026-09-16T03:00:00.000Z",
   },
   {
     id: "deepgram-realtime",
     name: "Deepgram",
     provider: "deepgram",
     credentialName: "realtime",
+    credentialPreview: [{ label: "API key", format: "last_four", lastFour: "1d90" }],
     updatedAt: "2026-09-15T09:45:00.000Z",
   },
   {
@@ -32,6 +35,10 @@ export const services: ServiceInventoryItem[] = [
     name: "Telnyx",
     provider: "telnyx",
     credentialName: "primary",
+    credentialPreview: [
+      { label: "API key", format: "last_four", lastFour: "c4a1" },
+      { label: "Public key", format: "last_four", lastFour: "91ef" },
+    ],
     updatedAt: "2026-09-14T16:10:00.000Z",
   },
   {
@@ -39,6 +46,10 @@ export const services: ServiceInventoryItem[] = [
     name: "Twilio",
     provider: "twilio",
     credentialName: "backup",
+    credentialPreview: [
+      { label: "Client ID", format: "last_four", lastFour: "4566" },
+      { label: "Client secret", format: "masked" },
+    ],
     updatedAt: "2026-09-12T07:30:00.000Z",
   },
 ];
@@ -159,6 +170,7 @@ export function applyCredentialCreation(
         name: draft.name,
         provider: draft.provider,
         credentialName: draft.name,
+        credentialPreview: [],
         updatedAt: new Date().toISOString(),
       },
     ],

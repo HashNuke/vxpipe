@@ -9,7 +9,8 @@ import type {
 import { validateCredentialDraft } from "./validateCredentialDraft";
 
 const providers: Array<{ value: ServiceProvider; label: string }> = [
-  { value: "google", label: "Google" },
+  { value: "google", label: "Google AI Studio" },
+  { value: "vertex_ai", label: "Google Vertex AI" },
   { value: "zenmux", label: "Zenmux" },
   { value: "deepgram", label: "Deepgram" },
   { value: "telnyx", label: "Telnyx" },
@@ -17,18 +18,21 @@ const providers: Array<{ value: ServiceProvider; label: string }> = [
 ];
 
 export function ServiceCredentialForm({
+  initialProvider = "google",
   status,
+  submitLabel = "Save credential",
   message,
   onCancel,
   onSubmit,
 }: {
+  initialProvider?: ServiceProvider;
   status: CredentialSetupStatus;
+  submitLabel?: string;
   message?: string;
   onCancel: () => void;
   onSubmit: (draft: CredentialDraft) => void;
 }) {
-  const [provider, setProvider] = useState<ServiceProvider>("google");
-  const [name, setName] = useState("");
+  const [provider, setProvider] = useState<ServiceProvider>(initialProvider);
   const [apiKey, setApiKey] = useState("");
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -39,6 +43,11 @@ export function ServiceCredentialForm({
     setAccountSid("");
     setAuthToken("");
   }
+
+  useEffect(() => {
+    setProvider(initialProvider);
+    clearSecrets();
+  }, [initialProvider]);
 
   useEffect(() => {
     if (
@@ -63,7 +72,7 @@ export function ServiceCredentialForm({
         event.preventDefault();
         const draft: CredentialDraft = {
           provider,
-          name: name.trim(),
+          name: provider,
           values:
             provider === "twilio"
               ? { accountSid, authToken }
@@ -92,15 +101,6 @@ export function ServiceCredentialForm({
           ))}
         </select>
       </label>
-      <label className="grid gap-1.5 text-sm font-semibold">
-        Credential name
-        <input
-          className={fieldClass}
-          disabled={pending}
-          onChange={(event) => setName(event.target.value)}
-          value={name}
-        />
-      </label>
       {provider === "twilio" ? (
         <>
           <label className="grid gap-1.5 text-sm font-semibold">
@@ -123,7 +123,7 @@ export function ServiceCredentialForm({
       {status === "success" ? <p className="text-sm text-[var(--admin-green)]" role="status">Credential stored.</p> : null}
       <div className="flex justify-end gap-2">
         <Button disabled={pending} onClick={() => { clearSecrets(); onCancel(); }} type="button" variant="ghost">Cancel</Button>
-        <Button disabled={pending} type="submit">{pending ? "Saving…" : "Save credential"}</Button>
+        <Button disabled={pending} type="submit">{pending ? "Saving…" : submitLabel}</Button>
       </div>
     </form>
   );

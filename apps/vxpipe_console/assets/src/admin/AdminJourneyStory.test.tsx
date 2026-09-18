@@ -137,8 +137,8 @@ test("reaches services through the tenant workspace", () => {
   expect(screen.getByRole("button", { name: "Add credential" })).toBeVisible();
 
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
-  fireEvent.change(screen.getByLabelText("Credential name"), {
-    target: { value: "secondary" },
+  fireEvent.change(screen.getByLabelText("Provider"), {
+    target: { value: "zenmux" },
   });
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "valid-key" },
@@ -147,22 +147,15 @@ test("reaches services through the tenant workspace", () => {
 
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Credential stored");
-  expect(screen.getAllByText("secondary")).not.toHaveLength(0);
+  expect(screen.getAllByText("zenmux")).not.toHaveLength(0);
 
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
   expect(screen.getByLabelText("API key")).toHaveValue("");
   expect(
     within(screen.getByRole("dialog")).queryByText("Credential stored."),
   ).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Credential name"), {
-    target: { value: "tertiary" },
-  });
-  fireEvent.change(screen.getByLabelText("API key"), {
-    target: { value: "next-valid-key" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(screen.getAllByText("tertiary")).not.toHaveLength(0);
 });
 
 test("resets service state when the tenant route changes", () => {

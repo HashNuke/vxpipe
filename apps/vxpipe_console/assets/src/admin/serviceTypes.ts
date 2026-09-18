@@ -2,6 +2,7 @@ import type { TenantContext } from "./definitionTypes";
 
 export type ServiceProvider =
   | "google"
+  | "vertex_ai"
   | "zenmux"
   | "deepgram"
   | "telnyx"
@@ -12,8 +13,13 @@ export type ServiceInventoryItem = {
   name: string;
   provider: ServiceProvider;
   credentialName: string | null;
+  credentialPreview?: CredentialPreview[];
   updatedAt: string;
 };
+
+export type CredentialPreview =
+  | { label: string; format: "last_four"; lastFour: string }
+  | { label: string; format: "masked" };
 
 export type CredentialSetupStatus =
   | "idle"

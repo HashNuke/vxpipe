@@ -25,3 +25,25 @@
 - Added deterministic relative-time formatting (for example, `3 days ago`) while retaining the exact
   UTC ISO timestamp in the `time` element and hover title. The focused formatter test, console-assets
   test suite, TypeScript check, and rendered Storybook review pass.
+- Added reusable provider service marks for the admin inventory (Google, Zenmux, Deepgram, Telnyx,
+  and Twilio) with compact responsive tiles and provider-specific color treatments. Desktop and
+  mobile Storybook review show the marks improving scanability without introducing page overflow;
+  the focused admin test and TypeScript check pass.
+- Replaced the hand-drawn Google/Zenmux approximations with direct tree-shaken `@lobehub/icons`
+  components. The logo resolver now uses an explicit per-provider source map, with LobeHub
+  components where selected, official vendored assets where selected, and local avatar-like
+  provider marks as the fallback. The LobeHub dependency is owned by `@vxpipe/console-assets`;
+  assets tests and the root Storybook production build pass.
+- Google is configured to use Google's official full-color G mark, ZenMux to use LobeHub, Telnyx
+  to use its official media-kit logo, and Deepgram/Twilio to use local avatars. The Google and
+  Telnyx assets are vendored directly under `src/admin/assets/icons/`, with provenance recorded in
+  the directory README. The component falls back locally if an imported image fails to load.
+  Rendered Storybook confirms the Google and Telnyx marks use their official vendored assets.
+- Added Vertex AI as a distinct service provider rather than treating it as Google. Its separate
+  service row, credential-provider option, API response parser allowlist, and icon asset are now
+  covered by the focused admin test and rendered Storybook review. Replaced the initial external
+  Vertex AI SVG with the current official Google Cloud asset from `core-products-icons.zip`.
+- Restored a useful Credentials column with server-provided masked previews: partially revealed
+  values show exactly four mask characters plus the final four characters, while fully hidden
+  values show exactly six mask characters. Added per-row edit actions that open the existing
+  credential modal with secret fields blank.

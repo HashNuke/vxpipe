@@ -627,7 +627,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
       });
       expect(JSON.parse(String(init?.body))).toEqual({
         provider: "google",
-        name: "primary",
+        name: "google",
         values: { api_key: "private-value" },
       });
       return response(
@@ -650,9 +650,6 @@ test("submits write-only credential values with CSRF and updates metadata after 
   expect(await screen.findByText("No services yet")).toBeVisible();
 
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
-  fireEvent.change(screen.getByLabelText("Credential name"), {
-    target: { value: "primary" },
-  });
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "private-value" },
   });
@@ -689,7 +686,6 @@ test("ignores a stale credential submission after leaving the tenant services pa
   );
   expect(await screen.findByText("No services yet")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
-  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "primary" } });
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "private-value" } });
   fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
 
@@ -721,13 +717,11 @@ test("ignores a credential response after its dialog is closed and reopened", as
   render(<AdminApp csrfToken="csrf-token" fetchImpl={fetchImpl} />);
   expect(await screen.findByText("No services yet")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
-  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "first" } });
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "first-secret" } });
   fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
   fireEvent.click(screen.getByRole("button", { name: "Close credential setup" }));
 
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
-  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "second" } });
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "second-secret" } });
 
   await act(async () => {
@@ -751,7 +745,6 @@ test("ignores a credential response after its dialog is closed and reopened", as
   });
 
   expect(screen.getByRole("dialog", { name: "Add credential" })).toBeVisible();
-  expect(screen.getByLabelText("Credential name")).toHaveValue("second");
   expect(screen.getByLabelText("API key")).toHaveValue("second-secret");
 });
 
@@ -787,7 +780,6 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
   );
   expect(await screen.findByText("No services yet")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
-  fireEvent.change(screen.getByLabelText("Credential name"), { target: { value: "primary" } });
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "private-value" } });
   fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("already exists");

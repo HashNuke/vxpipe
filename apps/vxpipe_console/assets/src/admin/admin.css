@@ -69,3 +69,74 @@ body,
   scrollbar-color: var(--admin-muted) var(--admin-panel);
   scrollbar-width: thin;
 }
+
+.service-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.08em;
+  line-height: 1;
+}
+
+.service-logo-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.service-logo-image--official {
+  padding: 0.35rem;
+  object-fit: contain;
+}
+
+.service-logo--google {
+  border-color: color-mix(in srgb, #4285f4 45%, transparent);
+  background: conic-gradient(from 210deg, #4285f4, #34a853 28%, #fbbc05 53%, #ea4335 75%, #4285f4);
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+.service-logo--google[data-logo-source="official"] {
+  background: #fff;
+  color: #202124;
+  text-shadow: none;
+}
+
+.service-logo--zenmux {
+  border-color: color-mix(in srgb, #a78bfa 40%, transparent);
+  background: linear-gradient(145deg, #312e81, #7c3aed);
+  color: #ede9fe;
+}
+
+.service-logo--deepgram {
+  border-color: color-mix(in srgb, #38bdf8 45%, transparent);
+  background: linear-gradient(145deg, #082f49, #0ea5e9);
+  color: #e0f2fe;
+}
+
+.service-logo--telnyx {
+  border-color: color-mix(in srgb, #22d3ee 45%, transparent);
+  background: linear-gradient(145deg, #164e63, #0891b2);
+  color: #cffafe;
+}
+
+.service-logo--telnyx[data-logo-source="official"] {
+  border-color: color-mix(in srgb, #00e3aa 45%, transparent);
+  background: #071f1a;
+  color: #00e3aa;
+}
+
+.service-logo--twilio {
+  border-color: color-mix(in srgb, #f472b6 45%, transparent);
+  background: linear-gradient(145deg, #831843, #e11d48);
+  color: #fce7f3;
+}
