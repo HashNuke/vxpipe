@@ -280,28 +280,21 @@ test("validates and projects metadata-only service inventory", () => {
         id: "credential-google",
         name: "primary",
         provider: "google",
-        capability: "Models",
         credentialName: "primary",
-        serviceStatus: "not-applicable",
-        telephonyConfiguration: null,
+        updatedAt: "2026-09-17T02:00:00Z",
       },
       {
         id: "service-support",
         name: "support",
         provider: "telnyx",
-        capability: "Telephony",
         credentialName: "voice",
-        serviceStatus: "registered",
-        telephonyConfiguration: {
-          providerConnectionId: "connection-primary",
-          outboundNumber: "+14155550100",
-        },
+        updatedAt: "2026-09-17T02:01:00Z",
       },
     ],
   });
 });
 
-test("does not claim a telephony credential is unregistered when inventory is partial", () => {
+test("keeps credential update time when inventory is partial", () => {
   const result = parseServiceDirectory({
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
     truncated: true,
@@ -319,7 +312,7 @@ test("does not claim a telephony credential is unregistered when inventory is pa
     telephony_services: [],
   });
 
-  expect(result.services[0]?.serviceStatus).toBe("unknown");
+  expect(result.services[0]?.updatedAt).toBe("2026-09-17T02:01:00Z");
 });
 
 test("rejects service responses containing malformed, cross-linked, or secret data", () => {
@@ -381,10 +374,8 @@ test("maps a created credential response without accepting private response fiel
     id: "credential-deepgram",
     name: "realtime",
     provider: "deepgram",
-    capability: "Speech",
     credentialName: "realtime",
-    serviceStatus: "not-applicable",
-    telephonyConfiguration: null,
+    updatedAt: "2026-09-17T02:00:00Z",
   });
 
   expect(() =>

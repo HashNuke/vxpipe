@@ -48,7 +48,7 @@ existing published-definition/prepared-call workflow can then run through the de
   supports Google/Deepgram and the existing Zenmux alternative; one Deepgram credential can
   cover STT and TTS. Preserve provider/name binding semantics and safe metadata responses.
 - Add provider setup as React components in the Console admin application. Build small field,
-  capability-status and error components and complete mocked Storybook states before connecting
+  provider-configuration and error components and complete mocked Storybook states before connecting
   operator-authenticated writes. The login/code-entry page remains the only server-rendered UI.
 - Do not silently replace an existing provider credential. Report the existing binding and let
   the operator resolve any deliberate change through an explicit supported operation. This

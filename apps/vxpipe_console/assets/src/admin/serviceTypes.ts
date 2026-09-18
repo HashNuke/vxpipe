@@ -11,13 +11,8 @@ export type ServiceInventoryItem = {
   id: string;
   name: string;
   provider: ServiceProvider;
-  capability: "Models" | "Speech" | "Telephony";
   credentialName: string | null;
-  serviceStatus: "not-applicable" | "not-registered" | "registered" | "unknown";
-  telephonyConfiguration: {
-    providerConnectionId: string;
-    outboundNumber: string | null;
-  } | null;
+  updatedAt: string;
 };
 
 export type CredentialSetupStatus =

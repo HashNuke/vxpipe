@@ -6,7 +6,7 @@ import { TenantServicesPage } from "./TenantServicesPage";
 
 afterEach(cleanup);
 
-test("separates credential storage from telephony service readiness", () => {
+test("shows credential storage and compact update times", () => {
   render(<TenantServicesPage state={serviceFixture("populated")} />);
 
   expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
@@ -14,12 +14,9 @@ test("separates credential storage from telephony service readiness", () => {
     "page",
   );
   expect(screen.getAllByText("Credential stored")).not.toHaveLength(0);
-  expect(screen.getByText("Not registered")).toBeVisible();
-  expect(screen.getByText("Registered")).toBeVisible();
-  expect(screen.getByText(/connection-primary/)).toHaveTextContent(
-    "+14155550100",
-  );
-  expect(screen.getByText("No telephony service registered")).toBeVisible();
+  expect(screen.getAllByRole("time")).toHaveLength(5);
+  expect(screen.getByTitle("2026-09-17T03:00:00.000Z UTC")).toBeVisible();
+  expect(screen.queryByText(/Not registered|Registered|connection-primary|No telephony service registered/)).not.toBeInTheDocument();
   expect(screen.queryByText(/••••|secret-value|api key:/i)).not.toBeInTheDocument();
 });
 

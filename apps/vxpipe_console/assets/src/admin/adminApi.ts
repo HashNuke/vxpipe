@@ -195,17 +195,12 @@ export function parseServiceDirectory(value: unknown): ServiceDirectory {
         id: service.id,
         name: service.name,
         provider: service.provider,
-        capability: "Telephony" as const,
         credentialName: credential.name,
-        serviceStatus: "registered" as const,
-        telephonyConfiguration: {
-          providerConnectionId: service.providerConnectionId,
-          outboundNumber: service.outboundNumber,
-        },
+        updatedAt: credential.updatedAt,
       }));
     }
 
-    return [credentialInventory(credential, truncated)];
+    return [credentialInventory(credential)];
   });
 
   return {
@@ -234,6 +229,7 @@ type CredentialMetadata = {
   id: string;
   provider: ServiceProvider;
   name: string;
+  updatedAt: string;
   authKind: "api_key" | "account_sid_auth_token";
   status: "active" | "revoked";
 };
@@ -279,6 +275,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
     id: value.id,
     provider: value.provider,
     name: value.name,
+    updatedAt: value.updated_at,
     authKind: value.auth_kind,
     status: value.status,
   };
@@ -319,34 +316,18 @@ function parseTelephonyMetadata(value: unknown): TelephonyMetadata {
   };
 }
 
-function capability(provider: ServiceProvider): ServiceInventoryItem["capability"] {
-  if (provider === "deepgram") return "Speech";
-  if (telephonyProvider(provider)) return "Telephony";
-  return "Models";
-}
-
 function credentialInventory(
   credential: CredentialMetadata,
-  inventoryTruncated = false,
 ): ServiceInventoryItem {
   return {
     id: credential.id,
     name: credential.name,
     provider: credential.provider,
-    capability: capability(credential.provider),
     credentialName: credential.name,
-    serviceStatus: telephonyProvider(credential.provider)
-      ? inventoryTruncated
-        ? "unknown"
-        : "not-registered"
-      : "not-applicable",
-    telephonyConfiguration: null,
+    updatedAt: credential.updatedAt,
   };
 }
 
-function telephonyProvider(provider: ServiceProvider): provider is "telnyx" | "twilio" {
-  return provider === "telnyx" || provider === "twilio";
-}
 
 function parseCallDefinition(value: unknown): Pick<DefinitionContext, "id" | "name"> {
   if (

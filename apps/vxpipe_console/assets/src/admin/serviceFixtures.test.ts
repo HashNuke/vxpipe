@@ -17,7 +17,7 @@ test("rejects duplicate provider and credential-name bindings without overwrite"
   expect(JSON.stringify(result)).not.toContain("replacement-value");
 });
 
-test("stores only new credential metadata and does not imply telephony registration", () => {
+test("stores only new credential metadata", () => {
   const result = applyCredentialCreation(serviceFixture("populated"), {
     provider: "twilio",
     name: "secondary",
@@ -32,7 +32,7 @@ test("stores only new credential metadata and does not imply telephony registrat
   expect(result.services.at(-1)).toMatchObject({
     provider: "twilio",
     credentialName: "secondary",
-    serviceStatus: "not-registered",
+    updatedAt: expect.any(String),
   });
   expect(JSON.stringify(result)).not.toContain("private-input");
   expect(result.setup).toEqual({

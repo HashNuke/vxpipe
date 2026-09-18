@@ -8,51 +8,38 @@ import { demoTenant } from "./definitionFixtures";
 export const services: ServiceInventoryItem[] = [
   {
     id: "google-primary",
-    name: "Primary Google models",
+    name: "Google",
     provider: "google",
-    capability: "Models",
     credentialName: "primary",
-    serviceStatus: "not-applicable",
-    telephonyConfiguration: null,
+    updatedAt: "2026-09-17T03:00:00.000Z",
   },
   {
     id: "zenmux-fallback",
-    name: "Zenmux fallback",
+    name: "Zenmux",
     provider: "zenmux",
-    capability: "Models",
     credentialName: null,
-    serviceStatus: "not-applicable",
-    telephonyConfiguration: null,
+    updatedAt: "2026-09-16T11:20:00.000Z",
   },
   {
     id: "deepgram-realtime",
-    name: "Realtime transcription",
+    name: "Deepgram",
     provider: "deepgram",
-    capability: "Speech",
     credentialName: "realtime",
-    serviceStatus: "not-applicable",
-    telephonyConfiguration: null,
+    updatedAt: "2026-09-15T09:45:00.000Z",
   },
   {
     id: "telnyx-primary",
-    name: "Primary voice service",
+    name: "Telnyx",
     provider: "telnyx",
-    capability: "Telephony",
     credentialName: "primary",
-    serviceStatus: "registered",
-    telephonyConfiguration: {
-      providerConnectionId: "connection-primary",
-      outboundNumber: "+14155550100",
-    },
+    updatedAt: "2026-09-14T16:10:00.000Z",
   },
   {
     id: "twilio-backup",
-    name: "Backup voice service",
+    name: "Twilio",
     provider: "twilio",
-    capability: "Telephony",
     credentialName: "backup",
-    serviceStatus: "not-registered",
-    telephonyConfiguration: null,
+    updatedAt: "2026-09-12T07:30:00.000Z",
   },
 ];
 
@@ -83,11 +70,7 @@ export function serviceFixture(
         status: "ready",
         tenant: demoTenant,
         setup,
-        services: services.map((service) =>
-          service.serviceStatus === "not-registered"
-            ? { ...service, serviceStatus: "unknown" as const }
-            : service,
-        ),
+        services,
         truncated: true,
       };
     case "unavailable":
@@ -111,11 +94,7 @@ export function serviceFixture(
             id: "telnyx-long",
             name: "International priority outbound voice operations and exception handling",
             credentialName: `primary_${"credential_".repeat(10)}binding`,
-            telephonyConfiguration: {
-              providerConnectionId:
-                "connection-international-priority-voice-operations-southeast-asia",
-              outboundNumber: "+14155550100",
-            },
+            updatedAt: "2026-09-18T02:15:00.000Z",
           },
           ...services.slice(0, 2),
         ],
@@ -166,7 +145,6 @@ export function applyCredentialCreation(
     };
   }
 
-  const telephony = draft.provider === "telnyx" || draft.provider === "twilio";
   return {
     ...state,
     setup: {
@@ -180,15 +158,8 @@ export function applyCredentialCreation(
         id: `${draft.provider}-${draft.name}`,
         name: draft.name,
         provider: draft.provider,
-        capability:
-          draft.provider === "deepgram"
-            ? "Speech"
-            : telephony
-              ? "Telephony"
-              : "Models",
         credentialName: draft.name,
-        serviceStatus: telephony ? "not-registered" : "not-applicable",
-        telephonyConfiguration: null,
+        updatedAt: new Date().toISOString(),
       },
     ],
   };
