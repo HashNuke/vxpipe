@@ -39,14 +39,14 @@ export function ServiceInventory({
               <div className="min-w-0 text-sm">
                 {service.credentialPreview?.map((preview) => (
                   <div
-                    className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-2"
+                    className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-2 font-mono text-xs text-[var(--admin-muted)]"
                     key={preview.label}
                   >
-                    <span className="shrink-0 font-mono text-[0.68rem] font-semibold uppercase tracking-[0.04em] text-[var(--admin-muted)]">
+                    <span className="shrink-0 font-semibold uppercase tracking-[0.04em]">
                       {preview.label}:
                     </span>
                     <code
-                      className="truncate text-[var(--admin-ink)]"
+                      className="truncate text-inherit"
                       title={`${preview.label}: ${preview.format === "last_four" ? `****${preview.lastFour}` : "******"}`}
                     >
                       {preview.format === "last_four"

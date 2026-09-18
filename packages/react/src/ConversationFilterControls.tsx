@@ -90,7 +90,7 @@ export function ConversationFilterControls({
           <button
             aria-label={`${filters[filter] ? "Hide" : "Show"} ${conversationFilterLabels[filter]}`}
             aria-pressed={filters[filter]}
-            className={filters[filter] ? `vx-filter-active vx-filter-${filter}` : ""}
+            className={filters[filter] ? "vx-filter-active" : ""}
             key={filter}
             onClick={() => onToggle(filter)}
             title={conversationFilterLabels[filter]}

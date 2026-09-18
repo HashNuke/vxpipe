@@ -143,6 +143,30 @@ test("Conversation filters messages, events, tool calls and raw RTVI logs", () =
   expect(screen.queryByText("client-ready")).not.toBeInTheDocument();
 });
 
+test("conversation filter icons use one active treatment", () => {
+  render(<CallConsole controller={createFixtureController("conversation")} />);
+
+  expect(screen.getByRole("button", { name: "Hide Messages" })).toHaveClass(
+    "vx-filter-active",
+  );
+  expect(screen.getByRole("button", { name: "Hide Events" })).toHaveClass(
+    "vx-filter-active",
+  );
+  expect(screen.getByRole("button", { name: "Hide Tool calls" })).toHaveClass(
+    "vx-filter-active",
+  );
+
+  for (const name of ["Hide Messages", "Hide Events", "Hide Tool calls"]) {
+    expect(screen.getByRole("button", { name }).className).toBe(
+      "vx-filter-active",
+    );
+  }
+
+  expect(screen.getByRole("button", { name: "Show Logs" })).not.toHaveClass(
+    "vx-filter-active",
+  );
+});
+
 test("tool calls disclose optional request and response details", () => {
   render(<CallConsole controller={createFixtureController("tool-states")} />);
 

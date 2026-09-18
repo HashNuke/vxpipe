@@ -516,15 +516,6 @@
   color: var(--vx-ink);
 }
 .vx-filter-icons button.vx-filter-active {
-  color: var(--vx-blue);
-}
-.vx-filter-icons button.vx-filter-logs {
-  color: var(--vx-amber);
-}
-.vx-filter-icons button.vx-filter-events {
-  color: var(--vx-violet);
-}
-.vx-filter-icons button.vx-filter-tools {
   color: var(--vx-green);
 }
 .vx-filter-icons svg,
@@ -539,6 +530,8 @@
   display: none;
 }
 .vx-filter-menu {
+  --vx-filter-menu-active: oklch(0.51 0.13 162.48);
+  --vx-filter-menu-muted: oklch(0.48 0.014 285.938);
   z-index: 90;
   min-width: 190px;
   padding: 6px;
@@ -556,6 +549,8 @@
   color-scheme: light;
 }
 .vx-filter-menu[data-vx-theme="dark"] {
+  --vx-filter-menu-active: oklch(0.78 0.12 162);
+  --vx-filter-menu-muted: oklch(0.76 0.01 286);
   border-color: oklch(0.35 0.006 286);
   background: oklch(0.235 0.006 285.885);
   color: oklch(0.985 0 0);
@@ -587,6 +582,12 @@
 .vx-filter-menu svg {
   width: 15px;
   height: 15px;
+}
+.vx-filter-menu > [role="menuitemcheckbox"] > svg {
+  color: var(--vx-filter-menu-muted);
+}
+.vx-filter-menu > [role="menuitemcheckbox"][aria-checked="true"] > svg {
+  color: var(--vx-filter-menu-active);
 }
 .vx-transcript {
   flex: 1;

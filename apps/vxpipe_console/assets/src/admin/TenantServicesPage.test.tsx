@@ -39,6 +39,11 @@ test("shows safe credential previews and compact update times", () => {
   expect(screen.getByText("****8c4a")).toBeVisible();
   expect(screen.getByText("Account SID:")).toBeVisible();
   expect(screen.getByText("****4566")).toBeVisible();
+  expect(screen.getByText("Account SID:").parentElement).toHaveClass(
+    "font-mono",
+    "text-xs",
+    "text-[var(--admin-muted)]",
+  );
   expect(screen.getByText("Auth token:")).toBeVisible();
   expect(screen.getByText("******")).toBeVisible();
   expect(screen.queryByText("Credential stored")).not.toBeInTheDocument();
