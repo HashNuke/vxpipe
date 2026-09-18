@@ -91,3 +91,8 @@ source, milestone, and example paths.
   server/browser were stopped. The rename introduced no behavior changes beyond
   the reviewed compatibility additions: the safe legacy resolved-plan reader
   and the new reversible migration; existing migrations remain untouched.
+- Follow-up: at the user's request, the one-off isolated migration regression
+  test was permanently removed after successful up/down/up verification. The
+  migration and compatibility implementation remain in place; the historical
+  verification evidence above is preserved. Current checks after this removal
+  was intentionally not rerun after this test-only removal per the user's request.
