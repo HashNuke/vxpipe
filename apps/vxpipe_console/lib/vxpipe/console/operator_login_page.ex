@@ -35,7 +35,7 @@ defmodule Vxpipe.Console.OperatorLoginPage do
             <div :if={@view == :code}>
               <p class="operator-login-label">Verification</p>
               <h1>Enter the 8-digit code</h1>
-              <p>Use the code printed beside the login URL. The request expires after 10 minutes.</p>
+              <p>The request expires after 10 minutes.</p>
               <form action="/auth/login-token" method="post" class="operator-login-form">
                 <input type="hidden" name="_csrf_token" value={@csrf_token} />
                 <input type="hidden" name="operator[token]" value={@token} />
