@@ -14,11 +14,22 @@ const meta = {
       },
     },
   },
-  args: { scenario: "choose-services", theme: "dark" },
+  args: {
+    scenario: "choose-services",
+    theme: "dark",
+    publicOrigin:
+      import.meta.env.STORYBOOK_APP_ORIGIN ?? "http://localhost:4000",
+  },
   argTypes: {
     scenario: {
       control: "select",
       options: [
+        "platform-services",
+        "platform-configured",
+        "platform-telnyx",
+        "inherited-services",
+        "tenant-override",
+        "tenant-override-error",
         "creating-tenant",
         "choose-services",
         "service-picker",
@@ -147,4 +158,19 @@ export const SpeechToSpeechConnectedPreview: Story = {
 export const TelnyxAiOnly: Story = { args: { scenario: "telnyx-ai-only" } };
 export const TelnyxConnected: Story = {
   args: { scenario: "telnyx-connected" },
+};
+
+export const PlatformServices: Story = {
+  args: { scenario: "platform-services" },
+};
+export const PlatformConfigured: Story = {
+  args: { scenario: "platform-configured" },
+};
+export const PlatformTelnyx: Story = { args: { scenario: "platform-telnyx" } };
+export const InheritedServices: Story = {
+  args: { scenario: "inherited-services" },
+};
+export const TenantOverride: Story = { args: { scenario: "tenant-override" } };
+export const TenantOverrideError: Story = {
+  args: { scenario: "tenant-override-error" },
 };

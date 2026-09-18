@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { CheckCheck, Pencil, TriangleAlert } from "lucide-react";
 import { Button } from "./Button";
 import { ServiceLogo } from "./ServiceLogo";
 import {
@@ -11,18 +11,26 @@ export function SetupServiceCard({
   provider,
   connection,
   onSelect,
-  telephony = false,
+  platform = false,
+  overridesPlatform = false,
 }: {
   provider: SetupProvider;
   connection?: SetupConnection;
   onSelect: () => void;
-  telephony?: boolean;
+  platform?: boolean;
+  overridesPlatform?: boolean;
 }) {
   const connected = connection?.status === "connected";
   const needsPublicKey =
-    telephony &&
     provider.id === "telnyx" &&
     !connection?.telephonyPublicKeyConfigured;
+  const source = platform
+    ? null
+    : connection?.source === "platform"
+      ? "Inherited from platform"
+      : overridesPlatform
+        ? "Tenant override"
+        : null;
   return (
     <article
       aria-label={provider.name}
@@ -31,21 +39,29 @@ export function SetupServiceCard({
       <div className="setup-service-card-heading">
         <ServiceLogo name={provider.name} provider={provider.id} />
         <h3>{provider.name}</h3>
-        {connected ? (
-          <span
-            className={`setup-service-status${needsPublicKey ? " setup-service-status--pending" : ""}`}
+        <div className="setup-service-card-actions">
+          {connected ? (
+            <span className="setup-service-status" title="Connected">
+              <CheckCheck aria-hidden="true" size={18} />
+              <span className="sr-only">Connected</span>
+            </span>
+          ) : null}
+          <Button
+            aria-label={`${connection ? "Manage" : "Connect"} ${provider.name}`}
+            className="setup-service-edit"
+            onClick={onSelect}
+            title={`${connection ? "Manage" : "Connect"} ${provider.name}`}
+            variant="ghost"
           >
-            {needsPublicKey ? (
-              "Public key needed"
-            ) : (
-              <>
-                <Check aria-hidden="true" size={14} />
-                Connected
-              </>
-            )}
-          </span>
-        ) : null}
+            <Pencil aria-hidden="true" size={16} />
+          </Button>
+        </div>
       </div>
+      {connection?.status === "disabled" ? (
+        <p className="setup-service-source">Disabled for this tenant</p>
+      ) : source ? (
+        <p className="setup-service-source">{source}</p>
+      ) : null}
       {connection?.status === "invalid" ? (
         <p className="setup-error">Credentials need attention</p>
       ) : null}
@@ -55,15 +71,20 @@ export function SetupServiceCard({
       <div className="setup-service-card-footer">
         <div className="setup-tags">
           {provider.capabilities.map((capability) => (
-            <span key={capability}>{capabilityLabels[capability]}</span>
+            <span key={capability}>
+              {capabilityLabels[capability]}
+              {capability === "telephony" && connected && needsPublicKey ? (
+                <span
+                  className="setup-capability-warning"
+                  title="Public key needed"
+                >
+                  <TriangleAlert aria-hidden="true" size={13} />
+                  <span className="sr-only">Public key needed</span>
+                </span>
+              ) : null}
+            </span>
           ))}
         </div>
-        <Button
-          aria-label={`${connected ? "Manage" : "Connect"} ${provider.name}`}
-          onClick={onSelect}
-        >
-          {connected ? "Manage" : "Connect"}
-        </Button>
       </div>
     </article>
   );

@@ -9,6 +9,13 @@ call has a usable destination; its storage/auth implementation does not depend o
 Sources: [Developer console design](../developer-console-and-onboarding.md),
 [Tenant control plane](../tenant-control-plane.md), [Provider storage](../provider-credential-storage.md).
 
+The 2026-09-19 [platform and tenant services plan](../platform-and-tenant-services.md)
+extends the tenant-only contracts below with explicit platform inheritance and tenant
+overrides. Its sequence covers Storybook review, scoped credential storage/readers,
+scoped Telnyx verification/routing, then Console integration. Backend tasks remain
+unchecked; the existing operator session can authorize this work before programmatic
+platform API-key issuance is complete.
+
 ## Runnable outcome
 
 A trusted developer issues a platform-level API key once and authenticates a platform API operation.

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { Button } from "./Button";
 import type {
@@ -17,6 +17,8 @@ const providers: Array<{ value: ServiceProvider; label: string }> = [
   { value: "twilio", label: "Twilio" },
 ];
 
+type CredentialField = "apiKey" | "publicKey" | "accountSid" | "authToken";
+
 export function ServiceCredentialForm({
   initialProvider = "google",
   providerLocked = false,
@@ -29,6 +31,8 @@ export function ServiceCredentialForm({
   message,
   onCancel,
   onSubmit,
+  beforeActions,
+  savedFields = [],
 }: {
   initialProvider?: ServiceProvider;
   providerLocked?: boolean;
@@ -41,6 +45,8 @@ export function ServiceCredentialForm({
   message?: string;
   onCancel: () => void;
   onSubmit: (draft: CredentialDraft) => void;
+  beforeActions?: ReactNode;
+  savedFields?: CredentialField[];
 }) {
   const [provider, setProvider] = useState<ServiceProvider>(initialProvider);
   const [apiKey, setApiKey] = useState("");
@@ -77,6 +83,10 @@ export function ServiceCredentialForm({
   }, [status]);
 
   const pending = status === "submitting";
+  const savedPlaceholder = (field: CredentialField) =>
+    provider === initialProvider && savedFields.includes(field)
+      ? "••••••••"
+      : undefined;
   const fieldClass =
     "h-10 w-full rounded-sm border border-[var(--admin-line)] bg-[var(--admin-bg)] px-3 text-sm text-[var(--admin-ink)]";
 
@@ -131,6 +141,7 @@ export function ServiceCredentialForm({
               className={fieldClass}
               disabled={pending}
               onChange={(event) => setAccountSid(event.target.value)}
+              placeholder={savedPlaceholder("accountSid")}
               type="password"
               value={accountSid}
             />
@@ -141,6 +152,7 @@ export function ServiceCredentialForm({
               className={fieldClass}
               disabled={pending}
               onChange={(event) => setAuthToken(event.target.value)}
+              placeholder={savedPlaceholder("authToken")}
               type="password"
               value={authToken}
             />
@@ -154,23 +166,13 @@ export function ServiceCredentialForm({
             </label>
             <input
               id={`${inputId}-api`}
-              aria-describedby={
-                includePublicKey ? `${inputId}-api-hint` : undefined
-              }
               className={fieldClass}
               disabled={pending}
               onChange={(event) => setApiKey(event.target.value)}
+              placeholder={savedPlaceholder("apiKey")}
               type="password"
               value={apiKey}
             />
-            {includePublicKey ? (
-              <p
-                id={`${inputId}-api-hint`}
-                className="text-xs text-[var(--admin-muted)]"
-              >
-                For making API calls.
-              </p>
-            ) : null}
           </div>
           {includePublicKey ? (
             <div className="grid gap-1.5 text-sm">
@@ -183,6 +185,7 @@ export function ServiceCredentialForm({
                 className={fieldClass}
                 disabled={pending}
                 onChange={(event) => setPublicKey(event.target.value)}
+                placeholder={savedPlaceholder("publicKey")}
                 spellCheck={false}
                 type="text"
                 value={publicKey}
@@ -191,8 +194,7 @@ export function ServiceCredentialForm({
                 id={`${inputId}-public-hint`}
                 className="text-xs text-[var(--admin-muted)]"
               >
-                Optional for AI services. Required for telephony to validate
-                webhooks.
+                Optional; Only required for Telephony services
               </p>
             </div>
           ) : null}
@@ -213,6 +215,7 @@ export function ServiceCredentialForm({
           Credential stored.
         </p>
       ) : null}
+      {beforeActions}
       <div className="flex justify-end gap-2">
         {showCancel ? (
           <Button

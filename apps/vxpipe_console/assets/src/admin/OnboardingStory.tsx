@@ -21,6 +21,7 @@ import { TenantSetupOverview } from "./TenantSetupOverview";
 import { TenantSetupPage } from "./TenantSetupPage";
 import {
   capabilityLabels,
+  effectiveSetupConnections,
   voiceSetupReady,
   setupProviders,
   providersFor,
@@ -39,6 +40,12 @@ import type { CredentialDraft } from "./serviceTypes";
 import "./tenantSetup.css";
 
 export type OnboardingScenario =
+  | "platform-services"
+  | "platform-configured"
+  | "platform-telnyx"
+  | "inherited-services"
+  | "tenant-override"
+  | "tenant-override-error"
   | "service-picker"
   | "speech-to-speech"
   | "speech-to-speech-connected"
@@ -75,8 +82,11 @@ export type OnboardingScenario =
   | "api-key-created"
   | "api-key-existing";
 
-type SetupPage = "services" | "keys" | "samples" | "tenants";
-const steps: Array<{ page: Exclude<SetupPage, "tenants">; label: string }> = [
+type SetupPage = "services" | "keys" | "samples" | "tenants" | "platform";
+const steps: Array<{
+  page: Exclude<SetupPage, "tenants" | "platform">;
+  label: string;
+}> = [
   { page: "services", label: "Setup services" },
   { page: "keys", label: "Create API Keys" },
   { page: "samples", label: "Setup Call Specs" },
@@ -140,6 +150,10 @@ function tenantDefaults(key: string): TenantProgress {
 }
 
 function initialConnections(scenario: OnboardingScenario): SetupConnection[] {
+  if (scenario === "tenant-override")
+    return [{ ...connection("telnyx"), telephonyPublicKeyConfigured: true }];
+  if (scenario === "tenant-override-error")
+    return [{ provider: "deepgram", status: "invalid" }];
   if (scenario === "telnyx-ai-only") return [connection("telnyx")];
   if (scenario === "telnyx-connected")
     return [{ ...connection("telnyx"), telephonyPublicKeyConfigured: true }];
@@ -177,7 +191,7 @@ function initialModal(scenario: OnboardingScenario): ServiceModalState | null {
   if (scenario === "service-picker") return { provider: null, status: "idle" };
   if (scenario === "enter-credentials")
     return { provider: "deepgram", status: "idle" };
-  if (scenario === "telnyx-credentials")
+  if (scenario === "telnyx-credentials" || scenario === "platform-telnyx")
     return { provider: "telnyx", status: "idle" };
   if (scenario === "validating")
     return { provider: "google", status: "submitting" };
@@ -200,7 +214,9 @@ function initialModal(scenario: OnboardingScenario): ServiceModalState | null {
 export function OnboardingStory({
   scenario,
   theme,
+  publicOrigin = "http://localhost:4000",
 }: {
+  publicOrigin?: string;
   scenario: OnboardingScenario;
   theme: "dark" | "light";
 }) {
@@ -217,25 +233,27 @@ export function OnboardingStory({
       )
     : setupProviders;
   const [page, setPage] = useState<SetupPage>(
-    scenario.startsWith("api-key")
-      ? "keys"
-      : [
-            "blocked-samples",
-            "samples",
-            "loading-samples",
-            "sample-error",
-            "complete",
-          ].includes(scenario)
-        ? "samples"
+    scenario.startsWith("platform-")
+      ? "platform"
+      : scenario.startsWith("api-key")
+        ? "keys"
         : [
-              "demo-nudge",
-              "multiple-tenants",
-              "new-tenant",
-              "creating-new-tenant",
-              "tenant-creation-error",
+              "blocked-samples",
+              "samples",
+              "loading-samples",
+              "sample-error",
+              "complete",
             ].includes(scenario)
-          ? "tenants"
-          : "services",
+          ? "samples"
+          : [
+                "demo-nudge",
+                "multiple-tenants",
+                "new-tenant",
+                "creating-new-tenant",
+                "tenant-creation-error",
+              ].includes(scenario)
+            ? "tenants"
+            : "services",
   );
   const [tenants, setTenants] = useState(() => initialTenants(scenario));
   const [tenant, setTenant] = useState<SetupTenant>(
@@ -251,9 +269,30 @@ export function OnboardingStory({
             ? "error"
             : null,
     );
-  const [connections, setConnections] = useState(() =>
+  const [tenantConnections, setConnections] = useState(() =>
     initialConnections(scenario),
   );
+  const [platformConnections, setPlatformConnections] = useState<
+    SetupConnection[]
+  >(() =>
+    [
+      "platform-configured",
+      "inherited-services",
+      "tenant-override",
+      "tenant-override-error",
+    ].includes(scenario)
+      ? [
+          connection("deepgram"),
+          connection("google"),
+          { ...connection("telnyx"), telephonyPublicKeyConfigured: true },
+        ]
+      : [],
+  );
+  const connections = effectiveSetupConnections(
+    platformConnections,
+    tenantConnections,
+  );
+  const platformPage = page === "platform";
   const [modal, setModal] = useState(() => initialModal(scenario));
   const [modelProvider, setModelProvider] = useState<SetupProviderId>("google");
   const [selectedRecipe, setSelectedRecipe] = useState<SampleRecipe | null>(
@@ -325,7 +364,10 @@ export function OnboardingStory({
     setModal((current) => ({ ...current, provider, status: "submitting" }));
     // Storybook simulates validation; credential values are never retained or sent.
     timerRef.current = setTimeout(() => {
-      setConnections((current) => {
+      const updateConnections = platformPage
+        ? setPlatformConnections
+        : setConnections;
+      updateConnections((current) => {
         const previous = current.find((item) => item.provider === provider);
         const next: SetupConnection = {
           ...connection(provider),
@@ -350,7 +392,12 @@ export function OnboardingStory({
   }
 
   function selectTenant(next: SetupTenant, resume = false) {
-    const current = { connections, modelProvider, installed, apiKeys };
+    const current = {
+      connections: tenantConnections,
+      modelProvider,
+      installed,
+      apiKeys,
+    };
     const saved =
       next.key === tenant.key
         ? current
@@ -362,7 +409,11 @@ export function OnboardingStory({
     setInstalled(saved.installed);
     setApiKeys(saved.apiKeys);
     navigatePage(
-      resume && voiceSetupReady(saved.connections, providers)
+      resume &&
+        voiceSetupReady(
+          effectiveSetupConnections(platformConnections, saved.connections),
+          providers,
+        )
         ? saved.apiKeys.length > 0
           ? "samples"
           : "keys"
@@ -397,17 +448,27 @@ export function OnboardingStory({
   return (
     <AdminShell
       breadcrumbs={
-        page === "tenants"
-          ? undefined
-          : [
-              {
-                label: "Tenants",
-                onSelect: () => navigatePage("tenants"),
-                href: "#/admin",
-              },
-              { label: tenant.name },
-              { label: steps.find((step) => step.page === page)!.label },
-            ]
+        page === "platform"
+          ? [{ label: "Platform" }, { label: "Services" }]
+          : page === "tenants"
+            ? undefined
+            : [
+                {
+                  label: "Tenants",
+                  onSelect: () => navigatePage("tenants"),
+                  href: "#/admin",
+                },
+                { label: tenant.name },
+                { label: steps.find((step) => step.page === page)!.label },
+              ]
+      }
+      headerActions={
+        <Button
+          variant="ghost"
+          onClick={() => navigatePage(platformPage ? "tenants" : "platform")}
+        >
+          {platformPage ? "Tenants" : "Platform services"}
+        </Button>
       }
       headerInert={overlayOpen || keyPending}
       theme={theme}
@@ -417,7 +478,7 @@ export function OnboardingStory({
         className="tenant-setup"
         inert={overlayOpen ? true : undefined}
       >
-        {page !== "tenants" ? (
+        {page !== "tenants" && !platformPage ? (
           <nav aria-label="Tenant setup" className="setup-steps">
             {steps.map((step, index) => (
               <button
@@ -432,9 +493,11 @@ export function OnboardingStory({
             ))}
           </nav>
         ) : null}
-        {page === "services" ? (
+        {page === "services" || platformPage ? (
           <TenantSetupPage
-            connections={connections}
+            connections={platformPage ? platformConnections : connections}
+            platform={platformPage}
+            platformConnections={platformConnections}
             creating={scenario === "creating-tenant"}
             providers={providers}
             onBrowse={(group) =>
@@ -481,11 +544,14 @@ export function OnboardingStory({
             items={tenants.map((item) => {
               const progress =
                 item.key === tenant.key
-                  ? { connections, installed }
+                  ? { connections: tenantConnections, installed }
                   : (savedTenants[item.key] ?? tenantDefaults(item.key));
               return {
                 tenant: item,
-                connections: progress.connections,
+                connections: effectiveSetupConnections(
+                  platformConnections,
+                  progress.connections,
+                ),
                 hasCallSpecs: progress.installed.length > 0,
               };
             })}
@@ -511,14 +577,47 @@ export function OnboardingStory({
       {modal ? (
         <ServiceSetupModal
           providers={providers}
-          connections={connections}
+          connections={platformPage ? platformConnections : connections}
+          platformConnections={platformConnections}
+          publicOrigin={publicOrigin}
+          scope={
+            platformPage
+              ? { kind: "platform" }
+              : {
+                  kind: "tenant",
+                  tenantKey: tenant.key,
+                  tenantName: tenant.name,
+                }
+          }
+          onOverride={() =>
+            setModal((current) =>
+              current ? { ...current, overriding: true } : current,
+            )
+          }
+          onUsePlatform={(provider) => {
+            setConnections((current) =>
+              current.filter((item) => item.provider !== provider),
+            );
+            setModal(null);
+          }}
+          onDisable={(provider) => {
+            setConnections((current) => [
+              ...current.filter((item) => item.provider !== provider),
+              { provider, status: "disabled" },
+            ]);
+            setModal(null);
+          }}
           onSelect={(provider) =>
-            setModal((current) => ({ ...current, provider, status: "idle" }))
+            setModal((current) => ({
+              ...current,
+              provider,
+              status: "idle",
+              overriding: false,
+            }))
           }
           onClose={() => setModal(null)}
           onSubmit={submitCredential}
           state={modal}
-          tenantName={tenant.name}
         />
       ) : null}
       {selectedRecipe ? (

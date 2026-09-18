@@ -108,6 +108,15 @@
         ],
         "createdAt": "2026-09-18T03:39:22.200Z",
         "reason": "Agent: DESIGN.md explicitly specifies Inter for this operational UI; this refinement preserves the incumbent typography."
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 50%)",
+        "files": [
+          "apps/vxpipe_console/assets/src/admin/tenantSetup.css"
+        ],
+        "createdAt": "2026-09-18T17:43:11.523Z",
+        "reason": "Existing modal backdrop explicitly requested during onboarding review; preserve shadcn-style 50-percent black overlay."
       }
     ]
   }

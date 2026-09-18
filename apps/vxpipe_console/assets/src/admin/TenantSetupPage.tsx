@@ -22,6 +22,8 @@ export function TenantSetupPage({
   creating = false,
   unavailable = false,
   onRetry,
+  platform = false,
+  platformConnections = [],
 }: {
   tenant: SetupTenant;
   connections: SetupConnection[];
@@ -32,6 +34,8 @@ export function TenantSetupPage({
   creating?: boolean;
   unavailable?: boolean;
   onRetry: () => void;
+  platform?: boolean;
+  platformConnections?: SetupConnection[];
 }) {
   const ready = voiceSetupReady(connections, providers);
   const connected = providers.filter((provider) =>
@@ -65,7 +69,11 @@ export function TenantSetupPage({
       key={provider.id}
       provider={provider}
       connection={connections.find((item) => item.provider === provider.id)}
-      telephony={group === "telephony"}
+      platform={platform}
+      overridesPlatform={
+        !platform &&
+        platformConnections.some((item) => item.provider === provider.id)
+      }
       onSelect={() => onConnect(provider.id, group)}
     />
   );
@@ -90,22 +98,37 @@ export function TenantSetupPage({
 
   return (
     <>
-      <header className="setup-page-heading setup-services-heading">
-        <div className="setup-ready-title" role="status">
-          <CircleCheck aria-hidden="true" size={18} />
-          <div>
-            <span>Tenant created: {tenant.name}</span>
-            <p>
-              Connect AI and Telephony services to get started. You can rename
-              this tenant later.
-            </p>
+      {!platform ? (
+        <header className="setup-page-heading setup-services-heading">
+          <div className="setup-ready-title" role="status">
+            <CircleCheck aria-hidden="true" size={18} />
+            <div>
+              <span>Tenant created: {tenant.name}</span>
+              <p>
+                Connect AI and Telephony services to get started. You can rename
+                this tenant later.
+              </p>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      ) : null}
       <section aria-labelledby="setup-services-title">
         <div className="setup-section-heading">
-          <h1 id="setup-services-title">Setup services</h1>
+          <h1 id="setup-services-title">
+            {platform ? "Platform services" : "Setup services"}
+          </h1>
         </div>
+        {platform ? (
+          <p className="setup-platform-description">
+            Connect services once for tenants to inherit. Each tenant can use
+            its own credentials instead.
+          </p>
+        ) : platformConnections.length > 0 ? (
+          <p className="setup-platform-description">
+            Platform services are available to {tenant.name}. Override a service
+            to use this tenant’s own credentials.
+          </p>
+        ) : null}
         <section aria-label="AI providers" className="setup-service-group">
           <div className="setup-group-heading">
             <h2>AI providers</h2>
@@ -134,12 +157,18 @@ export function TenantSetupPage({
           </p>
         </section>
       </section>
-      <footer className="setup-footer setup-services-footer">
-        <Button className="setup-primary" disabled={!ready} onClick={onApiKeys}>
-          Continue
-          <ArrowRight aria-hidden="true" size={16} />
-        </Button>
-      </footer>
+      {!platform ? (
+        <footer className="setup-footer setup-services-footer">
+          <Button
+            className="setup-primary"
+            disabled={!ready}
+            onClick={onApiKeys}
+          >
+            Continue
+            <ArrowRight aria-hidden="true" size={16} />
+          </Button>
+        </footer>
+      ) : null}
     </>
   );
 }

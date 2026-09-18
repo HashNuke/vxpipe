@@ -5,9 +5,26 @@ export type VoiceCapability = "stt" | "llm" | "tts" | "s2s";
 export type SetupProviderId = ServiceProvider;
 export type SetupConnection = {
   provider: SetupProviderId;
-  status: "connected" | "invalid" | "unavailable";
+  status: "connected" | "invalid" | "unavailable" | "disabled";
+  source?: "platform" | "tenant";
   telephonyPublicKeyConfigured?: boolean;
 };
+export type SetupServiceScope =
+  | { kind: "platform" }
+  | { kind: "tenant"; tenantKey: string; tenantName: string };
+
+// A tenant entry always wins, including a disabled or invalid override.
+export function effectiveSetupConnections(
+  platform: SetupConnection[],
+  tenant: SetupConnection[],
+): SetupConnection[] {
+  const effective = new Map<SetupProviderId, SetupConnection>();
+  for (const item of platform)
+    effective.set(item.provider, { ...item, source: "platform" });
+  for (const item of tenant)
+    effective.set(item.provider, { ...item, source: "tenant" });
+  return [...effective.values()];
+}
 export type SetupTenant = { key: string; name: string; demo?: boolean };
 export type SetupProvider = {
   id: SetupProviderId;

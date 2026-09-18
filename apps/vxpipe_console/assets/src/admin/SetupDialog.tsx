@@ -10,14 +10,18 @@ import { Button } from "./Button";
 
 export function SetupDialog({
   title,
+  headerContent,
   children,
   onClose,
   busy = false,
+  anchorTop = false,
 }: {
   title: string;
+  headerContent?: ReactNode;
   children: ReactNode;
   onClose: () => void;
   busy?: boolean;
+  anchorTop?: boolean;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -50,7 +54,7 @@ export function SetupDialog({
     if (event.key !== "Tab") return;
     const items = Array.from(
       dialogRef.current?.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]",
+        "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href]",
       ) ?? [],
     );
     const first = items[0];
@@ -70,7 +74,7 @@ export function SetupDialog({
 
   return (
     <div
-      className="setup-dialog-backdrop"
+      className={`setup-dialog-backdrop${anchorTop ? " setup-dialog-backdrop--anchored" : ""}`}
       onClick={(event) => {
         if (event.target === event.currentTarget && !busy) onClose();
       }}
@@ -85,7 +89,10 @@ export function SetupDialog({
         tabIndex={-1}
       >
         <header className="setup-dialog-header">
-          <h2 id={titleId}>{title}</h2>
+          <h2 className={headerContent ? "sr-only" : undefined} id={titleId}>
+            {title}
+          </h2>
+          {headerContent}
           <Button
             aria-label="Close dialog"
             disabled={busy}
