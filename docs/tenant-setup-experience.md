@@ -49,6 +49,8 @@ Production integration of the revised flow is a separate checkpoint.
 All tenants share “Tenant created: {name}” and “Connect AI and Telephony
 services to get started. You can rename this tenant later.” The breadcrumbs and
 step navigation use **Setup services → Create API Keys → Setup Call Specs**.
+Use that navigation to revisit steps; omit redundant Back buttons inside the
+step content. Keep the forward Continue actions.
 This supersedes the earlier Demo-specific welcome and two-step flow.
 
 The tenant directory shows a prominent continuation card when Demo is the only

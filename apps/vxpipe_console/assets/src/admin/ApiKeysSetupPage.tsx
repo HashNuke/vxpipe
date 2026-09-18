@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Copy, KeyRound } from "lucide-react";
+import { ArrowRight, Check, Copy, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./Button";
 import {
@@ -15,7 +15,6 @@ export function ApiKeysSetupPage({
   creation,
   initialKind = "calls",
   onCreate,
-  onServices,
   onCallSpecs,
 }: {
   tenantName: string;
@@ -23,7 +22,6 @@ export function ApiKeysSetupPage({
   creation: ApiKeyCreation;
   initialKind?: TenantApiKeyKind;
   onCreate: (name: string, kind: TenantApiKeyKind) => void;
-  onServices: () => void;
   onCallSpecs: () => void;
 }) {
   const [name, setName] = useState("Application");
@@ -32,15 +30,6 @@ export function ApiKeysSetupPage({
   const busy = creation.status === "submitting";
   return (
     <>
-      <Button
-        className="setup-back"
-        disabled={busy}
-        onClick={onServices}
-        variant="ghost"
-      >
-        <ArrowLeft aria-hidden="true" size={15} />
-        Back to services
-      </Button>
       <header className="setup-page-heading">
         <h1>Create API Keys</h1>
         <p>

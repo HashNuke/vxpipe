@@ -519,7 +519,6 @@ export function OnboardingStory({
             keys={apiKeys}
             onCallSpecs={() => navigatePage("samples")}
             onCreate={createApiKey}
-            onServices={() => navigatePage("services")}
             tenantName={tenant.name}
           />
         ) : null}
@@ -532,7 +531,6 @@ export function OnboardingStory({
             modelProvider={modelProvider}
             onModelProvider={setModelProvider}
             onServices={() => navigatePage("services")}
-            onApiKeys={() => navigatePage("keys")}
             tenantName={tenant.name}
             onTry={tryRecipe}
             preparing={scenario === "loading-samples" ? "voice" : undefined}

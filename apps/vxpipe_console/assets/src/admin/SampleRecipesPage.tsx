@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, SlidersHorizontal } from "lucide-react";
+import { Check, SlidersHorizontal } from "lucide-react";
 import { Button } from "./Button";
 import { SampleRecipeCard } from "./SampleRecipeCard";
 import {
@@ -23,7 +23,6 @@ export function SampleRecipesPage({
   modelProvider,
   onModelProvider,
   onServices,
-  onApiKeys,
   tenantName,
   onTry,
   installed = [],
@@ -35,7 +34,6 @@ export function SampleRecipesPage({
   modelProvider: SetupProviderId;
   onModelProvider: (provider: SetupProviderId) => void;
   onServices: () => void;
-  onApiKeys: () => void;
   tenantName: string;
   onTry: (recipe: SampleRecipe) => void;
   installed?: SampleRecipe["id"][];
@@ -60,10 +58,6 @@ export function SampleRecipesPage({
       : `Connect ${missing.map((capability) => capabilityLabels[capability]).join(", ")} to try these samples.`;
   return (
     <>
-      <Button className="setup-back" onClick={onApiKeys} variant="ghost">
-        <ArrowLeft aria-hidden="true" size={15} />
-        Back to API keys
-      </Button>
       <header className="setup-page-heading">
         <h1>Setup Call Specs</h1>
         <p>

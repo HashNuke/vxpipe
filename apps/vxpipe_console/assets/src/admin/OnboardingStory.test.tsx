@@ -201,8 +201,20 @@ test("one speech provider covers two capabilities and a model provider unlocks s
   expect(screen.getAllByRole("button", { name: /^Load / })).toHaveLength(3);
   for (const button of screen.getAllByRole("button", { name: /^Load / }))
     expect(button).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Back to API keys" }));
-  fireEvent.click(screen.getByRole("button", { name: "Back to services" }));
+  expect(
+    screen.queryByRole("button", { name: /^Back to/ }),
+  ).not.toBeInTheDocument();
+  const navigation = screen.getByRole("navigation", { name: "Tenant setup" });
+  fireEvent.click(
+    within(navigation).getByRole("button", { name: /Create API Keys/ }),
+  );
+  expect(screen.getByRole("heading", { name: "Create API Keys" })).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: /^Back to/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(
+    within(navigation).getByRole("button", { name: /Setup services/ }),
+  );
   expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 });
 

@@ -647,9 +647,6 @@
   display: block;
   margin-top: 10px;
 }
-.setup-back {
-  margin: -8px 0 20px -12px;
-}
 .recipe-service-strip {
   display: grid;
   grid-template-columns: 200px 1fr;
