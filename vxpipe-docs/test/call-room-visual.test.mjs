@@ -112,6 +112,16 @@ test('homepage renders a static React call-room visual built on room terminology
   const css = read('src/styles/call-room.css');
   assert.match(
     css,
+    /html\[data-theme=['"]dark['"]\] \.crv\s*\{[^}]*--crv-surface:\s*#[0-9a-f]{6}/s,
+    'dark mode must give the call-room visual an opaque surface',
+  );
+  assert.match(
+    css,
+    /html\[data-theme=['"]light['"]\] \.crv\s*\{[^}]*--crv-surface:\s*#[0-9a-f]{6}/s,
+    'light mode must give the call-room visual an opaque surface',
+  );
+  assert.match(
+    css,
     /crv-deck-slot\s*\{[^}]*?0%, 30%\s*\{[^}]*transform:\s*translate\(0,\s*0\)/s,
     'front card must sit top-left with the deck cascading down-right',
   );

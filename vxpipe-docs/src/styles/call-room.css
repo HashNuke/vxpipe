@@ -13,12 +13,20 @@
   --crv-agent-wash: rgb(52 211 153 / 0.12);
   --crv-muted: var(--sl-color-gray-3, #a1a1aa);
   --crv-hairline: rgb(255 255 255 / 0.12);
-  --crv-surface: rgb(255 255 255 / 0.045);
+  --crv-surface: #18191c;
   --crv-cycle: 12s;
 
   margin-block: 2rem 2.5rem;
   margin-inline: auto;
   max-width: 54rem;
+}
+
+html[data-theme='dark'] .crv {
+  --crv-surface: #18191c;
+}
+
+html[data-theme='light'] .crv {
+  --crv-surface: #f8f9fb;
 }
 
 .crv-room {

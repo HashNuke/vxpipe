@@ -34,6 +34,16 @@ test('landing backdrop spans the full top stage in both themes', () => {
     /\.sl-container > div\.hero::before/,
     'the ripple field must not be clipped to the hero text box',
   );
+  assert.match(
+    landingCss,
+    /repeating-radial-gradient\(\s*ellipse 78rem 48rem at -4% 30rem/s,
+    'the selected open wave must radiate into the stage from beyond its left edge',
+  );
+  assert.doesNotMatch(
+    landingCss,
+    /ellipse 76rem 31rem at 50% 31rem/,
+    'the old centered ripple treatment must be replaced',
+  );
 });
 
 test('homepage hero states the product crisply and presents the feature set', () => {

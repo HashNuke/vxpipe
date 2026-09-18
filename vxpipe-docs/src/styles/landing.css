@@ -19,23 +19,23 @@ html[data-has-hero] body {
     linear-gradient(
       to bottom,
       transparent 0,
-      transparent 31rem,
-      var(--landing-backdrop-base) 69rem
+      transparent 35rem,
+      var(--landing-backdrop-base) 70rem
     ),
     radial-gradient(
-      ellipse 78rem 38rem at 50% 12rem,
+      ellipse 66rem 36rem at 28% 14rem,
       var(--landing-backdrop-halo),
       transparent 72%
     ),
     repeating-radial-gradient(
-      ellipse 76rem 31rem at 50% 31rem,
-      transparent 0 5.25rem,
-      var(--landing-backdrop-line) 5.3rem 5.38rem,
-      transparent 5.43rem 10.5rem
+      ellipse 78rem 48rem at -4% 30rem,
+      transparent 0 6.25rem,
+      var(--landing-backdrop-line) 6.3rem 6.38rem,
+      transparent 6.43rem 12.5rem
     ),
     linear-gradient(to bottom, var(--landing-backdrop-wash), var(--landing-backdrop-base));
   background-repeat: no-repeat;
-  background-size: 100% 70rem, 100% 60rem, max(100%, 86rem) 58rem, 100% 70rem;
+  background-size: 100% 70rem, 100% 58rem, max(100%, 92rem) 62rem, 100% 70rem;
   background-position: top center;
 }
 
@@ -70,7 +70,7 @@ html[data-has-hero] .header {
 
 .sl-markdown-content h2 {
   color: var(--foreground);
-  font-size: 1.5rem;
+  font-size: var(--sl-text-2xl);
   font-weight: 600;
   line-height: 2rem;
 }
