@@ -63,7 +63,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
           <p>Live, bounded observations from the gateway and call engine.</p>
         </div>
         <nav class="topnav" aria-label="Diagnostics navigation">
-          <a class="nav-link" href="/pipecat-console">Voice console</a>
+          <a class="nav-link" href="/samples/pipecat-console">Voice console</a>
           <a class="nav-link nav-link--primary" href="/diagnostics/system">System dashboard</a>
         </nav>
       </header>

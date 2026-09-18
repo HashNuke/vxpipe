@@ -24,13 +24,13 @@ defmodule Vxpipe.Console.HomePage do
           <nav aria-label="Console interfaces">
             <ul class="surface-list">
               <li>
-                <a href="/pipecat-console">
+                <a href="/samples/pipecat-console">
                   <strong>Pipecat console</strong>
                   <span>Create a sample room and exercise the RTVI voice path.</span>
                 </a>
               </li>
               <li>
-                <a href="/transfer">
+                <a href="/samples/transfer">
                   <strong>Human transfer desk</strong>
                   <span>Join and accept a development human-transfer flow.</span>
                 </a>

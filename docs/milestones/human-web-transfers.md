@@ -56,9 +56,9 @@ Reception prepares a human web destination. That person privately hears permitte
 
 1. Configure and migrate `VXPIPE_DB_URL`, provision tenant Google/Deepgram credentials using
    [credential setup](../provider-credential-storage.md), set `VXPIPE_DEV_TENANT`, then start `bin/dev`.
-2. Open `/pipecat-console`, create a room, connect the Pipecat caller console, and ask to be
+2. Open `/samples/pipecat-console`, create a room, connect the Pipecat caller console, and ask to be
    transferred to human support with a concise purpose.
-3. Open `/transfer` in a second browser/device and connect within the 30-second attempt deadline.
+3. Open `/samples/transfer` in a second browser/device and connect within the 30-second attempt deadline.
    Verify only the destination hears the private briefing and configured notice; neither web human
    can exchange main-room audio before acceptance.
 4. Accept on the destination page. Verify it reports `Main room active`, the source agent exits,
@@ -104,8 +104,9 @@ promote main media: the room closes under the existing significant-child fail-cl
 before source handoff. The success path also proves the same Call Variables and Call Lifecycle
 processes survive human promotion, so no transfer resets the pinned duration clock.
 
-The Console sample checkpoint adds a dedicated `/transfer` destination page beside the unchanged
-Pipecat caller console. It obtains only a public locator plus expiring participant token, claims the
+The Console sample checkpoint adds a dedicated `/samples/transfer` destination page beside the
+`/samples/pipecat-console` Pipecat caller console. It obtains only a public locator plus expiring
+participant token, claims the
 provisional gateway session, negotiates browser audio directly, and uses the bounded `vxpipe`
 sideband for exact-attempt acceptance. Component and browser-transport tests cover the admission,
 offer, trickle ICE, projected controls, acceptance envelope, remote audio, and cleanup. The React

@@ -3379,7 +3379,7 @@ Phoenix is approved for the separate `vxpipe_console` application, not a gateway
 migration. Preserve the existing gateway protocol handlers, React sample,
 application-option ownership and engine/persistence dependency direction.
 The Console root is an interface directory, while the Pipecat caller sample is mounted at
-`/pipecat-console` and its human-transfer destination remains at `/transfer`. These are host UI
+`/samples/pipecat-console` and its human-transfer destination remains at `/samples/transfer`. These are host UI
 routes rather than additions to the reusable gateway protocol surface.
 Phoenix LiveDashboard is selected for platform VM/runtime inspection; a separate
 Vxpipe diagnostics page owns bounded call-path measurements. Diagnostics are disabled

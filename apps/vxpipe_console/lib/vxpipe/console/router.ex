@@ -69,12 +69,17 @@ defmodule Vxpipe.Console.Router do
     post "/transfers", Vxpipe.Console.SampleTransferController, :create
   end
 
+  scope "/samples" do
+    pipe_through :browser
+
+    get "/pipecat-console", Vxpipe.Console.PageController, :index
+    get "/transfer", Vxpipe.Console.PageController, :index
+  end
+
   scope "/" do
     pipe_through :browser
 
     get "/", Vxpipe.Console.HomeController, :index
-    get "/pipecat-console", Vxpipe.Console.PageController, :index
-    get "/transfer", Vxpipe.Console.PageController, :index
     get "/operator/sign-in", Vxpipe.Console.LegacyOperatorSessionController, :guidance
     post "/operator/session", Vxpipe.Console.LegacyOperatorSessionController, :reject
     post "/operator/sign-out", Vxpipe.Console.LegacyOperatorSessionController, :reject

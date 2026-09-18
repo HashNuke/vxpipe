@@ -99,7 +99,7 @@ serves the React assets, and mounts the reusable gateway on the same endpoint.
 By default Phoenix serves HTTP at `http://localhost:4000/`, with no Tailscale
 dependency. WebRTC media continues to use its negotiated ICE path. The root page
 lists the available Console interfaces. The Pipecat sample itself is available
-at `/pipecat-console`.
+at `/samples/pipecat-console`.
 
 Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the
@@ -158,9 +158,9 @@ Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
 definition publication are documented in
 [Tenant control-plane operations](tenant-control-plane.md).
 
-The human transfer desk at `/transfer` requires this PostgreSQL-backed sample.
+The human transfer desk at `/samples/transfer` requires this PostgreSQL-backed sample.
 After migrating the database, start `bin/dev`, create
-a new room in `/pipecat-console`, and request human support before connecting the
+a new room in `/samples/pipecat-console`, and request human support before connecting the
 desk. Follow the [human-transfer walkthrough](../apps/vxpipe_console/assets/README.md#manual-human-transfer-test)
 for the two-browser flow.
 

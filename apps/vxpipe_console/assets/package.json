@@ -26,8 +26,9 @@
     "lucide-react": "^1.46.0",
     "phoenix": "1.8.13",
     "phoenix_live_view": "1.2.11",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {

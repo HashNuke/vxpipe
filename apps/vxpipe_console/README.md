@@ -38,7 +38,7 @@ The Console accepts `X-Forwarded-Proto: https` only from a loopback peer. Plain 
 is limited to a loopback peer requesting a loopback host.
 
 The Console root is a small directory of browser-facing interfaces. The tracked React SPA index is
-served at `/pipecat-console` for the caller sample and `/transfer` for its transfer destination.
+served at `/samples/pipecat-console` for the caller sample and `/samples/transfer` for its transfer destination.
 `Plug.Static` serves all revalidated `/assets/*` files. If either compiled sample bundle is absent,
 those SPA routes return 503 rather than a nonfunctional shell. The separate bounded diagnostics
 surface remains available at `/diagnostics`. This application does not own Ecto or call

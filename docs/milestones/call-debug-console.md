@@ -266,7 +266,7 @@ Exit: a developer can follow who is in the call and who spoke across existing ha
   another room or silently lose the result. A fresh run is a deliberate new preparation.
 - [ ] Inspect 360/768/1440 px, light/dark, keyboard/focus, reduced motion, long identifiers,
   2/6 participants, high event volume, device-denied, waiting, failed and ended states.
-- [ ] Switch `/pipecat-console` to the verified replacement and keep the transfer desk usable.
+- [ ] Switch `/samples/pipecat-console` to the verified replacement and keep the transfer desk usable.
   Update source-development/sample docs, affected diagnostics links and component evidence.
 
 Exit: a usable, bounded debug console remains informative through failure and completion.

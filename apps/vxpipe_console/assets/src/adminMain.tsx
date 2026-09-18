@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 
-import { AdminApp } from "./AdminApp";
+import { App } from "./App";
 
 const root = document.getElementById("admin-root");
 
@@ -14,4 +14,4 @@ if (!csrfToken) {
   throw new Error("Missing CSRF token");
 }
 
-createRoot(root).render(<AdminApp csrfToken={csrfToken} />);
+createRoot(root).render(<App csrfToken={csrfToken} />);

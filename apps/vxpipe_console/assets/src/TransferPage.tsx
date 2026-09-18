@@ -177,7 +177,7 @@ export default function TransferPage() {
     <main className="transfer-page">
       <div className="transfer-shell">
         <header className="transfer-header">
-          <a href="/pipecat-console" aria-label="Vxpipe caller sample">VX</a>
+          <a href="/samples/pipecat-console" aria-label="Vxpipe caller sample">VX</a>
           <p>Human transfer desk</p>
         </header>
 

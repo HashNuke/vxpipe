@@ -6,7 +6,7 @@ behavior in the browser. The Console's Phoenix endpoint supervises Phoenix's esb
 wrapper as its development watcher and uses LiveReload for browser refreshes;
 `mix assets.deploy` writes the minified release bundle to the Console application's
 ignored `priv/static/assets` directory. Phoenix serves the UI and mounted gateway
-from one listener. The caller playground is mounted at `/pipecat-console`; the root is a directory
+from one listener. The caller playground is mounted at `/samples/pipecat-console`; the root is a directory
 of the available Console interfaces.
 
 The esbuild profile has independent named entries for the React sample, the shared LiveView client,
@@ -61,7 +61,7 @@ spoken through the configured Deepgram path.
    Google and Deepgram for one tenant. Set `VXPIPE_DEV_TENANT` to its public key alongside the
    platform encryption settings in the ignored repository-root `.env`.
 2. From the repository root, run `bin/dev`.
-3. Open `https://<this-machine's-tailscale-fqdn>:4000/pipecat-console`, choose **Create room**,
+3. Open `https://<this-machine's-tailscale-fqdn>:4000/samples/pipecat-console`, choose **Create room**,
    and then choose **Connect** in the Pipecat console.
 4. Type or say: `Use the get_current_time tool and tell me the current UTC time.`
 5. In the console event log, verify an `llm-function-call-in-progress` event for
@@ -78,8 +78,8 @@ is a failed test.
 
 1. Create/migrate `vxpipe_dev`, provision the tenant’s Google and Deepgram credentials,
    select that tenant with `VXPIPE_DEV_TENANT`, and start `bin/dev`.
-2. Open `/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
-3. Open `/transfer` in a second browser or device. Use headphones when both clients are on one
+2. Open `/samples/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
+3. Open `/samples/transfer` in a second browser or device. Use headphones when both clients are on one
    machine so the two live microphones do not feed each other.
 4. In the caller console, type or say: `Please transfer me to human support. I need help with my
    sample order.` The development agent must invoke its catalog-bound transfer tool; a model reply

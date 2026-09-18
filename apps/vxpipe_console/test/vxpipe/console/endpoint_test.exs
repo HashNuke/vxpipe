@@ -14,7 +14,7 @@ defmodule Vxpipe.Console.EndpointTest do
   test "serves the configured sample index and mounted gateway routes through one endpoint" do
     configure_sample_index(Path.expand("../../../priv/static/index.html", __DIR__))
 
-    console_conn = get(build_conn(), "/pipecat-console")
+    console_conn = get(build_conn(), "/samples/pipecat-console")
 
     html = html_response(console_conn, 200)
 
@@ -24,8 +24,11 @@ defmodule Vxpipe.Console.EndpointTest do
     refute html =~ "/src/main.tsx"
     assert Plug.Conn.get_resp_header(console_conn, "cache-control") == ["no-store"]
 
-    transfer_conn = get(build_conn(), "/transfer")
+    transfer_conn = get(build_conn(), "/samples/transfer")
     assert html_response(transfer_conn, 200) =~ "Vxpipe RTVI Playground"
+
+    assert response(get(build_conn(), "/pipecat-console"), 404)
+    assert response(get(build_conn(), "/transfer"), 404)
 
     gateway_conn = get(build_conn(), "/healthz")
 
@@ -38,7 +41,7 @@ defmodule Vxpipe.Console.EndpointTest do
   test "reports unavailable sample assets without hiding the release error" do
     configure_sample_index(Path.join(System.tmp_dir!(), "missing-vxpipe-sample-index.html"))
 
-    conn = get(build_conn(), "/pipecat-console")
+    conn = get(build_conn(), "/samples/pipecat-console")
 
     assert response(conn, 503) == "Vxpipe Console assets are not built"
   end
@@ -49,7 +52,7 @@ defmodule Vxpipe.Console.EndpointTest do
       [Path.join(System.tmp_dir!(), "missing-vxpipe-sample-app.js")]
     )
 
-    conn = get(build_conn(), "/pipecat-console")
+    conn = get(build_conn(), "/samples/pipecat-console")
 
     assert response(conn, 503) == "Vxpipe Console assets are not built"
   end

@@ -183,7 +183,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert has_element?(view, "#mcp-request-invocation-remote-error td:last-child", "1")
 
     assert has_element?(view, ~s(a[href="/diagnostics/system"]), "System dashboard")
-    assert has_element?(view, ~s(a[href="/pipecat-console"]), "Voice console")
+    assert has_element?(view, ~s(a[href="/samples/pipecat-console"]), "Voice console")
     refute render(view) =~ sentinel
   end
 

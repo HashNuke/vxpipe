@@ -441,8 +441,8 @@ passes 996 tests with 15 explicitly excluded integrations, formatting, warnings-
 compilation, unused-dependency checking, and strict Credo over 801 files.
 
 Implementation evidence, pre-delivery route cleanup (2026-09-13): `/` now renders a compact
-directory linking every stable Console UI entry point. The Pipecat caller sample moved intact to
-`/pipecat-console`; `/transfer` remains its separate transfer-destination page. Existing navigation
+directory linking every stable Console UI entry point. The Pipecat caller sample is at
+`/samples/pipecat-console`; `/samples/transfer` remains its separate transfer-destination page. Existing navigation
 from diagnostics, call inspection, operator sign-in, and the transfer desk points directly to the
 new caller URL rather than assuming the sample owns the root route.
 

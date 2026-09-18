@@ -339,7 +339,8 @@ is the only delivery slice with an outstanding external acceptance check.
 
 ### Checkpoint: human web handoff
 
-**Runnable outcome:** start a call in `/pipecat-console`, request human support, connect `/transfer`
+**Runnable outcome:** start a call in `/samples/pipecat-console`, request human support, connect
+`/samples/transfer`
 on a second device, hear its private briefing, accept, hear the local waits/cues, then talk in both
 directions with permitted transcripts. A delayed or failed capability produces a useful preparing
 or recovery state rather than a false completion or unexplained return to the create-room screen.
@@ -810,7 +811,7 @@ this delivery plan.
   player/connector. Idle and whole-call duration clocks retain their defined behavior.
 - [x] Safe telemetry exposes phase durations, readiness blockers by capability kind, timeout/failure,
   and player queue pressure without transcript/audio bytes, secrets or provider error payloads.
-- [x] Existing rendered Chrome `/pipecat-console` and mobile-sized `/transfer` checks cover
+- [x] Existing rendered Chrome `/samples/pipecat-console` and mobile-sized `/samples/transfer` checks cover
   briefing, acceptance, preparation, decoded cues, conversation and transcripts. Deliberately
   delayed readiness and default/URL/nil audio are verified through native peers as authorized in
   the verification review; this does not claim physical loudspeaker volume.
