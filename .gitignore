@@ -30,6 +30,7 @@ erl_crash.dump
 
 # Reusable browser packages and Storybook artifacts.
 /node_modules/
+/storybook-static/
 /packages/*/node_modules/
 /packages/*/dist/
 /packages/*/storybook-static/
