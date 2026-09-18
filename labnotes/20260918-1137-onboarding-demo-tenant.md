@@ -36,3 +36,23 @@ The user required Storybook design before production endpoint work.
   invalidates old evidence; a later call can still fail for model/voice permissions or expiry.
 - The repository currently has one managed development `SampleCall`, not the requested checked-in
   three-entry onboarding catalog. The catalog remains a separate implementation checkpoint.
+
+## Checkpoint: provider validation evidence
+
+- Added a Calls-owned validator port and separate validated create/update workflows. Existing trusted
+  provisioning remains unvalidated and stores no timestamp.
+- Console operator writes now validate before persistence. Provider rejection returns an actionable
+  422; timeout, rate limit, transport and upstream failures return a retryable 503.
+- Added read-only probes for Google model listing, Deepgram project listing, Zenmux model listing,
+  Telnyx Call Control application listing and Twilio account fetch. Retries and redirects are off.
+- Added nullable `provider_credentials.last_validated_at`. Successful validation evidence is stored
+  atomically with the encrypted credential version and returned only as safe metadata.
+- Updated the frontend API projection to preserve `lastValidatedAt` for the onboarding integration.
+
+### Test evidence
+
+- Calls operator administration: 16 tests, 0 failures.
+- Persistence provider credential store: 11 tests, 0 failures after the new migration.
+- Console services endpoint and validator: 8 tests, 0 failures.
+- Frontend admin API parser: 11 tests, 0 failures; TypeScript check passes.
+- Affected full suites: Calls 107, Persistence 153, Console 160 and frontend 129 tests, all passing.

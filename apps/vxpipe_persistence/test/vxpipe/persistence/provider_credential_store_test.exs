@@ -79,6 +79,47 @@ defmodule Vxpipe.Persistence.ProviderCredentialStoreTest do
              )
   end
 
+  test "persists validation evidence with the exact credential version", data do
+    first_validation = ~U[2026-09-18 04:00:00.000000Z]
+    second_validation = ~U[2026-09-18 05:00:00.000000Z]
+
+    credential = %Vxpipe.Calls.ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_key: data.tenant.key,
+      provider: "google",
+      name: "google",
+      auth_kind: "api_key",
+      last_validated_at: first_validation
+    }
+
+    assert {:ok, created} =
+             ProviderCredentialStore.provision(
+               data.context,
+               credential,
+               %{"api_key" => "first-private"}
+             )
+
+    assert created.last_validated_at == first_validation
+
+    assert Repo.get_by!(ProviderCredential, public_id: created.id).last_validated_at ==
+             first_validation
+
+    assert {:ok, updated} =
+             ProviderCredentialStore.replace(
+               data.context,
+               data.tenant.key,
+               created.id,
+               "google",
+               "api_key",
+               %{"api_key" => "second-private"},
+               %{"api_key" => "vate"},
+               second_validation
+             )
+
+    assert updated.version == 2
+    assert updated.last_validated_at == second_validation
+  end
+
   test "rejects malformed auth and unsupported providers before persisting a binding", data do
     for {provider, kind, payload} <- [
           {"req_llm", "api_key", %{"api_key" => "secret"}},

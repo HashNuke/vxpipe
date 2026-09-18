@@ -16,7 +16,11 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     TelephonyService
   }
 
-  alias Vxpipe.Calls.{TestAdminRepository, TestOperatorCredentialRepository}
+  alias Vxpipe.Calls.{
+    TestAdminRepository,
+    TestOperatorCredentialRepository,
+    TestOperatorCredentialValidator
+  }
 
   test "lists one bounded deterministic tenant page for installation operator authority" do
     tenants = [
@@ -387,6 +391,102 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
       assert provisioned.name == provider
       assert provisioned.auth_kind == auth_kind
     end
+  end
+
+  test "validates a credential upstream before persisting validation evidence" do
+    tenant_key = "AAAAAAAAAAAAAAAA"
+    validated_at = ~U[2026-09-18 05:00:00Z]
+
+    returned = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_key: tenant_key,
+      provider: "google",
+      name: "google",
+      auth_kind: "api_key",
+      last_validated_at: validated_at
+    }
+
+    repository = TestOperatorCredentialRepository.repository(self(), {:ok, returned})
+    validator = TestOperatorCredentialValidator.validator(self(), :ok)
+
+    assert {:ok, ^returned} =
+             Vxpipe.Calls.create_validated_operator_credential(
+               InstallationOperator.authority(),
+               tenant_key,
+               "google",
+               "google",
+               "api_key",
+               %{"api_key" => "private"},
+               provider_credential_repository: repository,
+               provider_credential_validator: validator,
+               clock: fn -> validated_at end,
+               uuid_generator: fn -> returned.id end
+             )
+
+    assert_received {:operator_credential_validated, "google", "api_key",
+                     %{"api_key" => "private"}}
+
+    assert_received {:operator_credential_provisioned,
+                     %ProviderCredential{last_validated_at: ^validated_at},
+                     %{"api_key" => "private"}}
+  end
+
+  test "does not persist credentials rejected by the provider" do
+    validator =
+      TestOperatorCredentialValidator.validator(self(), {:error, :provider_credential_rejected})
+
+    repository =
+      TestOperatorCredentialRepository.repository(
+        self(),
+        {:error, :repository_must_not_be_called}
+      )
+
+    assert {:error, :provider_credential_rejected} =
+             Vxpipe.Calls.create_validated_operator_credential(
+               InstallationOperator.authority(),
+               "AAAAAAAAAAAAAAAA",
+               "deepgram",
+               "deepgram",
+               "api_key",
+               %{"api_key" => "rejected"},
+               provider_credential_repository: repository,
+               provider_credential_validator: validator
+             )
+
+    assert_received {:operator_credential_validated, "deepgram", "api_key",
+                     %{"api_key" => "rejected"}}
+
+    refute_received {:operator_credential_provisioned, _, _}
+  end
+
+  test "ordinary provisioning cannot claim upstream validation evidence" do
+    tenant_key = "AAAAAAAAAAAAAAAA"
+
+    returned = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      tenant_key: tenant_key,
+      provider: "google",
+      name: "google",
+      auth_kind: "api_key"
+    }
+
+    repository = TestOperatorCredentialRepository.repository(self(), {:ok, returned})
+
+    assert {:ok, ^returned} =
+             Vxpipe.Calls.create_operator_credential(
+               InstallationOperator.authority(),
+               tenant_key,
+               "google",
+               "google",
+               "api_key",
+               %{"api_key" => "private"},
+               provider_credential_repository: repository,
+               last_validated_at: ~U[2026-09-18 05:00:00Z],
+               uuid_generator: fn -> returned.id end
+             )
+
+    assert_received {:operator_credential_provisioned,
+                     %ProviderCredential{last_validated_at: nil}, _payload}
   end
 
   test "replaces an operator credential without changing its identity" do

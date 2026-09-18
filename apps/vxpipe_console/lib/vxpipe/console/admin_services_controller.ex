@@ -28,7 +28,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   def create(conn, %{"tenant_key" => tenant_key} = params) do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
-           Vxpipe.Calls.create_operator_credential(
+           Vxpipe.Calls.create_validated_operator_credential(
              InstallationOperator.authority(),
              tenant_key,
              provider,
@@ -48,6 +48,12 @@ defmodule Vxpipe.Console.AdminServicesController do
       when reason in [:invalid_provider_auth, :invalid_credential_name, :invalid_tenant_key] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
 
+      {:error, :provider_credential_rejected} ->
+        conn |> put_status(422) |> json(%{error: %{code: "credential_rejected"}})
+
+      {:error, :provider_validation_unavailable} ->
+        conn |> put_status(503) |> json(%{error: %{code: "credential_validation_unavailable"}})
+
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
     end
@@ -59,7 +65,7 @@ defmodule Vxpipe.Console.AdminServicesController do
       ) do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
-           Vxpipe.Calls.update_operator_credential(
+           Vxpipe.Calls.update_validated_operator_credential(
              InstallationOperator.authority(),
              tenant_key,
              credential_id,
@@ -81,6 +87,12 @@ defmodule Vxpipe.Console.AdminServicesController do
              :invalid_provider_credential_id
            ] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
+
+      {:error, :provider_credential_rejected} ->
+        conn |> put_status(422) |> json(%{error: %{code: "credential_rejected"}})
+
+      {:error, :provider_validation_unavailable} ->
+        conn |> put_status(503) |> json(%{error: %{code: "credential_validation_unavailable"}})
 
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
@@ -115,6 +127,7 @@ defmodule Vxpipe.Console.AdminServicesController do
       auth_kind: credential.auth_kind,
       status: Atom.to_string(credential.status),
       credential_preview: credential_preview(credential),
+      last_validated_at: datetime_json(credential.last_validated_at),
       created_at: datetime_json(credential.inserted_at),
       updated_at: datetime_json(credential.updated_at)
     }

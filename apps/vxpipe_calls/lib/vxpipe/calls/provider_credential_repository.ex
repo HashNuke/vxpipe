@@ -5,7 +5,16 @@ defmodule Vxpipe.Calls.ProviderCredentialRepository do
 
   @callback provision(term(), ProviderCredential.t(), map()) ::
               {:ok, ProviderCredential.t()} | {:error, atom()}
-  @callback replace(term(), String.t(), String.t(), String.t(), String.t(), map(), map()) ::
+  @callback replace(
+              term(),
+              String.t(),
+              String.t(),
+              String.t(),
+              String.t(),
+              map(),
+              map(),
+              DateTime.t() | nil
+            ) ::
               {:ok, ProviderCredential.t()} | {:error, atom()}
   @callback list(term(), String.t()) :: {:ok, [ProviderCredential.t()]} | {:error, atom()}
   @callback resolve(term(), String.t(), String.t(), String.t()) ::

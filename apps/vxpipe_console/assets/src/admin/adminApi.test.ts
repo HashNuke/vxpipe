@@ -243,6 +243,7 @@ test("validates and projects metadata-only service inventory", () => {
           credential_preview: [
             { label: "API key", format: "last_four", last_four: "8c4a" },
           ],
+          last_validated_at: "2026-09-17T01:55:00Z",
           created_at: "2026-09-17T02:00:00Z",
           updated_at: "2026-09-17T02:00:00Z",
         },
@@ -255,6 +256,7 @@ test("validates and projects metadata-only service inventory", () => {
           credential_preview: [
             { label: "API key", format: "last_four", last_four: "7f2b" },
           ],
+          last_validated_at: null,
           created_at: "2026-09-17T02:01:00Z",
           updated_at: "2026-09-17T02:01:00Z",
         },
@@ -283,6 +285,7 @@ test("validates and projects metadata-only service inventory", () => {
         credentialPreview: [
           { label: "API key", format: "last_four", lastFour: "8c4a" },
         ],
+        lastValidatedAt: "2026-09-17T01:55:00Z",
         updatedAt: "2026-09-17T02:00:00Z",
       },
       {
@@ -294,6 +297,7 @@ test("validates and projects metadata-only service inventory", () => {
         credentialPreview: [
           { label: "API key", format: "last_four", lastFour: "7f2b" },
         ],
+        lastValidatedAt: null,
         updatedAt: "2026-09-17T02:01:00Z",
       },
     ],
@@ -312,6 +316,7 @@ test("keeps credential update time when inventory is partial", () => {
         auth_kind: "api_key",
         status: "active",
         credential_preview: [{ label: "API key", format: "masked" }],
+        last_validated_at: "2026-09-17T01:55:00Z",
         created_at: "2026-09-17T02:01:00Z",
         updated_at: "2026-09-17T02:01:00Z",
       },
@@ -375,6 +380,7 @@ test("maps a created credential response without accepting private response fiel
       credential_preview: [
         { label: "API key", format: "last_four", last_four: "8c4a" },
       ],
+      last_validated_at: "2026-09-17T01:55:00Z",
       created_at: "2026-09-17T02:00:00Z",
       updated_at: "2026-09-17T02:00:00Z",
     },
@@ -389,6 +395,7 @@ test("maps a created credential response without accepting private response fiel
     credentialPreview: [
       { label: "API key", format: "last_four", lastFour: "8c4a" },
     ],
+    lastValidatedAt: "2026-09-17T01:55:00Z",
     updatedAt: "2026-09-17T02:00:00Z",
   });
 

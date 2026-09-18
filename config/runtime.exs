@@ -89,6 +89,7 @@ if database_url do
     provider_credential_repository:
       {Vxpipe.Persistence.ProviderCredentialStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    provider_credential_validator: {Vxpipe.Console.ProviderCredentialValidator, []},
     telephony_service_repository:
       {Vxpipe.Persistence.TelephonyServiceStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},

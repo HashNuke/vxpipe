@@ -30,6 +30,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
         payload_schema_version: credential.payload_schema_version,
         status: "active",
         secret_hints: credential.secret_hints,
+        last_validated_at: credential.last_validated_at,
         encrypted_payload: encrypted,
         encryption_key_id: key_id
       }
@@ -50,7 +51,16 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   end
 
   @impl true
-  def replace(context, tenant_key, credential_id, provider, auth_kind, payload, secret_hints) do
+  def replace(
+        context,
+        tenant_key,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        secret_hints,
+        last_validated_at
+      ) do
     repo = Keyword.fetch!(context, :repo)
 
     case repo.transaction(
@@ -73,7 +83,8 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                | auth_kind: auth_kind,
                  version: stored.version + 1,
                  status: :active,
-                 secret_hints: secret_hints
+                 secret_hints: secret_hints,
+                 last_validated_at: last_validated_at
              }
 
              with :ok <- ProviderAuth.validate(provider, auth_kind, payload),
@@ -86,6 +97,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                         version: next.version,
                         status: "active",
                         secret_hints: secret_hints,
+                        last_validated_at: last_validated_at,
                         encrypted_payload: encrypted,
                         encryption_key_id: key_id
                       ),
@@ -353,6 +365,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
       encryption_key_id: stored.encryption_key_id,
       status: status(stored.status),
       secret_hints: stored.secret_hints || %{},
+      last_validated_at: stored.last_validated_at,
       inserted_at: stored.inserted_at,
       updated_at: stored.updated_at
     }

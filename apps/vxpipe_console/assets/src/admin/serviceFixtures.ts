@@ -13,6 +13,7 @@ export const services: ServiceInventoryItem[] = [
     provider: "google",
     credentialName: "primary",
     credentialPreview: [{ label: "API key", format: "last_four", lastFour: "8c4a" }],
+    lastValidatedAt: "2026-09-17T02:59:00.000Z",
     updatedAt: "2026-09-17T03:00:00.000Z",
   },
   {
@@ -22,6 +23,7 @@ export const services: ServiceInventoryItem[] = [
     provider: "vertex_ai",
     credentialName: "primary",
     credentialPreview: [{ label: "API key", format: "last_four", lastFour: "7f2b" }],
+    lastValidatedAt: null,
     updatedAt: "2026-09-16T03:00:00.000Z",
   },
   {
@@ -31,6 +33,7 @@ export const services: ServiceInventoryItem[] = [
     provider: "deepgram",
     credentialName: "realtime",
     credentialPreview: [{ label: "API key", format: "last_four", lastFour: "1d90" }],
+    lastValidatedAt: "2026-09-15T09:44:00.000Z",
     updatedAt: "2026-09-15T09:45:00.000Z",
   },
   {
@@ -43,6 +46,7 @@ export const services: ServiceInventoryItem[] = [
       { label: "API key", format: "last_four", lastFour: "c4a1" },
       { label: "Public key", format: "last_four", lastFour: "91ef" },
     ],
+    lastValidatedAt: "2026-09-14T16:09:00.000Z",
     updatedAt: "2026-09-14T16:10:00.000Z",
   },
   {
@@ -55,6 +59,7 @@ export const services: ServiceInventoryItem[] = [
       { label: "Account SID", format: "last_four", lastFour: "4566" },
       { label: "Auth token", format: "masked" },
     ],
+    lastValidatedAt: "2026-09-12T07:29:00.000Z",
     updatedAt: "2026-09-12T07:30:00.000Z",
   },
 ];
@@ -174,6 +179,7 @@ export function applyCredentialCreation(
         provider: draft.provider,
         credentialName: draft.provider,
         credentialPreview: [],
+        lastValidatedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
     ],

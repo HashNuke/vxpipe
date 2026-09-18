@@ -23,6 +23,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
     Application.put_env(:vxpipe_console, :operator_login_secret, @secret)
     configure_login_repository()
+    configure_credential_validator(:ok)
     :ok
   end
 
@@ -37,6 +38,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       auth_kind: "api_key",
       status: :active,
       secret_hints: %{"api_key" => "8c4a"},
+      last_validated_at: ~U[2026-09-17 01:55:00Z],
       inserted_at: ~U[2026-09-17 02:00:00Z],
       updated_at: ~U[2026-09-17 02:00:00Z]
     }
@@ -74,6 +76,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                  "credential_preview" => [
                    %{"format" => "last_four", "label" => "API key", "last_four" => "8c4a"}
                  ],
+                 "last_validated_at" => "2026-09-17T01:55:00Z",
                  "created_at" => "2026-09-17T02:00:00Z",
                  "updated_at" => "2026-09-17T02:00:00Z"
                }
@@ -122,6 +125,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
         provider: provider,
         name: provider,
         auth_kind: expected_kind,
+        last_validated_at: ~U[2026-09-18 04:00:00Z],
         inserted_at: ~U[2026-09-17 02:00:00Z],
         updated_at: ~U[2026-09-17 02:00:00Z]
       }
@@ -148,6 +152,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                      "provider" => ^provider,
                      "name" => ^provider,
                      "auth_kind" => ^expected_kind,
+                     "last_validated_at" => "2026-09-18T04:00:00Z",
                      "status" => "active"
                    }
                  } = json_response(response, 201)
@@ -157,6 +162,10 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
       for secret <- Map.values(values), do: refute(log =~ secret)
       assert_received {:operator_credential_created, created, ^expected_payload}
+
+      assert_received {:operator_credential_validated, ^provider, ^expected_kind,
+                       ^expected_payload}
+
       assert created.tenant_key == @tenant_key
       assert created.provider == provider
       assert created.name == provider
@@ -210,7 +219,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     refute response.resp_body =~ "replacement-private"
 
     assert_received {:operator_credential_replaced, @tenant_key, credential_id, "twilio",
-                     "account_sid_auth_token", _payload}
+                     "account_sid_auth_token", _payload, %DateTime{}}
 
     assert credential_id == returned.id
   end
@@ -311,6 +320,27 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert log =~ ~s("values" => "[FILTERED]")
   end
 
+  test "does not store credentials rejected by the provider" do
+    configure_credential_validator({:error, :provider_credential_rejected})
+    authenticated = authenticate()
+    csrf = admin_csrf(authenticated)
+
+    response =
+      authenticated
+      |> recycle()
+      |> put_req_header("x-csrf-token", csrf)
+      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+        "provider" => "google",
+        "values" => %{"api_key" => "rejected-private"}
+      })
+
+    assert json_response(response, 422) == %{
+             "error" => %{"code" => "credential_rejected"}
+           }
+
+    refute_received {:operator_credential_created, _, _}
+  end
+
   defp tenant do
     %Tenant{
       key: @tenant_key,
@@ -357,6 +387,13 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
   defp configure_credential_repository(result) do
     update_calls(:provider_credential_repository, {
       Vxpipe.Console.Test.OperatorCredentialRepository,
+      {self(), result}
+    })
+  end
+
+  defp configure_credential_validator(result) do
+    update_calls(:provider_credential_validator, {
+      Vxpipe.Console.Test.OperatorCredentialValidator,
       {self(), result}
     })
   end

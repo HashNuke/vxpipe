@@ -15,6 +15,7 @@ export type ServiceInventoryItem = {
   provider: ServiceProvider;
   credentialName: string | null;
   credentialPreview?: CredentialPreview[];
+  lastValidatedAt: string | null;
   updatedAt: string;
 };
 

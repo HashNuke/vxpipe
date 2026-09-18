@@ -112,6 +112,7 @@ const serviceDirectory = (tenantKey: string, credentials = true) => ({
           credential_preview: [
             { label: "API key", format: "last_four", last_four: "8c4a" },
           ],
+          last_validated_at: "2026-09-17T01:55:00Z",
           created_at: "2026-09-17T02:00:00Z",
           updated_at: "2026-09-17T02:00:00Z",
         },
@@ -780,6 +781,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
               credential_preview: [
                 { label: "API key", format: "last_four", last_four: "alue" },
               ],
+              last_validated_at: "2026-09-17T01:55:00Z",
               created_at: "2026-09-17T02:00:00Z",
               updated_at: "2026-09-17T02:00:00Z",
             },
@@ -836,6 +838,7 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
           credential_preview: [
             { label: "API key", format: "last_four", last_four: "7f2b" },
           ],
+          last_validated_at: "2026-09-18T01:55:00Z",
           created_at: "2026-09-17T02:00:00Z",
           updated_at: "2026-09-18T02:00:00Z",
         },
@@ -958,6 +961,8 @@ test("ignores a credential response after its dialog is closed and reopened", as
             name: "first",
             auth_kind: "api_key",
             status: "active",
+            credential_preview: [],
+            last_validated_at: "2026-09-17T01:55:00Z",
             created_at: "2026-09-17T02:00:00Z",
             updated_at: "2026-09-17T02:00:00Z",
           },

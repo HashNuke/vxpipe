@@ -247,6 +247,7 @@ type CredentialMetadata = {
   provider: ServiceProvider;
   name: string;
   updatedAt: string;
+  lastValidatedAt: string | null;
   authKind: "api_key" | "account_sid_auth_token";
   status: "active" | "revoked";
   credentialPreview: CredentialPreview[];
@@ -271,6 +272,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
       "auth_kind",
       "status",
       "credential_preview",
+      "last_validated_at",
       "created_at",
       "updated_at",
     ]) ||
@@ -288,6 +290,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
     value.name.length === 0 ||
     !member(value.status, ["active", "revoked"]) ||
     !Array.isArray(value.credential_preview) ||
+    !(value.last_validated_at === null || validTimestamp(value.last_validated_at)) ||
     !validTimestamp(value.created_at) ||
     !validTimestamp(value.updated_at) ||
     !(
@@ -304,6 +307,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
     provider: value.provider,
     name: value.name,
     updatedAt: value.updated_at,
+    lastValidatedAt: value.last_validated_at,
     authKind: value.auth_kind,
     status: value.status,
     credentialPreview: value.credential_preview.map(parseCredentialPreview),
@@ -388,6 +392,7 @@ function credentialInventory(
     provider: credential.provider,
     credentialName: credential.name,
     credentialPreview: credential.credentialPreview,
+    lastValidatedAt: credential.lastValidatedAt,
     updatedAt: credential.updatedAt,
   };
 }

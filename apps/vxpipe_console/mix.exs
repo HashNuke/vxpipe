@@ -37,6 +37,7 @@ defmodule Vxpipe.Console.MixProject do
       {:phoenix_live_reload, "~> 1.6", only: :dev},
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_pubsub, "~> 2.1"},
+      {:req, "~> 0.7.4"},
       {:telemetry, "~> 1.3"},
       {:vxpipe_artifacts, in_umbrella: true},
       {:vxpipe_calls, in_umbrella: true},

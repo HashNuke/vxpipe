@@ -37,7 +37,8 @@ defmodule Vxpipe.Calls.ProviderCredentials do
         provider,
         auth_kind,
         payload,
-        ProviderCredentialHints.from_payload(auth_kind, payload)
+        ProviderCredentialHints.from_payload(auth_kind, payload),
+        nil
       ])
     end
   end

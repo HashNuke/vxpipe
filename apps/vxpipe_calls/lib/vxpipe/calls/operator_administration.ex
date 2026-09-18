@@ -190,8 +190,8 @@ defmodule Vxpipe.Calls.OperatorAdministration do
           map(),
           keyword()
         ) :: {:ok, ProviderCredential.t()} | {:error, term()}
-  def create_credential(
-        %InstallationOperator{grant: :installation_operator},
+  def create_validated_credential(
+        %InstallationOperator{grant: :installation_operator} = authority,
         tenant_key,
         provider,
         name,
@@ -202,20 +202,64 @@ defmodule Vxpipe.Calls.OperatorAdministration do
       when is_list(options) do
     with :ok <- ProviderAuth.binding(tenant_key, provider, name),
          :ok <- ProviderAuth.validate(provider, auth_kind, payload),
-         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
-      credential = %ProviderCredential{
-        id: generate_uuid(options),
-        tenant_key: tenant_key,
-        provider: provider,
-        name: name,
-        auth_kind: auth_kind,
-        secret_hints: ProviderCredentialHints.from_payload(auth_kind, payload)
-      }
-
-      repository
-      |> Repositories.call(:provision, [credential, payload])
-      |> validate_created_credential(credential)
+         {:ok, validator} <- Repositories.fetch(options, :provider_credential_validator),
+         :ok <- Repositories.call(validator, :validate, [provider, auth_kind, payload]),
+         {:ok, validated_at} <- validation_time(options) do
+      do_create_credential(
+        authority,
+        tenant_key,
+        provider,
+        name,
+        auth_kind,
+        payload,
+        validated_at,
+        options
+      )
     end
+  end
+
+  def create_validated_credential(
+        %InstallationOperator{},
+        _tenant,
+        _provider,
+        _name,
+        _kind,
+        _payload,
+        _options
+      ),
+      do: {:error, :installation_operator_required}
+
+  def create_validated_credential(
+        _authority,
+        _tenant,
+        _provider,
+        _name,
+        _kind,
+        _payload,
+        _options
+      ),
+      do: {:error, :installation_operator_required}
+
+  def create_credential(
+        %InstallationOperator{grant: :installation_operator} = authority,
+        tenant_key,
+        provider,
+        name,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_list(options) do
+    do_create_credential(
+      authority,
+      tenant_key,
+      provider,
+      name,
+      auth_kind,
+      payload,
+      nil,
+      options
+    )
   end
 
   def create_credential(
@@ -241,8 +285,8 @@ defmodule Vxpipe.Calls.OperatorAdministration do
           map(),
           keyword()
         ) :: {:ok, ProviderCredential.t()} | {:error, term()}
-  def update_credential(
-        %InstallationOperator{grant: :installation_operator},
+  def update_validated_credential(
+        %InstallationOperator{grant: :installation_operator} = authority,
         tenant_key,
         credential_id,
         provider,
@@ -253,18 +297,64 @@ defmodule Vxpipe.Calls.OperatorAdministration do
       when is_binary(credential_id) and byte_size(credential_id) in 1..128 and is_list(options) do
     with :ok <- ProviderAuth.binding(tenant_key, provider, provider),
          :ok <- ProviderAuth.validate(provider, auth_kind, payload),
-         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
-      repository
-      |> Repositories.call(:replace, [
+         {:ok, validator} <- Repositories.fetch(options, :provider_credential_validator),
+         :ok <- Repositories.call(validator, :validate, [provider, auth_kind, payload]),
+         {:ok, validated_at} <- validation_time(options) do
+      do_update_credential(
+        authority,
         tenant_key,
         credential_id,
         provider,
         auth_kind,
         payload,
-        ProviderCredentialHints.from_payload(auth_kind, payload)
-      ])
-      |> validate_updated_credential(tenant_key, credential_id, provider, auth_kind)
+        validated_at,
+        options
+      )
     end
+  end
+
+  def update_validated_credential(
+        %InstallationOperator{},
+        _tenant,
+        _id,
+        _provider,
+        _kind,
+        _payload,
+        _options
+      ),
+      do: {:error, :installation_operator_required}
+
+  def update_validated_credential(
+        _authority,
+        _tenant,
+        _id,
+        _provider,
+        _kind,
+        _payload,
+        _options
+      ),
+      do: {:error, :installation_operator_required}
+
+  def update_credential(
+        %InstallationOperator{grant: :installation_operator} = authority,
+        tenant_key,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_binary(credential_id) and byte_size(credential_id) in 1..128 and is_list(options) do
+    do_update_credential(
+      authority,
+      tenant_key,
+      credential_id,
+      provider,
+      auth_kind,
+      payload,
+      nil,
+      options
+    )
   end
 
   def update_credential(%InstallationOperator{}, _tenant, _id, _provider, _kind, _payload, _opts),
@@ -273,10 +363,73 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   def update_credential(_authority, _tenant, _id, _provider, _kind, _payload, _options),
     do: {:error, :installation_operator_required}
 
+  defp do_create_credential(
+         %InstallationOperator{grant: :installation_operator},
+         tenant_key,
+         provider,
+         name,
+         auth_kind,
+         payload,
+         last_validated_at,
+         options
+       ) do
+    with :ok <- ProviderAuth.binding(tenant_key, provider, name),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      credential = %ProviderCredential{
+        id: generate_uuid(options),
+        tenant_key: tenant_key,
+        provider: provider,
+        name: name,
+        auth_kind: auth_kind,
+        secret_hints: ProviderCredentialHints.from_payload(auth_kind, payload),
+        last_validated_at: last_validated_at
+      }
+
+      repository
+      |> Repositories.call(:provision, [credential, payload])
+      |> validate_created_credential(credential)
+    end
+  end
+
+  defp do_update_credential(
+         %InstallationOperator{grant: :installation_operator},
+         tenant_key,
+         credential_id,
+         provider,
+         auth_kind,
+         payload,
+         last_validated_at,
+         options
+       ) do
+    with :ok <- ProviderAuth.binding(tenant_key, provider, provider),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      repository
+      |> Repositories.call(:replace, [
+        tenant_key,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        ProviderCredentialHints.from_payload(auth_kind, payload),
+        last_validated_at
+      ])
+      |> validate_updated_credential(tenant_key, credential_id, provider, auth_kind)
+    end
+  end
+
   defp generate_uuid(options) do
     options
     |> Keyword.get(:uuid_generator, &PublicId.uuid/0)
     |> then(fn generator -> generator.() end)
+  end
+
+  defp validation_time(options) do
+    case options |> Keyword.get(:clock, &DateTime.utc_now/0) |> then(& &1.()) do
+      %DateTime{} = validated_at -> {:ok, validated_at}
+      _invalid -> {:error, :provider_validation_unavailable}
+    end
   end
 
   defp validate_service_directory(
