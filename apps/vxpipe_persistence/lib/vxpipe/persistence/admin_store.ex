@@ -205,6 +205,7 @@ defmodule Vxpipe.Persistence.AdminStore do
               :payload_schema_version,
               :status,
               :secret_hints,
+              :last_validated_at,
               :encryption_key_id,
               :inserted_at,
               :updated_at
@@ -530,6 +531,7 @@ defmodule Vxpipe.Persistence.AdminStore do
       payload_schema_version: stored.payload_schema_version,
       status: credential_status(stored.status),
       secret_hints: stored.secret_hints || %{},
+      last_validated_at: stored.last_validated_at,
       encryption_key_id: stored.encryption_key_id,
       inserted_at: stored.inserted_at,
       updated_at: stored.updated_at

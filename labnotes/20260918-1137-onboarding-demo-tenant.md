@@ -56,3 +56,20 @@ The user required Storybook design before production endpoint work.
 - Console services endpoint and validator: 8 tests, 0 failures.
 - Frontend admin API parser: 11 tests, 0 failures; TypeScript check passes.
 - Affected full suites: Calls 107, Persistence 153, Console 160 and frontend 129 tests, all passing.
+
+## Checkpoint: durable DemoTenant identity
+
+- Added an installation setup record that binds one generated tenant identity independently of its
+  editable display name. An existing unrelated tenant named `DemoTenant` is never adopted.
+- The persistence transaction creates the tenant and singleton binding together. A retry returns
+  the existing binding; a losing singleton insert rolls back its candidate before resuming.
+- Added a narrow operator-authenticated, CSRF-protected endpoint. It returns tenant metadata only
+  and does not create an otherwise orphaned plaintext tenant API key.
+- Also corrected the admin service projection to carry the previously persisted
+  `last_validated_at` value through the real persistence adapter.
+
+### Test evidence
+
+- Calls suite: 109 tests, 0 failures.
+- Focused Persistence demo/admin store: 9 tests, 0 failures.
+- Console onboarding endpoint: 2 tests, 0 failures.

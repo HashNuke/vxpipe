@@ -11,6 +11,7 @@ defmodule Vxpipe.Calls do
     CallDetailsInspections,
     CallDetailsFinalization,
     CallDetailsPublications,
+    DemoSetup,
     Definitions,
     Inspections,
     OperatorAdministration,
@@ -20,6 +21,9 @@ defmodule Vxpipe.Calls do
     TelephonyAdmissions,
     UsageProjections
   }
+
+  def ensure_demo_tenant(authority, options \\ []),
+    do: DemoSetup.ensure_tenant(authority, options)
 
   def issue_operator_login_challenge(verifier_secret, options \\ []),
     do: OperatorLoginChallenges.issue(verifier_secret, options)

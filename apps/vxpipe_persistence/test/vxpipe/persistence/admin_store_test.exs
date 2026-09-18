@@ -1,6 +1,8 @@
 defmodule Vxpipe.Persistence.AdminStoreTest do
   use Vxpipe.Persistence.DataCase, async: false
 
+  import Ecto.Query
+
   alias Vxpipe.Calls.{
     Administration,
     Definitions,
@@ -24,6 +26,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     CallDefinition,
     CallDetailsPublication,
     DefinitionRevision,
+    ProviderCredential,
     Tenant
   }
 
@@ -110,6 +113,12 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
                options
              )
 
+    validated_at = ~U[2026-09-18 04:00:00Z]
+    google_id = google.id
+
+    from(credential in ProviderCredential, where: credential.public_id == ^google_id)
+    |> Repo.update_all(set: [last_validated_at: validated_at])
+
     assert {:ok, _foreign} =
              ProviderCredentials.provision(
                other.key,
@@ -148,6 +157,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert Enum.map(services, &{&1.provider, &1.name}) == [{"telnyx", "support"}]
     assert List.first(credentials).id == google.id
     assert List.first(credentials).secret_hints == %{"api_key" => "alue"}
+    assert DateTime.compare(List.first(credentials).last_validated_at, validated_at) == :eq
     assert List.first(services).id == service.id
 
     rendered = inspect({credentials, services})
