@@ -6,6 +6,7 @@ import {
   type ServiceModalState,
 } from "./admin/ServiceSetupModal";
 import { TenantSetupPage } from "./admin/TenantSetupPage";
+import { TenantTelephonyApplications } from "./admin/TenantTelephonyApplications";
 import {
   parseBindingDirectory,
   type BindingDirectory,
@@ -340,6 +341,26 @@ export function ScopedServicesApp({
               ))}
             </div>
           </section>
+        ) : null}
+        {tenantKey !== null ? (
+          <TenantTelephonyApplications
+            key={tenantKey}
+            tenantKey={tenantKey}
+            csrfToken={csrfToken}
+            binding={primary.find((binding) => binding.provider === "telnyx")}
+            credentialsLoaded={phase === "ready"}
+            webhookUrl={
+              primary.find((binding) => binding.provider === "telnyx")
+                ?.source === "tenant"
+                ? directory?.webhookUrls?.tenant
+                : directory?.webhookUrls?.platform
+            }
+            fetchImpl={fetchImpl}
+            onSessionExpired={onSessionExpired}
+            onConnectionDetails={() =>
+              open({ provider: "telnyx", group: "telephony", status: "idle" })
+            }
+          />
         ) : null}
         {phase === "ready" && tenantKey !== null ? (
           <footer className="setup-footer">

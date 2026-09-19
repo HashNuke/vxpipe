@@ -2,10 +2,10 @@
 
 Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
 are delivered, including the credential-presence correction. C1/C2 scoped Telnyx
-bindings/ingress, C3a Console credential/URL configuration and D1 legacy webhook removal
-are implemented. C3b application/number-route setup and D2 final acceptance remain.
-The latest umbrella run passes 1,788 tests with zero failures and 40 exclusions;
-all root static gates and 183 frontend tests pass.
+bindings/ingress, C3a Console credential/URL configuration, D1 legacy webhook removal
+and C3b application/number-route setup are implemented. D2 final acceptance remains.
+All root static gates and 187 frontend tests pass. The C3b umbrella rerun remains
+pending after one native WebRTC timeout in its first 1,798-test run.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -211,8 +211,9 @@ legacy compatibility boundary, selected-owner identity and acceptance order.
 C3 is split into credential/URL setup (C3a) and tenant application configuration
 (C3b). C3b is delivered as an operator API/durable-route checkpoint (C3b1), then its
 Console form and browser acceptance (C3b2). C3b1's API is implemented and its owning
-application suites pass; final umbrella acceptance remains open after a native WebRTC
-handoff timeout outside this slice. C3b2 remains open. The binding decision
+application suites pass; C3b2's Console form and rendered acceptance also pass.
+Final umbrella acceptance remains open after a native WebRTC handoff timeout
+outside this slice. The binding decision
 records their input, authority, identity and published-route contracts separately
 from implementation progress. C3a includes D's shared-origin and outgoing scope-URL generation so displayed
 and outgoing URLs agree; D owns legacy webhook deletion and final acceptance, per
@@ -431,8 +432,22 @@ Checkpoint C3b1 implementation:
   100 applications/500 routes, with ambiguity counted before truncation.
 - Calls (117), Persistence (184) and Console (185) suites pass, along with all static
   gates. The first 1,798-test umbrella run had one native WebRTC handoff timeout;
-  three isolated reruns passed. Final umbrella acceptance remains pending. See
+  five isolated reruns passed. Final umbrella acceptance remains pending. See
   [C3b1 evidence](../labnotes/20260919-1208-tenant-phone-application-api.md).
+
+Checkpoint C3b2 implementation:
+
+- Tenant service setup now exposes an inline application create/edit form and reads
+  current published number routes. Service names stay fixed; edits change only the
+  application ID and optional outbound caller. Credentials remain in their existing form.
+- Missing tenant public keys, duplicate IDs, failed reads/writes and saved-but-reload-failed
+  states preserve the credential-scope contract and provide explicit recovery. The page
+  distinguishes local configuration, remote Telnyx settings and live call verification.
+- All 187 frontend tests, TypeScript, ESLint, Prettier and asset builds pass. Chrome
+  at 1440px and 390px verifies both credential sources, real create/edit, persisted
+  published routes, errors, retry and restart. Independent finish review returns `ship`;
+  no new design-system rule is needed. Final umbrella acceptance remains in D2. See
+  [C3b2 evidence](../labnotes/20260919-1225-tenant-phone-configuration.md).
 
 ### 1. Storybook review checkpoint
 

@@ -135,6 +135,17 @@ even when a usable platform credential exists. Metadata remains readable without
 Number authoring stays in the existing authorized call-spec save/publish APIs. These endpoints
 configure local bindings only; they neither provision Telnyx resources nor prove live calling.
 
+The tenant's Console service-setup page exposes these operations under **Phone routing**.
+Add an existing Voice API application, then edit its application ID or outbound caller number
+as needed. The service name remains fixed because call specs reference it. **Connection
+details** opens the effective Telnyx credential configuration and its scoped webhook URL.
+An API-only tenant override needs its own public key before application writes are available.
+
+After publishing a receiving call spec, reload phone routing to see its current number,
+revision and participant. Conflicting published routes are called out even when the directory
+is truncated. Saved keys and application metadata are local configuration: assign the number
+and matching webhook URL in Telnyx, then verify a live call separately.
+
 ## Private resolution and call spec checks
 
 `TelephonyServices.resolve(tenant_key, name)` returns a private snapshot of the service and its
