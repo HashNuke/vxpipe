@@ -2,7 +2,7 @@ defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
   use ExUnit.Case, async: true
   alias Vxpipe.Calls.{InstallationOperator, Principal, TestOperatorCredentialRepository}
 
-  test "only an installation operator can change a tenant's exact binding policy" do
+  test "only an installation operator can delete credentials within their exact owner" do
     tenant = "AAAAAAAAAAAAAAAA"
 
     options = [
@@ -11,43 +11,22 @@ defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
 
     principal = %Principal{tenant_key: tenant, api_key_id: "key", scopes: MapSet.new([:admin])}
 
-    assert {:error, :installation_operator_required} =
-             Vxpipe.Calls.set_operator_service_policy(
-               principal,
-               tenant,
-               "google",
-               "named-model",
-               :disabled,
-               options
-             )
+    for scope <- [tenant, :platform] do
+      assert {:error, :installation_operator_required} =
+               Vxpipe.Calls.delete_operator_credential(principal, scope, "credential-id", options)
 
-    refute_received {:operator_policy_changed, _, _, _, _}
+      refute_received {:operator_credential_deleted, _, _}
 
-    for policy <- [:override, :disabled, :inherit] do
       assert :ok =
-               Vxpipe.Calls.set_operator_service_policy(
+               Vxpipe.Calls.delete_operator_credential(
                  InstallationOperator.authority(),
-                 tenant,
-                 "google",
-                 "named-model",
-                 policy,
+                 scope,
+                 "credential-id",
                  options
                )
 
-      assert_received {:operator_policy_changed, ^tenant, "google", "named-model", ^policy}
+      assert_received {:operator_credential_deleted, ^scope, "credential-id"}
     end
-
-    assert {:error, :invalid_service_policy} =
-             Vxpipe.Calls.set_operator_service_policy(
-               InstallationOperator.authority(),
-               tenant,
-               "google",
-               "named-model",
-               :fallback,
-               options
-             )
-
-    refute_received {:operator_policy_changed, _, _, _, _}
   end
 
   test "accepts a tagged tenant owner and strips extra repository metadata" do

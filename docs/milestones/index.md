@@ -139,8 +139,13 @@ on 2026-09-19 and is tracked as eight runnable vertical checkpoints in that plan
 including the user's subsequent operator/tenant authoring-authority clarification;
 the inherited-provider, principal-aware authoring, operator API-key writes and Console platform slices pass
 focused tests, browser checks where applicable and the serial umbrella suite;
-tenant exception management, older demo-onboarding integration and scoped carrier routing remain. The combined A3
+tenant exception management and older demo onboarding now also pass under the
+presence correction; scoped carrier routing remains. The combined A3
 umbrella run passes 1,754 tests with 40 exclusions; all root static gates pass.
+The latest clarification removes credential policies: existing tenant credentials win;
+otherwise platform credentials are inherited. Scoped deletion and UI simplification
+pass browser/migration/restart checks and the final umbrella run: 1,763 tests, no
+failures, 40 excluded.
 This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 

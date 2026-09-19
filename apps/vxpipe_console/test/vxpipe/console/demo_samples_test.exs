@@ -121,7 +121,7 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     assert Enum.all?(page.call_specs, &(&1.latest_revision == 1))
   end
 
-  test "installs with inherited exact bindings and refuses a disabled tenant override" do
+  test "installs with inherited exact bindings and refuses an unreadable tenant credential" do
     {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
 
     options = [
@@ -149,20 +149,28 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     assert {:ok, installed} = DemoSamples.install(authority, tenant.key, options)
     assert Enum.map(installed, &{&1.id, &1.status, &1.revision}) == expected_installations()
 
-    assert :ok =
-             ProviderCredentials.set_policy(
+    assert {:ok, own} =
+             ProviderCredentials.provision(
                tenant.key,
                "deepgram",
                "deepgram",
-               :disabled,
+               "api_key",
+               %{"api_key" => "synthetic-own"},
                options
              )
+
+    stored = Repo.get_by!(Vxpipe.Persistence.Schema.ProviderCredential, public_id: own.id)
+
+    Repo.update!(
+      Ecto.Changeset.change(stored,
+        encrypted_payload: :crypto.strong_rand_bytes(byte_size(stored.encrypted_payload))
+      )
+    )
 
     assert {:error, :sample_prerequisites_missing} =
              DemoSamples.install(authority, tenant.key, options)
 
-    assert :ok =
-             ProviderCredentials.set_policy(tenant.key, "deepgram", "deepgram", :inherit, options)
+    assert :ok = ProviderCredentials.delete(tenant.key, own.id, options)
 
     assert {:ok, resumed} = DemoSamples.install(authority, tenant.key, options)
     assert Enum.map(resumed, &{&1.id, &1.status, &1.revision}) == expected_installations()

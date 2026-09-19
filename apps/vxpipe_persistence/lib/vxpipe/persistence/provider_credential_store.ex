@@ -48,7 +48,6 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                    ProviderCredential.changeset(%ProviderCredential{}, attributes),
                    @private_query_options
                  ) do
-            :ok = ProviderCredentialScope.override(repo, owner, stored.provider, stored.name)
             metadata(stored, owner.key)
           else
             {:error, %Ecto.Changeset{} = changeset} -> repo.rollback(insertion_error(changeset))
@@ -123,7 +122,6 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                       ),
                       @private_query_options
                     ) do
-               :ok = ProviderCredentialScope.override(repo, owner, updated.provider, updated.name)
                metadata(updated, owner.key)
              else
                {:error, %Ecto.Changeset{}} -> repo.rollback(:provider_credential_write_failed)
@@ -203,27 +201,38 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   end
 
   @impl true
-  def set_policy(context, tenant_key, provider, name, policy)
-      when policy in [:inherit, :override, :disabled] do
+  def delete(context, scope, credential_id) do
     repo = Keyword.fetch!(context, :repo)
 
-    with :ok <- ProviderAuth.tenant_key(tenant_key),
-         :ok <- ProviderAuth.binding(tenant_key, provider, name) do
-      case repo.transaction(
-             fn ->
-               case ProviderCredentialScope.owner(repo, tenant_key, "FOR UPDATE") do
-                 {:ok, tenant} ->
-                   ProviderCredentialScope.set_policy(repo, tenant, provider, name, policy)
+    case repo.transaction(
+           fn ->
+             unless match?({:ok, _id}, Ecto.UUID.cast(credential_id)),
+               do: repo.rollback(:invalid_provider_credential_id)
 
-                 {:error, reason} ->
-                   repo.rollback(reason)
-               end
-             end,
-             @private_query_options
-           ) do
-        {:ok, :ok} -> :ok
-        {:error, reason} -> {:error, reason}
-      end
+             with {:ok, owner} <- ProviderCredentialScope.owner(repo, scope, "FOR UPDATE"),
+                  query = ProviderCredentialScope.owned(ProviderCredential, owner),
+                  %ProviderCredential{} = stored <-
+                    repo.one(
+                      from(c in query, where: c.public_id == ^credential_id, lock: "FOR UPDATE"),
+                      @private_query_options
+                    ),
+                  changeset =
+                    Ecto.Changeset.change(stored)
+                    |> Ecto.Changeset.foreign_key_constraint(:public_id,
+                      name: :telephony_services_credential_owner_fkey
+                    ),
+                  {:ok, _deleted} <- repo.delete(changeset, @private_query_options) do
+               :ok
+             else
+               nil -> repo.rollback(:provider_credential_not_found)
+               {:error, %Ecto.Changeset{}} -> repo.rollback(:provider_credential_in_use)
+               {:error, reason} -> repo.rollback(reason)
+             end
+           end,
+           @private_query_options
+         ) do
+      {:ok, :ok} -> :ok
+      {:error, reason} -> {:error, reason}
     end
   rescue
     error -> repository_error(error, __STACKTRACE__)
@@ -231,9 +240,6 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
     :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
       {:error, :provider_credentials_unavailable}
   end
-
-  def set_policy(_context, _tenant_key, _provider, _name, _policy),
-    do: {:error, :invalid_service_policy}
 
   @impl true
   def with_active(context, tenant_key, requirements, operation) do

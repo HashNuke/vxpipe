@@ -8,43 +8,29 @@ defmodule Vxpipe.Console.AdminServicesController do
   def platform_index(conn, _params), do: bindings(conn, :platform)
   def tenant_bindings(conn, %{"tenant_key" => key}), do: bindings(conn, key)
 
-  def set_policy(conn, %{"tenant_key" => key, "provider" => provider, "name" => name}) do
-    with %{"policy" => value} = body when map_size(body) == 1 <- conn.body_params,
-         {:ok, policy} <- policy(value),
-         :ok <-
-           Vxpipe.Calls.set_operator_service_policy(
-             InstallationOperator.authority(),
-             key,
-             provider,
-             name,
-             policy
-           ) do
-      json(conn, %{policy: value})
-    else
-      {:error, :tenant_not_found} ->
-        conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+  def delete(conn, %{"tenant_key" => key, "credential_id" => id}),
+    do: delete_credential(conn, key, id)
 
-      {:error, reason}
-      when reason in [
-             :invalid_tenant_key,
-             :invalid_provider_auth,
-             :invalid_credential_name,
-             :invalid_service_policy
-           ] ->
-        conn |> put_status(422) |> json(%{error: %{code: "invalid_service_policy"}})
+  def delete_platform(conn, %{"credential_id" => id}), do: delete_credential(conn, :platform, id)
+
+  defp delete_credential(conn, owner, id) do
+    case Vxpipe.Calls.delete_operator_credential(InstallationOperator.authority(), owner, id) do
+      :ok ->
+        send_resp(conn, 204, "")
+
+      {:error, reason} when reason in [:tenant_not_found, :provider_credential_not_found] ->
+        conn |> put_status(404) |> json(%{error: %{code: Atom.to_string(reason)}})
+
+      {:error, :provider_credential_in_use} ->
+        conn |> put_status(409) |> json(%{error: %{code: "provider_credential_in_use"}})
+
+      {:error, reason} when reason in [:invalid_tenant_key, :invalid_provider_credential_id] ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
 
       {:error, _reason} ->
-        conn |> put_status(503) |> json(%{error: %{code: "service_policy_unavailable"}})
-
-      _invalid ->
-        conn |> put_status(422) |> json(%{error: %{code: "invalid_service_policy"}})
+        conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
     end
   end
-
-  defp policy("inherit"), do: {:ok, :inherit}
-  defp policy("override"), do: {:ok, :override}
-  defp policy("disabled"), do: {:ok, :disabled}
-  defp policy(_value), do: {:error, :invalid_service_policy}
 
   defp bindings(conn, scope) do
     case Vxpipe.Calls.list_operator_service_bindings(InstallationOperator.authority(), scope) do

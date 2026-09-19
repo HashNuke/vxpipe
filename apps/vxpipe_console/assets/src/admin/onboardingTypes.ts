@@ -5,7 +5,6 @@ export type OnboardingProviderStatus =
   | "validating"
   | "valid"
   | "invalid"
-  | "disabled"
   | "unavailable";
 
 export type OnboardingProvider = {

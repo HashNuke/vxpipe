@@ -1,10 +1,10 @@
 # Platform and tenant services
 
-Status: implementation authorized 2026-09-19. Storybook prototype implemented and
-verified; A, A2, A3 and B1 are delivered. B2, B3, C and D remain.
-B2's Console policy controls and B3's effective-service onboarding pass focused
-tests and browser/restart checks. Their umbrella acceptance remains open after
-native WebRTC handoff failures.
+Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
+are delivered, including the credential-presence correction. Scoped Telnyx C and
+callback/migration acceptance D remain. The latest umbrella run passes 1,763 tests
+with zero failures and 40 exclusions; all root static gates pass. Earlier native
+handoff failures remain in historical evidence; this pass does not establish their cause.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -25,25 +25,26 @@ It does not restore environment-based provider credentials or implicit failure f
   tenant call keys can run that tenant's published routes. They cannot author a new
   platform-backed spec. Operator API keys establish installation authority separately
   from tenant `admin`/`calls` keys and browser login sessions.
-- Runtime preference (user clarification, 2026-09-19): use the active tenant service
-  when both tenant and platform configure the referenced provider/name, regardless
-  of who authored the spec. Otherwise inherit the platform service. Restored
-  inheritance may retain dormant tenant credential rows; these are not active tenant
-  configurations. Disabled policies and failed overrides retain the fail-closed rules.
-- Tenant cards identify exceptions with **Inherited from platform**, **Tenant override**,
-  or **Disabled for this tenant**. Ordinary tenant and platform cards omit redundant
-  scope labels. Inherited capabilities count toward onboarding readiness. New tenants
-  inherit available platform defaults.
-- Resolve each provider/named binding using an explicit tenant policy: inherit, override,
-  or disabled. A tenant override replaces the whole credential set. Its missing,
-  revoked, invalid or unreadable credentials fail; they never trigger platform fallback.
-  Named bindings retain their names rather than silently substituting `default`.
-- “Use platform service” explicitly removes the override policy; disabling creates a
-  durable tenant policy so an inherited provider does not reappear on refresh.
+- **Credential presence (latest user clarification, 2026-09-19):** credentials either
+  exist at tenant scope or do not; the same applies at platform scope. There is no
+  separate inherit/override/disabled policy or credential disable action.
+- Runtime uses the tenant credential for the exact provider/name whenever it exists,
+  regardless of who authored the spec. Otherwise use the platform credential; absence
+  at both scopes is unavailable. Existing invalid or unreadable tenant credentials
+  fail closed. They never trigger fallback to platform. An override replaces the
+  whole credential set; named bindings never silently substitute `default`.
+- Tenant cards show **Inherited from platform** or **Tenant override** where applicable.
+  Ordinary tenant/platform cards omit redundant scope labels. Inherited capabilities
+  count toward onboarding readiness, including newly created tenants.
+- **Use platform service** deletes the tenant credential. **Remove service** deletes
+  the credential at its own scope. There are no dormant tenant credentials: adding
+  a credential again creates a new identity, requiring fresh preparation for readers
+  pinned to the deleted identity. Existing legacy telephony references prevent deletion
+  until their application binding is removed. API-key revocation is a separate concern.
 - An inherited service opens a read-only explanation with **Override for this tenant**
-  and **Disable for this tenant** actions. Platform credentials are edited at platform
-  scope. The operator UI currently has installation-wide authority; future tenant-only
-  principals must not acquire platform edit authority from these UI actions.
+  and **Manage platform services**. Platform credentials are edited at platform scope.
+  The operator UI has installation-wide authority; tenant API keys do not gain that
+  authority through inheritance or UI actions.
 - The first UI supports Deepgram, Rime, Google AI Studio and Telnyx, as already selected
   by the user. Provider labels and defaults do not establish live runtime support.
 
@@ -118,7 +119,7 @@ bindings, separate from the credential scope. References:
 
 The original Calls/Persistence credential boundary required a tenant key and tenant
 foreign key. Checkpoint A now separates tagged ownership from the consuming tenant,
-adds platform uniqueness and tenant policies, and shares policy resolution between
+adds platform uniqueness, and shares presence-based resolution between
 private reads and final write guards. Existing tenant ciphertext keeps its version-1
 authenticated context; platform ciphertext uses a distinct version-2 context.
 
@@ -128,7 +129,7 @@ Gateway `ServiceRegistry` currently looks up globally unique ingress keys, and
 `TelnyxEvents` verifies through a resolved tenant service. Existing initialized legs
 retain authentication for callbacks/media/cleanup during storage outages.
 
-Keep responsibilities: Calls owns scoped service policies and safe identities;
+Keep responsibilities: Calls owns scoped service resolution and safe identities;
 Persistence owns encryption, schema, constraints and transactions; Gateway owns
 provider protocols and signed webhook dispatch; Console owns operator endpoints and UI.
 No Console dependency in the engine or Gateway, and no Repo calls in those applications.
@@ -142,10 +143,10 @@ these vertical slices; each includes the owning tests, documentation and applica
 browser checks. A checked design task does not count as a delivered slice.
 
 - [x] **A — Use an inherited provider in a tenant call.** Migrate credential ownership
-  and explicit tenant policies, provision a platform provider through the operator
+  and scoped bindings, provision a platform provider through the operator
   boundary, and resolve it through call-spec save/publish/preparation and fresh runtime
-  readers. Prove two inheriting tenants, one override, named bindings, disabled/failed
-  overrides and transaction-time guards. Preserve existing tenant ciphertext and IDs.
+  readers. Prove two inheriting tenants, one override, named bindings, failed
+  tenant credentials and transaction-time guards. Preserve existing tenant ciphertext and IDs.
 - [x] **A2 — Authorize service references by the writing principal.** Add explicit
   principal-aware create/update/publish workflows. Prove operator writes can use
   platform services while tenant writes require tenant ownership, including edits
@@ -159,13 +160,13 @@ browser checks. A checked design task does not count as a delivered slice.
   platform and tenant pages to authenticated APIs. Save and edit a platform service,
   show its effective source/readiness to tenants and reload durable progress. Prove
   CSRF, authority boundaries, no secret disclosure and desktop/mobile behavior.
-- [ ] **B2 — Manage tenant service exceptions in the Console.** Override, disable and
+- [x] **B2 — Manage tenant service exceptions in the Console.** Override and
   restore an inherited service through the reviewed UI and durable APIs. Preserve
-  named and dormant tenant bindings, show failed overrides without fallback, and
+  exact named bindings, show failed overrides without fallback, and
   verify reload, onboarding readiness and desktop/mobile recovery paths.
-- [ ] **B3 — Resume demo onboarding with effective services.** Replace the older
+- [x] **B3 — Resume demo onboarding with effective services.** Replace the older
   onboarding and sample installer's tenant-only inventory reads with the effective
-  directory. Count only usable exact named bindings, show inherited/disabled states,
+  directory. Count only usable exact named bindings, show inherited states,
   route credential management through the scoped setup page, and prove inherited
   sample publication plus reload and failure recovery. Preserve edited samples.
 - [ ] **C — Receive a scoped Telnyx call.** Bind a tenant Voice API application to its
@@ -178,7 +179,7 @@ browser checks. A checked design task does not count as a delivered slice.
   rollback/restart and final umbrella gates. Document remote webhook cutover and deferred
   provider integrations without claiming live-provider evidence.
 
-Checkpoint design review, 2026-09-19: A establishes the shared policy resolver before
+Checkpoint design review, 2026-09-19: A establishes the shared scoped resolver before
 the operator UI and scoped carrier readers use it; B1/B2 provide the durable management
 surface used by C. C establishes exact verifier/application ownership before D changes
 outgoing URLs. The user's subsequent authoring-authority clarification inserts A2/A3
@@ -201,7 +202,7 @@ Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provi
 Checkpoint A implementation details:
 
 - Owning application suites, focused transaction integration tests, and disposable
-  database migration/restart checks pass. The latest complete umbrella run passes
+  database migration/restart checks pass. The A3 combined umbrella run passed
   1,754 tests with 40 exclusions (`--max-cases 1 --seed 772211`). Earlier runs had
   intermittent native-media failures; this result does not establish their cause.
   Format, compile, strict Credo and unused-dependency checks pass.
@@ -211,9 +212,8 @@ Checkpoint A implementation details:
   Responses contain credential metadata only. Tenant credential endpoints keep
   their existing names and authority contract; Console listings/editing follow in B1.
 - A call's `credential_name` selects exactly that provider/name. Migrated tenant
-  credentials have explicit override policies; a missing policy inherits platform
-  credentials. B2 exposes disabling and restoring inheritance through the operator
-  UI/API, backed by the same policy resolver.
+  credentials retain their ownership. The presence correction supersedes the original
+  policy resolver: tenant records take precedence; missing tenant records inherit.
 - Newly prepared plans pin owner and credential ID, not credential version. Rotation
   within that identity is visible to fresh readers; an owner/ID switch requires new
   preparation. Speech asset cache keys also include credential version. Legacy stored
@@ -242,7 +242,7 @@ Checkpoint B1 implementation and browser evidence:
   `GET /admin/api/tenants/:tenant_key/service-bindings`. Platform replacement uses
   `PATCH /admin/api/platform/credentials/:credential_id` with real CSRF enforcement.
   Responses contain safe metadata only; credentials remain write-only.
-- Inherited details link to platform management. Tenant override/disable/restore
+- Inherited details link to platform management. Tenant override/restore
   actions follow in B2. Telnyx public-key and webhook configuration follow in C;
   the production form does not display fields that cannot yet be persisted.
 - Rime credentials can be stored and validated with its authenticated dictionary
@@ -267,54 +267,56 @@ gates pass. See the [key and authoring contract](operator-api-key-authoring.md),
 [key lifecycle labnotes](../labnotes/20260919-0803-operator-key-authoring.md) and
 [HTTP authoring labnotes](../labnotes/20260919-0821-authorize-http-spec-writes.md).
 
-Checkpoint B2 implementation (umbrella acceptance open):
+Checkpoint B2 originally shipped explicit tenant policies in `4c2bd75`. Its disable
+and dormant-row semantics are superseded by the credential-presence correction below.
+Historical tests/browser evidence and unresolved native audio failures are retained in
+[B2 labnotes](../labnotes/20260919-0840-tenant-service-exceptions.md).
 
-- Tenant setup exposes **Override for this tenant**, **Disable for this tenant**
-  and **Use platform service**. An override draft remains local until validated
-  credentials save; cancelling or rejected validation preserves the existing policy.
-- The operator-session API is
-  `PUT /admin/api/tenants/:tenant_key/service-policies/:provider/:name`, with exactly
-  `{"policy":"inherit"}`, `{"policy":"override"}` or `{"policy":"disabled"}` and a
-  CSRF header. Tenant principals cannot invoke the installation policy workflow.
-  Explicit override without credentials is unavailable, never platform fallback.
-- Tenant credential creation accepts an optional exact `name`, defaulting to the
-  provider ID. Restoring inheritance retains the dormant tenant row; a later override
-  replaces that row rather than editing the platform credential or creating a duplicate.
-  Named bindings and primary cards never borrow another name's platform identity.
-- Policy and credential writes reload the effective directory before showing success.
-  Failed writes remain actionable in the modal; successful writes with failed reload
-  show a retry state. Only saved fields receive masked placeholders. No secrets are read.
-- Calls passes 115 tests; Console passes 178 (one excluded); frontend passes 177.
-  Root static checks pass. Chrome verified desktop/mobile, two inheriting tenants
-  and a third override, failed validation recovery, durable disable/restore across
-  restart, exact named bindings and missing overrides without fallback. The fixture
-  used a synthetic validator and real encrypted PostgreSQL storage, not upstream
-  providers. The full umbrella run completed 1,757 tests with one native WebRTC
-  failure (40 excluded): the five-participant handoff timed out waiting for audio
-  after listener reconnection. Its isolated rerun failed later at cue/conversation
-  ordering. The cause remains unresolved; B2's acceptance checkbox stays open.
-  See the
-  [B2 labnotes](../labnotes/20260919-0840-tenant-service-exceptions.md).
+Credential-presence correction (implemented and reviewed before C):
 
-Checkpoint B3 implementation (umbrella acceptance open):
+- [x] Select tenant credentials by exact provider/name presence; otherwise inherit.
+  Remove the policy workflow/schema from readers and writes. Keep failed credentials
+  fail-closed and preserve transaction locks around authoring and runtime selection.
+- [x] Add installation-only, CSRF-protected deletion at
+  `DELETE /admin/api/tenants/:tenant_key/credentials/:credential_id` and
+  `DELETE /admin/api/platform/credentials/:credential_id`. No fallback lookup in deletion.
+  Existing telephony references return 409; missing owned credentials return 404.
+- [x] Remove policy/dormant-credential metadata and all credential disable UI. Restore
+  platform use by deleting the exact tenant credential and reloading the directory.
+  Failed mutation/reload stays actionable; inherited secrets remain read-only.
+- [x] Verify migration, restart, rendered desktop/mobile flows and root gates; review
+  the complete checkpoint before committing. All 1,763 umbrella tests pass (40 excluded),
+  alongside 181 frontend tests and the focused real-transaction lane. See
+  [presence labnotes](../labnotes/20260919-0934-credential-presence-resolution.md).
+
+The new migration drops only `tenant_service_policies`, preserving all credential IDs
+and encrypted payloads. Previously dormant tenant records now take precedence because
+they exist; explicitly remove them to inherit. Rollback recreates override policies for
+all tenant records, preserving presence-based selection with the older resolver. It does
+not restore retired disable policies or recover credentials intentionally deleted later.
+Deploy the code and migration together; old application processes still query the retired
+policy table and must be restarted on this version.
+
+Checkpoint B3 implementation (accepted by the presence-correction umbrella run):
 
 - Demo onboarding and the sample installer read the same effective directory as
   scoped setup. Only connected exact primary names satisfy the fixed sample bindings;
-  alternate names and disabled/failed overrides do not borrow platform readiness.
-- The production onboarding entry labels inherited/disabled services and sends edits
+  alternate names and failed tenant credentials do not borrow platform readiness.
+- The production onboarding entry labels inherited services and sends edits
   to the scoped services page. It never asks for inherited credentials. Directory
-  failures remain unavailable and offer Retry setup; optional disabled providers do
+  failures remain unavailable and offer Retry setup; optional unavailable providers do
   not invalidate usable sample prerequisites.
-- Focused tests cover inherited publication, disable/restore, idempotent installation
-  and preservation of an edited sample's draft and earlier publication. Frontend
+- Focused tests now cover inherited publication, unreadable tenant credentials/removal,
+  idempotent installation and preservation of an edited sample's draft and earlier publication. Frontend
   tests cover the effective-directory boundary, source labels, scoped navigation,
   optional services and recovery. All 181 frontend tests, TypeScript, ESLint, assets
   and root static checks pass. The umbrella run completed 1,759 tests, one failure,
   40 exclusions: the unchanged native `after_speech_adoption` handoff test timed out
-  waiting for preparation progress. All 180 Console tests passed; acceptance stays open.
+  waiting for preparation progress. All 180 Console tests passed. The later presence
+  correction passes the complete suite and closes B3 acceptance.
 - Chrome at 1440×1000 and 390×844 verified inherited readiness, sample installation,
-  disabling/restoring speech, scoped management and retry after a failed directory
-  read. A fresh server process retained the same Demo tenant, inherited credentials
+  the then-current disable/restore flow (superseded), scoped management and retry after
+  a failed directory read. A fresh server process retained the same Demo tenant, inherited credentials
   and all three revision-1 publications. Reinstalling remains idempotent; the older
   entry's sample labels are refreshed by the explicit install action, while service
   readiness is read on page load. No live provider request was made.
@@ -324,7 +326,7 @@ Checkpoint B3 implementation (umbrella acceptance open):
 
 - [x] Show tenant and platform Telnyx URLs in connect/edit states with copy feedback.
 - [x] Add Platform services using the existing AI/optional-telephony grids and modals.
-- [x] Show inherited, tenant override, disabled and failed-override states; preserve
+- [x] Show inherited, tenant override and failed-credential states; preserve
   independent tenant progress and platform changes across prototype navigation.
 - [x] Verify readiness and recipes use effective services, including newly created tenants.
 - [x] Inspect desktop/mobile, light/dark, create/edit and clipboard behavior.
@@ -335,22 +337,22 @@ remote application provisioning, credential persistence, verification or routing
 ### 2. Persist and use an inherited AI provider
 
 - [x] Define a tagged credential owner (`platform` or tenant key), distinct from the
-  consuming tenant. Add scope-aware unique/check constraints, metadata and tenant
-  inherit/override/disabled policy records. Never use a fake platform tenant.
+  consuming tenant. Add scope-aware unique/check constraints and metadata.
+  Never use a fake platform tenant.
 - [x] Migrate existing credentials and references as tenant-owned without changing IDs
   or effective behavior. Version authenticated encryption context where needed;
   test existing decrypt, replacement, re-encryption, interruption and rollback behavior.
 - [ ] Add explicit platform operator CRUD/validation endpoints using the current session
   and CSRF protections. Tenant keys cannot write/read platform secrets; effective-list
   responses contain safe source/readiness metadata and URLs only.
-- [x] Implement one shared policy resolver used by save/publish/preparation and every
+- [x] Implement one shared presence resolver used by save/publish/preparation and every
   fresh model/STT/TTS reader. Preserve current named binding semantics, final transaction
   guards, tenant data isolation and fail-closed behavior.
 - [x] Pin safe selected credential scope/identity at preparation boundaries and reject
   unexpected rebinding. Already-initialized clients retain their owned configuration;
   new preparation uses the current authorized selection. Cache keys include tenant,
   provider, binding and selected scope/identity; never share tenant call data.
-- [ ] Wire one reviewed provider flow through Console and prove two tenants inherit a
+- [x] Wire one reviewed provider flow through Console and prove two tenants inherit a
   platform provider while a third overrides it, with no secret exposure or failure fallback.
 
 ### 3. Verify and route scoped Telnyx webhooks
@@ -379,8 +381,8 @@ remote application provisioning, credential persistence, verification or routing
 
 ### 4. Complete Console integration and migration acceptance
 
-- [ ] Wire platform/tenant service pages and onboarding to effective-service metadata.
-  Show source, unavailable/invalid/disabled states and explicit restore/override actions.
+- [x] Wire platform/tenant service pages and onboarding to effective-service metadata.
+  Show source and unavailable/invalid states and explicit restore/override actions.
 - [ ] Make service scope changes deliberate and display the resulting webhook URL change.
   Keep secrets write-only and isolate operator/platform authority from tenant administration.
 - [ ] Derive progress from durable resources after reload, including telephony application
@@ -394,7 +396,7 @@ One generic webhook path can work with a trusted lookup, but it hides the explic
 scope selected by the user. Implicit retry with a platform key after tenant failure violates
 that contract. Copying platform credentials into each tenant creates divergent records and
 unnecessary secret handling. Making every tenant create credentials again defeats inheritance.
-Reintroducing the deleted static application fallback would bypass persisted policies.
+Reintroducing the deleted static application fallback would bypass persisted credentials.
 
 Local design review, 2026-09-19: separated credential owner from call/application tenant,
 limited the initial Telnyx account cardinality, retained named AI bindings, and added legacy
@@ -415,4 +417,4 @@ themes. Root static checks pass. An earlier umbrella run passed; the latest run 
 two backend timing failures in participant shutdown and room audio egress, whose
 affected test files pass independently. See the [initial checkpoint labnotes](../labnotes/20260919-0036-scoped-service-onboarding.md)
 and [final review evidence](../labnotes/20260919-0205-saved-credential-placeholders.md).
-This verifies the prototype, not the planned production routes or credential policies.
+This verifies the prototype, not the planned production routes or credential ownership.

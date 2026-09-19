@@ -598,11 +598,13 @@ export function OnboardingStory({
             );
             setModal(null);
           }}
-          onDisable={(provider) => {
-            setConnections((current) => [
-              ...current.filter((item) => item.provider !== provider),
-              { provider, status: "disabled" },
-            ]);
+          onRemove={(provider) => {
+            const update = platformPage
+              ? setPlatformConnections
+              : setConnections;
+            update((current) =>
+              current.filter((item) => item.provider !== provider),
+            );
             setModal(null);
           }}
           onSelect={(provider) =>

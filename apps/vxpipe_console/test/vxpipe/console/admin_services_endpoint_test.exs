@@ -398,11 +398,9 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     binding = %{
       provider: "google",
       name: "shared-model",
-      policy: :inherit,
       source: :platform,
       status: :connected,
       credential_id: "shared-id",
-      tenant_credential_id: nil,
       platform_available: true,
       saved_fields: ["api_key"],
       last_validated_at: nil
@@ -423,13 +421,11 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert_received {:operator_bindings_requested, @tenant_key}
     refute conn.resp_body =~ "payload"
 
-    configure_credential_repository(
-      {:ok, %{tenant: nil, bindings: [%{binding | policy: :platform}]}}
-    )
+    configure_credential_repository({:ok, %{tenant: nil, bindings: [binding]}})
 
     conn = authenticate() |> recycle() |> https_get("/admin/api/platform/services")
 
-    assert %{"tenant" => nil, "bindings" => [%{"policy" => "platform"}]} =
+    assert %{"tenant" => nil, "bindings" => [%{"source" => "platform"}]} =
              json_response(conn, 200)
 
     assert_received {:operator_bindings_requested, :platform}
@@ -478,48 +474,43 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                      _, _}
   end
 
-  test "tenant policy mutations require an operator session and CSRF, and preserve exact names" do
-    path =
-      "https://localhost/admin/api/tenants/#{@tenant_key}/service-policies/google/named-model"
+  test "credential deletion requires an operator session and CSRF and preserves exact ownership" do
+    for {scope, prefix} <- [{@tenant_key, "tenants/#{@tenant_key}"}, {:platform, "platform"}] do
+      path = "https://localhost/admin/api/#{prefix}/credentials/exact-id"
+      configure_credential_repository(:ok)
+      assert json_response(delete(build_conn(), path), 401)
+      refute_received {:operator_credential_deleted, _, _}
 
-    configure_credential_repository(:ok)
-    assert json_response(put(build_conn(), path, %{"policy" => "disabled"}), 401)
-    refute_received {:operator_policy_changed, _, _, _, _}
+      authenticated = authenticate() |> recycle() |> https_get("/admin")
 
-    authenticated = authenticate() |> recycle() |> https_get("/admin")
-    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
+      [_, csrf] =
+        Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
 
-    conn =
-      authenticated
-      |> recycle()
-      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+      conn =
+        authenticated
+        |> recycle()
+        |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
 
-    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
-      put(conn, path, %{"policy" => "disabled"})
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn -> delete(conn, path) end
+      refute_received {:operator_credential_deleted, _, _}
+      response = conn |> put_req_header("x-csrf-token", csrf) |> delete(path)
+      assert response.status == 204
+      assert response.resp_body == ""
+      assert_received {:operator_credential_deleted, ^scope, "exact-id"}
+
+      for {reason, status, code} <- [
+            {:invalid_provider_credential_id, 422, "invalid_credential"},
+            {:provider_credential_not_found, 404, "provider_credential_not_found"},
+            {:provider_credential_in_use, 409, "provider_credential_in_use"},
+            {{:storage_failed, "private-detail"}, 503, "credential_store_unavailable"}
+          ] do
+        configure_credential_repository({:error, reason})
+        failed = conn |> put_req_header("x-csrf-token", csrf) |> delete(path)
+        assert json_response(failed, status) == %{"error" => %{"code" => code}}
+        refute failed.resp_body =~ "private-detail"
+        assert_received {:operator_credential_deleted, ^scope, "exact-id"}
+      end
     end
-
-    refute_received {:operator_policy_changed, _, _, _, _}
-
-    for {value, policy} <- [
-          {"override", :override},
-          {"disabled", :disabled},
-          {"inherit", :inherit}
-        ] do
-      response = conn |> put_req_header("x-csrf-token", csrf) |> put(path, %{"policy" => value})
-      assert json_response(response, 200) == %{"policy" => value}
-      assert_received {:operator_policy_changed, @tenant_key, "google", "named-model", ^policy}
-    end
-
-    for body <- [%{"policy" => "fallback"}, %{"policy" => "inherit", "owner" => "platform"}] do
-      assert conn |> put_req_header("x-csrf-token", csrf) |> put(path, body) |> json_response(422)
-    end
-
-    refute_received {:operator_policy_changed, _, _, _, _}
-
-    configure_credential_repository({:error, {:storage_failed, "private-detail"}})
-    failed = conn |> put_req_header("x-csrf-token", csrf) |> put(path, %{"policy" => "disabled"})
-    assert json_response(failed, 503) == %{"error" => %{"code" => "service_policy_unavailable"}}
-    refute failed.resp_body =~ "private-detail"
   end
 
   test "tenant credential creation preserves an explicit named binding" do

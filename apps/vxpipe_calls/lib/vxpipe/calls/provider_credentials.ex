@@ -58,15 +58,11 @@ defmodule Vxpipe.Calls.ProviderCredentials do
     end
   end
 
-  def set_policy(tenant_key, provider, name, policy, options \\ []) do
-    with :ok <- ProviderAuth.tenant_key(tenant_key),
-         :ok <- ProviderAuth.binding(tenant_key, provider, name),
-         true <- policy in [:inherit, :override, :disabled],
+  def delete(owner, id, options \\ []) do
+    with :ok <- ProviderAuth.owner(owner),
+         :ok <- credential_id(id),
          {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
-      Repositories.call(repository, :set_policy, [tenant_key, provider, name, policy])
-    else
-      false -> {:error, :invalid_service_policy}
-      error -> error
+      Repositories.call(repository, :delete, [owner, id])
     end
   end
 

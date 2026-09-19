@@ -22,8 +22,7 @@ export function SetupServiceCard({
 }) {
   const connected = connection?.status === "connected";
   const needsPublicKey =
-    provider.id === "telnyx" &&
-    !connection?.telephonyPublicKeyConfigured;
+    provider.id === "telnyx" && !connection?.telephonyPublicKeyConfigured;
   const source = platform
     ? null
     : connection?.source === "platform"
@@ -57,11 +56,7 @@ export function SetupServiceCard({
           </Button>
         </div>
       </div>
-      {connection?.status === "disabled" ? (
-        <p className="setup-service-source">Disabled for this tenant</p>
-      ) : source ? (
-        <p className="setup-service-source">{source}</p>
-      ) : null}
+      {source ? <p className="setup-service-source">{source}</p> : null}
       {connection?.status === "invalid" ? (
         <p className="setup-error">Credentials need attention</p>
       ) : null}

@@ -23,15 +23,8 @@ defmodule Vxpipe.Calls.ProviderCredentialRepository do
   @callback resolve(term(), owner(), String.t(), String.t()) ::
               {:ok, ResolvedProviderCredential.t()} | {:error, atom()}
 
-  @callback set_policy(
-              term(),
-              String.t(),
-              String.t(),
-              String.t(),
-              :inherit | :override | :disabled
-            ) ::
-              :ok | {:error, atom()}
-  @optional_callbacks set_policy: 5, list_bindings: 2
+  @callback delete(term(), owner(), String.t()) :: :ok | {:error, atom()}
+  @optional_callbacks delete: 3, list_bindings: 2
 
   @doc """
   Validate and hold active bindings while performing the authorized database write.

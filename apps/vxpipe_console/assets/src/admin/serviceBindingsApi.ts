@@ -3,9 +3,7 @@ import type { SetupConnection, SetupServiceScope } from "./setupCatalog";
 
 export type ServiceBinding = SetupConnection & {
   name: string;
-  policy: "platform" | "inherit" | "override" | "disabled";
   credentialId: string | null;
-  tenantCredentialId: string | null;
   platformAvailable: boolean;
   lastValidatedAt: string | null;
 };
@@ -57,20 +55,11 @@ export function parseBindingDirectory(
       typeof item.name !== "string" ||
       !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(item.name) ||
       !(scope.kind === "platform"
-        ? item.policy === "platform"
-        : ["inherit", "override", "disabled"].includes(String(item.policy))) ||
-      item.source !==
-        (["platform", "inherit"].includes(String(item.policy))
-          ? "platform"
-          : "tenant") ||
-      !["connected", "invalid", "unavailable", "disabled"].includes(
-        String(item.status),
-      ) ||
+        ? item.source === "platform"
+        : ["platform", "tenant"].includes(String(item.source))) ||
+      !["connected", "invalid", "unavailable"].includes(String(item.status)) ||
       !optionalId(item.credential_id) ||
-      !optionalId(item.tenant_credential_id) ||
       (item.status === "connected" && item.credential_id === null) ||
-      (item.policy === "disabled" &&
-        (item.status !== "disabled" || item.credential_id !== null)) ||
       typeof item.platform_available !== "boolean" ||
       !Array.isArray(item.saved_fields) ||
       !item.saved_fields.every((field) =>
@@ -89,11 +78,9 @@ export function parseBindingDirectory(
     return {
       provider: item.provider as ServiceBinding["provider"],
       name: item.name,
-      policy: item.policy as ServiceBinding["policy"],
       source: item.source as ServiceBinding["source"],
       status: item.status as ServiceBinding["status"],
       credentialId: item.credential_id as string | null,
-      tenantCredentialId: item.tenant_credential_id as string | null,
       platformAvailable: item.platform_available,
       lastValidatedAt: item.last_validated_at as string | null,
       telephonyPublicKeyConfigured: item.saved_fields.includes("public_key"),

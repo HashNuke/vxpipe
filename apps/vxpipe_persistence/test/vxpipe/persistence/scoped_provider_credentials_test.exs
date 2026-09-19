@@ -73,7 +73,7 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
              end)
   end
 
-  test "disabled and failed overrides never fall back until inheritance is explicitly restored",
+  test "unusable tenant credentials fail closed until removed",
        data do
     [tenant | _] = data.tenants
 
@@ -88,53 +88,19 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
     assert {:error, :provider_credential_revoked} =
              ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
 
-    assert :ok =
-             ProviderCredentials.set_policy(
-               tenant.key,
-               "google",
-               "shared-model",
-               :disabled,
-               data.options
-             )
-
-    assert {:error, :provider_service_disabled} =
-             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
-
     requirements = [%{provider: "google", name: "shared-model", path: ["model"]}]
 
     assert {:error, {:provider_credential_unavailable, ["model"]}} =
              ProviderCredentialStore.with_active(data.context, tenant.key, requirements, fn ->
-               flunk("disabled service reached the write")
+               flunk("unusable credentials reached the write")
              end)
 
-    assert :ok =
-             ProviderCredentials.set_policy(
-               tenant.key,
-               "google",
-               "shared-model",
-               :inherit,
-               data.options
-             )
+    assert :ok = ProviderCredentials.delete(tenant.key, override.id, data.options)
 
     assert {:ok, inherited} =
              ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
 
     assert inherited.credential.id == platform.id
-
-    # An explicit override still fails if its credential disappeared.
-    assert :ok =
-             ProviderCredentials.set_policy(
-               tenant.key,
-               "google",
-               "shared-model",
-               :override,
-               data.options
-             )
-
-    Repo.delete!(stored)
-
-    assert {:error, :provider_credential_not_found} =
-             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
   end
 
   test "platform ciphertext cannot be transplanted into a tenant and both scopes re-encrypt",
@@ -197,61 +163,25 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
     assert [binding] = directory.bindings
     assert binding.name == "shared-model"
     assert binding.source == :tenant
-    assert binding.policy == :override
     assert binding.credential_id == own.id
     assert binding.platform_available
     assert binding.status == :connected
 
-    assert :ok =
-             ProviderCredentials.set_policy(
-               tenant.key,
-               "google",
-               "shared-model",
-               :inherit,
-               data.options
-             )
+    assert :ok = ProviderCredentials.delete(tenant.key, own.id, data.options)
 
     assert {:ok, inherited} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
     assert [binding] = inherited.bindings
     assert binding.credential_id == platform.id
-    assert binding.tenant_credential_id == own.id
     assert binding.source == :platform
-    assert binding.policy == :inherit
-
-    assert :ok =
-             ProviderCredentials.set_policy(
-               tenant.key,
-               "google",
-               "shared-model",
-               :disabled,
-               data.options
-             )
-
-    assert {:ok, disabled} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
-    assert [binding] = disabled.bindings
-    assert binding.status == :disabled
-    assert binding.credential_id == nil
-
-    assert :ok =
-             ProviderCredentials.set_policy(
-               tenant.key,
-               "google",
-               "missing",
-               :override,
-               data.options
-             )
-
-    assert {:ok, failed} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
-    assert Enum.find(failed.bindings, &(&1.name == "missing")).status == :unavailable
 
     assert {:ok, platform_directory} =
              ProviderCredentialStore.list_bindings(data.context, :platform)
 
     assert platform_directory.tenant == nil
-    assert [%{credential_id: id, policy: :platform}] = platform_directory.bindings
+    assert [%{credential_id: id, source: :platform}] = platform_directory.bindings
     assert id == platform.id
 
-    for directory <- [directory, inherited, disabled, failed, platform_directory] do
+    for directory <- [directory, inherited, platform_directory] do
       inspected = inspect(directory)
       refute inspected =~ "directory-secret"
       refute inspected =~ "encrypted_payload"

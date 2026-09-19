@@ -5,7 +5,7 @@ export type VoiceCapability = "stt" | "llm" | "tts" | "s2s";
 export type SetupProviderId = ServiceProvider;
 export type SetupConnection = {
   provider: SetupProviderId;
-  status: "connected" | "invalid" | "unavailable" | "disabled";
+  status: "connected" | "invalid" | "unavailable";
   source?: "platform" | "tenant";
   telephonyPublicKeyConfigured?: boolean;
   savedFields?: CredentialField[];
@@ -14,7 +14,7 @@ export type SetupServiceScope =
   | { kind: "platform" }
   | { kind: "tenant"; tenantKey: string; tenantName: string };
 
-// A tenant entry always wins, including a disabled or invalid override.
+// A tenant entry always wins, including an invalid override.
 export function effectiveSetupConnections(
   platform: SetupConnection[],
   tenant: SetupConnection[],

@@ -119,7 +119,7 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
              Calls.resolve_participant_route(ctx.tenant.key, route.key, ctx.options)
   end
 
-  test "holds inherited selection through the write against policy changes and platform revocation",
+  test "holds inherited selection through the write against tenant provisioning and platform removal",
        ctx do
     observer = self()
     name = "transaction_" <> ctx.tenant.key
@@ -165,47 +165,60 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
 
       try do
         result =
-          ProviderCredentials.set_policy(ctx.tenant.key, "google", name, :disabled, ctx.options)
+          ProviderCredentials.provision(
+            ctx.tenant.key,
+            "google",
+            name,
+            "api_key",
+            %{"api_key" => "synthetic-tenant"},
+            ctx.options
+          )
 
-        send(observer, {:concurrent_policy_result, result})
+        send(observer, {:concurrent_provision_result, result})
       after
         Repo.query!("RESET lock_timeout")
       end
     end)
 
-    assert_receive {:concurrent_policy_result, {:error, :provider_credentials_unavailable}}, 1_000
+    assert_receive {:concurrent_provision_result, {:error, :provider_credentials_unavailable}},
+                   1_000
 
     db_task(fn ->
-      result =
-        try do
-          Repo.transaction(fn ->
-            Repo.query!("SET LOCAL lock_timeout = '100ms'")
-            revoke(platform.id)
-          end)
-        rescue
-          error in Postgrex.Error -> {:error, error.postgres.code}
-        end
+      Repo.query!("SET lock_timeout = '100ms'")
 
-      send(observer, {:concurrent_platform_revoke, result})
+      try do
+        result = ProviderCredentials.delete(:platform, platform.id, ctx.options)
+        send(observer, {:concurrent_platform_removal, result})
+      after
+        Repo.query!("RESET lock_timeout")
+      end
     end)
 
-    assert_receive {:concurrent_platform_revoke, {:error, :lock_not_available}}, 1_000
+    assert_receive {:concurrent_platform_removal, {:error, :provider_credentials_unavailable}},
+                   1_000
+
     send(writer, :write)
     assert_receive {:inherited_write_result, {:ok, :saved}}, 1_000
 
-    assert :ok =
-             ProviderCredentials.set_policy(
+    assert {:ok, own} =
+             ProviderCredentials.provision(
                ctx.tenant.key,
                "google",
                name,
-               :disabled,
+               "api_key",
+               %{"api_key" => "synthetic-tenant"},
                ctx.options
              )
 
-    assert {:error, :provider_service_disabled} =
+    assert {:ok, resolved} =
              ProviderCredentials.resolve(ctx.tenant.key, "google", name, ctx.options)
 
-    assert {1, _} = revoke(platform.id)
+    assert resolved.credential.id == own.id
+    assert :ok = ProviderCredentials.delete(ctx.tenant.key, own.id, ctx.options)
+    assert :ok = ProviderCredentials.delete(:platform, platform.id, ctx.options)
+
+    assert {:error, :provider_credential_not_found} =
+             ProviderCredentials.resolve(ctx.tenant.key, "google", name, ctx.options)
   end
 
   defp db_task(operation) do

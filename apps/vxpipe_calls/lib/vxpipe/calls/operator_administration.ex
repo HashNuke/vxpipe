@@ -181,6 +181,12 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   def list_services(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
 
+  def delete_credential(%InstallationOperator{grant: :installation_operator}, owner, id, options),
+    do: Vxpipe.Calls.ProviderCredentials.delete(owner, id, options)
+
+  def delete_credential(_authority, _owner, _id, _options),
+    do: {:error, :installation_operator_required}
+
   @spec create_credential(
           InstallationOperator.t(),
           String.t(),

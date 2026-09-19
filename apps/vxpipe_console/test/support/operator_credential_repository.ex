@@ -34,8 +34,8 @@ defmodule Vxpipe.Console.Test.OperatorCredentialRepository do
   end
 
   @impl true
-  def set_policy({owner, result}, tenant, provider, name, policy) do
-    send(owner, {:operator_policy_changed, tenant, provider, name, policy})
+  def delete({owner, result}, scope, id) do
+    send(owner, {:operator_credential_deleted, scope, id})
     result
   end
 

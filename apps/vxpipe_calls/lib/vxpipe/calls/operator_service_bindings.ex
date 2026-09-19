@@ -1,15 +1,13 @@
 defmodule Vxpipe.Calls.OperatorServiceBindings do
-  @moduledoc "Installation-authorized effective provider inventory and tenant binding policies."
+  @moduledoc "Installation-authorized effective provider inventory."
   alias Vxpipe.Calls.{InstallationOperator, ProviderAuth, Repositories}
 
   @fields [
     :provider,
     :name,
-    :policy,
     :source,
     :status,
     :credential_id,
-    :tenant_credential_id,
     :platform_available,
     :saved_fields,
     :last_validated_at
@@ -37,19 +35,6 @@ defmodule Vxpipe.Calls.OperatorServiceBindings do
 
   def list(_authority, _scope, _options), do: {:error, :installation_operator_required}
 
-  def set_policy(
-        %InstallationOperator{grant: :installation_operator},
-        tenant,
-        provider,
-        name,
-        policy,
-        options
-      ),
-      do: Vxpipe.Calls.ProviderCredentials.set_policy(tenant, provider, name, policy, options)
-
-  def set_policy(_authority, _tenant, _provider, _name, _policy, _options),
-    do: {:error, :installation_operator_required}
-
   defp valid_tenant?(nil, :platform), do: true
   defp valid_tenant?(tenant, {:tenant, key}), do: valid_tenant?(tenant, key)
   defp valid_tenant?(%{key: key, name: name}, key) when is_binary(name), do: true
@@ -59,23 +44,20 @@ defmodule Vxpipe.Calls.OperatorServiceBindings do
          %{
            provider: provider,
            name: name,
-           policy: policy,
            source: source,
            status: status,
            credential_id: id,
-           tenant_credential_id: tenant_id,
            platform_available: available,
            saved_fields: fields,
            last_validated_at: validated
          },
          scope
        ) do
-    expected_source = if policy in [:platform, :inherit], do: :platform, else: :tenant
-    policies = if scope == :platform, do: [:platform], else: [:inherit, :override, :disabled]
+    sources = if scope == :platform, do: [:platform], else: [:platform, :tenant]
 
-    ProviderAuth.binding(scope, provider, name) == :ok and policy in policies and
-      source == expected_source and status in [:connected, :invalid, :unavailable, :disabled] and
-      optional_id?(id) and optional_id?(tenant_id) and is_boolean(available) and
+    ProviderAuth.binding(scope, provider, name) == :ok and source in sources and
+      status in [:connected, :invalid, :unavailable] and
+      optional_id?(id) and is_boolean(available) and
       is_list(fields) and
       Enum.all?(fields, &(&1 in ["api_key", "public_key", "account_sid", "auth_token"])) and
       (is_nil(validated) or is_struct(validated, DateTime))

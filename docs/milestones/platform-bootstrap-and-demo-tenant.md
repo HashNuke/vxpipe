@@ -20,14 +20,20 @@ cover inherited-provider execution, Console management, scoped incoming Telnyx c
 then callback cutover and migration/restart acceptance. The user's authoring-authority
 clarification adds principal-aware writes and operator API keys for programmatic authoring.
 Checkpoints A/A2/A3/B1 pass focused tests and the serial umbrella suite; B1's operator-session
-Console flow also passes browser/restart inspection. B2's tenant policy implementation
-passes owning suites and browser/restart checks, but umbrella acceptance remains open
+Console flow also passes browser/restart inspection. B2's original tenant policy implementation
+passed owning suites and browser/restart checks, but initially left umbrella acceptance open
 after a native multi-listener WebRTC audio failure;
 the platform-key and demo-bootstrap gates below remain independently tracked.
 B3 connects the older onboarding/sample installer to effective services. Its focused
-inherited-installation, exact-name, disable/restore and edited-sample checks pass,
+inherited-installation, exact-name and edited-sample checks pass,
 along with Chrome/restart verification. The combined 1,759-test run passed all 180
-Console tests but failed one native WebRTC preparation case; umbrella acceptance stays open.
+Console tests but failed one native WebRTC preparation case.
+The latest user clarification supersedes disabled/dormant credential policies: a tenant
+credential takes precedence by presence; removing it restores platform inheritance.
+The correction adds scoped deletion and removes policy controls. Focused red-green,
+transaction, desktop/mobile Chrome, migration/rollback/restart and all root checks pass.
+The final combined suite passes 1,763 tests with zero failures and 40 exclusions,
+closing B2/B3 acceptance. Scoped Telnyx C/D and the remaining milestone gates stay open.
 The two A3 steps implement trusted key bootstrap/replacement/revocation, authenticated
 platform status and operator/tenant call-spec HTTP writes. Persisted lifecycle tests,
 real HTTP/restart checks and the 1,754-test combined umbrella run pass. See the

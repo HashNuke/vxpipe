@@ -111,7 +111,9 @@ export function ScopedServicesApp({
     if (tenantKey && existing?.source === "platform" && !modal.overriding)
       return;
     const credentialId = tenantKey
-      ? existing?.tenantCredentialId
+      ? existing?.source === "tenant"
+        ? existing.credentialId
+        : null
       : existing?.credentialId;
     const values =
       "apiKey" in draft.values
@@ -128,22 +130,27 @@ export function ScopedServicesApp({
     );
   }
 
-  async function setPolicy(policy: "inherit" | "disabled") {
-    if (!tenantKey || !modal?.provider || saving.current) return;
+  async function removeCredential() {
+    if (!modal?.provider || saving.current || !directory) return;
     const name = modal.bindingName ?? modal.provider;
+    const selected = directory.bindings.find(
+      (binding) => binding.provider === modal.provider && binding.name === name,
+    );
+    if (!selected?.credentialId || (tenantKey && selected.source !== "tenant"))
+      return;
     await mutate(
-      `${prefix}/service-policies/${encodeURIComponent(modal.provider)}/${encodeURIComponent(name)}`,
-      "PUT",
-      { policy },
-      "policy",
+      `${prefix}/credentials/${encodeURIComponent(selected.credentialId)}`,
+      "DELETE",
+      undefined,
+      "removal",
     );
   }
 
   async function mutate(
     url: string,
     method: string,
-    body: object,
-    operation: "credentials" | "policy",
+    body: object | undefined,
+    operation: "credentials" | "removal",
   ) {
     if (!modal || saving.current) return;
     const controller = new AbortController();
@@ -169,8 +176,10 @@ export function ScopedServicesApp({
       }
       if (!response.ok)
         throw new Error(
-          operation === "policy"
-            ? "Service settings could not be saved. Check the connection and try again."
+          operation === "removal"
+            ? response.status === 409
+              ? "This credential is used by a telephony service. Remove that service before removing its credentials."
+              : "Service could not be removed. Check the connection and try again."
             : response.status === 409
               ? "This binding already exists. Close this form and reload to edit it."
               : response.status === 422
@@ -191,7 +200,7 @@ export function ScopedServicesApp({
       setDirectory(next);
       setModal(null);
       setNotice(
-        operation === "policy" ? "Service settings saved." : "Service saved.",
+        operation === "removal" ? "Service removed." : "Service saved.",
       );
       requestAnimationFrame(() => trigger.current?.focus());
     } catch (error) {
@@ -200,8 +209,8 @@ export function ScopedServicesApp({
         setModal(null);
         setPhase("unavailable");
         setNotice(
-          operation === "policy"
-            ? "Service settings saved. Retry to load the current state."
+          operation === "removal"
+            ? "Service removed. Retry to load the current state."
             : "Service saved. Retry to load its current state.",
         );
       } else
@@ -396,8 +405,8 @@ export function ScopedServicesApp({
                 }
               : undefined
           }
-          onUsePlatform={tenantKey ? () => setPolicy("inherit") : undefined}
-          onDisable={tenantKey ? () => setPolicy("disabled") : undefined}
+          onUsePlatform={tenantKey ? removeCredential : undefined}
+          onRemove={removeCredential}
         />
       ) : null}
     </AdminShell>

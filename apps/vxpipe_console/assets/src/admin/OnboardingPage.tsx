@@ -339,11 +339,6 @@ function ProviderSetup({
               Inherited from platform
             </p>
           ) : null}
-          {provider.status === "disabled" ? (
-            <p className="mt-2 text-sm text-[var(--admin-muted)]">
-              Disabled for this tenant
-            </p>
-          ) : null}
           {managed && provider.status === "invalid" ? (
             <p className="mt-2 text-sm text-[var(--admin-red)]">
               Credentials need attention. Open Manage services to update them.

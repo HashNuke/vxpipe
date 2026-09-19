@@ -165,6 +165,30 @@ defmodule Vxpipe.Persistence.TelephonyServiceStoreTest do
     assert Repo.aggregate("telephony_services", :count) == 0
   end
 
+  test "credential deletion reports an existing telephony reference without breaking the service",
+       data do
+    assert {:ok, service} =
+             TelephonyServices.register(
+               data.tenant.key,
+               attributes(data.credential),
+               data.options
+             )
+
+    assert {:error, :provider_credential_in_use} =
+             ProviderCredentials.delete(data.tenant.key, data.credential.id, data.options)
+
+    assert {:ok, resolved} =
+             ProviderCredentials.resolve(
+               data.tenant.key,
+               "telnyx",
+               data.credential.name,
+               data.options
+             )
+
+    assert resolved.credential.id == data.credential.id
+    assert {:ok, ^service} = TelephonyServices.fetch(data.tenant.key, "support", data.options)
+  end
+
   test "database foreign key enforces credential tenant and provider ownership", data do
     assert {:ok, service} =
              TelephonyServices.register(

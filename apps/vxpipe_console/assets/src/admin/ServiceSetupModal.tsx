@@ -23,7 +23,7 @@ export type ServiceModalState = {
   status: "idle" | "submitting" | "error";
   message?: string;
   overriding?: boolean;
-  operation?: "credentials" | "policy";
+  operation?: "credentials" | "removal";
 };
 
 export function ServiceSetupModal({
@@ -38,7 +38,7 @@ export function ServiceSetupModal({
   platformConnections = [],
   onOverride,
   onUsePlatform,
-  onDisable,
+  onRemove,
   onManagePlatform,
   telephonySetup = true,
   bindingName,
@@ -57,7 +57,7 @@ export function ServiceSetupModal({
   platformConnections?: SetupConnection[];
   onOverride?: () => void;
   onUsePlatform?: (provider: SetupProviderId) => void;
-  onDisable?: (provider: SetupProviderId) => void;
+  onRemove?: (provider: SetupProviderId) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const provider = state.provider
@@ -68,7 +68,6 @@ export function ServiceSetupModal({
     scope.kind === "tenant" &&
     selected?.source === "platform" &&
     !state.overriding;
-  const disabled = selected?.status === "disabled" && !state.overriding;
   const connected = Boolean(selected) && !state.overriding;
   const hasPlatform = platformConnections.some(
     (item) => item.provider === provider?.id,
@@ -142,12 +141,12 @@ export function ServiceSetupModal({
                   className="animate-spin motion-reduce:animate-none"
                   size={16}
                 />
-                {state.operation === "policy"
-                  ? "Updating service…"
+                {state.operation === "removal"
+                  ? "Removing service…"
                   : `Validating credentials with ${provider.name}…`}
               </p>
             ) : null}
-            {inherited || disabled ? (
+            {inherited ? (
               <div className="setup-inherited-detail">
                 {state.message ? (
                   <p className="text-sm text-[var(--admin-red)]" role="alert">
@@ -155,28 +154,17 @@ export function ServiceSetupModal({
                   </p>
                 ) : null}
                 <p>
-                  {disabled
-                    ? "This service is disabled for this tenant."
-                    : "This tenant uses the platform service. Platform credentials are managed in Platform services."}
+                  This tenant uses the platform service. Platform credentials
+                  are managed in Platform services.
                 </p>
-                {inherited ? webhook : null}
+                {webhook}
                 <div className="setup-scope-actions">
-                  {disabled && hasPlatform && onUsePlatform ? (
-                    <Button
-                      disabled={state.status === "submitting"}
-                      onClick={() => onUsePlatform?.(provider.id)}
-                    >
-                      Use platform service
-                    </Button>
-                  ) : null}
                   {onOverride ? (
                     <Button
                       disabled={state.status === "submitting"}
                       onClick={onOverride}
                     >
-                      {disabled
-                        ? "Connect for this tenant"
-                        : "Override for this tenant"}
+                      Override for this tenant
                     </Button>
                   ) : null}
                   {inherited && onManagePlatform ? (
@@ -185,15 +173,6 @@ export function ServiceSetupModal({
                       onClick={onManagePlatform}
                     >
                       Manage platform services
-                    </Button>
-                  ) : null}
-                  {inherited && onDisable ? (
-                    <Button
-                      variant="ghost"
-                      disabled={state.status === "submitting"}
-                      onClick={() => onDisable?.(provider.id)}
-                    >
-                      Disable for this tenant
                     </Button>
                   ) : null}
                 </div>
@@ -221,19 +200,18 @@ export function ServiceSetupModal({
                 status={state.status}
                 submitLabel="Validate and save"
                 submittingLabel={
-                  state.operation === "policy" ? "Updating…" : "Validating…"
+                  state.operation === "removal" ? "Updating…" : "Validating…"
                 }
                 beforeActions={webhook}
               />
             )}
-            {scope.kind === "tenant" &&
-            !inherited &&
-            !disabled &&
+            {!inherited &&
             connected &&
-            (onDisable || (hasPlatform && onUsePlatform)) &&
+            (onRemove ||
+              (scope.kind === "tenant" && hasPlatform && onUsePlatform)) &&
             !state.overriding ? (
               <div className="setup-scope-actions setup-restore-platform">
-                {hasPlatform && onUsePlatform ? (
+                {scope.kind === "tenant" && hasPlatform && onUsePlatform ? (
                   <>
                     <p>
                       Switching to the platform service removes this tenant
@@ -251,13 +229,14 @@ export function ServiceSetupModal({
                     </Button>
                   </>
                 ) : null}
-                {onDisable ? (
+                {onRemove &&
+                !(scope.kind === "tenant" && hasPlatform && onUsePlatform) ? (
                   <Button
                     variant="ghost"
                     disabled={state.status === "submitting"}
-                    onClick={() => onDisable?.(provider.id)}
+                    onClick={() => onRemove?.(provider.id)}
                   >
-                    Disable for this tenant
+                    Remove service
                   </Button>
                 ) : null}
               </div>

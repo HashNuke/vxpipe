@@ -13,14 +13,12 @@ const tenant = {
   name: "Demo",
   created_at: "2026-09-19T01:00:00Z",
 };
-const binding = (provider: string, policy = "inherit", name = provider) => ({
+const binding = (provider: string, status = "connected", name = provider) => ({
   provider,
   name,
-  policy,
-  source: policy === "inherit" ? "platform" : "tenant",
-  status: policy === "disabled" ? "disabled" : "connected",
-  credential_id: policy === "disabled" ? null : `${provider}-id`,
-  tenant_credential_id: null,
+  source: "platform",
+  status,
+  credential_id: `${provider}-id`,
   platform_available: true,
   saved_fields: [],
   last_validated_at: null,
@@ -34,7 +32,7 @@ afterEach(() => {
   window.history.replaceState({}, "", "/admin");
 });
 
-test("a disabled optional service does not block sample readiness or progress", async () => {
+test("an unavailable optional service does not block sample readiness or progress", async () => {
   window.history.replaceState({}, "", "/admin/onboarding");
   const fetchImpl = vi.fn((url: RequestInfo | URL) =>
     url === "/admin/api/onboarding/demo-tenant"
@@ -44,7 +42,7 @@ test("a disabled optional service does not block sample readiness or progress", 
           bindings: [
             binding("google"),
             binding("deepgram"),
-            binding("telnyx", "disabled"),
+            binding("telnyx", "unavailable"),
           ],
         }),
   );
@@ -109,7 +107,7 @@ test("onboarding counts inherited services and opens scoped management without a
   );
 });
 
-test("disabled and alternate named bindings cannot make onboarding samples ready", async () => {
+test("unavailable and alternate named bindings cannot make onboarding samples ready", async () => {
   window.history.replaceState({}, "", "/admin/onboarding");
   const fetchImpl = vi.fn((url: RequestInfo | URL) =>
     url === "/admin/api/onboarding/demo-tenant"
@@ -118,13 +116,13 @@ test("disabled and alternate named bindings cannot make onboarding samples ready
           tenant,
           bindings: [
             binding("google"),
-            binding("deepgram", "disabled"),
-            binding("deepgram", "inherit", "another-speech"),
+            binding("deepgram", "unavailable"),
+            binding("deepgram", "connected", "another-speech"),
           ],
         }),
   );
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
-  expect(await screen.findByText("Disabled for this tenant")).toBeVisible();
+  await screen.findByRole("button", { name: "Manage services" });
   expect(
     screen.queryByRole("button", { name: "Load sample call specs" }),
   ).not.toBeInTheDocument();

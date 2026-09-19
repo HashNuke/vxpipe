@@ -2,7 +2,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialScope do
   @moduledoc false
   import Ecto.Query
 
-  alias Vxpipe.Persistence.Schema.{Tenant, TenantServicePolicy}
+  alias Vxpipe.Persistence.Schema.{Tenant, ProviderCredential}
 
   @private [log: false, telemetry_event: nil]
 
@@ -39,60 +39,15 @@ defmodule Vxpipe.Persistence.ProviderCredentialScope do
 
   def selected(repo, key, provider, name) do
     with {:ok, tenant} <- owner(repo, key, "FOR SHARE") do
-      policy =
-        repo.one(
-          from(p in TenantServicePolicy,
-            where: p.tenant_id == ^tenant.id and p.provider == ^provider and p.name == ^name,
-            select: p.policy
-          ),
+      query = owned(ProviderCredential, tenant)
+
+      exists? =
+        repo.exists?(
+          from(c in query, where: c.provider == ^provider and c.name == ^name),
           @private
         )
 
-      case policy do
-        nil -> owner(repo, :platform)
-        "override" -> {:ok, tenant}
-        "disabled" -> {:error, :provider_service_disabled}
-      end
+      if exists?, do: {:ok, tenant}, else: owner(repo, :platform)
     end
-  end
-
-  def override(_repo, %{scope: "platform"}, _provider, _name), do: :ok
-
-  def override(repo, tenant, provider, name) do
-    set_policy(repo, tenant, provider, name, :override)
-  end
-
-  def set_policy(repo, tenant, provider, name, :inherit) do
-    repo.delete_all(
-      from(p in TenantServicePolicy,
-        where: p.tenant_id == ^tenant.id and p.provider == ^provider and p.name == ^name
-      ),
-      @private
-    )
-
-    :ok
-  end
-
-  def set_policy(repo, tenant, provider, name, policy) when policy in [:override, :disabled] do
-    now = DateTime.utc_now()
-    value = Atom.to_string(policy)
-
-    repo.insert!(
-      %TenantServicePolicy{
-        tenant_id: tenant.id,
-        provider: provider,
-        name: name,
-        policy: value,
-        inserted_at: now,
-        updated_at: now
-      },
-      @private ++
-        [
-          conflict_target: [:tenant_id, :provider, :name],
-          on_conflict: [set: [policy: value, updated_at: now]]
-        ]
-    )
-
-    :ok
   end
 end

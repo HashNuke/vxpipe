@@ -110,17 +110,15 @@ test("inherited services count toward readiness and Telnyx overrides use an inde
   expect(telephony.getByText("Connected")).toBeVisible();
 });
 
-test("disabling an inherited service blocks readiness and can be reversed without credentials", () => {
+test("inherited services have no disable or remove control", () => {
   render(<OnboardingStory scenario="inherited-services" theme="dark" />);
   fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Disable for this tenant" }),
-  );
-  expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-  expect(screen.getByText("Disabled for this tenant")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
-  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
-  expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  expect(
+    screen.queryByRole("button", { name: /Disable|Remove service/ }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Override for this tenant" }),
+  ).toBeVisible();
 });
 
 test("a failed tenant override never uses platform readiness", () => {

@@ -15,14 +15,12 @@ afterEach(() => {
 });
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }));
-const binding = (provider: string, policy = "platform", name = provider) => ({
+const binding = (provider: string, source = "platform", name = provider) => ({
   provider,
   name,
-  policy,
-  source: policy === "override" ? "tenant" : "platform",
+  source,
   status: "connected",
   credential_id: `${provider}-id` as string | null,
-  tenant_credential_id: null as string | null,
   platform_available: true,
   saved_fields: ["api_key"],
   last_validated_at: null,
@@ -39,6 +37,10 @@ test("platform services save, reload and edit the exact persisted binding", asyn
           JSON.stringify({ credential: { id: "deepgram-id" } }),
           { status: options.method === "POST" ? 201 : 200 },
         );
+      }
+      if (options?.method === "DELETE") {
+        bindings = [];
+        return new Response(null, { status: 204 });
       }
       return new Response(JSON.stringify({ tenant: null, bindings }));
     },
@@ -88,6 +90,23 @@ test("platform services save, reload and edit the exact persisted binding", asyn
       expect.objectContaining({ method: "PATCH" }),
     ),
   );
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
+  expect(
+    screen.queryByRole("button", { name: /Disable/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Remove service" }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Manage Deepgram" }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/platform/credentials/deepgram-id",
+    expect.objectContaining({ method: "DELETE" }),
+  );
 });
 
 test("tenant setup uses inherited readiness and keeps platform secrets read-only", async () => {
@@ -100,9 +119,9 @@ test("tenant setup uses inherited readiness and keeps platform secrets read-only
     response({
       tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
       bindings: [
-        binding("google", "inherit"),
-        binding("deepgram", "inherit"),
-        binding("google", "inherit", "named-model"),
+        binding("google", "platform"),
+        binding("deepgram", "platform"),
+        binding("google", "platform", "named-model"),
       ],
     }),
   );
@@ -125,34 +144,26 @@ test("tenant setup uses inherited readiness and keeps platform secrets read-only
   ).toBeInTheDocument();
 });
 
-test("tenant override, disable and restore reload durable state without editing the platform row", async () => {
+test("tenant credential removal restores inheritance and there is no disable control", async () => {
   window.history.replaceState(
     {},
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
   );
-  let service = binding("google", "inherit");
-  let saved = false;
+  let service = binding("google");
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
       if (options?.method === "POST") {
-        saved = true;
         service = {
-          ...binding("google", "override"),
+          ...binding("google", "tenant"),
           credential_id: "tenant-google",
-          tenant_credential_id: "tenant-google",
         };
-      } else if (options?.method === "PUT") {
-        const policy = JSON.parse(String(options.body)).policy;
-        service = {
-          ...binding("google", policy),
-          source: policy === "disabled" ? "tenant" : "platform",
-          status: policy === "disabled" ? "disabled" : "connected",
-          credential_id: policy === "disabled" ? null : "google-id",
-          tenant_credential_id: "tenant-google",
-        };
+        return new Response("{}", { status: 201 });
       }
-      if (options?.method) return new Response("{}", { status: 200 });
+      if (options?.method === "DELETE") {
+        service = binding("google");
+        return new Response(null, { status: 204 });
+      }
       return new Response(
         JSON.stringify({
           tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
@@ -165,6 +176,9 @@ test("tenant override, disable and restore reload durable state without editing 
   fireEvent.click(
     await screen.findByRole("button", { name: "Manage Google AI Studio" }),
   );
+  expect(
+    screen.queryByRole("button", { name: /Disable/ }),
+  ).not.toBeInTheDocument();
   fireEvent.click(
     screen.getByRole("button", { name: "Override for this tenant" }),
   );
@@ -178,39 +192,30 @@ test("tenant override, disable and restore reload durable state without editing 
   });
   fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
   expect(await screen.findByText("Tenant override")).toBeInTheDocument();
-  expect(saved).toBe(true);
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials",
     expect.objectContaining({ method: "POST" }),
   );
-
   fireEvent.click(
     screen.getByRole("button", { name: "Manage Google AI Studio" }),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Disable for this tenant" }),
   );
   expect(
-    await screen.findByText("Disabled for this tenant"),
-  ).toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Manage Google AI Studio" }),
-  );
+    screen.queryByRole("button", { name: /Disable/ }),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
   expect(
     await screen.findByText("Inherited from platform"),
   ).toBeInTheDocument();
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/service-policies/google/google",
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials/tenant-google",
     expect.objectContaining({
-      method: "PUT",
+      method: "DELETE",
       headers: expect.objectContaining({ "x-csrf-token": "csrf-example" }),
-      body: JSON.stringify({ policy: "inherit" }),
     }),
   );
 });
 
-test("named overrides replace the dormant tenant row and missing overrides have no saved secret placeholder", async () => {
+test("a named inherited service creates a new tenant credential without touching the platform row", async () => {
   window.history.replaceState(
     {},
     "",
@@ -222,18 +227,7 @@ test("named overrides replace the dormant tenant row and missing overrides have 
         ? {}
         : {
             tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-            bindings: [
-              {
-                ...binding("google", "inherit", "named-model"),
-                tenant_credential_id: "dormant-tenant",
-              },
-              {
-                ...binding("deepgram", "override"),
-                credential_id: null,
-                status: "unavailable",
-                saved_fields: [],
-              },
-            ],
+            bindings: [binding("google", "platform", "named-model")],
           },
     ),
   );
@@ -241,6 +235,10 @@ test("named overrides replace the dormant tenant row and missing overrides have 
   fireEvent.click(await screen.findByRole("button", { name: /named-model/ }));
   fireEvent.click(
     screen.getByRole("button", { name: "Override for this tenant" }),
+  );
+  expect(screen.getByLabelText("API key")).not.toHaveAttribute(
+    "placeholder",
+    "••••••••",
   );
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "synthetic-named" },
@@ -250,9 +248,9 @@ test("named overrides replace the dormant tenant row and missing overrides have 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials/dormant-tenant",
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials",
     expect.objectContaining({
-      method: "PATCH",
+      method: "POST",
       body: JSON.stringify({
         provider: "google",
         name: "named-model",
@@ -260,14 +258,9 @@ test("named overrides replace the dormant tenant row and missing overrides have 
       }),
     }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
-  expect(screen.getByLabelText("API key")).not.toHaveAttribute(
-    "placeholder",
-    "••••••••",
-  );
 });
 
-test("policy failures stay visible and a successful write with failed reload never pretends to be ready", async () => {
+test("removal failures stay visible and a successful write with failed reload never pretends to be ready", async () => {
   window.history.replaceState(
     {},
     "",
@@ -275,35 +268,29 @@ test("policy failures stay visible and a successful write with failed reload nev
   );
   let attempt = 0;
   const fetchImpl = vi.fn((_url: RequestInfo | URL, options?: RequestInit) => {
-    if (options?.method === "PUT")
+    if (options?.method === "DELETE")
       return response({}, ++attempt === 1 ? 503 : 200);
     return attempt === 2
       ? response({}, 503)
       : response({
           tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-          bindings: [binding("google", "inherit")],
+          bindings: [binding("google", "tenant")],
         });
   });
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
   fireEvent.click(
     await screen.findByRole("button", { name: "Manage Google AI Studio" }),
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Disable for this tenant" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Service settings could not be saved",
+    "Service could not be removed",
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Disable for this tenant" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
   expect(
     await screen.findByRole("button", { name: "Retry setup" }),
   ).toBeInTheDocument();
   expect(
-    screen.getByText(
-      "Service settings saved. Retry to load the current state.",
-    ),
+    screen.getByText("Service removed. Retry to load the current state."),
   ).toBeInTheDocument();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
@@ -319,11 +306,10 @@ test("a different platform binding does not turn a tenant-only service into an o
       tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
       bindings: [
         {
-          ...binding("google", "override"),
+          ...binding("google", "tenant"),
           platform_available: false,
-          tenant_credential_id: "google-id",
         },
-        binding("google", "inherit", "another-model"),
+        binding("google", "platform", "another-model"),
       ],
     }),
   );
@@ -337,7 +323,7 @@ test("a different platform binding does not turn a tenant-only service into an o
     screen.queryByRole("button", { name: "Use platform service" }),
   ).not.toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "Disable for this tenant" }),
+    screen.getByRole("button", { name: "Remove service" }),
   ).toBeInTheDocument();
 });
 
