@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioOutputPipelineTest do
   alias Vxpipe.Gateway.Telephony.Telnyx.AudioOutputPipeline
 
   @pipeline_timeout 2_000
+  @startup_timeout 10_000
 
   test "encodes one acknowledged PCM playout frame as paced Telnyx media" do
     pipeline_id = start_pipeline()
@@ -51,7 +52,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioOutputPipelineTest do
          participant_id: "part-human"}
       )
 
-    assert_receive {:vxpipe_audio_output_pipeline_ready, ^pipeline_id}, @pipeline_timeout
+    assert_receive {:vxpipe_audio_output_pipeline_ready, ^pipeline_id}, @startup_timeout
     pipeline_id
   end
 

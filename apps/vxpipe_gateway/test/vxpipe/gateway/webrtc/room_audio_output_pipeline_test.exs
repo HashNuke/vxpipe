@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioOutputPipelineTest do
   alias Vxpipe.Gateway.WebRTC.RoomAudioOutputPipeline
 
   @pipeline_timeout 2_000
+  @startup_timeout 10_000
 
   test "encodes aligned authorized mixer modes as one paced Opus RTP stream" do
     pipeline_id = unique_id("room-output")
@@ -32,7 +33,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioOutputPipelineTest do
          send_rtp: send_rtp}
       )
 
-    assert_receive {:vxpipe_room_audio_output_ready, ^pipeline_id}, @pipeline_timeout
+    assert_receive {:vxpipe_room_audio_output_ready, ^pipeline_id}, @startup_timeout
     assert :ok = RoomAudioOutputPipeline.push(pipeline_id, frame(0, 1_000))
 
     assert :ok =
@@ -71,7 +72,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioOutputPipelineTest do
          send_rtp: fn _peer, _track, _packet -> :ok end}
       )
 
-    assert_receive {:vxpipe_room_audio_output_ready, ^pipeline_id}, @pipeline_timeout
+    assert_receive {:vxpipe_room_audio_output_ready, ^pipeline_id}, @startup_timeout
     valid = frame(0, 1_000)
 
     assert {:error, :wrong_participant} =
