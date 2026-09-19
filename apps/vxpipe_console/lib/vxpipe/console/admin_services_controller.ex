@@ -8,6 +8,44 @@ defmodule Vxpipe.Console.AdminServicesController do
   def platform_index(conn, _params), do: bindings(conn, :platform)
   def tenant_bindings(conn, %{"tenant_key" => key}), do: bindings(conn, key)
 
+  def set_policy(conn, %{"tenant_key" => key, "provider" => provider, "name" => name}) do
+    with %{"policy" => value} = body when map_size(body) == 1 <- conn.body_params,
+         {:ok, policy} <- policy(value),
+         :ok <-
+           Vxpipe.Calls.set_operator_service_policy(
+             InstallationOperator.authority(),
+             key,
+             provider,
+             name,
+             policy
+           ) do
+      json(conn, %{policy: value})
+    else
+      {:error, :tenant_not_found} ->
+        conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+
+      {:error, reason}
+      when reason in [
+             :invalid_tenant_key,
+             :invalid_provider_auth,
+             :invalid_credential_name,
+             :invalid_service_policy
+           ] ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_service_policy"}})
+
+      {:error, _reason} ->
+        conn |> put_status(503) |> json(%{error: %{code: "service_policy_unavailable"}})
+
+      _invalid ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_service_policy"}})
+    end
+  end
+
+  defp policy("inherit"), do: {:ok, :inherit}
+  defp policy("override"), do: {:ok, :override}
+  defp policy("disabled"), do: {:ok, :disabled}
+  defp policy(_value), do: {:error, :invalid_service_policy}
+
   defp bindings(conn, scope) do
     case Vxpipe.Calls.list_operator_service_bindings(InstallationOperator.authority(), scope) do
       {:ok, directory} ->
@@ -42,7 +80,12 @@ defmodule Vxpipe.Console.AdminServicesController do
   end
 
   def create(conn, %{"tenant_key" => tenant_key} = params) do
-    create_credential(conn, tenant_key, params, Map.get(params, "provider"))
+    create_credential(
+      conn,
+      tenant_key,
+      params,
+      Map.get(params, "name", Map.get(params, "provider"))
+    )
   end
 
   def create_platform(conn, params) do

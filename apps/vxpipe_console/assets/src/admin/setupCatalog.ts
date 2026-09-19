@@ -1,5 +1,5 @@
 import catalog from "./setupCatalog.json";
-import type { ServiceProvider } from "./serviceTypes";
+import type { ServiceProvider, CredentialField } from "./serviceTypes";
 
 export type VoiceCapability = "stt" | "llm" | "tts" | "s2s";
 export type SetupProviderId = ServiceProvider;
@@ -8,6 +8,7 @@ export type SetupConnection = {
   status: "connected" | "invalid" | "unavailable" | "disabled";
   source?: "platform" | "tenant";
   telephonyPublicKeyConfigured?: boolean;
+  savedFields?: CredentialField[];
 };
 export type SetupServiceScope =
   | { kind: "platform" }

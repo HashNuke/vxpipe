@@ -1,5 +1,5 @@
 defmodule Vxpipe.Calls.OperatorServiceBindings do
-  @moduledoc "Installation-authorized, non-secret effective provider inventory."
+  @moduledoc "Installation-authorized effective provider inventory and tenant binding policies."
   alias Vxpipe.Calls.{InstallationOperator, ProviderAuth, Repositories}
 
   @fields [
@@ -36,6 +36,19 @@ defmodule Vxpipe.Calls.OperatorServiceBindings do
   end
 
   def list(_authority, _scope, _options), do: {:error, :installation_operator_required}
+
+  def set_policy(
+        %InstallationOperator{grant: :installation_operator},
+        tenant,
+        provider,
+        name,
+        policy,
+        options
+      ),
+      do: Vxpipe.Calls.ProviderCredentials.set_policy(tenant, provider, name, policy, options)
+
+  def set_policy(_authority, _tenant, _provider, _name, _policy, _options),
+    do: {:error, :installation_operator_required}
 
   defp valid_tenant?(nil, :platform), do: true
   defp valid_tenant?(tenant, {:tenant, key}), do: valid_tenant?(tenant, key)

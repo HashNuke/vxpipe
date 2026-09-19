@@ -18,6 +18,12 @@ const record = (value: unknown): value is Record<string, unknown> =>
 const optionalId = (value: unknown) =>
   value === null ||
   (typeof value === "string" && value.length > 0 && value.length <= 128);
+const credentialFields = {
+  api_key: "apiKey",
+  public_key: "publicKey",
+  account_sid: "accountSid",
+  auth_token: "authToken",
+} as const;
 const invalid = () =>
   new Error(
     "Service setup could not be loaded. Retry to load the saved services.",
@@ -67,7 +73,7 @@ export function parseBindingDirectory(
       typeof item.platform_available !== "boolean" ||
       !Array.isArray(item.saved_fields) ||
       !item.saved_fields.every((field) =>
-        ["api_key", "public_key", "account_sid", "auth_token"].includes(field),
+        Object.keys(credentialFields).includes(field),
       ) ||
       !(
         item.last_validated_at === null ||
@@ -89,6 +95,9 @@ export function parseBindingDirectory(
       tenantCredentialId: item.tenant_credential_id as string | null,
       platformAvailable: item.platform_available,
       telephonyPublicKeyConfigured: item.saved_fields.includes("public_key"),
+      savedFields: item.saved_fields.map(
+        (field) => credentialFields[field as keyof typeof credentialFields],
+      ),
     };
   });
   return { tenant: tenant as BindingDirectory["tenant"], bindings };

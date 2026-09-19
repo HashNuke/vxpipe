@@ -46,6 +46,17 @@ defmodule Vxpipe.Calls do
   def list_operator_service_bindings(authority, scope, options \\ []),
     do: Vxpipe.Calls.OperatorServiceBindings.list(authority, scope, options)
 
+  def set_operator_service_policy(authority, tenant, provider, name, policy, options \\ []),
+    do:
+      Vxpipe.Calls.OperatorServiceBindings.set_policy(
+        authority,
+        tenant,
+        provider,
+        name,
+        policy,
+        options
+      )
+
   def list_operator_services(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_services(authority, tenant_key, options)
 

@@ -478,6 +478,79 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                      _, _}
   end
 
+  test "tenant policy mutations require an operator session and CSRF, and preserve exact names" do
+    path =
+      "https://localhost/admin/api/tenants/#{@tenant_key}/service-policies/google/named-model"
+
+    configure_credential_repository(:ok)
+    assert json_response(put(build_conn(), path, %{"policy" => "disabled"}), 401)
+    refute_received {:operator_policy_changed, _, _, _, _}
+
+    authenticated = authenticate() |> recycle() |> https_get("/admin")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
+
+    conn =
+      authenticated
+      |> recycle()
+      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      put(conn, path, %{"policy" => "disabled"})
+    end
+
+    refute_received {:operator_policy_changed, _, _, _, _}
+
+    for {value, policy} <- [
+          {"override", :override},
+          {"disabled", :disabled},
+          {"inherit", :inherit}
+        ] do
+      response = conn |> put_req_header("x-csrf-token", csrf) |> put(path, %{"policy" => value})
+      assert json_response(response, 200) == %{"policy" => value}
+      assert_received {:operator_policy_changed, @tenant_key, "google", "named-model", ^policy}
+    end
+
+    for body <- [%{"policy" => "fallback"}, %{"policy" => "inherit", "owner" => "platform"}] do
+      assert conn |> put_req_header("x-csrf-token", csrf) |> put(path, body) |> json_response(422)
+    end
+
+    refute_received {:operator_policy_changed, _, _, _, _}
+
+    configure_credential_repository({:error, {:storage_failed, "private-detail"}})
+    failed = conn |> put_req_header("x-csrf-token", csrf) |> put(path, %{"policy" => "disabled"})
+    assert json_response(failed, 503) == %{"error" => %{"code" => "service_policy_unavailable"}}
+    refute failed.resp_body =~ "private-detail"
+  end
+
+  test "tenant credential creation preserves an explicit named binding" do
+    returned = %ProviderCredential{
+      id: "named-id",
+      tenant_key: @tenant_key,
+      provider: "google",
+      name: "named-model",
+      auth_kind: "api_key"
+    }
+
+    configure_credential_repository({:ok, returned})
+    authenticated = authenticate()
+    csrf = admin_csrf(authenticated)
+
+    response =
+      authenticated
+      |> recycle()
+      |> put_req_header("x-csrf-token", csrf)
+      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+        "provider" => "google",
+        "name" => "named-model",
+        "values" => %{"api_key" => "synthetic-named"}
+      })
+
+    assert json_response(response, 201)["credential"]["name"] == "named-model"
+
+    assert_received {:operator_credential_created,
+                     %{name: "named-model", tenant_key: @tenant_key}, _}
+  end
+
   defp tenant do
     %Tenant{
       key: @tenant_key,

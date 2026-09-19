@@ -108,33 +108,60 @@ export function ScopedServicesApp({
     const existing = directory.bindings.find(
       (binding) => binding.provider === draft.provider && binding.name === name,
     );
-    if (tenantKey && existing?.source === "platform") return;
+    if (tenantKey && existing?.source === "platform" && !modal.overriding)
+      return;
+    const credentialId = tenantKey
+      ? existing?.tenantCredentialId
+      : existing?.credentialId;
+    const values =
+      "apiKey" in draft.values
+        ? { api_key: draft.values.apiKey }
+        : {
+            account_sid: draft.values.accountSid,
+            auth_token: draft.values.authToken,
+          };
+    await mutate(
+      `${prefix}/credentials${credentialId ? `/${encodeURIComponent(credentialId)}` : ""}`,
+      credentialId ? "PATCH" : "POST",
+      { provider: draft.provider, name, values },
+      "credentials",
+    );
+  }
+
+  async function setPolicy(policy: "inherit" | "disabled") {
+    if (!tenantKey || !modal?.provider || saving.current) return;
+    const name = modal.bindingName ?? modal.provider;
+    await mutate(
+      `${prefix}/service-policies/${encodeURIComponent(modal.provider)}/${encodeURIComponent(name)}`,
+      "PUT",
+      { policy },
+      "policy",
+    );
+  }
+
+  async function mutate(
+    url: string,
+    method: string,
+    body: object,
+    operation: "credentials" | "policy",
+  ) {
+    if (!modal || saving.current) return;
     const controller = new AbortController();
     saving.current = controller;
-    setModal({ ...modal, status: "submitting", message: undefined });
+    setModal({ ...modal, status: "submitting", operation, message: undefined });
     let stored = false;
     try {
-      const values =
-        "apiKey" in draft.values
-          ? { api_key: draft.values.apiKey }
-          : {
-              account_sid: draft.values.accountSid,
-              auth_token: draft.values.authToken,
-            };
-      const response = await fetchImpl(
-        `${prefix}/credentials${existing?.credentialId ? `/${encodeURIComponent(existing.credentialId)}` : ""}`,
-        {
-          method: existing?.credentialId ? "PATCH" : "POST",
-          credentials: "same-origin",
-          signal: controller.signal,
-          headers: {
-            "content-type": "application/json",
-            accept: "application/json",
-            "x-csrf-token": csrfToken,
-          },
-          body: JSON.stringify({ provider: draft.provider, name, values }),
+      const response = await fetchImpl(url, {
+        method,
+        credentials: "same-origin",
+        signal: controller.signal,
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          "x-csrf-token": csrfToken,
         },
-      );
+        body: JSON.stringify(body),
+      });
       if (controller.signal.aborted) return;
       if (response.status === 401) {
         onSessionExpired();
@@ -142,11 +169,13 @@ export function ScopedServicesApp({
       }
       if (!response.ok)
         throw new Error(
-          response.status === 409
-            ? "This binding already exists. Close this form and reload to edit it."
-            : response.status === 422
-              ? "The credentials were rejected. Check them and try again."
-              : "Credentials could not be saved. Check the connection and try again.",
+          operation === "policy"
+            ? "Service settings could not be saved. Check the connection and try again."
+            : response.status === 409
+              ? "This binding already exists. Close this form and reload to edit it."
+              : response.status === 422
+                ? "The credentials were rejected. Check them and try again."
+                : "Credentials could not be saved. Check the connection and try again.",
         );
       stored = true;
       const reloaded = await fetchImpl(directoryUrl, {
@@ -161,14 +190,20 @@ export function ScopedServicesApp({
       if (controller.signal.aborted) return;
       setDirectory(next);
       setModal(null);
-      setNotice("Service saved.");
+      setNotice(
+        operation === "policy" ? "Service settings saved." : "Service saved.",
+      );
       requestAnimationFrame(() => trigger.current?.focus());
     } catch (error) {
       if (controller.signal.aborted) return;
       if (stored) {
         setModal(null);
         setPhase("unavailable");
-        setNotice("Service saved. Retry to load its current state.");
+        setNotice(
+          operation === "policy"
+            ? "Service settings saved. Retry to load the current state."
+            : "Service saved. Retry to load its current state.",
+        );
       } else
         setModal({
           ...modal,
@@ -253,7 +288,9 @@ export function ScopedServicesApp({
             connections={primary}
             providers={providers}
             platform={tenantKey === null}
-            platformConnections={platformConnections}
+            platformConnections={platformConnections.filter(
+              (binding) => binding.name === binding.provider,
+            )}
             unavailable={phase === "unavailable"}
             onRetry={() => setRetry((value) => value + 1)}
             onConnect={(provider, group) =>
@@ -326,7 +363,9 @@ export function ScopedServicesApp({
           scope={scope}
           providers={providers}
           connections={selected ? [selected] : []}
-          platformConnections={platformConnections}
+          platformConnections={platformConnections.filter(
+            (binding) => binding.name === (modal.bindingName ?? modal.provider),
+          )}
           telephonySetup={false}
           bindingName={modal.bindingName}
           onClose={close}
@@ -336,12 +375,29 @@ export function ScopedServicesApp({
               setModal({
                 ...modal,
                 provider,
+                overriding: false,
+                operation: undefined,
                 bindingName: undefined,
                 status: "idle",
                 message: undefined,
               });
           }}
           onManagePlatform={() => onNavigate("/admin/platform/services")}
+          onOverride={
+            tenantKey
+              ? () => {
+                  if (!saving.current)
+                    setModal({
+                      ...modal,
+                      overriding: true,
+                      status: "idle",
+                      message: undefined,
+                    });
+                }
+              : undefined
+          }
+          onUsePlatform={tenantKey ? () => setPolicy("inherit") : undefined}
+          onDisable={tenantKey ? () => setPolicy("disabled") : undefined}
         />
       ) : null}
     </AdminShell>

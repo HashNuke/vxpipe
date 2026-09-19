@@ -15,13 +15,17 @@ overrides. Its sequence covers Storybook review, scoped credential storage/reade
 scoped Telnyx verification/routing, then Console integration. Backend tasks remain
 unchecked; the existing operator session can authorize this work before programmatic
 platform API-key issuance is complete. The user authorized that implementation on
-2026-09-19. Its [seven runnable delivery checkpoints](../platform-and-tenant-services.md#runnable-delivery-checkpoints)
+2026-09-19. Its [eight runnable delivery checkpoints](../platform-and-tenant-services.md#runnable-delivery-checkpoints)
 cover inherited-provider execution, Console management, scoped incoming Telnyx calls,
 then callback cutover and migration/restart acceptance. The user's authoring-authority
 clarification adds principal-aware writes and operator API keys for programmatic authoring.
 Checkpoints A/A2/A3/B1 pass focused tests and the serial umbrella suite; B1's operator-session
-Console flow also passes browser/restart inspection. B2 is next;
+Console flow also passes browser/restart inspection. B2's tenant policy implementation
+passes owning suites and browser/restart checks, but umbrella acceptance remains open
+after a native multi-listener WebRTC audio failure;
 the platform-key and demo-bootstrap gates below remain independently tracked.
+B3 separately connects the older onboarding/sample installer to effective services;
+its current tenant-only inventory does not yet support platform inheritance.
 The two A3 steps implement trusted key bootstrap/replacement/revocation, authenticated
 platform status and operator/tenant call-spec HTTP writes. Persisted lifecycle tests,
 real HTTP/restart checks and the 1,754-test combined umbrella run pass. See the

@@ -1,5 +1,11 @@
 import type { TenantContext } from "./callSpecTypes";
 
+export type CredentialField =
+  | "apiKey"
+  | "publicKey"
+  | "accountSid"
+  | "authToken";
+
 export type ServiceProvider =
   | "rime"
   | "google"

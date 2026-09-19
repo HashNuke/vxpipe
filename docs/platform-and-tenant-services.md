@@ -1,7 +1,9 @@
 # Platform and tenant services
 
 Status: implementation authorized 2026-09-19. Storybook prototype implemented and
-verified; A, A2, A3 and B1 are delivered. B2, C and D remain.
+verified; A, A2, A3 and B1 are delivered. B2, B3, C and D remain.
+B2's Console policy controls pass focused tests and browser/restart checks. Its
+umbrella acceptance remains open after a native WebRTC audio failure.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -160,6 +162,11 @@ browser checks. A checked design task does not count as a delivered slice.
   restore an inherited service through the reviewed UI and durable APIs. Preserve
   named and dormant tenant bindings, show failed overrides without fallback, and
   verify reload, onboarding readiness and desktop/mobile recovery paths.
+- [ ] **B3 — Resume demo onboarding with effective services.** Replace the older
+  onboarding and sample installer's tenant-only inventory reads with the effective
+  directory. Count only usable exact named bindings, show inherited/disabled states,
+  route credential management through the scoped setup page, and prove inherited
+  sample publication plus reload and failure recovery. Preserve edited samples.
 - [ ] **C — Receive a scoped Telnyx call.** Bind a tenant Voice API application to its
   selected service scope, verify the route-selected key, then dispatch to that tenant.
   Exercise both routes with persisted credentials, wrong-scope/tenant rejection and
@@ -182,6 +189,10 @@ The user's subsequent review/commit instruction requires reviewing and committin
 each runnable checkpoint before starting the next implementation. Unresolved
 verification stays explicit and leaves the acceptance checkbox open. B was split into B1/B2 to keep
 both Console commits runnable and small enough to review independently.
+Integration review, 2026-09-19: B2 verification found that the older
+`/admin/onboarding` entry and `DemoSamples` installer still read tenant-only inventory.
+B3 separates that required effective-service integration into another runnable
+checkpoint before carrier work; it does not add a new provider or recipe catalog.
 
 Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provider-inheritance.md).
 
@@ -199,8 +210,8 @@ Checkpoint A implementation details:
   their existing names and authority contract; Console listings/editing follow in B1.
 - A call's `credential_name` selects exactly that provider/name. Migrated tenant
   credentials have explicit override policies; a missing policy inherits platform
-  credentials. Disabling or restoring inheritance is currently a trusted host
-  operation; its operator UI/API follows in B2.
+  credentials. B2 exposes disabling and restoring inheritance through the operator
+  UI/API, backed by the same policy resolver.
 - Newly prepared plans pin owner and credential ID, not credential version. Rotation
   within that identity is visible to fresh readers; an owner/ID switch requires new
   preparation. Speech asset cache keys also include credential version. Legacy stored
@@ -253,6 +264,35 @@ the combined umbrella suite passes 1,754 tests with 40 exclusions. All root stat
 gates pass. See the [key and authoring contract](operator-api-key-authoring.md),
 [key lifecycle labnotes](../labnotes/20260919-0803-operator-key-authoring.md) and
 [HTTP authoring labnotes](../labnotes/20260919-0821-authorize-http-spec-writes.md).
+
+Checkpoint B2 implementation (umbrella acceptance open):
+
+- Tenant setup exposes **Override for this tenant**, **Disable for this tenant**
+  and **Use platform service**. An override draft remains local until validated
+  credentials save; cancelling or rejected validation preserves the existing policy.
+- The operator-session API is
+  `PUT /admin/api/tenants/:tenant_key/service-policies/:provider/:name`, with exactly
+  `{"policy":"inherit"}`, `{"policy":"override"}` or `{"policy":"disabled"}` and a
+  CSRF header. Tenant principals cannot invoke the installation policy workflow.
+  Explicit override without credentials is unavailable, never platform fallback.
+- Tenant credential creation accepts an optional exact `name`, defaulting to the
+  provider ID. Restoring inheritance retains the dormant tenant row; a later override
+  replaces that row rather than editing the platform credential or creating a duplicate.
+  Named bindings and primary cards never borrow another name's platform identity.
+- Policy and credential writes reload the effective directory before showing success.
+  Failed writes remain actionable in the modal; successful writes with failed reload
+  show a retry state. Only saved fields receive masked placeholders. No secrets are read.
+- Calls passes 115 tests; Console passes 178 (one excluded); frontend passes 177.
+  Root static checks pass. Chrome verified desktop/mobile, two inheriting tenants
+  and a third override, failed validation recovery, durable disable/restore across
+  restart, exact named bindings and missing overrides without fallback. The fixture
+  used a synthetic validator and real encrypted PostgreSQL storage, not upstream
+  providers. The full umbrella run completed 1,757 tests with one native WebRTC
+  failure (40 excluded): the five-participant handoff timed out waiting for audio
+  after listener reconnection. Its isolated rerun failed later at cue/conversation
+  ordering. The cause remains unresolved; B2's acceptance checkbox stays open.
+  See the
+  [B2 labnotes](../labnotes/20260919-0840-tenant-service-exceptions.md).
 
 ### 1. Storybook review checkpoint
 

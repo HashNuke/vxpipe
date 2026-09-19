@@ -23,6 +23,7 @@ export type ServiceModalState = {
   status: "idle" | "submitting" | "error";
   message?: string;
   overriding?: boolean;
+  operation?: "credentials" | "policy";
 };
 
 export function ServiceSetupModal({
@@ -141,11 +142,18 @@ export function ServiceSetupModal({
                   className="animate-spin motion-reduce:animate-none"
                   size={16}
                 />
-                Validating credentials with {provider.name}…
+                {state.operation === "policy"
+                  ? "Updating service…"
+                  : `Validating credentials with ${provider.name}…`}
               </p>
             ) : null}
             {inherited || disabled ? (
               <div className="setup-inherited-detail">
+                {state.message ? (
+                  <p className="text-sm text-[var(--admin-red)]" role="alert">
+                    {state.message}
+                  </p>
+                ) : null}
                 <p>
                   {disabled
                     ? "This service is disabled for this tenant."
@@ -154,25 +162,35 @@ export function ServiceSetupModal({
                 {inherited ? webhook : null}
                 <div className="setup-scope-actions">
                   {disabled && hasPlatform && onUsePlatform ? (
-                    <Button onClick={() => onUsePlatform?.(provider.id)}>
+                    <Button
+                      disabled={state.status === "submitting"}
+                      onClick={() => onUsePlatform?.(provider.id)}
+                    >
                       Use platform service
                     </Button>
                   ) : null}
                   {onOverride ? (
-                    <Button onClick={onOverride}>
+                    <Button
+                      disabled={state.status === "submitting"}
+                      onClick={onOverride}
+                    >
                       {disabled
                         ? "Connect for this tenant"
                         : "Override for this tenant"}
                     </Button>
                   ) : null}
                   {inherited && onManagePlatform ? (
-                    <Button onClick={onManagePlatform}>
+                    <Button
+                      disabled={state.status === "submitting"}
+                      onClick={onManagePlatform}
+                    >
                       Manage platform services
                     </Button>
                   ) : null}
                   {inherited && onDisable ? (
                     <Button
                       variant="ghost"
+                      disabled={state.status === "submitting"}
                       onClick={() => onDisable?.(provider.id)}
                     >
                       Disable for this tenant
@@ -187,11 +205,12 @@ export function ServiceSetupModal({
                 savedFields={
                   !connected
                     ? []
-                    : provider.id === "twilio"
-                      ? ["accountSid", "authToken"]
-                      : selected?.telephonyPublicKeyConfigured
-                        ? ["apiKey", "publicKey"]
-                        : ["apiKey"]
+                    : (selected?.savedFields ??
+                      (provider.id === "twilio"
+                        ? ["accountSid", "authToken"]
+                        : selected?.telephonyPublicKeyConfigured
+                          ? ["apiKey", "publicKey"]
+                          : ["apiKey"]))
                 }
                 message={state.message}
                 onCancel={onClose}
@@ -201,37 +220,46 @@ export function ServiceSetupModal({
                 showProvider={false}
                 status={state.status}
                 submitLabel="Validate and save"
-                submittingLabel="Validating…"
+                submittingLabel={
+                  state.operation === "policy" ? "Updating…" : "Validating…"
+                }
                 beforeActions={webhook}
               />
             )}
             {scope.kind === "tenant" &&
             !inherited &&
             !disabled &&
-            hasPlatform &&
-            onUsePlatform &&
+            connected &&
+            (onDisable || (hasPlatform && onUsePlatform)) &&
             !state.overriding ? (
               <div className="setup-scope-actions setup-restore-platform">
-                <p>
-                  Switching to the platform service removes this tenant override
-                  {provider.id === "telnyx"
-                    ? " and changes its webhook URL"
-                    : ""}
-                  .
-                </p>
-                <Button
-                  disabled={state.status === "submitting"}
-                  onClick={() => onUsePlatform?.(provider.id)}
-                >
-                  Use platform service
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={state.status === "submitting"}
-                  onClick={() => onDisable?.(provider.id)}
-                >
-                  Disable for this tenant
-                </Button>
+                {hasPlatform && onUsePlatform ? (
+                  <>
+                    <p>
+                      Switching to the platform service removes this tenant
+                      override
+                      {provider.id === "telnyx"
+                        ? " and changes its webhook URL"
+                        : ""}
+                      .
+                    </p>
+                    <Button
+                      disabled={state.status === "submitting"}
+                      onClick={() => onUsePlatform?.(provider.id)}
+                    >
+                      Use platform service
+                    </Button>
+                  </>
+                ) : null}
+                {onDisable ? (
+                  <Button
+                    variant="ghost"
+                    disabled={state.status === "submitting"}
+                    onClick={() => onDisable?.(provider.id)}
+                  >
+                    Disable for this tenant
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             {scope.kind === "tenant" && !inherited ? (

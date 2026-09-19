@@ -3,6 +3,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import type {
   CredentialDraft,
+  CredentialField,
   CredentialSetupStatus,
   ServiceProvider,
 } from "./serviceTypes";
@@ -16,8 +17,6 @@ const providers: Array<{ value: ServiceProvider; label: string }> = [
   { value: "telnyx", label: "Telnyx" },
   { value: "twilio", label: "Twilio" },
 ];
-
-type CredentialField = "apiKey" | "publicKey" | "accountSid" | "authToken";
 
 export function ServiceCredentialForm({
   initialProvider = "google",

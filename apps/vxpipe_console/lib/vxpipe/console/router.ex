@@ -123,6 +123,10 @@ defmodule Vxpipe.Console.Router do
 
     post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create
 
+    put "/tenants/:tenant_key/service-policies/:provider/:name",
+        Vxpipe.Console.AdminServicesController,
+        :set_policy
+
     patch "/tenants/:tenant_key/credentials/:credential_id",
           Vxpipe.Console.AdminServicesController,
           :update

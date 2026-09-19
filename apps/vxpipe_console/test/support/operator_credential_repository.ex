@@ -34,6 +34,12 @@ defmodule Vxpipe.Console.Test.OperatorCredentialRepository do
   end
 
   @impl true
+  def set_policy({owner, result}, tenant, provider, name, policy) do
+    send(owner, {:operator_policy_changed, tenant, provider, name, policy})
+    result
+  end
+
+  @impl true
   def list(_context, _tenant_key), do: {:error, :not_implemented}
 
   @impl true
