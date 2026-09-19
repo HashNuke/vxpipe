@@ -1,46 +1,71 @@
 defmodule Vxpipe.CallEngine.Speech.SessionTree do
   @moduledoc false
   use Supervisor
+  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel, ScopeControl}
 
-  alias Vxpipe.CallEngine.Speech.Channel
-
-  def start_link(options) do
-    name = {:via, Registry, {Vxpipe.CallEngine.Speech.Registry, {:tree, make_ref()}}}
-    private_init = :ets.new(__MODULE__, [:set, :protected])
-    :ets.insert(private_init, {:private, Keyword.get(options, :private, [])})
-    deadline = System.monotonic_time(:millisecond) + Keyword.fetch!(options, :start_timeout)
-
-    public_options =
-      options
-      |> Keyword.take([:owner, :provider, :descriptor, :call_timeout, :start_timeout])
-      |> Keyword.put(:private_init, private_init)
-      |> Keyword.put(:start_deadline, deadline)
-
-    try do
-      with {:ok, session} <- Supervisor.start_link(__MODULE__, public_options, name: name),
-           :ok <- Channel.activate(session) do
-        {:ok, session}
-      else
-        _failure -> {:error, :initialization_failed}
-      end
-    after
-      :ets.delete(private_init)
-    end
-  catch
-    :exit, _reason -> {:error, :initialization_failed}
+  def child_spec(options) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [options]},
+      restart: :temporary,
+      type: :supervisor,
+      shutdown: :infinity
+    }
   end
 
-  def commands(session),
-    do: {:via, Registry, {Vxpipe.CallEngine.Speech.Registry, {:commands, session}}}
+  def start_link({allocation, _public} = options) do
+    if Allocation.valid?(allocation),
+      do: Supervisor.start_link(__MODULE__, options, name: address(allocation)),
+      else: {:error, :closed}
+  end
 
-  # The supervisor retains only the opaque ETS reference in its initial args and
-  # child spec. The starting owner deletes the short-lived snapshot on every exit.
-  def start_provider(provider, options) do
-    [{:private, private}] = :ets.lookup(Keyword.fetch!(options, :private_init), :private)
-    private_init = options |> Keyword.delete(:private_init) |> Keyword.put(:private, private)
+  def address(allocation), do: CapabilityTree.address({allocation.generation, :allocation})
+  def commands(allocation), do: CapabilityTree.address({allocation.generation, :commands})
+  def providers(allocation), do: CapabilityTree.address({allocation.generation, :providers})
 
-    case provider.start_link(private_init) do
-      {:ok, pid} when is_pid(pid) -> {:ok, pid}
+  def initialize(allocation, public) do
+    provider = Keyword.fetch!(public, :provider)
+
+    with true <- Allocation.valid?(allocation),
+         {:ok, descriptor} <- provider.configure(Keyword.get(public, :options, [])),
+         :ok <-
+           Channel.configure(
+             allocation,
+             provider,
+             descriptor,
+             Keyword.get(public, :call_timeout, 5_000)
+           ),
+         {:ok, pid} <-
+           DynamicSupervisor.start_child(providers(allocation), %{
+             id: provider,
+             start: {__MODULE__, :start_provider, [allocation, provider, descriptor]},
+             restart: :temporary,
+             shutdown: :brutal_kill
+           }),
+         :ok <- Channel.started(allocation, pid) do
+      :ok
+    else
+      _failure -> ScopeControl.failed(allocation, :initialization_failed)
+    end
+  rescue
+    _error -> ScopeControl.failed(allocation, :initialization_failed)
+  catch
+    _kind, _reason -> ScopeControl.failed(allocation, :initialization_failed)
+  end
+
+  def start_provider(allocation, provider, descriptor) do
+    with {:ok, private} <- ScopeControl.claim(allocation),
+         true <- Allocation.valid?(allocation),
+         {:ok, pid} when is_pid(pid) <-
+           provider.start_link(
+             allocation: allocation,
+             descriptor: descriptor,
+             channel: Channel.address(allocation),
+             private: private,
+             start_deadline: allocation.deadline
+           ) do
+      {:ok, pid}
+    else
       _failure -> {:error, :initialization_failed}
     end
   rescue
@@ -50,34 +75,15 @@ defmodule Vxpipe.CallEngine.Speech.SessionTree do
   end
 
   @impl true
-  def init(options) do
-    options = Keyword.put(options, :session, self())
-    provider = Keyword.fetch!(options, :provider)
-
-    provider_options = [
-      descriptor: Keyword.fetch!(options, :descriptor),
-      channel: Channel.address(self()),
-      private_init: Keyword.fetch!(options, :private_init),
-      start_deadline: Keyword.fetch!(options, :start_deadline)
-    ]
-
+  def init({allocation, _public}) do
     children = [
-      Supervisor.child_spec({Channel, Keyword.delete(options, :private_init)},
-        restart: :temporary,
-        significant: true
-      ),
-      Supervisor.child_spec({Task.Supervisor, name: commands(self())},
-        restart: :temporary,
-        significant: true
-      ),
-      %{
-        id: provider,
-        start: {__MODULE__, :start_provider, [provider, provider_options]},
-        restart: :temporary,
-        significant: true,
-        shutdown: 5_000
-      }
+      {Channel, allocation},
+      {Task.Supervisor, name: commands(allocation)},
+      {DynamicSupervisor, name: providers(allocation), strategy: :one_for_one}
     ]
+
+    children =
+      Enum.map(children, &Supervisor.child_spec(&1, restart: :temporary, significant: true))
 
     Supervisor.init(children, strategy: :one_for_all, auto_shutdown: :any_significant)
   end

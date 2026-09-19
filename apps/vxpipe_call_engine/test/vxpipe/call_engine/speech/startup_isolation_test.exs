@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor
-  alias Vxpipe.CallEngine.Speech.{Event, Session}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.{SpeechSessionProbe, TestSpeechToTextTransport}
 
   @jobs 8
@@ -39,14 +39,12 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
   } do
     owner = self()
 
-    held_start =
-      Task.Supervisor.async_nolink(tasks, fn ->
-        Session.start(
-          provider: SpeechSessionProbe,
-          owner: owner,
-          private: [observer: owner, hold_start?: true]
-        )
-      end)
+    {:ok, held_session, :starting} =
+      Session.start(scope(),
+        provider: SpeechSessionProbe,
+        owner: owner,
+        private: [observer: owner, hold_start?: true]
+      )
 
     assert_receive {:probe_initializing, held_provider, _channel}, 1_000
     jobs = start_morse_jobs(tasks)
@@ -58,7 +56,6 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
         send(held_provider, :release_start)
       end
 
-    assert {:ok, held_session} = Task.await(held_start, 2_000)
     assert :ok = Session.close(held_session)
 
     results =
@@ -72,6 +69,8 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
 
     completed_before_release =
       Enum.count(before_release, fn {_task, result} -> not is_nil(result) end)
+
+    assert completed_before_release == @jobs
 
     assert Enum.all?(results, &(&1.start_ms <= @startup_budget)),
            "#{completed_before_release}/#{@jobs} healthy Morse sessions completed within " <>
@@ -153,21 +152,52 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
     end
   end
 
-  defp start_morse_jobs(tasks) do
+  test "a held initializer leaves a same-scope sibling ready and recognizing", %{tasks: tasks} do
+    scope = scope()
+
+    {:ok, held, :starting} =
+      Session.start(scope,
+        provider: SpeechSessionProbe,
+        private: [observer: self(), hold_start?: true]
+      )
+
+    assert_receive {:probe_initializing, provider, _channel}
+    [job] = start_morse_jobs(tasks, [scope])
+
+    try do
+      result = Task.await(job, @observation_window)
+      assert result.text == "E"
+      assert result.start_ms <= @startup_budget
+    after
+      send(provider, :release_start)
+      assert :ok = Session.close(held)
+    end
+  end
+
+  defp scope do
+    start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
+    |> CapabilityTree.scope()
+  end
+
+  defp start_morse_jobs(tasks), do: start_morse_jobs(tasks, for(_ <- 1..@jobs, do: scope()))
+
+  defp start_morse_jobs(tasks, scopes) do
     observer = self()
 
     jobs =
-      for _ <- 1..@jobs do
+      for scope <- scopes do
         Task.Supervisor.async_nolink(tasks, fn ->
           send(observer, {:morse_job_invoking, self()})
           started = System.monotonic_time(:millisecond)
-          {:ok, session} = Session.start(provider: MorseSession, start_timeout: @startup_budget)
-          start_ms = System.monotonic_time(:millisecond) - started
+
+          {:ok, session, :starting} =
+            Session.start(scope, provider: MorseSession, start_timeout: @startup_budget)
 
           try do
             assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready},
                            1_000
 
+            start_ms = System.monotonic_time(:millisecond) - started
             assert :ok = Session.ack(session, ready)
             assert :ok = Session.push_audio(session, reference_e())
             %{text: receive_semantic_final(session), start_ms: start_ms}

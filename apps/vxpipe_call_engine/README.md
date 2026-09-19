@@ -5,25 +5,30 @@ lifecycle and processing runtime.
 
 ## Standalone semantic Morse recognition
 
-Checkpoint A of [simpler speech integrations](../../docs/milestones/simpler-speech-integrations.md)
+The experimental scoped implementation of [simpler speech integrations](../../docs/milestones/simpler-speech-integrations.md)
 provides a native STT session without a socket or JSON. From this application's directory,
 start `MIX_ENV=test iex -S mix` and paste this example. It constructs an independent Morse
 dot plus an end gap; it does not use the Morse encoder to supply its expected result.
 
-The baseline prototype is recorded before room integration: a
-[reproduced startup-isolation defect](../../docs/speech-startup-isolation.md) allows one slow
-initialization to delay unrelated sessions beyond their startup budget. The linked report
-also records opt-in Morse latency measurements; this example is not checkpoint acceptance.
-The [revised ownership plan](../../docs/speech-session-ownership.md) replaces this prototype's
-global startup API with explicitly owned local scopes; that API is proposed, not implemented.
+The [original startup-isolation defect](../../docs/speech-startup-isolation.md) and latency
+measurements remain recorded. The new API requires the explicit local scopes described in
+the [ownership plan](../../docs/speech-session-ownership.md); its isolated held-start and
+adoption tests pass. Checkpoint R acceptance and room migration remain separate gates.
 The [scoped room experiment](../../docs/scoped-speech-experiment.md) supplies a separate test-only
 prototype and reproducible paired load checks for policy, turns, output and interruption.
 
 ```elixir
 alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
-alias Vxpipe.CallEngine.Speech.{Event, Session}
+alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
 
-{:ok, session} = Session.start(provider: MorseSession)
+{:ok, supervisor} = Supervisor.start_link(
+  [{CapabilityTree, owner: self()}],
+  strategy: :one_for_one,
+  name: Vxpipe.SpeechExample
+)
+[{CapabilityTree, tree, :supervisor, _modules}] = Supervisor.which_children(supervisor)
+scope = CapabilityTree.scope(tree)
+{:ok, session, :starting} = Session.start(scope, provider: MorseSession)
 
 receive do
   {:vxpipe_speech, %Event{session: ^session, kind: :ready} = event} ->
@@ -49,20 +54,22 @@ end
 # => [{:speech_started, nil}, {:transcript, "E"}, {:turn_ended, "E"}]
 
 :ok = Session.close(session)
+Supervisor.stop(supervisor)
 ```
 
 This recognizes Morse tones, not human speech. Supported rates are 8, 16, 24 and 48 kHz;
 input is raw mono signed little-endian linear16, without a WAV header or resampling.
 Odd chunk boundaries are supported. Empty chunks and chunks above 131,072 bytes are rejected.
-Only the session owner can submit input, acknowledge events or close the session. The owner
+The current consumer submits input and acknowledges events; it and the lifetime owner can
+close the active session. A preparation lease loses close authority after adoption. The consumer
 must validate each envelope with `Session.ack/2` before consuming its text; duplicate, stale
 or modified events fail acknowledgement. The channel keeps one event in the owner's mailbox
 and at most 32 pending events, each with at most 4,096 transcript bytes. A slow consumer that
 exhausts this allowance receives `{:vxpipe_speech_closed, session, :event_overflow}` and must
 retire the session. There is no automatic retry or replay.
 
-Initialization and commands default to five-second deadlines; the known startup defect
-currently excludes time waiting behind another initialization. Owner loss, failed commands and
+Initialization and commands default to five-second deadlines; startup includes local admission
+wait and required adoption, and settles when activation succeeds. Owner loss, failed commands and
 explicit close tear down owned work; close discards incomplete speech rather than inventing
 a final transcript. A local ready event means initialized, and turn end means the decoder
 observed its configured silence gap. The descriptor reports locally measured usage without

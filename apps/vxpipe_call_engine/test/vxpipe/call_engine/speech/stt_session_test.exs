@@ -4,8 +4,8 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
 
   alias Vxpipe.CallEngine.Provider.MorseCode.Config
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
-  alias Vxpipe.CallEngine.Speech.{Event, Session}
-  alias Vxpipe.CallEngine.SpeechSessionProbe
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Session}
+  alias Vxpipe.CallEngine.{SpeechSessionOwner, SpeechSessionProbe}
 
   @reference_runs [
     {:tone, 1},
@@ -39,7 +39,7 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
   ]
 
   test "independent odd-sized PCM becomes ordered typed transcript events" do
-    session = start_supervised!({Session, provider: MorseSession, owner: self()})
+    session = start_session(provider: MorseSession, owner: self())
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
     assert :ok = Session.ack(session, ready)
     assert {:ok, config} = Config.new()
@@ -60,9 +60,10 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
     assert Enum.map(Enum.filter(events, &(&1.kind == :transcript)), & &1.text) ==
              ["S", "SO", "SOS", "SOS 2"]
 
-    monitor = Process.monitor(session)
+    tree = Session.tree(session)
+    monitor = Process.monitor(tree)
     assert :ok = Session.close(session)
-    assert_receive {:DOWN, ^monitor, :process, ^session, _reason}
+    assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}
   end
 
   test "configuration is closed, pure and truthful about local evidence" do
@@ -99,7 +100,7 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
   end
 
   test "rejects malformed, empty and oversized input without consuming audio" do
-    session = start_supervised!({Session, provider: MorseSession})
+    session = start_session(provider: MorseSession)
     assert_receive {:vxpipe_speech, ready}
     assert :ok = Session.ack(session, ready)
     assert {:error, :invalid_audio} = Session.push_audio(session, :bad)
@@ -113,7 +114,7 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
   end
 
   test "validates exact envelopes and delivers only one event until acknowledged" do
-    session = start_supervised!({Session, provider: MorseSession})
+    session = start_session(provider: MorseSession)
     assert_receive {:vxpipe_speech, ready}
     assert {:ok, config} = Config.new()
     assert :ok = Session.push_audio(session, reference_pcm([{:tone, 1}, {:silence, 14}], config))
@@ -132,103 +133,93 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
   end
 
   test "close discards an unfinished mark and is idempotent" do
-    session = start_supervised!({Session, provider: MorseSession})
+    session = start_session(provider: MorseSession)
     assert_receive {:vxpipe_speech, ready}
     assert :ok = Session.ack(session, ready)
     assert {:ok, config} = Config.new()
     assert :ok = Session.push_audio(session, reference_pcm([{:tone, 1}], config))
     assert_receive {:vxpipe_speech, %Event{kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
-    monitor = Process.monitor(session)
+    tree = Session.tree(session)
+    monitor = Process.monitor(tree)
     assert :ok = Session.close(session)
-    assert_receive {:DOWN, ^monitor, :process, ^session, _reason}
+    assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}
     assert :ok = Session.close(session)
     assert {:error, :closed} = Session.ack(session, started)
     refute_received {:vxpipe_speech, _event}
   end
 
   test "overflow is bounded and fails even when event credit is withheld" do
-    session = start_supervised!({Session, provider: MorseSession})
+    session = start_session(provider: MorseSession)
     assert_receive {:vxpipe_speech, _ready}
-    monitor = Process.monitor(session)
+    tree = Session.tree(session)
+    monitor = Process.monitor(tree)
     assert {:ok, config} = Config.new()
     audio = reference_pcm([{:tone, 1}, {:silence, 14}], config)
 
     for _index <- 1..11, do: Session.push_audio(session, audio)
 
     assert_receive {:vxpipe_speech_closed, ^session, :event_overflow}
-    assert_receive {:DOWN, ^monitor, :process, ^session, _reason}
+    assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}
     refute_received {:vxpipe_speech, _event}
   end
 
   test "owner loss tears down the session and provider" do
-    owner = start_supervised!({Agent, fn -> :owner end})
-    session = start_supervised!({Session, provider: MorseSession, owner: owner})
-    [{_channel, metadata}] = Registry.lookup(Vxpipe.CallEngine.Speech.Registry, session)
-    provider = metadata.provider
-    session_monitor = Process.monitor(session)
+    owner = start_supervised!({SpeechSessionOwner, self()})
+    session = start_session(provider: MorseSession, owner: owner)
+    provider = Session.provider(session)
+    tree = Session.tree(session)
+    session_monitor = Process.monitor(tree)
     provider_monitor = Process.monitor(provider)
     assert {:error, :not_owner} = Session.push_audio(session, <<0, 0>>)
-    Agent.stop(owner)
-    assert_receive {:DOWN, ^session_monitor, :process, ^session, _reason}
+    GenServer.stop(owner)
+    assert_receive {:DOWN, ^session_monitor, :process, ^tree, _reason}
     assert_receive {:DOWN, ^provider_monitor, :process, ^provider, _reason}
   end
 
   test "owner loss during held startup prevents early readiness and kills the provider" do
-    owner = start_supervised!({Agent, fn -> :owner end})
-    task_supervisor = start_supervised!({Task.Supervisor, name: __MODULE__.StartupTasks})
-    observer = self()
+    owner = start_supervised!({SpeechSessionOwner, self()})
 
-    task =
-      Task.Supervisor.async_nolink(task_supervisor, fn ->
-        Session.start(
-          provider: SpeechSessionProbe,
-          owner: owner,
-          private: [observer: observer, hold_start?: true]
-        )
-      end)
+    {:ok, session, :starting} =
+      begin_session(
+        provider: SpeechSessionProbe,
+        owner: owner,
+        private: [observer: self(), hold_start?: true]
+      )
 
-    assert_receive {:probe_initializing, provider, {:via, Registry, {_registry, session}}}
+    assert_receive {:probe_initializing, provider, _channel}
+    tree = Session.tree(session)
     monitor = Process.monitor(provider)
-    session_monitor = Process.monitor(session)
-    refute_received {:vxpipe_speech, _event}
-    Agent.stop(owner)
+    tree_monitor = Process.monitor(tree)
+    refute_received {:speech_owner, ^owner, {:vxpipe_speech, _event}}
+    GenServer.stop(owner)
     assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}
-    assert_receive {:DOWN, ^session_monitor, :process, ^session, _reason}
-    assert {:error, _safe_reason} = Task.await(task)
+    assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _reason}
   end
 
   test "startup deadline also fences ready emitted from an unfinished init" do
-    task_supervisor = start_supervised!({Task.Supervisor, name: __MODULE__.DeadlineTasks})
-    observer = self()
+    {:ok, session, :starting} =
+      begin_session(
+        provider: SpeechSessionProbe,
+        start_timeout: 100,
+        private: [observer: self(), hold_start?: true]
+      )
 
-    task =
-      Task.Supervisor.async_nolink(task_supervisor, fn ->
-        Session.start(
-          provider: SpeechSessionProbe,
-          owner: observer,
-          start_timeout: 100,
-          private: [observer: observer, hold_start?: true]
-        )
-      end)
-
-    assert_receive {:probe_initializing, provider, {:via, Registry, {_registry, _session}}}
+    assert_receive {:probe_initializing, provider, _channel}
     monitor = Process.monitor(provider)
     refute_received {:vxpipe_speech, _event}
-    # Either the channel deadline or bounded OTP startup can win. Both must
-    # discard early readiness, terminate the provider and return a safe failure.
-    assert {:error, :initialization_failed} = Task.await(task, 1_000)
+    assert_receive {:vxpipe_speech_closed, ^session, reason}, 1_000
+    assert reason in [:startup_timeout, :initialization_failed]
     assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}
     refute_received {:vxpipe_speech, _event}
   end
 
   test "input timeout retires the session before another submission can be admitted" do
     session =
-      start_supervised!(
-        {Session,
-         provider: SpeechSessionProbe,
-         call_timeout: 20,
-         private: [observer: self(), trap_exits?: true, hold_input?: true]}
+      start_session(
+        provider: SpeechSessionProbe,
+        call_timeout: 20,
+        private: [observer: self(), trap_exits?: true, hold_input?: true]
       )
 
     assert_receive {:probe_initializing, provider, _channel}
@@ -244,7 +235,7 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
   end
 
   test "events and process status hide text, audio and crash messages" do
-    session = start_supervised!({Session, provider: MorseSession})
+    session = start_session(provider: MorseSession)
     assert_receive {:vxpipe_speech, ready}
     assert :ok = Session.ack(session, ready)
     assert {:ok, config} = Config.new()
@@ -252,8 +243,8 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
     events = receive_turn(session, [])
     ended = List.last(events)
     refute inspect(ended) =~ "SOS 2"
-    [{channel, metadata}] = Registry.lookup(Vxpipe.CallEngine.Speech.Registry, session)
-    refute inspect(:sys.get_status(metadata.provider)) =~ "SOS"
+    channel = Channel.address(session)
+    refute inspect(:sys.get_status(Session.provider(session))) =~ "SOS"
     refute inspect(:sys.get_status(channel)) =~ "SOS"
 
     sentinel = "private-audio-transcript-secret"
@@ -277,83 +268,95 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
   end
 
   test "only the bound provider can publish semantic events" do
-    session = start_supervised!({Session, provider: MorseSession})
+    session = start_session(provider: MorseSession)
     channel = Vxpipe.CallEngine.Speech.Channel.address(session)
     assert {:error, :unbound_producer} = Event.emit(channel, :ready, readiness: :initialized)
   end
 
   test "explicit close during startup removes the held provider" do
-    task_supervisor = start_supervised!({Task.Supervisor, name: __MODULE__.CloseTasks})
-    observer = self()
+    {:ok, session, :starting} =
+      begin_session(
+        provider: SpeechSessionProbe,
+        private: [observer: self(), hold_start?: true]
+      )
 
-    task =
-      Task.Supervisor.async_nolink(task_supervisor, fn ->
-        Session.start(
-          provider: SpeechSessionProbe,
-          owner: observer,
-          call_timeout: 20,
-          private: [observer: observer, hold_start?: true]
-        )
-      end)
-
-    assert_receive {:probe_initializing, provider, {:via, Registry, {_registry, session}}}
+    assert_receive {:probe_initializing, provider, _channel}
     monitor = Process.monitor(provider)
     assert :ok = Session.close(session)
     assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}
-    assert {:error, _reason} = Task.await(task)
     refute_received {:vxpipe_speech, _event}
   end
 
   test "supervisor status and child failure logs do not retain private initialization" do
     sentinel = "private-init-regression-sentinel"
-    session = start_supervised!({Session, provider: MorseSession, private: [api_key: sentinel]})
+    session = start_session(provider: MorseSession, private: [api_key: sentinel])
 
-    refute inspect(:sys.get_status(session), limit: :infinity, printable_limit: :infinity) =~
+    refute inspect(:sys.get_status(Session.tree(session)),
+             limit: :infinity,
+             printable_limit: :infinity
+           ) =~
              sentinel
 
-    [{_channel, metadata}] = Registry.lookup(Vxpipe.CallEngine.Speech.Registry, session)
-    monitor = Process.monitor(session)
+    tree = Session.tree(session)
+    monitor = Process.monitor(tree)
 
     logs =
       ExUnit.CaptureLog.capture_log(fn ->
-        Process.exit(metadata.provider, :provider_failed)
-        assert_receive {:DOWN, ^monitor, :process, ^session, _reason}
+        Process.exit(Session.provider(session), :provider_failed)
+        assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}
       end)
 
     refute logs =~ sentinel
   end
 
   test "public startup errors do not expose provider responses" do
-    result =
-      Session.start(
+    {:ok, session, :starting} =
+      begin_session(
         provider: SpeechSessionProbe,
         private: [observer: self(), start_error: {:upstream_response, "private-error-sentinel"}]
       )
 
-    assert result == {:error, :initialization_failed}
+    assert_receive {:vxpipe_speech_closed, ^session, :initialization_failed}
   end
 
   test "owner loss before binding still bounds a provider that traps exits" do
-    owner = start_supervised!({Agent, fn -> :owner end})
-    tasks = start_supervised!({Task.Supervisor, name: __MODULE__.BeforeBindTasks})
-    observer = self()
+    owner = start_supervised!({SpeechSessionOwner, self()})
 
-    task =
-      Task.Supervisor.async_nolink(tasks, fn ->
-        Session.start(
-          provider: SpeechSessionProbe,
-          owner: owner,
-          start_timeout: 100,
-          private: [observer: observer, trap_exits?: true, hold_before_bind?: true]
-        )
-      end)
+    {:ok, session, :starting} =
+      begin_session(
+        provider: SpeechSessionProbe,
+        owner: owner,
+        start_timeout: 100,
+        private: [observer: self(), trap_exits?: true, hold_before_bind?: true]
+      )
 
     assert_receive {:probe_before_bind, provider, _channel}
-    on_exit(fn -> Process.exit(provider, :kill) end)
     monitor = Process.monitor(provider)
-    Agent.stop(owner)
+    GenServer.stop(owner)
     assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 1_000
-    assert {:error, :initialization_failed} = Task.await(task)
+    assert {:error, :closed} = Session.push_audio(session, <<0, 0>>)
+  end
+
+  defp begin_session(options) do
+    scope =
+      start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
+
+    Session.start(CapabilityTree.scope(scope), options)
+  end
+
+  defp start_session(options) do
+    {:ok, session, :starting} = begin_session(options)
+    owner = Keyword.get(options, :owner, self())
+
+    if owner == self() do
+      assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message
+      send(self(), message)
+    else
+      assert_receive {:speech_owner, ^owner,
+                      {:vxpipe_speech, %Event{session: ^session, kind: :ready}}}
+    end
+
+    session
   end
 
   defp receive_turn(session, events) do

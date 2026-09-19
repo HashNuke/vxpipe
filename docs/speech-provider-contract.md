@@ -3,8 +3,10 @@
 Status: proposed design, researched on 2026-09-19 against `51a9a17`, with ownership replanned
 after the isolated startup regression.
 The original task requested research and a plan; implementation was subsequently authorized.
-Checkpoint A remains unaccepted pending the tested [startup-isolation defect](speech-startup-isolation.md),
-with no room migration or hosted interoperability claim. Implementation is tracked in
+The historical [startup-isolation defect](speech-startup-isolation.md) is now green in the
+scoped R prototype. Its [adoption repair and load evidence](speech-adoption-fix.md) establish
+bounded local behavior; R/A acceptance, room migration and hosted interoperability remain pending.
+Implementation is tracked in
 [Simpler speech integrations](milestones/simpler-speech-integrations.md).
 The [revised ownership proposal](speech-session-ownership.md) supersedes the prototype's
 global execution model. Its scoped admission/lifecycle contracts apply throughout this design.

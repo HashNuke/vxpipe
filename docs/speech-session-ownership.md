@@ -1,9 +1,10 @@
 # Speech sessions owned by the call tree
 
-Status: revised proposal, 2026-09-19. Replaces the application-wide execution ownership
-in the baseline prototype. The baseline is recorded before continuing checkpoint R; this document changes the plan,
-not the running architecture. See the [milestone](milestones/simpler-speech-integrations.md)
-for checkpoints and the [measured failure](speech-startup-isolation.md) for evidence.
+Status: revised ownership design, 2026-09-19. Replaces the application-wide execution ownership
+in the baseline prototype. The isolated R implementation and its [adoption repair](speech-adoption-fix.md)
+are under verification; existing rooms still use their original speech path. See the
+[milestone](milestones/simpler-speech-integrations.md) for acceptance checkpoints and the
+[original measured failure](speech-startup-isolation.md) for baseline evidence.
 
 ## Decision
 
@@ -78,6 +79,16 @@ lease and delivery authority; it never reparents a running OTP subtree. If a fin
 explicit owned preparation tree does not exist, do not allocate a provider. Current opening
 preparation already has an incarnation, so this plan does not invent pre-room synthesis.
 
+The allocation handle identifies a generation; copied role fields do not grant current
+authority. Scope control retains the authoritative lifetime owner, pending lease and active
+consumer. Adoption commits those roles synchronously before the event channel enables
+delivery or returns success. The same record governs close, owner/consumer monitoring and
+terminal notifications. The old lease can cancel pending work but loses that authority after
+adoption. A cancellation committed first prevents adoption; an adoption committed first
+rejects subsequent lease cancellation. Preserve the lifetime-owner monitor and replace the
+lease monitor with a consumer monitor. This bounded lifecycle operation adds no per-audio
+scope-control call and no synchronous callback from scope control to the event channel.
+
 An opaque allocation handle binds room incarnation, participant/connection or operation,
 purpose, attempt/generation, owning tree, and control identity. It contains no credentials or
 speech payload. Tree identity is distinct from a capability/provider PID. Lookup and stop
@@ -96,7 +107,7 @@ allocation handle needed for exact teardown.
 The engine facade becomes explicitly scoped, for example:
 
 ```elixir
-# Proposed engine-facing shape; scope comes from trusted room/test composition.
+# Experimental engine-facing API; scope comes from trusted test composition until migration.
 {:ok, allocation, :starting} = Speech.Session.start(scope, options)
 # Readiness arrives later, bound to this allocation and its owner/lease.
 ```
@@ -242,9 +253,11 @@ retention. These are incorporated above. Review of the written proposal and loca
 documentation checks is recorded in the
 [replan labnote](../labnotes/20260919-1646-replan-speech-ownership.md).
 
-No new isolation gate is claimed green by writing this proposal. The original startup test
-is still red, the baseline remains at zero accepted checkpoints, and no code is reverted or
-changed as part of this replan.
+Writing this proposal did not make an isolation gate green. Subsequent R implementation
+repaired the original startup test, then exposed and repaired an adoption-authority defect
+under the user's stop/fix procedure. The [repair report](speech-adoption-fix.md) records actual
+tests and load evidence. The milestone remains at zero accepted checkpoints; R's full gates
+are distinct from the bounded repair.
 
 The subsequent [scoped speech experiment](scoped-speech-experiment.md) checks semantic STT/TTS
 substitution through real room policy, turn and interruption paths. Its test-owned scopes and

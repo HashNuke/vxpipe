@@ -1,6 +1,6 @@
 # Simpler speech integrations
 
-Status: replanned on 2026-09-19; baseline recorded before continuing checkpoint R.
+Status: checkpoint R in progress; user-authorized adoption repair verified under isolated load.
 Implementation: **0 of 9 checkpoints complete**. The revised order is
 **R → A → D → B → C → E → F → G → H**, preserving existing checkpoint identities.
 The user-requested baseline commit records the experimental standalone prototype and evidence;
@@ -9,6 +9,13 @@ it does not accept a checkpoint. The final room-owned architecture remains pendi
 session startup exceeding its budget in the first prototype. The corresponding
 original-path isolation controls passed; this is not a demonstrated defect in `main`.
 Existing rooms still use the original path.
+The R prototype initially failed its adoption-authority test and was paused under the user's
+tested-instability rule. The user authorized the fix and load verification. The old lease's
+close now rejects after adoption, while the current consumer owns close and failure delivery.
+The [repair report](../speech-adoption-fix.md) records 16,236 adoption-load turns and two
+68,400-turn legacy/native comparisons. No checkpoint is accepted by this bounded repair;
+R's remaining gates still apply. The [original failure labnote](../../labnotes/20260919-1839-scoped-speech-ownership.md)
+retains the reproduction. Commit `343829c` preserves the pre-R experimental baseline.
 The later [scoped speech experiment](../scoped-speech-experiment.md) exercises a test-only
 semantic bridge through real rooms before approval. It provides behavioral/load evidence;
 it does not complete checkpoint R; room migration remains pending R and its revised gates.
@@ -149,7 +156,7 @@ It owns the foundational allocation work previously left ambiguous in A2/A4.
   and add `test/vxpipe/call_engine/speech/scope_lifecycle_test.exs`: include separate-room and same-room siblings, queued
   expiry/cancellation, owner loss before bind, stale stop after replacement, and subtree failure.
   Keep the exact-PCM readiness/turn proof; a quick `:starting` return alone cannot make it green.
-- [ ] **R2 — Explicit local scope.** Add a minimal `lib/speech/capability_tree.ex` and typed
+- [x] **R2 — Explicit local scope.** Add a minimal `lib/speech/capability_tree.ex` and typed
   scope/allocation handle; revise `speech/session.ex`, `session_tree.ex` and `channel.ex`.
   Require the caller's owning scope for standalone use. Remove prototype global speech
   supervisor/registry entries from `application.ex`; no implicit global fallback. A local
@@ -184,7 +191,9 @@ It owns the foundational allocation work previously left ambiguous in A2/A4.
 - [ ] **Exit R.** The existing startup regression and new ownership/cancellation cases are green,
   no speech allocation outlives its scope/lease, other scopes still reach ready/recognize PCM,
   allocation and capability failure boundaries pass independently, startup deadlines settle,
-  old room tests and all five root gates pass. This is the first possible implementation commit.
+  old room tests and all five root gates pass. This accepts the first milestone implementation checkpoint.
+  The separately user-authorized adoption-repair commit records its bounded verified slice;
+  it does not satisfy this Exit gate or authorize room migration.
 
 ## Checkpoint A — Native Morse STT session
 
@@ -482,14 +491,14 @@ existing limits unless a focused red test and documented decision require changi
 
 Pre-approval experiment evidence is separate from the checkpoint ledger: 12,996 measured
 turns and 12 loaded control scenarios passed through test-owned scopes. Full root acceptance
-was not green: the original prototype startup test remains red; a prepared WebRTC decoder
+was not green: the original prototype startup test was red; a prepared WebRTC decoder
 test also failed once and passed on focused reruns. No causal connection from this experiment
 to that decoder failure was established. See the [experiment report](../scoped-speech-experiment.md)
 for timing distributions, exact covered permissions and excluded production paths.
 
 | Checkpoint | Implementation | Red/green and root evidence | External/manual evidence |
 | --- | --- | --- | --- |
-| R | Revised ownership proposal; not implemented | Original isolation test remains red | Scope, queue cancellation and same-room gates pending |
+| R | Local scopes and synchronous adoption-authority repair implemented; full checkpoint pending | 47 speech cases pass within the 747-test Call Engine suite; original held-start gate now green; all five root gates pass (1,845 tests, zero failures, 40 excluded) | 16,236 adoption-load turns and 136,800 paired legacy/native turns; deadline implementation and full ancestry/private-init/failure-boundary review still pending |
 | A | Native standalone prototype; baseline recorded, checkpoint not accepted | 17 contract tests; selected suite 39 tests / 1 known startup-isolation failure; excluding it 38 pass | Independent PCM proven; 68,400 measured local turns succeed; no live-call claim |
 | D | Not started | Pending | PCM playback/replacement pending |
 | B | Not started | Pending | Real room loop pending |

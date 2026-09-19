@@ -1,114 +1,147 @@
 defmodule Vxpipe.CallEngine.Speech.Session do
   @moduledoc """
-  Owned, bounded speech sessions. The owner alone submits input and acknowledges
-  events; each synchronous submission finishes before it can admit another.
-  Start through `start/1` in production or `child_spec/1` under a test supervisor.
-  Provider modules and private options are trusted host configuration.
+  Speech allocations inside an explicitly owned `Speech.CapabilityTree` scope.
+  `start/2` reserves one of two local slots and returns `{:ok, allocation, :starting}`.
+  Wait for and acknowledge the allocation's ready event before submitting input.
+  Prepared allocations use a lease authority and `consumer: nil`; `adopt/2` changes
+  delivery authority while retaining their original supervised parent.
   """
 
-  alias Vxpipe.CallEngine.Speech.{Channel, SessionTree}
+  alias Vxpipe.CallEngine.Speech.{
+    Allocation,
+    Channel,
+    ProviderName,
+    Scope,
+    ScopeControl,
+    SessionTree
+  }
 
-  @maximum_audio_bytes 131_072
   @timeout 5_000
+  @maximum_audio_bytes 131_072
 
-  def child_spec(options) do
-    options = Keyword.put_new(options, :owner, self())
+  def start(%Scope{} = scope, options) do
+    budget = Keyword.get(options, :start_timeout, @timeout)
+    owner = Keyword.get(options, :owner, self())
 
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, [options]},
-      restart: :temporary,
-      type: :supervisor,
-      shutdown: 5_000
+    allocation = %Allocation{
+      scope: scope,
+      generation: make_ref(),
+      owner: owner,
+      consumer: Keyword.get(options, :consumer, owner),
+      lease: Keyword.get(options, :lease),
+      deadline: System.monotonic_time(:millisecond) + budget,
+      token: :atomics.new(1, [])
     }
-  end
 
-  def start(options) do
-    DynamicSupervisor.start_child(Vxpipe.CallEngine.Speech.SessionSupervisor, child_spec(options))
-  end
+    try do
+      case ScopeControl.reserve(allocation, options, budget) do
+        {:ok, _, :starting} = result ->
+          result
 
-  @doc false
-  def start_link(options) do
-    provider = Keyword.fetch!(options, :provider)
-
-    with {:ok, descriptor} <- provider.configure(Keyword.get(options, :options, [])) do
-      options =
-        options
-        |> Keyword.put(:descriptor, descriptor)
-        |> Keyword.put_new(:start_timeout, @timeout)
-        |> Keyword.put_new(:call_timeout, @timeout)
-
-      SessionTree.start_link(options)
+        error ->
+          Allocation.cancel(allocation)
+          error
+      end
+    catch
+      :exit, _reason ->
+        Allocation.cancel(allocation)
+        {:error, :unavailable}
     end
   end
 
-  def describe(session) do
-    with {:ok, metadata} <- lookup(session), do: {:ok, metadata.descriptor}
+  def describe(allocation) do
+    with {:ok, metadata} <- metadata(allocation), do: {:ok, metadata.descriptor}
   end
 
-  def push_audio(session, audio)
+  def adopt(allocation, consumer), do: call(allocation, {:adopt, consumer})
+  def ack(allocation, event), do: call(allocation, {:ack, event})
+
+  def push_audio(allocation, audio)
       when is_binary(audio) and byte_size(audio) in 1..@maximum_audio_bytes do
-    with {:ok, metadata} <- owned(session),
-         true <- metadata.active? do
-      invoke(session, metadata.call_timeout, fn ->
-        metadata.module.push_audio(metadata.provider, audio)
-      end)
+    deadline = System.monotonic_time(:millisecond) + @timeout
+
+    with {:ok, metadata} <- metadata(allocation), true <- metadata.active? do
+      invoke(
+        allocation,
+        min(deadline, System.monotonic_time(:millisecond) + metadata.call_timeout),
+        fn ->
+          metadata.module.push_audio(metadata.producer, audio)
+        end
+      )
     else
       false -> {:error, :not_ready}
       error -> error
     end
   end
 
-  def push_audio(_session, audio) when is_binary(audio), do: {:error, :invalid_audio_size}
-  def push_audio(_session, _audio), do: {:error, :invalid_audio}
+  def push_audio(_allocation, audio) when is_binary(audio), do: {:error, :invalid_audio_size}
+  def push_audio(_allocation, _audio), do: {:error, :invalid_audio}
 
-  def ack(session, event) do
-    with {:ok, _metadata} <- owned(session) do
-      GenServer.call(Channel.address(session), {:ack, event}, @timeout)
+  def close(allocation) do
+    deadline = System.monotonic_time(:millisecond) + @timeout
+    tree = tree(allocation)
+    monitor = if is_pid(tree), do: Process.monitor(tree)
+
+    result = ScopeControl.close(allocation, :closed)
+
+    if result == :ok and monitor do
+      receive do
+        {:DOWN, ^monitor, :process, ^tree, _reason} -> :ok
+      after
+        max(deadline - System.monotonic_time(:millisecond), 0) ->
+          Process.demonitor(monitor, [:flush])
+          {:error, :close_timeout}
+      end
+    else
+      if monitor, do: Process.demonitor(monitor, [:flush])
+      result
     end
+  catch
+    :exit, _reason -> :ok
+  end
+
+  @doc false
+  def tree(allocation), do: GenServer.whereis(SessionTree.address(allocation))
+  @doc false
+  def provider(allocation) do
+    case ProviderName.whereis_name(allocation) do
+      :undefined -> nil
+      pid -> pid
+    end
+  end
+
+  defp metadata(allocation), do: call(allocation, :metadata)
+
+  defp call(allocation, message) do
+    if Allocation.valid?(allocation),
+      do: GenServer.call(Channel.address(allocation), message, @timeout),
+      else: {:error, :closed}
   catch
     :exit, _reason -> {:error, :closed}
   end
 
-  def close(session) do
-    case owned(session) do
-      {:ok, metadata} ->
-        _result =
-          invoke(session, metadata.call_timeout, fn ->
-            metadata.module.close(metadata.provider)
-          end)
-
-        retire(session)
-
-      {:error, :closed} ->
-        :ok
-
-      error ->
-        error
-    end
-  end
-
-  defp invoke(session, timeout, operation) do
+  defp invoke(allocation, deadline, operation) do
     task =
-      Task.Supervisor.async_nolink(SessionTree.commands(session), fn -> safely(operation) end)
+      Task.Supervisor.async_nolink(SessionTree.commands(allocation), fn -> safely(operation) end)
 
-    case Task.yield(task, timeout) do
+    case Task.yield(task, max(deadline - System.monotonic_time(:millisecond), 0)) do
       {:ok, {:error, :session_failed}} ->
-        retire(session)
-        {:error, :session_failed}
+        fail(allocation)
 
       {:ok, result} ->
         result
 
       _failed ->
         Task.shutdown(task, :brutal_kill)
-        retire(session)
-        {:error, :session_failed}
+        fail(allocation)
     end
   catch
-    :exit, _reason ->
-      retire(session)
-      {:error, :session_failed}
+    :exit, _reason -> fail(allocation)
+  end
+
+  defp fail(allocation) do
+    _result = ScopeControl.close(allocation, :session_failed)
+    {:error, :session_failed}
   end
 
   defp safely(operation) do
@@ -117,49 +150,5 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     _error -> {:error, :session_failed}
   catch
     _kind, _reason -> {:error, :session_failed}
-  end
-
-  defp retire(session) do
-    monitor = Process.monitor(session)
-    stop_tree(session)
-
-    receive do
-      {:DOWN, ^monitor, :process, ^session, _reason} -> :ok
-    after
-      @timeout ->
-        Process.demonitor(monitor, [:flush])
-        {:error, :close_timeout}
-    end
-  end
-
-  defp stop_tree(session) do
-    case lookup(session) do
-      {:ok, metadata} ->
-        # Force retirement of the known provider before stopping its supervisor;
-        # even a trapped, blocked callback cannot outlive a timed-out command.
-        if is_pid(metadata.provider), do: Process.exit(metadata.provider, :kill)
-        Supervisor.stop(session, :normal, @timeout)
-
-      {:error, :closed} ->
-        :ok
-    end
-  catch
-    :exit, _reason -> Process.exit(session, :kill)
-  end
-
-  defp owned(session) do
-    with {:ok, metadata} <- lookup(session) do
-      if metadata.owner == self(), do: {:ok, metadata}, else: {:error, :not_owner}
-    end
-  end
-
-  defp lookup(session) do
-    case Registry.lookup(Vxpipe.CallEngine.Speech.Registry, session) do
-      [{_channel, metadata}] ->
-        if Process.alive?(session), do: {:ok, metadata}, else: {:error, :closed}
-
-      [] ->
-        {:error, :closed}
-    end
   end
 end

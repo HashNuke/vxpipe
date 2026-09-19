@@ -100,6 +100,12 @@ tasks to remove lifecycle/task bookkeeping replaced by local supervision. A spee
 ceiling and net code reduction remain unproven; no acceptance checkbox changed.
 The packaging/retention hold is unchanged.
 
+Checkpoint R subsequently paused on the user's tested-instability stop rule when its adoption
+prototype let an old lease terminate an adopted allocation. The user authorized the repair and
+load verification. The [repair report](../speech-adoption-fix.md) records the passing authority
+tests, 16,236 adoption-load turns and 136,800 legacy/native comparison turns. Existing rooms
+remain on the original path. R's remaining gates are pending; zero speech checkpoints are accepted.
+
 ## How to use this index
 
 Implement in the order below. Product/operator entries describe runnable vertical slices;

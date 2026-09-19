@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor
-  alias Vxpipe.CallEngine.Speech.{Event, Session}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
   @report_path List.first(System.argv()) ||
@@ -91,7 +91,11 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
           {incarnation, supervisor}
         end
       else
-        List.duplicate(nil, count)
+        for _ <- 1..count do
+          id = make_ref()
+          tree = start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: id))
+          {:scope, id, CapabilityTree.scope(tree)}
+        end
       end
 
     jobs =
@@ -106,7 +110,7 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
         microseconds
       end)
 
-    # Prepare clients before holding the shared startup supervisor: this scenario
+    # Prepare clients before holding an unrelated initializer: this scenario
     # measures already-active recognition rather than repeating startup queueing.
     held = if held?, do: hold_start(tasks)
 
@@ -133,7 +137,7 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
         Enum.each(jobs, &Task.await(&1, 5_000))
 
         Enum.each(rooms, fn
-          nil -> :ok
+          {:scope, id, _scope} -> stop_supervised!(id)
           {incarnation, _supervisor} -> stop_supervised!({RoomCapabilitySupervisor, incarnation})
         end)
       end
@@ -178,8 +182,8 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
     end
   end
 
-  defp start_client(:semantic, _incarnation) do
-    {:ok, pid} = Session.start(provider: MorseSession)
+  defp start_client(:semantic, {:scope, _id, scope}) do
+    {:ok, pid, :starting} = Session.start(scope, provider: MorseSession)
     assert_receive {:vxpipe_speech, %Event{session: ^pid, kind: :ready} = ready}, 5_000
     assert :ok = Session.ack(pid, ready)
     %{path: :semantic, pid: pid}
@@ -281,20 +285,19 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
         client.pid
       )
 
-  defp hold_start(tasks) do
-    owner = self()
+  defp hold_start(_tasks) do
+    id = make_ref()
+    tree = start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: id))
 
-    task =
-      Task.Supervisor.async_nolink(tasks, fn ->
-        Session.start(
-          provider: SpeechSessionProbe,
-          owner: owner,
-          private: [observer: owner, hold_start?: true]
-        )
-      end)
+    {:ok, session, :starting} =
+      Session.start(CapabilityTree.scope(tree),
+        provider: SpeechSessionProbe,
+        start_timeout: 120_000,
+        private: [observer: self(), hold_start?: true]
+      )
 
     assert_receive {:probe_initializing, provider, _channel}, 1_000
-    %{task: task, provider: provider, monitor: Process.monitor(provider)}
+    %{id: id, session: session, provider: provider, monitor: Process.monitor(provider)}
   end
 
   defp release_start(nil), do: :ok
@@ -305,8 +308,8 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
     refute_received {:DOWN, ^monitor, :process, ^provider, _reason}
     Process.demonitor(monitor, [:flush])
     send(provider, :release_start)
-    assert {:ok, session} = Task.await(held.task, 2_000)
-    assert :ok = Session.close(session)
+    assert :ok = Session.close(held.session)
+    stop_supervised!(held.id)
   end
 
   defp reference_e do
