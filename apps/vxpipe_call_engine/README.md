@@ -13,8 +13,9 @@ dot plus an end gap; it does not use the Morse encoder to supply its expected re
 The [original startup-isolation defect](../../docs/speech-startup-isolation.md) and latency
 measurements remain recorded. The new API requires the explicit local scopes described in
 the [ownership plan](../../docs/speech-session-ownership.md); its isolated held-start and
-adoption tests pass. Checkpoint R is accepted; native STT/TTS completion and room migration
-remain subsequent gates.
+adoption tests pass. Checkpoints R and A are accepted; native TTS D and room migration
+remain subsequent gates. See the [native STT verification](../../docs/native-stt-contract.md)
+for contract, load and regression evidence.
 The [scoped room experiment](../../docs/scoped-speech-experiment.md) supplies a separate test-only
 prototype and reproducible paired load checks for policy, turns, output and interruption.
 
@@ -76,6 +77,13 @@ Input uses one persistent local worker; success means provider acceptance. A que
 leaves the allocation usable, while an admitted timeout retires it. Close returns success only
 after authoritative cancellation and observed tree teardown (or cancellation before creation).
 A timed-out adoption that already committed is retired safely; it cannot deliver late readiness.
+`{:error, :busy}` means this chunk was not accepted; existing provider work remains valid.
+There is no automatic resubmission. Recognition can finish after acceptance; the consumer can
+record that acceptance with the existing usage tracker, retaining it on later failure.
+Standalone Session does not emit usage observations; room wiring belongs to checkpoint B.
+Input age starts at API entry; captured-frame age remains the upstream ingress's responsibility.
+Descriptor metadata is validated before
+provider startup, and emitted readiness/endpointing must match its declared evidence.
 See [deadline and fault evidence](../../docs/speech-deadlines-and-failure-containment.md). Owner loss, failed commands and
 explicit close tear down owned work; close discards incomplete speech rather than inventing
 a final transcript. A local ready event means initialized, and turn end means the decoder

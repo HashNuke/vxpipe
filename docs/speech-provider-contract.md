@@ -5,7 +5,10 @@ after the isolated startup regression.
 The original task requested research and a plan; implementation was subsequently authorized.
 The historical [startup-isolation defect](speech-startup-isolation.md) is now green in the
 scoped R prototype. Its [adoption repair and load evidence](speech-adoption-fix.md) establish
-bounded local behavior; R/A acceptance, room migration and hosted interoperability remain pending.
+bounded local behavior. R is accepted with the later
+[deadline/fault evidence](speech-deadlines-and-failure-containment.md); A is accepted with
+[native contract/load verification](native-stt-contract.md). Room migration and hosted
+interoperability remain pending.
 Implementation is tracked in
 [Simpler speech integrations](milestones/simpler-speech-integrations.md).
 The [revised ownership proposal](speech-session-ownership.md) supersedes the prototype's
@@ -75,8 +78,9 @@ is a recorded blocker for that adapter, not permission to silently switch API/mo
 
 ## Proposed author-facing interface
 
-The final APIs below remain proposed; the committed experimental standalone prototype implements
-only part of them and its global startup shape is rejected. Use `Speech.STTProvider`, `Speech.TTSProvider`,
+The standalone STT API implements the scoped ownership contract; TTS and room migration
+remain subsequent checkpoints. The historical global startup prototype was rejected and
+replaced in R. Use `Speech.STTProvider`, `Speech.TTSProvider`,
 `Speech.Descriptor`, `Speech.Session`, `Speech.Event` and `Speech.Output` under
 `Vxpipe.CallEngine`. Keep each module in its own file.
 
@@ -84,7 +88,7 @@ only part of them and its global startup shape is rejected. Use `Speech.STTProvi
 | --- | --- |
 | `configure(public_options)` | Pure validation; returns `{:ok, descriptor}` or a bounded configuration error. No connection or credential lookup. |
 | `start_link(private_init)` | Performs bounded local startup beneath its owning speech scope and returns promptly; remote preparation is asynchronous. Readiness arrives separately. |
-| STT: `push_audio(pid, audio)` | Admits one bounded audio chunk matching the descriptor; returns `:ok` or a bounded error. |
+| STT: `push_audio(pid, audio)` | `:ok` proves actual acceptance into a bounded provider/transport slot. `{:error, :busy}` proves no acceptance and preserves the session. Other failures retire the allocation safely. |
 | TTS: `speak(pid, request_ref, text)` | Admits one bounded complete-text request; returns `:ok` or a bounded error. Synthesis is asynchronous. |
 | TTS: `cancel(pid, request_ref, playback)` | Requests cancellation with a typed, locally confirmed playback report; returns promptly. Terminal cancellation arrives separately for active generation. |
 | `close(pid)` | Idempotent, bounded explicit shutdown; supervisor/monitor ownership guarantees cleanup if the call fails. |
@@ -100,6 +104,11 @@ identity. STT declares endpointing provenance (provider semantic detection, prov
 detection, external boundary required, or none), speech-start evidence and supported optional
 eager/resume events. This is a small validated capability description, not arbitrary feature
 flags. Identity values exclude credentials, URLs, headers and raw provider responses.
+`Descriptor.new/1` validates this closed metadata shape, and the engine repeats
+validation before starting a provider. Provider-specific settings remain the provider's
+pure-validation responsibility. Readiness, endpointing and optional events must agree with
+the descriptor at delivery. Request IDs are optional, valid UTF-8 with 1..256 bytes,
+and excluded from inspection.
 The initial contract preserves supported formats: STT linear16/Opus as advertised by the
 selected provider; TTS mono little-endian linear16 at a supported sample rate. No implicit
 resampling, new codecs or silent format conversion is introduced. Format validation also
@@ -176,11 +185,13 @@ projections during migration; renaming every room event is unnecessary.
 
 ### STT
 
-Events are `ready`, `turn_started`, `transcript_updated`, `turn_ended`, optional
+Native events are `ready`, `speech_started`, `transcript`, `turn_ended`, optional
 `eager_turn_ended`/`turn_resumed`, and a safe session failure. Transcript text is the cumulative
 snapshot for the identified turn. `turn_ended` carries its final snapshot and ends that turn;
 a provider's finalized transcript segment alone does not prove the person finished speaking.
 Adapters assemble segmented results when necessary and supply genuine endpointing evidence.
+The existing legacy room signal names `turn_started`/`transcript_updated` remain internal
+projections during migration; the native helper does not expose both spellings.
 
 The conversational path requires provider-owned endpointing and the speech-start evidence
 needed by its current barge-in behavior. A transcript-only or manually finalized provider is
@@ -197,6 +208,13 @@ unrelated policy changes retain the current session. Prepared sessions cannot pu
 the active interval before adoption. Closing/replacing a session discards its buffered results;
 it does not flush forbidden audio into a final transcript. Preserve current counting/privacy
 rules for usage without retaining denied text.
+
+STT acceptance is independent of recognition completion. A consumer starts existing usage
+accounting on `push_audio` returning `:ok`; later processing failure retains that accepted
+work and settles the attempt once. Rejection creates no acceptance evidence. This does not
+invent recognized duration or final-text measurements before real recognition evidence.
+Checkpoint A proves these boundaries with a controlled deferred provider and the existing
+usage accumulator; B owns the production room projection.
 
 ### TTS
 
@@ -252,6 +270,10 @@ credit retain their separate bounds without resetting an in-flight budget at int
 Use persistent local workers for repeated input/output, with separate responsive control;
 avoid per-audio Tasks by default. Preserve accepted-input versus submitted-input accounting
 if command completion and provider processing occur at different times.
+The STT facade admits one command and 1..131,072 bytes at a time. Its age bound starts at
+API entry and includes all queue waits. Binary input contains no capture timestamp: room
+ingress must continue enforcing its existing frame-capture age limits. A busy provider
+rejects the current chunk without replacing accepted work or automatically replaying it.
 Startup deadlines must include queue wait, and one call's provider initialization must not
 block admission for unrelated calls. The earlier application-global prototype failed this
 requirement in an [isolated process-tree test](speech-startup-isolation.md). Checkpoint R's
@@ -328,5 +350,6 @@ explicit in the descriptor, lifecycle rules and milestone conformance tasks.
 Subsequent GPT-6 Astra xhigh review of the ownership replan checked fault boundaries,
 admission/cancellation, deadline lifetime, private-init retention and migration order. See the
 [ownership proposal](speech-session-ownership.md) and its labnote for that separate design
-review. The original isolation regression remains unresolved; the baseline is recorded before
-continuing checkpoint R, with zero of nine checkpoints accepted.
+review. The original isolation regression is now green in the scoped path; R and A are accepted,
+with two of nine checkpoints complete. Historical failing runs remain recorded. The native
+STT contract passed independent review, load and root gates; D remains required before room migration.

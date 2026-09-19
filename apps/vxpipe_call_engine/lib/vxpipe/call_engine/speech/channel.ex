@@ -150,6 +150,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not Allocation.valid?(state.allocation) ->
         {:reply, {:error, :closed}, state}
 
+      not Event.supported?(event, state.descriptor) ->
+        {:reply, {:error, :invalid_event}, state}
+
       state.pending_count >= @maximum_pending ->
         fail(state, :event_overflow)
 

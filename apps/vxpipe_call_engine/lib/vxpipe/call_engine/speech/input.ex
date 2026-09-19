@@ -50,5 +50,6 @@ defmodule Vxpipe.CallEngine.Speech.Input do
   end
 
   defp accepted(:ok), do: :ok
+  defp accepted({:error, :busy}), do: {:error, :busy}
   defp accepted(_failure), do: {:error, :session_failed}
 end

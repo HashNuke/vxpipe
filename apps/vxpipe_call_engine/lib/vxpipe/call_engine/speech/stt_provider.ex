@@ -28,6 +28,15 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
 
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()
-  @callback push_audio(pid(), binary()) :: :ok | {:error, atom()}
+  @doc """
+  Accept one bounded chunk into the provider's bounded processing/transport slot.
+  `:ok` proves acceptance; processing and transcript delivery may finish later.
+  Return `{:error, :busy}` only when this chunk was not accepted and existing work
+  remains valid. The caller decides whether to submit again; nothing is replayed.
+  Every other error or unexpected return retires the allocation with a fixed safe
+  error. The API-entry command deadline bounds this operation independently of provider
+  responsiveness. Never return success merely for an unbounded mailbox enqueue.
+  """
+  @callback push_audio(pid(), binary()) :: :ok | {:error, :busy | :session_failed}
   @callback close(pid()) :: :ok | {:error, atom()}
 end

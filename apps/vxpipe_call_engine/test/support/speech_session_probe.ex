@@ -7,7 +7,12 @@ defmodule Vxpipe.CallEngine.SpeechSessionProbe do
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
 
   @impl true
-  def configure(options), do: MorseSession.configure(options)
+  def configure(options) do
+    case Keyword.fetch(options, :descriptor) do
+      {:ok, descriptor} -> {:ok, descriptor}
+      :error -> MorseSession.configure(options)
+    end
+  end
 
   @impl true
   def start_link(options) do
@@ -72,6 +77,9 @@ defmodule Vxpipe.CallEngine.SpeechSessionProbe do
       do: {:noreply, state},
       else: {:reply, state.input_result, state}
   end
+
+  def handle_call({:emit, kind, fields}, _from, state),
+    do: {:reply, Event.emit(state.channel, kind, fields), state}
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 end

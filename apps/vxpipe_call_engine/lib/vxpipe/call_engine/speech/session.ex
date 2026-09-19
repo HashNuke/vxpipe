@@ -95,6 +95,13 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def ack(allocation, event), do: call(allocation, {:ack, event})
 
+  @doc """
+  Submit 1..131072 bytes with one outstanding command per allocation. `:ok` means
+  bounded provider acceptance, not recognition completion. `{:error, :busy}`
+  means no acceptance; this function never retries. The command budget measures
+  age from API entry, including queue waits. Raw bytes carry no capture timestamp;
+  upstream ingress retains responsibility for captured-frame age limits.
+  """
   def push_audio(allocation, audio)
       when is_binary(audio) and byte_size(audio) in 1..@maximum_audio_bytes do
     command = command(allocation)

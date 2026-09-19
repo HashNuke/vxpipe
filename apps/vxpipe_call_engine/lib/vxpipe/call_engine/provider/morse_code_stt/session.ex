@@ -17,27 +17,26 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
          true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
          {:ok, config} <- Config.new(options) do
-      {:ok,
-       %Descriptor{
-         kind: :stt,
-         settings: config,
-         format: %{
-           encoding: :linear16,
-           container: :raw,
-           sample_rate: config.sample_rate,
-           channels: 1,
-           byte_order: :little,
-           signed?: true
-         },
-         usage_identity: %{
-           provider: :morse_code,
-           model: :morse_code,
-           provenance: :locally_measured
-         },
-         readiness: :initialized,
-         endpointing: :provider_gap,
-         speech_start?: true
-       }}
+      Descriptor.new(
+        kind: :stt,
+        settings: config,
+        format: %{
+          encoding: :linear16,
+          container: :raw,
+          sample_rate: config.sample_rate,
+          channels: 1,
+          byte_order: :little,
+          signed?: true
+        },
+        usage_identity: %{
+          provider: :morse_code,
+          model: :morse_code,
+          provenance: :locally_measured
+        },
+        readiness: :initialized,
+        endpointing: :provider_gap,
+        speech_start?: true
+      )
     else
       _invalid -> {:error, :invalid_configuration}
     end

@@ -1,7 +1,15 @@
 defmodule Vxpipe.CallEngine.Speech.SessionTree do
   @moduledoc false
   use Supervisor
-  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel, Input, ScopeControl}
+
+  alias Vxpipe.CallEngine.Speech.{
+    Allocation,
+    CapabilityTree,
+    Channel,
+    Descriptor,
+    Input,
+    ScopeControl
+  }
 
   def child_spec(options) do
     %{
@@ -28,6 +36,7 @@ defmodule Vxpipe.CallEngine.Speech.SessionTree do
 
     with true <- Allocation.valid?(allocation),
          {:ok, descriptor} <- provider.configure(Keyword.get(public, :options, [])),
+         :ok <- Descriptor.validate(descriptor),
          :ok <-
            Channel.configure(
              allocation,

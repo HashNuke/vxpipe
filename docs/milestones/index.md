@@ -91,15 +91,18 @@ original providers. The [revised ownership plan](../speech-session-ownership.md)
 execution and both native STT/TTS proofs before integration: R → A → D → B → C → E → F → G → H.
 The [scoped room experiment](../scoped-speech-experiment.md) remains test-only bridge evidence.
 
-Checkpoint R is now accepted: **1 of 9 speech checkpoints complete**. The prior
+Checkpoints R and A are accepted: **2 of 9 speech checkpoints complete**. The prior
 [adoption-authority repair](../speech-adoption-fix.md) was followed by
 [bounded deadlines and failure containment](../speech-deadlines-and-failure-containment.md).
 Local persistent admission/input workers preserve responsive cancellation; deterministic tests
-cover late handoff and close races. GPT-6 Astra xhigh reviewed the changes. All five root gates
-pass: 1,868 tests, zero failures, 40 excluded (seed 892574). Latest load evidence includes
+cover late handoff and close races. A completes the [native STT contract](../native-stt-contract.md),
+including metadata/event validation, bounded busy rejection, usage evidence and stale-input
+fencing. GPT-6 Astra xhigh reviewed both checkpoints. All five current root gates
+pass: 1,880 tests, zero failures, 40 excluded (seed 330044). Latest load evidence includes
 39,360 concurrent-fault turns, 68,400 paired legacy/native turns and 16,236 adoption-churn turns.
-A is next; native TTS in D still precedes room migration. A speedup, capacity ceiling and net
-code reduction remain unproven. The packaging/retention hold is unchanged.
+Native TTS in D is next and still precedes room migration. Reliability takes priority over
+small latency overhead; a speedup, capacity ceiling and net code reduction remain unproven.
+The packaging/retention hold is unchanged.
 
 ## How to use this index
 
@@ -147,7 +150,7 @@ progress without claiming the entire milestone is complete.
 27. [x] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
-30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Scoped ownership checkpoint R is accepted (1/9); native STT A and TTS D precede room migration.
+30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Scoped ownership R and native STT A are accepted (2/9); native TTS D is next, before room migration.
 31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 

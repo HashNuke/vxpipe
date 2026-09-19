@@ -1,7 +1,7 @@
 # Simpler speech integrations
 
-Status: checkpoint R accepted; native STT checkpoint A is next.
-Implementation: **1 of 9 checkpoints complete**. The revised order is
+Status: checkpoints R and A accepted; native TTS checkpoint D is next.
+Implementation: **2 of 9 checkpoints complete**. The revised order is
 **R → A → D → B → C → E → F → G → H**, preserving existing checkpoint identities.
 The user-requested baseline commit records the experimental standalone prototype and evidence;
 it does not accept a checkpoint. The final room-owned architecture remains pending. The
@@ -93,8 +93,11 @@ behavior, not final room ancestry, all permission boundaries or a completed chec
 - **Latency:** no overall speedup is established. In the 32-call burst follow-up, turn-end
   p95 was 4.513 ms existing versus 5.708 ms scoped; first-audio p95 was 1.680 versus 2.121 ms.
   Retain the earlier scoped sink-finish p99 of 213.800 ms and its failure to repeat, alongside
-  the favorable paced results. Agree processing-latency acceptance budgets before B migrates
-  room input; evaluate both native directions against them. Better hardware is a hypothesis,
+  the favorable paced results. The user accepts about 1 ms of added processing latency for
+  reliability (2026-09-19); an across-the-board speedup is not an acceptance requirement.
+  Define metric-specific tail/deadline budgets before B migrates room input and evaluate both
+  native directions. This tradeoff does not waive queue, loss, cleanup or fault-isolation gates.
+  Better hardware is a hypothesis,
   not an explanation for the observed differences or a waiver of regression checks.
 - **Capacity:** 32 was the highest ordinary burst concurrency tested, not a capacity limit.
   Repeated ordinary paced trials reached 8 calls; the control lane had 32 paced calls plus two
@@ -209,29 +212,34 @@ continues using its current path until B.
 - [x] **A1 — Red contract test.** Add `test/vxpipe/call_engine/speech/stt_session_test.exs`:
   start under `start_supervised!`, inject the existing independent Morse fixture in odd-sized
   chunks, and expect one ordered final transcript. Confirm failure because the new API is absent.
-- [ ] **A2 — Finish the minimal STT contract.** Refine `lib/speech/stt_provider.ex`,
+- [x] **A2 — Finish the minimal STT contract.** Refine `lib/speech/stt_provider.ex`,
   `descriptor.ex`, `event.ex` and `session.ex` on R's owned allocation API. Pure public
   configuration, typed metadata and readiness stay separate from credential lookup and I/O.
   Providers receive local handles; no public transport interface or global supervisor choice.
 - [x] **A3 — Native provider.** Add `lib/provider/morse_code_stt/session.ex` around the existing
   Morse Config/Decoder; publish semantic events directly. Retain old callers until B and avoid
   duplicating the decoder or creating fake hosted request IDs.
-- [ ] **A4 — Bounded persistent input.** R brings forward the minimal persistent local
+- [x] **A4 — Bounded persistent input.** R brings forward the minimal persistent local
   input worker because Task admission cannot bound the preceding wait. Complete its remaining
   input/usage contracts and performance acceptance here. Keep one admitted
   chunk, size/age bounds, synchronous acceptance evidence and an independent cancel/deadline
   path. Test held provider input, timeout, duplicate envelopes and late results without a
   control/worker callback cycle. Preserve usage when acceptance and decoding complete at
   different times; benchmark audio-call, first-text and turn-end distributions against baseline.
-- [ ] **A5 — Failure and example.** Cover malformed/oversized input, duplicate envelopes,
+- [x] **A5 — Failure and example.** Cover malformed/oversized input, duplicate envelopes,
   teardown during startup, safe errors and no audio/text/secret inspection. Add a short runnable
   standalone example to `apps/vxpipe_call_engine/README.md` with truthful format limitations.
-- [ ] **Exit A.** Independent expected text is observed through the public session API; owner
+- [x] **Exit A.** Independent expected text is observed through the public session API; owner
   death produces monitored teardown; existing Morse codec/transport/room tests and root gates pass.
 
 Revalidation gate: the R isolation/cancellation tests stay green after the native data path
 changes. Preserve the historical failure and 68,400-turn report. A has no room migration;
 D next proves TTS ownership, output credit and cancellation before B starts integration.
+
+A implementation and load evidence: [native STT contract](../native-stt-contract.md).
+All five root gates passed: 1,880 tests, zero failures, 40 excluded (seed 330044).
+The independently reviewed source passed 123,996 final latency/fault/adoption turns.
+The report preserves earlier failures, the nonrepeated tail spike and workload limits.
 
 ## Checkpoint D — Native Morse TTS session
 
@@ -505,7 +513,7 @@ for timing distributions, exact covered permissions and excluded production path
 | Checkpoint | Implementation | Red/green and root evidence | External/manual evidence |
 | --- | --- | --- | --- |
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
-| A | Native standalone prototype; baseline recorded, checkpoint not accepted | 17 contract tests; selected suite 39 tests / 1 known startup-isolation failure; excluding it 38 pass | Independent PCM proven; 68,400 measured local turns succeed; no live-call claim |
+| A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
 | D | Not started | Pending | PCM playback/replacement pending |
 | B | Not started | Pending | Real room loop pending |
 | C | Not started | Pending | Local wire and hosted STT pending |
@@ -564,5 +572,15 @@ Final source review found no remaining R blocker, conditional on root gates and 
 
 R acceptance: all five root gates passed on the reviewed source, with 1,868 tests, zero
 failures and 40 exclusions (seed 892574). The 70 speech cases and three latest load diagnostics
-passed. R is accepted; A4 remains open for its broader input/usage/envelope contract, and both
-A and D remain prerequisites to room migration. No production capacity or overall speedup is claimed.
+passed. At R acceptance, A4 remained open for its broader input/usage/envelope contract;
+A and D remained prerequisites to room migration. No production capacity or overall speedup was claimed.
+
+A implementation review and acceptance (2026-09-19): GPT-6 Astra xhigh reviewed descriptor
+validation, event evidence, bounded busy rejection, usage boundaries and stale work. Its
+eager-end consistency finding was reproduced red and fixed. The first root run exposed a
+test's overly specific safe-failure category; a focused rerun exposed an implicit 100 ms
+notification wait. Reviewed test corrections preserve actual deadline/isolation assertions.
+The complete root rerun passed with seed 330044: 1,880 tests, zero failures, 40 excluded.
+Final serial load diagnostics passed 123,996 measured turns. R and A are accepted (2/9);
+D is next. The user's reliability priority accepts small processing overhead without waiving
+failure, delivery, privacy or cleanup gates. Room migration remains pending.
