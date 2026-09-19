@@ -1,9 +1,13 @@
 # Semantic speech provider contract
 
-Status: proposed design, researched and locally reviewed on 2026-09-19 against `51a9a17`.
-The user requested research and an implementation plan. No runtime changes or provider
-interoperability checks were performed. Implementation is tracked in
+Status: proposed design, researched on 2026-09-19 against `51a9a17`, with ownership replanned
+after the isolated startup regression.
+The original task requested research and a plan; implementation was subsequently authorized.
+Checkpoint A is paused on a tested [startup-isolation defect](speech-startup-isolation.md),
+with no room migration or hosted interoperability claim. Implementation is tracked in
 [Simpler speech integrations](milestones/simpler-speech-integrations.md).
+The [revised ownership proposal](speech-session-ownership.md) supersedes the prototype's
+global execution model. Its scoped admission/lifecycle contracts apply throughout this design.
 
 ## Problem and decision
 
@@ -14,7 +18,8 @@ Morse providers manufacture JSON control messages to use that same path.
 
 Introduce one documented session behaviour for each capability, STT and TTS. Configuration
 returns a typed descriptor; a supervised provider session accepts semantic operations and
-emits typed events through a shared delivery helper. Network framing, provider control
+emits typed events through reusable delivery helpers with private per-allocation state.
+Network framing, provider control
 commands, response parsing and upstream request correlation remain inside the provider.
 Transport helpers remain available as implementation details. An integration may use several
 modules where appropriate; it does not have to implement or register a second public transport
@@ -68,14 +73,15 @@ is a recorded blocker for that adapter, not permission to silently switch API/mo
 
 ## Proposed author-facing interface
 
-Names below are proposed, not available APIs. Use `Speech.STTProvider`, `Speech.TTSProvider`,
+The final APIs below remain proposed; the uncommitted standalone prototype implements only
+part of them and its global startup shape is rejected. Use `Speech.STTProvider`, `Speech.TTSProvider`,
 `Speech.Descriptor`, `Speech.Session`, `Speech.Event` and `Speech.Output` under
 `Vxpipe.CallEngine`. Keep each module in its own file.
 
 | Required callback | Meaning |
 | --- | --- |
 | `configure(public_options)` | Pure validation; returns `{:ok, descriptor}` or a bounded configuration error. No connection or credential lookup. |
-| `start_link(private_init)` | Starts the provider process when called by its owning supervisor; returns normal OTP startup results. Readiness arrives separately. |
+| `start_link(private_init)` | Performs bounded local startup beneath its owning speech scope and returns promptly; remote preparation is asynchronous. Readiness arrives separately. |
 | STT: `push_audio(pid, audio)` | Admits one bounded audio chunk matching the descriptor; returns `:ok` or a bounded error. |
 | TTS: `speak(pid, request_ref, text)` | Admits one bounded complete-text request; returns `:ok` or a bounded error. Synthesis is asynchronous. |
 | TTS: `cancel(pid, request_ref, playback)` | Requests cancellation with a typed, locally confirmed playback report; returns promptly. Terminal cancellation arrives separately for active generation. |
@@ -104,10 +110,24 @@ boundaries; public options cannot choose a module, callback, endpoint or auth he
 session keeps its resolved credential snapshot. The current tenant override/platform inheritance
 and pinned binding rules remain owned by the credential source.
 
-The engine calls a shared `Speech.Session` facade. Providers implement the behaviour above;
-the facade starts them through a named owning DynamicSupervisor, binds/monitors their lifetime
-to the capability/preparation owner, enforces admission/deadlines, and projects typed events.
-Do not synchronously run remote connection work in Room Authority or add a second turn queue.
+The engine calls reusable `Speech.Session` functions with an explicit owned scope. In rooms,
+each scope is a temporary speech capability subtree beneath the existing room capability
+supervisor; standalone callers provide their own local scope. Its session supervisor,
+provider, event/control state and I/O workers remain local. No application-wide speech
+supervisor, execution queue or implicit fallback participates in this boundary.
+
+Admission reserves bounded local capacity and returns an allocation handle in `:starting`
+state; observing authenticated readiness is separate. The startup/adoption deadline starts at
+API entry, includes queue wait and settles at activation/adoption; it is not a session TTL.
+Later commands have independent API-entry deadlines. Every shared ancestor starts only
+lightweight local children; blocking provider/credential/network work runs asynchronously
+beneath the allocated subtree, preserving existing authorization boundaries. Lifetime
+owner, event consumer and preparation lease/adoption authority are explicit. Cancellation
+invalidates queued attempts before provider creation; adoption rechecks lease/generation and
+does not reparent the tree. See the ownership proposal for exact-purpose stop handles,
+participant/connection teardown and preservation of the existing room control APIs.
+Opaque private-init data remains owned until asynchronous handoff, cancellation or expiry;
+returning `:starting` does not end its lifetime. Supervisor/status/crash output must stay safe.
 
 ### Example flow
 
@@ -134,7 +154,7 @@ same operations to their actual protocol internally.
 
 ### Identity and order
 
-The shared event channel binds the producer PID, fresh session generation and monotonic local
+Each allocation's private event channel binds the producer PID, fresh session generation and monotonic local
 event sequence. TTS events also carry the engine-issued request reference; STT turn events
 carry a stable session-local turn reference. The helper, rather than integration-authored
 tuple construction, owns that envelope and its delivery acknowledgements. Multiple internal
@@ -195,7 +215,7 @@ existing sink's finish operation, then waits for its actual playback acknowledge
 room turn or starting the next queued request. A provider event never asserts audibility.
 
 Cancellation immediately invalidates old output at the engine boundary, clears the existing
-pending turn queue as today, and interrupts the sink first. The shared output/session boundary
+pending turn queue as today, and interrupts the sink first. The allocation's output/session boundary
 maintains a playback ledger from actual sink acknowledgements. `cancel/3` receives a typed
 report with request-relative and session-total played milliseconds; only the adapter selects
 and encodes the coordinate system its API needs. Never derive those counters from generated
@@ -224,6 +244,15 @@ provider code delivers a chunk and awaits credit before producing/reading anothe
 occurs in an owned producer worker or asynchronous continuation, never in the control process
 that must handle cancel/close. Keep the existing 15-second output acknowledgement deadline and
 5-second public call bound; explicitly bound connect/cancel/close using current host deadlines.
+That public call bound limits admission/control waits, not an accepted generation's playback
+duration. Successful activation settles the startup deadline; later operations and output
+credit retain their separate bounds without resetting an in-flight budget at internal stages.
+Use persistent local workers for repeated input/output, with separate responsive control;
+avoid per-audio Tasks by default. Preserve accepted-input versus submitted-input accounting
+if command completion and provider processing occur at different times.
+Startup deadlines must include queue wait, and one call's provider initialization must not
+block admission for unrelated calls. The current prototype fails this requirement in an
+isolated process-tree test; its startup ownership needs revision before room integration.
 
 Control events use bounded admission through the same session delivery boundary, with a small
 explicit queue limit and safe overflow failure. Audio credit does not block cancellation or
@@ -235,6 +264,10 @@ Session processes and their request/network workers have explicit supervision ow
 monitor the capability/preparation owner. Owner loss, cancelled startup and rejected policy
 adoption close the entire allocated subtree. Sessions are temporary; supervision does not
 silently restart into the old permission interval. `terminate/2` remains best-effort cleanup.
+An allocation-local failure closes that allocation; failed STT preparation preserves the
+active allocation. Shared capability-control/session-supervisor failure closes the whole
+capability tree, while unrelated capability trees remain usable. Allocation close and engine
+capability stop are distinct operations.
 
 Preserve [transport privacy](speech-transport-privacy.md): no secrets, text, audio, raw provider
 errors or headers in Inspect/status/crash reports or routine telemetry. Typed errors use fixed
@@ -283,7 +316,12 @@ Local design review on 2026-09-19 covered callback count, config/auth separation
 early-event ordering, usage after partial submission, cancellation isolation, backpressure,
 STT privacy intervals, cache identity and prerequisite order. It corrected a too-small
 `start/speak/cancel` sketch by specifying accounting and terminal-isolation evidence. This is
-planning evidence only; no independent-agent review, live-provider success or implemented
-contract is claimed. The wider provider review additionally caught segment-final/turn-end,
+planning evidence only; that initial local review was not independent-agent approval or
+evidence of live-provider success or implementation. The wider provider review additionally caught segment-final/turn-end,
 batch-done/request-end, packet/container and Gemini Live ownership distinctions; these are now
 explicit in the descriptor, lifecycle rules and milestone conformance tasks.
+
+Subsequent GPT-6 Astra xhigh review of the ownership replan checked fault boundaries,
+admission/cancellation, deadline lifetime, private-init retention and migration order. See the
+[ownership proposal](speech-session-ownership.md) and its labnote for that separate design
+review. The original isolation regression remains unresolved; implementation is paused.

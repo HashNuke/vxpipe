@@ -1,0 +1,2461 @@
+{
+  "input": "independent E PCM; 16kHz linear16; 60ms dot + 840ms gap",
+  "output": "independent E PCM; 16kHz linear16; 20ms dot + 280ms gap",
+  "otp": "28",
+  "schedulers": 8,
+  "elixir": "1.19.5",
+  "trials": [
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 29,
+          "p50": 8,
+          "p95": 27,
+          "p99": 29
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 277,
+          "p50": 77,
+          "p95": 226,
+          "p99": 277
+        },
+        "first_text_us": {
+          "max": 319,
+          "p50": 158,
+          "p95": 264,
+          "p99": 319
+        },
+        "playback_ack_us": {
+          "max": 200,
+          "p50": 157,
+          "p95": 200,
+          "p99": 200
+        },
+        "sink_finish_us": {
+          "max": 538,
+          "p50": 301,
+          "p95": 516,
+          "p99": 538
+        },
+        "speech_start_us": {
+          "max": 285,
+          "p50": 142,
+          "p95": 210,
+          "p99": 285
+        },
+        "total_us": {
+          "max": 2688,
+          "p50": 1187,
+          "p95": 2134,
+          "p99": 2688
+        },
+        "turn_end_us": {
+          "max": 459,
+          "p50": 388,
+          "p95": 444,
+          "p99": 459
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 20,
+      "process_count_before": 277,
+      "process_count_after": 277,
+      "process_memory_before": 23940040,
+      "process_memory_after": 25796520
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 30,
+          "p50": 7,
+          "p95": 28,
+          "p99": 30
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 140,
+          "p50": 87,
+          "p95": 131,
+          "p99": 140
+        },
+        "first_text_us": {
+          "max": 244,
+          "p50": 157,
+          "p95": 229,
+          "p99": 244
+        },
+        "playback_ack_us": {
+          "max": 407,
+          "p50": 147,
+          "p95": 235,
+          "p99": 407
+        },
+        "sink_finish_us": {
+          "max": 453,
+          "p50": 333,
+          "p95": 416,
+          "p99": 453
+        },
+        "speech_start_us": {
+          "max": 207,
+          "p50": 144,
+          "p95": 201,
+          "p99": 207
+        },
+        "total_us": {
+          "max": 1719,
+          "p50": 1190,
+          "p95": 1661,
+          "p99": 1719
+        },
+        "turn_end_us": {
+          "max": 549,
+          "p50": 406,
+          "p95": 529,
+          "p99": 549
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 20,
+      "process_count_before": 281,
+      "process_count_after": 281,
+      "process_memory_before": 24554616,
+      "process_memory_after": 25868784
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 2572,
+          "p50": 52,
+          "p95": 513,
+          "p99": 1092
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 2395,
+          "p50": 179,
+          "p95": 789,
+          "p99": 1280
+        },
+        "first_text_us": {
+          "max": 4135,
+          "p50": 521,
+          "p95": 1647,
+          "p99": 4039
+        },
+        "playback_ack_us": {
+          "max": 3890,
+          "p50": 228,
+          "p95": 875,
+          "p99": 2880
+        },
+        "sink_finish_us": {
+          "max": 10417,
+          "p50": 1353,
+          "p95": 5045,
+          "p99": 7989
+        },
+        "speech_start_us": {
+          "max": 3902,
+          "p50": 422,
+          "p95": 1418,
+          "p99": 2695
+        },
+        "total_us": {
+          "max": 15514,
+          "p50": 3271,
+          "p95": 11063,
+          "p99": 15406
+        },
+        "turn_end_us": {
+          "max": 4206,
+          "p50": 848,
+          "p95": 2238,
+          "p99": 4034
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 160,
+      "process_count_before": 494,
+      "process_count_after": 494,
+      "process_memory_before": 27279336,
+      "process_memory_after": 38287992
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 315,
+          "p50": 37,
+          "p95": 121,
+          "p99": 200
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 724,
+          "p50": 188,
+          "p95": 318,
+          "p99": 437
+        },
+        "first_text_us": {
+          "max": 827,
+          "p50": 395,
+          "p95": 604,
+          "p99": 822
+        },
+        "playback_ack_us": {
+          "max": 855,
+          "p50": 225,
+          "p95": 430,
+          "p99": 772
+        },
+        "sink_finish_us": {
+          "max": 2882,
+          "p50": 1383,
+          "p95": 1897,
+          "p99": 2836
+        },
+        "speech_start_us": {
+          "max": 701,
+          "p50": 339,
+          "p95": 552,
+          "p99": 686
+        },
+        "total_us": {
+          "max": 4879,
+          "p50": 3065,
+          "p95": 3781,
+          "p99": 4832
+        },
+        "turn_end_us": {
+          "max": 1264,
+          "p50": 752,
+          "p95": 1029,
+          "p99": 1150
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 160,
+      "process_count_before": 526,
+      "process_count_after": 526,
+      "process_memory_before": 27675488,
+      "process_memory_after": 38389872
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1907,
+          "p50": 167,
+          "p95": 664,
+          "p99": 1132
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 2829,
+          "p50": 548,
+          "p95": 1603,
+          "p99": 2418
+        },
+        "first_text_us": {
+          "max": 4831,
+          "p50": 1143,
+          "p95": 2695,
+          "p99": 4160
+        },
+        "playback_ack_us": {
+          "max": 2142,
+          "p50": 377,
+          "p95": 895,
+          "p99": 1276
+        },
+        "sink_finish_us": {
+          "max": 17023,
+          "p50": 5214,
+          "p95": 10198,
+          "p99": 14497
+        },
+        "speech_start_us": {
+          "max": 4573,
+          "p50": 936,
+          "p95": 2341,
+          "p99": 3342
+        },
+        "total_us": {
+          "max": 24977,
+          "p50": 10831,
+          "p95": 18778,
+          "p99": 23499
+        },
+        "turn_end_us": {
+          "max": 6375,
+          "p50": 2015,
+          "p95": 3859,
+          "p99": 5285
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": false,
+      "successful_turns": 640,
+      "process_count_before": 1238,
+      "process_count_after": 1238,
+      "process_memory_before": 36938064,
+      "process_memory_after": 79914816
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1971,
+          "p50": 135,
+          "p95": 495,
+          "p99": 896
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 6467,
+          "p50": 626,
+          "p95": 1805,
+          "p99": 3479
+        },
+        "first_text_us": {
+          "max": 6546,
+          "p50": 1447,
+          "p95": 2992,
+          "p99": 4771
+        },
+        "playback_ack_us": {
+          "max": 1605,
+          "p50": 371,
+          "p95": 840,
+          "p99": 1137
+        },
+        "sink_finish_us": {
+          "max": 22839,
+          "p50": 5453,
+          "p95": 10588,
+          "p99": 16422
+        },
+        "speech_start_us": {
+          "max": 6517,
+          "p50": 1202,
+          "p95": 2685,
+          "p99": 4479
+        },
+        "total_us": {
+          "max": 27717,
+          "p50": 11084,
+          "p95": 19967,
+          "p99": 25401
+        },
+        "turn_end_us": {
+          "max": 8502,
+          "p50": 2509,
+          "p95": 4728,
+          "p99": 6710
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": false,
+      "successful_turns": 640,
+      "process_count_before": 1366,
+      "process_count_after": 1366,
+      "process_memory_before": 38855368,
+      "process_memory_after": 81192480
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 4480,
+          "p50": 156,
+          "p95": 668,
+          "p99": 1292
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 10036,
+          "p50": 527,
+          "p95": 1383,
+          "p99": 2388
+        },
+        "first_text_us": {
+          "max": 6818,
+          "p50": 1231,
+          "p95": 3165,
+          "p99": 5504
+        },
+        "playback_ack_us": {
+          "max": 4146,
+          "p50": 367,
+          "p95": 828,
+          "p99": 2136
+        },
+        "sink_finish_us": {
+          "max": 28298,
+          "p50": 4997,
+          "p95": 10075,
+          "p99": 23740
+        },
+        "speech_start_us": {
+          "max": 6818,
+          "p50": 969,
+          "p95": 2501,
+          "p99": 4972
+        },
+        "total_us": {
+          "max": 38641,
+          "p50": 10429,
+          "p95": 18531,
+          "p99": 34701
+        },
+        "turn_end_us": {
+          "max": 8283,
+          "p50": 2082,
+          "p95": 4241,
+          "p99": 5882
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": true,
+      "successful_turns": 640,
+      "process_count_before": 1241,
+      "process_count_after": 1241,
+      "process_memory_before": 38750728,
+      "process_memory_after": 80781584
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 6769,
+          "p50": 161,
+          "p95": 941,
+          "p99": 2440
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 7258,
+          "p50": 683,
+          "p95": 2645,
+          "p99": 5805
+        },
+        "first_text_us": {
+          "max": 15631,
+          "p50": 1529,
+          "p95": 4777,
+          "p99": 8888
+        },
+        "playback_ack_us": {
+          "max": 3928,
+          "p50": 378,
+          "p95": 895,
+          "p99": 1821
+        },
+        "sink_finish_us": {
+          "max": 21316,
+          "p50": 6241,
+          "p95": 12358,
+          "p99": 17985
+        },
+        "speech_start_us": {
+          "max": 14066,
+          "p50": 1295,
+          "p95": 4056,
+          "p99": 8219
+        },
+        "total_us": {
+          "max": 37158,
+          "p50": 12357,
+          "p95": 28293,
+          "p99": 32271
+        },
+        "turn_end_us": {
+          "max": 18316,
+          "p50": 2572,
+          "p95": 6123,
+          "p99": 10093
+        }
+      },
+      "repeat": 1,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": true,
+      "successful_turns": 640,
+      "process_count_before": 1369,
+      "process_count_after": 1369,
+      "process_memory_before": 41711448,
+      "process_memory_after": 82341112
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1090,
+          "p50": 60,
+          "p95": 1090,
+          "p99": 1090
+        },
+        "input_lateness_max_us": {
+          "max": 5746,
+          "p50": 5152,
+          "p95": 5746,
+          "p99": 5746
+        },
+        "first_audio_us": {
+          "max": 445,
+          "p50": 401,
+          "p95": 445,
+          "p99": 445
+        },
+        "first_text_us": {
+          "max": 244778,
+          "p50": 244102,
+          "p95": 244778,
+          "p99": 244778
+        },
+        "playback_ack_us": {
+          "max": 484,
+          "p50": 266,
+          "p95": 484,
+          "p99": 484
+        },
+        "sink_finish_us": {
+          "max": 919,
+          "p50": 694,
+          "p95": 919,
+          "p99": 919
+        },
+        "speech_start_us": {
+          "max": 24973,
+          "p50": 19919,
+          "p95": 24973,
+          "p99": 24973
+        },
+        "total_us": {
+          "max": 906282,
+          "p50": 905630,
+          "p95": 906282,
+          "p99": 906282
+        },
+        "turn_end_us": {
+          "max": 1444,
+          "p50": 1402,
+          "p95": 1444,
+          "p99": 1444
+        }
+      },
+      "repeat": 1,
+      "lane": "paced",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 2,
+      "process_count_before": 277,
+      "process_count_after": 277,
+      "process_memory_before": 28044192,
+      "process_memory_after": 28071912
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 83,
+          "p50": 81,
+          "p95": 83,
+          "p99": 83
+        },
+        "input_lateness_max_us": {
+          "max": 5844,
+          "p50": 5733,
+          "p95": 5844,
+          "p99": 5844
+        },
+        "first_audio_us": {
+          "max": 237,
+          "p50": 179,
+          "p95": 237,
+          "p99": 237
+        },
+        "first_text_us": {
+          "max": 241408,
+          "p50": 240863,
+          "p95": 241408,
+          "p99": 241408
+        },
+        "playback_ack_us": {
+          "max": 325,
+          "p50": 274,
+          "p95": 325,
+          "p99": 325
+        },
+        "sink_finish_us": {
+          "max": 652,
+          "p50": 529,
+          "p95": 652,
+          "p99": 652
+        },
+        "speech_start_us": {
+          "max": 21701,
+          "p50": 19851,
+          "p95": 21701,
+          "p99": 21701
+        },
+        "total_us": {
+          "max": 906469,
+          "p50": 904432,
+          "p95": 906469,
+          "p99": 906469
+        },
+        "turn_end_us": {
+          "max": 997,
+          "p50": 364,
+          "p95": 997,
+          "p99": 997
+        }
+      },
+      "repeat": 1,
+      "lane": "paced",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 2,
+      "process_count_before": 281,
+      "process_count_after": 281,
+      "process_memory_before": 26359528,
+      "process_memory_after": 26819832
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 312,
+          "p50": 202,
+          "p95": 312,
+          "p99": 312
+        },
+        "input_lateness_max_us": {
+          "max": 4684,
+          "p50": 3377,
+          "p95": 4684,
+          "p99": 4684
+        },
+        "first_audio_us": {
+          "max": 1352,
+          "p50": 402,
+          "p95": 1352,
+          "p99": 1352
+        },
+        "first_text_us": {
+          "max": 240997,
+          "p50": 240454,
+          "p95": 240997,
+          "p99": 240997
+        },
+        "playback_ack_us": {
+          "max": 1163,
+          "p50": 320,
+          "p95": 1163,
+          "p99": 1163
+        },
+        "sink_finish_us": {
+          "max": 4445,
+          "p50": 3265,
+          "p95": 4445,
+          "p99": 4445
+        },
+        "speech_start_us": {
+          "max": 21884,
+          "p50": 20265,
+          "p95": 21884,
+          "p99": 21884
+        },
+        "total_us": {
+          "max": 907587,
+          "p50": 906355,
+          "p95": 907587,
+          "p99": 907587
+        },
+        "turn_end_us": {
+          "max": 2143,
+          "p50": 816,
+          "p95": 2143,
+          "p99": 2143
+        }
+      },
+      "repeat": 1,
+      "lane": "paced",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 16,
+      "process_count_before": 494,
+      "process_count_after": 494,
+      "process_memory_before": 30353344,
+      "process_memory_after": 33972240
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1710,
+          "p50": 113,
+          "p95": 1710,
+          "p99": 1710
+        },
+        "input_lateness_max_us": {
+          "max": 7529,
+          "p50": 2870,
+          "p95": 7529,
+          "p99": 7529
+        },
+        "first_audio_us": {
+          "max": 682,
+          "p50": 471,
+          "p95": 682,
+          "p99": 682
+        },
+        "first_text_us": {
+          "max": 241916,
+          "p50": 240938,
+          "p95": 241916,
+          "p99": 241916
+        },
+        "playback_ack_us": {
+          "max": 977,
+          "p50": 464,
+          "p95": 977,
+          "p99": 977
+        },
+        "sink_finish_us": {
+          "max": 3228,
+          "p50": 2275,
+          "p95": 3228,
+          "p99": 3228
+        },
+        "speech_start_us": {
+          "max": 20479,
+          "p50": 20157,
+          "p95": 20479,
+          "p99": 20479
+        },
+        "total_us": {
+          "max": 910182,
+          "p50": 904944,
+          "p95": 910182,
+          "p99": 910182
+        },
+        "turn_end_us": {
+          "max": 4822,
+          "p50": 691,
+          "p95": 4822,
+          "p99": 4822
+        }
+      },
+      "repeat": 1,
+      "lane": "paced",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 16,
+      "process_count_before": 526,
+      "process_count_after": 526,
+      "process_memory_before": 30701432,
+      "process_memory_after": 34626160
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 31,
+          "p50": 8,
+          "p95": 11,
+          "p99": 31
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 728,
+          "p50": 88,
+          "p95": 525,
+          "p99": 728
+        },
+        "first_text_us": {
+          "max": 188,
+          "p50": 150,
+          "p95": 178,
+          "p99": 188
+        },
+        "playback_ack_us": {
+          "max": 194,
+          "p50": 145,
+          "p95": 179,
+          "p99": 194
+        },
+        "sink_finish_us": {
+          "max": 990,
+          "p50": 343,
+          "p95": 760,
+          "p99": 990
+        },
+        "speech_start_us": {
+          "max": 163,
+          "p50": 134,
+          "p95": 157,
+          "p99": 163
+        },
+        "total_us": {
+          "max": 1849,
+          "p50": 1194,
+          "p95": 1831,
+          "p99": 1849
+        },
+        "turn_end_us": {
+          "max": 513,
+          "p50": 413,
+          "p95": 491,
+          "p99": 513
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 20,
+      "process_count_before": 281,
+      "process_count_after": 281,
+      "process_memory_before": 27397256,
+      "process_memory_after": 28900392
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 38,
+          "p50": 9,
+          "p95": 27,
+          "p99": 38
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 177,
+          "p50": 97,
+          "p95": 171,
+          "p99": 177
+        },
+        "first_text_us": {
+          "max": 2280,
+          "p50": 174,
+          "p95": 393,
+          "p99": 2280
+        },
+        "playback_ack_us": {
+          "max": 2706,
+          "p50": 168,
+          "p95": 443,
+          "p99": 2706
+        },
+        "sink_finish_us": {
+          "max": 840,
+          "p50": 331,
+          "p95": 599,
+          "p99": 840
+        },
+        "speech_start_us": {
+          "max": 2244,
+          "p50": 156,
+          "p95": 305,
+          "p99": 2244
+        },
+        "total_us": {
+          "max": 4422,
+          "p50": 1455,
+          "p95": 3757,
+          "p99": 4422
+        },
+        "turn_end_us": {
+          "max": 3413,
+          "p50": 430,
+          "p95": 2343,
+          "p99": 3413
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 20,
+      "process_count_before": 277,
+      "process_count_after": 277,
+      "process_memory_before": 27379728,
+      "process_memory_after": 28821480
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 699,
+          "p50": 33,
+          "p95": 152,
+          "p99": 287
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 2682,
+          "p50": 158,
+          "p95": 732,
+          "p99": 2452
+        },
+        "first_text_us": {
+          "max": 1788,
+          "p50": 380,
+          "p95": 736,
+          "p99": 1153
+        },
+        "playback_ack_us": {
+          "max": 2731,
+          "p50": 207,
+          "p95": 928,
+          "p99": 2647
+        },
+        "sink_finish_us": {
+          "max": 7711,
+          "p50": 1321,
+          "p95": 3015,
+          "p99": 7702
+        },
+        "speech_start_us": {
+          "max": 1153,
+          "p50": 313,
+          "p95": 682,
+          "p99": 1131
+        },
+        "total_us": {
+          "max": 9347,
+          "p50": 3084,
+          "p95": 5435,
+          "p99": 9320
+        },
+        "turn_end_us": {
+          "max": 1772,
+          "p50": 710,
+          "p95": 1194,
+          "p99": 1538
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 160,
+      "process_count_before": 526,
+      "process_count_after": 526,
+      "process_memory_before": 30507168,
+      "process_memory_after": 43347272
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 328,
+          "p50": 30,
+          "p95": 167,
+          "p99": 303
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 830,
+          "p50": 158,
+          "p95": 364,
+          "p99": 754
+        },
+        "first_text_us": {
+          "max": 1398,
+          "p50": 363,
+          "p95": 822,
+          "p99": 1277
+        },
+        "playback_ack_us": {
+          "max": 815,
+          "p50": 208,
+          "p95": 386,
+          "p99": 600
+        },
+        "sink_finish_us": {
+          "max": 2749,
+          "p50": 1174,
+          "p95": 1920,
+          "p99": 2667
+        },
+        "speech_start_us": {
+          "max": 1285,
+          "p50": 277,
+          "p95": 704,
+          "p99": 1207
+        },
+        "total_us": {
+          "max": 4849,
+          "p50": 2788,
+          "p95": 3994,
+          "p99": 4784
+        },
+        "turn_end_us": {
+          "max": 1809,
+          "p50": 708,
+          "p95": 1137,
+          "p99": 1772
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 160,
+      "process_count_before": 494,
+      "process_count_after": 494,
+      "process_memory_before": 30228128,
+      "process_memory_after": 40509120
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 7308,
+          "p50": 145,
+          "p95": 891,
+          "p99": 1797
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 11222,
+          "p50": 713,
+          "p95": 2364,
+          "p99": 4515
+        },
+        "first_text_us": {
+          "max": 8399,
+          "p50": 1396,
+          "p95": 3608,
+          "p99": 5572
+        },
+        "playback_ack_us": {
+          "max": 4802,
+          "p50": 336,
+          "p95": 901,
+          "p99": 2479
+        },
+        "sink_finish_us": {
+          "max": 24823,
+          "p50": 6264,
+          "p95": 11736,
+          "p99": 17681
+        },
+        "speech_start_us": {
+          "max": 8398,
+          "p50": 1199,
+          "p95": 3121,
+          "p99": 5332
+        },
+        "total_us": {
+          "max": 32592,
+          "p50": 12318,
+          "p95": 24319,
+          "p99": 28731
+        },
+        "turn_end_us": {
+          "max": 10641,
+          "p50": 2468,
+          "p95": 5102,
+          "p99": 7763
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": false,
+      "successful_turns": 640,
+      "process_count_before": 1366,
+      "process_count_after": 1366,
+      "process_memory_before": 41226544,
+      "process_memory_after": 81678648
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 3537,
+          "p50": 170,
+          "p95": 1105,
+          "p99": 1868
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 17100,
+          "p50": 758,
+          "p95": 2961,
+          "p99": 10852
+        },
+        "first_text_us": {
+          "max": 10425,
+          "p50": 1459,
+          "p95": 4750,
+          "p99": 7333
+        },
+        "playback_ack_us": {
+          "max": 17856,
+          "p50": 452,
+          "p95": 2237,
+          "p99": 5222
+        },
+        "sink_finish_us": {
+          "max": 47204,
+          "p50": 7777,
+          "p95": 29090,
+          "p99": 34126
+        },
+        "speech_start_us": {
+          "max": 9466,
+          "p50": 1174,
+          "p95": 3595,
+          "p99": 6423
+        },
+        "total_us": {
+          "max": 63713,
+          "p50": 16487,
+          "p95": 40348,
+          "p99": 52264
+        },
+        "turn_end_us": {
+          "max": 19858,
+          "p50": 2534,
+          "p95": 6271,
+          "p99": 9093
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": false,
+      "successful_turns": 640,
+      "process_count_before": 1238,
+      "process_count_after": 1238,
+      "process_memory_before": 41512976,
+      "process_memory_after": 81870568
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 6517,
+          "p50": 223,
+          "p95": 1391,
+          "p99": 2269
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 14603,
+          "p50": 1179,
+          "p95": 3703,
+          "p99": 7430
+        },
+        "first_text_us": {
+          "max": 19248,
+          "p50": 2241,
+          "p95": 6194,
+          "p99": 10635
+        },
+        "playback_ack_us": {
+          "max": 2823,
+          "p50": 451,
+          "p95": 1545,
+          "p99": 2416
+        },
+        "sink_finish_us": {
+          "max": 37225,
+          "p50": 10294,
+          "p95": 20357,
+          "p99": 26847
+        },
+        "speech_start_us": {
+          "max": 17181,
+          "p50": 1789,
+          "p95": 5355,
+          "p99": 10240
+        },
+        "total_us": {
+          "max": 47462,
+          "p50": 18738,
+          "p95": 37909,
+          "p99": 45345
+        },
+        "turn_end_us": {
+          "max": 18825,
+          "p50": 3579,
+          "p95": 8585,
+          "p99": 15049
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": true,
+      "successful_turns": 640,
+      "process_count_before": 1369,
+      "process_count_after": 1369,
+      "process_memory_before": 41413080,
+      "process_memory_after": 82643224
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 10182,
+          "p50": 137,
+          "p95": 977,
+          "p99": 2948
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 14377,
+          "p50": 697,
+          "p95": 2653,
+          "p99": 10845
+        },
+        "first_text_us": {
+          "max": 16581,
+          "p50": 1175,
+          "p95": 5193,
+          "p99": 8082
+        },
+        "playback_ack_us": {
+          "max": 6910,
+          "p50": 457,
+          "p95": 1321,
+          "p99": 2473
+        },
+        "sink_finish_us": {
+          "max": 34814,
+          "p50": 7667,
+          "p95": 18517,
+          "p99": 26463
+        },
+        "speech_start_us": {
+          "max": 11709,
+          "p50": 950,
+          "p95": 3967,
+          "p99": 6373
+        },
+        "total_us": {
+          "max": 40052,
+          "p50": 13727,
+          "p95": 32835,
+          "p99": 37130
+        },
+        "turn_end_us": {
+          "max": 24062,
+          "p50": 2101,
+          "p95": 5936,
+          "p99": 11827
+        }
+      },
+      "repeat": 2,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": true,
+      "successful_turns": 640,
+      "process_count_before": 1241,
+      "process_count_after": 1241,
+      "process_memory_before": 42160296,
+      "process_memory_after": 82269768
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 134,
+          "p50": 122,
+          "p95": 134,
+          "p99": 134
+        },
+        "input_lateness_max_us": {
+          "max": 5667,
+          "p50": 3407,
+          "p95": 5667,
+          "p99": 5667
+        },
+        "first_audio_us": {
+          "max": 208,
+          "p50": 119,
+          "p95": 208,
+          "p99": 208
+        },
+        "first_text_us": {
+          "max": 241825,
+          "p50": 240400,
+          "p95": 241825,
+          "p99": 241825
+        },
+        "playback_ack_us": {
+          "max": 230,
+          "p50": 160,
+          "p95": 230,
+          "p99": 230
+        },
+        "sink_finish_us": {
+          "max": 513,
+          "p50": 444,
+          "p95": 513,
+          "p99": 513
+        },
+        "speech_start_us": {
+          "max": 21179,
+          "p50": 19484,
+          "p95": 21179,
+          "p99": 21179
+        },
+        "total_us": {
+          "max": 904360,
+          "p50": 902378,
+          "p95": 904360,
+          "p99": 904360
+        },
+        "turn_end_us": {
+          "max": 599,
+          "p50": 411,
+          "p95": 599,
+          "p99": 599
+        }
+      },
+      "repeat": 2,
+      "lane": "paced",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 2,
+      "process_count_before": 281,
+      "process_count_after": 281,
+      "process_memory_before": 30149136,
+      "process_memory_after": 30197704
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 91,
+          "p50": 57,
+          "p95": 91,
+          "p99": 91
+        },
+        "input_lateness_max_us": {
+          "max": 7009,
+          "p50": 5946,
+          "p95": 7009,
+          "p99": 7009
+        },
+        "first_audio_us": {
+          "max": 206,
+          "p50": 135,
+          "p95": 206,
+          "p99": 206
+        },
+        "first_text_us": {
+          "max": 243987,
+          "p50": 240811,
+          "p95": 243987,
+          "p99": 243987
+        },
+        "playback_ack_us": {
+          "max": 273,
+          "p50": 201,
+          "p95": 273,
+          "p99": 273
+        },
+        "sink_finish_us": {
+          "max": 554,
+          "p50": 388,
+          "p95": 554,
+          "p99": 554
+        },
+        "speech_start_us": {
+          "max": 25001,
+          "p50": 19813,
+          "p95": 25001,
+          "p99": 25001
+        },
+        "total_us": {
+          "max": 906268,
+          "p50": 901843,
+          "p95": 906268,
+          "p99": 906268
+        },
+        "turn_end_us": {
+          "max": 354,
+          "p50": 349,
+          "p95": 354,
+          "p99": 354
+        }
+      },
+      "repeat": 2,
+      "lane": "paced",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 2,
+      "process_count_before": 277,
+      "process_count_after": 277,
+      "process_memory_before": 29135424,
+      "process_memory_after": 29702840
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 4451,
+          "p50": 176,
+          "p95": 4451,
+          "p99": 4451
+        },
+        "input_lateness_max_us": {
+          "max": 9012,
+          "p50": 4122,
+          "p95": 9012,
+          "p99": 9012
+        },
+        "first_audio_us": {
+          "max": 3496,
+          "p50": 516,
+          "p95": 3496,
+          "p99": 3496
+        },
+        "first_text_us": {
+          "max": 242988,
+          "p50": 240587,
+          "p95": 242988,
+          "p99": 242988
+        },
+        "playback_ack_us": {
+          "max": 3369,
+          "p50": 691,
+          "p95": 3369,
+          "p99": 3369
+        },
+        "sink_finish_us": {
+          "max": 6695,
+          "p50": 2219,
+          "p95": 6695,
+          "p99": 6695
+        },
+        "speech_start_us": {
+          "max": 20634,
+          "p50": 20075,
+          "p95": 20634,
+          "p99": 20634
+        },
+        "total_us": {
+          "max": 928282,
+          "p50": 905126,
+          "p95": 928282,
+          "p99": 928282
+        },
+        "turn_end_us": {
+          "max": 17027,
+          "p50": 711,
+          "p95": 17027,
+          "p99": 17027
+        }
+      },
+      "repeat": 2,
+      "lane": "paced",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 16,
+      "process_count_before": 526,
+      "process_count_after": 526,
+      "process_memory_before": 32842152,
+      "process_memory_after": 36669184
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 816,
+          "p50": 242,
+          "p95": 816,
+          "p99": 816
+        },
+        "input_lateness_max_us": {
+          "max": 4750,
+          "p50": 2815,
+          "p95": 4750,
+          "p99": 4750
+        },
+        "first_audio_us": {
+          "max": 2690,
+          "p50": 228,
+          "p95": 2690,
+          "p99": 2690
+        },
+        "first_text_us": {
+          "max": 240952,
+          "p50": 240495,
+          "p95": 240952,
+          "p99": 240952
+        },
+        "playback_ack_us": {
+          "max": 701,
+          "p50": 292,
+          "p95": 701,
+          "p99": 701
+        },
+        "sink_finish_us": {
+          "max": 4529,
+          "p50": 1463,
+          "p95": 4529,
+          "p99": 4529
+        },
+        "speech_start_us": {
+          "max": 21012,
+          "p50": 20110,
+          "p95": 21012,
+          "p99": 21012
+        },
+        "total_us": {
+          "max": 908095,
+          "p50": 906532,
+          "p95": 908095,
+          "p99": 908095
+        },
+        "turn_end_us": {
+          "max": 3444,
+          "p50": 497,
+          "p95": 3444,
+          "p99": 3444
+        }
+      },
+      "repeat": 2,
+      "lane": "paced",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 16,
+      "process_count_before": 494,
+      "process_count_after": 494,
+      "process_memory_before": 32481744,
+      "process_memory_after": 36150480
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 623,
+          "p50": 9,
+          "p95": 59,
+          "p99": 623
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 722,
+          "p50": 95,
+          "p95": 210,
+          "p99": 722
+        },
+        "first_text_us": {
+          "max": 827,
+          "p50": 164,
+          "p95": 234,
+          "p99": 827
+        },
+        "playback_ack_us": {
+          "max": 437,
+          "p50": 158,
+          "p95": 226,
+          "p99": 437
+        },
+        "sink_finish_us": {
+          "max": 1024,
+          "p50": 345,
+          "p95": 446,
+          "p99": 1024
+        },
+        "speech_start_us": {
+          "max": 787,
+          "p50": 149,
+          "p95": 209,
+          "p99": 787
+        },
+        "total_us": {
+          "max": 2834,
+          "p50": 1269,
+          "p95": 2234,
+          "p99": 2834
+        },
+        "turn_end_us": {
+          "max": 1059,
+          "p50": 420,
+          "p95": 492,
+          "p99": 1059
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 20,
+      "process_count_before": 277,
+      "process_count_after": 277,
+      "process_memory_before": 29270624,
+      "process_memory_after": 30729232
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 27,
+          "p50": 9,
+          "p95": 27,
+          "p99": 27
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 560,
+          "p50": 95,
+          "p95": 204,
+          "p99": 560
+        },
+        "first_text_us": {
+          "max": 695,
+          "p50": 192,
+          "p95": 434,
+          "p99": 695
+        },
+        "playback_ack_us": {
+          "max": 443,
+          "p50": 160,
+          "p95": 305,
+          "p99": 443
+        },
+        "sink_finish_us": {
+          "max": 712,
+          "p50": 355,
+          "p95": 678,
+          "p99": 712
+        },
+        "speech_start_us": {
+          "max": 694,
+          "p50": 177,
+          "p95": 431,
+          "p99": 694
+        },
+        "total_us": {
+          "max": 2815,
+          "p50": 1425,
+          "p95": 2323,
+          "p99": 2815
+        },
+        "turn_end_us": {
+          "max": 1865,
+          "p50": 426,
+          "p95": 682,
+          "p99": 1865
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 20,
+      "process_count_before": 281,
+      "process_count_after": 281,
+      "process_memory_before": 29381384,
+      "process_memory_after": 30902056
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1853,
+          "p50": 53,
+          "p95": 605,
+          "p99": 790
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 2898,
+          "p50": 246,
+          "p95": 1124,
+          "p99": 2042
+        },
+        "first_text_us": {
+          "max": 4027,
+          "p50": 615,
+          "p95": 2001,
+          "p99": 2862
+        },
+        "playback_ack_us": {
+          "max": 2685,
+          "p50": 271,
+          "p95": 1100,
+          "p99": 2588
+        },
+        "sink_finish_us": {
+          "max": 9521,
+          "p50": 1965,
+          "p95": 4301,
+          "p99": 8291
+        },
+        "speech_start_us": {
+          "max": 4026,
+          "p50": 505,
+          "p95": 1796,
+          "p99": 2384
+        },
+        "total_us": {
+          "max": 12669,
+          "p50": 4841,
+          "p95": 9120,
+          "p99": 11566
+        },
+        "turn_end_us": {
+          "max": 3923,
+          "p50": 973,
+          "p95": 2353,
+          "p99": 3508
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 160,
+      "process_count_before": 494,
+      "process_count_after": 494,
+      "process_memory_before": 30365968,
+      "process_memory_after": 44989896
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 258,
+          "p50": 23,
+          "p95": 113,
+          "p99": 244
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 1732,
+          "p50": 211,
+          "p95": 555,
+          "p99": 805
+        },
+        "first_text_us": {
+          "max": 1568,
+          "p50": 355,
+          "p95": 847,
+          "p99": 1189
+        },
+        "playback_ack_us": {
+          "max": 568,
+          "p50": 239,
+          "p95": 388,
+          "p99": 488
+        },
+        "sink_finish_us": {
+          "max": 5255,
+          "p50": 1597,
+          "p95": 3440,
+          "p99": 4681
+        },
+        "speech_start_us": {
+          "max": 1567,
+          "p50": 304,
+          "p95": 754,
+          "p99": 1108
+        },
+        "total_us": {
+          "max": 8178,
+          "p50": 3263,
+          "p95": 5628,
+          "p99": 7347
+        },
+        "turn_end_us": {
+          "max": 2934,
+          "p50": 754,
+          "p95": 1357,
+          "p99": 2096
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 160,
+      "process_count_before": 526,
+      "process_count_after": 526,
+      "process_memory_before": 32977960,
+      "process_memory_after": 42997704
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 3777,
+          "p50": 119,
+          "p95": 702,
+          "p99": 1308
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 9779,
+          "p50": 531,
+          "p95": 1757,
+          "p99": 3856
+        },
+        "first_text_us": {
+          "max": 6368,
+          "p50": 1009,
+          "p95": 2651,
+          "p99": 3967
+        },
+        "playback_ack_us": {
+          "max": 3675,
+          "p50": 348,
+          "p95": 984,
+          "p99": 1577
+        },
+        "sink_finish_us": {
+          "max": 23440,
+          "p50": 5403,
+          "p95": 12494,
+          "p99": 20640
+        },
+        "speech_start_us": {
+          "max": 6217,
+          "p50": 816,
+          "p95": 2140,
+          "p99": 3760
+        },
+        "total_us": {
+          "max": 27537,
+          "p50": 10526,
+          "p95": 21116,
+          "p99": 24712
+        },
+        "turn_end_us": {
+          "max": 6421,
+          "p50": 1725,
+          "p95": 3711,
+          "p99": 5025
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": false,
+      "successful_turns": 640,
+      "process_count_before": 1238,
+      "process_count_after": 1238,
+      "process_memory_before": 44953592,
+      "process_memory_after": 84389424
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 6892,
+          "p50": 87,
+          "p95": 602,
+          "p99": 1537
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 10249,
+          "p50": 563,
+          "p95": 1885,
+          "p99": 3163
+        },
+        "first_text_us": {
+          "max": 13287,
+          "p50": 1044,
+          "p95": 3344,
+          "p99": 5902
+        },
+        "playback_ack_us": {
+          "max": 2486,
+          "p50": 346,
+          "p95": 1059,
+          "p99": 1792
+        },
+        "sink_finish_us": {
+          "max": 23117,
+          "p50": 6195,
+          "p95": 11644,
+          "p99": 15896
+        },
+        "speech_start_us": {
+          "max": 13260,
+          "p50": 862,
+          "p95": 2928,
+          "p99": 5693
+        },
+        "total_us": {
+          "max": 28250,
+          "p50": 10442,
+          "p95": 20387,
+          "p99": 27079
+        },
+        "turn_end_us": {
+          "max": 14478,
+          "p50": 1945,
+          "p95": 4523,
+          "p99": 7411
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": false,
+      "successful_turns": 640,
+      "process_count_before": 1366,
+      "process_count_after": 1366,
+      "process_memory_before": 46439040,
+      "process_memory_after": 85313000
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 6336,
+          "p50": 88,
+          "p95": 558,
+          "p99": 1448
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 10142,
+          "p50": 489,
+          "p95": 1774,
+          "p99": 3017
+        },
+        "first_text_us": {
+          "max": 11662,
+          "p50": 795,
+          "p95": 3009,
+          "p99": 6524
+        },
+        "playback_ack_us": {
+          "max": 13123,
+          "p50": 389,
+          "p95": 1316,
+          "p99": 9797
+        },
+        "sink_finish_us": {
+          "max": 24738,
+          "p50": 5590,
+          "p95": 16314,
+          "p99": 20666
+        },
+        "speech_start_us": {
+          "max": 11365,
+          "p50": 646,
+          "p95": 2628,
+          "p99": 5638
+        },
+        "total_us": {
+          "max": 33709,
+          "p50": 9715,
+          "p95": 25520,
+          "p99": 31633
+        },
+        "turn_end_us": {
+          "max": 13063,
+          "p50": 1460,
+          "p95": 4505,
+          "p99": 7693
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": true,
+      "successful_turns": 640,
+      "process_count_before": 1241,
+      "process_count_after": 1241,
+      "process_memory_before": 41641648,
+      "process_memory_after": 84877928
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 4574,
+          "p50": 76,
+          "p95": 408,
+          "p99": 1138
+        },
+        "input_lateness_max_us": {
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0
+        },
+        "first_audio_us": {
+          "max": 4421,
+          "p50": 573,
+          "p95": 1796,
+          "p99": 3195
+        },
+        "first_text_us": {
+          "max": 5308,
+          "p50": 892,
+          "p95": 2388,
+          "p99": 3849
+        },
+        "playback_ack_us": {
+          "max": 3014,
+          "p50": 382,
+          "p95": 1182,
+          "p99": 1942
+        },
+        "sink_finish_us": {
+          "max": 22984,
+          "p50": 6239,
+          "p95": 14273,
+          "p99": 17080
+        },
+        "speech_start_us": {
+          "max": 5185,
+          "p50": 767,
+          "p95": 2134,
+          "p99": 3499
+        },
+        "total_us": {
+          "max": 31513,
+          "p50": 10353,
+          "p95": 19810,
+          "p99": 22735
+        },
+        "turn_end_us": {
+          "max": 9441,
+          "p50": 1694,
+          "p95": 3802,
+          "p99": 4834
+        }
+      },
+      "repeat": 3,
+      "lane": "burst",
+      "concurrency": 32,
+      "held_start": true,
+      "successful_turns": 640,
+      "process_count_before": 1369,
+      "process_count_after": 1369,
+      "process_memory_before": 46125864,
+      "process_memory_after": 85231128
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 135,
+          "p50": 73,
+          "p95": 135,
+          "p99": 135
+        },
+        "input_lateness_max_us": {
+          "max": 6223,
+          "p50": 3330,
+          "p95": 6223,
+          "p99": 6223
+        },
+        "first_audio_us": {
+          "max": 216,
+          "p50": 181,
+          "p95": 216,
+          "p99": 216
+        },
+        "first_text_us": {
+          "max": 241000,
+          "p50": 240802,
+          "p95": 241000,
+          "p99": 241000
+        },
+        "playback_ack_us": {
+          "max": 276,
+          "p50": 271,
+          "p95": 276,
+          "p99": 276
+        },
+        "sink_finish_us": {
+          "max": 634,
+          "p50": 522,
+          "p95": 634,
+          "p99": 634
+        },
+        "speech_start_us": {
+          "max": 22200,
+          "p50": 22096,
+          "p95": 22200,
+          "p99": 22200
+        },
+        "total_us": {
+          "max": 909353,
+          "p50": 902118,
+          "p95": 909353,
+          "p99": 909353
+        },
+        "turn_end_us": {
+          "max": 444,
+          "p50": 436,
+          "p95": 444,
+          "p99": 444
+        }
+      },
+      "repeat": 3,
+      "lane": "paced",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 2,
+      "process_count_before": 277,
+      "process_count_after": 277,
+      "process_memory_before": 33625008,
+      "process_memory_after": 33472776
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 191,
+          "p50": 80,
+          "p95": 191,
+          "p99": 191
+        },
+        "input_lateness_max_us": {
+          "max": 5592,
+          "p50": 5081,
+          "p95": 5592,
+          "p99": 5592
+        },
+        "first_audio_us": {
+          "max": 795,
+          "p50": 283,
+          "p95": 795,
+          "p99": 795
+        },
+        "first_text_us": {
+          "max": 243424,
+          "p50": 240737,
+          "p95": 243424,
+          "p99": 243424
+        },
+        "playback_ack_us": {
+          "max": 966,
+          "p50": 500,
+          "p95": 966,
+          "p99": 966
+        },
+        "sink_finish_us": {
+          "max": 1121,
+          "p50": 589,
+          "p95": 1121,
+          "p99": 1121
+        },
+        "speech_start_us": {
+          "max": 19801,
+          "p50": 19360,
+          "p95": 19801,
+          "p99": 19801
+        },
+        "total_us": {
+          "max": 904146,
+          "p50": 903659,
+          "p95": 904146,
+          "p99": 904146
+        },
+        "turn_end_us": {
+          "max": 572,
+          "p50": 431,
+          "p95": 572,
+          "p99": 572
+        }
+      },
+      "repeat": 3,
+      "lane": "paced",
+      "concurrency": 1,
+      "held_start": false,
+      "successful_turns": 2,
+      "process_count_before": 281,
+      "process_count_after": 281,
+      "process_memory_before": 32125536,
+      "process_memory_after": 31366592
+    },
+    {
+      "path": "legacy",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1324,
+          "p50": 96,
+          "p95": 1324,
+          "p99": 1324
+        },
+        "input_lateness_max_us": {
+          "max": 5869,
+          "p50": 2819,
+          "p95": 5869,
+          "p99": 5869
+        },
+        "first_audio_us": {
+          "max": 1085,
+          "p50": 189,
+          "p95": 1085,
+          "p99": 1085
+        },
+        "first_text_us": {
+          "max": 241292,
+          "p50": 240441,
+          "p95": 241292,
+          "p99": 241292
+        },
+        "playback_ack_us": {
+          "max": 873,
+          "p50": 288,
+          "p95": 873,
+          "p99": 873
+        },
+        "sink_finish_us": {
+          "max": 2143,
+          "p50": 1189,
+          "p95": 2143,
+          "p99": 2143
+        },
+        "speech_start_us": {
+          "max": 21103,
+          "p50": 20015,
+          "p95": 21103,
+          "p99": 21103
+        },
+        "total_us": {
+          "max": 904369,
+          "p50": 903001,
+          "p95": 904369,
+          "p99": 904369
+        },
+        "turn_end_us": {
+          "max": 740,
+          "p50": 420,
+          "p95": 740,
+          "p99": 740
+        }
+      },
+      "repeat": 3,
+      "lane": "paced",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 16,
+      "process_count_before": 494,
+      "process_count_after": 494,
+      "process_memory_before": 33714248,
+      "process_memory_after": 37807992
+    },
+    {
+      "path": "scoped",
+      "metrics": {
+        "ingress_admit_max_us": {
+          "max": 1762,
+          "p50": 84,
+          "p95": 1762,
+          "p99": 1762
+        },
+        "input_lateness_max_us": {
+          "max": 5552,
+          "p50": 4101,
+          "p95": 5552,
+          "p99": 5552
+        },
+        "first_audio_us": {
+          "max": 719,
+          "p50": 238,
+          "p95": 719,
+          "p99": 719
+        },
+        "first_text_us": {
+          "max": 242473,
+          "p50": 240386,
+          "p95": 242473,
+          "p99": 242473
+        },
+        "playback_ack_us": {
+          "max": 693,
+          "p50": 338,
+          "p95": 693,
+          "p99": 693
+        },
+        "sink_finish_us": {
+          "max": 2322,
+          "p50": 1805,
+          "p95": 2322,
+          "p99": 2322
+        },
+        "speech_start_us": {
+          "max": 20452,
+          "p50": 19771,
+          "p95": 20452,
+          "p99": 20452
+        },
+        "total_us": {
+          "max": 909354,
+          "p50": 905659,
+          "p95": 909354,
+          "p99": 909354
+        },
+        "turn_end_us": {
+          "max": 1029,
+          "p50": 500,
+          "p95": 1029,
+          "p99": 1029
+        }
+      },
+      "repeat": 3,
+      "lane": "paced",
+      "concurrency": 8,
+      "held_start": false,
+      "successful_turns": 16,
+      "process_count_before": 526,
+      "process_count_after": 526,
+      "process_memory_before": 33956592,
+      "process_memory_after": 38257672
+    }
+  ],
+  "warmup_rounds": 3,
+  "playback": "immediate controlled acknowledgement at sink finish; not acoustic latency",
+  "total_successful_turns": 8868,
+  "limitations": "First-pass summaries retained. TTS deltas from observer TextOutput receipt have48 negative samples across first_audio/sink_finish due to cross-sender observation order; do not use as causal TTS latencies. STT/paced concern remains valid. Canonical report replaces TTS anchor with identical source callback timestamp instrumentation."
+}

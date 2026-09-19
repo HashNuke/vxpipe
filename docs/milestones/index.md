@@ -81,12 +81,21 @@ reusable and assigns Phoenix/dashboard/sample ownership to `vxpipe_console` /
 `Vxpipe.Console`. It changes these slices' application ownership, not their count or order.
 
 The 2026-09-19 speech-integration research adds
-[Simpler speech integrations](simpler-speech-integrations.md) before delivery. Its eight proposed
+[Simpler speech integrations](simpler-speech-integrations.md) before delivery. Its nine revised
 checkpoints replace the public provider/transport split with semantic sessions, migrating Morse
 and Deepgram one direction at a time. The [provider comparison](../speech-provider-comparison.md)
 covers Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini without adding those integrations.
-Research and local specification review are complete; implementation is not started and the
-packaging/retention hold is unchanged.
+Research is complete; implementation is paused and uncommitted. Isolated Morse tests proved a
+startup-isolation regression. The [revised ownership plan](../speech-session-ownership.md) adds
+checkpoint R, requires room-scoped execution, and moves both native STT/TTS proofs ahead of
+integration: R → A → D → B → C → E → F → G → H. The
+[evidence and load measurements](../speech-startup-isolation.md) remain the baseline; zero of
+nine checkpoints are complete. The subsequent [scoped speech experiment](../scoped-speech-experiment.md)
+checks real-room behavior/load through a test-only bridge; migration remains paused.
+The milestone now carries its latency/capacity limits, explicit failure-handling gates and
+tasks to remove lifecycle/task bookkeeping replaced by local supervision. A speedup, capacity
+ceiling and net code reduction remain unproven; no acceptance checkbox changed.
+The packaging/retention hold is unchanged.
 
 ## How to use this index
 
@@ -134,7 +143,7 @@ progress without claiming the entire milestone is complete.
 27. [x] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
-30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through eight runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Research/specification only; implementation has not started.
+30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Replanned around room-scoped ownership and asynchronous local startup; implementation remains paused with zero of nine checkpoints complete.
 31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -494,7 +503,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | In progress; Storybook refinement locally reviewed 2026-09-18 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity remain required. Compact provider cards, credential modals with service dropdowns, alternative voice-readiness previews and tenant resumption are prototyped; the default name is Demo. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Production integration planned; recipe prototype locally reviewed 2026-09-18 | Tenant services-to-recipes stories include blocked/ready states and explicit provider choice. Root-home/demo-mode behavior, durable publication and real debug-console launch retain their incomplete acceptance gates. |
-| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Proposed; research and local design/dependency review complete | Eight unimplemented vertical checkpoints map session contracts, provider migrations, shared conformance examples and final consumer acceptance. Official Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini docs inform segment/turn, generation/playback and cancellation boundaries. No new hosted support or runtime verification is claimed. |
+| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Revised proposal; ownership review and post-experiment planning refresh, implementation paused | Nine checkpoints retain scoped admission/lifetime proof and isolated native STT/TTS before room migration. Experiment limits and B/E/H cleanup-code deletion gates are explicit. The first prototype's global-startup regression remains red; no speedup, capacity ceiling or new hosted support is claimed. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 
 ## Planning verification
