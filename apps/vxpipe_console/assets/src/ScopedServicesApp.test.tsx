@@ -26,6 +26,120 @@ const binding = (provider: string, source = "platform", name = provider) => ({
   last_validated_at: null,
 });
 
+test("Telnyx saves the public key and shows backend URLs and saved-field metadata", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  let saved = false;
+  const fetchImpl = vi.fn(
+    async (_url: RequestInfo | URL, options?: RequestInit) => {
+      if (options?.method === "POST") {
+        saved = true;
+        return new Response("{}", { status: 201 });
+      }
+      return new Response(
+        JSON.stringify({
+          tenant: null,
+          bindings: saved
+            ? [
+                {
+                  ...binding("telnyx"),
+                  saved_fields: ["api_key", "public_key"],
+                },
+              ]
+            : [],
+          webhook_urls: {
+            platform:
+              "https://callbacks.example.test/voice/webhooks/platform/telnyx",
+            tenant: null,
+          },
+        }),
+      );
+    },
+  );
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  await screen.findByRole("heading", { name: "Platform services" });
+  fireEvent.click(
+    screen.getAllByRole("button", { name: "Connect a service" })[0],
+  );
+  fireEvent.change(screen.getByLabelText("Service"), {
+    target: { value: "telnyx" },
+  });
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue(
+    "https://callbacks.example.test/voice/webhooks/platform/telnyx",
+  );
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "synthetic-api-key" },
+  });
+  const publicKey = "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  fireEvent.change(screen.getByLabelText("Public key"), {
+    target: { value: publicKey },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/platform/credentials",
+    expect.objectContaining({
+      body: JSON.stringify({
+        provider: "telnyx",
+        name: "telnyx",
+        values: { api_key: "synthetic-api-key", public_key: publicKey },
+      }),
+    }),
+  );
+  fireEvent.click(screen.getAllByRole("button", { name: "Manage Telnyx" })[0]);
+  expect(screen.getByLabelText("Public key")).toHaveValue("");
+  expect(screen.getByLabelText("Public key")).toHaveAttribute(
+    "placeholder",
+    "••••••••",
+  );
+  expect(
+    screen.getByText(/Leave blank to remove the saved public key/),
+  ).toBeInTheDocument();
+});
+
+test("Telnyx overrides switch URL scope without borrowing the inherited public key", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
+  );
+  const fetchImpl = vi.fn(() =>
+    response({
+      tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
+      bindings: [
+        { ...binding("telnyx"), saved_fields: ["api_key", "public_key"] },
+      ],
+      webhook_urls: {
+        platform: "http://localhost:4567/webhooks/platform/telnyx",
+        tenant:
+          "http://localhost:4567/webhooks/tenants/AAAAAAAAAAAAAAAA/telnyx",
+      },
+    }),
+  );
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  fireEvent.click(
+    (await screen.findAllByRole("button", { name: "Manage Telnyx" }))[0],
+  );
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue(
+    "http://localhost:4567/webhooks/platform/telnyx",
+  );
+  expect(screen.queryByLabelText("Public key")).not.toBeInTheDocument();
+  expect(screen.getByText(/Local preview/)).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Override for this tenant" }),
+  );
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue(
+    "http://localhost:4567/webhooks/tenants/AAAAAAAAAAAAAAAA/telnyx",
+  );
+  expect(screen.getByLabelText("Public key")).not.toHaveAttribute(
+    "placeholder",
+  );
+  expect(
+    screen.getByText(/Update your Telnyx Voice API application/),
+  ).toBeInTheDocument();
+});
+
 test("platform services save, reload and edit the exact persisted binding", async () => {
   window.history.replaceState({}, "", "/admin/platform/services");
   let bindings: ReturnType<typeof binding>[] = [];

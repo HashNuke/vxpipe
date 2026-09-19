@@ -65,8 +65,11 @@ in the launching shell or inject them through your secret manager.
 
 For existing Telnyx/Twilio calls, provision a tenant carrier credential and register its service
 as described in [tenant telephony setup](tenant-telephony-services.md#trusted-registration-and-lookup).
-Set `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` to the public HTTPS origin and mounted path. Provider
-credentials come from PostgreSQL; the callback-origin setting only configures public routes.
+Public `APP_HOST` supplies the HTTPS callback origin. Use
+`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` to override it, including a mounted path prefix.
+Local HTTP URLs are previews and do not enable live telephony ingress. Provider
+credentials come from PostgreSQL. See [scoped Telnyx setup](scoped-telnyx-service-bindings.md)
+for platform inheritance, tenant overrides and matching Console webhook URLs.
 
 ## Local fixtures
 

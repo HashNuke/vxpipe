@@ -194,6 +194,9 @@ export function ServiceCredentialForm({
                 className="text-xs text-[var(--admin-muted)]"
               >
                 Optional; Only required for Telephony services
+                {savedFields.includes("publicKey")
+                  ? ". Leave blank to remove the saved public key; phone calls will require a new key."
+                  : ""}
               </p>
             </div>
           ) : null}

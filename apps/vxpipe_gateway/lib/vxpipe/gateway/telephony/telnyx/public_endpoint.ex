@@ -4,8 +4,29 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint do
   alias Vxpipe.Gateway.Telephony.ConfiguredService
 
   @spec event_url(ConfiguredService.t()) :: String.t()
+  def event_url(
+        %ConfiguredService{
+          identity: %{service_reference: %{credential_name: "telnyx", credential_owner: owner}}
+        } = service
+      )
+      when not is_nil(owner) do
+    scoped_event_url(service.public_base_url, owner)
+  end
+
   def event_url(%ConfiguredService{} = service) do
     append_path(service, "events")
+  end
+
+  @doc "Builds a credential-scope URL, preserving the configured public path prefix."
+  def scoped_event_url(base, owner) do
+    suffix =
+      case owner do
+        :platform -> "/webhooks/platform/telnyx"
+        {:tenant, key} -> "/webhooks/tenants/#{URI.encode(key, &URI.char_unreserved?/1)}/telnyx"
+      end
+
+    uri = URI.parse(base)
+    URI.to_string(%{uri | path: String.trim_trailing(uri.path || "", "/") <> suffix})
   end
 
   @spec media_url(ConfiguredService.t(), String.t()) :: String.t()

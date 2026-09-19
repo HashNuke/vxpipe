@@ -343,24 +343,34 @@ if config_env() == :prod do
   config :vxpipe_console, :operator_login_secret, secret_key_base
 end
 
-telephony_public_base_url =
-  case nonempty_env.("VXPIPE_TELEPHONY_PUBLIC_BASE_URL") do
-    nil ->
-      nil
+# Child-app test runs do not load Gateway or Console; keep their runtime settings optional.
+if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
+  service_public_origin =
+    case Vxpipe.Gateway.HTTP.PublicOrigin.resolve(
+           host: nonempty_env.("APP_HOST"),
+           port: nonempty_env.("PORT"),
+           tls: if(config_env() == :dev, do: nonempty_env.("VXPIPE_DEV_TLS")),
+           override: nonempty_env.("VXPIPE_TELEPHONY_PUBLIC_BASE_URL")
+         ) do
+      {:ok, origin} ->
+        origin
 
-    value ->
-      case Vxpipe.Gateway.Telephony.ConfiguredService.normalize_public_base_url(value) do
-        {:ok, origin} -> origin
-        _invalid -> raise "invalid VXPIPE_TELEPHONY_PUBLIC_BASE_URL configuration"
-      end
-  end
+      _invalid ->
+        raise "invalid APP_HOST / PORT / VXPIPE_DEV_TLS / VXPIPE_TELEPHONY_PUBLIC_BASE_URL configuration"
+    end
 
-config :vxpipe_gateway, Vxpipe.Gateway.Application,
-  http: [
-    operator_api: [enabled: not is_nil(database_url)],
-    call_spec_authoring: [enabled: not is_nil(database_url)],
-    telephony: [
-      enabled: not is_nil(telephony_public_base_url),
-      public_base_url: telephony_public_base_url
+  config :vxpipe_console, :service_public_origin, service_public_origin
+
+  telephony_public_base_url =
+    if URI.parse(service_public_origin).scheme == "https", do: service_public_origin
+
+  config :vxpipe_gateway, Vxpipe.Gateway.Application,
+    http: [
+      operator_api: [enabled: not is_nil(database_url)],
+      call_spec_authoring: [enabled: not is_nil(database_url)],
+      telephony: [
+        enabled: not is_nil(telephony_public_base_url),
+        public_base_url: telephony_public_base_url
+      ]
     ]
-  ]
+end

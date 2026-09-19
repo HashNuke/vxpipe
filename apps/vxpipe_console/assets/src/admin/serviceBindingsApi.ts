@@ -10,6 +10,7 @@ export type ServiceBinding = SetupConnection & {
 export type BindingDirectory = {
   tenant: { key: string; name: string } | null;
   bindings: ServiceBinding[];
+  webhookUrls?: { platform: string; tenant: string | null };
 };
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -89,5 +90,41 @@ export function parseBindingDirectory(
       ),
     };
   });
-  return { tenant: tenant as BindingDirectory["tenant"], bindings };
+  let webhookUrls: BindingDirectory["webhookUrls"];
+  if (value.webhook_urls !== undefined) {
+    const urls = value.webhook_urls;
+    if (
+      !record(urls) ||
+      !validWebhookUrl(urls.platform) ||
+      (scope.kind === "platform"
+        ? urls.tenant !== null
+        : !validWebhookUrl(urls.tenant))
+    )
+      throw invalid();
+    webhookUrls = {
+      platform: urls.platform as string,
+      tenant: urls.tenant as string | null,
+    };
+  }
+  return {
+    tenant: tenant as BindingDirectory["tenant"],
+    bindings,
+    webhookUrls,
+  };
+}
+
+function validWebhookUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 2304) return false;
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
 }

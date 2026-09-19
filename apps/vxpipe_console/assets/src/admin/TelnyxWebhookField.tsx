@@ -43,6 +43,12 @@ export function TelnyxWebhookField({ url }: { url: string }) {
         Use this URL in your Telnyx Voice API application to receive call
         events.
       </p>
+      {url.startsWith("http:") ? (
+        <p>
+          Local preview. Live call events require a publicly reachable HTTPS
+          URL.
+        </p>
+      ) : null}
       {state !== "idle" ? (
         <p role="status">
           {state === "copied"

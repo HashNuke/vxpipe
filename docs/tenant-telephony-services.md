@@ -199,9 +199,11 @@ credential resolution at the owning live-reader boundary.
 
 ## Live readers and platform callback origin
 
-Set optional `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` to the public HTTPS origin and mounted path,
-for example `https://voice.example.test/voice`. Setting it enables the existing telephony routes;
-the existing Console/Gateway listener still serves them. Use the externally visible URL because
+Public `APP_HOST` defaults the callback origin to HTTPS. Optional
+`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` overrides that origin and its mounted path,
+for example `https://voice.example.test/voice`. A resolved HTTPS origin enables telephony routes;
+local HTTP URLs are previews. The existing Console/Gateway listener still serves the routes.
+Use the externally visible URL because
 Twilio signatures include the exact URL. The setting rejects userinfo, query strings, fragments
 and non-HTTPS URLs. It contains no provider credentials. `env.sample` documents it.
 

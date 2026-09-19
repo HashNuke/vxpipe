@@ -110,6 +110,9 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
            %{"api_key" => "zenmux-private"}},
           {"telnyx", %{"api_key" => "telnyx-private"}, "api_key",
            %{"api_key" => "telnyx-private"}},
+          {"telnyx", %{"api_key" => "telnyx-private", "public_key" => Base.encode64(<<1::256>>)},
+           "api_key",
+           %{"api_key" => "telnyx-private", "public_key" => Base.encode64(<<1::256>>)}},
           {"twilio",
            %{
              "account_sid" => "AC11111111111111111111111111111111",
@@ -395,6 +398,18 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
   end
 
   test "lists platform and inherited bindings using operator authority" do
+    previous_origin = Application.fetch_env!(:vxpipe_console, :service_public_origin)
+
+    Application.put_env(
+      :vxpipe_console,
+      :service_public_origin,
+      "https://callbacks.example.test/voice"
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_console, :service_public_origin, previous_origin)
+    end)
+
     binding = %{
       provider: "google",
       name: "shared-model",
@@ -419,6 +434,13 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              json_response(conn, 200)
 
     assert_received {:operator_bindings_requested, @tenant_key}
+
+    assert json_response(conn, 200)["webhook_urls"] == %{
+             "platform" => "https://callbacks.example.test/voice/webhooks/platform/telnyx",
+             "tenant" =>
+               "https://callbacks.example.test/voice/webhooks/tenants/#{@tenant_key}/telnyx"
+           }
+
     refute conn.resp_body =~ "payload"
 
     configure_credential_repository({:ok, %{tenant: nil, bindings: [binding]}})
@@ -429,6 +451,12 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              json_response(conn, 200)
 
     assert_received {:operator_bindings_requested, :platform}
+
+    assert json_response(conn, 200)["webhook_urls"] == %{
+             "platform" => "https://callbacks.example.test/voice/webhooks/platform/telnyx",
+             "tenant" => nil
+           }
+
     assert https_get("/admin/api/platform/services").status == 401
     refute_received {:operator_bindings_requested, _}
   end

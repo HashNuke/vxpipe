@@ -1,11 +1,11 @@
 # Platform and tenant services
 
 Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
-are delivered, including the credential-presence correction. C1's effective Telnyx
-bindings and C2's scoped ingress are implemented; Console configuration C3 and
-callback/migration acceptance D remain. The C2 umbrella run passes 1,781 tests with
-zero failures and 40 exclusions; all root static gates pass. Earlier native
-handoff failures remain in historical evidence; this pass does not establish their cause.
+are delivered, including the credential-presence correction. C1/C2 scoped Telnyx
+bindings/ingress and C3a Console credential/URL configuration are implemented.
+C3b application/number-route setup, legacy webhook removal and final acceptance
+remain. The latest umbrella run passes 1,786 tests with zero failures and 40 exclusions;
+all root static gates and 183 frontend tests pass.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -174,11 +174,11 @@ browser checks. A checked design task does not count as a delivered slice.
   selected service scope, verify the route-selected key, then dispatch to that tenant.
   Exercise both routes with persisted credentials, wrong-scope/tenant rejection and
   duplicate/outage behavior. Expose the matching URL and configuration in Console.
-- [ ] **D — Complete Telnyx callback cutover and restart acceptance.** Use one resolved
-  public origin/scope for displayed and outgoing callbacks, preserve initialized legs
-  and legacy ingress/media contracts, and exercise migration, replacement, re-encryption,
-  rollback/restart and final umbrella gates. Document remote webhook cutover and deferred
-  provider integrations without claiming live-provider evidence.
+- [ ] **D — Remove legacy Telnyx webhooks and complete acceptance.** Use only the explicit
+  platform and tenant webhook paths. Remove the legacy events route and callback generation
+  in a reviewed checkpoint, preserving media/token and Twilio contracts. Verify replacement,
+  re-encryption, restart, schema rollback boundaries and final umbrella gates. Document
+  required remote application configuration without claiming live-provider evidence.
 
 Checkpoint design review, 2026-09-19: A establishes the shared scoped resolver before
 the operator UI and scoped carrier readers use it; B1/B2 provide the durable management
@@ -204,7 +204,15 @@ The [scoped Telnyx binding decision](scoped-telnyx-service-bindings.md) records 
 legacy compatibility boundary, selected-owner identity and acceptance order.
 C3 is split into credential/URL setup (C3a) and tenant application configuration
 (C3b). C3a includes D's shared-origin and outgoing scope-URL generation so displayed
-and outgoing URLs agree; D retains deliberate legacy cutover and final acceptance.
+and outgoing URLs agree; D owns legacy webhook deletion and final acceptance, per
+the latest user clarification.
+
+User scope correction, 2026-09-19: legacy Telnyx webhooks are no longer required.
+Remove their routes and callback generation instead of delivering a compatibility
+window. This supersedes earlier legacy webhook preservation requirements; historical
+C1/C2 evidence below describes what those checkpoints delivered. C3a finishes its
+reviewed credential/URL slice before the separate removal checkpoint. Stored credentials,
+media authentication and Twilio routing are not deleted by that change.
 
 Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provider-inheritance.md).
 
@@ -366,6 +374,26 @@ Checkpoint C2 implementation:
   pass. No UI or live-provider claim is included. See
   [C2 evidence](../labnotes/20260919-1030-scoped-telnyx-ingress.md).
 
+Checkpoint C3a implementation:
+
+- Production Telnyx forms accept the optional public key with the API key. Directory
+  responses expose configured-field names only, from the exact selected credential.
+  Unreadable tenant rows do not inherit a platform public-key flag. Whole-payload
+  replacement remains explicit: leaving a saved public key blank removes it.
+- Runtime resolves one public origin from allowlisted configuration; the explicit
+  telephony override preserves path prefixes. Console returns platform/tenant URLs
+  built by the same Gateway helper used for newly initialized scoped callbacks.
+  Public APP_HOST defaults to HTTPS; local HTTP remains a preview. Legacy callbacks
+  remain temporarily in this checkpoint, pending the approved deletion next.
+- Chrome at desktop/mobile sizes verified save/edit, inherited details, override URL
+  changes, clipboard success/failure, rejected-key recovery and persisted state after
+  restart with encrypted PostgreSQL and synthetic validation. No live Telnyx claim.
+- Review caught malformed URL ports being silently normalized and a repeated
+  CallIngress test identity collision. Focused regressions and 50 test-isolation reruns
+  pass; the final umbrella passes 1,786 tests, zero failures, 40 excluded. All 183
+  frontend tests, assets, TypeScript, ESLint and root static gates pass. See
+  [C3a evidence](../labnotes/20260919-1052-telnyx-console-configuration.md).
+
 ### 1. Storybook review checkpoint
 
 - [x] Show tenant and platform Telnyx URLs in connect/edit states with copy feedback.
@@ -386,7 +414,7 @@ remote application provisioning, credential persistence, verification or routing
 - [x] Migrate existing credentials and references as tenant-owned without changing IDs
   or effective behavior. Version authenticated encryption context where needed;
   test existing decrypt, replacement, re-encryption, interruption and rollback behavior.
-- [ ] Add explicit platform operator CRUD/validation endpoints using the current session
+- [x] Add explicit platform operator CRUD/validation endpoints using the current session
   and CSRF protections. Tenant keys cannot write/read platform secrets; effective-list
   responses contain safe source/readiness metadata and URLs only.
 - [x] Implement one shared presence resolver used by save/publish/preparation and every
@@ -411,14 +439,14 @@ remote application provisioning, credential persistence, verification or routing
 - [x] Mount both approved `/webhooks/...` routes through the existing Phoenix/Gateway
   boundary. Select exactly one verifier from the route; reject unknown tenants, missing
   public keys, malformed signatures, stale events and wrong application ownership.
-- [ ] Generate outgoing callback URLs using the same public origin and scope as the UI.
+- [x] Generate outgoing callback URLs using the same public origin and scope as the UI.
   Preserve call/leg deduplication, exact live-owner dispatch and tenant media-token ownership.
   Review initialized-key lifetime versus a replaced scoped key explicitly; never try the
   other scope's key on a verification failure or change an active leg's ownership.
-- [ ] Migrate existing `/api/telephony/telnyx/:ingress/events` callers deliberately. Preserve
-  the legacy route only against its exact existing tenant/service binding during transition;
-  never redirect signed requests or interpret ingress keys as tenant keys. Document the
-  remote URL update and cutover; retain existing media URL/token contracts.
+- [ ] Remove `/api/telephony/telnyx/:ingress/events`, its verifier-selection path and
+  legacy callback generation. Only explicit platform/tenant webhook paths remain. Update
+  callers and tests; requests to removed paths must fail without dispatch. Retain media
+  URL/token and Twilio contracts. Do not delete stored credentials as part of route removal.
 - [x] Prove signed platform and tenant HTTP requests through persisted encrypted bindings,
   cross-scope key rejection, cross-tenant application rejection, duplicates, storage outage
   and malformed public configuration. Live checks stay in the tagged integration lane.
@@ -427,7 +455,7 @@ remote application provisioning, credential persistence, verification or routing
 
 - [x] Wire platform/tenant service pages and onboarding to effective-service metadata.
   Show source and unavailable/invalid states and explicit restore/override actions.
-- [ ] Make service scope changes deliberate and display the resulting webhook URL change.
+- [x] Make service scope changes deliberate and display the resulting webhook URL change.
   Keep secrets write-only and isolate operator/platform authority from tenant administration.
 - [ ] Derive progress from durable resources after reload, including telephony application
   and number setup. Preserve existing tenant services and prepared/live-call contracts.

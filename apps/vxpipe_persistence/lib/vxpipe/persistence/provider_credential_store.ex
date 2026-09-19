@@ -174,11 +174,22 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   end
 
   @doc false
-  def availability(context, stored, tenant_key) do
+  def setup_metadata(context, stored, tenant_key) do
     case {stored.status, resolve_payload(context, stored, tenant_key)} do
-      {"active", {:ok, _resolved}} -> :connected
-      {"revoked", _result} -> :invalid
-      _unreadable -> :unavailable
+      {"active", {:ok, resolved}} ->
+        fields =
+          Enum.filter(
+            ~w(api_key public_key account_sid auth_token),
+            &Map.has_key?(resolved.payload, &1)
+          )
+
+        %{status: :connected, saved_fields: fields}
+
+      {"revoked", _result} ->
+        %{status: :invalid, saved_fields: []}
+
+      _unreadable ->
+        %{status: :unavailable, saved_fields: []}
     end
   end
 

@@ -127,6 +127,9 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
 
     assert :ok = OutgoingLeg.await(leg, 1_000)
 
+    assert_receive {:test_telephony_dial, dial}
+    assert dial.callback_url == "https://voice.example.test/voice/webhooks/platform/telnyx"
+
     body =
       JSON.encode!(%{
         data: %{

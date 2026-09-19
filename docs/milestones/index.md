@@ -135,7 +135,7 @@ Onboarding follow-up, 2026-09-19: the [platform and tenant services plan](../pla
 extends the bootstrap milestone with explicit shared services, tenant overrides and
 scope-specific Telnyx webhook URLs. Storybook work precedes the planned storage,
 reader, verification and Console integration checkpoints. Implementation was authorized
-on 2026-09-19 and is tracked as eight runnable vertical checkpoints in that plan,
+on 2026-09-19 and is tracked as runnable vertical checkpoints in that plan,
 including the user's subsequent operator/tenant authoring-authority clarification;
 the inherited-provider, principal-aware authoring, operator API-key writes and Console platform slices pass
 focused tests, browser checks where applicable and the serial umbrella suite;
@@ -150,8 +150,12 @@ C1 adds effective Telnyx application bindings and preserves legacy carrier ident
 Its 1,770-test umbrella run found one outdated reference-field assertion, now corrected
 and verified by the 116-test Calls suite; all other suites and root static gates pass.
 Scoped ingress C2 now passes 1,781 umbrella tests with zero failures and 40 exclusions,
-including persisted signed requests through Phoenix and retained owner checks. Console
-carrier configuration C3 and final cutover acceptance remain open.
+including persisted signed requests through Phoenix and retained owner checks. C3a adds
+Console public-key configuration and matching UI/outgoing URLs with browser/restart
+verification; 1,786 umbrella and 183 frontend tests pass, with all static gates green.
+Application/number setup C3b and final acceptance remain open. The latest user clarification
+removes the legacy Telnyx webhook compatibility requirement: remove the old events
+route and callback generation in a separate reviewed checkpoint.
 This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 

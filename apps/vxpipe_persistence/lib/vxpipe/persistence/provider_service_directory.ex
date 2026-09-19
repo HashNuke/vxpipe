@@ -62,19 +62,17 @@ defmodule Vxpipe.Persistence.ProviderServiceDirectory do
     source = if owner.scope == "tenant" and Map.has_key?(own, key), do: :tenant, else: :platform
     selected = if source == :tenant, do: Map.fetch!(own, key), else: Map.fetch!(platform, key)
     tenant_key = if source == :tenant, do: owner.key
+    setup = ProviderCredentialStore.setup_metadata(context, selected, tenant_key)
 
     %{
       provider: provider,
       name: name,
       source: source,
-      status: ProviderCredentialStore.availability(context, selected, tenant_key),
+      status: setup.status,
       credential_id: selected.public_id,
       platform_available: Map.has_key?(platform, key),
       last_validated_at: selected.last_validated_at,
-      saved_fields: fields(selected.auth_kind)
+      saved_fields: setup.saved_fields
     }
   end
-
-  defp fields("api_key"), do: ["api_key"]
-  defp fields("account_sid_auth_token"), do: ["account_sid", "auth_token"]
 end

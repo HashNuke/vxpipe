@@ -1,6 +1,6 @@
 # Scoped Telnyx service bindings
 
-Decision: 2026-09-19. Design and C1/C2 implementation reviewed. C3 remains open under checkpoint C of the
+Decision: 2026-09-19. Design and C1/C2/C3a implementation reviewed. C3b remains open under checkpoint C of the
 [platform and tenant services plan](platform-and-tenant-services.md).
 
 ## Credential ownership and application identity
@@ -28,6 +28,13 @@ application ID among scoped bindings. The new scope URLs select only the primary
 Shared Voice API applications and number-based tenant selection remain deferred.
 
 ## Compatibility and migration
+
+**Latest approved scope, 2026-09-19:** remove legacy Telnyx webhook routes and
+callback generation. There is no required compatibility window. The historical
+C1/C2 behavior below is superseded for webhook delivery; media/token and Twilio
+contracts remain. Deleting webhook code does not authorize deleting stored credentials.
+The removal follows the C3a credential/URL checkpoint and will explicitly test rejected
+old paths and supported scoped callbacks.
 
 Existing bindings without `credential_name` retain their exact tenant credential ID,
 public key, ingress key and foreign-key checks. Do not guess a scoped primary account
@@ -84,7 +91,8 @@ accepts scoped application metadata:
 Registration requires an effective credential with a valid verification key. It does
 not publish a phone-number route or configure the remote Telnyx application. The
 explicit `/api/telephony/telnyx/:ingress_key/events` ingress remains available during
-cutover. C2 adds the scoped URLs; production Console configuration follows in C3.
+cutover. C2 adds the scoped URLs; C3a adds Console credential/URL configuration. Application
+configuration remains C3b; the next checkpoint removes the legacy webhook route.
 
 - [x] C1: store the optional scoped verification key, register a tenant application
   against the effective credential name, authorize call-spec writes, and resolve new
@@ -98,10 +106,11 @@ cutover. C2 adds the scoped URLs; production Console configuration follows in C3
   initialized owner credentials and duplicate/outage behavior.
 - [ ] C3: expose public-key configuration, application bindings and matching webhook
   URLs in the operator Console, with durable metadata and browser verification.
-  Deliver C3a (credential form, configured-field metadata and URLs) before C3b
-  (tenant application configuration and published number-route progress).
-- [ ] D retains callback cutover acceptance, deliberate legacy migration and final
-  restart/rollback/umbrella acceptance from the parent plan.
+- [x] C3a: production credential form, configured-field metadata, shared public origin
+  and matching UI/outgoing scoped URLs. Browser/restart and all required checks pass.
+- [ ] C3b: tenant application configuration and published number-route progress.
+- [ ] D removes the legacy Telnyx webhook path and callback generation, then completes
+  restart/rollback/re-encryption and final umbrella acceptance from the parent plan.
 
 Design review: keep credentials separate from tenant application identity; reuse the
 existing owner/presence resolver rather than introduce another fallback mechanism.
@@ -111,16 +120,19 @@ C1 evidence: 24 focused persistence and six Gateway reader tests pass, with disp
 database upgrade/rollback/restart acceptance. The umbrella run covers 1,770 tests;
 one obsolete reference-field assertion was corrected and the full 116-test Calls suite
 rerun. C2's full umbrella passes 1,781 tests with zero failures and 40 exclusions;
-all static gates pass. C3 and live-provider verification are not claimed complete.
+all static gates pass. C3a now passes 1,786 umbrella tests, 183 frontend tests, all
+static checks and desktop/mobile/restart verification. C3b and live-provider
+verification are not claimed complete.
 
 Console dependency review, 2026-09-19: move D's common public-origin and outgoing
 scope-URL generation into C3a so the displayed URL and newly initialized callbacks
 agree when the form ships. Preserve the explicit telephony-origin override, including
 path prefixes, and default public APP_HOST to HTTPS. Local HTTP is a configuration
 preview, not phone readiness. C3b follows the verified binding/ingress boundaries and
-keeps application identity separate from credential edits. D still owns deliberate
-legacy cutover and final restart/re-encryption/rollback acceptance. This order change
-does not mark any C3 or D implementation complete.
+keeps application identity separate from credential edits. The latest user correction
+replaces deliberate legacy cutover with webhook deletion.
+D retains final restart/re-encryption/rollback acceptance. C3b and D remain open until their
+implementation and acceptance checks pass.
 
 Telnyx documents account-level Ed25519 verification over the original request body
 and application-owned webhook configuration. These support the separation above;

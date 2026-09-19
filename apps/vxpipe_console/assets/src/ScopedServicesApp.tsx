@@ -117,7 +117,12 @@ export function ScopedServicesApp({
       : existing?.credentialId;
     const values =
       "apiKey" in draft.values
-        ? { api_key: draft.values.apiKey }
+        ? {
+            api_key: draft.values.apiKey,
+            ...(draft.provider === "telnyx" && draft.values.publicKey
+              ? { public_key: draft.values.publicKey }
+              : {}),
+          }
         : {
             account_sid: draft.values.accountSid,
             auth_token: draft.values.authToken,
@@ -375,7 +380,7 @@ export function ScopedServicesApp({
           platformConnections={platformConnections.filter(
             (binding) => binding.name === (modal.bindingName ?? modal.provider),
           )}
-          telephonySetup={false}
+          webhookUrls={directory?.webhookUrls}
           bindingName={modal.bindingName}
           onClose={close}
           onSubmit={save}

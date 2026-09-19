@@ -35,6 +35,7 @@ export function ServiceSetupModal({
   providers = setupProviders,
   scope,
   publicOrigin,
+  webhookUrls,
   platformConnections = [],
   onOverride,
   onUsePlatform,
@@ -51,6 +52,7 @@ export function ServiceSetupModal({
   providers?: SetupProvider[];
   scope: SetupServiceScope;
   publicOrigin?: string;
+  webhookUrls?: { platform: string; tenant: string | null };
   telephonySetup?: boolean;
   bindingName?: string;
   onManagePlatform?: () => void;
@@ -73,12 +75,27 @@ export function ServiceSetupModal({
     (item) => item.provider === provider?.id,
   );
   const effectiveScope = inherited ? { kind: "platform" as const } : scope;
+  const webhookUrl = webhookUrls
+    ? effectiveScope.kind === "platform"
+      ? webhookUrls.platform
+      : webhookUrls.tenant
+    : publicOrigin
+      ? telnyxWebhookUrl(publicOrigin, effectiveScope)
+      : null;
   const webhook =
-    provider?.id === "telnyx" && publicOrigin && telephonySetup ? (
-      <TelnyxWebhookField
-        key={telnyxWebhookUrl(publicOrigin, effectiveScope)}
-        url={telnyxWebhookUrl(publicOrigin, effectiveScope)}
-      />
+    provider?.id === "telnyx" &&
+    webhookUrl &&
+    telephonySetup &&
+    (!bindingName || bindingName === "telnyx") ? (
+      <>
+        <TelnyxWebhookField key={webhookUrl} url={webhookUrl} />
+        {state.overriding ? (
+          <p className="setup-secret-note">
+            Update your Telnyx Voice API application to use this tenant webhook
+            URL after saving.
+          </p>
+        ) : null}
+      </>
     ) : null;
   useEffect(() => {
     contentRef.current
@@ -220,6 +237,9 @@ export function ServiceSetupModal({
                         ? " and changes its webhook URL"
                         : ""}
                       .
+                      {provider.id === "telnyx" && webhookUrl
+                        ? " Update your Telnyx Voice API application after switching."
+                        : ""}
                     </p>
                     <Button
                       disabled={state.status === "submitting"}

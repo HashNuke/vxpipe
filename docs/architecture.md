@@ -1127,7 +1127,12 @@ the stored tenant service, then load its exact encrypted credential and verifica
 Outbound lookup requires the prepared participant's canonical tenant/service/provider/account/
 credential reference. The alias never falls back to application configuration. Stored service
 metadata owns the originating number, machine-detection policy and existing media/timer settings;
-`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` supplies the externally visible HTTPS origin and mounted path.
+the configured public `APP_HOST` supplies the HTTPS origin, with
+`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` retained as an explicit origin/path override.
+Console URLs and newly initialized callbacks use the same resolved value. Scoped primary
+Telnyx bindings select the platform or tenant webhook path from their credential owner;
+legacy exact-ID bindings still retain their ingress-key path pending the approved
+legacy webhook removal checkpoint.
 
 The HTTP boundary keeps the original body for verification. Bounded untrusted identifiers can
 locate an existing leg's private initialized configuration; they do not authorize dispatch.

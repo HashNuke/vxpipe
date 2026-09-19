@@ -94,6 +94,11 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
              public_base_url: "https://voice.example.test/voice"
            ]
 
+    assert configuration
+           |> Keyword.fetch!(:vxpipe_console)
+           |> Keyword.fetch!(:service_public_origin) ==
+             "https://voice.example.test/voice"
+
     System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "   ")
     configuration = Config.Reader.read!(@runtime, env: :dev)
 
@@ -104,6 +109,32 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
       |> Keyword.fetch!(:http)
 
     assert Keyword.fetch!(http, :telephony) == [enabled: false, public_base_url: nil]
+
+    assert configuration
+           |> Keyword.fetch!(:vxpipe_console)
+           |> Keyword.fetch!(:service_public_origin) ==
+             "http://localhost:4000"
+  end
+
+  test "a public application host supplies the shared HTTPS callback origin" do
+    System.put_env("APP_HOST", "192.0.2.15")
+    configuration = Config.Reader.read!(@runtime, env: :dev)
+
+    assert configuration
+           |> Keyword.fetch!(:vxpipe_console)
+           |> Keyword.fetch!(:service_public_origin) ==
+             "https://192.0.2.15"
+
+    http =
+      configuration
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+      |> Keyword.fetch!(:http)
+
+    assert Keyword.fetch!(http, :telephony) == [
+             enabled: true,
+             public_base_url: "https://192.0.2.15"
+           ]
   end
 
   test "an invalid callback origin fails without echoing embedded credentials" do

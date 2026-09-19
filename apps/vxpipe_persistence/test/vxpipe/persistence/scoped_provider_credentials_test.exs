@@ -192,6 +192,50 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
              ProviderCredentialStore.list_bindings(data.context, "ZZZZZZZZZZZZZZZZ")
   end
 
+  test "Telnyx directory exposes configured fields only from the selected whole credential",
+       data do
+    [tenant | _] = data.tenants
+    public_key = Base.encode64(<<1::256>>)
+
+    assert {:ok, _platform} =
+             ProviderCredentials.provision(
+               :platform,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{"api_key" => "directory-api-private", "public_key" => public_key},
+               data.options
+             )
+
+    assert {:ok, inherited} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert [%{saved_fields: ["api_key", "public_key"], source: :platform}] = inherited.bindings
+    refute inspect(inherited) =~ public_key
+    refute inspect(inherited) =~ "directory-api-private"
+
+    assert {:ok, override} =
+             ProviderCredentials.provision(
+               tenant.key,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{"api_key" => "directory-tenant-private"},
+               data.options
+             )
+
+    assert {:ok, own} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert [%{saved_fields: ["api_key"], source: :tenant}] = own.bindings
+
+    stored = Repo.get_by!(ProviderCredential, public_id: override.id)
+    <<first, rest::binary>> = stored.encrypted_payload
+
+    Repo.update!(
+      Ecto.Changeset.change(stored, encrypted_payload: <<Bitwise.bxor(first, 1), rest::binary>>)
+    )
+
+    assert {:ok, unreadable} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert [%{saved_fields: [], source: :tenant, status: :unavailable}] = unreadable.bindings
+  end
+
   defp provision(owner, name, secret, options) do
     ProviderCredentials.provision(
       owner,

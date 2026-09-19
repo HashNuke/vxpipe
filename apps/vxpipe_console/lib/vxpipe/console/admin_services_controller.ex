@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   use Phoenix.Controller, formats: [:json]
 
   alias Vxpipe.Calls.InstallationOperator
+  alias Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint
 
   def platform_index(conn, _params), do: bindings(conn, :platform)
   def tenant_bindings(conn, %{"tenant_key" => key}), do: bindings(conn, key)
@@ -35,7 +36,15 @@ defmodule Vxpipe.Console.AdminServicesController do
   defp bindings(conn, scope) do
     case Vxpipe.Calls.list_operator_service_bindings(InstallationOperator.authority(), scope) do
       {:ok, directory} ->
-        json(conn, directory)
+        origin = Application.fetch_env!(:vxpipe_console, :service_public_origin)
+
+        urls = %{
+          platform: PublicEndpoint.scoped_event_url(origin, :platform),
+          tenant:
+            if(is_binary(scope), do: PublicEndpoint.scoped_event_url(origin, {:tenant, scope}))
+        }
+
+        json(conn, Map.put(directory, :webhook_urls, urls))
 
       {:error, :tenant_not_found} ->
         conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
@@ -160,6 +169,13 @@ defmodule Vxpipe.Console.AdminServicesController do
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
     end
   end
+
+  defp credential_input(%{
+         "provider" => "telnyx",
+         "values" => %{"api_key" => _api_key, "public_key" => _public_key} = values
+       })
+       when map_size(values) == 2,
+       do: {:ok, "telnyx", "api_key", values}
 
   defp credential_input(%{
          "provider" => provider,
