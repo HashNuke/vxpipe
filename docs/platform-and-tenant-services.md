@@ -197,6 +197,11 @@ Integration review, 2026-09-19: B2 verification found that the older
 B3 separates that required effective-service integration into another runnable
 checkpoint before carrier work; it does not add a new provider or recipe catalog.
 
+Carrier design review, 2026-09-19: C will be delivered in reviewed C1/C2/C3 commits for
+effective application bindings, scoped ingress, and Console configuration respectively.
+The [scoped Telnyx binding decision](scoped-telnyx-service-bindings.md) records the
+legacy compatibility boundary, selected-owner identity and acceptance order.
+
 Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provider-inheritance.md).
 
 Checkpoint A implementation details:
