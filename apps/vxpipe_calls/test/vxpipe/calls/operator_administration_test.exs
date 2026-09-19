@@ -459,6 +459,57 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     refute_received {:operator_credential_provisioned, _, _}
   end
 
+  test "only installation operators can provision a validated platform-owned credential" do
+    returned = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      owner: :platform,
+      tenant_key: nil,
+      provider: "google",
+      name: "shared-model",
+      auth_kind: "api_key"
+    }
+
+    options = [
+      provider_credential_repository:
+        TestOperatorCredentialRepository.repository(self(), {:ok, returned}),
+      provider_credential_validator: TestOperatorCredentialValidator.validator(self(), :ok)
+    ]
+
+    tenant_principal = %Principal{
+      tenant_key: "AAAAAAAAAAAAAAAA",
+      api_key_id: "tenant-key",
+      scopes: MapSet.new([:admin])
+    }
+
+    assert {:error, :installation_operator_required} =
+             Vxpipe.Calls.create_validated_operator_credential(
+               tenant_principal,
+               :platform,
+               "google",
+               "shared-model",
+               "api_key",
+               %{"api_key" => "example-key"},
+               options
+             )
+
+    refute_received {:operator_credential_validated, _, _, _}
+
+    assert {:ok, ^returned} =
+             Vxpipe.Calls.create_validated_operator_credential(
+               InstallationOperator.authority(),
+               :platform,
+               "google",
+               "shared-model",
+               "api_key",
+               %{"api_key" => "example-key"},
+               options
+             )
+
+    assert_received {:operator_credential_provisioned,
+                     %ProviderCredential{owner: :platform, tenant_key: nil, name: "shared-model"},
+                     _payload}
+  end
+
   test "ordinary provisioning cannot claim upstream validation evidence" do
     tenant_key = "AAAAAAAAAAAAAAAA"
 
@@ -566,6 +617,52 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                "primary",
                "api_key",
                %{"api_key" => "private"},
+               options
+             )
+  end
+
+  test "platform credential replacement validates the tagged owner without treating it as a tenant key" do
+    returned = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      owner: :platform,
+      tenant_key: nil,
+      provider: "google",
+      name: "shared-model",
+      auth_kind: "api_key",
+      version: 2
+    }
+
+    options = [
+      provider_credential_repository:
+        TestOperatorCredentialRepository.repository(self(), {:ok, returned})
+    ]
+
+    assert {:ok, ^returned} =
+             Vxpipe.Calls.update_operator_credential(
+               InstallationOperator.authority(),
+               :platform,
+               returned.id,
+               "google",
+               "api_key",
+               %{"api_key" => "replacement"},
+               options
+             )
+
+    foreign = %{returned | owner: {:tenant, "BBBBBBBBBBBBBBBB"}, tenant_key: "BBBBBBBBBBBBBBBB"}
+
+    options = [
+      provider_credential_repository:
+        TestOperatorCredentialRepository.repository(self(), {:ok, foreign})
+    ]
+
+    assert {:error, :provider_credential_write_failed} =
+             Vxpipe.Calls.update_operator_credential(
+               InstallationOperator.authority(),
+               :platform,
+               returned.id,
+               "google",
+               "api_key",
+               %{"api_key" => "replacement"},
                options
              )
   end

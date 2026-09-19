@@ -119,6 +119,95 @@ defmodule Vxpipe.Persistence.Integration.ProviderCredentialTransactionTest do
              Calls.resolve_participant_route(ctx.tenant.key, route.key, ctx.options)
   end
 
+  test "holds inherited selection through the write against policy changes and platform revocation",
+       ctx do
+    observer = self()
+    name = "transaction_" <> ctx.tenant.key
+
+    assert {:ok, platform} =
+             ProviderCredentials.provision(
+               :platform,
+               "google",
+               name,
+               "api_key",
+               %{"api_key" => "synthetic-platform-key"},
+               ctx.options
+             )
+
+    on_exit(fn ->
+      :ok = Sandbox.checkout(Repo, sandbox: false)
+      Repo.delete_all(from(c in ProviderCredential, where: c.public_id == ^platform.id))
+      Sandbox.checkin(Repo)
+    end)
+
+    requirements = [%{provider: "google", name: name, path: ["model_inference"]}]
+
+    writer =
+      db_task(fn ->
+        result =
+          ProviderCredentialStore.with_active(ctx.context, ctx.tenant.key, requirements, fn ->
+            send(observer, {:inherited_write_held, self()})
+
+            receive do
+              :write -> {:ok, :saved}
+            after
+              2_000 -> {:error, :test_write_timeout}
+            end
+          end)
+
+        send(observer, {:inherited_write_result, result})
+      end)
+
+    assert_receive {:inherited_write_held, ^writer}, 1_000
+
+    db_task(fn ->
+      Repo.query!("SET lock_timeout = '100ms'")
+
+      try do
+        result =
+          ProviderCredentials.set_policy(ctx.tenant.key, "google", name, :disabled, ctx.options)
+
+        send(observer, {:concurrent_policy_result, result})
+      after
+        Repo.query!("RESET lock_timeout")
+      end
+    end)
+
+    assert_receive {:concurrent_policy_result, {:error, :provider_credentials_unavailable}}, 1_000
+
+    db_task(fn ->
+      result =
+        try do
+          Repo.transaction(fn ->
+            Repo.query!("SET LOCAL lock_timeout = '100ms'")
+            revoke(platform.id)
+          end)
+        rescue
+          error in Postgrex.Error -> {:error, error.postgres.code}
+        end
+
+      send(observer, {:concurrent_platform_revoke, result})
+    end)
+
+    assert_receive {:concurrent_platform_revoke, {:error, :lock_not_available}}, 1_000
+    send(writer, :write)
+    assert_receive {:inherited_write_result, {:ok, :saved}}, 1_000
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               ctx.tenant.key,
+               "google",
+               name,
+               :disabled,
+               ctx.options
+             )
+
+    assert {:error, :provider_service_disabled} =
+             ProviderCredentials.resolve(ctx.tenant.key, "google", name, ctx.options)
+
+    assert {1, _} = revoke(platform.id)
+  end
+
   defp db_task(operation) do
     start_supervised!(
       {Task,

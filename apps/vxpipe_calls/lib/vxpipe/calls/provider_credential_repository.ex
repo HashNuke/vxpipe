@@ -3,11 +3,13 @@ defmodule Vxpipe.Calls.ProviderCredentialRepository do
 
   alias Vxpipe.Calls.{ProviderCredential, ResolvedProviderCredential}
 
+  @type owner :: :platform | {:tenant, String.t()} | String.t()
+
   @callback provision(term(), ProviderCredential.t(), map()) ::
               {:ok, ProviderCredential.t()} | {:error, atom()}
   @callback replace(
               term(),
-              String.t(),
+              owner(),
               String.t(),
               String.t(),
               String.t(),
@@ -16,9 +18,19 @@ defmodule Vxpipe.Calls.ProviderCredentialRepository do
               DateTime.t() | nil
             ) ::
               {:ok, ProviderCredential.t()} | {:error, atom()}
-  @callback list(term(), String.t()) :: {:ok, [ProviderCredential.t()]} | {:error, atom()}
-  @callback resolve(term(), String.t(), String.t(), String.t()) ::
+  @callback list(term(), owner()) :: {:ok, [ProviderCredential.t()]} | {:error, atom()}
+  @callback resolve(term(), owner(), String.t(), String.t()) ::
               {:ok, ResolvedProviderCredential.t()} | {:error, atom()}
+
+  @callback set_policy(
+              term(),
+              String.t(),
+              String.t(),
+              String.t(),
+              :inherit | :override | :disabled
+            ) ::
+              :ok | {:error, atom()}
+  @optional_callbacks set_policy: 5
 
   @doc """
   Validate and hold active bindings while performing the authorized database write.

@@ -19,7 +19,8 @@ defmodule Vxpipe.Calls.ProviderCredentialSource do
       {:ok,
        %ProviderCredential{
          id: credential.id,
-         tenant_id: credential.tenant_key,
+         tenant_id: tenant_id,
+         owner: Vxpipe.Calls.ProviderCredential.owner(credential),
          provider: credential.provider,
          name: credential.name,
          version: credential.version,

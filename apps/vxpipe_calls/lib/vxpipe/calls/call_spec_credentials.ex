@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
   alias Vxpipe.Calls.{
     CallSpecRevision,
     ProviderAuth,
+    ProviderCredential,
     ProviderCredentials,
     Repositories,
     ResolvedProviderCredential,
@@ -36,9 +37,15 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
              resource_id: revision.call_spec_id,
              revision: revision.revision
            ) do
-      with_active_capabilities(call_spec, revision.tenant_key, options, fn ->
-        TelephonyPlanBindings.with_active(plan, options, operation)
-      end)
+      with_active_capabilities(
+        call_spec,
+        revision.tenant_key,
+        options,
+        fn ->
+          TelephonyPlanBindings.with_active(plan, options, operation)
+        end,
+        plan.credential_bindings
+      )
     else
       false -> unavailable(["tenant_id"])
       error -> error
@@ -51,12 +58,22 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
     end)
   end
 
-  defp with_active_capabilities(call_spec, tenant_key, options, operation) do
+  defp with_active_capabilities(call_spec, tenant_key, options, operation, bindings \\ nil) do
     requirements =
       call_spec
       |> CapabilityRequirements.credentials()
       |> Enum.map(fn {selection, path} ->
-        %{provider: selection.provider, name: selection.credential_name, path: path}
+        requirement = %{provider: selection.provider, name: selection.credential_name, path: path}
+
+        if is_map(bindings) do
+          Map.put(
+            requirement,
+            :identity,
+            Map.get(bindings, {selection.provider, selection.credential_name})
+          )
+        else
+          requirement
+        end
       end)
 
     case requirements do
@@ -74,6 +91,27 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
           {:error, _reason} ->
             unavailable(first.path)
         end
+    end
+  end
+
+  def pin(%CallSpec{} = call_spec, %ResolvedCallPlan{} = plan, options) do
+    call_spec
+    |> CapabilityRequirements.credentials()
+    |> Enum.reduce_while({:ok, %{}}, fn {selection, path}, {:ok, bindings} ->
+      case resolve(plan.tenant_id, selection, options) do
+        {:ok, resolved} ->
+          identity = ProviderCredential.binding_identity(resolved.credential)
+
+          {:cont,
+           {:ok, Map.put(bindings, {selection.provider, selection.credential_name}, identity)}}
+
+        {:error, _reason} ->
+          {:halt, unavailable(path)}
+      end
+    end)
+    |> case do
+      {:ok, bindings} -> {:ok, %{plan | credential_bindings: bindings}}
+      error -> error
     end
   end
 
@@ -143,7 +181,8 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
              options
            ),
          credential <- resolved.credential,
-         true <- credential.tenant_key == tenant_key and credential.provider == selection.provider,
+         true <- ProviderCredential.available_to?(credential, tenant_key),
+         true <- credential.provider == selection.provider,
          true <- credential.name == selection.credential_name and credential.status == :active,
          :ok <- ProviderAuth.validate(credential.provider, credential.auth_kind, resolved.payload) do
       {:ok, resolved}

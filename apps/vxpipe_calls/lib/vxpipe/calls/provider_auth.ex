@@ -32,8 +32,8 @@ defmodule Vxpipe.Calls.ProviderAuth do
   def twilio_account_sid?(_value), do: false
 
   @spec binding(term(), term(), term()) :: :ok | {:error, atom()}
-  def binding(tenant_key, provider, name) when provider in @providers do
-    with :ok <- tenant_key(tenant_key) do
+  def binding(owner, provider, name) when provider in @providers do
+    with :ok <- owner(owner) do
       if is_binary(name) and byte_size(name) <= 128 and
            Regex.match?(~r/\A[a-zA-Z0-9][a-zA-Z0-9_-]*\z/, name),
          do: :ok,
@@ -42,6 +42,10 @@ defmodule Vxpipe.Calls.ProviderAuth do
   end
 
   def binding(_tenant_key, _provider, _name), do: {:error, :invalid_provider_auth}
+
+  def owner(:platform), do: :ok
+  def owner({:tenant, key}), do: tenant_key(key)
+  def owner(key), do: tenant_key(key)
 
   @spec tenant_key(term()) :: :ok | {:error, :invalid_tenant_key}
   def tenant_key(value) do

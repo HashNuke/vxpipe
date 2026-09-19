@@ -418,7 +418,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
        do: {:ok, nil}
 
   defp agent_activation_options(plan, receiver, options) do
-    AgentActivationOptions.new(plan, receiver, options)
+    AgentActivationOptions.new(plan, receiver, credential_options(plan, options))
   end
 
   @doc false
@@ -434,7 +434,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     case resolve_provider(
            participant.capabilities.speech_to_text,
            plan.tenant_id,
-           options,
+           credential_options(plan, options),
            :speech_to_text
          ) do
       {:ok, nil} ->
@@ -540,7 +540,12 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp text_to_speech_runtime(plan, selection, participant, options, path) do
-    case resolve_provider(selection, plan.tenant_id, options, :text_to_speech) do
+    case resolve_provider(
+           selection,
+           plan.tenant_id,
+           credential_options(plan, options),
+           :text_to_speech
+         ) do
       {:ok, nil} ->
         {:ok, nil}
 
@@ -557,11 +562,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           {:ok,
            %TextToSpeechRuntime{
              asset_cache_identity:
-               Map.put(
-                 asset_cache_identity,
-                 "selection",
-                 CapabilitySelection.identity(selection, plan.tenant_id)
-               ),
+               asset_cache_identity
+               |> Map.put("selection", CapabilitySelection.identity(selection, plan.tenant_id))
+               |> put_credential_cache_identity(Keyword.get(settings, :credential_identity)),
              call_id: plan.call_id,
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
@@ -591,6 +594,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
+  defp credential_options(plan, options),
+    do: Keyword.put(options, :credential_bindings, plan.credential_bindings)
+
   defp resolve_provider(nil, _tenant_id, _options, _kind), do: {:ok, nil}
 
   defp resolve_provider(
@@ -609,6 +615,18 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          true <- function_exported?(provider, :new, 1),
          {:ok, provider_config} <-
            provider.new(selected_options) do
+      settings =
+        if credential do
+          identity =
+            credential
+            |> Vxpipe.CallEngine.ProviderCredential.binding_identity()
+            |> Map.put("version", credential.version)
+
+          Keyword.put(settings, :credential_identity, identity)
+        else
+          settings
+        end
+
       {:ok, {provider, provider_config}, settings}
     else
       _unsupported -> {:error, unsupported_speech_configuration_reason(kind)}
@@ -638,6 +656,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp provider_settings(_settings, _provider), do: {:error, :provider_not_configured}
+
+  defp put_credential_cache_identity(identity, nil), do: identity
+
+  defp put_credential_cache_identity(identity, credential),
+    do: Map.put(identity, "credential", credential)
 
   defp authenticate_speech(options, nil), do: {:ok, options}
 

@@ -23,6 +23,9 @@ defmodule Vxpipe.CallEngine.TestTenantCredentialSource do
     send(observer, {:tenant_credential_resolved, tenant_id, provider, name})
 
     case Map.fetch(bindings, {tenant_id, provider, name}) do
+      {:ok, %ProviderCredential{} = credential} ->
+        {:ok, credential}
+
       {:ok, payload} ->
         {:ok,
          %ProviderCredential{

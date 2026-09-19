@@ -19,16 +19,13 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
     Vxpipe.CallEngine.CallDefinition.OpeningAudio => Vxpipe.CallEngine.CallSpec.OpeningAudio,
     Vxpipe.CallEngine.CallDefinition.Participant => Vxpipe.CallEngine.CallSpec.Participant,
     Vxpipe.CallEngine.CallDefinition.ToolSelection => Vxpipe.CallEngine.CallSpec.ToolSelection,
-    Vxpipe.CallEngine.CallDefinition.ToolVisibility =>
-      Vxpipe.CallEngine.CallSpec.ToolVisibility,
+    Vxpipe.CallEngine.CallDefinition.ToolVisibility => Vxpipe.CallEngine.CallSpec.ToolVisibility,
     Vxpipe.CallEngine.CallDefinition.TransferHistory =>
       Vxpipe.CallEngine.CallSpec.TransferHistory,
-    Vxpipe.CallEngine.CallDefinition.TransferPolicy =>
-      Vxpipe.CallEngine.CallSpec.TransferPolicy,
+    Vxpipe.CallEngine.CallDefinition.TransferPolicy => Vxpipe.CallEngine.CallSpec.TransferPolicy,
     Vxpipe.CallEngine.CallDefinition.VariablePermissions =>
       Vxpipe.CallEngine.CallSpec.VariablePermissions,
-    Vxpipe.CallEngine.CallDefinition.VariableSchema =>
-      Vxpipe.CallEngine.CallSpec.VariableSchema,
+    Vxpipe.CallEngine.CallDefinition.VariableSchema => Vxpipe.CallEngine.CallSpec.VariableSchema,
     Vxpipe.CallEngine.CallDefinition.VariableSection =>
       Vxpipe.CallEngine.CallSpec.VariableSection,
     Vxpipe.CallEngine.CallDefinition.WaitSounds => Vxpipe.CallEngine.CallSpec.WaitSounds,
@@ -80,7 +77,7 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
     ResolvedCallPlan.ensure_data_loaded!()
 
     case encoded |> :erlang.binary_to_term([:safe]) |> normalize() do
-      %ResolvedCallPlan{} = plan -> {:ok, plan}
+      %ResolvedCallPlan{} = plan -> {:ok, Map.put_new(plan, :credential_bindings, nil)}
       _invalid -> {:error, :invalid_stored_call_plan}
     end
   rescue

@@ -378,7 +378,8 @@ defmodule Vxpipe.Calls.OperatorAdministration do
          {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
       credential = %ProviderCredential{
         id: generate_uuid(options),
-        tenant_key: tenant_key,
+        tenant_key: ProviderCredential.owner_key(tenant_key),
+        owner: ProviderCredential.owner_tag(tenant_key),
         provider: provider,
         name: name,
         auth_kind: auth_kind,
@@ -501,9 +502,12 @@ defmodule Vxpipe.Calls.OperatorAdministration do
            provider: provider,
            name: name,
            auth_kind: auth_kind
-         }
-       ),
-       do: {:ok, stored}
+         } = requested
+       ) do
+    if ProviderCredential.owner(stored) == ProviderCredential.owner(requested),
+      do: {:ok, stored},
+      else: {:error, :provider_credential_write_failed}
+  end
 
   defp validate_created_credential({:ok, _invalid}, _requested),
     do: {:error, :provider_credential_write_failed}
@@ -514,16 +518,18 @@ defmodule Vxpipe.Calls.OperatorAdministration do
          {:ok,
           %ProviderCredential{
             id: credential_id,
-            tenant_key: tenant_key,
             provider: provider,
             auth_kind: auth_kind
           } = stored},
-         tenant_key,
+         owner,
          credential_id,
          provider,
          auth_kind
-       ),
-       do: {:ok, stored}
+       ) do
+    if ProviderCredential.owner(stored) == ProviderCredential.owner_tag(owner),
+      do: {:ok, stored},
+      else: {:error, :provider_credential_write_failed}
+  end
 
   defp validate_updated_credential({:ok, _invalid}, _tenant, _id, _provider, _kind),
     do: {:error, :provider_credential_write_failed}

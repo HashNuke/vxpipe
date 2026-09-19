@@ -26,13 +26,22 @@ defmodule Vxpipe.Console.AdminServicesController do
   end
 
   def create(conn, %{"tenant_key" => tenant_key} = params) do
+    create_credential(conn, tenant_key, params, Map.get(params, "provider"))
+  end
+
+  def create_platform(conn, params) do
+    name = Map.get(params, "name", Map.get(params, "provider"))
+    create_credential(conn, :platform, params, name)
+  end
+
+  defp create_credential(conn, owner, params, name) do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
            Vxpipe.Calls.create_validated_operator_credential(
              InstallationOperator.authority(),
-             tenant_key,
+             owner,
              provider,
-             provider,
+             name,
              auth_kind,
              payload
            ) do

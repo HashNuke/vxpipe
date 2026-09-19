@@ -98,6 +98,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through :installation_operator_api
 
     get "/session", Vxpipe.Console.AdminSessionController, :show
+    post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant
 
     post "/onboarding/demo-tenant/samples",

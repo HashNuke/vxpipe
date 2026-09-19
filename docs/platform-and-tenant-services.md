@@ -1,7 +1,8 @@
 # Platform and tenant services
 
-Status: Storybook prototype implemented and verified, pending user review; backend
-plan, not implemented.
+Status: implementation authorized 2026-09-19. Storybook prototype implemented and
+verified; backend checkpoint A is implemented and reviewed, with umbrella verification
+still open. No backend checkpoint is fully accepted yet.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -95,10 +96,14 @@ bindings, separate from the credential scope. References:
 
 ## Existing boundaries that must change
 
-Calls `ProviderCredential` and `ProviderCredentials` currently require a tenant key.
-Persistence `Schema.ProviderCredential` requires a tenant foreign key and uses
-tenant/provider/name uniqueness; encryption and repository guards assume tenant ownership.
-`TelephonyService` stores the public key and enforces a same-tenant credential binding.
+The original Calls/Persistence credential boundary required a tenant key and tenant
+foreign key. Checkpoint A now separates tagged ownership from the consuming tenant,
+adds platform uniqueness and tenant policies, and shares policy resolution between
+private reads and final write guards. Existing tenant ciphertext keeps its version-1
+authenticated context; platform ciphertext uses a distinct version-2 context.
+
+The carrier boundary still needs implementation: `TelephonyService` stores the public
+key and enforces a same-tenant credential binding.
 Gateway `ServiceRegistry` currently looks up globally unique ingress keys, and
 `TelnyxEvents` verifies through a resolved tenant service. Existing initialized legs
 retain authentication for callbacks/media/cleanup during storage outages.
@@ -109,6 +114,72 @@ provider protocols and signed webhook dispatch; Console owns operator endpoints 
 No Console dependency in the engine or Gateway, and no Repo calls in those applications.
 
 ## Implementation sequence
+
+### Runnable delivery checkpoints
+
+The user authorized implementation of the full plan on 2026-09-19. Delivery follows
+these vertical slices; each includes the owning tests, documentation and applicable
+browser checks. A checked design task does not count as a delivered slice.
+
+- [ ] **A — Use an inherited provider in a tenant call.** Migrate credential ownership
+  and explicit tenant policies, provision a platform provider through the operator
+  boundary, and resolve it through call-spec save/publish/preparation and fresh runtime
+  readers. Prove two inheriting tenants, one override, named bindings, disabled/failed
+  overrides and transaction-time guards. Preserve existing tenant ciphertext and IDs.
+- [ ] **B1 — Connect an inherited provider in the Console.** Connect the reviewed
+  platform and tenant pages to authenticated APIs. Save and edit a platform service,
+  show its effective source/readiness to tenants and reload durable progress. Prove
+  CSRF, authority boundaries, no secret disclosure and desktop/mobile behavior.
+- [ ] **B2 — Manage tenant service exceptions in the Console.** Override, disable and
+  restore an inherited service through the reviewed UI and durable APIs. Preserve
+  named and dormant tenant bindings, show failed overrides without fallback, and
+  verify reload, onboarding readiness and desktop/mobile recovery paths.
+- [ ] **C — Receive a scoped Telnyx call.** Bind a tenant Voice API application to its
+  selected service scope, verify the route-selected key, then dispatch to that tenant.
+  Exercise both routes with persisted credentials, wrong-scope/tenant rejection and
+  duplicate/outage behavior. Expose the matching URL and configuration in Console.
+- [ ] **D — Complete Telnyx callback cutover and restart acceptance.** Use one resolved
+  public origin/scope for displayed and outgoing callbacks, preserve initialized legs
+  and legacy ingress/media contracts, and exercise migration, replacement, re-encryption,
+  rollback/restart and final umbrella gates. Document remote webhook cutover and deferred
+  provider integrations without claiming live-provider evidence.
+
+Checkpoint design review, 2026-09-19: A establishes the shared policy resolver before
+the operator UI and scoped carrier readers use it; B1/B2 provide the durable management
+surface used by C. C establishes exact verifier/application ownership before D changes
+outgoing URLs. Programmatic platform API-key issuance and new AI adapters remain outside
+this dependency chain. The detailed acceptance requirements below remain authoritative.
+The user's subsequent review/commit instruction requires reviewing and committing
+each runnable checkpoint before starting the next implementation. Unresolved
+verification stays explicit and leaves the acceptance checkbox open. B was split into B1/B2 to keep
+both Console commits runnable and small enough to review independently.
+
+Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provider-inheritance.md).
+
+Checkpoint A implementation details (acceptance still pending the umbrella gate):
+
+- Owning application suites, focused transaction integration tests, and disposable
+  database migration/restart checks pass. The latest complete umbrella run has
+  1,733 tests, one Twilio source-recovery failure and 40 exclusions; that scenario
+  passes in isolation. The failure is still under investigation. Format, compile,
+  strict Credo and unused-dependency checks pass.
+- Installation operators can create a named platform binding with
+  `POST /admin/api/platform/credentials`, using the existing session and CSRF token.
+  Inputs are `provider`, optional `name` (defaults to the provider ID), and `values`.
+  Responses contain credential metadata only. Tenant credential endpoints keep
+  their existing names and authority contract; Console listings/editing follow in B1.
+- A call's `credential_name` selects exactly that provider/name. Migrated tenant
+  credentials have explicit override policies; a missing policy inherits platform
+  credentials. Disabling or restoring inheritance is currently a trusted host
+  operation; its operator UI/API follows in B2.
+- Newly prepared plans pin owner and credential ID, not credential version. Rotation
+  within that identity is visible to fresh readers; an owner/ID switch requires new
+  preparation. Speech asset cache keys also include credential version. Legacy stored
+  plans without the field retain their previous lookup behavior; the decoder supplies
+  the compatibility default rather than inventing a historical credential identity.
+- The migration does not rewrite tenant IDs or ciphertext. Its down migration works
+  for unchanged tenant-only configuration and rejects scoped configuration requiring
+  deliberate cutover. Further Telnyx migration and callback acceptance remain in D.
 
 ### 1. Storybook review checkpoint
 

@@ -341,6 +341,58 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     refute_received {:operator_credential_created, _, _}
   end
 
+  test "creates a named platform credential through the protected operator endpoint" do
+    credential = %ProviderCredential{
+      id: "11111111-1111-4111-8111-111111111111",
+      owner: :platform,
+      tenant_key: nil,
+      provider: "google",
+      name: "shared-model",
+      auth_kind: "api_key"
+    }
+
+    configure_credential_repository({:ok, credential})
+
+    body = %{
+      "provider" => "google",
+      "name" => "shared-model",
+      "values" => %{"api_key" => "platform-example-key"}
+    }
+
+    anonymous = post(build_conn(), "https://localhost/admin/api/platform/credentials", body)
+    assert anonymous.status in [401, 403]
+    refute_received {:operator_credential_created, _, _}
+
+    authenticated = authenticate() |> recycle() |> https_get("/admin")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      authenticated
+      |> recycle()
+      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+      |> post("https://localhost/admin/api/platform/credentials", body)
+    end
+
+    refute_received {:operator_credential_created, _, _}
+
+    response =
+      authenticated
+      |> recycle()
+      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+      |> put_req_header("x-csrf-token", csrf)
+      |> post("https://localhost/admin/api/platform/credentials", body)
+
+    assert %{"credential" => %{"name" => "shared-model", "id" => id}} =
+             json_response(response, 201)
+
+    assert id == credential.id
+    refute response.resp_body =~ "platform-example-key"
+
+    assert_received {:operator_credential_created,
+                     %ProviderCredential{owner: :platform, tenant_key: nil, name: "shared-model"},
+                     _payload}
+  end
+
   defp tenant do
     %Tenant{
       key: @tenant_key,

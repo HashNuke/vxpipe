@@ -23,6 +23,7 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
          :ok <- CallSpecCredentials.check(call_spec, revision.tenant_key, options),
          {:ok, invocation} <- invocation(revision, initial_variables, transport, options),
          {:ok, plan} <- CallPlanCompiler.compile(call_spec, invocation, options),
+         {:ok, plan} <- CallSpecCredentials.pin(call_spec, plan, options),
          {:ok, plan} <- Vxpipe.CallEngine.prepare_call_audio(plan, options) do
       {:ok, prepared_call(plan, revision.routes, initial_variables, options)}
     end

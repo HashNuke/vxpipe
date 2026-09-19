@@ -92,6 +92,47 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
     refute inspect(second) =~ "private-marker"
   end
 
+  test "speech assets distinguish platform and tenant credential identities with the same payload" do
+    tenant = "tenant-cache"
+    plan = plan(tenant)
+    agent = Map.fetch!(plan.participants, "agent")
+    key = {tenant, "deepgram", "destination-voice"}
+    payloads = bindings(tenant)
+
+    shared = %Vxpipe.CallEngine.ProviderCredential{
+      id: "platform-voice",
+      owner: :platform,
+      tenant_id: tenant,
+      provider: "deepgram",
+      name: "destination-voice",
+      version: 1,
+      auth_kind: "api_key",
+      payload: Map.fetch!(payloads, key)
+    }
+
+    own = %{shared | id: "tenant-voice", owner: {:tenant, tenant}}
+
+    assert {:ok, inherited} =
+             PlanStartup.agent_destination(
+               plan,
+               agent,
+               options({self(), Map.put(payloads, key, shared)})
+             )
+
+    assert {:ok, overridden} =
+             PlanStartup.agent_destination(
+               plan,
+               agent,
+               options({self(), Map.put(payloads, key, own)})
+             )
+
+    refute inherited.text_to_speech.asset_cache_identity ==
+             overridden.text_to_speech.asset_cache_identity
+
+    refute :erlang.term_to_binary(inherited.text_to_speech.asset_cache_identity) =~
+             "private-marker"
+  end
+
   for {provider, name, destination_key} <- [
         {"google", "destination-model", "agent"},
         {"deepgram", "destination-voice", "agent"},
@@ -100,7 +141,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
     @binding {provider, name}
     @destination_key destination_key
 
-    test "unavailable #{@binding |> elem(1)} fails preparation before destination clients start" do
+    test "missing or rebound #{@binding |> elem(1)} fails before destination clients start" do
       tenant = "tenant-failure"
       plan = plan(tenant)
       all = bindings(tenant)
@@ -126,6 +167,53 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       refute_received {:test_tts_transport_started, _, _}
       refute_received {:test_stt_transport_started, _, _}
       refute inspect(request) =~ "private-marker"
+
+      pinned =
+        Map.new(all, fn {{_tenant, provider, name}, _payload} ->
+          {{provider, name},
+           %{"id" => provider <> "-credential", "scope" => "tenant", "tenant_key" => tenant}}
+        end)
+
+      pinned_plan = %{plan | credential_bindings: pinned}
+      pinned_runtime = %{runtime | plan: pinned_plan, startup_options: options({self(), all})}
+
+      prepared =
+        case destination.kind do
+          :agent ->
+            PlanStartup.agent_destination(pinned_plan, destination, options({self(), all}))
+
+          :human ->
+            PlanStartup.human_destination(pinned_plan, destination, options({self(), all}))
+        end
+
+      assert {:ok, _destination} = prepared
+
+      rebound = %Vxpipe.CallEngine.ProviderCredential{
+        id: provider <> "-credential",
+        owner: :platform,
+        tenant_id: tenant,
+        provider: provider,
+        name: name,
+        version: 1,
+        auth_kind: "api_key",
+        payload: Map.fetch!(all, {tenant, provider, name})
+      }
+
+      rebound_runtime = %{
+        pinned_runtime
+        | startup_options: options({self(), Map.put(all, {tenant, provider, name}, rebound)})
+      }
+
+      assert {:error, :destination_plan_unavailable} =
+               DestinationPreparer.prepare(
+                 request,
+                 rebound_runtime,
+                 destination,
+                 true,
+                 [],
+                 startup.text_to_speech,
+                 System.monotonic_time(:millisecond) + 1_000
+               )
     end
   end
 

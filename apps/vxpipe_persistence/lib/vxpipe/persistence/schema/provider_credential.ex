@@ -3,6 +3,7 @@ defmodule Vxpipe.Persistence.Schema.ProviderCredential do
   import Ecto.Changeset
 
   schema "provider_credentials" do
+    field(:scope, :string, default: "tenant")
     field(:public_id, Ecto.UUID)
     field(:provider, :string)
     field(:name, :string)
@@ -20,6 +21,7 @@ defmodule Vxpipe.Persistence.Schema.ProviderCredential do
 
   def changeset(credential, attributes) do
     fields = [
+      :scope,
       :public_id,
       :provider,
       :name,
@@ -36,9 +38,12 @@ defmodule Vxpipe.Persistence.Schema.ProviderCredential do
 
     credential
     |> cast(attributes, fields)
-    |> validate_required(fields -- [:last_validated_at])
+    |> validate_required(fields -- [:last_validated_at, :tenant_id])
+    |> validate_inclusion(:scope, ["platform", "tenant"])
+    |> check_constraint(:scope, name: :provider_credentials_owner)
     |> foreign_key_constraint(:tenant_id)
     |> unique_constraint(:public_id)
     |> unique_constraint(:name, name: :provider_credentials_tenant_id_provider_name_index)
+    |> unique_constraint(:name, name: :provider_credentials_platform_provider_name_index)
   end
 end

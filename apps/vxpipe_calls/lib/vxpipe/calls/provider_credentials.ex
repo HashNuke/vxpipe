@@ -15,7 +15,8 @@ defmodule Vxpipe.Calls.ProviderCredentials do
          {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
       credential = %ProviderCredential{
         id: PublicId.uuid(),
-        tenant_key: tenant_key,
+        tenant_key: ProviderCredential.owner_key(tenant_key),
+        owner: ProviderCredential.owner_tag(tenant_key),
         provider: provider,
         name: name,
         auth_kind: auth_kind,
@@ -44,7 +45,7 @@ defmodule Vxpipe.Calls.ProviderCredentials do
   end
 
   def list(tenant_key, options \\ []) do
-    with :ok <- ProviderAuth.tenant_key(tenant_key),
+    with :ok <- ProviderAuth.owner(tenant_key),
          {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
       Repositories.call(repository, :list, [tenant_key])
     end
@@ -54,6 +55,18 @@ defmodule Vxpipe.Calls.ProviderCredentials do
     with :ok <- ProviderAuth.binding(tenant_key, provider, name),
          {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
       Repositories.call(repository, :resolve, [tenant_key, provider, name])
+    end
+  end
+
+  def set_policy(tenant_key, provider, name, policy, options \\ []) do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- ProviderAuth.binding(tenant_key, provider, name),
+         true <- policy in [:inherit, :override, :disabled],
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      Repositories.call(repository, :set_policy, [tenant_key, provider, name, policy])
+    else
+      false -> {:error, :invalid_service_policy}
+      error -> error
     end
   end
 

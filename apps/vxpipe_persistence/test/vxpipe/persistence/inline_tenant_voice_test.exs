@@ -175,6 +175,75 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     refute inspect(error) =~ "inline-private-marker"
   end
 
+  test "an inherited voice plan pins its credential owners and rejects later scope rebinding",
+       ctx do
+    for provider <- ["google", "deepgram"] do
+      assert {:ok, _credential} =
+               ProviderCredentials.provision(
+                 :platform,
+                 provider,
+                 "default",
+                 "api_key",
+                 %{"api_key" => provider <> "-platform-private-marker"},
+                 ctx.options
+               )
+    end
+
+    {:ok, issued} =
+      Administration.issue_api_key(ctx.other.key, "inherited-call", [:calls], ctx.options)
+
+    {:ok, principal} =
+      Administration.authenticate(ctx.other.key, issued.secret, :calls, ctx.options)
+
+    assert {:ok, draft} = Calls.save_call_spec(ctx.other.key, source(), ctx.options)
+
+    assert {:ok, published} =
+             Calls.publish_call_spec(ctx.other.key, draft.call_spec_id, 1, ctx.options)
+
+    assert [route] = published.routes
+    assert {:ok, prepared, _token} = Calls.prepare_call(principal, route.key, %{}, ctx.options)
+    assert prepared.plan.credential_bindings[{"google", "default"}]["scope"] == "platform"
+    refute :erlang.term_to_binary(prepared) =~ "private-marker"
+
+    selection = prepared.plan.participants["assistant"].capabilities.model_inference
+
+    runtime = [
+      credential_source: {Vxpipe.Calls.ProviderCredentialSource, ctx.options},
+      credential_bindings: prepared.plan.credential_bindings
+    ]
+
+    assert {:ok, credential} =
+             Vxpipe.CallEngine.CredentialSource.resolve(ctx.other.key, selection, runtime)
+
+    assert credential.payload == %{"api_key" => "google-platform-private-marker"}
+
+    assert {:ok, override} =
+             ProviderCredentials.provision(
+               ctx.other.key,
+               "google",
+               "default",
+               "api_key",
+               %{"api_key" => "new-override-marker"},
+               ctx.options
+             )
+
+    assert {:error, :provider_credential_unavailable} =
+             Vxpipe.CallEngine.CredentialSource.resolve(ctx.other.key, selection, runtime)
+
+    assert {:error, %{code: :provider_credential_unavailable}} =
+             Vxpipe.Calls.CallSpecCredentials.with_active(
+               published,
+               prepared.plan,
+               ctx.options,
+               fn ->
+                 flunk("rebound credential passed the final write guard")
+               end
+             )
+
+    assert {:ok, fresh, _token} = Calls.prepare_call(principal, route.key, %{}, ctx.options)
+    assert fresh.plan.credential_bindings[{"google", "default"}]["id"] == override.id
+  end
+
   for {kind, provider} <- [
         model_inference: "google",
         text_to_speech: "deepgram",

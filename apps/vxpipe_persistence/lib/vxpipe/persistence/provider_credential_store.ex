@@ -1,13 +1,13 @@
 defmodule Vxpipe.Persistence.ProviderCredentialStore do
-  @moduledoc "Encrypted PostgreSQL adapter for tenant provider credentials. Queries never log bound data."
+  @moduledoc "Encrypted PostgreSQL adapter for scoped provider credentials. Queries never log bound data."
   @behaviour Vxpipe.Calls.ProviderCredentialRepository
 
   import Ecto.Query
 
   alias Vxpipe.Calls.{ProviderAuth, ResolvedProviderCredential}
   alias Vxpipe.Calls.ProviderCredential, as: Credential
-  alias Vxpipe.Persistence.{CredentialCipher, CredentialKeyring}
-  alias Vxpipe.Persistence.Schema.{ProviderCredential, Tenant}
+  alias Vxpipe.Persistence.{CredentialCipher, CredentialKeyring, ProviderCredentialScope}
+  alias Vxpipe.Persistence.Schema.ProviderCredential
 
   @private_query_options [log: false, telemetry_event: nil]
 
@@ -15,33 +15,48 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   def provision(context, %Credential{} = credential, payload) do
     repo = Keyword.fetch!(context, :repo)
 
-    with :ok <- ProviderAuth.binding(credential.tenant_key, credential.provider, credential.name),
+    with :ok <-
+           ProviderAuth.binding(
+             Credential.owner(credential),
+             credential.provider,
+             credential.name
+           ),
          :ok <- ProviderAuth.validate(credential.provider, credential.auth_kind, payload),
          {:ok, key_id, encrypted} <-
-           CredentialCipher.encrypt(Keyword.get(context, :keyring), credential, payload),
-         {:ok, tenant} <- tenant(repo, credential.tenant_key) do
-      attributes = %{
-        public_id: credential.id,
-        tenant_id: tenant.id,
-        provider: credential.provider,
-        name: credential.name,
-        auth_kind: credential.auth_kind,
-        version: credential.version,
-        payload_schema_version: credential.payload_schema_version,
-        status: "active",
-        secret_hints: credential.secret_hints,
-        last_validated_at: credential.last_validated_at,
-        encrypted_payload: encrypted,
-        encryption_key_id: key_id
-      }
-
-      case repo.insert(ProviderCredential.changeset(%ProviderCredential{}, attributes),
-             log: false,
-             telemetry_event: nil
-           ) do
-        {:ok, stored} -> {:ok, metadata(stored, tenant.key)}
-        {:error, changeset} -> {:error, insertion_error(changeset)}
-      end
+           CredentialCipher.encrypt(Keyword.get(context, :keyring), credential, payload) do
+      repo.transaction(
+        fn ->
+          with {:ok, owner} <-
+                 ProviderCredentialScope.owner(repo, Credential.owner(credential), "FOR UPDATE"),
+               attributes = %{
+                 public_id: credential.id,
+                 scope: owner.scope,
+                 tenant_id: owner.id,
+                 provider: credential.provider,
+                 name: credential.name,
+                 auth_kind: credential.auth_kind,
+                 version: credential.version,
+                 payload_schema_version: credential.payload_schema_version,
+                 status: "active",
+                 secret_hints: credential.secret_hints,
+                 last_validated_at: credential.last_validated_at,
+                 encrypted_payload: encrypted,
+                 encryption_key_id: key_id
+               },
+               {:ok, stored} <-
+                 repo.insert(
+                   ProviderCredential.changeset(%ProviderCredential{}, attributes),
+                   @private_query_options
+                 ) do
+            :ok = ProviderCredentialScope.override(repo, owner, stored.provider, stored.name)
+            metadata(stored, owner.key)
+          else
+            {:error, %Ecto.Changeset{} = changeset} -> repo.rollback(insertion_error(changeset))
+            {:error, reason} -> repo.rollback(reason)
+          end
+        end,
+        @private_query_options
+      )
     end
   rescue
     error -> repository_error(error, __STACKTRACE__)
@@ -65,12 +80,17 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
 
     case repo.transaction(
            fn ->
+             owner =
+               case ProviderCredentialScope.owner(repo, tenant_key, "FOR UPDATE") do
+                 {:ok, owner} -> owner
+                 {:error, _reason} -> repo.rollback(:provider_credential_not_found)
+               end
+
+             query = ProviderCredentialScope.owned(ProviderCredential, owner)
+
              query =
-               from(c in ProviderCredential,
-                 join: t in assoc(c, :tenant),
-                 where:
-                   t.key == ^tenant_key and c.public_id == ^credential_id and
-                     c.provider == ^provider,
+               from(c in query,
+                 where: c.public_id == ^credential_id and c.provider == ^provider,
                  lock: "FOR UPDATE"
                )
 
@@ -79,7 +99,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                  repo.rollback(:provider_credential_not_found)
 
              next = %{
-               metadata(stored, tenant_key)
+               metadata(stored, owner.key)
                | auth_kind: auth_kind,
                  version: stored.version + 1,
                  status: :active,
@@ -103,7 +123,8 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                       ),
                       @private_query_options
                     ) do
-               metadata(updated, tenant_key)
+               :ok = ProviderCredentialScope.override(repo, owner, updated.provider, updated.name)
+               metadata(updated, owner.key)
              else
                {:error, %Ecto.Changeset{}} -> repo.rollback(:provider_credential_write_failed)
                {:error, reason} -> repo.rollback(reason)
@@ -125,18 +146,17 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   def list(context, tenant_key) do
     repo = Keyword.fetch!(context, :repo)
 
-    with {:ok, tenant} <- tenant(repo, tenant_key) do
+    with {:ok, owner} <- ProviderCredentialScope.owner(repo, tenant_key) do
+      query = ProviderCredentialScope.owned(ProviderCredential, owner)
+
       credentials =
         repo.all(
-          from(c in ProviderCredential,
-            where: c.tenant_id == ^tenant.id,
-            order_by: [c.provider, c.name]
-          ),
+          from(c in query, order_by: [c.provider, c.name]),
           log: false,
           telemetry_event: nil
         )
 
-      {:ok, Enum.map(credentials, &metadata(&1, tenant.key))}
+      {:ok, Enum.map(credentials, &metadata(&1, owner.key))}
     end
   rescue
     error -> repository_error(error, __STACKTRACE__)
@@ -149,16 +169,12 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   def resolve(context, tenant_key, provider, name) do
     repo = Keyword.fetch!(context, :repo)
 
-    query =
-      from(c in ProviderCredential,
-        join: t in assoc(c, :tenant),
-        where: t.key == ^tenant_key and c.provider == ^provider and c.name == ^name
-      )
-
-    case repo.one(query, log: false, telemetry_event: nil) do
-      nil -> {:error, :provider_credential_not_found}
-      %{status: "revoked"} -> {:error, :provider_credential_revoked}
-      %{status: "active"} = stored -> resolve_payload(context, stored, tenant_key)
+    case repo.transaction(
+           fn -> resolve_selected(context, tenant_key, provider, name) end,
+           @private_query_options
+         ) do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
     end
   rescue
     error -> repository_error(error, __STACKTRACE__)
@@ -166,6 +182,39 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
     :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
       {:error, :provider_credentials_unavailable}
   end
+
+  @impl true
+  def set_policy(context, tenant_key, provider, name, policy)
+      when policy in [:inherit, :override, :disabled] do
+    repo = Keyword.fetch!(context, :repo)
+
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- ProviderAuth.binding(tenant_key, provider, name) do
+      case repo.transaction(
+             fn ->
+               case ProviderCredentialScope.owner(repo, tenant_key, "FOR UPDATE") do
+                 {:ok, tenant} ->
+                   ProviderCredentialScope.set_policy(repo, tenant, provider, name, policy)
+
+                 {:error, reason} ->
+                   repo.rollback(reason)
+               end
+             end,
+             @private_query_options
+           ) do
+        {:ok, :ok} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  rescue
+    error -> repository_error(error, __STACKTRACE__)
+  catch
+    :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
+      {:error, :provider_credentials_unavailable}
+  end
+
+  def set_policy(_context, _tenant_key, _provider, _name, _policy),
+    do: {:error, :invalid_service_policy}
 
   @impl true
   def with_active(context, tenant_key, requirements, operation) do
@@ -200,21 +249,15 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   end
 
   defp lock_active(context, tenant_key, requirement) do
-    repo = Keyword.fetch!(context, :repo)
+    case resolve_selected(context, tenant_key, requirement.provider, requirement.name) do
+      {:ok, snapshot} ->
+        if not Map.has_key?(requirement, :identity) or
+             requirement.identity == Credential.binding_identity(snapshot.credential),
+           do: :ok,
+           else: {:error, :provider_credential_unavailable}
 
-    with {:ok, tenant} <- tenant(repo, tenant_key),
-         query =
-           from(c in ProviderCredential,
-             where:
-               c.tenant_id == ^tenant.id and c.provider == ^requirement.provider and
-                 c.name == ^requirement.name,
-             lock: "FOR SHARE"
-           ),
-         %{status: "active"} = stored <- repo.one(query, log: false, telemetry_event: nil),
-         {:ok, _private_snapshot} <- resolve_payload(context, stored, tenant_key) do
-      :ok
-    else
-      _unavailable -> {:error, :provider_credential_unavailable}
+      {:error, _reason} ->
+        {:error, :provider_credential_unavailable}
     end
   end
 
@@ -238,7 +281,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
           rows =
             repo.all(
               from(c in ProviderCredential,
-                join: t in assoc(c, :tenant),
+                left_join: t in assoc(c, :tenant),
                 where: c.encryption_key_id != ^current_key_id,
                 order_by: c.id,
                 limit: ^batch_size,
@@ -340,10 +383,23 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
     end
   end
 
-  defp tenant(repo, key) do
-    case repo.get_by(Tenant, [key: key], log: false, telemetry_event: nil) do
-      nil -> {:error, :tenant_not_found}
-      tenant -> {:ok, tenant}
+  defp resolve_selected(context, tenant_key, provider, name) do
+    repo = Keyword.fetch!(context, :repo)
+
+    with {:ok, owner} <- ProviderCredentialScope.selected(repo, tenant_key, provider, name) do
+      query = ProviderCredentialScope.owned(ProviderCredential, owner)
+
+      query =
+        from(c in query,
+          where: c.provider == ^provider and c.name == ^name,
+          lock: "FOR SHARE"
+        )
+
+      case repo.one(query, @private_query_options) do
+        nil -> {:error, :provider_credential_not_found}
+        %{status: "revoked"} -> {:error, :provider_credential_revoked}
+        %{status: "active"} = stored -> resolve_payload(context, stored, owner.key)
+      end
     end
   end
 
@@ -357,6 +413,7 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
     %Credential{
       id: stored.public_id,
       tenant_key: tenant_key,
+      owner: if(stored.scope == "platform", do: :platform, else: {:tenant, tenant_key}),
       provider: stored.provider,
       name: stored.name,
       auth_kind: stored.auth_kind,

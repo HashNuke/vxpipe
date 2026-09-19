@@ -69,12 +69,14 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
 
     assert plan.call_spec_id == "legacy-call-definition"
     assert plan.call_spec_revision == 3
+    assert plan.credential_bindings == nil
     assert plan.wait_sounds.__struct__ == Vxpipe.CallEngine.CallSpec.WaitSounds
     assert plan.transfer_policy.__struct__ == Vxpipe.CallEngine.CallSpec.TransferPolicy
     caller = Map.fetch!(plan.participants, "caller")
     transfer = Map.fetch!(caller.tools, "transfer").transfer
     assert transfer.source_call_spec_key == "caller"
     assert Map.fetch!(transfer.targets, "agent").call_spec_key == "agent"
+
     assert plan.call_variables.sections["user_payload"] == %{
              "definition_id" => "must-stay-definition-id",
              "definition_key" => "must-stay-definition-key"

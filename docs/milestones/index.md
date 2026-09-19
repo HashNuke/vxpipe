@@ -134,7 +134,9 @@ progress without claiming the entire milestone is complete.
 Onboarding follow-up, 2026-09-19: the [platform and tenant services plan](../platform-and-tenant-services.md)
 extends the bootstrap milestone with explicit shared services, tenant overrides and
 scope-specific Telnyx webhook URLs. Storybook work precedes the planned storage,
-reader, verification and Console integration checkpoints. This does not change the
+reader, verification and Console integration checkpoints. Implementation was authorized
+on 2026-09-19 and is tracked as five runnable vertical checkpoints in that plan;
+the inherited-provider execution slice is in progress. This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 
 After milestone 22 passes its acceptance gates, stop implementation and present the complete

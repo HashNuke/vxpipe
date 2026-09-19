@@ -35,6 +35,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   ]
   defstruct @enforce_keys ++
               [
+                credential_bindings: nil,
                 wait_sounds: %Vxpipe.CallEngine.CallSpec.WaitSounds{},
                 wait_sound_assets: nil
               ]
@@ -86,6 +87,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           call_spec_revision: pos_integer(),
           schema_version: String.t(),
           tenant_id: String.t(),
+          credential_bindings: nil | %{{String.t(), String.t()} => map()},
           actor_id: String.t(),
           call_id: String.t(),
           room_id: String.t(),

@@ -1,0 +1,196 @@
+defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
+  use Vxpipe.Persistence.DataCase, async: false
+
+  alias Vxpipe.Calls.{Administration, ProviderCredentials, ProviderCredentialSource}
+  alias Vxpipe.Persistence.{CredentialKeyring, CredentialStore, ProviderCredentialStore, Repo}
+  alias Vxpipe.Persistence.Schema.ProviderCredential
+
+  setup do
+    tenants =
+      for name <- ["First inheritor", "Second inheritor", "Override tenant"] do
+        {:ok, tenant, _issued} =
+          Administration.bootstrap_tenant(name, [:admin],
+            credential_repository: {CredentialStore, Repo}
+          )
+
+        tenant
+      end
+
+    {:ok, keyring} =
+      CredentialKeyring.new("scope-v1", %{"scope-v1" => :crypto.strong_rand_bytes(32)})
+
+    context = [repo: Repo, keyring: keyring]
+    options = [provider_credential_repository: {ProviderCredentialStore, context}]
+    %{tenants: tenants, context: context, options: options}
+  end
+
+  test "two tenants inherit a named platform credential while a third uses its own", data do
+    [first, second, third] = data.tenants
+
+    assert {:ok, platform} =
+             provision(:platform, "shared-model", "platform-example", data.options)
+
+    assert platform.owner == :platform
+    assert platform.tenant_key == nil
+
+    assert {:ok, override} = provision(third.key, "shared-model", "tenant-example", data.options)
+
+    for tenant <- [first, second] do
+      assert {:ok, resolved} =
+               ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+
+      assert resolved.credential.id == platform.id
+      assert resolved.credential.owner == :platform
+      assert resolved.payload == %{"api_key" => "platform-example"}
+
+      assert {:ok, runtime} =
+               ProviderCredentialSource.resolve(
+                 data.options,
+                 tenant.key,
+                 "google",
+                 "shared-model"
+               )
+
+      assert runtime.tenant_id == tenant.key
+      assert runtime.id == platform.id
+    end
+
+    assert {:ok, own} =
+             ProviderCredentials.resolve(third.key, "google", "shared-model", data.options)
+
+    assert own.credential.id == override.id
+    assert own.credential.owner == {:tenant, third.key}
+    assert own.payload == %{"api_key" => "tenant-example"}
+
+    assert {:error, :provider_credential_not_found} =
+             ProviderCredentials.resolve(first.key, "google", "default", data.options)
+
+    requirements = [%{provider: "google", name: "shared-model", path: ["model"]}]
+
+    assert {:ok, :saved} =
+             ProviderCredentialStore.with_active(data.context, first.key, requirements, fn ->
+               {:ok, :saved}
+             end)
+  end
+
+  test "disabled and failed overrides never fall back until inheritance is explicitly restored",
+       data do
+    [tenant | _] = data.tenants
+
+    assert {:ok, platform} =
+             provision(:platform, "shared-model", "platform-example", data.options)
+
+    assert {:ok, override} = provision(tenant.key, "shared-model", "tenant-example", data.options)
+
+    stored = Repo.get_by!(ProviderCredential, public_id: override.id)
+    Repo.update!(Ecto.Changeset.change(stored, status: "revoked"))
+
+    assert {:error, :provider_credential_revoked} =
+             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "google",
+               "shared-model",
+               :disabled,
+               data.options
+             )
+
+    assert {:error, :provider_service_disabled} =
+             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+
+    requirements = [%{provider: "google", name: "shared-model", path: ["model"]}]
+
+    assert {:error, {:provider_credential_unavailable, ["model"]}} =
+             ProviderCredentialStore.with_active(data.context, tenant.key, requirements, fn ->
+               flunk("disabled service reached the write")
+             end)
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "google",
+               "shared-model",
+               :inherit,
+               data.options
+             )
+
+    assert {:ok, inherited} =
+             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+
+    assert inherited.credential.id == platform.id
+
+    # An explicit override still fails if its credential disappeared.
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "google",
+               "shared-model",
+               :override,
+               data.options
+             )
+
+    Repo.delete!(stored)
+
+    assert {:error, :provider_credential_not_found} =
+             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+  end
+
+  test "platform ciphertext cannot be transplanted into a tenant and both scopes re-encrypt",
+       data do
+    [tenant | _] = data.tenants
+
+    assert {:ok, platform} =
+             provision(:platform, "shared-model", "platform-example", data.options)
+
+    assert {:ok, override} = provision(tenant.key, "shared-model", "tenant-example", data.options)
+    shared_row = Repo.get_by!(ProviderCredential, public_id: platform.id)
+    tenant_row = Repo.get_by!(ProviderCredential, public_id: override.id)
+    assert <<2, _rest::binary>> = shared_row.encrypted_payload
+    assert <<1, _rest::binary>> = tenant_row.encrypted_payload
+
+    Repo.update!(
+      Ecto.Changeset.change(tenant_row, encrypted_payload: shared_row.encrypted_payload)
+    )
+
+    assert {:error, :provider_credential_unreadable} =
+             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+
+    tenant_row
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.force_change(:encrypted_payload, tenant_row.encrypted_payload)
+    |> Repo.update!()
+
+    old = Keyword.fetch!(data.context, :keyring)
+    assert {:ok, old_key} = CredentialKeyring.fetch(old, "scope-v1")
+    next_key = :crypto.strong_rand_bytes(32)
+
+    assert {:ok, next} =
+             CredentialKeyring.new("scope-v2", %{"scope-v1" => old_key, "scope-v2" => next_key})
+
+    assert {:ok, %{processed: 2, remaining_by_key: %{}}} =
+             ProviderCredentialStore.reencrypt(Keyword.put(data.context, :keyring, next))
+
+    assert {:ok, retired} = CredentialKeyring.new("scope-v2", %{"scope-v2" => next_key})
+    context = Keyword.put(data.context, :keyring, retired)
+
+    for {owner, expected} <- [{:platform, "platform-example"}, {tenant.key, "tenant-example"}] do
+      assert {:ok, resolved} =
+               ProviderCredentialStore.resolve(context, owner, "google", "shared-model")
+
+      assert resolved.payload == %{"api_key" => expected}
+    end
+  end
+
+  defp provision(owner, name, secret, options) do
+    ProviderCredentials.provision(
+      owner,
+      "google",
+      name,
+      "api_key",
+      %{"api_key" => secret},
+      options
+    )
+  end
+end
