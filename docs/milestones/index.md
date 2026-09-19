@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 31 milestone specifications: 23 complete and 8 incomplete. Milestone 17, Telnyx calls and
+Status: 32 milestone specifications: 24 complete and 8 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -13,7 +13,7 @@ call-details publications, is complete, including immutable late revisions and p
 retrieval. Milestone 22, context compaction and supported LLM fallback, is complete, including
 bounded private summaries, provider-native routing, truthful usage, and runnable HTTPS/WebRTC
 acceptance. The platform is now at its pre-delivery review hold. Milestone 23 proposes transfer
-readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 30 and 31 remain unimplemented until the user has exercised the
+readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Delivery and retention remain unimplemented until the user has exercised the
 working platform and decided to proceed with packaging and retention.
 Milestone 24 implements the 2026-09-15 provider-credential decision: inline upstream
 provider/model selections, no capability profiles, encrypted tenant AI/speech and Telnyx/Twilio
@@ -80,6 +80,14 @@ The approved [gateway/console boundary](../gateway-console-boundary.md) keeps th
 reusable and assigns Phoenix/dashboard/sample ownership to `vxpipe_console` /
 `Vxpipe.Console`. It changes these slices' application ownership, not their count or order.
 
+The 2026-09-19 speech-integration research adds
+[Simpler speech integrations](simpler-speech-integrations.md) before delivery. Its eight proposed
+checkpoints replace the public provider/transport split with semantic sessions, migrating Morse
+and Deepgram one direction at a time. The [provider comparison](../speech-provider-comparison.md)
+covers Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini without adding those integrations.
+Research and local specification review are complete; implementation is not started and the
+packaging/retention hold is unchanged.
+
 ## How to use this index
 
 Implement in the order below. Product/operator entries describe runnable vertical slices;
@@ -126,8 +134,9 @@ progress without claiming the entire milestone is complete.
 27. [x] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
-30. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-31. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through eight runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Research/specification only; implementation has not started.
+31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
@@ -174,7 +183,7 @@ provider, transfer, media, recording, inspection, publication, and fallback path
 system. Record any discovered fixes or approved design changes in their owning milestone before
 release work begins.
 
-Do not start milestone 30 (Docker/container packaging) or milestone 31 (retention/deletion) until
+Do not start Docker/container packaging or retention/deletion until
 that review is complete and the user explicitly chooses to proceed. This is a sequencing hold,
 not a change to either milestone's approved scope or completion state. Retention/deletion remains
 the final milestone.
@@ -439,6 +448,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Operator login and admin dashboard**: short-lived local login challenge, installation-wide operator session and integration of the user-approved React administration over every tenant, call spec and call; no users, teams or RBAC.
 - **Platform bootstrap and demo tenant**: explicit hash-only platform API-key authority and durable demo binding, preserving tenant boundaries and encrypted provider storage.
 - **Getting Started and example calls**: production-default runtime, explicit demo mode, persistent `/` setup checklist and per-example readiness, three versioned examples and safe debug-console launch.
+- **Simpler speech integrations**: user-requested provider-contract research and proposed semantic STT/TTS sessions; preserve call/media/privacy/usage ownership while removing mandatory transport and wire-protocol authoring.
 - **Embedded and container delivery**: Container/OTP boundary; complete approved scope.
 
 ## Specification review evidence
@@ -484,7 +494,8 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | In progress; Storybook refinement locally reviewed 2026-09-18 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity remain required. Compact provider cards, credential modals with service dropdowns, alternative voice-readiness previews and tenant resumption are prototyped; the default name is Demo. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Production integration planned; recipe prototype locally reviewed 2026-09-18 | Tenant services-to-recipes stories include blocked/ready states and explicit provider choice. Root-home/demo-mode behavior, durable publication and real debug-console launch retain their incomplete acceptance gates. |
-| [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The packaging hold remains. |
+| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Proposed; research and local design/dependency review complete | Eight unimplemented vertical checkpoints map session contracts, provider migrations, shared conformance examples and final consumer acceptance. Official Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini docs inform segment/turn, generation/playback and cancellation boundaries. No new hosted support or runtime verification is claimed. |
+| [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 
 ## Planning verification
 

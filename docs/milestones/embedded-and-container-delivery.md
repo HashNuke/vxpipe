@@ -1,7 +1,7 @@
 # Embedded and container delivery
 
 Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
-Prerequisites: [Getting Started/example calls](getting-started-and-example-calls.md), including its debug-console and platform-bootstrap prerequisites; [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
+Prerequisites: [Getting Started/example calls](getting-started-and-example-calls.md), including its debug-console and platform-bootstrap prerequisites; [Simpler speech integrations](simpler-speech-integrations.md); [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
 Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical call spec boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](../gateway-console-boundary.md).
 
@@ -166,3 +166,10 @@ Local review places the debug console, platform bootstrap and Getting Started sl
 delivery. The image acceptance now covers production-default behavior and explicit demo opt-in
 using the same build. Existing embedded boundaries and the pre-delivery user review hold remain
 in force. This follow-up adds prerequisite/mode checks, not implementation or image verification.
+
+### Speech integration prerequisite review (2026-09-19)
+
+The user-requested speech contract plan is placed before delivery so the embedded authoring
+guide and host configuration describe the completed semantic interface when packaged. Local
+review found no reverse dependency on delivery or retention. This adds a proposed implementation
+prerequisite; it does not claim the interface is implemented or release the packaging hold.
