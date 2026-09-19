@@ -40,6 +40,8 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       |> Keyword.merge(registry: telephony_events.registry, clock: telephony_events.clock)
 
     %{
+      operator_api:
+        options |> Keyword.get(:operator_api, []) |> Vxpipe.Gateway.HTTP.OperatorAPI.init(),
       call_admission: CallAdmissions.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
@@ -52,6 +54,10 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   @impl true
   def call(%Plug.Conn{method: "GET", path_info: ["healthz"]} = conn, _options) do
     send_resp(conn, 200, "ok")
+  end
+
+  def call(%Plug.Conn{method: "GET", path_info: ["api", "platform", "status"]} = conn, options) do
+    Vxpipe.Gateway.HTTP.OperatorAPI.status(conn, options.operator_api)
   end
 
   def call(%Plug.Conn{method: "POST", path_info: ["api", "rooms"]} = conn, options) do

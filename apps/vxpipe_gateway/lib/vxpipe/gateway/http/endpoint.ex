@@ -19,6 +19,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
         ),
       router:
         Router.init(
+          operator_api: Keyword.get(options, :operator_api, []),
           call_admission: Keyword.get(options, :call_admission, []),
           room_creation: Keyword.get(options, :room_creation, []),
           telephony: Keyword.get(options, :telephony, []),

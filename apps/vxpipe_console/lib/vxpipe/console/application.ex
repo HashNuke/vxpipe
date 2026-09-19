@@ -55,7 +55,7 @@ defmodule Vxpipe.Console.Application do
 
     gateway_settings
     |> Keyword.fetch!(:http)
-    |> Keyword.take([:call_admission, :cors, :room_creation, :telephony, :webrtc])
+    |> Keyword.take([:operator_api, :call_admission, :cors, :room_creation, :telephony, :webrtc])
     |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
     |> Keyword.put(:path_prefix, "/")
     |> Mount.init()

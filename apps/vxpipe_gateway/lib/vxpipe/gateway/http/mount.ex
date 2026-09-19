@@ -16,6 +16,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
     options =
       Keyword.validate!(options,
         path_prefix: "/",
+        operator_api: [],
         call_admission: [],
         cors: [],
         room_creation: [],
@@ -26,6 +27,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
     %{
       endpoint:
         Endpoint.init(
+          operator_api: Keyword.fetch!(options, :operator_api),
           cors: Keyword.fetch!(options, :cors),
           call_admission: Keyword.fetch!(options, :call_admission),
           room_creation: Keyword.fetch!(options, :room_creation),

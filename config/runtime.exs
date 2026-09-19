@@ -85,6 +85,8 @@ if database_url do
     artifact_repository: {Vxpipe.Persistence.ArtifactStore, Vxpipe.Persistence.Repo},
     usage_repository: {Vxpipe.Persistence.UsageStore, Vxpipe.Persistence.Repo},
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
+    operator_api_key_repository:
+      {Vxpipe.Persistence.OperatorApiKeyStore, Vxpipe.Persistence.Repo},
     operator_login_challenge_repository:
       {Vxpipe.Persistence.OperatorLoginChallengeStore, [repo: Vxpipe.Persistence.Repo]},
     provider_credential_repository:
@@ -355,6 +357,7 @@ telephony_public_base_url =
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
   http: [
+    operator_api: [enabled: not is_nil(database_url)],
     telephony: [
       enabled: not is_nil(telephony_public_base_url),
       public_base_url: telephony_public_base_url

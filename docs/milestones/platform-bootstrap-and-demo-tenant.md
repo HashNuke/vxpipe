@@ -22,6 +22,10 @@ clarification adds principal-aware writes and operator API keys for programmatic
 Checkpoints A/A2/B1 pass focused tests and the serial umbrella suite; B1's operator-session
 Console flow also passes browser/restart inspection. A3 is next;
 the platform-key and demo-bootstrap gates below remain independently tracked.
+The first A3 step now implements trusted key bootstrap/replacement/revocation and
+authenticated platform status. Persisted lifecycle tests and real HTTP/restart checks
+pass; call-spec HTTP writes remain the next step. See the
+[operator-key contract](../operator-api-key-authoring.md).
 
 ## Runnable outcome
 

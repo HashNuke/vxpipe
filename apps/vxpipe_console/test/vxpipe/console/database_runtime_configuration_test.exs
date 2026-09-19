@@ -38,6 +38,30 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     end)
   end
 
+  test "operator HTTP authentication is enabled with hosted persistence in development and production" do
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/operator_auth_configuration")
+
+    for environment <- [:dev, :prod] do
+      http =
+        Config.Reader.read!(@runtime, env: environment)
+        |> Keyword.fetch!(:vxpipe_gateway)
+        |> Keyword.fetch!(Vxpipe.Gateway.Application)
+        |> Keyword.fetch!(:http)
+
+      assert http |> Keyword.get(:operator_api, []) |> Keyword.get(:enabled, false)
+    end
+
+    System.delete_env("VXPIPE_DB_URL")
+
+    http =
+      Config.Reader.read!(@runtime, env: :prod)
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+      |> Keyword.fetch!(:http)
+
+    refute http |> Keyword.get(:operator_api, []) |> Keyword.get(:enabled, false)
+  end
+
   test "each database alias works and the first nonblank alias wins independently" do
     for {url_key, pool_key} <- [
           {"VXPIPE_DB_URL", "VXPIPE_DB_POOL_SIZE"},

@@ -245,6 +245,14 @@ Checkpoint B1 implementation and browser evidence:
   suite afterward. See the
   [B1 labnotes](../labnotes/20260919-0715-console-platform-services.md).
 
+Checkpoint A3 is in progress in two runnable commits to keep review bounded. The
+first adds trusted operator-key bootstrap/replacement/revocation and authenticated
+`GET /api/platform/status`; the second adds operator/tenant call-spec HTTP writes.
+Key storage, protected output, authority separation and a disposable-database
+HTTP/restart exercise pass. See the [key and authoring contract](operator-api-key-authoring.md)
+and [A3 labnotes](../labnotes/20260919-0803-operator-key-authoring.md). A3 stays unchecked
+until the authoring routes and final acceptance are verified.
+
 ### 1. Storybook review checkpoint
 
 - [x] Show tenant and platform Telnyx URLs in connect/edit states with copy feedback.

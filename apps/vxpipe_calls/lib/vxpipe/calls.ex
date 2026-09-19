@@ -129,6 +129,18 @@ defmodule Vxpipe.Calls do
           options
         )
 
+  def bootstrap_operator_api_key(options \\ []),
+    do: Vxpipe.Calls.OperatorApiKeys.bootstrap(options)
+
+  def replace_operator_api_key(options \\ []),
+    do: Vxpipe.Calls.OperatorApiKeys.replace(options)
+
+  def revoke_operator_api_key(id, options \\ []),
+    do: Vxpipe.Calls.OperatorApiKeys.revoke(id, options)
+
+  def authenticate_operator(secret, options \\ []),
+    do: Vxpipe.Calls.OperatorApiKeys.authenticate(secret, options)
+
   def bootstrap_tenant(name, scopes, options \\ []),
     do: Administration.bootstrap_tenant(name, scopes, options)
 
