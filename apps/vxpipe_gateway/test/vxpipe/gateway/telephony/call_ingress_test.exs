@@ -18,6 +18,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
 
   setup do
     backend = start_supervised!({TestTelephonyCallBackend, observer: self()})
+    service = identity()
 
     options = [
       backend: TestTelephonyCallBackend.backend(backend),
@@ -25,27 +26,29 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
       leg_supervisor: LegSupervisor
     ]
 
-    on_exit(fn -> LegSupervisor.stop(identity().identity, "call-leg-1") end)
+    on_exit(fn -> LegSupervisor.stop(service.identity, "call-leg-1") end)
 
-    %{backend: backend, options: options}
+    %{backend: backend, options: options, service: service}
   end
 
   test "claims and activates once, then projects the provider answer occurrence", context do
-    assert :ok = handle_event(context.options, identity(), incoming_event())
-    assert :ok = handle_event(context.options, identity(), incoming_event())
+    assert :ok = handle_event(context.options, context.service, incoming_event())
+    assert :ok = handle_event(context.options, context.service, incoming_event())
+
+    service_name = context.service.identity.service_id
 
     assert [
-             {:claim_incoming, {:tenant, "AAAAAAAAAAAAAAAA"}, "primary-phone", "call-leg-1"},
+             {:claim_incoming, {:tenant, "AAAAAAAAAAAAAAAA"}, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
              {:activate_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1", leg}
            ] = TestTelephonyCallBackend.operations(context.backend)
 
     answered = answered_event()
-    assert :ok = handle_event(context.options, identity(), answered)
-    assert :ok = handle_event(context.options, identity(), answered)
+    assert :ok = handle_event(context.options, context.service, answered)
+    assert :ok = handle_event(context.options, context.service, answered)
 
     assert [
-             {:claim_incoming, {:tenant, "AAAAAAAAAAAAAAAA"}, "primary-phone", "call-leg-1"},
+             {:claim_incoming, {:tenant, "AAAAAAAAAAAAAAAA"}, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
              {:activate_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1", ^leg},
              {:mark_incoming_started, "30000000-0000-4000-8000-000000000003", "rinc_phone-1",
@@ -56,10 +59,10 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
   end
 
   test "routes later exact-leg events through memory without another durable claim", context do
-    assert :ok = handle_event(context.options, identity(), incoming_event())
+    assert :ok = handle_event(context.options, context.service, incoming_event())
 
     answered = answered_event()
-    assert :ok = handle_event(context.options, identity(), answered)
+    assert :ok = handle_event(context.options, context.service, answered)
 
     dtmf = %{
       answered
@@ -68,7 +71,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
         digit: "1"
     }
 
-    assert :ok = handle_event(context.options, identity(), dtmf)
+    assert :ok = handle_event(context.options, context.service, dtmf)
     assert_receive {:test_live_telephony_event, ^dtmf, source}
     assert source == self()
 
@@ -80,14 +83,14 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     mismatched = %{answered | provider_call_session_id: "call-session-other"}
 
     assert {:error, :telephony_leg_mismatch} =
-             handle_event(context.options, identity(), mismatched)
+             handle_event(context.options, context.service, mismatched)
 
     refute_receive {:test_live_telephony_event, ^mismatched, _source}
   end
 
   test "a scoped incoming owner remains discoverable without storage and duplicate admission",
        context do
-    original = identity()
+    original = context.service
 
     reference = %{
       original.identity.service_reference
@@ -117,7 +120,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
   end
 
   test "uses admitted media start as live evidence when it arrives before answered", context do
-    assert :ok = handle_event(context.options, identity(), incoming_event())
+    assert :ok = handle_event(context.options, context.service, incoming_event())
 
     media_started = %{
       incoming_event()
@@ -127,7 +130,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
         stream_id: "stream-1"
     }
 
-    assert :ok = handle_event(context.options, identity(), media_started)
+    assert :ok = handle_event(context.options, context.service, media_started)
 
     assert [
              {:mark_incoming_started, "30000000-0000-4000-8000-000000000003", "rinc_phone-1",
@@ -139,7 +142,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert source == self()
   end
 
-  test "records one startup failure and does not restart the crashed call" do
+  test "records one startup failure and does not restart the crashed call", context do
     backend =
       start_supervised!(
         {TestTelephonyCallBackend, observer: self(), start_failure?: true},
@@ -152,17 +155,18 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
       leg_supervisor: LegSupervisor
     ]
 
-    assert :ok = handle_event(options, identity(), incoming_event())
-    assert :ok = handle_event(options, identity(), incoming_event())
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert :ok = handle_event(options, context.service, incoming_event())
+    service_name = context.service.identity.service_id
 
     assert [
-             {:claim_incoming, _first_scope, "primary-phone", "call-leg-1"},
+             {:claim_incoming, _first_scope, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
              {:mark_incoming_failed, "30000000-0000-4000-8000-000000000003", :room_start_failed}
            ] = TestTelephonyCallBackend.operations(backend)
   end
 
-  test "records a rejected carrier activation without marking the call started" do
+  test "records a rejected carrier activation without marking the call started", context do
     backend =
       start_supervised!(
         {TestTelephonyCallBackend, observer: self(), activation_failure?: true},
@@ -175,10 +179,11 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
       leg_supervisor: LegSupervisor
     ]
 
-    assert :ok = handle_event(options, identity(), incoming_event())
+    assert :ok = handle_event(options, context.service, incoming_event())
+    service_name = context.service.identity.service_id
 
     assert [
-             {:claim_incoming, _scope, "primary-phone", "call-leg-1"},
+             {:claim_incoming, _scope, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
              {:activate_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1", leg},
              {:mark_incoming_failed, "30000000-0000-4000-8000-000000000003",
@@ -194,7 +199,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     binding = %MediaBinding{
       provider: claim.provider,
       service_id: claim.service,
-      ingress_key: "ingress_telnyx_primary",
+      ingress_key: context.service.identity.ingress_key,
       tenant_id: claim.call.tenant_key,
       call_id: claim.call.id,
       room_id: claim.call.room_id,
@@ -229,14 +234,14 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert started.measurement.component == "carrier_legs"
 
     assert {:ok, "wss://voice.example.test/media"} =
-             handle_event(context.options, identity(), incoming_event())
+             handle_event(context.options, context.service, incoming_event())
 
     answered = %{
       answered_event()
       | occurred_at: ~U[2026-09-12 06:00:03.250Z]
     }
 
-    assert :ok = handle_event(context.options, identity(), answered)
+    assert :ok = handle_event(context.options, context.service, answered)
     assert_receive {:test_usage_observations, [connected]}
     assert connected.delivery_id == answered.provider_event_id
 
@@ -248,7 +253,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
         end_reason: :hangup
     }
 
-    assert :ok = handle_event(context.options, identity(), ended)
+    assert :ok = handle_event(context.options, context.service, ended)
     assert_receive {:test_usage_observations, [duration]}
     assert duration.outcome == :succeeded
     assert duration.measurement.component == "connection_duration"
@@ -258,7 +263,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
   end
 
   test "incoming retries retain exact call identity and initialized service", context do
-    service = identity()
+    service = context.service
     incoming = incoming_event()
     assert :ok = handle_event(context.options, service, incoming)
     assert {:ok, leg} = LegSupervisor.lookup(service.identity, incoming.provider_call_leg_id)
@@ -296,9 +301,12 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
   end
 
   defp identity do
+    # Each test owns its registry identity; prior owners may still be retiring.
+    suffix = System.unique_integer([:positive])
+
     options = [
-      id: "primary-phone",
-      ingress_key: "ingress_telnyx_primary",
+      id: "primary-phone-#{suffix}",
+      ingress_key: "ingress_telnyx_#{suffix}",
       scope: {:tenant, "AAAAAAAAAAAAAAAA"},
       provider: :telnyx,
       provider_connection_id: "voice-application-1",
