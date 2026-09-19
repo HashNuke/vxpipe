@@ -96,6 +96,7 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
     end)
     |> Map.new()
     |> Map.put(:__struct__, normalized_module)
+    |> normalize_reference_defaults(normalized_module)
   end
 
   defp normalize(value) when is_map(value) do
@@ -105,6 +106,11 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
   defp normalize(value) when is_list(value), do: Enum.map(value, &normalize/1)
 
   defp normalize(value), do: value
+
+  defp normalize_reference_defaults(value, Vxpipe.CallEngine.Telephony.ServiceReference),
+    do: value |> Map.put_new(:credential_owner, nil) |> Map.put_new(:credential_name, nil)
+
+  defp normalize_reference_defaults(value, _module), do: value
 
   defp normalize_struct_field(
          Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding,

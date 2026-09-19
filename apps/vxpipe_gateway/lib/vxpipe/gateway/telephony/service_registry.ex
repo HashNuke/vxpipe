@@ -52,8 +52,7 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
              registry.repository_options
            ),
          true <- snapshot.service.ingress_key == ingress and candidate.ingress_key == ingress,
-         true <-
-           TelephonyServices.reference(snapshot.service) == TelephonyServices.reference(candidate),
+         true <- same_binding?(snapshot.service, candidate),
          {:ok, service} <- configure(registry, snapshot) do
       {:ok, service}
     else
@@ -91,6 +90,24 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
 
   def fetch_for_tenant(%__MODULE__{}, _name, _tenant, _reference),
     do: {:error, :service_not_found}
+
+  defp same_binding?(
+         resolved,
+         %TelephonyService{
+           credential_name: "telnyx",
+           credential_id: nil,
+           credential_owner: nil,
+           public_key: nil
+         } = candidate
+       ) do
+    reference = TelephonyServices.reference(resolved)
+
+    %{reference | credential_id: nil, credential_owner: nil} ==
+      TelephonyServices.reference(candidate)
+  end
+
+  defp same_binding?(resolved, candidate),
+    do: TelephonyServices.reference(resolved) == TelephonyServices.reference(candidate)
 
   defp configure(registry, snapshot) do
     ConfiguredService.from_snapshot(snapshot, registry.public_base_url, registry.adapters)

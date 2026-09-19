@@ -12,12 +12,15 @@ defmodule Mix.Tasks.Vxpipe.TelephonyService.Register do
 
       mix vxpipe.telephony_service.register --tenant TENANT_KEY --file service.json
 
-  The JSON object contains name, ingress_key, provider, provider_connection_id and credential_id.
-  Telnyx requires public_key; Twilio omits it and uses its account SID as provider_connection_id.
+  The JSON object contains name, ingress_key, provider and provider_connection_id.
+  For scoped Telnyx, supply credential_name: "telnyx" and omit credential_id/public_key;
+  the effective tenant-or-platform credential must contain its verification public_key.
+  Legacy bindings instead supply credential_id. Legacy Telnyx also requires public_key;
+  Twilio omits it and uses its account SID as provider_connection_id.
   Optional fields are outbound_number,
   answering_machine_detection (disabled or detect), media_token_ttl_ms and
-  webhook_tolerance_seconds. The existing provider credential must belong to the same
-  tenant/provider and be active and readable. Output contains public binding IDs only.
+  webhook_tolerance_seconds. Legacy credentials must belong to the same tenant/provider.
+  All selected credentials must be readable. Output contains public binding IDs only.
   Secret fields, adapter modules and public origins are not service metadata.
   """
 

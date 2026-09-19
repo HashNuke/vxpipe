@@ -6,7 +6,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
 
   alias Vxpipe.Calls.TelephonyService, as: Service
   alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyServices}
-  alias Vxpipe.Persistence.ProviderCredentialStore
+  alias Vxpipe.Persistence.{ProviderCredentialScope, ProviderCredentialStore}
   alias Vxpipe.Persistence.Schema.{ProviderCredential, TelephonyService}
 
   @query_options [log: false, telemetry_event: nil]
@@ -136,7 +136,8 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
     with {:ok, service} <- fetch_metadata(repo, query),
          :ok <- Service.validate(service),
          {:ok, {_tenant_id, credential}} <- lock_credential(context, service) do
-      {:ok, %ResolvedTelephonyService{service: service, credential: credential}}
+      resolved = resolved_service(service, credential)
+      {:ok, %ResolvedTelephonyService{service: resolved, credential: credential}}
     end
   end
 
@@ -149,6 +150,36 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
          end) do
       {:ok, result} -> result
       {:error, _reason} = error -> error
+    end
+  end
+
+  defp resolved_service(%{credential_name: nil} = service, _credential), do: service
+
+  defp resolved_service(service, credential) do
+    %{
+      service
+      | credential_id: credential.credential.id,
+        credential_owner: Vxpipe.Calls.ProviderCredential.owner(credential.credential),
+        public_key: Map.fetch!(credential.payload, "public_key")
+    }
+  end
+
+  defp lock_credential(context, %{credential_name: "telnyx"} = service) do
+    repo = Keyword.fetch!(context, :repo)
+
+    with {:ok, owner} <- ProviderCredentialScope.owner(repo, service.tenant_key, "FOR SHARE"),
+         {:ok, credential} <-
+           ProviderCredentialStore.resolve(
+             context,
+             service.tenant_key,
+             service.provider,
+             service.credential_name
+           ),
+         true <-
+           Vxpipe.Calls.ProviderAuth.telnyx_public_key?(Map.get(credential.payload, "public_key")) do
+      {:ok, {owner.id, credential}}
+    else
+      _unavailable -> {:error, :provider_credential_unavailable}
     end
   end
 
@@ -190,7 +221,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   defp attributes(service, tenant_id) do
     service
     |> Map.from_struct()
-    |> Map.drop([:id, :tenant_key, :inserted_at, :updated_at])
+    |> Map.drop([:id, :tenant_key, :credential_owner, :inserted_at, :updated_at])
     |> Map.merge(%{public_id: service.id, tenant_id: tenant_id})
     |> Map.update!(:answering_machine_detection, &Atom.to_string/1)
   end
@@ -204,6 +235,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
       provider: stored.provider,
       provider_connection_id: stored.provider_connection_id,
       credential_id: stored.credential_id,
+      credential_name: stored.credential_name,
       public_key: stored.public_key,
       outbound_number: stored.outbound_number,
       answering_machine_detection: detection(stored.answering_machine_detection),

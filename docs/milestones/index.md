@@ -146,6 +146,10 @@ The latest clarification removes credential policies: existing tenant credential
 otherwise platform credentials are inherited. Scoped deletion and UI simplification
 pass browser/migration/restart checks and the final umbrella run: 1,763 tests, no
 failures, 40 excluded.
+C1 adds effective Telnyx application bindings and preserves legacy carrier identities.
+Its 1,770-test umbrella run found one outdated reference-field assertion, now corrected
+and verified by the 116-test Calls suite; all other suites and root static gates pass.
+Scoped ingress C2 and Console carrier configuration C3 remain open.
 This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 

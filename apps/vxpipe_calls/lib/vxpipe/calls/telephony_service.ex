@@ -9,6 +9,7 @@ defmodule Vxpipe.Calls.TelephonyService do
     provider: nil,
     provider_connection_id: nil,
     credential_id: nil,
+    credential_name: nil,
     public_key: nil,
     outbound_number: nil,
     answering_machine_detection: "disabled",
@@ -18,7 +19,8 @@ defmodule Vxpipe.Calls.TelephonyService do
   @input_keys Enum.map(@attributes, fn {key, _default} -> Atom.to_string(key) end)
   @enforce_keys [:id, :tenant_key]
   @derive {Inspect, only: [:id, :tenant_key, :name, :provider, :credential_id]}
-  defstruct @enforce_keys ++ Keyword.keys(@attributes) ++ [:inserted_at, :updated_at]
+  defstruct @enforce_keys ++
+              Keyword.keys(@attributes) ++ [:credential_owner, :inserted_at, :updated_at]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -27,7 +29,9 @@ defmodule Vxpipe.Calls.TelephonyService do
           ingress_key: String.t(),
           provider: String.t(),
           provider_connection_id: String.t(),
-          credential_id: String.t(),
+          credential_id: String.t() | nil,
+          credential_name: String.t() | nil,
+          credential_owner: :platform | {:tenant, String.t()} | nil,
           public_key: String.t() | nil,
           outbound_number: String.t() | nil,
           answering_machine_detection: :disabled | :detect,
@@ -63,7 +67,7 @@ defmodule Vxpipe.Calls.TelephonyService do
   def validate(%__MODULE__{} = service) do
     if ProviderAuth.tenant_key(service.tenant_key) == :ok and
          identifier(service.name) == :ok and identifier(service.ingress_key) == :ok and
-         uuid?(service.id) and uuid?(service.credential_id) and provider_metadata?(service) and
+         uuid?(service.id) and credential_binding?(service) and provider_metadata?(service) and
          phone_number?(service.outbound_number) and
          service.answering_machine_detection in [:disabled, :detect] and
          timer?(service.media_token_ttl_ms, 1) and timer?(service.webhook_tolerance_seconds, 0),
@@ -71,7 +75,33 @@ defmodule Vxpipe.Calls.TelephonyService do
        else: {:error, :invalid_telephony_service}
   end
 
+  defp credential_binding?(%{credential_name: nil} = service),
+    do: uuid?(service.credential_id) and is_nil(service.credential_owner)
+
+  defp credential_binding?(%{
+         provider: "telnyx",
+         credential_name: "telnyx",
+         credential_id: nil,
+         public_key: nil,
+         credential_owner: nil
+       }),
+       do: true
+
+  defp credential_binding?(%{provider: "telnyx", credential_name: "telnyx"} = service),
+    do:
+      uuid?(service.credential_id) and
+        service.credential_owner in [:platform, {:tenant, service.tenant_key}] and
+        ProviderAuth.telnyx_public_key?(service.public_key)
+
+  defp credential_binding?(_service), do: false
+
   @doc false
+  def credential_matches?(
+        %__MODULE__{provider: "telnyx", credential_name: "telnyx", public_key: key},
+        payload
+      ),
+      do: ProviderAuth.telnyx_public_key?(key) and Map.get(payload, "public_key") == key
+
   def credential_matches?(%__MODULE__{provider: "telnyx"}, _payload), do: true
 
   def credential_matches?(%__MODULE__{provider: "twilio", provider_connection_id: sid}, %{
@@ -81,8 +111,13 @@ defmodule Vxpipe.Calls.TelephonyService do
 
   def credential_matches?(_service, _payload), do: false
 
+  defp provider_metadata?(%{provider: "telnyx", credential_name: "telnyx"} = service),
+    do: connection_id?(service.provider_connection_id)
+
   defp provider_metadata?(%{provider: "telnyx"} = service),
-    do: connection_id?(service.provider_connection_id) and public_key?(service.public_key)
+    do:
+      connection_id?(service.provider_connection_id) and
+        ProviderAuth.telnyx_public_key?(service.public_key)
 
   defp provider_metadata?(%{provider: "twilio"} = service),
     do:
@@ -112,14 +147,6 @@ defmodule Vxpipe.Calls.TelephonyService do
     is_binary(value) and byte_size(value) in 1..128 and Regex.match?(~r/\A[\x21-\x7E]+\z/, value)
   end
 
-  defp public_key?(value) when is_binary(value) and byte_size(value) == 44 do
-    case Base.decode64(value) do
-      {:ok, decoded} when byte_size(decoded) == 32 -> true
-      _invalid -> false
-    end
-  end
-
-  defp public_key?(_value), do: false
   defp phone_number?(nil), do: true
 
   defp phone_number?(value) when is_binary(value),

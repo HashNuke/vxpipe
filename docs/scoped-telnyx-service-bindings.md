@@ -1,6 +1,6 @@
 # Scoped Telnyx service bindings
 
-Decision: 2026-09-19. Design reviewed; implementation pending under checkpoint C of the
+Decision: 2026-09-19. Design and C1 implementation reviewed. C2/C3 remain open under checkpoint C of the
 [platform and tenant services plan](platform-and-tenant-services.md).
 
 ## Credential ownership and application identity
@@ -49,7 +49,27 @@ were a previously authorized selection.
 
 ## Delivery order and verification
 
-- [ ] C1: store the optional scoped verification key, register a tenant application
+C1 configuration uses the trusted `ProviderCredentials.provision/6` host API to store
+the primary `telnyx` credential with `api_key` and optional `public_key`. The existing
+`mix vxpipe.telephony_service.register --tenant TENANT_KEY --file service.json` command
+accepts scoped application metadata:
+
+```json
+{
+  "name": "support",
+  "provider": "telnyx",
+  "credential_name": "telnyx",
+  "provider_connection_id": "VOICE_API_APPLICATION_ID",
+  "ingress_key": "support-tenant-ingress"
+}
+```
+
+Registration requires an effective credential with a valid verification key. It does
+not publish a phone-number route or configure the remote Telnyx application. During C1,
+use the existing explicit `/api/telephony/telnyx/:ingress_key/events` ingress. The new
+scoped URL and Console configuration arrive in C2/C3.
+
+- [x] C1: store the optional scoped verification key, register a tenant application
   against the effective credential name, authorize call-spec writes, and resolve new
   Gateway clients. Preserve legacy ingress so the intermediate checkpoint is runnable.
   Test two inheriting tenants, tenant override/removal/restore, cross-tenant rejection,
@@ -68,7 +88,11 @@ Design review: keep credentials separate from tenant application identity; reuse
 existing owner/presence resolver rather than introduce another fallback mechanism.
 Reject relaxing every legacy ownership constraint, silently copying platform secrets
 into tenant rows, and selecting a verification scope from unsigned event fields.
-No live-provider or completed-implementation claim is made by this design record.
+C1 evidence: 24 focused persistence and six Gateway reader tests pass, with disposable
+database upgrade/rollback/restart acceptance. The umbrella run covers 1,770 tests;
+one obsolete reference-field assertion was corrected and the full 116-test Calls suite
+rerun. All other umbrella suites and static gates pass. C2/C3 and live-provider
+verification are not claimed complete.
 
 Telnyx documents account-level Ed25519 verification over the original request body
 and application-owned webhook configuration. These support the separation above;

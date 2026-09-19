@@ -2,10 +2,12 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
   @moduledoc """
   Neutral repository port for tenant carrier bindings and private authentication.
 
-  Registration requires a readable active credential in the same tenant/provider and
-  atomically enforces a tenant-local name and globally unique ingress key. `fetch` and
-  `fetch_by_ingress` return metadata only; `resolve` returns private authentication for
-  the exact active linked credential.
+  Registration requires readable credentials and atomically enforces tenant-local names
+  and globally unique ingress keys. Legacy bindings pin an exact tenant credential;
+  scoped Telnyx applications resolve the consuming tenant's effective primary binding.
+  Scoped application IDs are unique. `fetch` and `fetch_by_ingress` return stored
+  metadata only; `resolve` fills the selected credential identity and authentication.
+  Metadata for a scoped application has a credential name but no resolved ID or key.
   """
 
   alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyService}
@@ -20,7 +22,7 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
               {:ok, ResolvedTelephonyService.t()} | {:error, atom()}
 
   @doc """
-  Lock exact tenant services and active linked credentials around a DB-only write callback.
+  Lock tenant services and selected credentials around a DB-only write callback.
 
   Each requirement has a name and error path. When it includes a `reference`, compare that
   complete stable identity with the locked service before invoking the callback. Compare every

@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Telephony.ServiceReference do
     :provider_connection_id,
     :credential_id
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [credential_owner: nil, credential_name: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -17,6 +17,8 @@ defmodule Vxpipe.CallEngine.Telephony.ServiceReference do
           name: String.t(),
           provider: String.t(),
           provider_connection_id: String.t(),
-          credential_id: String.t()
+          credential_id: String.t(),
+          credential_owner: :platform | {:tenant, String.t()} | nil,
+          credential_name: String.t() | nil
         }
 end

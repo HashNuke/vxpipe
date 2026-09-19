@@ -179,6 +179,52 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
     end
   end
 
+  test "scoped application metadata resolves platform authentication and pins its credential owner" do
+    original =
+      Repository.snapshot(service(:telnyx, @tenant, "scoped-ingress", "platform-private-key"))
+
+    snapshot = %{
+      original
+      | service: %{original.service | credential_name: "telnyx", credential_owner: :platform},
+        credential: %{
+          original.credential
+          | credential: %{
+              original.credential.credential
+              | owner: :platform,
+                tenant_key: nil,
+                name: "telnyx"
+            },
+            payload:
+              Map.put(original.credential.payload, "public_key", original.service.public_key)
+        }
+    }
+
+    metadata = %{snapshot.service | credential_id: nil, credential_owner: nil, public_key: nil}
+
+    context = fn
+      :fetch_by_ingress, ["scoped-ingress"] -> {:ok, metadata}
+      :resolve, [@tenant, "primary-phone"] -> {:ok, snapshot}
+    end
+
+    registry = registry(context)
+    assert {:ok, incoming} = ServiceRegistry.fetch(registry, "scoped-ingress")
+    reference = TelephonyServices.reference(snapshot.service)
+    assert incoming.identity.service_reference == reference
+    assert incoming.identity.scope == {:tenant, @tenant}
+    assert Keyword.fetch!(incoming.adapter_options, :api_key) == "platform-private-key"
+
+    assert {:ok, _} =
+             ServiceRegistry.fetch_for_tenant(registry, "primary-phone", @tenant, reference)
+
+    assert {:error, :service_not_found} =
+             ServiceRegistry.fetch_for_tenant(registry, "primary-phone", @tenant, %{
+               reference
+               | credential_owner: {:tenant, @tenant}
+             })
+
+    refute inspect(incoming) =~ "platform-private-key"
+  end
+
   defp registry(context) do
     ServiceRegistry.init!(
       enabled: true,

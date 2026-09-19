@@ -25,6 +25,15 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
         "caller" => %{
           __struct__: Vxpipe.CallEngine.ResolvedCallPlan.Participant,
           definition_key: "caller",
+          telephony_service: %{
+            __struct__: Vxpipe.CallEngine.Telephony.ServiceReference,
+            tenant_id: "tenant",
+            service_id: "service",
+            name: "phone",
+            provider: "telnyx",
+            provider_connection_id: "application",
+            credential_id: "credential"
+          },
           tools: %{
             "transfer" => %{
               __struct__: Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding,
@@ -73,6 +82,9 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
     assert plan.wait_sounds.__struct__ == Vxpipe.CallEngine.CallSpec.WaitSounds
     assert plan.transfer_policy.__struct__ == Vxpipe.CallEngine.CallSpec.TransferPolicy
     caller = Map.fetch!(plan.participants, "caller")
+    assert caller.telephony_service.credential_owner == nil
+    assert caller.telephony_service.credential_name == nil
+    assert caller.telephony_service.credential_id == "credential"
     transfer = Map.fetch!(caller.tools, "transfer").transfer
     assert transfer.source_call_spec_key == "caller"
     assert Map.fetch!(transfer.targets, "agent").call_spec_key == "agent"

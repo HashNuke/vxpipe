@@ -44,7 +44,9 @@ defmodule Vxpipe.Calls.TelephonyPlanBindingsTest do
              name: service.name,
              provider: service.provider,
              provider_connection_id: service.provider_connection_id,
-             credential_id: service.credential_id
+             credential_id: service.credential_id,
+             credential_owner: nil,
+             credential_name: nil
            }
 
     assert Map.fetch!(plan.participants, "backup").telephony_service == reference

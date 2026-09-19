@@ -7,7 +7,14 @@ defmodule Vxpipe.Calls.TelephonyServices do
   Fetching metadata does not resolve or authorize the use of a private credential.
   """
 
-  alias Vxpipe.Calls.{ProviderAuth, Repositories, ResolvedTelephonyService, TelephonyService}
+  alias Vxpipe.Calls.{
+    ProviderAuth,
+    ProviderCredential,
+    Repositories,
+    ResolvedTelephonyService,
+    TelephonyService
+  }
+
   alias Vxpipe.CallEngine.Telephony.ServiceReference
 
   @doc "Projects stable, non-secret identity for a prepared plan or locked comparison."
@@ -18,7 +25,9 @@ defmodule Vxpipe.Calls.TelephonyServices do
       name: service.name,
       provider: service.provider,
       provider_connection_id: service.provider_connection_id,
-      credential_id: service.credential_id
+      credential_id: service.credential_id,
+      credential_owner: service.credential_owner,
+      credential_name: service.credential_name
     }
   end
 
@@ -66,13 +75,24 @@ defmodule Vxpipe.Calls.TelephonyServices do
     end
   end
 
+  defp credential_owner_matches?(%{credential_name: nil, tenant_key: tenant}, credential),
+    do: ProviderCredential.owner(credential) == {:tenant, tenant}
+
+  defp credential_owner_matches?(service, credential),
+    do:
+      ProviderCredential.available_to?(credential, service.tenant_key) and
+        ProviderCredential.owner(credential) == service.credential_owner and
+        credential.name == service.credential_name
+
   defp validate_snapshot(snapshot, tenant_key, name) do
     service = snapshot.service
     credential = snapshot.credential.credential
 
     with :ok <- TelephonyService.validate(service),
          true <- service.tenant_key == tenant_key and service.name == name,
-         true <- credential.id == service.credential_id and credential.tenant_key == tenant_key,
+         true <-
+           credential.id == service.credential_id and
+             credential_owner_matches?(service, credential),
          true <- credential.provider == service.provider and credential.status == :active,
          :ok <-
            ProviderAuth.validate(

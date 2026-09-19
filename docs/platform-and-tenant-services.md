@@ -1,9 +1,12 @@
 # Platform and tenant services
 
 Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
-are delivered, including the credential-presence correction. Scoped Telnyx C and
-callback/migration acceptance D remain. The latest umbrella run passes 1,763 tests
-with zero failures and 40 exclusions; all root static gates pass. Earlier native
+are delivered, including the credential-presence correction. C1's effective Telnyx
+bindings are implemented; scoped ingress C2, Console configuration C3 and
+callback/migration acceptance D remain. The C1 umbrella run covers 1,770 tests with
+40 exclusions; its sole failure was an outdated legacy reference-field assertion,
+corrected and verified by rerunning the 116-test Calls suite. All other application
+suites and root static gates pass. Earlier native
 handoff failures remain in historical evidence; this pass does not establish their cause.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
@@ -123,8 +126,8 @@ adds platform uniqueness, and shares presence-based resolution between
 private reads and final write guards. Existing tenant ciphertext keeps its version-1
 authenticated context; platform ciphertext uses a distinct version-2 context.
 
-The carrier boundary still needs implementation: `TelephonyService` stores the public
-key and enforces a same-tenant credential binding.
+The carrier boundary now supports effective primary Telnyx bindings through an explicit
+credential name, while legacy bindings keep their public key and exact tenant credential.
 Gateway `ServiceRegistry` currently looks up globally unique ingress keys, and
 `TelnyxEvents` verifies through a resolved tenant service. Existing initialized legs
 retain authentication for callbacks/media/cleanup during storage outages.
@@ -235,8 +238,8 @@ service reference, tenant edits/publish fail until that tenant supplies the requ
 services, and fresh runtime preparation prefers the active tenant configuration.
 Existing tenant-key-only host functions remain trusted host APIs. A3 exposes the
 new authorization boundary through real operator/tenant API-key HTTP writes.
-The persisted positive cases currently cover AI/speech services. Applying the same
-contract to a platform-backed Telnyx caller requires C's scoped carrier bindings.
+The persisted positive cases cover AI/speech services and, in C1, a platform-backed
+Telnyx caller. Tenant edits and publication require tenant credentials in both cases.
 
 Checkpoint B1 implementation and browser evidence:
 
@@ -327,6 +330,25 @@ Checkpoint B3 implementation (accepted by the presence-correction umbrella run):
   readiness is read on page load. No live provider request was made.
   See [B3 labnotes](../labnotes/20260919-0905-inherited-demo-onboarding.md).
 
+Checkpoint C1 implementation:
+
+- Scoped Telnyx credentials accept an optional verification public key. A tenant
+  application with `credential_name: "telnyx"` resolves its effective whole credential;
+  an existing tenant credential without a public key fails without platform fallback.
+- Dedicated application IDs are unique across scoped bindings. Operator-authored
+  callers may use platform credentials; tenant updates and publication require tenant
+  ownership. Prepared references pin the selected owner, credential ID and name.
+- Legacy exact-ID bindings, ingress and Twilio remain supported. The binary plan
+  decoder supplies explicit legacy defaults for the added fields. Migration preserves
+  legacy IDs/ciphertext and refuses rollback while scoped bindings exist. Fresh-VM
+  resolution and upgrade/down/re-upgrade checks pass.
+- Focused persistence (24) and Gateway reader (6) tests pass. The full umbrella run
+  covers 1,770 tests with one obsolete field-set assertion; its correction passes the
+  complete 116-test Calls suite. All remaining umbrella applications pass, including
+  the 700 engine and 446 Gateway tests. Root static gates pass. No UI changed in C1.
+  See [binding configuration](scoped-telnyx-service-bindings.md) and
+  [C1 evidence](../labnotes/20260919-0930-scoped-telnyx-bindings.md).
+
 ### 1. Storybook review checkpoint
 
 - [x] Show tenant and platform Telnyx URLs in connect/edit states with copy feedback.
@@ -362,7 +384,7 @@ remote application provisioning, credential persistence, verification or routing
 
 ### 3. Verify and route scoped Telnyx webhooks
 
-- [ ] Store Telnyx verification configuration beside its scoped service identity, with a
+- [x] Store Telnyx verification configuration beside its scoped service identity, with a
   single selected public key per scope. Keep API credentials encrypted and the verification
   public key non-secret. Update telephony foreign-key constraints without permitting an
   unrelated tenant credential or application to satisfy a binding.
