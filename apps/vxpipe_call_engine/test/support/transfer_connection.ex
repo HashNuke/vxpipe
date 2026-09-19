@@ -46,7 +46,11 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   @impl true
   def prepare_binding(binding, _policy, demand) do
     await_output_preparation(binding, demand)
-    track = if demand.audio_input? or demand.speech_to_text?, do: input_track()
+
+    track =
+      if demand.audio_input? or demand.speech_to_text?,
+        do: Map.get(binding, :input_track, input_track())
+
     {:ok, [binding.resource], track}
   end
 
@@ -116,6 +120,7 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
          generation: make_ref(),
          attachment: nil,
          output: Keyword.fetch!(options, :output),
+         input_track: Keyword.get(options, :input_track, input_track()),
          output_preparation_observer: Keyword.get(options, :output_preparation_observer),
          policy_subscription: [
            id: command.connection_id <> ":room-output",

@@ -1,6 +1,7 @@
 # Scoped speech prototype and room experiment
 
-Status: pre-approval experiment, 2026-09-19. Production migration remains paused.
+Status: pre-approval experiment, 2026-09-19. Baseline recorded before continuing checkpoint R;
+zero of nine checkpoints accepted. Production migration remains pending its revised gates.
 This records executable evidence for the [ownership proposal](speech-session-ownership.md),
 separately from acceptance of the [implementation milestone](milestones/simpler-speech-integrations.md).
 
@@ -178,7 +179,7 @@ Further evidence and review are in the
 
 ## Decision and next checkpoints
 
-Keep production migration paused. This experiment supports local semantic execution as a
+Keep production migration pending checkpoint R and its revised gates. This experiment supports local semantic execution as a
 candidate: real room behavior survives the tested substitution and the held initializer does
 not block sibling recognition. It does not establish full permission coverage, production
 stability or latency equivalence. The latency observations do not yet prove that production

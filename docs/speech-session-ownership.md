@@ -1,7 +1,7 @@
 # Speech sessions owned by the call tree
 
 Status: revised proposal, 2026-09-19. Replaces the application-wide execution ownership
-in the paused prototype. Implementation remains paused; this document changes the plan,
+in the baseline prototype. The baseline is recorded before continuing checkpoint R; this document changes the plan,
 not the running architecture. See the [milestone](milestones/simpler-speech-integrations.md)
 for checkpoints and the [measured failure](speech-startup-isolation.md) for evidence.
 
@@ -223,7 +223,7 @@ pause and report when tests prove a stability problem.
 | Move all engine capabilities under participant supervisors | Deferred; larger unrelated migration, and opening/preparation lifetimes are not always participant activations. Keep explicit room-scoped speech subtrees. |
 | Reparent prepared provider trees on adoption | Rejected; keep the final parent and change lease/consumer authority. |
 | Spawn a Task for every input chunk | Replace with measured persistent local execution while preserving bounds and responsive control. |
-| Roll back all uncommitted prototype work now | Unnecessary for call restoration; old room paths remain in use. Retain useful decoder/event tests and evidence, replace the rejected global wiring in the first implementation checkpoint. |
+| Discard the baseline prototype now | Unnecessary for call restoration; old room paths remain in use. Retain useful decoder/event tests and evidence, replace the rejected global wiring in the first implementation checkpoint. |
 
 The revised delivery order is **R → A → D → B → C → E → F → G → H**. R proves ownership and
 admission; A and D prove real native STT/TTS in isolation before any room migration. Then
@@ -243,10 +243,10 @@ documentation checks is recorded in the
 [replan labnote](../labnotes/20260919-1646-replan-speech-ownership.md).
 
 No new isolation gate is claimed green by writing this proposal. The original startup test
-is still red, the implementation goal remains paused, and no code is reverted or committed
-as part of this replan.
+is still red, the baseline remains at zero accepted checkpoints, and no code is reverted or
+changed as part of this replan.
 
 The subsequent [scoped speech experiment](scoped-speech-experiment.md) checks semantic STT/TTS
 substitution through real room policy, turn and interruption paths. Its test-owned scopes and
 private legacy bridge establish bounded feasibility evidence, not final room nesting or full
-permission/hosted-provider acceptance. Migration remains paused.
+permission/hosted-provider acceptance. Migration remains pending its revised gates.

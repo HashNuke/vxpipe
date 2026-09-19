@@ -3,7 +3,7 @@
 Status: proposed design, researched on 2026-09-19 against `51a9a17`, with ownership replanned
 after the isolated startup regression.
 The original task requested research and a plan; implementation was subsequently authorized.
-Checkpoint A is paused on a tested [startup-isolation defect](speech-startup-isolation.md),
+Checkpoint A remains unaccepted pending the tested [startup-isolation defect](speech-startup-isolation.md),
 with no room migration or hosted interoperability claim. Implementation is tracked in
 [Simpler speech integrations](milestones/simpler-speech-integrations.md).
 The [revised ownership proposal](speech-session-ownership.md) supersedes the prototype's
@@ -73,8 +73,8 @@ is a recorded blocker for that adapter, not permission to silently switch API/mo
 
 ## Proposed author-facing interface
 
-The final APIs below remain proposed; the uncommitted standalone prototype implements only
-part of them and its global startup shape is rejected. Use `Speech.STTProvider`, `Speech.TTSProvider`,
+The final APIs below remain proposed; the committed experimental standalone prototype implements
+only part of them and its global startup shape is rejected. Use `Speech.STTProvider`, `Speech.TTSProvider`,
 `Speech.Descriptor`, `Speech.Session`, `Speech.Event` and `Speech.Output` under
 `Vxpipe.CallEngine`. Keep each module in its own file.
 
@@ -324,4 +324,5 @@ explicit in the descriptor, lifecycle rules and milestone conformance tasks.
 Subsequent GPT-6 Astra xhigh review of the ownership replan checked fault boundaries,
 admission/cancellation, deadline lifetime, private-init retention and migration order. See the
 [ownership proposal](speech-session-ownership.md) and its labnote for that separate design
-review. The original isolation regression remains unresolved; implementation is paused.
+review. The original isolation regression remains unresolved; the baseline is recorded before
+continuing checkpoint R, with zero of nine checkpoints accepted.

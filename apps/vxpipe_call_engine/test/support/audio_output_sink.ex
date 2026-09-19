@@ -83,6 +83,10 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
   def handle_call({:defer_drain, deferred?}, _from, state) when is_boolean(deferred?),
     do: {:reply, :ok, %{state | defer_drain: deferred?}}
 
+  def handle_call({:block_output, blocked?}, _from, %{pending_output: nil} = state)
+      when is_boolean(blocked?),
+      do: {:reply, :ok, %{state | block_output: blocked?}}
+
   def handle_call({:vxpipe_audio_output, frame}, from, state) do
     send(state.observer, {:test_audio_output, self(), frame})
 

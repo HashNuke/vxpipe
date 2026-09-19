@@ -1,8 +1,9 @@
 # Speech startup isolation and latency evidence
 
-Status: implementation paused during checkpoint A on 2026-09-19. The user requires
-test evidence before treating a design concern as a stability defect. This document
-records that evidence; it does not approve the current session implementation.
+Status: baseline recorded before continuing checkpoint R on 2026-09-19; zero of nine
+checkpoints accepted. The user requires test evidence before treating a design concern as a
+stability defect. This document records that evidence; it does not approve the current session
+implementation.
 
 The subsequent [ownership replan](speech-session-ownership.md) proposes room-scoped speech
 trees, asynchronous local initialization and admission-time deadlines. The historical
@@ -13,8 +14,8 @@ measurements below remain unchanged; the proposed fix has not been implemented o
 The new standalone semantic session boundary introduces cross-session startup blocking.
 A held provider initialization delays unrelated healthy Morse sessions beyond their
 configured startup budget. Existing per-room startup and replacement connectors do not
-show that coupling in the same controlled scenario. Keep the migration paused and the
-current room path intact until this regression test is green.
+show that coupling in the same controlled scenario. Keep the current room path intact and
+room migration pending until this regression test is green.
 
 This is a demonstrated availability/isolation defect in the proposed boundary. It is
 not evidence that existing calls currently lose audio, interrupt active recognition or

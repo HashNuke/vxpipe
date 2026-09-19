@@ -10,7 +10,7 @@ provides a native STT session without a socket or JSON. From this application's 
 start `MIX_ENV=test iex -S mix` and paste this example. It constructs an independent Morse
 dot plus an end gap; it does not use the Morse encoder to supply its expected result.
 
-The prototype is paused before room integration: a
+The baseline prototype is recorded before room integration: a
 [reproduced startup-isolation defect](../../docs/speech-startup-isolation.md) allows one slow
 initialization to delay unrelated sessions beyond their startup budget. The linked report
 also records opt-in Morse latency measurements; this example is not checkpoint acceptance.

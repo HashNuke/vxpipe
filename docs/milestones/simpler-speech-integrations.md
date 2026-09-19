@@ -1,16 +1,17 @@
 # Simpler speech integrations
 
-Status: replanned on 2026-09-19; implementation remains paused.
+Status: replanned on 2026-09-19; baseline recorded before continuing checkpoint R.
 Implementation: **0 of 9 checkpoints complete**. The revised order is
 **R → A → D → B → C → E → F → G → H**, preserving existing checkpoint identities.
-Implementation and checkpoint commits were subsequently authorized, but the standalone prototype remains uncommitted. The
+The user-requested baseline commit records the experimental standalone prototype and evidence;
+it does not accept a checkpoint. The final room-owned architecture remains pending. The
 [startup isolation and load evidence](../speech-startup-isolation.md) demonstrates unrelated
-session startup exceeding its budget in the first uncommitted prototype. The corresponding
+session startup exceeding its budget in the first prototype. The corresponding
 original-path isolation controls passed; this is not a demonstrated defect in `main`.
 Existing rooms still use the original path.
 The later [scoped speech experiment](../scoped-speech-experiment.md) exercises a test-only
 semantic bridge through real rooms before approval. It provides behavioral/load evidence;
-it does not complete checkpoint R or resume this migration.
+it does not complete checkpoint R; room migration remains pending R and its revised gates.
 
 Prerequisites: the implemented speech path in [Call-Spec-driven calls](call-spec-driven-call.md),
 [Local Morse providers](morse-code-audio-providers.md),
@@ -105,8 +106,8 @@ behavior, not final room ancestry, all permission boundaries or a completed chec
 
 ## Delivery strategy
 
-Implement **R → A → D → B → C → E → F → G → H** in that order once the paused goal
-is resumed. R replaces the rejected global ownership; both native directions must pass
+Continue **R → A → D → B → C → E → F → G → H** in that order. R replaces the rejected
+global ownership; both native directions must pass
 isolated lifecycle and latency checks before room integration. Existing A1/A3 evidence is
 retained, but does not bypass R or the revised A/D gates. Each checkpoint has an executable
 vertical outcome, a small set of file changes, a red test and an exit gate. The standalone provider slices deliberately
@@ -425,7 +426,7 @@ still load, and all remaining references are deliberate private wire implementat
   modules, inspect status/diffs, run all common root gates, and record actual results and unresolved
   external checks. Inspect actual speech ancestry and run the scoped isolation, paired burst
   and paced latency lanes for STT and TTS. Report each repeat, count and latency distribution;
-  reproduced stability failures keep the goal paused. No new hosted provider or format may
+  reproduced stability failures keep room migration pending its gates. No new hosted provider or format may
   appear merely because it was compared.
 - [ ] **H6 — Demonstrate simplification.** Record removed modules/callbacks and lifetime/task
   bookkeeping against the pre-migration baseline, plus retained monitors and their domain
@@ -489,7 +490,7 @@ for timing distributions, exact covered permissions and excluded production path
 | Checkpoint | Implementation | Red/green and root evidence | External/manual evidence |
 | --- | --- | --- | --- |
 | R | Revised ownership proposal; not implemented | Original isolation test remains red | Scope, queue cancellation and same-room gates pending |
-| A | Native standalone prototype; paused, uncommitted | 17 contract tests; selected suite 39 tests / 1 known startup-isolation failure; excluding it 38 pass | Independent PCM proven; 68,400 measured local turns succeed; no live-call claim |
+| A | Native standalone prototype; baseline recorded, checkpoint not accepted | 17 contract tests; selected suite 39 tests / 1 known startup-isolation failure; excluding it 38 pass | Independent PCM proven; 68,400 measured local turns succeed; no live-call claim |
 | D | Not started | Pending | PCM playback/replacement pending |
 | B | Not started | Pending | Real room loop pending |
 | C | Not started | Pending | Local wire and hosted STT pending |
@@ -529,7 +530,8 @@ Replan review on 2026-09-19 is separate from implementation progress. The
 cancellation, stale-stop, readiness, parentage, failure-domain, deadline-lifetime and
 private-init-retention gaps found during GPT-6 Astra xhigh review.
 See the [replan labnote](../../labnotes/20260919-1646-replan-speech-ownership.md). The new R
-checkpoint and revised gates are specifications; the goal is still paused and none is complete.
+checkpoint and revised gates are specifications; the baseline is recorded before continuing R,
+and none is accepted.
 
 Post-experiment planning refresh on 2026-09-19 records the main/prototype distinction, measured
 latency and capacity limits, explicit failure/cleanup evidence and concrete B/E/H code-removal
