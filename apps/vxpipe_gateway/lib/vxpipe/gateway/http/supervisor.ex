@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.HTTP.Supervisor do
     endpoint_options =
       Keyword.take(options, [
         :operator_api,
+        :call_spec_authoring,
         :call_admission,
         :cors,
         :room_creation,

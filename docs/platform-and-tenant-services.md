@@ -1,8 +1,7 @@
 # Platform and tenant services
 
 Status: implementation authorized 2026-09-19. Storybook prototype implemented and
-verified; backend checkpoint A is implemented and reviewed, with umbrella verification
-still open. No backend checkpoint is fully accepted yet.
+verified; A, A2, A3 and B1 are delivered. B2, C and D remain.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -149,7 +148,7 @@ browser checks. A checked design task does not count as a delivered slice.
   platform services while tenant writes require tenant ownership, including edits
   to an operator-created spec and transaction-time scope changes. Existing trusted
   host entry points remain explicitly trusted; runtime admission is separate.
-- [ ] **A3 — Write call specs with operator API keys.** Persist hash-only installation
+- [x] **A3 — Write call specs with operator API keys.** Persist hash-only installation
   keys, issue them through a trusted local command, authenticate an explicit operator
   principal, and expose authenticated operator/tenant call-spec writes. Prove no
   tenant-key promotion, rejected/revoked keys, reload and secret-safe responses.
@@ -177,9 +176,8 @@ surface used by C. C establishes exact verifier/application ownership before D c
 outgoing URLs. The user's subsequent authoring-authority clarification inserts A2/A3
 for programmatic writes: operator API-key issuance is now required for this flow. New AI
 adapters remain outside this dependency chain. The detailed acceptance requirements
-below remain authoritative. A2 is committed; the already-started B1 Console slice
-uses the existing operator browser session while A3 remains the next backend slice.
-No programmatic operator-key support is implied by that Console integration.
+below remain authoritative. A2/A3 provide programmatic authoring while B1 uses the
+separate operator browser session. B2 is the next Console slice.
 The user's subsequent review/commit instruction requires reviewing and committing
 each runnable checkpoint before starting the next implementation. Unresolved
 verification stays explicit and leaves the acceptance checkbox open. B was split into B1/B2 to keep
@@ -191,7 +189,7 @@ Checkpoint A implementation details:
 
 - Owning application suites, focused transaction integration tests, and disposable
   database migration/restart checks pass. The latest complete umbrella run passes
-  1,741 tests with 40 exclusions (`--max-cases 1 --seed 772211`). Earlier runs had
+  1,754 tests with 40 exclusions (`--max-cases 1 --seed 772211`). Earlier runs had
   intermittent native-media failures; this result does not establish their cause.
   Format, compile, strict Credo and unused-dependency checks pass.
 - Installation operators can create a named platform binding with
@@ -217,7 +215,7 @@ boundaries distinguish installation operators from tenant principals and recheck
 owner inside final write guards. Persisted tests prove an operator can author a shared
 service reference, tenant edits/publish fail until that tenant supplies the required
 services, and fresh runtime preparation prefers the active tenant configuration.
-Existing tenant-key-only host functions remain trusted host APIs. A3 must expose the
+Existing tenant-key-only host functions remain trusted host APIs. A3 exposes the
 new authorization boundary through real operator/tenant API-key HTTP writes.
 The persisted positive cases currently cover AI/speech services. Applying the same
 contract to a platform-backed Telnyx caller requires C's scoped carrier bindings.
@@ -245,13 +243,16 @@ Checkpoint B1 implementation and browser evidence:
   suite afterward. See the
   [B1 labnotes](../labnotes/20260919-0715-console-platform-services.md).
 
-Checkpoint A3 is in progress in two runnable commits to keep review bounded. The
+Checkpoint A3 passes in two runnable commits to keep review bounded. The
 first adds trusted operator-key bootstrap/replacement/revocation and authenticated
 `GET /api/platform/status`; the second adds operator/tenant call-spec HTTP writes.
-Key storage, protected output, authority separation and a disposable-database
-HTTP/restart exercise pass. See the [key and authoring contract](operator-api-key-authoring.md)
-and [A3 labnotes](../labnotes/20260919-0803-operator-key-authoring.md). A3 stays unchecked
-until the authoring routes and final acceptance are verified.
+Key storage, protected output, authority separation and disposable-database
+HTTP/restart exercises pass. The authoring routes now reject tenant writes using
+platform-only services and accept them once the tenant configures its own services;
+the combined umbrella suite passes 1,754 tests with 40 exclusions. All root static
+gates pass. See the [key and authoring contract](operator-api-key-authoring.md),
+[key lifecycle labnotes](../labnotes/20260919-0803-operator-key-authoring.md) and
+[HTTP authoring labnotes](../labnotes/20260919-0821-authorize-http-spec-writes.md).
 
 ### 1. Storybook review checkpoint
 
@@ -267,19 +268,19 @@ remote application provisioning, credential persistence, verification or routing
 
 ### 2. Persist and use an inherited AI provider
 
-- [ ] Define a tagged credential owner (`platform` or tenant key), distinct from the
+- [x] Define a tagged credential owner (`platform` or tenant key), distinct from the
   consuming tenant. Add scope-aware unique/check constraints, metadata and tenant
   inherit/override/disabled policy records. Never use a fake platform tenant.
-- [ ] Migrate existing credentials and references as tenant-owned without changing IDs
+- [x] Migrate existing credentials and references as tenant-owned without changing IDs
   or effective behavior. Version authenticated encryption context where needed;
   test existing decrypt, replacement, re-encryption, interruption and rollback behavior.
 - [ ] Add explicit platform operator CRUD/validation endpoints using the current session
   and CSRF protections. Tenant keys cannot write/read platform secrets; effective-list
   responses contain safe source/readiness metadata and URLs only.
-- [ ] Implement one shared policy resolver used by save/publish/preparation and every
+- [x] Implement one shared policy resolver used by save/publish/preparation and every
   fresh model/STT/TTS reader. Preserve current named binding semantics, final transaction
   guards, tenant data isolation and fail-closed behavior.
-- [ ] Pin safe selected credential scope/identity at preparation boundaries and reject
+- [x] Pin safe selected credential scope/identity at preparation boundaries and reject
   unexpected rebinding. Already-initialized clients retain their owned configuration;
   new preparation uses the current authorized selection. Cache keys include tenant,
   provider, binding and selected scope/identity; never share tenant call data.

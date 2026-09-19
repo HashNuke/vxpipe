@@ -358,6 +358,7 @@ telephony_public_base_url =
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
   http: [
     operator_api: [enabled: not is_nil(database_url)],
+    call_spec_authoring: [enabled: not is_nil(database_url)],
     telephony: [
       enabled: not is_nil(telephony_public_base_url),
       public_base_url: telephony_public_base_url

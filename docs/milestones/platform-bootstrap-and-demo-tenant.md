@@ -19,12 +19,12 @@ platform API-key issuance is complete. The user authorized that implementation o
 cover inherited-provider execution, Console management, scoped incoming Telnyx calls,
 then callback cutover and migration/restart acceptance. The user's authoring-authority
 clarification adds principal-aware writes and operator API keys for programmatic authoring.
-Checkpoints A/A2/B1 pass focused tests and the serial umbrella suite; B1's operator-session
-Console flow also passes browser/restart inspection. A3 is next;
+Checkpoints A/A2/A3/B1 pass focused tests and the serial umbrella suite; B1's operator-session
+Console flow also passes browser/restart inspection. B2 is next;
 the platform-key and demo-bootstrap gates below remain independently tracked.
-The first A3 step now implements trusted key bootstrap/replacement/revocation and
-authenticated platform status. Persisted lifecycle tests and real HTTP/restart checks
-pass; call-spec HTTP writes remain the next step. See the
+The two A3 steps implement trusted key bootstrap/replacement/revocation, authenticated
+platform status and operator/tenant call-spec HTTP writes. Persisted lifecycle tests,
+real HTTP/restart checks and the 1,754-test combined umbrella run pass. See the
 [operator-key contract](../operator-api-key-authoring.md).
 
 ## Runnable outcome
@@ -78,15 +78,15 @@ existing published-call-spec/prepared-call workflow can then run through the deb
 
 ## Checkpoint 1 — Establish platform authority
 
-- [ ] Specify the new principal/key storage and public operation contracts separately from the
+- [x] Specify the new principal/key storage and public operation contracts separately from the
   existing tenant principal; review owner/dependency and first-bootstrap trust boundaries.
 - [ ] Red-test trusted first issuance, one-time secret output, hash-only persistence and restart,
   incorrect/tenant/participant keys, expired/inactive key rejection and database failure.
-- [ ] Implement the trusted bootstrap command plus authenticated platform status/tenant operation.
+- [x] Implement the trusted bootstrap command plus authenticated platform status/tenant operation.
   Confirm an ordinary tenant key still authenticates only within its existing scope.
 - [ ] Authorize the matching Console setup actions through the existing operator session while
   keeping platform API-key authentication confined to `/api/platform`; verify CSRF and secret filtering.
-- [ ] Document a source-development path from migrations/keyring to one issued key and one
+- [x] Document a source-development path from migrations/keyring to one issued key and one
   authenticated operation. Existing keys and setup state survive repeat startup.
 
 Exit: the developer can perform a real authenticated platform operation without broadening tenant keys.
@@ -111,9 +111,9 @@ Exit: platform-authenticated source setup yields one stable, tenant-bound runnab
 
 ## Acceptance and completion
 
-- [ ] Trusted bootstrap, platform API authentication and operator browser sessions use explicit,
+- [x] Trusted bootstrap, platform API authentication and operator browser sessions use explicit,
   distinct authorities.
-- [ ] First issue is one-time output; existing/lost keys follow documented explicit local actions.
+- [x] First issue is one-time output; existing/lost keys follow documented explicit local actions.
 - [ ] Two tabs, retry after response loss and fresh application processes converge on one demo
   identity; adoption preserves existing call specs and credentials.
 - [ ] Missing/wrong platform authority and cross-tenant substitutions cause no mutation or disclosure.

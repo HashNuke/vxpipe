@@ -43,8 +43,8 @@ verification is needed. Silent repeated issuance could turn a retry into untrack
 authority; explicit replacement keeps recovery deliberate.
 
 The first key commit delivers trusted bootstrap/replacement/revocation and an
-authenticated status request. The next commit connects call-spec writes to that
-authority. Both are runnable vertical steps; A3 remains unchecked until both pass.
+authenticated status request. The second connects call-spec writes to that
+authority. Both runnable vertical steps pass focused and combined umbrella gates.
 The wider bootstrap milestone's demo-tenant and provisioning HTTP operations remain
 separate from this bounded authoring flow.
 
@@ -54,9 +54,9 @@ separate from this bounded authoring flow.
   PostgreSQL; repeated bootstrap never emits a second secret.
 - [x] Prove protected output, failed-output recovery and secret-safe errors.
 - [x] Prove operator/tenant key separation and authenticated status through HTTP.
-- [ ] Prove operator platform-service writes, tenant rejection and tenant-owned
+- [x] Prove operator platform-service writes, tenant rejection and tenant-owned
   updates/publish through the HTTP authoring boundary.
-- [ ] Restart with persisted keys and run owning suites plus umbrella gates.
+- [x] Restart with persisted keys and run owning suites plus umbrella gates.
 
 ## Use the key lifecycle step
 
@@ -94,8 +94,50 @@ tenant keys and provider ciphertext remain unchanged.
 The first step passed a disposable-database exercise with two concurrent bootstrap
 processes, actual authenticated Gateway HTTP requests, fresh-process restart,
 replacement/revocation and authority separation. The fixture and its private output
-files were removed. Call-spec HTTP routes described above are the next step and are
-not yet implemented by this key-lifecycle step.
+files were removed. The key-lifecycle step is committed as `c6b83d9`.
+
+## Call-spec HTTP requests
+
+The authoring step implements the three operations for both URL scopes:
+
+| Method and suffix | Body | Result |
+| --- | --- | --- |
+| `POST /call-specs` | `{"source": PORTABLE_CALL_SPEC}` | `201`, a new generated spec ID and draft revision |
+| `PUT /call-specs/:call_spec_id` | `{"source": PORTABLE_CALL_SPEC}` | `201`, append a revision under that ID (or create it if absent) |
+| `POST /call-specs/:call_spec_id/revisions/:revision/publish` | `{}` | `200`, explicitly publish that revision |
+
+Prepend `/api/platform/tenants/:tenant_key` when using an operator key, or
+`/api/tenants/:tenant_key` when using that tenant's `admin` key. Send the key as a
+bearer Authorization header and use `application/json`. Body fields other than the
+ones above are rejected. IDs remain bounded to 128 bytes; revision numbers must be
+positive database integers. Requests cannot select authority, repositories or
+service-owner options.
+
+Responses contain a `call_spec` metadata object with its ID, revision, schema,
+source digest, publication state and public participant routes. Source and compiled
+configuration are omitted. Unsupported configuration produces a bounded
+`validation_errors` summary; trusted inspection remains available for fuller diagnosis.
+Draft routes remain unavailable until publication.
+
+`401` rejects missing, invalid or wrong-scope keys; `403` rejects insufficient author
+authority, including `provider_service_forbidden` for tenant writes referencing
+platform-only services. Malformed requests return `400`; invalid source or unavailable
+provider credentials return `422`; an unpublishable draft returns `409`; missing
+resources return `404`; an unavailable backend returns `503` without raw reasons.
+Responses use `Cache-Control: no-store`.
+
+Hosted persistence enables these routes in both environments. An embedded Gateway
+must explicitly enable `call_spec_authoring` and configure its Calls repositories;
+it remains disabled by default. This does not enable anonymous tenant administration.
+
+A second disposable-database HTTP exercise proved operator create/update/publish with
+platform services, tenant create/edit/publish rejection, successful tenant writes
+after configuring tenant services, and immutable revision continuity across restart.
+Rejected tenant edits allocated no revisions. The 41-test Gateway HTTP group passes;
+the combined A3 umbrella run passes 1,754 tests with 40 exclusions
+(`--max-cases 1 --seed 772211`). Root format, warnings-as-errors compile, strict Credo
+and unused-dependency checks pass. Review found no remaining authoring issue; scoped
+Telnyx caller support remains checkpoint C.
 
 Design review, 2026-09-19: this follows the completed tenant-key and A2 authoring
 boundaries. It adds no database dependency to Gateway or Console dependency to Calls.
