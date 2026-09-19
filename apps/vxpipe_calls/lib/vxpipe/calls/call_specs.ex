@@ -1,5 +1,11 @@
 defmodule Vxpipe.Calls.CallSpecs do
-  @moduledoc "Call spec revision and participant-route workflows."
+  @moduledoc """
+  Trusted host call-spec revision and participant-route workflows.
+
+  External authors must enter through `Vxpipe.Calls.CallSpecAuthoring`, which
+  establishes the writing principal's service permissions before delegating here.
+  A tenant key argument by itself is a resource locator, not authentication.
+  """
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, Error}
 

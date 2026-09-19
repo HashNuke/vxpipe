@@ -91,6 +91,13 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
           required_snapshot(context, tenant_key, requirement)
         end)
 
+      unless Vxpipe.Calls.ProviderCredential.allowed_owner?(
+               snapshot.credential.credential,
+               Map.get(requirement, :allowed_owner)
+             ) do
+        repo.rollback({:provider_service_forbidden, requirement.path})
+      end
+
       unless matching_reference?(snapshot.service, requirement) do
         repo.rollback({:provider_credential_unavailable, requirement.path})
       end

@@ -228,6 +228,9 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
                :ok ->
                  :ok
 
+               {:error, :provider_service_forbidden} ->
+                 repo.rollback({:provider_service_forbidden, requirement.path})
+
                {:error, _reason} ->
                  repo.rollback({:provider_credential_unavailable, requirement.path})
              end
@@ -251,10 +254,17 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   defp lock_active(context, tenant_key, requirement) do
     case resolve_selected(context, tenant_key, requirement.provider, requirement.name) do
       {:ok, snapshot} ->
-        if not Map.has_key?(requirement, :identity) or
-             requirement.identity == Credential.binding_identity(snapshot.credential),
-           do: :ok,
-           else: {:error, :provider_credential_unavailable}
+        cond do
+          not Credential.allowed_owner?(snapshot.credential, Map.get(requirement, :allowed_owner)) ->
+            {:error, :provider_service_forbidden}
+
+          not Map.has_key?(requirement, :identity) or
+              requirement.identity == Credential.binding_identity(snapshot.credential) ->
+            :ok
+
+          true ->
+            {:error, :provider_credential_unavailable}
+        end
 
       {:error, _reason} ->
         {:error, :provider_credential_unavailable}

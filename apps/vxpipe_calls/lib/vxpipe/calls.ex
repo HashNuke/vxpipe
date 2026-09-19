@@ -141,6 +141,12 @@ defmodule Vxpipe.Calls do
   def save_call_spec(tenant_key, source, options \\ []),
     do: CallSpecs.save(tenant_key, source, options)
 
+  def save_authorized_call_spec(authority, tenant_key, source, options \\ []),
+    do: Vxpipe.Calls.CallSpecAuthoring.save(authority, tenant_key, source, options)
+
+  def publish_authorized_call_spec(authority, tenant_key, id, revision, options \\ []),
+    do: Vxpipe.Calls.CallSpecAuthoring.publish(authority, tenant_key, id, revision, options)
+
   def fetch_call_spec(tenant_key, call_spec_id, revision, options \\ []),
     do: CallSpecs.fetch(tenant_key, call_spec_id, revision, options)
 

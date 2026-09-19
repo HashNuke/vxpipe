@@ -135,7 +135,8 @@ Onboarding follow-up, 2026-09-19: the [platform and tenant services plan](../pla
 extends the bootstrap milestone with explicit shared services, tenant overrides and
 scope-specific Telnyx webhook URLs. Storybook work precedes the planned storage,
 reader, verification and Console integration checkpoints. Implementation was authorized
-on 2026-09-19 and is tracked as five runnable vertical checkpoints in that plan;
+on 2026-09-19 and is tracked as seven runnable vertical checkpoints in that plan,
+including the user's subsequent operator/tenant authoring-authority clarification;
 the inherited-provider execution slice is in progress. This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 

@@ -37,6 +37,9 @@ defmodule Vxpipe.Calls.ProviderCredentialRepository do
 
   The operation must use repositories sharing this context's transaction and must not
   perform network/provider work. Binding locks last until that transaction completes.
+  A requirement's optional `allowed_owner` restricts authoring to that credential
+  owner and must be checked under the same lock as liveness and optional `identity`.
+  Reject mismatched ownership as `{:provider_service_forbidden, requirement.path}`.
   """
   @callback with_active(term(), String.t(), [map()], (-> term())) :: term()
 end

@@ -15,9 +15,11 @@ overrides. Its sequence covers Storybook review, scoped credential storage/reade
 scoped Telnyx verification/routing, then Console integration. Backend tasks remain
 unchecked; the existing operator session can authorize this work before programmatic
 platform API-key issuance is complete. The user authorized that implementation on
-2026-09-19. Its [five runnable delivery checkpoints](../platform-and-tenant-services.md#runnable-delivery-checkpoints)
+2026-09-19. Its [seven runnable delivery checkpoints](../platform-and-tenant-services.md#runnable-delivery-checkpoints)
 cover inherited-provider execution, Console management, scoped incoming Telnyx calls,
-then callback cutover and migration/restart acceptance. Checkpoint A is in progress;
+then callback cutover and migration/restart acceptance. The user's authoring-authority
+clarification adds principal-aware writes and operator API keys before Console integration.
+Checkpoint A is implemented with umbrella acceptance open; A2 is in progress;
 the platform-key and demo-bootstrap gates below remain independently tracked.
 
 ## Runnable outcome

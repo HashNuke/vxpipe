@@ -175,6 +175,140 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     refute inspect(error) =~ "inline-private-marker"
   end
 
+  test "final authoring guard rejects platform ownership even if it is otherwise active", ctx do
+    tenant = ctx.other
+
+    {:ok, _} =
+      ProviderCredentials.provision(
+        :platform,
+        "google",
+        "shared-model",
+        "api_key",
+        %{"api_key" => "synthetic-platform"},
+        ctx.options
+      )
+
+    requirements = [
+      %{
+        provider: "google",
+        name: "shared-model",
+        path: ["model"],
+        allowed_owner: {:tenant, tenant.key}
+      }
+    ]
+
+    {_module, context} = Keyword.fetch!(ctx.options, :provider_credential_repository)
+
+    assert {:error, {:provider_service_forbidden, ["model"]}} =
+             ProviderCredentialStore.with_active(context, tenant.key, requirements, fn ->
+               flunk("unauthorized write ran")
+             end)
+
+    {:ok, _} =
+      ProviderCredentials.provision(
+        tenant.key,
+        "google",
+        "shared-model",
+        "api_key",
+        %{"api_key" => "synthetic-tenant"},
+        ctx.options
+      )
+
+    assert {:ok, :saved} =
+             ProviderCredentialStore.with_active(context, tenant.key, requirements, fn ->
+               {:ok, :saved}
+             end)
+  end
+
+  test "operator authors platform-backed specs but tenant authors require tenant services", ctx do
+    operator = Vxpipe.Calls.InstallationOperator.authority()
+
+    {:ok, issued} =
+      Administration.issue_api_key(ctx.other.key, "author", [:admin, :calls], ctx.options)
+
+    {:ok, author} = Administration.authenticate(ctx.other.key, issued.secret, :admin, ctx.options)
+
+    for provider <- ["google", "deepgram"] do
+      {:ok, _} =
+        ProviderCredentials.provision(
+          :platform,
+          provider,
+          "default",
+          "api_key",
+          %{"api_key" => "synthetic-platform"},
+          ctx.options
+        )
+    end
+
+    before = row_counts()
+
+    assert {:error, %{code: :provider_service_forbidden}} =
+             Calls.save_authorized_call_spec(author, ctx.other.key, source(), ctx.options)
+
+    assert row_counts() == before
+
+    assert {:ok, draft} =
+             Calls.save_authorized_call_spec(operator, ctx.other.key, source(), ctx.options)
+
+    update_options = Keyword.put(ctx.options, :call_spec_id, draft.call_spec_id)
+
+    assert {:error, %{code: :provider_service_forbidden}} =
+             Calls.save_authorized_call_spec(
+               author,
+               ctx.other.key,
+               Map.put(source(), :name, "Edited"),
+               update_options
+             )
+
+    assert {:error, %{code: :provider_service_forbidden}} =
+             Calls.publish_authorized_call_spec(
+               author,
+               ctx.other.key,
+               draft.call_spec_id,
+               1,
+               ctx.options
+             )
+
+    assert {:ok, published} =
+             Calls.publish_authorized_call_spec(
+               operator,
+               ctx.other.key,
+               draft.call_spec_id,
+               1,
+               ctx.options
+             )
+
+    assert [route] = published.routes
+    assert {:ok, inherited, _} = Calls.prepare_call(author, route.key, %{}, ctx.options)
+    assert inherited.plan.credential_bindings[{"google", "default"}]["scope"] == "platform"
+
+    for provider <- ["google", "deepgram"] do
+      {:ok, _} =
+        ProviderCredentials.provision(
+          ctx.other.key,
+          provider,
+          "default",
+          "api_key",
+          %{"api_key" => "synthetic-tenant"},
+          ctx.options
+        )
+    end
+
+    assert {:ok, tenant_call, _} = Calls.prepare_call(author, route.key, %{}, ctx.options)
+    assert tenant_call.plan.credential_bindings[{"google", "default"}]["scope"] == "tenant"
+
+    assert {:ok, updated} =
+             Calls.save_authorized_call_spec(author, ctx.other.key, source(), update_options)
+
+    assert updated.revision == 2
+
+    assert {:error, :tenant_access_forbidden} =
+             Calls.save_authorized_call_spec(author, ctx.tenant.key, source(), ctx.options)
+
+    assert {:error, :insufficient_scope} =
+             Calls.save_authorized_call_spec(ctx.principal, ctx.tenant.key, source(), ctx.options)
+  end
+
   test "an inherited voice plan pins its credential owners and rejects later scope rebinding",
        ctx do
     for provider <- ["google", "deepgram"] do

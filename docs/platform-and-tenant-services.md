@@ -10,6 +10,24 @@ It does not restore environment-based provider credentials or implicit failure f
 
 - Configure a provider once under **Platform services**, or configure a tenant override.
   Use “platform” consistently; “account” could mean an upstream Telnyx account.
+- **Authoring authority (user clarification, 2026-09-19):** platform configuration
+  does not grant tenant API keys permission to reference that service. An authenticated
+  installation operator may create/update a tenant call spec using platform services.
+  A tenant administrator may reference only services configured for that tenant.
+  Validate the complete resulting spec on every create, update and publish, including
+  unchanged references in an operator-authored spec. An operator's earlier write does
+  not transfer editing authority to the tenant. Reject unauthorized writes before
+  committing a revision or route; repeat ownership checks under the final transaction
+  locks. This includes AI/speech selections and telephony caller/destination services.
+- Execution of an already authorized, published spec remains a separate permission:
+  tenant call keys can run that tenant's published routes. They cannot author a new
+  platform-backed spec. Operator API keys establish installation authority separately
+  from tenant `admin`/`calls` keys and browser login sessions.
+- Runtime preference (user clarification, 2026-09-19): use the active tenant service
+  when both tenant and platform configure the referenced provider/name, regardless
+  of who authored the spec. Otherwise inherit the platform service. Restored
+  inheritance may retain dormant tenant credential rows; these are not active tenant
+  configurations. Disabled policies and failed overrides retain the fail-closed rules.
 - Tenant cards identify exceptions with **Inherited from platform**, **Tenant override**,
   or **Disabled for this tenant**. Ordinary tenant and platform cards omit redundant
   scope labels. Inherited capabilities count toward onboarding readiness. New tenants
@@ -126,6 +144,15 @@ browser checks. A checked design task does not count as a delivered slice.
   boundary, and resolve it through call-spec save/publish/preparation and fresh runtime
   readers. Prove two inheriting tenants, one override, named bindings, disabled/failed
   overrides and transaction-time guards. Preserve existing tenant ciphertext and IDs.
+- [ ] **A2 — Authorize service references by the writing principal.** Add explicit
+  principal-aware create/update/publish workflows. Prove operator writes can use
+  platform services while tenant writes require tenant ownership, including edits
+  to an operator-created spec and transaction-time scope changes. Existing trusted
+  host entry points remain explicitly trusted; runtime admission is separate.
+- [ ] **A3 — Write call specs with operator API keys.** Persist hash-only installation
+  keys, issue them through a trusted local command, authenticate an explicit operator
+  principal, and expose authenticated operator/tenant call-spec writes. Prove no
+  tenant-key promotion, rejected/revoked keys, reload and secret-safe responses.
 - [ ] **B1 — Connect an inherited provider in the Console.** Connect the reviewed
   platform and tenant pages to authenticated APIs. Save and edit a platform service,
   show its effective source/readiness to tenants and reload durable progress. Prove
@@ -147,8 +174,11 @@ browser checks. A checked design task does not count as a delivered slice.
 Checkpoint design review, 2026-09-19: A establishes the shared policy resolver before
 the operator UI and scoped carrier readers use it; B1/B2 provide the durable management
 surface used by C. C establishes exact verifier/application ownership before D changes
-outgoing URLs. Programmatic platform API-key issuance and new AI adapters remain outside
-this dependency chain. The detailed acceptance requirements below remain authoritative.
+outgoing URLs. The user's subsequent authoring-authority clarification inserts A2/A3
+before resuming B1: operator API-key issuance is now required for this flow. New AI
+adapters remain outside this dependency chain. The detailed acceptance requirements
+below remain authoritative. The partly implemented B1 directory/API work is retained
+while authoring authorization takes priority; no B1 completion is claimed.
 The user's subsequent review/commit instruction requires reviewing and committing
 each runnable checkpoint before starting the next implementation. Unresolved
 verification stays explicit and leaves the acceptance checkbox open. B was split into B1/B2 to keep
@@ -260,8 +290,9 @@ Reintroducing the deleted static application fallback would bypass persisted pol
 Local design review, 2026-09-19: separated credential owner from call/application tenant,
 limited the initial Telnyx account cardinality, retained named AI bindings, and added legacy
 route, encryption migration, initialized-client and media-token gates. Platform provider
-management can use the existing operator session; it does not depend on completing
-programmatic platform API-key issuance. Application discovery/creation in Telnyx is deferred;
+management uses the existing operator session. The subsequent user clarification adds
+programmatic operator API-key issuance for principal-aware call-spec writes; this is
+now an explicit dependency in A3. Application discovery/creation in Telnyx is deferred;
 the first production binding flow can accept an application ID. This is a plan review,
 not evidence that the backend checkpoints are implemented.
 

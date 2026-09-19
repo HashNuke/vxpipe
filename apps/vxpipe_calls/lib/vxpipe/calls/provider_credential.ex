@@ -48,6 +48,9 @@ defmodule Vxpipe.Calls.ProviderCredential do
     owner(credential) in [:platform, {:tenant, tenant_key}]
   end
 
+  def allowed_owner?(_credential, nil), do: true
+  def allowed_owner?(credential, expected), do: owner(credential) == expected
+
   def binding_identity(credential) do
     case owner(credential) do
       :platform -> %{"id" => credential.id, "scope" => "platform", "tenant_key" => nil}

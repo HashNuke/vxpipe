@@ -63,7 +63,15 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
       call_spec
       |> CapabilityRequirements.credentials()
       |> Enum.map(fn {selection, path} ->
-        requirement = %{provider: selection.provider, name: selection.credential_name, path: path}
+        requirement =
+          authoring_requirement(
+            %{
+              provider: selection.provider,
+              name: selection.credential_name,
+              path: path
+            },
+            options
+          )
 
         if is_map(bindings) do
           Map.put(
@@ -85,6 +93,7 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
           {:ok, repository} ->
             case Repositories.call(repository, :with_active, [tenant_key, requirements, operation]) do
               {:error, {:provider_credential_unavailable, path}} -> unavailable(path)
+              {:error, {:provider_service_forbidden, path}} -> forbidden(path)
               result -> result
             end
 
@@ -121,8 +130,16 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
       |> service_requirements()
       |> Enum.reduce_while(:ok, fn requirement, :ok ->
         case TelephonyServices.resolve(tenant_key, requirement.name, options) do
-          {:ok, _private_snapshot} -> {:cont, :ok}
-          {:error, _reason} -> {:halt, unavailable(requirement.path)}
+          {:ok, snapshot} ->
+            if ProviderCredential.allowed_owner?(
+                 snapshot.credential.credential,
+                 Keyword.get(options, :service_authoring_owner)
+               ),
+               do: {:cont, :ok},
+               else: {:halt, forbidden(requirement.path)}
+
+          {:error, _reason} ->
+            {:halt, unavailable(requirement.path)}
         end
       end)
     end
@@ -134,6 +151,7 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
     |> Enum.reduce_while(:ok, fn {selection, path}, :ok ->
       case resolve(tenant_key, selection, options) do
         {:ok, _credential} -> {:cont, :ok}
+        {:error, :provider_service_forbidden} -> {:halt, forbidden(path)}
         {:error, _reason} -> {:halt, unavailable(path)}
       end
     end)
@@ -145,7 +163,12 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
         operation.()
 
       [first | _] = requirements ->
+        requirements = Enum.map(requirements, &authoring_requirement(&1, options))
+
         case TelephonyServices.with_active(tenant_key, requirements, options, operation) do
+          {:error, {:provider_service_forbidden, path}} ->
+            forbidden(path)
+
           {:error, {:provider_credential_unavailable, path}} ->
             unavailable(path)
 
@@ -185,10 +208,29 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
          true <- credential.provider == selection.provider,
          true <- credential.name == selection.credential_name and credential.status == :active,
          :ok <- ProviderAuth.validate(credential.provider, credential.auth_kind, resolved.payload) do
-      {:ok, resolved}
+      if ProviderCredential.allowed_owner?(
+           credential,
+           Keyword.get(options, :service_authoring_owner)
+         ),
+         do: {:ok, resolved},
+         else: {:error, :provider_service_forbidden}
     else
       _unavailable -> {:error, :provider_credential_unavailable}
     end
+  end
+
+  defp authoring_requirement(requirement, options) do
+    case Keyword.get(options, :service_authoring_owner) do
+      nil -> requirement
+      owner -> Map.put(requirement, :allowed_owner, owner)
+    end
+  end
+
+  defp forbidden(path) do
+    {:error,
+     Error.new(
+       :provider_service_forbidden,
+       "This author cannot reference a platform-only service.", details: %{"path" => path})}
   end
 
   defp unavailable(path) do
