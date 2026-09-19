@@ -56,7 +56,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert dial.answering_machine_detection == :detect
 
     assert dial.callback_url ==
-             "https://voice.example.test/voice/api/telephony/telnyx/outbound_ingress/events"
+             "https://voice.example.test/voice/webhooks/tenants/tenantkey1234567/telnyx"
 
     assert {:ok, binding} = consume_media(context.media_admission, dial.media_url, service)
     assert binding.leg == leg
@@ -499,7 +499,6 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
   test "a verified retired owner cannot deliver to a replacement leg", context do
     service = service(self(), [])
     leg = start_accepted_leg(context, service)
-    registry = ServiceRegistry.init!(enabled: true)
 
     body =
       JSON.encode!(%{
@@ -513,10 +512,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       })
 
     assert {:ok, ^service, {:outgoing, ^leg} = owner} =
-             Vxpipe.Gateway.Telephony.WebhookService.select(
-               registry,
-               :telnyx,
-               service.identity.ingress_key,
+             Vxpipe.Gateway.Telephony.WebhookService.scoped_telnyx_owner(
+               service.identity.service_reference.credential_owner,
                body
              )
 

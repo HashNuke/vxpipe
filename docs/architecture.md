@@ -1121,18 +1121,18 @@ encoded into provider `client_state`; this provides the correlation seam for an 
 dial submission without selecting by phone number. The remaining authenticated but unconsumed
 Voice API events are acknowledged through `ignore`.
 
-Gateway exposes this boundary at
-`POST /api/telephony/telnyx/:ingress_key/events`. New legs resolve the opaque ingress key through
-the stored tenant service, then load its exact encrypted credential and verification metadata.
+Gateway exposes Telnyx at `POST /webhooks/platform/telnyx` and
+`POST /webhooks/tenants/:tenant_key/telnyx`. The URL selects exactly one credential scope
+before authenticating the raw body. An authenticated application ID then resolves its
+explicit tenant binding; the effective owner/ID/version must match the verifier selection.
+New live Telnyx clients require the scoped primary `telnyx` binding. The old ingress-key
+events route, verifier lookup and callback generator are removed. Media paths/tokens
+remain separate; Twilio keeps its own ingress and signature contracts.
 Outbound lookup requires the prepared participant's canonical tenant/service/provider/account/
 credential reference. The alias never falls back to application configuration. Stored service
-metadata owns the originating number, machine-detection policy and existing media/timer settings;
-the configured public `APP_HOST` supplies the HTTPS origin, with
-`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` retained as an explicit origin/path override.
-Console URLs and newly initialized callbacks use the same resolved value. Scoped primary
-Telnyx bindings select the platform or tenant webhook path from their credential owner;
-legacy exact-ID bindings still retain their ingress-key path pending the approved
-legacy webhook removal checkpoint.
+metadata owns originating number, machine-detection and media/timer settings. Public `APP_HOST`
+supplies HTTPS, with `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` as an explicit origin/path override.
+Console and outgoing callbacks share this resolved value and the selected credential scope.
 
 The HTTP boundary keeps the original body for verification. Bounded untrusted identifiers can
 locate an existing leg's private initialized configuration; they do not authorize dispatch.

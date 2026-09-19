@@ -19,7 +19,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioWebhookRequest do
          :ok <- form_content_type(conn),
          {:ok, body, conn} <- RawBody.read(conn, options.maximum_body_bytes),
          {:ok, service, owner} <-
-           WebhookService.select(options.registry, :twilio, ingress_key, body, local_id),
+           WebhookService.select_twilio(options.registry, ingress_key, body, local_id),
          {:ok, signature} <- TwilioRequestSignature.fetch(conn),
          {url, route_parameters} <- endpoint_builder.(service),
          webhook <- webhook(body, signature, options.clock, url, route_parameters),

@@ -89,7 +89,17 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
 
   def new(_invalid), do: {:error, :invalid_telephony_service_configuration}
 
-  def from_snapshot(%ResolvedTelephonyService{} = snapshot, public_base_url, adapters \\ %{}) do
+  def from_snapshot(snapshot, public_base_url, adapters \\ %{})
+
+  def from_snapshot(
+        %ResolvedTelephonyService{service: %{provider: "telnyx", credential_name: name}},
+        _origin,
+        _adapters
+      )
+      when name != "telnyx",
+      do: {:error, :invalid_telephony_service_configuration}
+
+  def from_snapshot(%ResolvedTelephonyService{} = snapshot, public_base_url, adapters) do
     stored = snapshot.service
     payload = snapshot.credential.payload
 

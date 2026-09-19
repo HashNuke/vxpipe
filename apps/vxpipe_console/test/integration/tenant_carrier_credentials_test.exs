@@ -75,6 +75,7 @@ defmodule Vxpipe.Console.TenantCarrierCredentialsTest do
             telephony: [
               enabled: true,
               public_base_url: @origin,
+              provider_credential_repository: {ProviderCredentialStore, data.context},
               telephony_service_repository: {TelephonyServiceStore, data.context},
               clock: fn -> @timestamp end,
               handler:
@@ -103,15 +104,19 @@ defmodule Vxpipe.Console.TenantCarrierCredentialsTest do
       case provider do
         "telnyx" ->
           {public, private} = :crypto.generate_key(:eddsa, :ed25519)
-          {Base.encode64(public), private, "api_key", %{"api_key" => secret}, "connection-1"}
+
+          {Base.encode64(public), private, "api_key",
+           %{"api_key" => secret, "public_key" => Base.encode64(public)}, "connection-#{tenant}"}
 
         "twilio" ->
           {nil, secret, "account_sid_auth_token",
            %{"account_sid" => @account, "auth_token" => secret}, @account}
       end
 
+    name = if provider == "telnyx", do: "telnyx", else: "phone"
+
     assert {:ok, credential} =
-             ProviderCredentials.provision(tenant, provider, "phone", kind, payload, options)
+             ProviderCredentials.provision(tenant, provider, name, kind, payload, options)
 
     attributes = %{
       "name" => "phone-#{provider}",
@@ -122,10 +127,13 @@ defmodule Vxpipe.Console.TenantCarrierCredentialsTest do
     }
 
     attributes =
-      if public_key, do: Map.put(attributes, "public_key", public_key), else: attributes
+      if public_key,
+        do: attributes |> Map.delete("credential_id") |> Map.put("credential_name", "telnyx"),
+        else: attributes
 
     assert {:ok, service} = TelephonyServices.register(tenant, attributes, options)
-    {service, secret, signing_key}
+    assert {:ok, snapshot} = TelephonyServices.resolve(tenant, service.name, options)
+    {snapshot.service, secret, signing_key}
   end
 
   defp request(endpoint, %{provider: "telnyx"} = service, key) do
@@ -152,7 +160,7 @@ defmodule Vxpipe.Console.TenantCarrierCredentialsTest do
     signature = :crypto.sign(:eddsa, :none, timestamp <> "|" <> body, [key, :ed25519])
 
     :post
-    |> conn("/api/telephony/telnyx/#{service.ingress_key}/events", body)
+    |> conn("/webhooks/tenants/#{service.tenant_key}/telnyx", body)
     |> put_req_header("content-type", "application/json")
     |> put_req_header("telnyx-timestamp", timestamp)
     |> put_req_header("telnyx-signature-ed25519", Base.encode64(signature))

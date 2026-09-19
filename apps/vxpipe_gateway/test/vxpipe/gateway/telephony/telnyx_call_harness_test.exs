@@ -29,7 +29,6 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
   @incoming_leg_id "leg-inbound-harness"
   @outgoing_leg_id "leg-outbound-harness"
-  @ingress_key "harness"
   @received_at DateTime.to_unix(~U[2026-09-11 15:00:05Z])
 
   setup context do
@@ -493,7 +492,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     TelnyxFixture.post_event(
       context.endpoint,
       context.private_key,
-      @ingress_key,
+      context.plan.tenant_id,
       name,
       replacements,
       @received_at

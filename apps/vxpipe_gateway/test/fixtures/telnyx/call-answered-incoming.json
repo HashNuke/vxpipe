@@ -13,6 +13,6 @@
   },
   "meta": {
     "attempt": 1,
-    "delivered_to": "https://voice.example.test/api/telephony/telnyx/harness/events"
+    "delivered_to": "https://voice.example.test/webhooks/tenants/telephonyharness/telnyx"
   }
 }

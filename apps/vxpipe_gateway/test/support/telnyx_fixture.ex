@@ -22,12 +22,12 @@ defmodule Vxpipe.Gateway.TelnyxFixture do
     |> Base.encode64()
   end
 
-  def post_event(endpoint, private_key, ingress_key, name, replacements, received_at) do
+  def post_event(endpoint, private_key, tenant_key, name, replacements, received_at) do
     body = body(name, replacements)
     timestamp = Integer.to_string(received_at)
 
     :post
-    |> conn("/api/telephony/telnyx/#{ingress_key}/events", body)
+    |> conn("/webhooks/tenants/#{tenant_key}/telnyx", body)
     |> put_req_header("content-type", "application/json")
     |> put_req_header("telnyx-timestamp", timestamp)
     |> put_req_header("telnyx-signature-ed25519", signature(body, private_key, timestamp))

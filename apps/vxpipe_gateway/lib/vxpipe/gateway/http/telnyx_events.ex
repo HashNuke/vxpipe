@@ -12,12 +12,6 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
   alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookSelection, WebhookVerifier}
 
   @spec route?(Plug.Conn.t()) :: boolean()
-  def route?(%Plug.Conn{
-        method: "POST",
-        path_info: ["api", "telephony", "telnyx", _ingress_key, "events"]
-      }),
-      do: true
-
   def route?(%Plug.Conn{method: "POST", path_info: ["webhooks", "platform", "telnyx"]}),
     do: true
 
@@ -26,7 +20,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
 
   def route?(%Plug.Conn{}), do: false
 
-  @spec handle(Plug.Conn.t(), map(), String.t() | {:scope, term()}) :: Plug.Conn.t()
+  @spec handle(Plug.Conn.t(), map(), {:scope, term()}) :: Plug.Conn.t()
   def handle(conn, options, locator) do
     with true <- options.registry.enabled?,
          :ok <- json_content_type(conn),

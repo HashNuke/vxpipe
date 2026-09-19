@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.WebhookServiceTest do
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, ServiceRegistry, WebhookService}
   alias Vxpipe.Gateway.TestTelephonyServiceRepository, as: Repository
 
-  test "selects the exact retained owner before consulting unavailable storage" do
+  test "selects each provider's exact retained owner before consulting unavailable storage" do
     for provider <- [:telnyx, :twilio] do
       ingress = "owner-#{System.unique_integer([:positive])}"
       local_id = "local-#{ingress}"
@@ -18,27 +18,25 @@ defmodule Vxpipe.Gateway.Telephony.WebhookServiceTest do
                  {:outgoing, service}
                )
 
-      assert {:ok, ^service, {:outgoing, owner}} =
-               WebhookService.select(
-                 registry,
-                 provider,
-                 ingress,
-                 body(provider, service, local_id),
-                 local_id
-               )
+      payload = body(provider, service, local_id)
 
+      selected =
+        case provider do
+          :telnyx -> WebhookService.scoped_telnyx_owner({:tenant, "AAAAAAAAAAAAAAAA"}, payload)
+          :twilio -> WebhookService.select_twilio(registry, ingress, payload, local_id)
+        end
+
+      assert {:ok, ^service, {:outgoing, owner}} = selected
       assert owner == self()
       refute_receive :credential_lookup
 
-      assert {:error, :service_not_found} =
-               WebhookService.select(
-                 registry,
-                 provider,
-                 "other-ingress",
-                 body(provider, service, local_id),
-                 local_id
-               )
+      rejected =
+        case provider do
+          :telnyx -> WebhookService.scoped_telnyx_owner(:platform, payload)
+          :twilio -> WebhookService.select_twilio(registry, "other-ingress", payload, local_id)
+        end
 
+      assert {:error, :service_not_found} = rejected
       refute_receive :credential_lookup
     end
   end
@@ -57,9 +55,8 @@ defmodule Vxpipe.Gateway.Telephony.WebhookServiceTest do
              )
 
     assert {:ok, ^service, {:incoming, owner}} =
-             WebhookService.select(
+             WebhookService.select_twilio(
                unavailable_registry(),
-               :twilio,
                ingress,
                body(:twilio, service, nil)
              )
@@ -68,9 +65,8 @@ defmodule Vxpipe.Gateway.Telephony.WebhookServiceTest do
     refute_receive :credential_lookup
 
     assert {:error, :service_not_found} =
-             WebhookService.select(
+             WebhookService.select_twilio(
                unavailable_registry(),
-               :twilio,
                ingress,
                "CallSid=#{call_sid}&AccountSid=wrong"
              )

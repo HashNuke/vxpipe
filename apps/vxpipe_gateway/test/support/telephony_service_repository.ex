@@ -53,6 +53,7 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
     [
       public_base_url: origin,
       telephony_service_repository: {__MODULE__, context},
+      provider_credential_repository: {__MODULE__, context},
       adapters: adapters
     ]
   end
@@ -66,8 +67,11 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
     {kind, payload, account} =
       case provider do
         "telnyx" ->
-          {"api_key", %{"api_key" => Keyword.fetch!(options, :api_key)},
-           Keyword.fetch!(options, :provider_connection_id)}
+          {"api_key",
+           %{
+             "api_key" => Keyword.fetch!(options, :api_key),
+             "public_key" => Keyword.fetch!(options, :public_key)
+           }, Keyword.fetch!(options, :provider_connection_id)}
 
         "twilio" ->
           sid = Keyword.fetch!(options, :account_sid)
@@ -90,7 +94,27 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
       "webhook_tolerance_seconds" => Keyword.get(options, :webhook_tolerance_seconds, 300)
     }
 
+    attributes =
+      if provider == "telnyx",
+        do:
+          Map.merge(attributes, %{
+            "credential_name" => "telnyx",
+            "credential_id" => nil,
+            "public_key" => nil
+          }),
+        else: attributes
+
     {:ok, service} = TelephonyService.new(tenant, attributes)
+
+    service =
+      if provider == "telnyx",
+        do: %{
+          service
+          | credential_id: credential_id,
+            credential_owner: {:tenant, tenant},
+            public_key: Keyword.fetch!(options, :public_key)
+        },
+        else: service
 
     %ResolvedTelephonyService{
       service: %{service | id: id({tenant, name, :service})},
@@ -99,7 +123,8 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
           id: credential_id,
           tenant_key: tenant,
           provider: provider,
-          name: "carrier",
+          name: if(provider == "telnyx", do: "telnyx", else: "carrier"),
+          owner: {:tenant, tenant},
           auth_kind: kind
         },
         payload: payload
@@ -145,6 +170,39 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
     case Enum.find(snapshots, &(&1.service.ingress_key == ingress)) do
       nil -> {:error, :service_not_found}
       snapshot -> {:ok, snapshot.service}
+    end
+  end
+
+  def fetch_telnyx_application(context, application) when is_function(context, 2),
+    do: context.(:fetch_telnyx_application, [application])
+
+  def fetch_telnyx_application(snapshots, application) do
+    case Enum.filter(
+           snapshots,
+           &(&1.service.provider == "telnyx" and &1.service.provider_connection_id == application)
+         ) do
+      [snapshot] ->
+        {:ok, %{snapshot.service | credential_id: nil, credential_owner: nil, public_key: nil}}
+
+      _missing_or_ambiguous ->
+        {:error, :telephony_service_not_found}
+    end
+  end
+
+  def resolve(context, scope, provider, name) when is_function(context, 2),
+    do: context.(:resolve, [scope, provider, name])
+
+  def resolve(snapshots, scope, provider, name) do
+    owner = if is_binary(scope), do: {:tenant, scope}, else: scope
+
+    case Enum.find(snapshots, fn snapshot ->
+           credential = snapshot.credential.credential
+
+           credential.owner == owner and credential.provider == provider and
+             credential.name == name
+         end) do
+      nil -> {:error, :provider_credential_not_found}
+      snapshot -> {:ok, snapshot.credential}
     end
   end
 

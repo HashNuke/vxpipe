@@ -153,9 +153,10 @@ Scoped ingress C2 now passes 1,781 umbrella tests with zero failures and 40 excl
 including persisted signed requests through Phoenix and retained owner checks. C3a adds
 Console public-key configuration and matching UI/outgoing URLs with browser/restart
 verification; 1,786 umbrella and 183 frontend tests pass, with all static gates green.
-Application/number setup C3b and final acceptance remain open. The latest user clarification
-removes the legacy Telnyx webhook compatibility requirement: remove the old events
-route and callback generation in a separate reviewed checkpoint.
+D1 removes the legacy Telnyx events route, verifier-selection branch and callback
+generation per the user's clarification. Scoped live bindings, media and Twilio checks
+pass; final umbrella: 1,788 tests, zero failures, 40 excluded, all static gates green.
+Application/number setup C3b and final acceptance D2 remain open.
 This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 

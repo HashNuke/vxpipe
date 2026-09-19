@@ -9,6 +9,26 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
   @other_tenant "BBBBBBBBBBBBBBBB"
   @origin "https://voice.example.test/voice"
 
+  test "an unscoped Telnyx binding is rejected before constructing a live carrier client" do
+    original = Repository.snapshot(service(:telnyx, @tenant, "old-ingress", "private-key"))
+
+    legacy = %{
+      original
+      | service: %{original.service | credential_name: nil, credential_owner: nil}
+    }
+
+    reference = TelephonyServices.reference(legacy.service)
+    context = fn :resolve, [@tenant, "primary-phone"] -> {:ok, legacy} end
+
+    assert {:error, :service_not_found} =
+             ServiceRegistry.fetch_for_tenant(
+               registry(context),
+               "primary-phone",
+               @tenant,
+               reference
+             )
+  end
+
   test "the selected tenant's credentials reach the existing encoded REST request" do
     Req.Test.verify_on_exit!()
 

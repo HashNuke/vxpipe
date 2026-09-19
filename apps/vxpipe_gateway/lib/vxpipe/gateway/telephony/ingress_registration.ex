@@ -6,18 +6,16 @@ defmodule Vxpipe.Gateway.Telephony.IngressRegistration do
   @registry Vxpipe.Gateway.Telephony.LegRegistry
 
   def register(service, provider_leg, kind) do
-    legacy = IngressIdentity.ingress_key(service.identity, provider_leg)
-
     keys =
       case service.identity do
         %{
           provider: :telnyx,
           service_reference: %{credential_name: "telnyx", credential_owner: owner}
         } ->
-          [legacy, {:scoped_telnyx, owner, service.identity.provider_connection_id, provider_leg}]
+          [{:scoped_telnyx, owner, service.identity.provider_connection_id, provider_leg}]
 
-        _legacy ->
-          [legacy]
+        %{provider: :twilio} ->
+          [IngressIdentity.ingress_key(service.identity, provider_leg)]
       end
 
     Enum.reduce_while(keys, {:ok, []}, fn key, {:ok, registered} ->

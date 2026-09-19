@@ -13,10 +13,6 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint do
     scoped_event_url(service.public_base_url, owner)
   end
 
-  def event_url(%ConfiguredService{} = service) do
-    append_path(service, "events")
-  end
-
   @doc "Builds a credential-scope URL, preserving the configured public path prefix."
   def scoped_event_url(base, owner) do
     suffix =

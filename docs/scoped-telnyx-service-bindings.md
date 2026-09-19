@@ -1,6 +1,6 @@
 # Scoped Telnyx service bindings
 
-Decision: 2026-09-19. Design and C1/C2/C3a implementation reviewed. C3b remains open under checkpoint C of the
+Decision: 2026-09-19. Design and C1/C2/C3a/D1 implementation reviewed. C3b remains open under checkpoint C of the
 [platform and tenant services plan](platform-and-tenant-services.md).
 
 ## Credential ownership and application identity
@@ -27,24 +27,20 @@ application ID among scoped bindings. The new scope URLs select only the primary
 `telnyx` credential name; alternate named accounts do not become additional verifiers.
 Shared Voice API applications and number-based tenant selection remain deferred.
 
-## Compatibility and migration
+## Webhook routes and stored identities
 
-**Latest approved scope, 2026-09-19:** remove legacy Telnyx webhook routes and
-callback generation. There is no required compatibility window. The historical
-C1/C2 behavior below is superseded for webhook delivery; media/token and Twilio
-contracts remain. Deleting webhook code does not authorize deleting stored credentials.
-The removal follows the C3a credential/URL checkpoint and will explicitly test rejected
-old paths and supported scoped callbacks.
+The user removed the legacy webhook compatibility requirement on 2026-09-19.
+Only the explicit platform and tenant URLs are supported. The old ingress-key events
+route, its verifier-selection branch and outgoing callback fallback are removed.
+A signed request to the removed path cannot dispatch. Telnyx live-owner lookup uses
+only scope/application/provider-leg identity (or exact client state within that scope).
+Media/token and Twilio contracts remain separate.
 
-Existing bindings without `credential_name` retain their exact tenant credential ID,
-public key, ingress key and foreign-key checks. Do not guess a scoped primary account
-from existing rows: multiple legacy keys or application aliases may be ambiguous.
-Existing exact bindings are not automatically enrolled in scoped webhook routes.
-A new scoped binding remains usable through its explicit ingress during C1; C2/C3
-add scoped ingress and its configuration. New nullable columns and conditional constraints preserve
-legacy rows and ciphertext without rewriting them. Rolling the schema back while
-scoped bindings exist must fail clearly and preserve those rows, rather than discard
-configuration or manufacture tenant credentials from a platform account.
+Gateway rejects unscoped Telnyx bindings before constructing a fresh live client. This
+change does not rewrite or delete stored credentials, application metadata or historical
+calls. Configure an explicit primary scoped binding and use its matching webhook URL.
+There is no inference from an old credential ID or public key to the new primary scope.
+The existing schema rollback guard still refuses to discard scoped bindings.
 
 Persisted prepared plans predating the new reference fields decode with explicit
 legacy defaults. New scoped references pin credential owner, ID and name; replacing
@@ -64,14 +60,14 @@ the verified selection. Also enforce a stricter application freshness setting wh
 configured. A concurrent credential/scope change rejects the request; it never retries
 another key. Tenant URLs cannot inherit the platform verifier.
 
-An initialized incoming or outgoing leg registers a scope/application/provider-leg
-locator alongside its legacy ingress locator. Only an owner within the URL-selected
+An initialized incoming or outgoing Telnyx leg registers a scope/application/provider-leg
+locator. Twilio retains its separate ingress locator. Only an owner within the URL-selected
 scope may provide its retained verifier. This preserves callbacks and incoming
 duplicate handling during storage outages or credential replacement, including
 callbacks without client state. The exact authenticated owner receives dispatch;
 owner death does not trigger a new lookup. Initialized owners retain their configured
 freshness window. C3a supplies outgoing URL generation and the common public origin;
-D verifies final cutover acceptance.
+D verifies removal and final acceptance.
 
 C1 configuration uses the trusted `ProviderCredentials.provision/6` host API to store
 the primary `telnyx` credential with `api_key` and optional `public_key`. The existing
@@ -89,10 +85,9 @@ accepts scoped application metadata:
 ```
 
 Registration requires an effective credential with a valid verification key. It does
-not publish a phone-number route or configure the remote Telnyx application. The
-explicit `/api/telephony/telnyx/:ingress_key/events` ingress remains available during
-cutover. C2 adds the scoped URLs; C3a adds Console credential/URL configuration. Application
-configuration remains C3b; the next checkpoint removes the legacy webhook route.
+not publish a phone-number route or configure the remote Telnyx application. Use the
+scope URL shown by Console in the Voice API application. C3a configures credentials
+and URLs; application configuration and published number progress remain C3b.
 
 - [x] C1: store the optional scoped verification key, register a tenant application
   against the effective credential name, authorize call-spec writes, and resolve new
@@ -111,6 +106,9 @@ configuration remains C3b; the next checkpoint removes the legacy webhook route.
 - [ ] C3b: tenant application configuration and published number-route progress.
 - [ ] D removes the legacy Telnyx webhook path and callback generation, then completes
   restart/rollback/re-encryption and final umbrella acceptance from the parent plan.
+- [x] D1: remove the old route, verifier selection and callback generation; reject
+  unscoped fresh Telnyx clients and preserve media/Twilio behavior.
+- [ ] D2: final combined application/number setup, restart, re-encryption and rollback acceptance.
 
 Design review: keep credentials separate from tenant application identity; reuse the
 existing owner/presence resolver rather than introduce another fallback mechanism.
@@ -139,3 +137,13 @@ and application-owned webhook configuration. These support the separation above;
 the Vxpipe owner/presence and migration decisions are local design choices.
 See [webhook verification](https://developers.telnyx.com/docs/development/api-fundamentals/webhooks/receiving-webhooks)
 and [Voice API applications](https://developers.telnyx.com/api-reference/call-control-applications/create-a-call-control-application).
+
+Legacy-removal design review: D1 depends on C1/C2/C3a and can run before C3b because
+it changes neither Console application management nor stored credential ownership.
+Remove both routing and callback generation together; reject unsupported live bindings
+before dialing rather than send callbacks to a removed URL. Do not silently reinterpret
+legacy IDs as primary credentials. Preserve protocol/body-limit, retained-owner, media
+and Twilio tests by moving Telnyx fixtures onto scoped credentials and webhook URLs.
+D1 is implemented and reviewed. Two red regressions pass, the encrypted two-carrier
+signature check passes, and both carrier harnesses pass six combined runs. Final
+umbrella: 1,788 tests, zero failures, 40 excluded; all root static gates pass.

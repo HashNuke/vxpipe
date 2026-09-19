@@ -112,16 +112,6 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   def call(
         %Plug.Conn{
           method: "POST",
-          path_info: ["api", "telephony", "telnyx", ingress_key, "events"]
-        } = conn,
-        options
-      ) do
-    TelnyxEvents.handle(conn, options.telephony, ingress_key)
-  end
-
-  def call(
-        %Plug.Conn{
-          method: "POST",
           path_info: ["api", "telephony", "twilio", ingress_key, "voice"]
         } = conn,
         options

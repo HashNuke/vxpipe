@@ -2,9 +2,9 @@
 
 Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
 are delivered, including the credential-presence correction. C1/C2 scoped Telnyx
-bindings/ingress and C3a Console credential/URL configuration are implemented.
-C3b application/number-route setup, legacy webhook removal and final acceptance
-remain. The latest umbrella run passes 1,786 tests with zero failures and 40 exclusions;
+bindings/ingress, C3a Console credential/URL configuration and D1 legacy webhook removal
+are implemented. C3b application/number-route setup and D2 final acceptance remain.
+The latest umbrella run passes 1,788 tests with zero failures and 40 exclusions;
 all root static gates and 183 frontend tests pass.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
@@ -124,11 +124,12 @@ adds platform uniqueness, and shares presence-based resolution between
 private reads and final write guards. Existing tenant ciphertext keeps its version-1
 authenticated context; platform ciphertext uses a distinct version-2 context.
 
-The carrier boundary now supports effective primary Telnyx bindings through an explicit
-credential name, while legacy bindings keep their public key and exact tenant credential.
-Gateway preserves globally unique legacy ingress keys and adds the two explicit
-scope URLs. Fresh scoped requests authenticate before application lookup; initialized
-legs retain authentication for callbacks/media/cleanup during storage outages.
+The carrier boundary supports effective primary Telnyx bindings through an explicit
+credential name. Gateway supports only the two explicit Telnyx scope URLs and rejects
+unscoped Telnyx bindings before constructing a fresh live client. Stored legacy metadata
+remains readable; media ingress keys and Twilio's exact tenant bindings are preserved.
+Fresh scoped requests authenticate before application lookup; initialized legs retain
+authentication for callbacks/media/cleanup during storage outages.
 
 Keep responsibilities: Calls owns scoped service resolution and safe identities;
 Persistence owns encryption, schema, constraints and transactions; Gateway owns
@@ -179,6 +180,11 @@ browser checks. A checked design task does not count as a delivered slice.
   in a reviewed checkpoint, preserving media/token and Twilio contracts. Verify replacement,
   re-encryption, restart, schema rollback boundaries and final umbrella gates. Document
   required remote application configuration without claiming live-provider evidence.
+- [x] **D1 — Remove legacy Telnyx webhook routing and generation.** The old events URL
+  cannot dispatch, and fresh clients require a scoped primary binding. Media/token and
+  Twilio behavior remain verified. This checkpoint follows C3a and precedes C3b.
+- [ ] **D2 — Complete final acceptance.** Verify replacement, re-encryption, restart,
+  schema rollback and the final combined application/number-setup flow after C3b.
 
 Checkpoint design review, 2026-09-19: A establishes the shared scoped resolver before
 the operator UI and scoped carrier readers use it; B1/B2 provide the durable management
@@ -394,6 +400,21 @@ Checkpoint C3a implementation:
   frontend tests, assets, TypeScript, ESLint and root static gates pass. See
   [C3a evidence](../labnotes/20260919-1052-telnyx-console-configuration.md).
 
+Checkpoint D1 implementation:
+
+- Removed the old Telnyx HTTP route, verifier-selection branch, live ingress alias
+  and outgoing callback fallback. Only explicit platform/tenant webhook URLs remain.
+  Gateway rejects unscoped Telnyx snapshots before constructing a fresh live client;
+  stored credentials, application records and historical call identities are preserved.
+- Two red regressions now pass: signed requests to the old path return 404 without
+  dispatch, and an unscoped binding cannot create a live client. Updated Telnyx
+  protocol/call-flow fixtures use scoped bindings and URLs; Twilio/media contracts pass.
+- The encrypted PostgreSQL two-tenant/two-carrier integration check passes. Review
+  corrected an incomplete synthetic speech acknowledgement in a separate fixture
+  checkpoint; six combined carrier harness runs pass. Final umbrella: 1,788 tests,
+  zero failures, 40 excluded, with all root static gates passing. No UI or live-provider
+  acceptance is claimed here. See [D1 evidence](../labnotes/20260919-1131-remove-legacy-webhooks.md).
+
 ### 1. Storybook review checkpoint
 
 - [x] Show tenant and platform Telnyx URLs in connect/edit states with copy feedback.
@@ -443,7 +464,7 @@ remote application provisioning, credential persistence, verification or routing
   Preserve call/leg deduplication, exact live-owner dispatch and tenant media-token ownership.
   Review initialized-key lifetime versus a replaced scoped key explicitly; never try the
   other scope's key on a verification failure or change an active leg's ownership.
-- [ ] Remove `/api/telephony/telnyx/:ingress/events`, its verifier-selection path and
+- [x] Remove `/api/telephony/telnyx/:ingress/events`, its verifier-selection path and
   legacy callback generation. Only explicit platform/tenant webhook paths remain. Update
   callers and tests; requests to removed paths must fail without dispatch. Retain media
   URL/token and Twilio contracts. Do not delete stored credentials as part of route removal.

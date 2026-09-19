@@ -7,25 +7,24 @@ defmodule Vxpipe.Gateway.Telephony.WebhookService do
 
   # Identifiers locate a candidate only. The caller must verify the original body and dispatch
   # to the returned owner without looking up a replacement after authentication.
-  def select(registry, provider, ingress, body, local_id \\ nil)
-  def select(%{enabled?: false}, _provider, _ingress, _body, _local_id), do: {:error, :disabled}
+  def select_twilio(registry, ingress, body, local_id \\ nil)
+  def select_twilio(%{enabled?: false}, _ingress, _body, _local_id), do: {:error, :disabled}
 
-  def select(registry, provider, ingress, body, local_id) do
-    {account, provider_leg, body_leg} = identifiers(provider, body)
-    local_id = bounded(local_id) || body_leg
+  def select_twilio(registry, ingress, body, local_id) do
+    {account, provider_leg, _body_leg} = identifiers(:twilio, body)
 
-    case owner(provider, ingress, account, provider_leg, local_id) do
+    case owner(:twilio, ingress, account, provider_leg, bounded(local_id)) do
       {:ok, %ConfiguredService{} = service, owner} ->
         identity = service.identity
 
-        if identity.provider == provider and identity.ingress_key == ingress and
+        if identity.provider == :twilio and identity.ingress_key == ingress and
              identity.provider_connection_id == account,
            do: {:ok, service, owner},
            else: {:error, :service_not_found}
 
       :not_found ->
         with {:ok, service} <- ServiceRegistry.fetch(registry, ingress) do
-          if service.identity.provider == provider,
+          if service.identity.provider == :twilio,
             do: {:ok, service, nil},
             else: {:error, :wrong_provider}
         end

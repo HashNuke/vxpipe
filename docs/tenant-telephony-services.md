@@ -3,7 +3,9 @@
 Status: trusted Telnyx/Twilio registration, the operator CLI, private credential resolution,
 canonical prepared-plan bindings, tenant-scoped incoming claims and call spec
 save/publish/web/incoming write guards are implemented. Twilio media authentication retains
-the initialized leg configuration. Gateway now resolves new Telnyx/Twilio legs from tenant storage in
+the initialized leg configuration. Telnyx now requires a scoped primary credential binding
+through the [platform/tenant service contract](scoped-telnyx-service-bindings.md);
+Twilio retains exact tenant credentials. The original tenant-reader work is recorded in
 [checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
 and [checkpoint 4](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
 
@@ -13,28 +15,33 @@ Calls owns the data-only `TelephonyService` record, trusted `TelephonyServices` 
 repository port. Persistence owns its PostgreSQL schema, constraints and transactions. Gateway
 continues to own carrier command/signature protocols. No new dependency crosses these boundaries.
 
-A service stores a canonical public UUID, tenant-local name, globally unique ingress key,
-provider connection ID, public verification key, optional originating number and existing carrier
-options. It references the credential's stable public UUID. The database foreign key includes
-credential ID, tenant and provider, so changing one cannot select another tenant/provider's key.
-The alias is what a call spec names; it is distinct from the canonical service identity that the
-reader cutover pins in prepared plans.
+A service stores a canonical public UUID, tenant-local name, globally unique media
+ingress key, provider connection ID, optional originating number and carrier options.
+The alias is what a call spec names; prepared plans pin the canonical service identity.
 
-Existing Telnyx and Twilio configuration is accepted here. Credentials are provisioned separately through
-[encrypted provider storage](provider-credential-storage.md). Service inputs reject secret fields,
-adapter modules and public callback/media origins. Origins remain platform configuration.
-The service's optional settings retain their current defaults: machine detection disabled,
-media-token lifetime 60,000 milliseconds and webhook tolerance 300 seconds. Stored timers fit
-positive PostgreSQL integers; webhook tolerance also permits zero. The Telnyx verification key is a
-Base64-encoded 32-byte Ed25519 public key. It is not a credential payload. Twilio omits this field
-and stores its Account SID as `provider_connection_id`; its encrypted SID/Auth Token payload
-must belong to that same account. Registration and each private resolution enforce the match.
-The database requires a public key for Telnyx and no public key for Twilio.
+Telnyx binds `credential_name: "telnyx"` and resolves that tenant's effective primary
+credential. Its API key and optional Ed25519 verification public key are stored together
+in the encrypted credential payload. Phone operation requires the public key. A tenant
+credential takes precedence by presence; an unusable tenant key never falls back to the
+platform. Each scoped Voice API application maps to exactly one consuming tenant.
+The old ingress-key webhook is removed. Gateway rejects unscoped Telnyx bindings before
+constructing a new live client; stored credentials and historical records are retained.
+
+Twilio references an exact tenant credential UUID. Its foreign key includes credential
+ID, tenant and provider. The Account SID is `provider_connection_id`; its encrypted
+SID/Auth Token payload must belong to that account. Registration and private resolution
+enforce the match. Twilio has no public-key field.
+
+Credentials are provisioned separately through [encrypted provider storage](provider-credential-storage.md).
+Service input rejects secrets, adapter modules and public callback/media origins.
+Origins remain platform configuration. Machine detection defaults to disabled,
+media tokens to 60,000 milliseconds and webhook tolerance to 300 seconds. Timers fit
+PostgreSQL integers; webhook tolerance also permits zero.
 
 ## Trusted registration and lookup
 
-Run the database migrations, provision the tenant's Telnyx key, and retain its public credential
-ID. Put the service metadata in a JSON object such as `service.json`:
+Run migrations and configure the primary Telnyx API/public-key pair at platform or
+tenant scope. Put the application metadata in a JSON object such as `service.json`:
 
 ```json
 {
@@ -42,12 +49,11 @@ ID. Put the service metadata in a JSON object such as `service.json`:
   "ingress_key": "tenant-support-ingress",
   "provider": "telnyx",
   "provider_connection_id": "TELNYX_CONNECTION_ID",
-  "credential_id": "PROVISIONED_CREDENTIAL_UUID",
-  "public_key": "TELNYX_BASE64_PUBLIC_KEY"
+  "credential_name": "telnyx"
 }
 ```
 
-Replace the placeholders with the existing connection, credential ID and verification public key.
+Replace the connection placeholder with the tenant's dedicated Telnyx Voice API application ID.
 The registration command reads this metadata once, validates it and writes the binding to PostgreSQL:
 
 ```shell
@@ -65,8 +71,7 @@ Vxpipe.Calls.TelephonyServices.register(tenant_key, %{
   "ingress_key" => "tenant-support-ingress",
   "provider" => "telnyx",
   "provider_connection_id" => telnyx_connection_id,
-  "credential_id" => provisioned_credential_id,
-  "public_key" => telnyx_verification_public_key
+  "credential_name" => "telnyx"
 })
 
 Vxpipe.Calls.TelephonyServices.fetch(tenant_key, "support-phone")
@@ -86,10 +91,8 @@ command, then use the same service registration command with this metadata:
 }
 ```
 
-Run the new service-schema migration before registration. It permits Twilio's absent public key
-while preserving Telnyx's requirement. Existing Telnyx rows are unchanged. Rolling that migration
-back requires removing or otherwise resolving Twilio rows first; it cannot restore `NOT NULL`
-while they exist.
+The scoped-service schema leaves existing rows unchanged. It refuses rollback while
+scoped bindings exist instead of discarding them or copying platform credentials into tenants.
 
 These are trusted host operations, not tenant-facing management APIs. Registration locks the
 matching credential row, verifies active status and decryption using the existing credential
@@ -105,7 +108,8 @@ is a locator, not authentication.
 ## Private resolution and call spec checks
 
 `TelephonyServices.resolve(tenant_key, name)` returns a private snapshot of the service and its
-exact linked credential. It locks both rows, checks tenant/provider/active status and decrypts
+selected credential (effective primary for Telnyx, exact tenant UUID for Twilio).
+It locks the relevant rows, checks scope/provider/active status and decrypts
 the credential using the existing authenticated store. A same-name credential with a different
 public ID is not an equivalent binding. The snapshot's inspection hides private authentication;
 call specs and prepared plans never retain its payload.

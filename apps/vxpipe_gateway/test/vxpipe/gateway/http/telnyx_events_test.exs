@@ -65,6 +65,15 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
                     }}
   end
 
+  test "the removed ingress-key webhook cannot dispatch even with a valid signature", context do
+    signed = signed_conn(incoming_body("voice-application-1"), context.private_key)
+    path = "/api/telephony/telnyx/#{@ingress_key}/events"
+    legacy = %{signed | request_path: path, path_info: String.split(path, "/", trim: true)}
+    response = Endpoint.call(legacy, context.endpoint)
+    assert response.status == 404
+    refute_received {:telephony_event, _identity, _event}
+  end
+
   test "rejects tampering before dispatch", context do
     body = incoming_body("voice-application-1")
     tampered_conn = signed_conn(body <> " ", context.private_key, body)
@@ -84,13 +93,13 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     refute_receive {:telephony_event, _identity, _event}
   end
 
-  test "rejects an event from another provider connection", context do
+  test "rejects an event from an unmapped provider application", context do
     body = incoming_body("voice-application-other")
 
     conn = request(context.endpoint, body, context.private_key)
 
-    assert conn.status == 403
-    assert conn.resp_body == "webhook source mismatch"
+    assert conn.status == 404
+    assert conn.resp_body == "not found"
     refute_receive {:telephony_event, _identity, _event}
   end
 
@@ -169,7 +178,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
       :crypto.sign(:eddsa, :none, timestamp <> "|" <> signed_body, [private_key, :ed25519])
 
     :post
-    |> conn("/api/telephony/telnyx/#{@ingress_key}/events", body)
+    |> conn("/webhooks/tenants/tenantkey1234567/telnyx", body)
     |> put_req_header("content-type", "application/json")
     |> put_req_header("telnyx-timestamp", timestamp)
     |> put_req_header("telnyx-signature-ed25519", Base.encode64(signature))

@@ -24,12 +24,6 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookSelection do
     :exit, _reason -> {:error, :webhook_processing_unavailable}
   end
 
-  def select(registry, ingress, body) when is_binary(ingress) do
-    with {:ok, service, owner} <- WebhookService.select(registry, :telnyx, ingress, body) do
-      retained(service, owner)
-    end
-  end
-
   def resolve(%__MODULE__{service: %ConfiguredService{} = service, owner: owner}, _webhook),
     do: {:ok, service, owner}
 
