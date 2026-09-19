@@ -311,8 +311,23 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     receive do
       {:test_tts_control, ^voice, control} ->
         case JSON.decode!(control) do
-          %{"type" => "Speak", "text" => "We can continue."} -> :ok
-          _other -> await_speak(voice, deadline)
+          %{"type" => "Speak", "text" => "We can continue."} ->
+            :ok
+
+          %{"type" => "Speak", "text" => "Connecting support."} ->
+            # This earlier response can reach TTS before the handoff interrupts it.
+            # Complete the synthetic provider request so recovery speech can start.
+            for type <- ["SpeechStarted", "SpeechMetadata"] do
+              CallEngine.TestTextToSpeechTransport.deliver_control(
+                voice,
+                JSON.encode!(%{type: type, speech_id: "transfer-acknowledgement"})
+              )
+            end
+
+            await_speak(voice, deadline)
+
+          _other ->
+            await_speak(voice, deadline)
         end
     after
       max(deadline - System.monotonic_time(:millisecond), 0) ->
