@@ -484,7 +484,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   defp valid_auth_kind?("twilio", "account_sid_auth_token"), do: true
 
   defp valid_auth_kind?(provider, "api_key")
-       when provider in ["google", "deepgram", "zenmux", "telnyx"],
+       when provider in ["google", "deepgram", "zenmux", "telnyx", "rime"],
        do: true
 
   defp valid_auth_kind?(_provider, _auth_kind), do: false

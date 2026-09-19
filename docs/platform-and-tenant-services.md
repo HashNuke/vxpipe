@@ -139,12 +139,12 @@ The user authorized implementation of the full plan on 2026-09-19. Delivery foll
 these vertical slices; each includes the owning tests, documentation and applicable
 browser checks. A checked design task does not count as a delivered slice.
 
-- [ ] **A — Use an inherited provider in a tenant call.** Migrate credential ownership
+- [x] **A — Use an inherited provider in a tenant call.** Migrate credential ownership
   and explicit tenant policies, provision a platform provider through the operator
   boundary, and resolve it through call-spec save/publish/preparation and fresh runtime
   readers. Prove two inheriting tenants, one override, named bindings, disabled/failed
   overrides and transaction-time guards. Preserve existing tenant ciphertext and IDs.
-- [ ] **A2 — Authorize service references by the writing principal.** Add explicit
+- [x] **A2 — Authorize service references by the writing principal.** Add explicit
   principal-aware create/update/publish workflows. Prove operator writes can use
   platform services while tenant writes require tenant ownership, including edits
   to an operator-created spec and transaction-time scope changes. Existing trusted
@@ -153,7 +153,7 @@ browser checks. A checked design task does not count as a delivered slice.
   keys, issue them through a trusted local command, authenticate an explicit operator
   principal, and expose authenticated operator/tenant call-spec writes. Prove no
   tenant-key promotion, rejected/revoked keys, reload and secret-safe responses.
-- [ ] **B1 — Connect an inherited provider in the Console.** Connect the reviewed
+- [x] **B1 — Connect an inherited provider in the Console.** Connect the reviewed
   platform and tenant pages to authenticated APIs. Save and edit a platform service,
   show its effective source/readiness to tenants and reload durable progress. Prove
   CSRF, authority boundaries, no secret disclosure and desktop/mobile behavior.
@@ -175,10 +175,11 @@ Checkpoint design review, 2026-09-19: A establishes the shared policy resolver b
 the operator UI and scoped carrier readers use it; B1/B2 provide the durable management
 surface used by C. C establishes exact verifier/application ownership before D changes
 outgoing URLs. The user's subsequent authoring-authority clarification inserts A2/A3
-before resuming B1: operator API-key issuance is now required for this flow. New AI
+for programmatic writes: operator API-key issuance is now required for this flow. New AI
 adapters remain outside this dependency chain. The detailed acceptance requirements
-below remain authoritative. The partly implemented B1 directory/API work is retained
-while authoring authorization takes priority; no B1 completion is claimed.
+below remain authoritative. A2 is committed; the already-started B1 Console slice
+uses the existing operator browser session while A3 remains the next backend slice.
+No programmatic operator-key support is implied by that Console integration.
 The user's subsequent review/commit instruction requires reviewing and committing
 each runnable checkpoint before starting the next implementation. Unresolved
 verification stays explicit and leaves the acceptance checkbox open. B was split into B1/B2 to keep
@@ -186,13 +187,13 @@ both Console commits runnable and small enough to review independently.
 
 Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provider-inheritance.md).
 
-Checkpoint A implementation details (acceptance still pending the umbrella gate):
+Checkpoint A implementation details:
 
 - Owning application suites, focused transaction integration tests, and disposable
-  database migration/restart checks pass. The latest complete umbrella run has
-  1,733 tests, one Twilio source-recovery failure and 40 exclusions; that scenario
-  passes in isolation. The failure is still under investigation. Format, compile,
-  strict Credo and unused-dependency checks pass.
+  database migration/restart checks pass. The latest complete umbrella run passes
+  1,741 tests with 40 exclusions (`--max-cases 1 --seed 772211`). Earlier runs had
+  intermittent native-media failures; this result does not establish their cause.
+  Format, compile, strict Credo and unused-dependency checks pass.
 - Installation operators can create a named platform binding with
   `POST /admin/api/platform/credentials`, using the existing session and CSRF token.
   Inputs are `provider`, optional `name` (defaults to the provider ID), and `values`.
@@ -210,6 +211,39 @@ Checkpoint A implementation details (acceptance still pending the umbrella gate)
 - The migration does not rewrite tenant IDs or ciphertext. Its down migration works
   for unchanged tenant-only configuration and rejects scoped configuration requiring
   deliberate cutover. Further Telnyx migration and callback acceptance remain in D.
+
+Checkpoint A2 is reviewed and committed as `5a0b407`. Explicit authorized save/publish
+boundaries distinguish installation operators from tenant principals and recheck the
+owner inside final write guards. Persisted tests prove an operator can author a shared
+service reference, tenant edits/publish fail until that tenant supplies the required
+services, and fresh runtime preparation prefers the active tenant configuration.
+Existing tenant-key-only host functions remain trusted host APIs. A3 must expose the
+new authorization boundary through real operator/tenant API-key HTTP writes.
+The persisted positive cases currently cover AI/speech services. Applying the same
+contract to a platform-backed Telnyx caller requires C's scoped carrier bindings.
+
+Checkpoint B1 implementation and browser evidence:
+
+- `/admin/platform/services` saves and edits platform credentials;
+  `/admin/tenants/:tenant_key/setup-services` displays effective source, readiness and
+  exact named bindings. The older tenant service inventory remains available.
+- Operator-session directory endpoints are `GET /admin/api/platform/services` and
+  `GET /admin/api/tenants/:tenant_key/service-bindings`. Platform replacement uses
+  `PATCH /admin/api/platform/credentials/:credential_id` with real CSRF enforcement.
+  Responses contain safe metadata only; credentials remain write-only.
+- Inherited details link to platform management. Tenant override/disable/restore
+  actions follow in B2. Telnyx public-key and webhook configuration follow in C;
+  the production form does not display fields that cannot yet be persisted.
+- Rime credentials can be stored and validated with its authenticated dictionary
+  coverage endpoint. This does not implement a Rime runtime adapter. Voice-sample
+  readiness still uses supported runtime capabilities, not the marketed capability list.
+- Chrome verified desktop/mobile save/edit, rejected-key recovery, two inheriting
+  tenants and reload after server restart with encrypted PostgreSQL storage and a
+  synthetic provider validator. No live upstream validation is claimed. The frontend
+  suite passes 173 tests and the serial umbrella run passes. A final tagged-owner
+  directory correction passed a red-green regression and the full 114-test Calls
+  suite afterward. See the
+  [B1 labnotes](../labnotes/20260919-0715-console-platform-services.md).
 
 ### 1. Storybook review checkpoint
 

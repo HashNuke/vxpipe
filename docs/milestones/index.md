@@ -137,7 +137,10 @@ scope-specific Telnyx webhook URLs. Storybook work precedes the planned storage,
 reader, verification and Console integration checkpoints. Implementation was authorized
 on 2026-09-19 and is tracked as seven runnable vertical checkpoints in that plan,
 including the user's subsequent operator/tenant authoring-authority clarification;
-the inherited-provider execution slice is in progress. This does not change the
+the inherited-provider, principal-aware authoring and Console platform slices pass
+focused tests, browser checks where applicable and the serial umbrella suite;
+operator API-key writes, tenant exception management and scoped carrier routing remain.
+This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 
 After milestone 22 passes its acceptance gates, stop implementation and present the complete

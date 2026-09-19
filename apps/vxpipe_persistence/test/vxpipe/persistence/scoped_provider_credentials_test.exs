@@ -183,6 +183,85 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
     end
   end
 
+  test "operator directory reports exact effective bindings without secret material", data do
+    [tenant, other | _] = data.tenants
+
+    {:ok, platform} =
+      provision(:platform, "shared-model", "shared-directory-secret", data.options)
+
+    {:ok, own} = provision(tenant.key, "shared-model", "own-directory-secret", data.options)
+    {:ok, _foreign} = provision(other.key, "foreign", "foreign-directory-secret", data.options)
+
+    assert {:ok, directory} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert directory.tenant.key == tenant.key
+    assert [binding] = directory.bindings
+    assert binding.name == "shared-model"
+    assert binding.source == :tenant
+    assert binding.policy == :override
+    assert binding.credential_id == own.id
+    assert binding.platform_available
+    assert binding.status == :connected
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "google",
+               "shared-model",
+               :inherit,
+               data.options
+             )
+
+    assert {:ok, inherited} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert [binding] = inherited.bindings
+    assert binding.credential_id == platform.id
+    assert binding.tenant_credential_id == own.id
+    assert binding.source == :platform
+    assert binding.policy == :inherit
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "google",
+               "shared-model",
+               :disabled,
+               data.options
+             )
+
+    assert {:ok, disabled} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert [binding] = disabled.bindings
+    assert binding.status == :disabled
+    assert binding.credential_id == nil
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "google",
+               "missing",
+               :override,
+               data.options
+             )
+
+    assert {:ok, failed} = ProviderCredentialStore.list_bindings(data.context, tenant.key)
+    assert Enum.find(failed.bindings, &(&1.name == "missing")).status == :unavailable
+
+    assert {:ok, platform_directory} =
+             ProviderCredentialStore.list_bindings(data.context, :platform)
+
+    assert platform_directory.tenant == nil
+    assert [%{credential_id: id, policy: :platform}] = platform_directory.bindings
+    assert id == platform.id
+
+    for directory <- [directory, inherited, disabled, failed, platform_directory] do
+      inspected = inspect(directory)
+      refute inspected =~ "directory-secret"
+      refute inspected =~ "encrypted_payload"
+      refute inspected =~ "foreign"
+    end
+
+    assert {:error, :tenant_not_found} =
+             ProviderCredentialStore.list_bindings(data.context, "ZZZZZZZZZZZZZZZZ")
+  end
+
   defp provision(owner, name, secret, options) do
     ProviderCredentials.provision(
       owner,

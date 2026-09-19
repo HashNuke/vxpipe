@@ -326,6 +326,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
       "vertex_ai",
       "zenmux",
       "deepgram",
+      "rime",
       "telnyx",
       "twilio",
     ]) ||

@@ -292,6 +292,15 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
         auth_kind: "api_key",
         inserted_at: ~U[2026-09-17 02:01:00Z],
         updated_at: ~U[2026-09-17 02:01:00Z]
+      },
+      %ProviderCredential{
+        id: "44444444-4444-4444-8444-444444444444",
+        tenant_key: tenant.key,
+        provider: "rime",
+        name: "rime",
+        auth_kind: "api_key",
+        inserted_at: ~U[2026-09-17 02:01:00Z],
+        updated_at: ~U[2026-09-17 02:01:00Z]
       }
     ]
 

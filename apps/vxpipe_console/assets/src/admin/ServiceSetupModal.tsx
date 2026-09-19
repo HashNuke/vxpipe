@@ -38,6 +38,9 @@ export function ServiceSetupModal({
   onOverride,
   onUsePlatform,
   onDisable,
+  onManagePlatform,
+  telephonySetup = true,
+  bindingName,
 }: {
   state: ServiceModalState;
   onClose: () => void;
@@ -46,7 +49,10 @@ export function ServiceSetupModal({
   connections?: SetupConnection[];
   providers?: SetupProvider[];
   scope: SetupServiceScope;
-  publicOrigin: string;
+  publicOrigin?: string;
+  telephonySetup?: boolean;
+  bindingName?: string;
+  onManagePlatform?: () => void;
   platformConnections?: SetupConnection[];
   onOverride?: () => void;
   onUsePlatform?: (provider: SetupProviderId) => void;
@@ -68,7 +74,7 @@ export function ServiceSetupModal({
   );
   const effectiveScope = inherited ? { kind: "platform" as const } : scope;
   const webhook =
-    provider?.id === "telnyx" ? (
+    provider?.id === "telnyx" && publicOrigin && telephonySetup ? (
       <TelnyxWebhookField
         key={telnyxWebhookUrl(publicOrigin, effectiveScope)}
         url={telnyxWebhookUrl(publicOrigin, effectiveScope)}
@@ -122,6 +128,7 @@ export function ServiceSetupModal({
       <div ref={contentRef}>
         {provider ? (
           <>
+            {bindingName ? <p>Binding: {bindingName}</p> : null}
             <div className="setup-tags setup-modal-capabilities">
               {provider.capabilities.map((capability) => (
                 <span key={capability}>{capabilityLabels[capability]}</span>
@@ -146,17 +153,24 @@ export function ServiceSetupModal({
                 </p>
                 {inherited ? webhook : null}
                 <div className="setup-scope-actions">
-                  {disabled && hasPlatform ? (
+                  {disabled && hasPlatform && onUsePlatform ? (
                     <Button onClick={() => onUsePlatform?.(provider.id)}>
                       Use platform service
                     </Button>
                   ) : null}
-                  <Button onClick={onOverride}>
-                    {disabled
-                      ? "Connect for this tenant"
-                      : "Override for this tenant"}
-                  </Button>
-                  {inherited ? (
+                  {onOverride ? (
+                    <Button onClick={onOverride}>
+                      {disabled
+                        ? "Connect for this tenant"
+                        : "Override for this tenant"}
+                    </Button>
+                  ) : null}
+                  {inherited && onManagePlatform ? (
+                    <Button onClick={onManagePlatform}>
+                      Manage platform services
+                    </Button>
+                  ) : null}
+                  {inherited && onDisable ? (
                     <Button
                       variant="ghost"
                       onClick={() => onDisable?.(provider.id)}
@@ -182,7 +196,7 @@ export function ServiceSetupModal({
                 message={state.message}
                 onCancel={onClose}
                 onSubmit={onSubmit}
-                showTelnyxPublicKey
+                showTelnyxPublicKey={telephonySetup}
                 providerLocked
                 showProvider={false}
                 status={state.status}
@@ -195,6 +209,7 @@ export function ServiceSetupModal({
             !inherited &&
             !disabled &&
             hasPlatform &&
+            onUsePlatform &&
             !state.overriding ? (
               <div className="setup-scope-actions setup-restore-platform">
                 <p>

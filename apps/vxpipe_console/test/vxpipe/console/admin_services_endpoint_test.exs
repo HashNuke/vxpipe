@@ -101,6 +101,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
   test "creates supported credentials with CSRF and never echoes or logs secret fields" do
     for {provider, values, expected_kind, expected_payload} <- [
+          {"rime", %{"api_key" => "rime-private"}, "api_key", %{"api_key" => "rime-private"}},
           {"google", %{"api_key" => "google-private"}, "api_key",
            %{"api_key" => "google-private"}},
           {"deepgram", %{"api_key" => "deepgram-private"}, "api_key",
@@ -391,6 +392,90 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert_received {:operator_credential_created,
                      %ProviderCredential{owner: :platform, tenant_key: nil, name: "shared-model"},
                      _payload}
+  end
+
+  test "lists platform and inherited bindings using operator authority" do
+    binding = %{
+      provider: "google",
+      name: "shared-model",
+      policy: :inherit,
+      source: :platform,
+      status: :connected,
+      credential_id: "shared-id",
+      tenant_credential_id: nil,
+      platform_available: true,
+      saved_fields: ["api_key"],
+      last_validated_at: nil
+    }
+
+    configure_credential_repository(
+      {:ok, %{tenant: %{key: @tenant_key, name: "Example tenant"}, bindings: [binding]}}
+    )
+
+    conn =
+      authenticate()
+      |> recycle()
+      |> https_get("/admin/api/tenants/#{@tenant_key}/service-bindings")
+
+    assert %{"bindings" => [%{"source" => "platform", "name" => "shared-model"}]} =
+             json_response(conn, 200)
+
+    assert_received {:operator_bindings_requested, @tenant_key}
+    refute conn.resp_body =~ "payload"
+
+    configure_credential_repository(
+      {:ok, %{tenant: nil, bindings: [%{binding | policy: :platform}]}}
+    )
+
+    conn = authenticate() |> recycle() |> https_get("/admin/api/platform/services")
+
+    assert %{"tenant" => nil, "bindings" => [%{"policy" => "platform"}]} =
+             json_response(conn, 200)
+
+    assert_received {:operator_bindings_requested, :platform}
+    assert https_get("/admin/api/platform/services").status == 401
+    refute_received {:operator_bindings_requested, _}
+  end
+
+  test "platform replacement requires CSRF and preserves exact credential identity" do
+    credential = %ProviderCredential{
+      id: "shared-id",
+      owner: :platform,
+      tenant_key: nil,
+      provider: "google",
+      name: "shared-model",
+      auth_kind: "api_key"
+    }
+
+    configure_credential_repository({:ok, credential})
+    authenticated = authenticate() |> recycle() |> https_get("/admin")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
+
+    conn =
+      authenticated
+      |> recycle()
+      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+
+    body = %{"provider" => "google", "values" => %{"api_key" => "platform-replacement"}}
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      patch(conn, "https://localhost/admin/api/platform/credentials/shared-id", body)
+    end
+
+    refute_received {:operator_credential_replaced, _, _, _, _, _, _}
+
+    updated =
+      conn
+      |> put_req_header("x-csrf-token", csrf)
+      |> patch("https://localhost/admin/api/platform/credentials/shared-id", body)
+
+    assert %{"credential" => %{"id" => "shared-id", "name" => "shared-model"}} =
+             json_response(updated, 200)
+
+    refute updated.resp_body =~ "platform-replacement"
+
+    assert_received {:operator_credential_replaced, :platform, "shared-id", "google", "api_key",
+                     _, _}
   end
 
   defp tenant do

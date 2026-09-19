@@ -18,8 +18,9 @@ platform API-key issuance is complete. The user authorized that implementation o
 2026-09-19. Its [seven runnable delivery checkpoints](../platform-and-tenant-services.md#runnable-delivery-checkpoints)
 cover inherited-provider execution, Console management, scoped incoming Telnyx calls,
 then callback cutover and migration/restart acceptance. The user's authoring-authority
-clarification adds principal-aware writes and operator API keys before Console integration.
-Checkpoint A is implemented with umbrella acceptance open; A2 is in progress;
+clarification adds principal-aware writes and operator API keys for programmatic authoring.
+Checkpoints A/A2/B1 pass focused tests and the serial umbrella suite; B1's operator-session
+Console flow also passes browser/restart inspection. A3 is next;
 the platform-key and demo-bootstrap gates below remain independently tracked.
 
 ## Runnable outcome

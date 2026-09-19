@@ -463,3 +463,26 @@ test("maps a created credential response without accepting private response fiel
     }),
   ).toThrow("Invalid credential response");
 });
+
+test("keeps saved Rime credentials readable in the tenant service inventory", () => {
+  const directory = parseServiceDirectory({
+    tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
+    truncated: false,
+    credentials: [{
+      id: "credential-rime",
+      provider: "rime",
+      name: "rime",
+      auth_kind: "api_key",
+      status: "active",
+      credential_preview: [],
+      last_validated_at: null,
+      created_at: "2026-09-17T02:00:00Z",
+      updated_at: "2026-09-17T02:00:00Z",
+    }],
+    telephony_services: [],
+  });
+
+  expect(directory.services).toEqual([
+    expect.objectContaining({ provider: "rime", name: "Rime" }),
+  ]);
+});

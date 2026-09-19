@@ -5,6 +5,22 @@ defmodule Vxpipe.Console.AdminServicesController do
 
   alias Vxpipe.Calls.InstallationOperator
 
+  def platform_index(conn, _params), do: bindings(conn, :platform)
+  def tenant_bindings(conn, %{"tenant_key" => key}), do: bindings(conn, key)
+
+  defp bindings(conn, scope) do
+    case Vxpipe.Calls.list_operator_service_bindings(InstallationOperator.authority(), scope) do
+      {:ok, directory} ->
+        json(conn, directory)
+
+      {:error, :tenant_not_found} ->
+        conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+
+      {:error, _reason} ->
+        conn |> put_status(503) |> json(%{error: %{code: "service_directory_unavailable"}})
+    end
+  end
+
   def index(conn, %{"tenant_key" => tenant_key}) do
     case Vxpipe.Calls.list_operator_services(InstallationOperator.authority(), tenant_key) do
       {:ok, directory} ->
@@ -72,11 +88,19 @@ defmodule Vxpipe.Console.AdminServicesController do
         conn,
         %{"tenant_key" => tenant_key, "credential_id" => credential_id} = params
       ) do
+    update_credential(conn, tenant_key, credential_id, params)
+  end
+
+  def update_platform(conn, %{"credential_id" => id} = params) do
+    update_credential(conn, :platform, id, params)
+  end
+
+  defp update_credential(conn, owner, credential_id, params) do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
            Vxpipe.Calls.update_validated_operator_credential(
              InstallationOperator.authority(),
-             tenant_key,
+             owner,
              credential_id,
              provider,
              auth_kind,
@@ -112,7 +136,7 @@ defmodule Vxpipe.Console.AdminServicesController do
          "provider" => provider,
          "values" => %{"api_key" => api_key} = values
        })
-       when provider in ["google", "deepgram", "zenmux", "telnyx"] and
+       when provider in ["google", "deepgram", "zenmux", "telnyx", "rime"] and
               map_size(values) == 1 do
     {:ok, provider, "api_key", %{"api_key" => api_key}}
   end

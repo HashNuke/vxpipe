@@ -30,7 +30,7 @@ export function TenantSetupPage({
   onConnect: (provider: SetupProviderId, group: SetupServiceGroup) => void;
   onBrowse: (group: "ai" | "telephony") => void;
   providers?: SetupProvider[];
-  onApiKeys: () => void;
+  onApiKeys?: () => void;
   creating?: boolean;
   unavailable?: boolean;
   onRetry: () => void;
@@ -157,7 +157,7 @@ export function TenantSetupPage({
           </p>
         </section>
       </section>
-      {!platform ? (
+      {!platform && onApiKeys ? (
         <footer className="setup-footer setup-services-footer">
           <Button
             className="setup-primary"

@@ -166,6 +166,25 @@ defmodule Vxpipe.Persistence.ProviderCredentialStore do
   end
 
   @impl true
+  def list_bindings(context, owner) do
+    Vxpipe.Persistence.ProviderServiceDirectory.list(context, owner)
+  rescue
+    error -> repository_error(error, __STACKTRACE__)
+  catch
+    :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
+      {:error, :provider_credentials_unavailable}
+  end
+
+  @doc false
+  def availability(context, stored, tenant_key) do
+    case {stored.status, resolve_payload(context, stored, tenant_key)} do
+      {"active", {:ok, _resolved}} -> :connected
+      {"revoked", _result} -> :invalid
+      _unreadable -> :unavailable
+    end
+  end
+
+  @impl true
   def resolve(context, tenant_key, provider, name) do
     repo = Keyword.fetch!(context, :repo)
 

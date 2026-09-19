@@ -55,6 +55,7 @@ import type {
 } from "./admin/serviceTypes";
 import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
+import { ScopedServicesApp } from "./ScopedServicesApp";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -80,6 +81,8 @@ export function App(props: AppProps) {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/admin/platform/services" element={<ScopedServicesRoute {...props} platform />} />
+        <Route path="/admin/tenants/:tenantKey/setup-services" element={<ScopedServicesRoute {...props} />} />
         <Route path="/admin/onboarding" element={<RoutedApp {...props} route={{ kind: "onboarding" }} />} />
         <Route path="/admin" element={<TenantDirectoryRoute {...props} />} />
         <Route path="/admin/tenants/:tenantKey" element={<TenantWorkspaceRedirect />} />
@@ -90,6 +93,20 @@ export function App(props: AppProps) {
         <Route path="*" element={<Navigate replace to="/admin" />} />
       </Routes>
     </BrowserRouter>
+  );
+}
+
+function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platform?: boolean }) {
+  const { tenantKey = "" } = useParams();
+  const navigate = useNavigate();
+  return (
+    <ScopedServicesApp
+      key={platform ? "platform" : tenantKey}
+      {...props}
+      scope={platform ? { kind: "platform" } : { kind: "tenant", tenantKey, tenantName: "Tenant" }}
+      onNavigate={navigate}
+      headerActions={<SignOut csrfToken={props.csrfToken} />}
+    />
   );
 }
 
@@ -413,7 +430,12 @@ function RoutedApp({
     };
   }, [csrfToken, fetchImpl, navigate, onSessionExpired, route]);
 
-  const headerActions = <SignOut csrfToken={csrfToken} />;
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <a className="text-sm" href="/admin/platform/services">Platform services</a>
+      <SignOut csrfToken={csrfToken} />
+    </div>
+  );
   const workspaceDestinations = ["call-specs", "calls", "services"] as const;
 
   if (route.kind === "onboarding") {
@@ -517,6 +539,7 @@ function RoutedApp({
     return (
       <TenantServicesPage
         headerActions={headerActions}
+        setupHref={`/admin/tenants/${encodeURIComponent(route.tenantKey)}/setup-services`}
         onCreateCredential={(draft) =>
           saveCredential(
             route.tenantKey,

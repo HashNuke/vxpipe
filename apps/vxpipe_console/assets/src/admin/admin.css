@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@vxpipe/react/styles.css";
+@import "./tenantSetup.css";
 @source "./**/*.{ts,tsx}";
 
 html,

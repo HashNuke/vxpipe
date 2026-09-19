@@ -28,6 +28,12 @@ defmodule Vxpipe.Console.Test.OperatorCredentialRepository do
   end
 
   @impl true
+  def list_bindings({owner, result}, scope) do
+    send(owner, {:operator_bindings_requested, scope})
+    result
+  end
+
+  @impl true
   def list(_context, _tenant_key), do: {:error, :not_implemented}
 
   @impl true

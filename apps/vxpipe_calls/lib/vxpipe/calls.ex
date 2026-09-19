@@ -43,6 +43,9 @@ defmodule Vxpipe.Calls do
   def fetch_operator_call(authority, tenant_key, call_id, options \\ []),
     do: OperatorAdministration.fetch_call_context(authority, tenant_key, call_id, options)
 
+  def list_operator_service_bindings(authority, scope, options \\ []),
+    do: Vxpipe.Calls.OperatorServiceBindings.list(authority, scope, options)
+
   def list_operator_services(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_services(authority, tenant_key, options)
 

@@ -27,6 +27,7 @@ export function TenantServicesPage({
   onDismissCredential,
   headerActions,
   workspaceDestinations,
+  setupHref,
 }: {
   state: TenantServicesPageState;
   theme?: "dark" | "light";
@@ -38,6 +39,7 @@ export function TenantServicesPage({
   onDismissCredential?: () => void;
   headerActions?: ReactNode;
   workspaceDestinations?: TenantDestination[];
+  setupHref?: string;
 }) {
   const [open, setOpen] = useState(state.setup.open);
   const [freshAttempt, setFreshAttempt] = useState(false);
@@ -118,6 +120,7 @@ export function TenantServicesPage({
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
+        {setupHref ? <p className="mb-4 text-sm"><a className="underline underline-offset-4" href={setupHref}>Setup services and view platform inheritance</a></p> : null}
         {state.status === "ready" && state.truncated ? (
           <p className="mb-4 text-sm text-[var(--admin-muted)]" role="status">
             Showing a partial inventory. More services are configured for this tenant.

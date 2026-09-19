@@ -58,6 +58,16 @@ defmodule Vxpipe.Console.ProviderCredentialValidator do
      ]}
   end
 
+  defp request("rime", "api_key", %{"api_key" => api_key}) do
+    {:ok,
+     [
+       method: :post,
+       url: "https://users.rime.ai/oov",
+       json: %{text: "hello"},
+       headers: [{"accept", "application/json"}, {"authorization", "Bearer " <> api_key}]
+     ]}
+  end
+
   defp request(
          "twilio",
          "account_sid_auth_token",
@@ -78,8 +88,9 @@ defmodule Vxpipe.Console.ProviderCredentialValidator do
   defp send_request(options, request) do
     options
     |> Keyword.get(:request_options, [])
+    |> Keyword.put(:method, :get)
     |> Keyword.merge(request)
-    |> Keyword.merge(method: :get, retry: false, redirect: false, receive_timeout: 10_000)
+    |> Keyword.merge(retry: false, redirect: false, receive_timeout: 10_000)
     |> Req.request()
   end
 

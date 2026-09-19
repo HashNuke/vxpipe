@@ -99,6 +99,12 @@ defmodule Vxpipe.Console.Router do
 
     get "/session", Vxpipe.Console.AdminSessionController, :show
     post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform
+    get "/platform/services", Vxpipe.Console.AdminServicesController, :platform_index
+
+    patch "/platform/credentials/:credential_id",
+          Vxpipe.Console.AdminServicesController,
+          :update_platform
+
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant
 
     post "/onboarding/demo-tenant/samples",
@@ -110,6 +116,11 @@ defmodule Vxpipe.Console.Router do
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
     get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
+
+    get "/tenants/:tenant_key/service-bindings",
+        Vxpipe.Console.AdminServicesController,
+        :tenant_bindings
+
     post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create
 
     patch "/tenants/:tenant_key/credentials/:credential_id",

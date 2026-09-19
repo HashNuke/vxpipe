@@ -37,6 +37,23 @@ defmodule Vxpipe.Console.ProviderCredentialValidatorTest do
     end
   end
 
+  test "checks Rime authentication using dictionary coverage without synthesizing audio" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert conn.method == "POST"
+      assert conn.host == "users.rime.ai"
+      assert conn.request_path == "/oov"
+      assert get_req_header(conn, "authorization") == ["Bearer rime-example"]
+      {:ok, body, conn} = read_body(conn)
+      assert JSON.decode!(body) == %{"text" => "hello"}
+      Req.Test.json(conn, [])
+    end)
+
+    assert :ok =
+             ProviderCredentialValidator.validate(options(), "rime", "api_key", %{
+               "api_key" => "rime-example"
+             })
+  end
+
   test "distinguishes rejected credentials from temporary provider failure" do
     Req.Test.expect(__MODULE__, fn conn ->
       conn |> put_status(401) |> Req.Test.json(%{error: "do not expose this body"})
