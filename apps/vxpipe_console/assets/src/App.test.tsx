@@ -190,13 +190,20 @@ test("starts the Demo onboarding flow when the installation has no tenants", asy
         },
       });
     }
-    return response(serviceDirectory("DEMOabcdefgh1234", false));
+    return response({
+      tenant: { key: "DEMOabcdefgh1234", name: "Demo" },
+      bindings: [],
+    });
   });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByRole("heading", { name: "Demo tenant is ready" })).toBeVisible();
-  expect(screen.getByRole("heading", { name: "Connect your services" })).toBeVisible();
+  expect(
+    await screen.findByRole("heading", { name: "Demo tenant is ready" }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Connect your services" }),
+  ).toBeVisible();
   expect(window.location.pathname).toBe("/admin/onboarding");
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/onboarding/demo-tenant", {
     method: "POST",

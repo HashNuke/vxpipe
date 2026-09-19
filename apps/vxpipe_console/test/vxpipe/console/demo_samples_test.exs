@@ -57,9 +57,9 @@ defmodule Vxpipe.Console.DemoSamplesTest do
              DemoSamples.install(
                InstallationOperator.authority(),
                tenant.key,
-               admin_repository: {
-                 Vxpipe.Console.Test.AdminRepository,
-                 {self(), {:ok, {tenant, [], [], false}}}
+               provider_credential_repository: {
+                 Vxpipe.Console.Test.OperatorCredentialRepository,
+                 {self(), {:ok, %{tenant: %{key: tenant.key, name: tenant.name}, bindings: []}}}
                }
              )
   end
@@ -119,6 +119,105 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     assert {:ok, page} = Vxpipe.Calls.list_operator_call_specs(authority, tenant.key, options)
     assert page.total == 3
     assert Enum.all?(page.call_specs, &(&1.latest_revision == 1))
+  end
+
+  test "installs with inherited exact bindings and refuses a disabled tenant override" do
+    {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
+
+    options = [
+      credential_repository: {CredentialStore, Repo},
+      provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
+      call_spec_repository: {CallSpecStore, Repo},
+      admin_repository: {AdminStore, Repo}
+    ]
+
+    assert {:ok, tenant, _} = Administration.bootstrap_tenant("Inherited demo", [:admin], options)
+
+    for provider <- ["google", "deepgram"] do
+      assert {:ok, _} =
+               ProviderCredentials.provision(
+                 :platform,
+                 provider,
+                 provider,
+                 "api_key",
+                 %{"api_key" => "synthetic-platform"},
+                 options
+               )
+    end
+
+    authority = InstallationOperator.authority()
+    assert {:ok, installed} = DemoSamples.install(authority, tenant.key, options)
+    assert Enum.map(installed, &{&1.id, &1.status, &1.revision}) == expected_installations()
+
+    assert :ok =
+             ProviderCredentials.set_policy(
+               tenant.key,
+               "deepgram",
+               "deepgram",
+               :disabled,
+               options
+             )
+
+    assert {:error, :sample_prerequisites_missing} =
+             DemoSamples.install(authority, tenant.key, options)
+
+    assert :ok =
+             ProviderCredentials.set_policy(tenant.key, "deepgram", "deepgram", :inherit, options)
+
+    assert {:ok, resumed} = DemoSamples.install(authority, tenant.key, options)
+    assert Enum.map(resumed, &{&1.id, &1.status, &1.revision}) == expected_installations()
+
+    [entry | _] = DemoSamples.catalog("google")
+    edited = Map.put(entry.source, :name, "Operator's customized sample")
+
+    assert {:ok, %{revision: 2}} =
+             Vxpipe.Calls.save_call_spec(
+               tenant.key,
+               edited,
+               Keyword.put(options, :call_spec_id, entry.id)
+             )
+
+    assert {:ok, [conflict | _]} = DemoSamples.install(authority, tenant.key, options)
+    assert conflict.status == :conflict
+    assert {:ok, page} = Vxpipe.Calls.list_operator_call_specs(authority, tenant.key, options)
+    customized = Enum.find(page.call_specs, &(&1.id == entry.id))
+    assert customized.latest_revision == 2
+    assert customized.published_revision == 1
+  end
+
+  test "alternate credential names do not satisfy the fixed sample bindings" do
+    {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
+
+    options = [
+      credential_repository: {CredentialStore, Repo},
+      provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
+      call_spec_repository: {CallSpecStore, Repo},
+      admin_repository: {AdminStore, Repo}
+    ]
+
+    assert {:ok, tenant, _} = Administration.bootstrap_tenant("Named demo", [:admin], options)
+
+    for provider <- ["google", "deepgram"] do
+      assert {:ok, _} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 provider,
+                 "alternate",
+                 "api_key",
+                 %{"api_key" => "synthetic-named"},
+                 options
+               )
+    end
+
+    assert {:error, :sample_prerequisites_missing} =
+             DemoSamples.install(InstallationOperator.authority(), tenant.key, options)
+
+    assert {:ok, %{total: 0}} =
+             Vxpipe.Calls.list_operator_call_specs(
+               InstallationOperator.authority(),
+               tenant.key,
+               options
+             )
   end
 
   defp expected_installations do

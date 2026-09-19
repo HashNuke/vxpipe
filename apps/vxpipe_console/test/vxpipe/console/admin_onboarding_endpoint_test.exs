@@ -91,8 +91,9 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     }
 
     put_calls_repository(
-      :admin_repository,
-      {Vxpipe.Console.Test.AdminRepository, {self(), {:ok, {tenant, [], [], false}}}}
+      :provider_credential_repository,
+      {Vxpipe.Console.Test.OperatorCredentialRepository,
+       {self(), {:ok, %{tenant: %{key: tenant.key, name: tenant.name}, bindings: []}}}}
     )
 
     configure_demo_repository({:ok, tenant})

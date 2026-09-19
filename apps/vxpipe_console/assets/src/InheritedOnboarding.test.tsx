@@ -1,0 +1,132 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+import { App } from "./App";
+
+const tenant = {
+  key: "AAAAAAAAAAAAAAAA",
+  name: "Demo",
+  created_at: "2026-09-19T01:00:00Z",
+};
+const binding = (provider: string, policy = "inherit", name = provider) => ({
+  provider,
+  name,
+  policy,
+  source: policy === "inherit" ? "platform" : "tenant",
+  status: policy === "disabled" ? "disabled" : "connected",
+  credential_id: policy === "disabled" ? null : `${provider}-id`,
+  tenant_credential_id: null,
+  platform_available: true,
+  saved_fields: [],
+  last_validated_at: null,
+});
+
+const response = (body: unknown, status = 200) =>
+  Promise.resolve(new Response(JSON.stringify(body), { status }));
+
+afterEach(() => {
+  cleanup();
+  window.history.replaceState({}, "", "/admin");
+});
+
+test("a disabled optional service does not block sample readiness or progress", async () => {
+  window.history.replaceState({}, "", "/admin/onboarding");
+  const fetchImpl = vi.fn((url: RequestInfo | URL) =>
+    url === "/admin/api/onboarding/demo-tenant"
+      ? response({ tenant })
+      : response({
+          tenant,
+          bindings: [
+            binding("google"),
+            binding("deepgram"),
+            binding("telnyx", "disabled"),
+          ],
+        }),
+  );
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  expect(
+    await screen.findByRole("button", { name: "Load sample call specs" }),
+  ).toBeEnabled();
+  expect(
+    within(screen.getByRole("list", { name: "Setup progress" })).getByText(
+      "Validated",
+    ),
+  ).toBeVisible();
+});
+
+test("retries a failed effective directory read without treating it as empty setup", async () => {
+  window.history.replaceState({}, "", "/admin/onboarding");
+  let available = false;
+  const fetchImpl = vi.fn((url: RequestInfo | URL) => {
+    if (url === "/admin/api/onboarding/demo-tenant")
+      return response({ tenant });
+    return available
+      ? response({ tenant, bindings: [binding("google"), binding("deepgram")] })
+      : response({}, 503);
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  expect(await screen.findByRole("alert")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Load sample call specs" }),
+  ).not.toBeInTheDocument();
+  available = true;
+  fireEvent.click(screen.getByRole("button", { name: "Retry setup" }));
+  expect(
+    await screen.findByRole("button", { name: "Load sample call specs" }),
+  ).toBeEnabled();
+  expect(screen.getAllByText("Inherited from platform")).toHaveLength(2);
+});
+
+test("onboarding counts inherited services and opens scoped management without asking for platform secrets", async () => {
+  window.history.replaceState({}, "", "/admin/onboarding");
+  const fetchImpl = vi.fn((url: RequestInfo | URL) => {
+    if (url === "/admin/api/onboarding/demo-tenant")
+      return response({ tenant });
+    if (String(url).endsWith("/service-bindings"))
+      return response({
+        tenant,
+        bindings: [binding("google"), binding("deepgram")],
+      });
+    return response({}, 404);
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  expect(
+    await screen.findByRole("button", { name: "Load sample call specs" }),
+  ).toBeEnabled();
+  expect(screen.getAllByText("Inherited from platform")).toHaveLength(2);
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Manage services" }));
+  expect(
+    await screen.findByRole("heading", { name: "Setup services" }),
+  ).toBeVisible();
+  expect(window.location.pathname).toBe(
+    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
+  );
+});
+
+test("disabled and alternate named bindings cannot make onboarding samples ready", async () => {
+  window.history.replaceState({}, "", "/admin/onboarding");
+  const fetchImpl = vi.fn((url: RequestInfo | URL) =>
+    url === "/admin/api/onboarding/demo-tenant"
+      ? response({ tenant })
+      : response({
+          tenant,
+          bindings: [
+            binding("google"),
+            binding("deepgram", "disabled"),
+            binding("deepgram", "inherit", "another-speech"),
+          ],
+        }),
+  );
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  expect(await screen.findByText("Disabled for this tenant")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Load sample call specs" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Manage services" })).toBeEnabled();
+});

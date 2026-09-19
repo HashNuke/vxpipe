@@ -56,6 +56,7 @@ import type {
 import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
 import { ScopedServicesApp } from "./ScopedServicesApp";
+import { parseBindingDirectory } from "./admin/serviceBindingsApi";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -170,6 +171,7 @@ function RoutedApp({
     providers: [],
     samples: { status: "blocked", items: onboardingSamples },
   });
+  const [onboardingReload, setOnboardingReload] = useState(0);
   const [callSpecs, setCallSpecs] = useState<TenantCallSpecsPageState>(() => ({
     status: "loading",
     tenant:
@@ -428,7 +430,14 @@ function RoutedApp({
         callDetailsControllerRef.current = undefined;
       }
     };
-  }, [csrfToken, fetchImpl, navigate, onSessionExpired, route]);
+  }, [
+    csrfToken,
+    fetchImpl,
+    navigate,
+    onSessionExpired,
+    route,
+    onboardingReload,
+  ]);
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
@@ -441,6 +450,7 @@ function RoutedApp({
   if (route.kind === "onboarding") {
     return (
       <OnboardingPage
+        onRetry={() => setOnboardingReload((version) => version + 1)}
         onInstallSamples={() =>
           installOnboardingSamples(
             onboarding,
@@ -450,26 +460,15 @@ function RoutedApp({
             setOnboarding,
           )
         }
-        onSelectProviders={(providers) =>
-          setOnboarding((state) => ({
-            ...state,
-            providers: providers.flatMap((provider) =>
-              provider === "vertex_ai"
-                ? []
-                : [onboardingProvider(provider, "needs_credentials")],
-            ),
-            samples: { status: "blocked", items: onboardingSamples },
-          }))
-        }
-        onSubmitCredential={(draft) =>
-          saveOnboardingCredential(
-            onboarding,
-            draft,
-            csrfToken,
-            fetchImpl,
-            onSessionExpired,
-            setOnboarding,
-          )
+        onManageServices={
+          onboarding.tenant.status === "ready"
+            ? () => {
+                if (onboarding.tenant.status === "ready")
+                  routerNavigate(
+                    `/admin/tenants/${encodeURIComponent(onboarding.tenant.key)}/setup-services`,
+                  );
+              }
+            : undefined
         }
         state={onboarding}
       />
@@ -669,7 +668,7 @@ async function loadOnboarding(
   const tenant = parseDemoTenant(await tenantResponse.json());
 
   const serviceResponse = await fetchImpl(
-    `/admin/api/tenants/${encodeURIComponent(tenant.key)}/services`,
+    `/admin/api/tenants/${encodeURIComponent(tenant.key)}/service-bindings`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -679,16 +678,28 @@ async function loadOnboarding(
     return;
   }
   if (!serviceResponse.ok) throw new Error("Demo tenant services unavailable");
-  const directory = parseServiceDirectory(await serviceResponse.json());
-  if (directory.tenant.key !== tenant.key) throw new Error("Unexpected demo tenant response");
+  const directory = parseBindingDirectory(await serviceResponse.json(), {
+    kind: "tenant",
+    tenantKey: tenant.key,
+    tenantName: tenant.name,
+  });
 
-  const providers = directory.services.flatMap((service) =>
-    service.provider === "vertex_ai"
+  const providers = directory.bindings.flatMap((service) =>
+    service.provider === "vertex_ai" || service.name !== service.provider
       ? []
       : [
-          onboardingProvider(service.provider, "valid", {
-            lastValidatedAt: service.lastValidatedAt,
-          }),
+          onboardingProvider(
+            service.provider,
+            service.status === "connected" ? "valid" : service.status,
+            {
+              lastValidatedAt: service.lastValidatedAt,
+              source: service.source,
+              message:
+                service.status === "unavailable"
+                  ? "Service unavailable. Open Manage services to check its configuration."
+                  : undefined,
+            },
+          ),
         ],
   );
 
@@ -702,90 +713,6 @@ async function loadOnboarding(
   };
 }
 
-async function saveOnboardingCredential(
-  current: OnboardingPageState,
-  draft: CredentialDraft,
-  csrfToken: string,
-  fetchImpl: Fetch,
-  onSessionExpired: () => void,
-  setOnboarding: Dispatch<SetStateAction<OnboardingPageState>>,
-) {
-  if (current.tenant.status !== "ready") return;
-
-  setOnboarding((state) => ({
-    ...state,
-    providers: state.providers.map((provider) =>
-      provider.provider === draft.provider
-        ? { ...provider, status: "validating", message: undefined }
-        : provider,
-    ),
-  }));
-
-  try {
-    const response = await fetchImpl(
-      `/admin/api/tenants/${encodeURIComponent(current.tenant.key)}/credentials`,
-      {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "x-csrf-token": csrfToken,
-        },
-        body: JSON.stringify(credentialRequest(draft)),
-      },
-    );
-
-    if (response.status === 401) {
-      onSessionExpired();
-      return;
-    }
-
-    if (response.status === 422) {
-      setOnboardingProviderFailure(
-        setOnboarding,
-        draft.provider,
-        "invalid",
-        "The provider rejected these credentials. Check them and try again.",
-      );
-      return;
-    }
-
-    if (!response.ok) throw new Error("Credential validation unavailable");
-    const stored = parseCreatedCredential(await response.json());
-
-    setOnboarding((state) => {
-      const providers = state.providers.map((provider) =>
-        provider.provider === draft.provider
-          ? {
-              ...provider,
-              status: "valid" as const,
-              lastValidatedAt: stored.lastValidatedAt,
-              message: undefined,
-            }
-          : provider,
-      );
-
-      return {
-        ...state,
-        providers,
-        samples: {
-          ...state.samples,
-          status: samplePrerequisitesMet(providers)
-            ? "ready"
-            : "blocked",
-        },
-      };
-    });
-  } catch {
-    setOnboardingProviderFailure(
-      setOnboarding,
-      draft.provider,
-      "unavailable",
-      "Credential validation is temporarily unavailable. Try again.",
-    );
-  }
-}
-
 function samplePrerequisitesMet(providers: OnboardingPageState["providers"]) {
   const valid = new Set(
     providers
@@ -793,21 +720,6 @@ function samplePrerequisitesMet(providers: OnboardingPageState["providers"]) {
       .map((provider) => provider.provider),
   );
   return valid.has("deepgram") && (valid.has("google") || valid.has("zenmux"));
-}
-
-function setOnboardingProviderFailure(
-  setOnboarding: Dispatch<SetStateAction<OnboardingPageState>>,
-  selectedProvider: CredentialDraft["provider"],
-  status: "invalid" | "unavailable",
-  message: string,
-) {
-  setOnboarding((state) => ({
-    ...state,
-    providers: state.providers.map((provider) =>
-      provider.provider === selectedProvider ? { ...provider, status, message } : provider,
-    ),
-    samples: { ...state.samples, status: "blocked" },
-  }));
 }
 
 async function installOnboardingSamples(

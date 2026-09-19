@@ -2,8 +2,11 @@
 
 The [platform and tenant services follow-up](platform-and-tenant-services.md) records
 the 2026-09-19 scope decision, Storybook changes and backend implementation sequence.
-It supersedes tenant-only credential ownership where explicitly stated; production
-inheritance and the new scoped webhook routes remain planned.
+It supersedes tenant-only credential ownership where explicitly stated. Production
+AI/speech inheritance and scoped Console management are implemented; the new scoped
+Telnyx webhook routes remain planned. The older Demo onboarding entry now reads
+effective services and opens the scoped setup page for credential changes. This does
+not claim production integration of the full three-step recipe flow below.
 
 Decision: 2026-09-18. The user approved this direction for Storybook review.
 Production integration of the revised flow is a separate checkpoint.

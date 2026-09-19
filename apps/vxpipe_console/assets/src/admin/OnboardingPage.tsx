@@ -57,17 +57,25 @@ export function OnboardingPage({
   onInstallSamples,
   onSelectProviders,
   onSubmitCredential,
+  onManageServices,
+  onRetry,
 }: {
   state: OnboardingPageState;
   theme?: "dark" | "light";
   onInstallSamples: () => void;
-  onSelectProviders: (providers: ServiceProvider[]) => void;
-  onSubmitCredential: OnboardingCredentialSubmit;
+  onSelectProviders?: (providers: ServiceProvider[]) => void;
+  onSubmitCredential?: OnboardingCredentialSubmit;
+  onManageServices?: () => void;
+  onRetry?: () => void;
 }) {
-  const [selectedProviders, setSelectedProviders] = useState<ServiceProvider[]>([]);
+  const [selectedProviders, setSelectedProviders] = useState<ServiceProvider[]>(
+    [],
+  );
   const tenantReady = state.tenant.status === "ready";
-  const providersValid =
-    state.providers.length > 0 && state.providers.every((provider) => provider.status === "valid");
+  const providersValid = onManageServices
+    ? state.samples.status !== "blocked"
+    : state.providers.length > 0 &&
+      state.providers.every((provider) => provider.status === "valid");
 
   return (
     <AdminShell breadcrumbs={[{ label: "Getting started" }]} theme={theme}>
@@ -108,7 +116,7 @@ export function OnboardingPage({
         </ol>
 
         <div className="overflow-hidden rounded-sm border border-[var(--admin-line)] bg-[var(--admin-panel)]">
-          <TenantSection tenant={state.tenant} />
+          <TenantSection tenant={state.tenant} onRetry={onRetry} />
 
           {tenantReady ? (
             <section aria-labelledby="services-heading" className="border-t border-[var(--admin-line)] p-4 sm:p-6">
@@ -119,7 +127,12 @@ export function OnboardingPage({
                 </p>
               </div>
 
-              {state.providers.length === 0 ? (
+              {onManageServices ? (
+                <div className="mb-5">
+                  <Button onClick={onManageServices}>Manage services</Button>
+                </div>
+              ) : null}
+              {state.providers.length === 0 && onSelectProviders ? (
                 <ProviderSelection
                   onChange={setSelectedProviders}
                   onContinue={() => onSelectProviders(selectedProviders)}
@@ -131,6 +144,7 @@ export function OnboardingPage({
                     <ProviderSetup
                       key={provider.provider}
                       onSubmit={onSubmitCredential}
+                      managed={Boolean(onManageServices)}
                       provider={provider}
                     />
                   ))}
@@ -176,7 +190,13 @@ function ProgressStep({
   );
 }
 
-function TenantSection({ tenant }: { tenant: OnboardingPageState["tenant"] }) {
+function TenantSection({
+  tenant,
+  onRetry,
+}: {
+  tenant: OnboardingPageState["tenant"];
+  onRetry?: () => void;
+}) {
   if (tenant.status === "creating") {
     return (
       <section aria-labelledby="tenant-heading" className="p-4 sm:p-6">
@@ -203,8 +223,17 @@ function TenantSection({ tenant }: { tenant: OnboardingPageState["tenant"] }) {
         <div className="flex items-start gap-3" role="alert">
           <AlertTriangle aria-hidden="true" className="mt-0.5 text-[var(--admin-red)]" size={20} />
           <div>
-            <h2 className="text-lg font-bold" id="tenant-heading">Demo tenant could not be prepared</h2>
-            <p className="mt-1 text-sm text-[var(--admin-muted)]">{tenant.message}</p>
+            <h2 className="text-lg font-bold" id="tenant-heading">
+              Demo tenant could not be prepared
+            </h2>
+            <p className="mt-1 text-sm text-[var(--admin-muted)]">
+              {tenant.message}
+            </p>
+            {onRetry ? (
+              <Button className="mt-4" onClick={onRetry}>
+                Retry setup
+              </Button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -292,9 +321,11 @@ function ProviderSelection({
 function ProviderSetup({
   provider,
   onSubmit,
+  managed = false,
 }: {
   provider: OnboardingPageState["providers"][number];
-  onSubmit: OnboardingCredentialSubmit;
+  onSubmit?: OnboardingCredentialSubmit;
+  managed?: boolean;
 }) {
   const validatedAt = provider.lastValidatedAt ?? null;
   return (
@@ -303,6 +334,21 @@ function ProviderSetup({
         <ServiceLogo name={provider.label} provider={provider.provider} />
         <div>
           <h3 className="text-sm font-semibold">{provider.label}</h3>
+          {provider.source === "platform" ? (
+            <p className="mt-2 text-sm text-[var(--admin-muted)]">
+              Inherited from platform
+            </p>
+          ) : null}
+          {provider.status === "disabled" ? (
+            <p className="mt-2 text-sm text-[var(--admin-muted)]">
+              Disabled for this tenant
+            </p>
+          ) : null}
+          {managed && provider.status === "invalid" ? (
+            <p className="mt-2 text-sm text-[var(--admin-red)]">
+              Credentials need attention. Open Manage services to update them.
+            </p>
+          ) : null}
           <p className="mt-1 flex flex-wrap gap-x-2 text-xs text-[var(--admin-muted)]">
             {provider.services.map((service) => (
               <span key={service}>{service}</span>
@@ -325,7 +371,10 @@ function ProviderSetup({
           ) : null}
         </div>
       </div>
-      {provider.status === "needs_credentials" || provider.status === "invalid" ? (
+      {!managed &&
+      onSubmit &&
+      (provider.status === "needs_credentials" ||
+        provider.status === "invalid") ? (
         <ServiceCredentialForm
           initialProvider={provider.provider}
           message={provider.status === "invalid" ? provider.message : undefined}
@@ -361,7 +410,9 @@ function SampleSection({
         {samples.status === "ready" || samples.status === "error" ? (
           <Button onClick={onInstall}>Load sample call specs</Button>
         ) : null}
-        {samples.status === "loading" ? <Button disabled>Loading samples…</Button> : null}
+        {samples.status === "loading" ? (
+          <Button disabled>Loading samples…</Button>
+        ) : null}
       </div>
 
       {samples.status === "blocked" ? (

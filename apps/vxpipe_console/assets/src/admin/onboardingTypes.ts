@@ -5,6 +5,7 @@ export type OnboardingProviderStatus =
   | "validating"
   | "valid"
   | "invalid"
+  | "disabled"
   | "unavailable";
 
 export type OnboardingProvider = {
@@ -14,6 +15,7 @@ export type OnboardingProvider = {
   status: OnboardingProviderStatus;
   lastValidatedAt?: string | null;
   message?: string;
+  source?: "platform" | "tenant";
 };
 
 export type OnboardingSample = {

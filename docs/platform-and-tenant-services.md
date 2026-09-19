@@ -2,8 +2,9 @@
 
 Status: implementation authorized 2026-09-19. Storybook prototype implemented and
 verified; A, A2, A3 and B1 are delivered. B2, B3, C and D remain.
-B2's Console policy controls pass focused tests and browser/restart checks. Its
-umbrella acceptance remains open after a native WebRTC audio failure.
+B2's Console policy controls and B3's effective-service onboarding pass focused
+tests and browser/restart checks. Their umbrella acceptance remains open after
+native WebRTC handoff failures.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -184,7 +185,8 @@ outgoing URLs. The user's subsequent authoring-authority clarification inserts A
 for programmatic writes: operator API-key issuance is now required for this flow. New AI
 adapters remain outside this dependency chain. The detailed acceptance requirements
 below remain authoritative. A2/A3 provide programmatic authoring while B1 uses the
-separate operator browser session. B2 is the next Console slice.
+separate operator browser session. B2's implementation is committed; B3 connects the
+remaining onboarding consumers before carrier work.
 The user's subsequent review/commit instruction requires reviewing and committing
 each runnable checkpoint before starting the next implementation. Unresolved
 verification stays explicit and leaves the acceptance checkbox open. B was split into B1/B2 to keep
@@ -293,6 +295,30 @@ Checkpoint B2 implementation (umbrella acceptance open):
   ordering. The cause remains unresolved; B2's acceptance checkbox stays open.
   See the
   [B2 labnotes](../labnotes/20260919-0840-tenant-service-exceptions.md).
+
+Checkpoint B3 implementation (umbrella acceptance open):
+
+- Demo onboarding and the sample installer read the same effective directory as
+  scoped setup. Only connected exact primary names satisfy the fixed sample bindings;
+  alternate names and disabled/failed overrides do not borrow platform readiness.
+- The production onboarding entry labels inherited/disabled services and sends edits
+  to the scoped services page. It never asks for inherited credentials. Directory
+  failures remain unavailable and offer Retry setup; optional disabled providers do
+  not invalidate usable sample prerequisites.
+- Focused tests cover inherited publication, disable/restore, idempotent installation
+  and preservation of an edited sample's draft and earlier publication. Frontend
+  tests cover the effective-directory boundary, source labels, scoped navigation,
+  optional services and recovery. All 181 frontend tests, TypeScript, ESLint, assets
+  and root static checks pass. The umbrella run completed 1,759 tests, one failure,
+  40 exclusions: the unchanged native `after_speech_adoption` handoff test timed out
+  waiting for preparation progress. All 180 Console tests passed; acceptance stays open.
+- Chrome at 1440×1000 and 390×844 verified inherited readiness, sample installation,
+  disabling/restoring speech, scoped management and retry after a failed directory
+  read. A fresh server process retained the same Demo tenant, inherited credentials
+  and all three revision-1 publications. Reinstalling remains idempotent; the older
+  entry's sample labels are refreshed by the explicit install action, while service
+  readiness is read on page load. No live provider request was made.
+  See [B3 labnotes](../labnotes/20260919-0905-inherited-demo-onboarding.md).
 
 ### 1. Storybook review checkpoint
 

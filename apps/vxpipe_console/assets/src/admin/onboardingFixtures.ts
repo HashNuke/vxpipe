@@ -25,7 +25,10 @@ const providerDetails: Record<
 export function onboardingProvider(
   provider: Exclude<ServiceProvider, "vertex_ai">,
   status: OnboardingProvider["status"],
-  options: Pick<OnboardingProvider, "lastValidatedAt" | "message"> = {},
+  options: Pick<
+    OnboardingProvider,
+    "lastValidatedAt" | "message" | "source"
+  > = {},
 ): OnboardingProvider {
   return { provider, status, ...providerDetails[provider], ...options };
 }

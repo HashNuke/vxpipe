@@ -7,6 +7,7 @@ export type ServiceBinding = SetupConnection & {
   credentialId: string | null;
   tenantCredentialId: string | null;
   platformAvailable: boolean;
+  lastValidatedAt: string | null;
 };
 export type BindingDirectory = {
   tenant: { key: string; name: string } | null;
@@ -94,6 +95,7 @@ export function parseBindingDirectory(
       credentialId: item.credential_id as string | null,
       tenantCredentialId: item.tenant_credential_id as string | null,
       platformAvailable: item.platform_available,
+      lastValidatedAt: item.last_validated_at as string | null,
       telephonyPublicKeyConfigured: item.saved_fields.includes("public_key"),
       savedFields: item.saved_fields.map(
         (field) => credentialFields[field as keyof typeof credentialFields],

@@ -24,8 +24,10 @@ Console flow also passes browser/restart inspection. B2's tenant policy implemen
 passes owning suites and browser/restart checks, but umbrella acceptance remains open
 after a native multi-listener WebRTC audio failure;
 the platform-key and demo-bootstrap gates below remain independently tracked.
-B3 separately connects the older onboarding/sample installer to effective services;
-its current tenant-only inventory does not yet support platform inheritance.
+B3 connects the older onboarding/sample installer to effective services. Its focused
+inherited-installation, exact-name, disable/restore and edited-sample checks pass,
+along with Chrome/restart verification. The combined 1,759-test run passed all 180
+Console tests but failed one native WebRTC preparation case; umbrella acceptance stays open.
 The two A3 steps implement trusted key bootstrap/replacement/revocation, authenticated
 platform status and operator/tenant call-spec HTTP writes. Persisted lifecycle tests,
 real HTTP/restart checks and the 1,754-test combined umbrella run pass. See the

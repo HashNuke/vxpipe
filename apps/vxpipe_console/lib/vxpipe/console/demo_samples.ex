@@ -75,8 +75,9 @@ defmodule Vxpipe.Console.DemoSamples do
     do: {:error, :installation_operator_required}
 
   defp install_locked(authority, tenant_key, options) do
-    with {:ok, directory} <- Vxpipe.Calls.list_operator_services(authority, tenant_key, options),
-         {:ok, model_provider} <- sample_providers(directory.credentials),
+    with {:ok, directory} <-
+           Vxpipe.Calls.list_operator_service_bindings(authority, tenant_key, options),
+         {:ok, model_provider} <- sample_providers(directory.bindings),
          {:ok, page} <-
            Vxpipe.Calls.list_operator_call_specs(
              authority,
@@ -144,10 +145,10 @@ defmodule Vxpipe.Console.DemoSamples do
     %{id: entry.id, name: entry.name, status: :failed, reason: reason}
   end
 
-  defp sample_providers(credentials) do
+  defp sample_providers(bindings) do
     active =
-      credentials
-      |> Enum.filter(&(&1.status == :active))
+      bindings
+      |> Enum.filter(&(&1.status == :connected and &1.name == &1.provider))
       |> MapSet.new(& &1.provider)
 
     cond do
