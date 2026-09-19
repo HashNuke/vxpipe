@@ -53,6 +53,18 @@ defmodule Vxpipe.Calls.TelephonyServices do
     end
   end
 
+  def fetch_telnyx_application(application_id, options \\ [])
+
+  def fetch_telnyx_application(application_id, options)
+      when is_binary(application_id) and byte_size(application_id) in 1..128 do
+    with {:ok, repository} <- Repositories.fetch(options, :telephony_service_repository) do
+      Repositories.call(repository, :fetch_telnyx_application, [application_id])
+    end
+  end
+
+  def fetch_telnyx_application(_application_id, _options),
+    do: {:error, :telephony_service_not_found}
+
   def resolve(tenant_key, name, options \\ []) do
     with :ok <- ProviderAuth.tenant_key(tenant_key),
          :ok <- TelephonyService.identifier(name),

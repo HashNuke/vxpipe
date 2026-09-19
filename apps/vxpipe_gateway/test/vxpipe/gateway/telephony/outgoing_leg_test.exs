@@ -103,6 +103,41 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert binding.provider_call_session_id == nil
   end
 
+  test "a scoped outgoing owner remains discoverable by provider leg without client state",
+       context do
+    original = service(self(), [])
+
+    reference = %{
+      original.identity.service_reference
+      | credential_owner: :platform,
+        credential_name: "telnyx"
+    }
+
+    service = %{original | identity: %{original.identity | service_reference: reference}}
+    request = %{request() | service_reference: reference}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service,
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+
+    body =
+      JSON.encode!(%{
+        data: %{
+          payload: %{connection_id: "voice-application-1", call_leg_id: "outbound-call-leg"}
+        }
+      })
+
+    assert {:ok, ^service, {:outgoing, ^leg}} =
+             Vxpipe.Gateway.Telephony.WebhookService.scoped_telnyx_owner(:platform, body)
+  end
+
   test "rejects an inbound-only service before submitting a dial", context do
     service = service(self(), outbound_number: nil)
 

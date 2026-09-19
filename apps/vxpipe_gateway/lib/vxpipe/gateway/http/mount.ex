@@ -2,8 +2,9 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
   @moduledoc """
   Composes the gateway's HTTP routes into another Plug pipeline.
 
-  The mount claims the gateway health route and API namespace, then delegates to
-  `Vxpipe.Gateway.HTTP.Endpoint`. Other paths continue through the host pipeline.
+  The mount claims the gateway health route, API namespace and scoped Telnyx webhooks,
+  then delegates to `Vxpipe.Gateway.HTTP.Endpoint`. Other paths continue through the
+  host pipeline.
   """
 
   @behaviour Plug
@@ -88,5 +89,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
 
   defp gateway_path?(["healthz"]), do: true
   defp gateway_path?(["api" | _rest]), do: true
+  defp gateway_path?(["webhooks", "platform", "telnyx"]), do: true
+  defp gateway_path?(["webhooks", "tenants", _tenant, "telnyx"]), do: true
   defp gateway_path?(_path), do: false
 end

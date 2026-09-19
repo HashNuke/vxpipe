@@ -2,11 +2,9 @@
 
 Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
 are delivered, including the credential-presence correction. C1's effective Telnyx
-bindings are implemented; scoped ingress C2, Console configuration C3 and
-callback/migration acceptance D remain. The C1 umbrella run covers 1,770 tests with
-40 exclusions; its sole failure was an outdated legacy reference-field assertion,
-corrected and verified by rerunning the 116-test Calls suite. All other application
-suites and root static gates pass. Earlier native
+bindings and C2's scoped ingress are implemented; Console configuration C3 and
+callback/migration acceptance D remain. The C2 umbrella run passes 1,781 tests with
+zero failures and 40 exclusions; all root static gates pass. Earlier native
 handoff failures remain in historical evidence; this pass does not establish their cause.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
@@ -128,9 +126,9 @@ authenticated context; platform ciphertext uses a distinct version-2 context.
 
 The carrier boundary now supports effective primary Telnyx bindings through an explicit
 credential name, while legacy bindings keep their public key and exact tenant credential.
-Gateway `ServiceRegistry` currently looks up globally unique ingress keys, and
-`TelnyxEvents` verifies through a resolved tenant service. Existing initialized legs
-retain authentication for callbacks/media/cleanup during storage outages.
+Gateway preserves globally unique legacy ingress keys and adds the two explicit
+scope URLs. Fresh scoped requests authenticate before application lookup; initialized
+legs retain authentication for callbacks/media/cleanup during storage outages.
 
 Keep responsibilities: Calls owns scoped service resolution and safe identities;
 Persistence owns encryption, schema, constraints and transactions; Gateway owns
@@ -204,6 +202,9 @@ Carrier design review, 2026-09-19: C will be delivered in reviewed C1/C2/C3 comm
 effective application bindings, scoped ingress, and Console configuration respectively.
 The [scoped Telnyx binding decision](scoped-telnyx-service-bindings.md) records the
 legacy compatibility boundary, selected-owner identity and acceptance order.
+C3 is split into credential/URL setup (C3a) and tenant application configuration
+(C3b). C3a includes D's shared-origin and outgoing scope-URL generation so displayed
+and outgoing URLs agree; D retains deliberate legacy cutover and final acceptance.
 
 Current evidence: [checkpoint A labnotes](../labnotes/20260919-0611-scoped-provider-inheritance.md).
 
@@ -349,6 +350,22 @@ Checkpoint C1 implementation:
   See [binding configuration](scoped-telnyx-service-bindings.md) and
   [C1 evidence](../labnotes/20260919-0930-scoped-telnyx-bindings.md).
 
+Checkpoint C2 implementation:
+
+- Both approved scope routes pass through the production Phoenix/Gateway mount,
+  preserving the raw body for signature verification. Tenant URLs require that
+  tenant's own primary credential; a platform credential cannot satisfy that route.
+- After authentication, explicit application lookup and effective owner/ID/version
+  checks reject unknown, cross-tenant and changed bindings. Existing exact-ID services
+  remain available through legacy ingress and are excluded from scoped lookup.
+- Incoming/outgoing owners retain their verifier and register scoped lookup aliases.
+  Duplicate admission and callbacks without client state work without another storage
+  read. Verification failure never retries a replacement owner or another scope's key.
+- Forty-seven focused Gateway checks and a real PostgreSQL/Phoenix signed-request test
+  pass. The full umbrella passes 1,781 tests, zero failures, 40 excluded; static gates
+  pass. No UI or live-provider claim is included. See
+  [C2 evidence](../labnotes/20260919-1030-scoped-telnyx-ingress.md).
+
 ### 1. Storybook review checkpoint
 
 - [x] Show tenant and platform Telnyx URLs in connect/edit states with copy feedback.
@@ -391,7 +408,7 @@ remote application provisioning, credential persistence, verification or routing
 - [ ] Add tenant Voice API application bindings referencing the selected credential scope;
   validate ownership and reject ambiguous mappings. Configure application ID and number
   routing before reporting telephony ready; API/public key alone are insufficient.
-- [ ] Mount both approved `/webhooks/...` routes through the existing Phoenix/Gateway
+- [x] Mount both approved `/webhooks/...` routes through the existing Phoenix/Gateway
   boundary. Select exactly one verifier from the route; reject unknown tenants, missing
   public keys, malformed signatures, stale events and wrong application ownership.
 - [ ] Generate outgoing callback URLs using the same public origin and scope as the UI.
@@ -402,7 +419,7 @@ remote application provisioning, credential persistence, verification or routing
   the legacy route only against its exact existing tenant/service binding during transition;
   never redirect signed requests or interpret ingress keys as tenant keys. Document the
   remote URL update and cutover; retain existing media URL/token contracts.
-- [ ] Prove signed platform and tenant HTTP requests through persisted encrypted bindings,
+- [x] Prove signed platform and tenant HTTP requests through persisted encrypted bindings,
   cross-scope key rejection, cross-tenant application rejection, duplicates, storage outage
   and malformed public configuration. Live checks stay in the tagged integration lane.
 

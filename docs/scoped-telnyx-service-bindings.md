@@ -1,6 +1,6 @@
 # Scoped Telnyx service bindings
 
-Decision: 2026-09-19. Design and C1 implementation reviewed. C2/C3 remain open under checkpoint C of the
+Decision: 2026-09-19. Design and C1/C2 implementation reviewed. C3 remains open under checkpoint C of the
 [platform and tenant services plan](platform-and-tenant-services.md).
 
 ## Credential ownership and application identity
@@ -49,6 +49,23 @@ were a previously authorized selection.
 
 ## Delivery order and verification
 
+Scoped ingress is implemented and verified in C2. For a
+fresh call, the URL selects the primary credential before any application lookup.
+After verifying the raw bytes in the standard 300-second window, lookup the explicit
+application mapping and compare its effective credential owner, ID and version with
+the verified selection. Also enforce a stricter application freshness setting when
+configured. A concurrent credential/scope change rejects the request; it never retries
+another key. Tenant URLs cannot inherit the platform verifier.
+
+An initialized incoming or outgoing leg registers a scope/application/provider-leg
+locator alongside its legacy ingress locator. Only an owner within the URL-selected
+scope may provide its retained verifier. This preserves callbacks and incoming
+duplicate handling during storage outages or credential replacement, including
+callbacks without client state. The exact authenticated owner receives dispatch;
+owner death does not trigger a new lookup. Initialized owners retain their configured
+freshness window. C3a supplies outgoing URL generation and the common public origin;
+D verifies final cutover acceptance.
+
 C1 configuration uses the trusted `ProviderCredentials.provision/6` host API to store
 the primary `telnyx` credential with `api_key` and optional `public_key`. The existing
 `mix vxpipe.telephony_service.register --tenant TENANT_KEY --file service.json` command
@@ -65,23 +82,25 @@ accepts scoped application metadata:
 ```
 
 Registration requires an effective credential with a valid verification key. It does
-not publish a phone-number route or configure the remote Telnyx application. During C1,
-use the existing explicit `/api/telephony/telnyx/:ingress_key/events` ingress. The new
-scoped URL and Console configuration arrive in C2/C3.
+not publish a phone-number route or configure the remote Telnyx application. The
+explicit `/api/telephony/telnyx/:ingress_key/events` ingress remains available during
+cutover. C2 adds the scoped URLs; production Console configuration follows in C3.
 
 - [x] C1: store the optional scoped verification key, register a tenant application
   against the effective credential name, authorize call-spec writes, and resolve new
   Gateway clients. Preserve legacy ingress so the intermediate checkpoint is runnable.
   Test two inheriting tenants, tenant override/removal/restore, cross-tenant rejection,
   exact prepared identity and no secret exposure.
-- [ ] C2: add route-selected platform/tenant signature verification and explicit
+- [x] C2: add route-selected platform/tenant signature verification and explicit
   application routing. A body identifier may locate an initialized owner only within
   the route-selected credential scope; it cannot choose another scope's verifier.
   Authenticate the exact raw bytes before trusting new application routing. Preserve
   initialized owner credentials and duplicate/outage behavior.
 - [ ] C3: expose public-key configuration, application bindings and matching webhook
   URLs in the operator Console, with durable metadata and browser verification.
-- [ ] D retains public-origin/callback cutover, deliberate legacy migration and final
+  Deliver C3a (credential form, configured-field metadata and URLs) before C3b
+  (tenant application configuration and published number-route progress).
+- [ ] D retains callback cutover acceptance, deliberate legacy migration and final
   restart/rollback/umbrella acceptance from the parent plan.
 
 Design review: keep credentials separate from tenant application identity; reuse the
@@ -91,8 +110,17 @@ into tenant rows, and selecting a verification scope from unsigned event fields.
 C1 evidence: 24 focused persistence and six Gateway reader tests pass, with disposable
 database upgrade/rollback/restart acceptance. The umbrella run covers 1,770 tests;
 one obsolete reference-field assertion was corrected and the full 116-test Calls suite
-rerun. All other umbrella suites and static gates pass. C2/C3 and live-provider
-verification are not claimed complete.
+rerun. C2's full umbrella passes 1,781 tests with zero failures and 40 exclusions;
+all static gates pass. C3 and live-provider verification are not claimed complete.
+
+Console dependency review, 2026-09-19: move D's common public-origin and outgoing
+scope-URL generation into C3a so the displayed URL and newly initialized callbacks
+agree when the form ships. Preserve the explicit telephony-origin override, including
+path prefixes, and default public APP_HOST to HTTPS. Local HTTP is a configuration
+preview, not phone readiness. C3b follows the verified binding/ingress boundaries and
+keeps application identity separate from credential edits. D still owns deliberate
+legacy cutover and final restart/re-encryption/rollback acceptance. This order change
+does not mark any C3 or D implementation complete.
 
 Telnyx documents account-level Ed25519 verification over the original request body
 and application-owned webhook configuration. These support the separation above;

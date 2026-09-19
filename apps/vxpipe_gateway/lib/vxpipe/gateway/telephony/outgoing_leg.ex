@@ -322,16 +322,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
     case Registry.register(Vxpipe.Gateway.Telephony.LegRegistry, key, {:outgoing, state.service}) do
       {:ok, _owner} ->
-        ingress_key =
-          IngressIdentity.ingress_key(state.service.identity, binding.provider_call_leg_id)
-
-        case Registry.register(
-               Vxpipe.Gateway.Telephony.LegRegistry,
-               ingress_key,
-               {:outgoing, state.service}
+        case Vxpipe.Gateway.Telephony.IngressRegistration.register(
+               state.service,
+               binding.provider_call_leg_id,
+               :outgoing
              ) do
-          {:ok, _} ->
-            bind_registered(state, [key, ingress_key], binding)
+          {:ok, ingress_keys} ->
+            bind_registered(state, [key | ingress_keys], binding)
 
           {:error, _reason} ->
             Registry.unregister(Vxpipe.Gateway.Telephony.LegRegistry, key)

@@ -7,12 +7,9 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
   alias Vxpipe.CallEngine.Telephony.{Event, Webhook}
   alias Vxpipe.Gateway.HTTP.RawBody
 
-  alias Vxpipe.Gateway.Telephony.{
-    IngressHandler,
-    WebhookService
-  }
+  alias Vxpipe.Gateway.Telephony.IngressHandler
 
-  alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookVerifier}
+  alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookSelection, WebhookVerifier}
 
   @spec route?(Plug.Conn.t()) :: boolean()
   def route?(%Plug.Conn{
@@ -21,19 +18,25 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
       }),
       do: true
 
+  def route?(%Plug.Conn{method: "POST", path_info: ["webhooks", "platform", "telnyx"]}),
+    do: true
+
+  def route?(%Plug.Conn{method: "POST", path_info: ["webhooks", "tenants", _tenant, "telnyx"]}),
+    do: true
+
   def route?(%Plug.Conn{}), do: false
 
-  @spec handle(Plug.Conn.t(), map(), String.t()) :: Plug.Conn.t()
-  def handle(conn, options, ingress_key) do
+  @spec handle(Plug.Conn.t(), map(), String.t() | {:scope, term()}) :: Plug.Conn.t()
+  def handle(conn, options, locator) do
     with true <- options.registry.enabled?,
          :ok <- json_content_type(conn),
          {:ok, body, conn} <- RawBody.read(conn, options.maximum_body_bytes),
-         {:ok, service, owner} <-
-           WebhookService.select(options.registry, :telnyx, ingress_key, body),
+         {:ok, selection} <- WebhookSelection.select(options.registry, locator, body),
          {:ok, headers} <- authentication_headers(conn),
          {:ok, received_at} <- received_at(options.clock),
          webhook = %Webhook{headers: headers, body: body, received_at: received_at},
-         :ok <- WebhookVerifier.verify(webhook, service.verifier_options) do
+         :ok <- WebhookVerifier.verify(webhook, selection.verifier_options),
+         {:ok, service, owner} <- WebhookSelection.resolve(selection, webhook) do
       handle_verified(conn, options.handler, service, webhook, owner)
     else
       false ->
@@ -47,6 +50,15 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
 
       {:error, :service_not_found} ->
         send_resp(conn, 404, "not found")
+
+      {:error, :webhook_source_mismatch} ->
+        send_resp(conn, 403, "webhook source mismatch")
+
+      {:error, :invalid_telnyx_webhook} ->
+        send_resp(conn, 400, "invalid webhook")
+
+      {:error, :webhook_processing_unavailable} ->
+        send_resp(conn, 503, "webhook processing unavailable")
 
       {:error, :unsupported_media_type} ->
         send_resp(conn, 415, "expected application/json")

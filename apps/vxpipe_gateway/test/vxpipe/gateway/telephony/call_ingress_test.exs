@@ -85,6 +85,37 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     refute_receive {:test_live_telephony_event, ^mismatched, _source}
   end
 
+  test "a scoped incoming owner remains discoverable without storage and duplicate admission",
+       context do
+    original = identity()
+
+    reference = %{
+      original.identity.service_reference
+      | credential_owner: :platform,
+        credential_name: "telnyx"
+    }
+
+    service = %{original | identity: %{original.identity | service_reference: reference}}
+    on_exit(fn -> LegSupervisor.stop(service.identity, "call-leg-1") end)
+    assert :ok = handle_event(context.options, service, incoming_event())
+
+    body =
+      JSON.encode!(%{
+        data: %{payload: %{connection_id: "voice-application-1", call_leg_id: "call-leg-1"}}
+      })
+
+    assert {:ok, ^service, {:incoming, leg} = owner} =
+             Vxpipe.Gateway.Telephony.WebhookService.scoped_telnyx_owner(:platform, body)
+
+    assert :ok = CallIngress.handle_event(context.options, service, incoming_event(), owner)
+    assert {:ok, ^leg} = LegSupervisor.lookup(service.identity, "call-leg-1")
+
+    assert Enum.count(TestTelephonyCallBackend.operations(context.backend), fn
+             {:claim_incoming, _, _, _} -> true
+             _operation -> false
+           end) == 1
+  end
+
   test "uses admitted media start as live evidence when it arrives before answered", context do
     assert :ok = handle_event(context.options, identity(), incoming_event())
 

@@ -99,6 +99,34 @@ defmodule Vxpipe.Persistence.ScopedTelnyxServiceTest do
     assert restored.service.public_key == public_key(1)
   end
 
+  test "application lookup returns only explicit scoped mappings", data do
+    {:ok, _platform} = credential(:platform, 1, data.options)
+    attributes = application(data.first.key)
+    {:ok, service} = TelephonyServices.register(data.first.key, attributes, data.options)
+
+    assert {:ok, ^service} =
+             TelephonyServices.fetch_telnyx_application(
+               service.provider_connection_id,
+               data.options
+             )
+
+    {:ok, own} = credential(data.first.key, 2, data.options)
+
+    legacy = %{
+      "name" => "legacy",
+      "provider" => "telnyx",
+      "ingress_key" => "legacy-ingress",
+      "provider_connection_id" => "legacy-application",
+      "credential_id" => own.id,
+      "public_key" => public_key(2)
+    }
+
+    assert {:ok, _} = TelephonyServices.register(data.first.key, legacy, data.options)
+
+    assert {:error, :telephony_service_not_found} =
+             TelephonyServices.fetch_telnyx_application("legacy-application", data.options)
+  end
+
   test "scoped applications cannot be assigned to two tenants or mix legacy identity fields",
        data do
     {:ok, platform} = credential(:platform, 1, data.options)

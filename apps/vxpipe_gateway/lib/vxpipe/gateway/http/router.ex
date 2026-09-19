@@ -96,6 +96,20 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   end
 
   def call(
+        %Plug.Conn{method: "POST", path_info: ["webhooks", "platform", "telnyx"]} = conn,
+        options
+      ) do
+    TelnyxEvents.handle(conn, options.telephony, {:scope, :platform})
+  end
+
+  def call(
+        %Plug.Conn{method: "POST", path_info: ["webhooks", "tenants", tenant, "telnyx"]} = conn,
+        options
+      ) do
+    TelnyxEvents.handle(conn, options.telephony, {:scope, {:tenant, tenant}})
+  end
+
+  def call(
         %Plug.Conn{
           method: "POST",
           path_info: ["api", "telephony", "telnyx", ingress_key, "events"]
@@ -231,6 +245,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     validate_options!(options, [
       :enabled,
       :public_base_url,
+      :provider_credential_repository,
       :telephony_service_repository,
       :adapters,
       :handler,
@@ -248,6 +263,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     Keyword.take(telephony, [
       :enabled,
       :public_base_url,
+      :provider_credential_repository,
       :telephony_service_repository,
       :adapters,
       :handler,

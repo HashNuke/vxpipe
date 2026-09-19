@@ -149,7 +149,9 @@ failures, 40 excluded.
 C1 adds effective Telnyx application bindings and preserves legacy carrier identities.
 Its 1,770-test umbrella run found one outdated reference-field assertion, now corrected
 and verified by the 116-test Calls suite; all other suites and root static gates pass.
-Scoped ingress C2 and Console carrier configuration C3 remain open.
+Scoped ingress C2 now passes 1,781 umbrella tests with zero failures and 40 exclusions,
+including persisted signed requests through Phoenix and retained owner checks. Console
+carrier configuration C3 and final cutover acceptance remain open.
 This does not change the
 completed historical tenant-credential milestone or mark backend work complete.
 

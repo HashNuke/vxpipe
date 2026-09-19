@@ -18,6 +18,10 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
               {:ok, TelephonyService.t()} | {:error, atom()}
   @callback fetch_by_ingress(term(), String.t()) ::
               {:ok, TelephonyService.t()} | {:error, atom()}
+
+  @doc "Returns a scoped Telnyx application mapping; excludes legacy exact-ID bindings."
+  @callback fetch_telnyx_application(term(), String.t()) ::
+              {:ok, TelephonyService.t()} | {:error, atom()}
   @callback resolve(term(), String.t(), String.t()) ::
               {:ok, ResolvedTelephonyService.t()} | {:error, atom()}
 

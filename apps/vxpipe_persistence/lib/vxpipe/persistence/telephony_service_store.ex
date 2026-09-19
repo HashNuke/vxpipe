@@ -64,6 +64,22 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   end
 
   @impl true
+  def fetch_telnyx_application(context, application_id) do
+    with_repository(context, fn repo ->
+      query =
+        from(s in TelephonyService,
+          join: t in assoc(s, :tenant),
+          where:
+            s.provider == "telnyx" and s.credential_name == "telnyx" and
+              s.provider_connection_id == ^application_id,
+          select: {s, t.key}
+        )
+
+      fetch_metadata(repo, query)
+    end)
+  end
+
+  @impl true
   def resolve(context, tenant_key, name) do
     with_repository(context, fn repo ->
       transaction(repo, fn -> resolve_locked(context, tenant_key, name) end)

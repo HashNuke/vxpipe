@@ -17,6 +17,7 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
       validate_options!(options,
         enabled: false,
         public_base_url: nil,
+        provider_credential_repository: nil,
         telephony_service_repository: nil,
         adapters: %{},
         handler: {CallIngress, []},
@@ -29,6 +30,7 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
       ServiceRegistry.init!(
         enabled: Keyword.fetch!(options, :enabled),
         public_base_url: Keyword.fetch!(options, :public_base_url),
+        provider_credential_repository: Keyword.fetch!(options, :provider_credential_repository),
         telephony_service_repository: Keyword.fetch!(options, :telephony_service_repository),
         adapters: Keyword.fetch!(options, :adapters)
       )

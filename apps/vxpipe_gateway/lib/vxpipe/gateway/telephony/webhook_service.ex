@@ -34,6 +34,32 @@ defmodule Vxpipe.Gateway.Telephony.WebhookService do
     _exception -> {:error, :service_not_found}
   end
 
+  # An unsigned locator may select a retained owner only inside the URL's scope.
+  # The caller still authenticates the raw body with this exact owner's verifier.
+  def scoped_telnyx_owner(scope, body) do
+    {application, provider_leg, local_id} = identifiers(:telnyx, body)
+
+    selected =
+      case lookup({:outgoing, local_id}) do
+        :not_found -> lookup({:scoped_telnyx, scope, application, provider_leg})
+        found -> found
+      end
+
+    case selected do
+      {:ok, service, owner} ->
+        reference = service.identity.service_reference
+
+        if service.identity.provider == :telnyx and
+             service.identity.provider_connection_id == application and
+             match?(%{credential_name: "telnyx", credential_owner: ^scope}, reference),
+           do: {:ok, service, owner},
+           else: {:error, :service_not_found}
+
+      :not_found ->
+        :not_found
+    end
+  end
+
   defp owner(provider, ingress, account, provider_leg, local_id) do
     case lookup({:outgoing, local_id}) do
       :not_found -> lookup({:ingress, provider, ingress, account, provider_leg})

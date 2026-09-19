@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     ConfiguredService,
     IncomingLegActivationResult,
     IngressIdentity,
+    IngressRegistration,
     LegUsage
   }
 
@@ -61,12 +62,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     service = Keyword.fetch!(options, :service)
     event = Keyword.fetch!(options, :event)
 
-    {:ok, _} =
-      Registry.register(
-        Vxpipe.Gateway.Telephony.LegRegistry,
-        IngressIdentity.ingress_key(service.identity, event.provider_call_leg_id),
-        {:incoming, service}
-      )
+    {:ok, _keys} = IngressRegistration.register(service, event.provider_call_leg_id, :incoming)
 
     state = %{
       activation: nil,
