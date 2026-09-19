@@ -209,7 +209,12 @@ effective application bindings, scoped ingress, and Console configuration respec
 The [scoped Telnyx binding decision](scoped-telnyx-service-bindings.md) records the
 legacy compatibility boundary, selected-owner identity and acceptance order.
 C3 is split into credential/URL setup (C3a) and tenant application configuration
-(C3b). C3a includes D's shared-origin and outgoing scope-URL generation so displayed
+(C3b). C3b is delivered as an operator API/durable-route checkpoint (C3b1), then its
+Console form and browser acceptance (C3b2). C3b1's API is implemented and its owning
+application suites pass; final umbrella acceptance remains open after a native WebRTC
+handoff timeout outside this slice. C3b2 remains open. The binding decision
+records their input, authority, identity and published-route contracts separately
+from implementation progress. C3a includes D's shared-origin and outgoing scope-URL generation so displayed
 and outgoing URLs agree; D owns legacy webhook deletion and final acceptance, per
 the latest user clarification.
 
@@ -414,6 +419,20 @@ Checkpoint D1 implementation:
   checkpoint; six combined carrier harness runs pass. Final umbrella: 1,788 tests,
   zero failures, 40 excluded, with all root static gates passing. No UI or live-provider
   acceptance is claimed here. See [D1 evidence](../labnotes/20260919-1131-remove-legacy-webhooks.md).
+
+Checkpoint C3b1 implementation:
+
+- Installation operators can create/edit a tenant's scoped Telnyx application through
+  session/CSRF-protected endpoints. Inputs exclude credential ownership, keys and ingress;
+  the server supplies the primary binding and stable media identity. Edits preserve the
+  service UUID/name and reject stale prepared references through existing locked checks.
+- The application directory reads current published number routes from existing call-spec
+  storage. Drafts, superseded revisions and foreign tenants are excluded. Bounds are
+  100 applications/500 routes, with ambiguity counted before truncation.
+- Calls (117), Persistence (184) and Console (185) suites pass, along with all static
+  gates. The first 1,798-test umbrella run had one native WebRTC handoff timeout;
+  three isolated reruns passed. Final umbrella acceptance remains pending. See
+  [C3b1 evidence](../labnotes/20260919-1208-tenant-phone-application-api.md).
 
 ### 1. Storybook review checkpoint
 

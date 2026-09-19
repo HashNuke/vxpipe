@@ -104,6 +104,10 @@ and URLs; application configuration and published number progress remain C3b.
 - [x] C3a: production credential form, configured-field metadata, shared public origin
   and matching UI/outgoing scoped URLs. Browser/restart and all required checks pass.
 - [ ] C3b: tenant application configuration and published number-route progress.
+- [ ] C3b1: operator application create/update API and bounded, durable published-route metadata.
+  API implementation and owning application suites pass; final umbrella acceptance is
+  pending after an existing native WebRTC handoff timeout, not reproduced in three isolated runs.
+- [ ] C3b2: Console application form, progress, recovery and browser/restart verification.
 - [ ] D removes the legacy Telnyx webhook path and callback generation, then completes
   restart/rollback/re-encryption and final umbrella acceptance from the parent plan.
 - [x] D1: remove the old route, verifier selection and callback generation; reject
@@ -147,3 +151,43 @@ and Twilio tests by moving Telnyx fixtures onto scoped credentials and webhook U
 D1 is implemented and reviewed. Two red regressions pass, the encrypted two-carrier
 signature check passes, and both carrier harnesses pass six combined runs. Final
 umbrella: 1,788 tests, zero failures, 40 excluded; all root static gates pass.
+
+## Console application configuration design review
+
+C3b follows the verified C1/C2/C3a/D1 boundaries. Split its operator API and persistence
+work (C3b1) from the rendered Console workflow (C3b2) to keep both commits reviewable.
+Neither checkbox is complete merely because this design is recorded.
+
+The installation operator can add a tenant-local service name, Voice API application
+ID and optional outbound caller number. The server fixes the provider and primary
+credential name to Telnyx, and generates the stable media ingress key. Editing changes
+only the application ID and outbound number; tenant, service UUID, name, credential
+binding and ingress key remain stable. Reuse effective credential locks and existing
+application uniqueness constraints. A changed application ID invalidates an old prepared
+reference; already initialized legs retain their exact configuration.
+
+Expose these operations through the existing installation-session and CSRF boundary.
+Reject caller-supplied credential IDs, scope, keys, ingress paths and carrier options.
+No remote application discovery or provisioning occurs. Credentials remain configured
+separately. A missing or unusable effective verification key prevents application writes.
+
+A bounded operator read lists this tenant's scoped applications and only number routes
+belonging to current published call-spec revisions. Report duplicate service/number
+mappings as ambiguous, including conflicts beyond the display limit. Drafts, superseded
+revisions and other tenants cannot count toward progress. The Console combines this
+durable metadata with effective credential/public-key and origin metadata. Saved keys
+alone do not establish phone readiness; local configuration is distinct from remote
+Telnyx setup and a successful live call.
+
+Number routing continues through the existing authorized call-spec save/publish boundary;
+this slice adds its progress view, not a second call-spec editor or separate routing store.
+Reject copying platform keys into applications, deriving tenant identity from phone numbers,
+or weakening the older tenant-credential inventory contract to accommodate applications.
+Application metadata has its own operator view and never masquerades as a credential.
+
+Acceptance: prove explicit operator authority, CSRF and input allowlists; create and edit
+two tenants' mappings with inheritance and overrides; reject duplicate application IDs,
+foreign edits and unusable credentials; preserve prepared/live identity rules; verify
+current published routes, conflicts, bounds and secret-safe responses. C3b2 adds desktop,
+mobile, reload/restart, missing-key and request-failure states. D2 retains final combined
+replacement/re-encryption/rollback acceptance.

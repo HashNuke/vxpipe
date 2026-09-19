@@ -117,6 +117,18 @@ defmodule Vxpipe.Console.Router do
     get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
 
+    get "/tenants/:tenant_key/telephony-applications",
+        Vxpipe.Console.AdminTelephonyApplicationsController,
+        :index
+
+    post "/tenants/:tenant_key/telephony-applications",
+         Vxpipe.Console.AdminTelephonyApplicationsController,
+         :create
+
+    patch "/tenants/:tenant_key/telephony-applications/:service_id",
+          Vxpipe.Console.AdminTelephonyApplicationsController,
+          :update
+
     get "/tenants/:tenant_key/service-bindings",
         Vxpipe.Console.AdminServicesController,
         :tenant_bindings

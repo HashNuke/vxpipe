@@ -97,13 +97,43 @@ scoped bindings exist instead of discarding them or copying platform credentials
 These are trusted host operations, not tenant-facing management APIs. Registration locks the
 matching credential row, verifies active status and decryption using the existing credential
 adapter, and inserts the service in that same transaction. A conflicting alias or ingress key
-returns an error without replacing a binding. There is no update/rebind operation in this slice.
+returns an error without replacing a binding. Operator application edits use the separate
+installation-authorized boundary below.
 
 `fetch` and `fetch_by_ingress` return metadata without reading or decrypting credential payloads. They can therefore
 inspect a registered binding when an encryption key is unavailable. Lookup success does not
 authorize a provider request or authenticate a webhook. The live reader resolves current private
 authentication and checks the exact pinned service/account at those boundaries. The ingress key
 is a locator, not authentication.
+
+## Operator application API
+
+An authenticated installation-operator browser session can manage a tenant's scoped Telnyx
+applications at `/admin/api/tenants/:tenant_key/telephony-applications`. Tenant API keys do
+not authorize these endpoints. Writes require the session's CSRF token.
+
+- `POST` accepts `name`, `provider_connection_id` (the Telnyx Voice API application ID),
+  and optional `outbound_number` (an E.164 number or null). The server supplies the primary
+  Telnyx credential binding and a stable generated media ingress key.
+- `PATCH /:service_id` accepts only `provider_connection_id` and `outbound_number`.
+  It preserves the service UUID, tenant, name, ingress and credential binding. Editing an
+  application ID invalidates prepared references to the old ID; initialized legs retain
+  their snapshots. Edits use the existing service and effective-credential locks.
+- `GET` returns tenant metadata, at most 100 applications and 500 current published number
+  routes, and a `truncated` flag. Each application exposes `id`, `name`,
+  `provider_connection_id`, `outbound_number` and `published_routes`. Route metadata includes
+  number, call-spec ID/name/revision, participant reference and `ambiguous`; ambiguity counts
+  include conflicts beyond the display limit. Drafts, superseded publications and foreign
+  tenants are excluded. Credentials and verification keys are never returned.
+
+Create returns 201, edit/read return 200. Reading or editing an unknown tenant/service
+returns 404, application
+conflicts return 409, and invalid input or an unavailable effective credential returns 422.
+Repository failures return a bounded 503 error. An unusable tenant credential prevents writes
+even when a usable platform credential exists. Metadata remains readable without decryption.
+
+Number authoring stays in the existing authorized call-spec save/publish APIs. These endpoints
+configure local bindings only; they neither provision Telnyx resources nor prove live calling.
 
 ## Private resolution and call spec checks
 

@@ -36,6 +36,56 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   end
 
   @impl true
+  def update_application(context, tenant_key, id, changes) do
+    with_repository(context, fn repo ->
+      repo.transaction(fn ->
+        query =
+          from(s in TelephonyService,
+            join: t in assoc(s, :tenant),
+            where:
+              t.key == ^tenant_key and s.public_id == ^id and s.provider == "telnyx" and
+                s.credential_name == "telnyx",
+            select: s,
+            lock: "FOR UPDATE"
+          )
+
+        case repo.one(query, @query_options) do
+          nil -> repo.rollback(:telephony_service_not_found)
+          stored -> update_locked_application(context, stored, tenant_key, changes)
+        end
+      end)
+    end)
+  end
+
+  defp update_locked_application(context, stored, tenant_key, changes) do
+    repo = Keyword.fetch!(context, :repo)
+    service = metadata(stored, tenant_key)
+
+    updated = %{
+      service
+      | provider_connection_id:
+          Map.get(changes, "provider_connection_id", service.provider_connection_id),
+        outbound_number: Map.get(changes, "outbound_number", service.outbound_number)
+    }
+
+    with :ok <- Service.validate(updated),
+         {:ok, {_tenant_id, _credential}} <- lock_credential(context, updated),
+         {:ok, saved} <-
+           repo.update(
+             TelephonyService.changeset(
+               stored,
+               Map.take(updated, [:provider_connection_id, :outbound_number])
+             ),
+             @query_options
+           ) do
+      metadata(saved, tenant_key)
+    else
+      {:error, %Ecto.Changeset{} = changeset} -> repo.rollback(insertion_error(changeset))
+      {:error, reason} -> repo.rollback(reason)
+    end
+  end
+
+  @impl true
   def fetch(context, tenant_key, name) do
     with_repository(context, fn repo ->
       query =

@@ -34,6 +34,11 @@ defmodule Vxpipe.Calls.AdminRepository do
               {:ok, {Tenant.t(), [ProviderCredential.t()], [TelephonyService.t()], boolean()}}
               | {:error, term()}
 
+  @doc "At most 100 scoped applications and 500 current published routes, with untruncated ambiguity counts."
+  @callback list_telephony_applications(context(), String.t()) ::
+              {:ok, {Tenant.t(), [TelephonyService.t()], [map()], boolean()}} | {:error, term()}
+  @optional_callbacks list_telephony_applications: 2
+
   @callback fetch_call_context(context(), String.t(), String.t()) ::
               {:ok, {Tenant.t(), CallDirectorySummary.t()}} | {:error, term()}
 end

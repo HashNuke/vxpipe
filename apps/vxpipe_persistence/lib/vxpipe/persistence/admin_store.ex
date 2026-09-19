@@ -186,6 +186,61 @@ defmodule Vxpipe.Persistence.AdminStore do
   end
 
   @impl true
+  def list_telephony_applications(repo, tenant_key) do
+    repository_result(fn ->
+      with {:ok, {tenant, tenant_id}} <- fetch_tenant(repo, tenant_key) do
+        services =
+          repo.all(
+            from(s in TelephonyService,
+              where:
+                s.tenant_id == ^tenant_id and s.provider == "telnyx" and
+                  s.credential_name == "telnyx",
+              order_by: [asc: s.name],
+              limit: 101
+            )
+          )
+
+        {visible, extra} = Enum.split(services, 100)
+        names = Enum.map(visible, & &1.name)
+
+        routes =
+          repo.all(
+            from(r in Vxpipe.Persistence.Schema.TelephonyRoute,
+              join: revision in assoc(r, :call_spec_revision),
+              join: spec in assoc(revision, :call_spec),
+              where:
+                r.tenant_id == ^tenant_id and spec.tenant_id == ^tenant_id and r.service in ^names and
+                  not is_nil(r.published_at) and spec.published_revision_id == revision.id,
+              order_by: [
+                asc: r.service,
+                asc: r.number,
+                asc: spec.public_id,
+                asc: r.participant_ref
+              ],
+              limit: 501,
+              select: %{
+                tenant_key: ^tenant_key,
+                service: r.service,
+                number: r.number,
+                call_spec_id: spec.public_id,
+                call_spec_name: fragment("?->>'name'", revision.source),
+                call_spec_revision: revision.revision,
+                participant_ref: r.participant_ref,
+                ambiguous: fragment("count(*) OVER (PARTITION BY ?, ?) > 1", r.service, r.number)
+              }
+            )
+          )
+
+        {visible_routes, extra_routes} = Enum.split(routes, 500)
+
+        {:ok,
+         {tenant, Enum.map(visible, &telephony_metadata(&1, tenant.key)), visible_routes,
+          extra != [] or extra_routes != []}}
+      end
+    end)
+  end
+
+  @impl true
   def list_services(repo, tenant_key) do
     repository_result(fn ->
       with {:ok, {tenant, tenant_id}} <- fetch_tenant(repo, tenant_key) do
@@ -547,6 +602,7 @@ defmodule Vxpipe.Persistence.AdminStore do
       provider: stored.provider,
       provider_connection_id: stored.provider_connection_id,
       credential_id: stored.credential_id,
+      credential_name: stored.credential_name,
       public_key: stored.public_key,
       outbound_number: stored.outbound_number,
       answering_machine_detection: detection(stored.answering_machine_detection),

@@ -14,6 +14,11 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
 
   @callback register(term(), TelephonyService.t()) ::
               {:ok, TelephonyService.t()} | {:error, atom()}
+
+  @doc "Edits only a scoped Telnyx application's ID and outbound number under its service/credential locks."
+  @callback update_application(term(), String.t(), String.t(), map()) ::
+              {:ok, TelephonyService.t()} | {:error, atom()}
+  @optional_callbacks update_application: 4
   @callback fetch(term(), String.t(), String.t()) ::
               {:ok, TelephonyService.t()} | {:error, atom()}
   @callback fetch_by_ingress(term(), String.t()) ::
