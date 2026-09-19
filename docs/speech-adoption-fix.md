@@ -43,11 +43,12 @@ allocation in the same scope also reached ready and decoded while startup stayed
 held. Returning `:starting` alone does not satisfy these assertions.
 
 GPT-6 Astra xhigh reviewed the bounded authority correction and found no blocker.
-Full checkpoint R acceptance remains separate from this repair: private-init,
-deadline, ancestry and failure-boundary implementation/verification is still open.
-In particular, `Session.close/1` currently maps a control-call timeout to success,
-and input-failure cleanup starts a fresh timeout budget. Those stalled-control
-paths require the remaining R work; these load trials do not establish them. All five root gates passed; the umbrella run completed 1,845 tests with zero
+That bounded repair did not accept R: private-init, deadline, ancestry and failure-boundary
+implementation/verification remained open. The later [R completion report](speech-deadlines-and-failure-containment.md)
+records their implementation and acceptance.
+At that repair checkpoint, `Session.close/1` mapped a control-call timeout to success,
+and input-failure cleanup started a fresh timeout budget. The later
+[deadline repair](speech-deadlines-and-failure-containment.md) addresses those stalled-control paths; these load trials do not establish them. All five root gates passed; the umbrella run completed 1,845 tests with zero
 failures and 40 excluded (seed 877669). Details are recorded in the
 [repair labnote](../labnotes/20260919-1858-adoption-authority-fix.md).
 

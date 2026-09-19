@@ -85,26 +85,21 @@ The 2026-09-19 speech-integration research adds
 checkpoints replace the public provider/transport split with semantic sessions, migrating Morse
 and Deepgram one direction at a time. The [provider comparison](../speech-provider-comparison.md)
 covers Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini without adding those integrations.
-Research is complete; the baseline is recorded before continuing checkpoint R, with zero of
-nine checkpoints accepted. The user-requested commit records the experimental prototype and
-diagnostics. Isolated Morse tests proved a startup-isolation regression. Existing rooms
-continue to use the original providers. The [revised ownership plan](../speech-session-ownership.md) adds
-checkpoint R, requires room-scoped execution, and moves both native STT/TTS proofs ahead of
-integration: R → A → D → B → C → E → F → G → H. The
-[evidence and load measurements](../speech-startup-isolation.md) remain the baseline; zero of
-nine checkpoints are complete. The subsequent [scoped speech experiment](../scoped-speech-experiment.md)
-checks real-room behavior/load through a test-only bridge; room migration remains pending its
-revised gates.
-The milestone now carries its latency/capacity limits, explicit failure-handling gates and
-tasks to remove lifecycle/task bookkeeping replaced by local supervision. A speedup, capacity
-ceiling and net code reduction remain unproven; no acceptance checkbox changed.
-The packaging/retention hold is unchanged.
+Research is complete. The earlier global prototype's startup-isolation regression and
+[evidence](../speech-startup-isolation.md) remain recorded. Existing rooms continue to use the
+original providers. The [revised ownership plan](../speech-session-ownership.md) requires scoped
+execution and both native STT/TTS proofs before integration: R → A → D → B → C → E → F → G → H.
+The [scoped room experiment](../scoped-speech-experiment.md) remains test-only bridge evidence.
 
-Checkpoint R subsequently paused on the user's tested-instability stop rule when its adoption
-prototype let an old lease terminate an adopted allocation. The user authorized the repair and
-load verification. The [repair report](../speech-adoption-fix.md) records the passing authority
-tests, 16,236 adoption-load turns and 136,800 legacy/native comparison turns. Existing rooms
-remain on the original path. R's remaining gates are pending; zero speech checkpoints are accepted.
+Checkpoint R is now accepted: **1 of 9 speech checkpoints complete**. The prior
+[adoption-authority repair](../speech-adoption-fix.md) was followed by
+[bounded deadlines and failure containment](../speech-deadlines-and-failure-containment.md).
+Local persistent admission/input workers preserve responsive cancellation; deterministic tests
+cover late handoff and close races. GPT-6 Astra xhigh reviewed the changes. All five root gates
+pass: 1,868 tests, zero failures, 40 excluded (seed 892574). Latest load evidence includes
+39,360 concurrent-fault turns, 68,400 paired legacy/native turns and 16,236 adoption-churn turns.
+A is next; native TTS in D still precedes room migration. A speedup, capacity ceiling and net
+code reduction remain unproven. The packaging/retention hold is unchanged.
 
 ## How to use this index
 
@@ -152,7 +147,7 @@ progress without claiming the entire milestone is complete.
 27. [x] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
-30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Replanned around room-scoped ownership and asynchronous local startup; baseline recorded before continuing checkpoint R, with zero of nine checkpoints accepted.
+30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Scoped ownership checkpoint R is accepted (1/9); native STT A and TTS D precede room migration.
 31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -512,7 +507,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | In progress; Storybook refinement locally reviewed 2026-09-18 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity remain required. Compact provider cards, credential modals with service dropdowns, alternative voice-readiness previews and tenant resumption are prototyped; the default name is Demo. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Production integration planned; recipe prototype locally reviewed 2026-09-18 | Tenant services-to-recipes stories include blocked/ready states and explicit provider choice. Root-home/demo-mode behavior, durable publication and real debug-console launch retain their incomplete acceptance gates. |
-| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Revised proposal; baseline recorded before continuing checkpoint R, 0/9 accepted | Nine checkpoints retain scoped admission/lifetime proof and isolated native STT/TTS before room migration. Experiment limits and B/E/H cleanup-code deletion gates are explicit. The first prototype's global-startup regression remains red; no speedup, capacity ceiling or new hosted support is claimed. |
+| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | R accepted; 1/9 checkpoints complete | Scoped admission, exact ownership, absolute deadlines and fault/load gates pass with independent review and 1,868 umbrella tests. A/D native proofs remain before room migration; earlier global-prototype failure evidence is retained. No speedup, capacity ceiling or new hosted support is claimed. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 
 ## Planning verification

@@ -53,7 +53,8 @@ defmodule Vxpipe.CallEngine.SpeechSessionProbe do
      %{
        observer: observer,
        channel: channel,
-       hold_input?: Keyword.get(private, :hold_input?, false)
+       hold_input?: Keyword.get(private, :hold_input?, false),
+       input_result: Keyword.get(private, :input_result, :hold)
      }}
   end
 
@@ -67,7 +68,9 @@ defmodule Vxpipe.CallEngine.SpeechSessionProbe do
       end
     end
 
-    {:noreply, state}
+    if state.input_result == :hold,
+      do: {:noreply, state},
+      else: {:reply, state.input_result, state}
   end
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}

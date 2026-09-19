@@ -253,8 +253,10 @@ Use persistent local workers for repeated input/output, with separate responsive
 avoid per-audio Tasks by default. Preserve accepted-input versus submitted-input accounting
 if command completion and provider processing occur at different times.
 Startup deadlines must include queue wait, and one call's provider initialization must not
-block admission for unrelated calls. The current prototype fails this requirement in an
-isolated process-tree test; its startup ownership needs revision before room integration.
+block admission for unrelated calls. The earlier application-global prototype failed this
+requirement in an [isolated process-tree test](speech-startup-isolation.md). Checkpoint R's
+scoped ownership and [deadline/fault evidence](speech-deadlines-and-failure-containment.md)
+replace that rejected startup design; room migration still waits for both native directions.
 
 Control events use bounded admission through the same session delivery boundary, with a small
 explicit queue limit and safe overflow failure. Audio credit does not block cancellation or

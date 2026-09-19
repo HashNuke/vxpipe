@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Speech.ScopeControl do
   @moduledoc false
   use GenServer
 
-  alias Vxpipe.CallEngine.Speech.{Allocation, Channel, ProviderName, SessionTree}
+  alias Vxpipe.CallEngine.Speech.{Admission, Allocation, Channel, ProviderName, SessionTree}
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
 
@@ -15,19 +15,34 @@ defmodule Vxpipe.CallEngine.Speech.ScopeControl do
   def bind(allocation, tree),
     do: GenServer.call(allocation.scope.control, {:bind, allocation, tree}, remaining(allocation))
 
-  def close(allocation, reason),
-    do: GenServer.call(allocation.scope.control, {:close, allocation, reason}, 5_000)
+  def close(allocation, reason, deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining > 0,
+      do:
+        GenServer.call(
+          allocation.scope.control,
+          {:close, allocation, reason, deadline},
+          remaining
+        ),
+      else: {:error, :close_timeout}
+  end
 
   def failed(allocation, reason),
     do: GenServer.cast(allocation.scope.control, {:failed, allocation, reason})
 
-  def activate(allocation, authority, consumer),
-    do:
-      GenServer.call(
-        allocation.scope.control,
-        {:activate, allocation, authority, consumer},
-        remaining(allocation)
-      )
+  def activate(allocation, authority, consumer, command) do
+    deadline = min(command.deadline, allocation.deadline)
+
+    GenServer.call(
+      allocation.scope.control,
+      {:activate, allocation, authority, consumer, command},
+      max(deadline - System.monotonic_time(:millisecond), 0)
+    )
+  catch
+    :exit, {:timeout, _call} -> {:error, :command_timeout}
+    :exit, _reason -> {:error, :closed}
+  end
 
   @impl true
   def init(options),
@@ -73,27 +88,37 @@ defmodule Vxpipe.CallEngine.Speech.ScopeControl do
     end
   end
 
-  def handle_call({:close, allocation, reason}, {caller, _tag}, state) do
+  def handle_call({:close, allocation, reason, deadline}, {caller, _tag}, state) do
     case Map.get(state.entries, allocation.generation) do
       nil ->
-        {:reply, :ok, state}
+        {:reply, {:ok, nil}, state}
 
       entry ->
-        if entry.allocation == allocation and
-             caller in [entry.allocation.owner, entry.lease, entry.consumer] do
-          {:reply, :ok, retire(state, entry.allocation, reason)}
-        else
-          {:reply, {:error, :not_owner}, state}
+        cond do
+          entry.allocation != allocation or
+              caller not in [entry.allocation.owner, entry.lease, entry.consumer] ->
+            {:reply, {:error, :not_owner}, state}
+
+          System.monotonic_time(:millisecond) >= deadline ->
+            {:reply, {:error, :close_timeout}, state}
+
+          true ->
+            state = retire(state, entry.allocation, reason)
+            tree = entry.tree || GenServer.whereis(SessionTree.address(entry.allocation))
+            {:reply, {:ok, tree}, state}
         end
     end
   end
 
-  def handle_call({:activate, allocation, authority, consumer}, {channel, _tag}, state) do
+  def handle_call({:activate, allocation, authority, consumer, command}, {channel, _tag}, state) do
     case Map.get(state.entries, allocation.generation) do
       %{phase: :pending, allocation: ^allocation} = entry ->
         if channel == GenServer.whereis(Channel.address(allocation)) and
+             System.monotonic_time(:millisecond) < command.deadline and
              authority == (entry.lease || entry.consumer) and valid_owner?(allocation) and
-             is_pid(consumer) and Process.alive?(consumer) and Allocation.activate(allocation) do
+             is_pid(consumer) and Process.alive?(consumer) and
+             :atomics.compare_exchange(command.token, 1, 0, 1) == :ok and
+             Allocation.activate(allocation) do
           Process.cancel_timer(entry.timer)
           if entry.lease_monitor, do: Process.demonitor(entry.lease_monitor, [:flush])
 
@@ -202,34 +227,9 @@ defmodule Vxpipe.CallEngine.Speech.ScopeControl do
     }
 
     public = Keyword.take(options, [:provider, :options, :call_timeout])
-    control = self()
-
-    {:ok, _task} =
-      Task.Supervisor.start_child(allocation.scope.admissions, fn ->
-        result = admit(allocation, public)
-        send(control, {:admitted, allocation, result})
-      end)
+    Admission.submit(allocation, public)
 
     {:reply, {:ok, allocation, :starting}, put_entry(state, allocation, entry)}
-  end
-
-  defp admit(allocation, public) do
-    with {:ok, tree} <-
-           DynamicSupervisor.start_child(
-             allocation.scope.sessions,
-             {SessionTree, {allocation, public}}
-           ),
-         :ok <- bind(allocation, tree),
-         {:ok, _worker} <-
-           Task.Supervisor.start_child(SessionTree.commands(allocation), fn ->
-             SessionTree.initialize(allocation, public)
-           end) do
-      :ok
-    else
-      _error -> :error
-    end
-  catch
-    :exit, _reason -> :error
   end
 
   defp retire(state, allocation, reason) do

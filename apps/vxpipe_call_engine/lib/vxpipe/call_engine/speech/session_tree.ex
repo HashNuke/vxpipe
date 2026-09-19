@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Speech.SessionTree do
   @moduledoc false
   use Supervisor
-  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel, ScopeControl}
+  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel, Input, ScopeControl}
 
   def child_spec(options) do
     %{
@@ -78,6 +78,7 @@ defmodule Vxpipe.CallEngine.Speech.SessionTree do
   def init({allocation, _public}) do
     children = [
       {Channel, allocation},
+      Supervisor.child_spec({Input, allocation}, shutdown: :brutal_kill),
       {Task.Supervisor, name: commands(allocation)},
       {DynamicSupervisor, name: providers(allocation), strategy: :one_for_one}
     ]

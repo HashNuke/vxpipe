@@ -1,7 +1,7 @@
 # Simpler speech integrations
 
-Status: checkpoint R in progress; user-authorized adoption repair verified under isolated load.
-Implementation: **0 of 9 checkpoints complete**. The revised order is
+Status: checkpoint R accepted; native STT checkpoint A is next.
+Implementation: **1 of 9 checkpoints complete**. The revised order is
 **R → A → D → B → C → E → F → G → H**, preserving existing checkpoint identities.
 The user-requested baseline commit records the experimental standalone prototype and evidence;
 it does not accept a checkpoint. The final room-owned architecture remains pending. The
@@ -13,12 +13,13 @@ The R prototype initially failed its adoption-authority test and was paused unde
 tested-instability rule. The user authorized the fix and load verification. The old lease's
 close now rejects after adoption, while the current consumer owns close and failure delivery.
 The [repair report](../speech-adoption-fix.md) records 16,236 adoption-load turns and two
-68,400-turn legacy/native comparisons. No checkpoint is accepted by this bounded repair;
-R's remaining gates still apply. The [original failure labnote](../../labnotes/20260919-1839-scoped-speech-ownership.md)
+68,400-turn legacy/native comparisons. That bounded repair did not accept R. The later
+[deadline and failure-containment work](../speech-deadlines-and-failure-containment.md)
+completes R's remaining gates with independent review, focused tests, load and umbrella checks. The [original failure labnote](../../labnotes/20260919-1839-scoped-speech-ownership.md)
 retains the reproduction. Commit `343829c` preserves the pre-R experimental baseline.
 The later [scoped speech experiment](../scoped-speech-experiment.md) exercises a test-only
 semantic bridge through real rooms before approval. It provides behavioral/load evidence;
-it does not complete checkpoint R; room migration remains pending R and its revised gates.
+it does not establish final room nesting; room migration remains pending the native A/D gates.
 
 Prerequisites: the implemented speech path in [Call-Spec-driven calls](call-spec-driven-call.md),
 [Local Morse providers](morse-code-audio-providers.md),
@@ -152,7 +153,7 @@ remain independently usable while a provider stalls, fails or is cancelled. This
 uses controlled providers and the existing native Morse prototype; no room consumer migrates.
 It owns the foundational allocation work previously left ambiguous in A2/A4.
 
-- [ ] **R1 — Red isolation and ownership.** Extend `test/vxpipe/call_engine/speech/startup_isolation_test.exs`
+- [x] **R1 — Red isolation and ownership.** Extend `test/vxpipe/call_engine/speech/startup_isolation_test.exs`
   and add `test/vxpipe/call_engine/speech/scope_lifecycle_test.exs`: include separate-room and same-room siblings, queued
   expiry/cancellation, owner loss before bind, stale stop after replacement, and subtree failure.
   Keep the exact-PCM readiness/turn proof; a quick `:starting` return alone cannot make it green.
@@ -162,14 +163,14 @@ It owns the foundational allocation work previously left ambiguous in A2/A4.
   supervisor/registry entries from `application.ex`; no implicit global fallback. A local
   session supervisor and its workers belong to that scope. Retain existing legacy globals
   only for callers that have not migrated. Name each supervisor explicitly.
-- [ ] **R3 — Bounded two-phase start.** Reserve local admission, bind owner/attempt/generation,
+- [x] **R3 — Bounded two-phase start.** Reserve local admission, bind owner/attempt/generation,
   and create the startup/adoption deadline before queueing. Admit only lightweight trees;
   perform blocking credential/provider initialization asynchronously below them, preserving
   existing authorization boundaries. Return a starting handle, then allocation-bound readiness.
   Check owner/lease/expiry before allocation and adoption; reject cancelled queued work without
   creating a provider. Keep retained startup arguments opaque; retain private initialization
   until async handoff and remove it on handoff, cancellation or expiry, with status/crash tests.
-- [ ] **R4 — Exact teardown.** Implement handle-based close before and after provider creation.
+- [x] **R4 — Exact teardown.** Implement handle-based close before and after provider creation.
   Provider/allocation-local worker loss retires that allocation; failed preparation preserves
   active STT. Shared capability-control/session-supervisor loss retires the whole capability
   tree; unrelated trees survive. Distinguish allocation close from capability stop, monitor
@@ -179,7 +180,7 @@ It owns the foundational allocation work previously left ambiguous in A2/A4.
   and an active session survives beyond its startup deadline.
   Use explicit OTP child restart/shutdown/significance policies to enforce owned process
   lifetimes; retain application notifications and external owner/lease monitoring where needed.
-- [ ] **R5 — Runnable gate and review.** Exercise actual Morse recognition while sibling startup
+- [x] **R5 — Runnable gate and review.** Exercise actual Morse recognition while sibling startup
   is held; inspect the owned tree and confirm prototype global session children are removed
   and each new allocation's execution stays in scope. Legacy globals serve only unmigrated
   callers. Re-run the STT burst benchmark and record distributions/known limits, without
@@ -188,12 +189,16 @@ It owns the foundational allocation work previously left ambiguous in A2/A4.
   notification/teardown and explicit replacement-to-ready timing while healthy peers continue;
   do not infer automatic recovery or recovered in-flight speech from a new allocation starting.
   Review with GPT-6 Astra xhigh and update the owning example, contract and labnotes.
-- [ ] **Exit R.** The existing startup regression and new ownership/cancellation cases are green,
+- [x] **Exit R.** The existing startup regression and new ownership/cancellation cases are green,
   no speech allocation outlives its scope/lease, other scopes still reach ready/recognize PCM,
   allocation and capability failure boundaries pass independently, startup deadlines settle,
   old room tests and all five root gates pass. This accepts the first milestone implementation checkpoint.
   The separately user-authorized adoption-repair commit records its bounded verified slice;
   it does not satisfy this Exit gate or authorize room migration.
+
+R implementation evidence: [deadlines and failure containment](../speech-deadlines-and-failure-containment.md).
+The persistent input/admission worker adjustment was reviewed separately with GPT-6 Astra xhigh;
+it closes R deadline requirements without accepting A4 or changing room migration order.
 
 ## Checkpoint A — Native Morse STT session
 
@@ -211,8 +216,9 @@ continues using its current path until B.
 - [x] **A3 — Native provider.** Add `lib/provider/morse_code_stt/session.ex` around the existing
   Morse Config/Decoder; publish semantic events directly. Retain old callers until B and avoid
   duplicating the decoder or creating fake hosted request IDs.
-- [ ] **A4 — Bounded persistent input.** Replace the prototype's per-audio Task path with
-  a persistent local input/command worker where the measurements support it. Keep one admitted
+- [ ] **A4 — Bounded persistent input.** R brings forward the minimal persistent local
+  input worker because Task admission cannot bound the preceding wait. Complete its remaining
+  input/usage contracts and performance acceptance here. Keep one admitted
   chunk, size/age bounds, synchronous acceptance evidence and an independent cancel/deadline
   path. Test held provider input, timeout, duplicate envelopes and late results without a
   control/worker callback cycle. Preserve usage when acceptance and decoding complete at
@@ -498,7 +504,7 @@ for timing distributions, exact covered permissions and excluded production path
 
 | Checkpoint | Implementation | Red/green and root evidence | External/manual evidence |
 | --- | --- | --- | --- |
-| R | Local scopes and synchronous adoption-authority repair implemented; full checkpoint pending | 47 speech cases pass within the 747-test Call Engine suite; original held-start gate now green; all five root gates pass (1,845 tests, zero failures, 40 excluded) | 16,236 adoption-load turns and 136,800 paired legacy/native turns; deadline implementation and full ancestry/private-init/failure-boundary review still pending |
+| R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Native standalone prototype; baseline recorded, checkpoint not accepted | 17 contract tests; selected suite 39 tests / 1 known startup-isolation failure; excluding it 38 pass | Independent PCM proven; 68,400 measured local turns succeed; no live-call claim |
 | D | Not started | Pending | PCM playback/replacement pending |
 | B | Not started | Pending | Real room loop pending |
@@ -548,3 +554,15 @@ gates. Dependency order and checkpoint identities are unchanged; new wording doe
 the migration or count test-only bridges as implemented slices. The separate review and
 documentation verification are recorded in the
 [refresh labnote](../../labnotes/20260919-1814-refresh-speech-milestone.md).
+
+Implementation review for R (2026-09-19): GPT-6 Astra xhigh reviewed the local workers,
+deadline/cancellation tickets, authority handoff, supervision boundaries, private-data handling,
+red tests and fault-load methodology. The minimal persistent input worker moved from A4 into R
+because Task admission itself was unbounded; this does not accept A4 or reorder migration.
+The review's close/adoption race findings were reproduced with deterministic barriers and fixed.
+Final source review found no remaining R blocker, conditional on root gates and accurate evidence.
+
+R acceptance: all five root gates passed on the reviewed source, with 1,868 tests, zero
+failures and 40 exclusions (seed 892574). The 70 speech cases and three latest load diagnostics
+passed. R is accepted; A4 remains open for its broader input/usage/envelope contract, and both
+A and D remain prerequisites to room migration. No production capacity or overall speedup is claimed.

@@ -256,8 +256,11 @@ documentation checks is recorded in the
 Writing this proposal did not make an isolation gate green. Subsequent R implementation
 repaired the original startup test, then exposed and repaired an adoption-authority defect
 under the user's stop/fix procedure. The [repair report](speech-adoption-fix.md) records actual
-tests and load evidence. The milestone remains at zero accepted checkpoints; R's full gates
-are distinct from the bounded repair.
+tests and load evidence. The subsequent [deadline and failure-containment work](speech-deadlines-and-failure-containment.md)
+adds persistent local admission/input workers, atomic handoff abandonment and truthful close
+completion. Its deterministic race tests and concurrent fault diagnostic address R's remaining
+contracts. R is now accepted with all five root gates green (1,868 tests, zero failures,
+40 excluded). A and D remain required before room migration.
 
 The subsequent [scoped speech experiment](scoped-speech-experiment.md) checks semantic STT/TTS
 substitution through real room policy, turn and interruption paths. Its test-owned scopes and

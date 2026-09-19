@@ -2,7 +2,15 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   @moduledoc false
   use GenServer
 
-  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Event, ProviderName, ScopeControl}
+  alias Vxpipe.CallEngine.Speech.{
+    Allocation,
+    CapabilityTree,
+    Event,
+    Input,
+    ProviderName,
+    ScopeControl
+  }
+
   @maximum_pending 32
 
   def start_link(allocation),
@@ -40,11 +48,25 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        sequence: 0,
        awaiting: nil,
        pending: :queue.new(),
-       pending_count: 0
+       pending_count: 0,
+       input: nil
      }}
   end
 
   @impl true
+  def handle_call({:command, allocation, deadline, message}, from, state) do
+    cond do
+      allocation != state.allocation ->
+        {:reply, {:error, :not_owner}, state}
+
+      deadline <= System.monotonic_time(:millisecond) ->
+        {:reply, {:error, :command_timeout}, state}
+
+      true ->
+        execute(message, from, deadline, state)
+    end
+  end
+
   def handle_call({:configure, module, descriptor, timeout}, _from, state),
     do: {:reply, :ok, %{state | module: module, descriptor: descriptor, call_timeout: timeout}}
 
@@ -79,14 +101,47 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  def handle_call({:adopt, consumer}, {caller, _tag}, state) do
-    if caller == state.allocation.lease and state.prepared? and
-         is_pid(consumer) and Process.alive?(consumer) and Allocation.pending?(state.allocation) and
-         Allocation.valid?(state.allocation) do
-      state = activate(%{state | consumer: consumer, prepared?: false})
-      {:reply, if(state.active?, do: :ok, else: {:error, :closed}), state}
-    else
-      {:reply, {:error, :not_adoptable}, state}
+  def handle_call({:input, allocation, command, audio}, {caller, _tag} = from, state) do
+    cond do
+      allocation != state.allocation or caller != state.consumer ->
+        {:reply, {:error, :not_owner}, state}
+
+      not Allocation.valid?(allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      not state.active? ->
+        {:reply, {:error, :not_ready}, state}
+
+      command.deadline <= System.monotonic_time(:millisecond) ->
+        {:reply, {:error, :command_timeout}, state}
+
+      not is_nil(state.input) ->
+        {:reply, {:error, :busy}, state}
+
+      :atomics.compare_exchange(command.token, 1, 0, 1) != :ok ->
+        {:reply, {:error, :command_timeout}, state}
+
+      true ->
+        timer = Process.send_after(self(), {:input_expired, command.ref}, remaining(command))
+        input = %{command: command, from: from, timer: timer, claimed?: false}
+        Input.submit(allocation, command, audio)
+        {:noreply, %{state | input: input}}
+    end
+  end
+
+  def handle_call({:claim_input, reference}, {worker, _tag}, state) do
+    case state.input do
+      %{command: %{ref: ^reference} = command, claimed?: false} = input ->
+        if remaining(command) > 0 and Allocation.valid?(state.allocation) and
+             worker == GenServer.whereis(Input.address(state.allocation)) do
+          {:reply, {:ok, state.module, state.producer},
+           %{state | input: %{input | claimed?: true}}}
+        else
+          {:reply, {:error, :closed}, state}
+        end
+
+      _input ->
+        {:reply, {:error, :closed}, state}
     end
   end
 
@@ -133,16 +188,36 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   @impl true
   def handle_cast(:retire, state), do: {:stop, :normal, state}
 
+  def handle_cast({:input_result, reference, worker, result}, state) do
+    case state.input do
+      %{command: %{ref: ^reference} = command, claimed?: true} = input ->
+        cond do
+          worker != GenServer.whereis(Input.address(state.allocation)) ->
+            {:noreply, state}
+
+          remaining(command) == 0 or result == {:error, :session_failed} ->
+            input_failed(state)
+
+          true ->
+            Process.cancel_timer(input.timer)
+            GenServer.reply(input.from, result)
+            {:noreply, %{state | input: nil}}
+        end
+
+      _input ->
+        {:noreply, state}
+    end
+  end
+
   @impl true
+  def handle_info({:input_expired, reference}, %{input: %{command: %{ref: reference}}} = state),
+    do: input_failed(state)
+
+  def handle_info({:input_expired, _reference}, state), do: {:noreply, state}
+
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
       when monitor == state.producer_monitor or monitor == state.scope_monitor do
-    Allocation.cancel(state.allocation)
-
-    case ProviderName.whereis_name(state.allocation) do
-      :undefined -> :ok
-      pid -> Process.exit(pid, :kill)
-    end
-
+    retire(state.allocation)
     {:stop, :normal, state}
   end
 
@@ -154,6 +229,34 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     |> Map.put(:reason, :redacted)
     |> Map.put(:log, [])
   end
+
+  defp execute({:adopt, consumer, command}, {caller, _tag}, _deadline, state) do
+    if caller == state.allocation.lease and state.prepared? and
+         is_pid(consumer) and Process.alive?(consumer) and Allocation.pending?(state.allocation) and
+         Allocation.valid?(state.allocation) do
+      case ScopeControl.activate(state.allocation, caller, consumer, command) do
+        :ok ->
+          if remaining(command) > 0 and Allocation.valid?(state.allocation) do
+            {:reply, :ok,
+             dispatch(%{state | consumer: consumer, prepared?: false, active?: true})}
+          else
+            fail(state, :command_timeout)
+          end
+
+        {:error, :command_timeout} = error ->
+          if :atomics.compare_exchange(command.token, 1, 0, 2) == 1,
+            do: fail(state, :command_timeout),
+            else: {:reply, error, state}
+
+        error ->
+          {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :not_adoptable}, state}
+    end
+  end
+
+  defp execute(message, from, _deadline, state), do: handle_call(message, from, state)
 
   defp activate(
          %{started?: true, ready?: true, active?: false, consumer: nil, prepared?: false} = state
@@ -170,9 +273,16 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        when is_pid(consumer) do
     authority = state.allocation.lease || state.allocation.consumer
 
-    if ScopeControl.activate(state.allocation, authority, consumer) == :ok do
+    command = %{deadline: state.allocation.deadline, token: :atomics.new(1, [])}
+    result = ScopeControl.activate(state.allocation, authority, consumer, command)
+
+    if result == :ok and remaining(command) > 0 and Allocation.valid?(state.allocation) do
       dispatch(%{state | active?: true})
     else
+      :atomics.compare_exchange(command.token, 1, 0, 2)
+      retire(state.allocation)
+      ScopeControl.failed(state.allocation, :startup_timeout)
+      GenServer.cast(self(), :retire)
       state
     end
   end
@@ -191,8 +301,27 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp dispatch(state), do: state
 
+  defp input_failed(state) do
+    retire(state.allocation)
+    GenServer.reply(state.input.from, {:error, :session_failed})
+    ScopeControl.failed(state.allocation, :session_failed)
+    {:stop, :normal, state}
+  end
+
+  defp remaining(command),
+    do: max(command.deadline - System.monotonic_time(:millisecond), 0)
+
+  defp retire(allocation) do
+    Allocation.cancel(allocation)
+
+    case ProviderName.whereis_name(allocation) do
+      :undefined -> :ok
+      pid -> Process.exit(pid, :kill)
+    end
+  end
+
   defp fail(state, reason) do
-    Allocation.cancel(state.allocation)
+    retire(state.allocation)
     ScopeControl.failed(state.allocation, reason)
     {:stop, :normal, {:error, reason}, state}
   end

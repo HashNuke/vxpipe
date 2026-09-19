@@ -21,6 +21,26 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def start(%Scope{} = scope, options) do
     budget = Keyword.get(options, :start_timeout, @timeout)
+    timeout = Keyword.get(options, :call_timeout, @timeout)
+
+    if is_integer(budget) and budget > 0 and is_integer(timeout) and timeout in 1..@timeout and
+         valid_roles?(options) do
+      reserve(scope, options, budget, timeout)
+    else
+      {:error, :invalid_configuration}
+    end
+  end
+
+  defp valid_roles?(options) do
+    owner = Keyword.get(options, :owner, self())
+    consumer = Keyword.get(options, :consumer, owner)
+    lease = Keyword.get(options, :lease)
+
+    is_pid(owner) and
+      ((is_pid(consumer) and is_nil(lease)) or (is_nil(consumer) and is_pid(lease)))
+  end
+
+  defp reserve(scope, options, budget, timeout) do
     owner = Keyword.get(options, :owner, self())
 
     allocation = %Allocation{
@@ -30,11 +50,16 @@ defmodule Vxpipe.CallEngine.Speech.Session do
       consumer: Keyword.get(options, :consumer, owner),
       lease: Keyword.get(options, :lease),
       deadline: System.monotonic_time(:millisecond) + budget,
-      token: :atomics.new(1, [])
+      token: :atomics.new(1, []),
+      call_timeout: timeout
     }
 
     try do
-      case ScopeControl.reserve(allocation, options, budget) do
+      case ScopeControl.reserve(
+             allocation,
+             options,
+             min(remaining(allocation.deadline), @timeout)
+           ) do
         {:ok, _, :starting} = result ->
           result
 
@@ -53,24 +78,43 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     with {:ok, metadata} <- metadata(allocation), do: {:ok, metadata.descriptor}
   end
 
-  def adopt(allocation, consumer), do: call(allocation, {:adopt, consumer})
+  def adopt(allocation, consumer) do
+    command = command(allocation)
+
+    try do
+      result = request(allocation, {:adopt, consumer, command}, command.deadline)
+
+      if result == :ok and remaining(command.deadline) == 0,
+        do: adoption_timeout(allocation, command),
+        else: result
+    catch
+      :exit, {:timeout, _call} -> adoption_timeout(allocation, command)
+      :exit, _reason -> {:error, :closed}
+    end
+  end
+
   def ack(allocation, event), do: call(allocation, {:ack, event})
 
   def push_audio(allocation, audio)
       when is_binary(audio) and byte_size(audio) in 1..@maximum_audio_bytes do
-    deadline = System.monotonic_time(:millisecond) + @timeout
+    command = command(allocation)
 
-    with {:ok, metadata} <- metadata(allocation), true <- metadata.active? do
-      invoke(
-        allocation,
-        min(deadline, System.monotonic_time(:millisecond) + metadata.call_timeout),
-        fn ->
-          metadata.module.push_audio(metadata.producer, audio)
-        end
-      )
-    else
-      false -> {:error, :not_ready}
-      error -> error
+    try do
+      if Allocation.valid?(allocation) do
+        GenServer.call(
+          Channel.address(allocation),
+          {:input, allocation, command, audio},
+          remaining(command.deadline)
+        )
+      else
+        {:error, :closed}
+      end
+    catch
+      :exit, {:timeout, _call} ->
+        input_timeout(allocation, command)
+
+      :exit, _reason ->
+        if(Allocation.valid?(allocation), do: {:error, :session_failed}, else: {:error, :closed})
     end
   end
 
@@ -78,26 +122,31 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   def push_audio(_allocation, _audio), do: {:error, :invalid_audio}
 
   def close(allocation) do
-    deadline = System.monotonic_time(:millisecond) + @timeout
-    tree = tree(allocation)
-    monitor = if is_pid(tree), do: Process.monitor(tree)
+    deadline = System.monotonic_time(:millisecond) + allocation.call_timeout
 
-    result = ScopeControl.close(allocation, :closed)
+    case ScopeControl.close(allocation, :closed, deadline) do
+      {:ok, tree} -> await_closed(tree, deadline)
+      error -> error
+    end
+  catch
+    :exit, {:timeout, _call} -> {:error, :close_timeout}
+    :exit, _reason -> if(tree(allocation), do: {:error, :unavailable}, else: :ok)
+  end
 
-    if result == :ok and monitor do
+  defp await_closed(nil, _deadline), do: :ok
+
+  defp await_closed(tree, deadline) do
+    monitor = Process.monitor(tree)
+
+    try do
       receive do
         {:DOWN, ^monitor, :process, ^tree, _reason} -> :ok
       after
-        max(deadline - System.monotonic_time(:millisecond), 0) ->
-          Process.demonitor(monitor, [:flush])
-          {:error, :close_timeout}
+        remaining(deadline) -> {:error, :close_timeout}
       end
-    else
-      if monitor, do: Process.demonitor(monitor, [:flush])
-      result
+    after
+      Process.demonitor(monitor, [:flush])
     end
-  catch
-    :exit, _reason -> :ok
   end
 
   @doc false
@@ -113,42 +162,57 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   defp metadata(allocation), do: call(allocation, :metadata)
 
   defp call(allocation, message) do
-    if Allocation.valid?(allocation),
-      do: GenServer.call(Channel.address(allocation), message, @timeout),
-      else: {:error, :closed}
+    deadline = System.monotonic_time(:millisecond) + allocation.call_timeout
+
+    request(allocation, message, deadline)
   catch
+    :exit, {:timeout, _call} -> {:error, :command_timeout}
     :exit, _reason -> {:error, :closed}
   end
 
-  defp invoke(allocation, deadline, operation) do
-    task =
-      Task.Supervisor.async_nolink(SessionTree.commands(allocation), fn -> safely(operation) end)
+  defp request(allocation, message, deadline) do
+    if Allocation.valid?(allocation),
+      do:
+        GenServer.call(
+          Channel.address(allocation),
+          {:command, allocation, deadline, message},
+          remaining(deadline)
+        ),
+      else: {:error, :closed}
+  end
 
-    case Task.yield(task, max(deadline - System.monotonic_time(:millisecond), 0)) do
-      {:ok, {:error, :session_failed}} ->
-        fail(allocation)
+  defp command(allocation) do
+    %{
+      ref: make_ref(),
+      deadline: System.monotonic_time(:millisecond) + allocation.call_timeout,
+      token: :atomics.new(1, [])
+    }
+  end
 
-      {:ok, result} ->
-        result
+  defp adoption_timeout(allocation, command) do
+    if :atomics.compare_exchange(command.token, 1, 0, 2) == 1, do: retire(allocation)
+    {:error, :command_timeout}
+  end
 
-      _failed ->
-        Task.shutdown(task, :brutal_kill)
-        fail(allocation)
+  defp input_timeout(allocation, command) do
+    # Only the Channel can admit this fresh ticket after checking current authority.
+    # Cancelling a queued command must not revoke an otherwise usable allocation.
+    case :atomics.compare_exchange(command.token, 1, 0, 2) do
+      :ok ->
+        {:error, :command_timeout}
+
+      1 ->
+        retire(allocation)
+        {:error, :session_failed}
     end
-  catch
-    :exit, _reason -> fail(allocation)
   end
 
-  defp fail(allocation) do
-    _result = ScopeControl.close(allocation, :session_failed)
-    {:error, :session_failed}
+  defp retire(allocation) do
+    Allocation.cancel(allocation)
+    ScopeControl.failed(allocation, :session_failed)
+    if pid = provider(allocation), do: Process.exit(pid, :kill)
+    if pid = GenServer.whereis(Channel.address(allocation)), do: Process.exit(pid, :kill)
   end
 
-  defp safely(operation) do
-    operation.()
-  rescue
-    _error -> {:error, :session_failed}
-  catch
-    _kind, _reason -> {:error, :session_failed}
-  end
+  defp remaining(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
 end

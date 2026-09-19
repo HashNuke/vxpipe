@@ -1,6 +1,6 @@
 defmodule Vxpipe.CallEngine.Speech.Allocation do
   @moduledoc "An exact speech allocation generation, including cancellation before provider creation."
-  @enforce_keys [:scope, :generation, :owner, :consumer, :lease, :deadline, :token]
+  @enforce_keys [:scope, :generation, :owner, :consumer, :lease, :deadline, :token, :call_timeout]
   @derive {Inspect, only: [:generation, :owner, :deadline]}
   defstruct @enforce_keys
   @type t :: %__MODULE__{}

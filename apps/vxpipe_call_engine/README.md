@@ -13,7 +13,8 @@ dot plus an end gap; it does not use the Morse encoder to supply its expected re
 The [original startup-isolation defect](../../docs/speech-startup-isolation.md) and latency
 measurements remain recorded. The new API requires the explicit local scopes described in
 the [ownership plan](../../docs/speech-session-ownership.md); its isolated held-start and
-adoption tests pass. Checkpoint R acceptance and room migration remain separate gates.
+adoption tests pass. Checkpoint R is accepted; native STT/TTS completion and room migration
+remain subsequent gates.
 The [scoped room experiment](../../docs/scoped-speech-experiment.md) supplies a separate test-only
 prototype and reproducible paired load checks for policy, turns, output and interruption.
 
@@ -69,7 +70,13 @@ exhausts this allowance receives `{:vxpipe_speech_closed, session, :event_overfl
 retire the session. There is no automatic retry or replay.
 
 Initialization and commands default to five-second deadlines; startup includes local admission
-wait and required adoption, and settles when activation succeeds. Owner loss, failed commands and
+wait and required adoption, and settles when activation succeeds. `call_timeout` accepts
+1–5,000 ms; each later operation carries one deadline through its queue and completion.
+Input uses one persistent local worker; success means provider acceptance. A queued timeout
+leaves the allocation usable, while an admitted timeout retires it. Close returns success only
+after authoritative cancellation and observed tree teardown (or cancellation before creation).
+A timed-out adoption that already committed is retired safely; it cannot deliver late readiness.
+See [deadline and fault evidence](../../docs/speech-deadlines-and-failure-containment.md). Owner loss, failed commands and
 explicit close tear down owned work; close discards incomplete speech rather than inventing
 a final transcript. A local ready event means initialized, and turn end means the decoder
 observed its configured silence gap. The descriptor reports locally measured usage without

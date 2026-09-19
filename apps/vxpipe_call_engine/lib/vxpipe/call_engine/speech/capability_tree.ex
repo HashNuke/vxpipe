@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Speech.CapabilityTree do
   @moduledoc "Temporary local ownership for a live speech allocation and its prepared replacement."
   use Supervisor
 
-  alias Vxpipe.CallEngine.Speech.{Scope, ScopeControl}
+  alias Vxpipe.CallEngine.Speech.{Admission, Scope, ScopeControl}
 
   def child_spec(options) do
     %{
@@ -35,8 +35,9 @@ defmodule Vxpipe.CallEngine.Speech.CapabilityTree do
   def init(options) do
     children = [
       {ScopeControl, owner: Keyword.fetch!(options, :owner)},
-      Supervisor.child_spec({Task.Supervisor, name: address({self(), :admissions})},
-        id: :admissions
+      Supervisor.child_spec({Admission, name: address({self(), :admissions})},
+        id: :admissions,
+        shutdown: :brutal_kill
       ),
       Supervisor.child_spec(
         {DynamicSupervisor, name: address({self(), :sessions}), strategy: :one_for_one},
