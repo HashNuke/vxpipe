@@ -156,15 +156,17 @@ verification; 1,786 umbrella and 183 frontend tests pass, with all static gates 
 D1 removes the legacy Telnyx events route, verifier-selection branch and callback
 generation per the user's clarification. Scoped live bindings, media and Twilio checks
 pass; final umbrella: 1,788 tests, zero failures, 40 excluded, all static gates green.
-Application/number setup C3b is implemented; final acceptance D2 remains open. C3b1's operator
+Application/number setup C3b and final acceptance D2 are complete. C3b1's operator
 application API and current published-route directory are implemented; Calls (117),
 Persistence (184), Console (185) and static gates pass. Its first 1,798-test umbrella
 run had one native WebRTC handoff timeout; five isolated reruns passed. C3b2's Console
 application form and published-number progress pass 187 frontend tests, desktop/mobile,
-request-failure, restart and independent finish review. Final acceptance stays unchecked
-until the full umbrella rerun passes.
-This does not change the
-completed historical tenant-credential milestone or mark backend work complete.
+request-failure, restart and independent finish review. D2 verifies combined replacement,
+restart, re-encryption and guarded schema rollback. The final full umbrella passes
+1,798 tests, zero failures, 40 excluded; all root static gates and asset builds pass.
+All 13 implementation checkpoints in the scoped-services follow-up are accepted.
+This does not change the completed historical tenant-credential milestone or complete
+the broader demo-bootstrap, debug-console and Getting Started milestones.
 
 After milestone 22 passes its acceptance gates, stop implementation and present the complete
 pre-packaging platform for user review. Exercise the runnable samples and the relevant framework,

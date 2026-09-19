@@ -1,11 +1,11 @@
 # Platform and tenant services
 
-Status: implementation authorized 2026-09-19. Storybook, A, A2, A3, B1, B2 and B3
-are delivered, including the credential-presence correction. C1/C2 scoped Telnyx
-bindings/ingress, C3a Console credential/URL configuration, D1 legacy webhook removal
-and C3b application/number-route setup are implemented. D2 final acceptance remains.
-All root static gates and 187 frontend tests pass. The C3b umbrella rerun remains
-pending after one native WebRTC timeout in its first 1,798-test run.
+Status: implemented and accepted 2026-09-19. Storybook and all 13 implementation
+checkpoints are delivered, including the credential-presence correction, scoped
+Telnyx ingress, Console application/number setup and legacy webhook removal.
+Final verification passes 1,798 umbrella tests with zero failures and 40 exclusions,
+187 frontend tests, all root static gates, browser/restart, re-encryption and rollback
+checks. Live Telnyx verification remains a deployment check, not claimed here.
 Requested 2026-09-19. This extends the previously tenant-only credential decision.
 It does not restore environment-based provider credentials or implicit failure fallback.
 
@@ -171,11 +171,11 @@ browser checks. A checked design task does not count as a delivered slice.
   directory. Count only usable exact named bindings, show inherited states,
   route credential management through the scoped setup page, and prove inherited
   sample publication plus reload and failure recovery. Preserve edited samples.
-- [ ] **C — Receive a scoped Telnyx call.** Bind a tenant Voice API application to its
+- [x] **C — Receive a scoped Telnyx call.** Bind a tenant Voice API application to its
   selected service scope, verify the route-selected key, then dispatch to that tenant.
   Exercise both routes with persisted credentials, wrong-scope/tenant rejection and
   duplicate/outage behavior. Expose the matching URL and configuration in Console.
-- [ ] **D — Remove legacy Telnyx webhooks and complete acceptance.** Use only the explicit
+- [x] **D — Remove legacy Telnyx webhooks and complete acceptance.** Use only the explicit
   platform and tenant webhook paths. Remove the legacy events route and callback generation
   in a reviewed checkpoint, preserving media/token and Twilio contracts. Verify replacement,
   re-encryption, restart, schema rollback boundaries and final umbrella gates. Document
@@ -183,7 +183,7 @@ browser checks. A checked design task does not count as a delivered slice.
 - [x] **D1 — Remove legacy Telnyx webhook routing and generation.** The old events URL
   cannot dispatch, and fresh clients require a scoped primary binding. Media/token and
   Twilio behavior remain verified. This checkpoint follows C3a and precedes C3b.
-- [ ] **D2 — Complete final acceptance.** Verify replacement, re-encryption, restart,
+- [x] **D2 — Complete final acceptance.** Verify replacement, re-encryption, restart,
   schema rollback and the final combined application/number-setup flow after C3b.
 
 Checkpoint design review, 2026-09-19: A establishes the shared scoped resolver before
@@ -210,10 +210,10 @@ The [scoped Telnyx binding decision](scoped-telnyx-service-bindings.md) records 
 legacy compatibility boundary, selected-owner identity and acceptance order.
 C3 is split into credential/URL setup (C3a) and tenant application configuration
 (C3b). C3b is delivered as an operator API/durable-route checkpoint (C3b1), then its
-Console form and browser acceptance (C3b2). C3b1's API is implemented and its owning
-application suites pass; C3b2's Console form and rendered acceptance also pass.
-Final umbrella acceptance remains open after a native WebRTC handoff timeout
-outside this slice. The binding decision
+Console form and browser acceptance (C3b2). Both are implemented and accepted by
+their owning suites, rendered checks and the final combined umbrella run. An earlier
+native WebRTC timeout did not recur in five isolated runs or that final full run.
+The binding decision
 records their input, authority, identity and published-route contracts separately
 from implementation progress. C3a includes D's shared-origin and outgoing scope-URL generation so displayed
 and outgoing URLs agree; D owns legacy webhook deletion and final acceptance, per
@@ -250,7 +250,7 @@ Checkpoint A implementation details:
   the compatibility default rather than inventing a historical credential identity.
 - The migration does not rewrite tenant IDs or ciphertext. Its down migration works
   for unchanged tenant-only configuration and rejects scoped configuration requiring
-  deliberate cutover. Further Telnyx migration and callback acceptance remain in D.
+  deliberate cutover. D records the final Telnyx migration and callback acceptance.
 
 Checkpoint A2 is reviewed and committed as `5a0b407`. Explicit authorized save/publish
 boundaries distinguish installation operators from tenant principals and recheck the
@@ -432,7 +432,7 @@ Checkpoint C3b1 implementation:
   100 applications/500 routes, with ambiguity counted before truncation.
 - Calls (117), Persistence (184) and Console (185) suites pass, along with all static
   gates. The first 1,798-test umbrella run had one native WebRTC handoff timeout;
-  five isolated reruns passed. Final umbrella acceptance remains pending. See
+  five isolated reruns and D2's final full umbrella run passed unchanged. See
   [C3b1 evidence](../labnotes/20260919-1208-tenant-phone-application-api.md).
 
 Checkpoint C3b2 implementation:
@@ -446,8 +446,27 @@ Checkpoint C3b2 implementation:
 - All 187 frontend tests, TypeScript, ESLint, Prettier and asset builds pass. Chrome
   at 1440px and 390px verifies both credential sources, real create/edit, persisted
   published routes, errors, retry and restart. Independent finish review returns `ship`;
-  no new design-system rule is needed. Final umbrella acceptance remains in D2. See
+  no new design-system rule is needed. D2 closes final umbrella acceptance. See
   [C3b2 evidence](../labnotes/20260919-1225-tenant-phone-configuration.md).
+
+Checkpoint D2 acceptance:
+
+- Both inherited and tenant-owned credentials support durable application/number
+  setup. Replacement, server restart and encryption-key rotation preserve the expected
+  credential identities/owners, application mappings and published routes. Fresh rendered
+  navigation after rotation confirms each tenant's source and routing metadata.
+- Disposable schema upgrade/rollback/re-upgrade preserves legacy IDs and ciphertext.
+  Rollback rejects live scoped bindings atomically; a fresh VM still resolves the same
+  application and verifier afterward. Owned browser/server/database fixtures are removed.
+- The final root run passes 1,798 tests, zero failures, 40 excluded. Format, compile with
+  warnings as errors, strict Credo, unused-dependency checks and asset builds pass;
+  all 187 frontend tests, TypeScript, ESLint and Prettier pass. The prior native handoff
+  timeout is recorded without claiming its cause or changing its timeout.
+- All 13 implementation checkpoints are accepted: A, A2, A3, B1, B2, B3, C1, C2, C3a,
+  C3b1, C3b2, D1 and D2. Parent C/D entries summarize those slices. Remote Telnyx
+  provisioning, shared applications, alternate named Telnyx accounts and new AI adapters
+  remain outside this plan. No live-provider call is claimed. See
+  [final acceptance evidence](../labnotes/20260919-1304-scoped-services-acceptance.md).
 
 ### 1. Storybook review checkpoint
 
@@ -488,7 +507,7 @@ remote application provisioning, credential persistence, verification or routing
   single selected public key per scope. Keep API credentials encrypted and the verification
   public key non-secret. Update telephony foreign-key constraints without permitting an
   unrelated tenant credential or application to satisfy a binding.
-- [ ] Add tenant Voice API application bindings referencing the selected credential scope;
+- [x] Add tenant Voice API application bindings referencing the selected credential scope;
   validate ownership and reject ambiguous mappings. Configure application ID and number
   routing before reporting telephony ready; API/public key alone are insufficient.
 - [x] Mount both approved `/webhooks/...` routes through the existing Phoenix/Gateway
@@ -512,9 +531,9 @@ remote application provisioning, credential persistence, verification or routing
   Show source and unavailable/invalid states and explicit restore/override actions.
 - [x] Make service scope changes deliberate and display the resulting webhook URL change.
   Keep secrets write-only and isolate operator/platform authority from tenant administration.
-- [ ] Derive progress from durable resources after reload, including telephony application
+- [x] Derive progress from durable resources after reload, including telephony application
   and number setup. Preserve existing tenant services and prepared/live-call contracts.
-- [ ] Run focused red-green tests per owning boundary, browser inspection, required umbrella
+- [x] Run focused red-green tests per owning boundary, browser inspection, required umbrella
   checks and a migration/restart exercise. Record deferred provider integrations accurately.
 
 ## Alternatives and design review

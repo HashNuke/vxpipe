@@ -1,6 +1,6 @@
 # Scoped Telnyx service bindings
 
-Decision: 2026-09-19. Design and C1/C2/C3a/C3b/D1 implementation reviewed. Final umbrella acceptance remains open under checkpoint C of the
+Decision: 2026-09-19. Design, implementation and final C/D acceptance complete under the
 [platform and tenant services plan](platform-and-tenant-services.md).
 
 ## Credential ownership and application identity
@@ -99,22 +99,21 @@ and URLs; C3b supplies application configuration and published number progress.
   the route-selected credential scope; it cannot choose another scope's verifier.
   Authenticate the exact raw bytes before trusting new application routing. Preserve
   initialized owner credentials and duplicate/outage behavior.
-- [ ] C3: expose public-key configuration, application bindings and matching webhook
+- [x] C3: expose public-key configuration, application bindings and matching webhook
   URLs in the operator Console, with durable metadata and browser verification.
 - [x] C3a: production credential form, configured-field metadata, shared public origin
   and matching UI/outgoing scoped URLs. Browser/restart and all required checks pass.
-- [ ] C3b: tenant application configuration and published number-route progress.
-- [ ] C3b1: operator application create/update API and bounded, durable published-route metadata.
-  API implementation and owning application suites pass; final umbrella acceptance is
-  pending after an existing native WebRTC handoff timeout, not reproduced in five isolated runs.
-- [ ] C3b2: Console application form, progress, recovery and browser/restart verification.
+- [x] C3b: tenant application configuration and published number-route progress.
+- [x] C3b1: operator application create/update API and bounded, durable published-route metadata.
+  API implementation, owning application suites and final umbrella acceptance pass.
+- [x] C3b2: Console application form, progress, recovery and browser/restart verification.
   Implementation, all 187 frontend tests, desktop/mobile/restart checks and independent
-  finish review pass. Final combined umbrella acceptance remains pending.
-- [ ] D removes the legacy Telnyx webhook path and callback generation, then completes
+  finish review pass, together with final combined umbrella acceptance.
+- [x] D removes the legacy Telnyx webhook path and callback generation, then completes
   restart/rollback/re-encryption and final umbrella acceptance from the parent plan.
 - [x] D1: remove the old route, verifier selection and callback generation; reject
   unscoped fresh Telnyx clients and preserve media/Twilio behavior.
-- [ ] D2: final combined application/number setup, restart, re-encryption and rollback acceptance.
+- [x] D2: final combined application/number setup, restart, re-encryption and rollback acceptance.
 
 Design review: keep credentials separate from tenant application identity; reuse the
 existing owner/presence resolver rather than introduce another fallback mechanism.
@@ -125,9 +124,11 @@ database upgrade/rollback/restart acceptance. The umbrella run covers 1,770 test
 one obsolete reference-field assertion was corrected and the full 116-test Calls suite
 rerun. C2's full umbrella passes 1,781 tests with zero failures and 40 exclusions;
 all static gates pass. C3a now passes 1,786 umbrella tests, 183 frontend tests, all
-static checks and desktop/mobile/restart verification. C3b implementation now passes
-its owning suites, 187 frontend tests and rendered/restart checks; the full umbrella
-rerun remains pending. Live-provider verification is not claimed.
+static checks and desktop/mobile/restart verification. C3b passes its owning suites,
+187 frontend tests and rendered/restart checks. D2's final full umbrella passes
+1,798 tests with zero failures and 40 exclusions, plus all root static gates.
+The earlier native handoff timeout did not recur in five isolated runs or the final
+full suite. Live-provider verification is not claimed.
 
 Console dependency review, 2026-09-19: move D's common public-origin and outgoing
 scope-URL generation into C3a so the displayed URL and newly initialized callbacks
@@ -136,8 +137,8 @@ path prefixes, and default public APP_HOST to HTTPS. Local HTTP is a configurati
 preview, not phone readiness. C3b follows the verified binding/ingress boundaries and
 keeps application identity separate from credential edits. The latest user correction
 replaces deliberate legacy cutover with webhook deletion.
-D retains final restart/re-encryption/rollback acceptance. C3b and D remain open until their
-implementation and acceptance checks pass.
+D owns final restart/re-encryption/rollback acceptance. C3b and D are implemented and
+accepted; their evidence remains distinct from live-provider verification.
 
 Telnyx documents account-level Ed25519 verification over the original request body
 and application-owned webhook configuration. These support the separation above;
@@ -188,9 +189,10 @@ Reject copying platform keys into applications, deriving tenant identity from ph
 or weakening the older tenant-credential inventory contract to accommodate applications.
 Application metadata has its own operator view and never masquerades as a credential.
 
-Acceptance: prove explicit operator authority, CSRF and input allowlists; create and edit
-two tenants' mappings with inheritance and overrides; reject duplicate application IDs,
-foreign edits and unusable credentials; preserve prepared/live identity rules; verify
-current published routes, conflicts, bounds and secret-safe responses. C3b2 adds desktop,
-mobile, reload/restart, missing-key and request-failure states. D2 retains final combined
-replacement/re-encryption/rollback acceptance.
+Acceptance checks pass for explicit operator authority, CSRF, input allowlists,
+two tenants' mappings with inheritance and overrides, duplicate application rejection,
+foreign edits, unusable credentials, prepared/live identity rules, current published
+routes, conflicts, bounds and secret-safe responses. C3b2 verifies desktop/mobile,
+reload/restart, missing-key and request-failure states. D2 verifies combined
+replacement/re-encryption/rollback acceptance. See the
+[final labnotes](../labnotes/20260919-1304-scoped-services-acceptance.md).

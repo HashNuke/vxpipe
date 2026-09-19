@@ -11,32 +11,23 @@ Sources: [Developer console design](../developer-console-and-onboarding.md),
 
 The 2026-09-19 [platform and tenant services plan](../platform-and-tenant-services.md)
 extends the tenant-only contracts below with explicit platform inheritance and tenant
-overrides. Its sequence covers Storybook review, scoped credential storage/readers,
-scoped Telnyx verification/routing, then Console integration. Backend tasks remain
-unchecked; the existing operator session can authorize this work before programmatic
-platform API-key issuance is complete. The user authorized that implementation on
-2026-09-19. Its [eight runnable delivery checkpoints](../platform-and-tenant-services.md#runnable-delivery-checkpoints)
-cover inherited-provider execution, Console management, scoped incoming Telnyx calls,
-then callback cutover and migration/restart acceptance. The user's authoring-authority
-clarification adds principal-aware writes and operator API keys for programmatic authoring.
-Checkpoints A/A2/A3/B1 pass focused tests and the serial umbrella suite; B1's operator-session
-Console flow also passes browser/restart inspection. B2's original tenant policy implementation
-passed owning suites and browser/restart checks, but initially left umbrella acceptance open
-after a native multi-listener WebRTC audio failure;
-the platform-key and demo-bootstrap gates below remain independently tracked.
-B3 connects the older onboarding/sample installer to effective services. Its focused
-inherited-installation, exact-name and edited-sample checks pass,
-along with Chrome/restart verification. The combined 1,759-test run passed all 180
-Console tests but failed one native WebRTC preparation case.
-The latest user clarification supersedes disabled/dormant credential policies: a tenant
-credential takes precedence by presence; removing it restores platform inheritance.
-The correction adds scoped deletion and removes policy controls. Focused red-green,
-transaction, desktop/mobile Chrome, migration/rollback/restart and all root checks pass.
-The final combined suite passes 1,763 tests with zero failures and 40 exclusions,
-closing B2/B3 acceptance. Scoped Telnyx C/D and the remaining milestone gates stay open.
-The two A3 steps implement trusted key bootstrap/replacement/revocation, authenticated
-platform status and operator/tenant call-spec HTTP writes. Persisted lifecycle tests,
-real HTTP/restart checks and the 1,754-test combined umbrella run pass. See the
+overrides. Its Storybook work and all 13 implementation checkpoints are accepted:
+scoped credential storage/readers, principal-aware operator/tenant authoring, Console
+management, inherited onboarding, scoped Telnyx verification/application routing,
+legacy webhook removal and final migration/restart acceptance.
+
+Credential presence supersedes the earlier disabled/dormant policy: a tenant credential
+takes precedence; removing it restores platform inheritance. Tenant API-key authors
+still require tenant-owned services even when an operator used platform services in
+the existing spec. Runtime resolves the selected tenant's effective credentials.
+
+The final combined suite passes 1,798 tests with zero failures and 40 exclusions,
+plus 187 frontend tests, all root static checks, desktop/mobile Chrome, restart,
+re-encryption and guarded schema rollback. No live-provider call is claimed.
+The platform-key and demo-bootstrap gates below remain independently tracked;
+the services follow-up does not establish a durable installation/demo identity.
+A3 implements trusted key bootstrap/replacement/revocation, authenticated platform
+status and operator/tenant call-spec HTTP writes. See the
 [operator-key contract](../operator-api-key-authoring.md).
 
 ## Runnable outcome
