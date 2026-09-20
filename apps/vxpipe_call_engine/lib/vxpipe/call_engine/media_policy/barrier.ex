@@ -8,17 +8,21 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Barrier do
           Snapshot.t(),
           pos_integer()
         ) ::
-          :ok | {:error, :enforcement_failed}
+          :ok | {:error, :enforcement_failed, pid(), MapSet.t(pid())}
   def apply(enforcers, %Snapshot{} = snapshot, timeout_ms)
       when is_map(enforcers) and is_integer(timeout_ms) and timeout_ms > 0 do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
 
-    Enum.reduce_while(enforcers, :ok, fn {enforcer, registration}, :ok ->
+    Enum.reduce_while(enforcers, MapSet.new(), fn {enforcer, registration}, applied ->
       case apply_enforcer(enforcer, registration.connection, snapshot, deadline) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} -> {:halt, {:error, :enforcement_failed}}
+        :ok -> {:cont, MapSet.put(applied, enforcer)}
+        {:error, _reason} -> {:halt, {:error, :enforcement_failed, enforcer, applied}}
       end
     end)
+    |> case do
+      %MapSet{} -> :ok
+      error -> error
+    end
   end
 
   defp apply_enforcer(enforcer, connection, snapshot, deadline) do

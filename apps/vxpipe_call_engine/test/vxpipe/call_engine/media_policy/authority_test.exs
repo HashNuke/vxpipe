@@ -502,6 +502,157 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
                     {:media_policy_enforcer_unavailable, ^enforcer, :killed}}
   end
 
+  test "explicit retirement removes a live connection's enforcers before teardown" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    first = start_enforcer()
+    second = start_enforcer()
+    retained = start_enforcer()
+
+    assert {:ok, _} = Authority.register_connection_enforcer(server, first, self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, second, self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert_receive {:media_policy_applied, ^first, _}
+    assert_receive {:media_policy_applied, ^second, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+
+    assert :ok = Authority.retire_connection_enforcers(server, self(), [first, second])
+    first_monitor = Process.monitor(first)
+    second_monitor = Process.monitor(second)
+    Process.exit(first, :kill)
+    Process.exit(second, :kill)
+    assert_receive {:DOWN, ^first_monitor, :process, ^first, :killed}
+    assert_receive {:DOWN, ^second_monitor, :process, ^second, :killed}
+
+    assert {:ok, snapshot} = Authority.admit(server, "joining")
+    assert_receive {:media_policy_applied, ^retained, ^snapshot}
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  test "a failed connection enforcer group stops locally and retains other connection media" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    failed = start_enforcer()
+    grouped = start_enforcer(trap_exit: true)
+    retained = start_enforcer()
+
+    assert {:ok, _} = Authority.register_connection_enforcers(server, [failed, grouped], self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert_receive {:media_policy_applied, ^failed, _}
+    assert_receive {:media_policy_applied, ^grouped, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+
+    grouped_monitor = Process.monitor(grouped)
+    Process.exit(failed, :kill)
+    assert_receive {:DOWN, ^grouped_monitor, :process, ^grouped, :killed}
+
+    assert {:ok, snapshot} = Authority.admit(server, "joining")
+    assert_receive {:media_policy_applied, ^retained, ^snapshot}
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  test "a group that rejects initial policy is killed without stopping the authority" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    rejecting = start_enforcer(mode: {:error, :rejected})
+    grouped = start_enforcer(trap_exit: true)
+    rejecting_monitor = Process.monitor(rejecting)
+    grouped_monitor = Process.monitor(grouped)
+
+    assert {:error, :enforcement_failed} =
+             Authority.register_connection_enforcers(server, [rejecting, grouped], self())
+
+    assert_receive {:DOWN, ^rejecting_monitor, :process, ^rejecting, :killed}
+    assert_receive {:DOWN, ^grouped_monitor, :process, ^grouped, :killed}
+    assert {:ok, snapshot} = Authority.admit(server, "joining")
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  test "a queued policy transition retires a group whose failure signal is still queued" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    failed = start_enforcer()
+    grouped = start_enforcer()
+    retained = start_enforcer()
+
+    assert {:ok, _} = Authority.register_connection_enforcers(server, [failed, grouped], self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert_receive {:media_policy_applied, ^failed, _}
+    assert_receive {:media_policy_applied, ^grouped, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+
+    :ok = :sys.suspend(server)
+    failed_monitor = Process.monitor(failed)
+    grouped_monitor = Process.monitor(grouped)
+    tag = make_ref()
+
+    TestMediaPolicyEnforcer.request_and_stop(
+      failed,
+      server,
+      {:admit, "joining"},
+      self(),
+      tag
+    )
+
+    assert_receive {:DOWN, ^failed_monitor, :process, ^failed, :normal}
+    :ok = :sys.resume(server)
+
+    assert_receive {^tag, {:ok, snapshot}}, 1_000
+    assert_receive {:DOWN, ^grouped_monitor, :process, ^grouped, :killed}
+    assert_receive {:media_policy_applied, ^retained, ^snapshot}
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  test "a grouped failure during enforcement continues without replaying accepted revisions" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    enforcers = Enum.map(1..4, fn _index -> start_enforcer() end)
+    [retained, held, grouped, survivor] = policy_order(enforcers)
+
+    assert {:ok, _} = Authority.register_connection_enforcers(server, [held, grouped], self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, survivor, self())
+    assert_receive {:media_policy_applied, ^held, _}
+    assert_receive {:media_policy_applied, ^grouped, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+    assert_receive {:media_policy_applied, ^survivor, _}
+    :sys.replace_state(retained, &Map.put(&1, :mode, :monotonic))
+    :sys.replace_state(held, &Map.put(&1, :mode, :manual))
+    :sys.replace_state(survivor, &Map.put(&1, :mode, :monotonic))
+
+    grouped_monitor = Process.monitor(grouped)
+    admission = Task.async(fn -> Authority.admit(server, "joining") end)
+    assert_receive {:media_policy_applied, ^retained, snapshot}
+    assert_receive {:media_policy_applied, ^held, ^snapshot}
+    refute_received {:media_policy_applied, ^grouped, ^snapshot}
+    refute_received {:media_policy_applied, ^survivor, ^snapshot}
+    Process.exit(held, :kill)
+
+    assert {:ok, ^snapshot} = Task.await(admission)
+    assert_receive {:DOWN, ^grouped_monitor, :process, ^grouped, :killed}
+    assert_receive {:media_policy_applied, ^survivor, ^snapshot}
+    refute_receive {:media_policy_applied, ^retained, ^snapshot}
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  test "retiring one grouped enforcer retires the whole registration without killing peers" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    first = start_enforcer()
+    second = start_enforcer()
+    retained = start_enforcer()
+
+    assert {:ok, _} = Authority.register_connection_enforcers(server, [first, second], self())
+    assert {:ok, _} = Authority.register_connection_enforcer(server, retained, self())
+    assert_receive {:media_policy_applied, ^first, _}
+    assert_receive {:media_policy_applied, ^second, _}
+    assert_receive {:media_policy_applied, ^retained, _}
+
+    second_monitor = Process.monitor(second)
+    assert :ok = Authority.retire_connection_enforcers(server, self(), [first])
+    Process.exit(first, :kill)
+
+    assert {:ok, snapshot} = Authority.admit(server, "joining")
+    assert_receive {:media_policy_applied, ^retained, ^snapshot}
+    refute_receive {:media_policy_applied, ^second, ^snapshot}
+    refute_receive {:DOWN, ^second_monitor, :process, ^second, _reason}
+    assert Authority.snapshot(server) == snapshot
+  end
+
   test "candidate adoption retains the destination connection's enforcer lifetime" do
     server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
     connection = start_enforcer()
@@ -571,6 +722,12 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     start_supervised!(
       {TestMediaPolicyEnforcer, Keyword.merge([owner: self(), mode: :ok], options)}
     )
+  end
+
+  defp policy_order(enforcers) do
+    enforcers
+    |> Map.new(&{&1, nil})
+    |> Enum.map(fn {enforcer, nil} -> enforcer end)
   end
 
   defp plan(presence_policies) do
