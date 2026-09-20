@@ -58,7 +58,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   defp begin_current(%{pending_policy: nil} = state, candidate, options) do
     change = change(state, candidate.snapshot)
 
-    with {:ok, session} <- prepare_session(state, candidate.snapshot, change) do
+    with {:ok, session} <- prepare_session(state, candidate.snapshot, change, options) do
       token = make_ref()
       owner = Keyword.fetch!(options, :owner)
       deadline = Keyword.fetch!(options, :deadline_ms)
@@ -200,6 +200,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
     %{state | pending_policy: %{pending | state: session}}
   end
 
+  def prepared(%{pending_policy: %{state: session} = pending} = state, allocation, descriptor) do
+    case State.prepared(session, allocation, descriptor) do
+      {:ok, session} -> {:ok, %{state | pending_policy: %{pending | state: session}}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def prepared(_state, _allocation, _descriptor), do: {:error, :stale_session}
+
+  def bridge_failed(
+        %{pending_policy: %{state: %{session: allocation}} = pending} = state,
+        allocation
+      ) do
+    session = %{pending.state | readiness_status: :failed, usage: nil}
+    %{state | pending_policy: %{pending | state: session, failed?: true}}
+  end
+
+  def bridge_failed(state, _allocation), do: state
+
   def message(state, payload) do
     pending = state.pending_policy
     session = pending.state
@@ -275,13 +294,52 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
 
     case State.readiness(pending.state) do
       {:ok, _resource, :ready} ->
-        release_lease(pending)
-        _retired = state |> Usage.finish_session(:cancelled) |> State.close()
-        {:ok, %{pending.state | adopted_policy_token: pending.token}}
+        with {:ok, adopted} <- State.adopt_prepared(pending.state, pending.deadline_ms) do
+          commit_adopted_replacement(state, pending, adopted)
+        else
+          {:error, _reason} -> {:error, :policy_not_ready, state}
+        end
 
       _not_ready ->
         {:error, :policy_not_ready, state}
     end
+  end
+
+  defp commit_adopted_replacement(state, pending, adopted) do
+    if handoff_valid?(pending) do
+      case State.retire_active(state, pending.deadline_ms) do
+        {:ok, retired} -> finish_adopted_replacement(retired, pending, adopted)
+        {:error, _reason} -> reject_adopted_replacement(state, pending, adopted)
+      end
+    else
+      reject_adopted_replacement(state, pending, adopted)
+    end
+  end
+
+  defp finish_adopted_replacement(retired, pending, adopted) do
+    if handoff_valid?(pending) do
+      _finished = Usage.finish_session(retired, :cancelled)
+      release_lease(pending)
+      {:ok, %{adopted | adopted_policy_token: pending.token}}
+    else
+      _closed = adopted |> Usage.finish_session(:cancelled) |> State.close()
+      failed = Usage.finish_session(retired, :failed)
+      release_lease(pending)
+
+      {:error, :policy_not_ready,
+       %{
+         failed
+         | adopted_policy_token: nil,
+           pending_policy: nil,
+           readiness_status: :failed
+       }}
+    end
+  end
+
+  defp reject_adopted_replacement(state, pending, adopted) do
+    _closed = adopted |> Usage.finish_session(:cancelled) |> State.close()
+    release_lease(pending)
+    {:error, :policy_not_ready, %{state | pending_policy: nil}}
   end
 
   defp install_live(state, snapshot) do
@@ -333,8 +391,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
     end
   end
 
-  defp prepare_session(state, snapshot, :replace), do: State.prepare_session(state, snapshot)
-  defp prepare_session(_state, _snapshot, _change), do: {:ok, nil}
+  defp prepare_session(state, snapshot, :replace, options),
+    do: State.prepare_session(state, snapshot, Keyword.fetch!(options, :deadline_ms))
+
+  defp prepare_session(_state, _snapshot, _change, _options), do: {:ok, nil}
 
   defp cleanup(pending, outcome \\ :cancelled) do
     release_lease(pending)
@@ -347,6 +407,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
     Process.demonitor(pending.monitor, [:flush])
     :ok
   end
+
+  defp handoff_valid?(pending),
+    do: Process.alive?(pending.owner) and now() < pending.deadline_ms
 
   defp validate_options(options) do
     owner = Keyword.get(options, :owner)

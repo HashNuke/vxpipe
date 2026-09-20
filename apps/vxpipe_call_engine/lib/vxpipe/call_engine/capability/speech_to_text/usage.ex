@@ -8,7 +8,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.Usage do
   alias Vxpipe.CallEngine.Usage.{ProviderContext, SpeechToTextSession}
 
   @spec start_session(State.t()) :: State.t()
-  def start_session(%State{transport: transport, usage: nil} = state) when is_pid(transport) do
+  def start_session(%State{usage: nil} = state) do
+    if active?(state), do: start_active_session(state), else: state
+  end
+
+  def start_session(%State{} = state), do: state
+
+  defp start_active_session(%State{} = state) do
     with context when is_list(context) <- state.usage_context,
          call_id when is_binary(call_id) <- Keyword.get(context, :call_id),
          participant_id when participant_id == state.identity.participant_id <-
@@ -32,11 +38,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.Usage do
     end
   end
 
-  def start_session(%State{} = state), do: state
-
   @spec transition(State.t(), State.t()) :: State.t()
   def transition(%State{} = previous, %State{} = updated) do
-    if previous.transport == updated.transport do
+    if same_session?(previous, updated) do
       updated
     else
       updated
@@ -97,4 +101,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.Usage do
     send(owner, {:vxpipe_usage_observations, self(), observations})
     :ok
   end
+
+  defp active?(%State{mode: :native, session: session, readiness_status: :ready}),
+    do: not is_nil(session)
+
+  defp active?(%State{mode: :legacy, transport: transport}), do: is_pid(transport)
+  defp active?(%State{}), do: false
+
+  defp same_session?(%State{mode: :native, session: session}, %State{
+         mode: :native,
+         session: session
+       }),
+       do: true
+
+  defp same_session?(%State{mode: :legacy, transport: transport}, %State{
+         mode: :legacy,
+         transport: transport
+       }),
+       do: true
+
+  defp same_session?(%State{}, %State{}), do: false
 end

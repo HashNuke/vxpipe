@@ -14,7 +14,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @call_timeout 5_000
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    case Keyword.get(options, :name) do
+      nil -> GenServer.start_link(__MODULE__, options)
+      name -> GenServer.start_link(__MODULE__, options, name: name)
+    end
+  end
 
   @impl Vxpipe.CallEngine.Readiness.Adapter
   def readiness(capability) do
@@ -192,6 +197,39 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
 
   def handle_info(
+        {:vxpipe_speech_prepared, allocation, descriptor},
+        %{pending_policy: %{state: %{session: allocation}}} = state
+      ) do
+    case PolicyPreparation.prepared(state, allocation, descriptor) do
+      {:ok, state} -> {:noreply, state}
+      {:error, _reason} -> {:noreply, PolicyPreparation.fail(state, :provider_failed)}
+    end
+  end
+
+  def handle_info({:vxpipe_speech, event}, state) do
+    case State.event(state, event) do
+      {:ok, %Signal{} = signal, state} -> handle_signal(signal, state)
+      {:error, :stale_session} -> {:noreply, state}
+      {:error, _reason} -> stop_unavailable(:invalid_provider_message, state)
+    end
+  end
+
+  def handle_info(
+        {:vxpipe_speech_closed, allocation, _reason},
+        %{pending_policy: %{state: %{session: allocation}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state, :provider_failed)}
+
+  def handle_info(
+        {:vxpipe_speech_closed, allocation, _reason},
+        %{session: allocation} = state
+      ),
+      do: stop_unavailable(:provider_failed, state)
+
+  def handle_info({:legacy_stt_bridge_failed, allocation}, state),
+    do: {:noreply, PolicyPreparation.bridge_failed(state, allocation)}
+
+  def handle_info(
         {:DOWN, monitor, :process, _owner, _reason},
         %{pending_policy: %{monitor: monitor}} = state
       ),
@@ -298,7 +336,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
         do: Vxpipe.CallEngine.Readiness.Provider.connected(state.readiness_status),
         else: state.readiness_status
 
-    state = %{state | readiness_status: readiness}
+    state = %{state | readiness_status: readiness} |> Usage.start_session()
     signal = %{signal | policy_revision: state.policy_revision}
     state = Usage.observe_signal(state, signal)
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})

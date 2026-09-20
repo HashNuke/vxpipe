@@ -4,7 +4,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Capability.SpeechToText.{PrivateAllocation, TransportConnector}
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
+  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Readiness.{Provider, Resource}
+  alias Vxpipe.CallEngine.Speech.{Descriptor, Event, Session}
 
   @maximum_audio_bytes 131_072
 
@@ -12,16 +14,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @enforce_keys [
     :connection,
     :connector,
+    :descriptor,
     :identity,
     :last_provider_sequence,
     :media_format,
+    :mode,
+    :next_turn_index,
     :owner,
     :policy,
     :policy_revision,
     :provider_module,
+    :provider_options,
+    :provider_private,
+    :scope,
+    :session,
     :transport,
     :transport_module,
     :transport_options,
+    :turn_indexes,
     :usage,
     :usage_context
   ]
@@ -37,19 +47,27 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @type t :: %__MODULE__{
           connection: map(),
           connector: map() | nil,
+          descriptor: Descriptor.t() | nil,
           identity: map(),
           last_provider_sequence: integer(),
           media_format: map(),
+          mode: :native | :legacy,
+          next_turn_index: non_neg_integer(),
           owner: pid(),
           policy: Snapshot.t() | nil,
           policy_revision: non_neg_integer() | nil,
           private_allocation: PrivateAllocation.t() | nil,
           provider_module: module(),
+          provider_options: term(),
+          provider_private: keyword(),
           readiness_generation: reference(),
           readiness_status: :preparing | :ready | :failed,
+          scope: Vxpipe.CallEngine.Speech.Scope.t() | nil,
+          session: Vxpipe.CallEngine.Speech.Allocation.t() | nil,
           transport: pid() | nil,
           transport_module: module(),
           transport_options: keyword(),
+          turn_indexes: %{optional(reference()) => non_neg_integer()},
           usage: nil | Vxpipe.CallEngine.Usage.SpeechToTextSession.t(),
           usage_context: nil | keyword()
         }
@@ -69,34 +87,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     }
 
     owner = Keyword.fetch!(options, :owner)
-    {provider_module, provider_config} = Keyword.fetch!(options, :provider)
-    {transport_module, transport_options} = Keyword.fetch!(options, :transport)
-    connection = provider_module.connection_options(provider_config)
+    {provider_module, provider_options} = Keyword.fetch!(options, :provider)
 
     with {:ok, demanded?} <- initial_demand(options, identity.participant_id),
          {:ok, allocation} <- PrivateAllocation.new(options, identity.participant_id),
-         {:ok, transport} <-
-           start_transport(demanded?, transport_module, connection, transport_options) do
-      {:ok,
-       %__MODULE__{
-         connection: connection,
-         connector: nil,
-         identity: identity,
-         last_provider_sequence: -1,
-         media_format: provider_module.media_format(provider_config),
-         owner: owner,
-         policy: nil,
-         policy_revision: nil,
-         private_allocation: allocation,
-         provider_module: provider_module,
-         readiness_generation: make_ref(),
-         readiness_status: Provider.initial_status(provider_module),
-         transport: transport,
-         transport_module: transport_module,
-         transport_options: transport_options,
-         usage: nil,
-         usage_context: Keyword.get(options, :usage)
-       }}
+         {:ok, state} <-
+           build_state(
+             options,
+             identity,
+             owner,
+             provider_module,
+             provider_options,
+             allocation,
+             demanded?
+           ) do
+      {:ok, state}
     else
       {:error, reason} = error when reason in [:invalid_initial_policy, :invalid_preparation] ->
         error
@@ -113,10 +118,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       not supported_audio?(state, frame) ->
         {:error, :unsupported_audio}
 
-      is_nil(state.transport) ->
+      state.mode == :native and is_nil(state.session) ->
         {:error, :policy_denied}
 
-      true ->
+      state.mode == :legacy and is_nil(state.transport) ->
+        {:error, :policy_denied}
+
+      state.mode == :native ->
+        case Session.push_audio(state.session, frame.payload) do
+          :ok -> :ok
+          {:error, reason} when reason in [:not_ready, :closed] -> {:error, :policy_denied}
+          {:error, _reason} -> {:error, :unavailable}
+        end
+
+      state.mode == :legacy ->
         case safe_send_audio(state.transport_module, state.transport, frame.payload) do
           :ok -> :ok
           {:error, _reason} -> {:error, :unavailable}
@@ -148,23 +163,87 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   @doc false
-  def prepare_session(%__MODULE__{} = state, snapshot) do
+  def prepare_session(%__MODULE__{} = state, snapshot, deadline) do
     prepared =
-      %{state | transport: nil, connector: nil, usage: nil, pending_policy: nil}
+      %{
+        state
+        | transport: nil,
+          connector: nil,
+          usage: nil,
+          pending_policy: nil,
+          turn_indexes: %{},
+          next_turn_index: 0
+      }
       |> invalidate_readiness()
       |> put_policy(snapshot)
 
-    case TransportConnector.start(
-           state.transport_module,
-           state.connection,
-           state.transport_options
-         ) do
-      {:ok, connector} -> {:ok, %{prepared | connector: connector}}
-      {:error, _reason} -> {:error, :transport_start_failed}
+    start_prepared(prepared, deadline)
+  end
+
+  def prepared(%__MODULE__{mode: :native, session: session} = state, session, descriptor) do
+    if descriptor == state.descriptor,
+      do: {:ok, %{state | readiness_status: :ready}},
+      else: {:error, :invalid_descriptor}
+  end
+
+  def prepared(%__MODULE__{}, _session, _descriptor), do: {:error, :stale_session}
+
+  def event(
+        %__MODULE__{mode: :native, session: session} = state,
+        %Event{session: session} = event
+      ) do
+    with :ok <- Session.ack(session, event),
+         {:ok, signal, state} <- semantic_signal(state, event) do
+      {:ok, signal, state}
+    else
+      _invalid -> {:error, :invalid_provider_event}
     end
   end
 
+  def event(%__MODULE__{}, %Event{}), do: {:error, :stale_session}
+
+  def adopt_prepared(%__MODULE__{mode: :native, session: session} = state, deadline) do
+    case Session.adopt(session, self(), deadline) do
+      :ok -> {:ok, state}
+      {:error, _reason} -> {:error, :policy_not_ready}
+    end
+  end
+
+  def adopt_prepared(%__MODULE__{} = state, _deadline), do: {:ok, state}
+
+  @doc false
+  def retire_active(%__MODULE__{mode: :native, session: session} = state, deadline)
+      when not is_nil(session) do
+    case Session.retire(session, deadline) do
+      :ok ->
+        retired = %{state | session: nil, turn_indexes: %{}, next_turn_index: 0}
+        {:ok, invalidate_readiness(retired)}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  def retire_active(%__MODULE__{mode: :native} = state, _deadline), do: {:ok, state}
+
+  def retire_active(
+        %__MODULE__{mode: :legacy, connector: nil, transport: nil} = state,
+        _deadline
+      ),
+      do: {:ok, state}
+
+  def retire_active(%__MODULE__{mode: :legacy} = state, _deadline), do: {:ok, close(state)}
+
   @spec close(t()) :: t()
+  def close(%__MODULE__{mode: :native, session: session} = state) when not is_nil(session) do
+    _ = Session.close(session)
+
+    %{state | session: nil, turn_indexes: %{}, next_turn_index: 0}
+    |> invalidate_readiness()
+  end
+
+  def close(%__MODULE__{mode: :native} = state), do: state
+
   def close(%__MODULE__{connector: connector} = state) when is_map(connector) do
     :ok = TransportConnector.stop(connector)
     %{state | connector: nil, transport: nil} |> invalidate_readiness()
@@ -197,8 +276,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       adapter: Vxpipe.CallEngine.Capability.SpeechToText
     }
 
+    active? = if state.mode == :native, do: state.session != nil, else: state.transport != nil
+
     status =
-      if state.readiness_status == :ready and state.transport == nil,
+      if state.readiness_status == :ready and not active?,
         do: :preparing,
         else: state.readiness_status
 
@@ -210,12 +291,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       state
       | readiness_generation: make_ref(),
         adopted_policy_token: nil,
-        readiness_status: Provider.initial_status(state.provider_module)
+        readiness_status: initial_status(state)
     }
   end
 
   defp apply_policy(%__MODULE__{policy: nil} = state, snapshot) do
-    if demanded?(state, snapshot) and is_nil(state.transport) do
+    if demanded?(state, snapshot) and not active?(state) do
       replace_session(state, snapshot)
     else
       state = if demanded?(state, snapshot), do: state, else: close(state)
@@ -236,12 +317,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     state = close(state)
 
     if demanded?(state, snapshot) do
-      case TransportConnector.start(
-             state.transport_module,
-             state.connection,
-             state.transport_options
-           ) do
-        {:ok, connector} -> {:ok, %{put_policy(state, snapshot) | connector: connector}}
+      case start_replacement(state) do
+        {:ok, replacement} -> {:ok, put_policy(replacement, snapshot)}
         {:error, _reason} -> {:error, :transport_start_failed, state}
       end
     else
@@ -271,7 +348,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       frame.connection_id == state.identity.connection_id and
       frame.codec == state.media_format.codec and
       frame.sample_rate == state.media_format.sample_rate and
-      frame.channels in [1, 2] and
+      supported_channels?(state, frame.channels) and
       is_binary(frame.payload) and byte_size(frame.payload) > 0 and
       byte_size(frame.payload) <= @maximum_audio_bytes
   end
@@ -297,6 +374,306 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       transport_options: transport_options
     )
   end
+
+  defp build_state(
+         options,
+         identity,
+         owner,
+         provider_module,
+         provider_options,
+         allocation,
+         demanded?
+       ) do
+    case Keyword.get(options, :transport) do
+      nil ->
+        build_native_state(
+          options,
+          identity,
+          owner,
+          provider_module,
+          provider_options,
+          allocation,
+          demanded?
+        )
+
+      {transport_module, transport_options}
+      when is_atom(transport_module) and is_list(transport_options) ->
+        build_legacy_state(
+          options,
+          identity,
+          owner,
+          provider_module,
+          provider_options,
+          transport_module,
+          transport_options,
+          allocation,
+          demanded?
+        )
+
+      _invalid ->
+        {:error, :transport_start_failed}
+    end
+  end
+
+  defp build_native_state(
+         options,
+         identity,
+         owner,
+         provider_module,
+         provider_options,
+         allocation,
+         demanded?
+       ) do
+    with %Vxpipe.CallEngine.Speech.Scope{} = scope <- Keyword.get(options, :speech_scope),
+         true <- function_exported?(provider_module, :configure, 1),
+         {:ok, descriptor} <- provider_module.configure(provider_options),
+         :ok <- Descriptor.validate(descriptor),
+         {:ok, session} <-
+           start_native_session(
+             demanded?,
+             scope,
+             provider_module,
+             provider_options,
+             Keyword.get(options, :provider_private, []),
+             self()
+           ) do
+      {:ok,
+       %__MODULE__{
+         connection: %{},
+         connector: nil,
+         descriptor: descriptor,
+         identity: identity,
+         last_provider_sequence: -1,
+         media_format: %{
+           codec: descriptor.format.encoding,
+           sample_rate: descriptor.format.sample_rate,
+           channels: descriptor.format.channels
+         },
+         mode: :native,
+         next_turn_index: 0,
+         owner: owner,
+         policy: nil,
+         policy_revision: nil,
+         private_allocation: allocation,
+         provider_module: provider_module,
+         provider_options: provider_options,
+         provider_private: Keyword.get(options, :provider_private, []),
+         readiness_generation: make_ref(),
+         readiness_status: :preparing,
+         scope: scope,
+         session: session,
+         transport: nil,
+         transport_module: nil,
+         transport_options: [],
+         turn_indexes: %{},
+         usage: nil,
+         usage_context: Keyword.get(options, :usage)
+       }}
+    else
+      _invalid -> {:error, :transport_start_failed}
+    end
+  end
+
+  defp build_legacy_state(
+         options,
+         identity,
+         owner,
+         provider_module,
+         provider_config,
+         transport_module,
+         transport_options,
+         allocation,
+         demanded?
+       ) do
+    connection = provider_module.connection_options(provider_config)
+
+    with {:ok, transport} <-
+           start_transport(demanded?, transport_module, connection, transport_options) do
+      {:ok,
+       %__MODULE__{
+         connection: connection,
+         connector: nil,
+         descriptor: nil,
+         identity: identity,
+         last_provider_sequence: -1,
+         media_format: provider_module.media_format(provider_config),
+         mode: :legacy,
+         next_turn_index: 0,
+         owner: owner,
+         policy: nil,
+         policy_revision: nil,
+         private_allocation: allocation,
+         provider_module: provider_module,
+         provider_options: provider_config,
+         provider_private: [],
+         readiness_generation: make_ref(),
+         readiness_status: Provider.initial_status(provider_module),
+         scope: Keyword.get(options, :speech_scope),
+         session: nil,
+         transport: transport,
+         transport_module: transport_module,
+         transport_options: transport_options,
+         turn_indexes: %{},
+         usage: nil,
+         usage_context: Keyword.get(options, :usage)
+       }}
+    end
+  end
+
+  defp start_native_session(false, _scope, _provider, _options, _private, _consumer),
+    do: {:ok, nil}
+
+  defp start_native_session(true, scope, provider, options, private, consumer) do
+    case Session.start(scope,
+           owner: self(),
+           consumer: consumer,
+           provider: provider,
+           options: options,
+           private: private,
+           usage: false
+         ) do
+      {:ok, session, :starting} -> {:ok, session}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp start_prepared(%__MODULE__{mode: :native} = state, deadline) do
+    case Session.start(state.scope,
+           owner: self(),
+           consumer: nil,
+           lease: self(),
+           provider: state.provider_module,
+           options: state.provider_options,
+           private: state.provider_private,
+           start_timeout: max(deadline - System.monotonic_time(:millisecond), 1),
+           usage: false
+         ) do
+      {:ok, session, :starting} -> {:ok, %{state | session: session}}
+      {:error, _reason} -> {:error, :transport_start_failed}
+    end
+  end
+
+  defp start_prepared(%__MODULE__{mode: :legacy} = state, _deadline) do
+    case TransportConnector.start(
+           state.transport_module,
+           state.connection,
+           state.transport_options
+         ) do
+      {:ok, connector} -> {:ok, %{state | connector: connector}}
+      {:error, _reason} -> {:error, :transport_start_failed}
+    end
+  end
+
+  defp start_replacement(%__MODULE__{mode: :native} = state) do
+    case start_native_session(
+           true,
+           state.scope,
+           state.provider_module,
+           state.provider_options,
+           state.provider_private,
+           self()
+         ) do
+      {:ok, session} -> {:ok, %{state | session: session}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp start_replacement(%__MODULE__{mode: :legacy} = state) do
+    case TransportConnector.start(
+           state.transport_module,
+           state.connection,
+           state.transport_options
+         ) do
+      {:ok, connector} -> {:ok, %{state | connector: connector}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp active?(%__MODULE__{mode: :native, session: session}), do: session != nil
+  defp active?(%__MODULE__{mode: :legacy, transport: transport}), do: transport != nil
+
+  defp initial_status(%__MODULE__{mode: :native}), do: :preparing
+
+  defp initial_status(%__MODULE__{mode: :legacy, provider_module: provider}),
+    do: Provider.initial_status(provider)
+
+  defp supported_channels?(%__MODULE__{mode: :native, media_format: format}, channels),
+    do: channels == format.channels
+
+  defp supported_channels?(%__MODULE__{mode: :legacy}, channels), do: channels in [1, 2]
+
+  defp semantic_signal(state, %Event{kind: :ready} = event) do
+    signal = %Signal{
+      kind: :connected,
+      provider_sequence: event.sequence,
+      request_id: event.provider_request_id
+    }
+
+    {:ok, signal, %{state | readiness_status: :ready}}
+  end
+
+  defp semantic_signal(state, %Event{kind: :speech_started, turn_ref: turn_ref} = event) do
+    turn_index = state.next_turn_index
+
+    signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: event.sequence,
+      provider_turn_index: turn_index,
+      request_id: event.provider_request_id,
+      text: ""
+    }
+
+    {:ok, signal,
+     %{
+       state
+       | next_turn_index: turn_index + 1,
+         turn_indexes: Map.put(state.turn_indexes, turn_ref, turn_index)
+     }}
+  end
+
+  defp semantic_signal(state, %Event{kind: :transcript} = event),
+    do: turn_signal(state, event, :transcript_updated)
+
+  defp semantic_signal(state, %Event{kind: :turn_resumed} = event),
+    do: turn_signal(state, event, :turn_resumed)
+
+  defp semantic_signal(state, %Event{kind: :eager_turn_ended} = event),
+    do: turn_signal(state, event, :eager_turn_ended)
+
+  defp semantic_signal(state, %Event{kind: :turn_ended} = event) do
+    with {:ok, signal, state} <- turn_signal(state, event, :turn_ended) do
+      signal = %{
+        signal
+        | end_of_turn_confidence: 1.0,
+          trigger: endpointing_trigger(event.endpointing)
+      }
+
+      {:ok, signal, %{state | turn_indexes: Map.delete(state.turn_indexes, event.turn_ref)}}
+    end
+  end
+
+  defp semantic_signal(_state, _event), do: {:error, :unsupported_event}
+
+  defp turn_signal(state, event, kind) do
+    case Map.fetch(state.turn_indexes, event.turn_ref) do
+      {:ok, turn_index} ->
+        {:ok,
+         %Signal{
+           kind: kind,
+           provider_sequence: event.sequence,
+           provider_turn_index: turn_index,
+           request_id: event.provider_request_id,
+           audio_duration_ms: event.audio_duration_ms,
+           text: event.text
+         }, state}
+
+      :error ->
+        {:error, :unknown_turn}
+    end
+  end
+
+  defp endpointing_trigger(:provider_gap), do: "provider_gap"
+  defp endpointing_trigger(:provider_semantic), do: "provider_semantic"
 
   defp safe_send_audio(module, transport, audio) do
     try do

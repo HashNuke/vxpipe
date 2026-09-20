@@ -4,13 +4,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   @moduletag capture_log: true
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
-  alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.Usage.ProviderContext
+  alias Vxpipe.CallEngine.Speech.CapabilityTree
+  alias Vxpipe.CallEngine.SpeechSessionProbe
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
 
@@ -424,6 +426,88 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert failed.measurement == nil
     assert failed.provider.request_id == nil
     assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}
+  end
+
+  test "async ingress receives final evidence before a failed native input closes the capability" do
+    assert {:module, SpeechSessionProbe} = Code.ensure_loaded(SpeechSessionProbe)
+
+    identity = [
+      tenant_id: "tenant-native-failure",
+      room_id: "room-native-failure",
+      incarnation_id: "incarnation-native-failure",
+      participant_id: "part-human",
+      connection_id: "conn-native-failure"
+    ]
+
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
+    capability =
+      start_supervised!(
+        {SpeechToText,
+         identity ++
+           [
+             owner: self(),
+             speech_scope: CapabilityTree.scope(tree),
+             provider: {SpeechSessionProbe, []},
+             provider_private: [observer: self(), input_result: :final_then_fail],
+             transport: nil
+           ]},
+        id: make_ref()
+      )
+
+    assert_receive {:probe_initializing, provider, _channel}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    policy = snapshot(0, ["part-human"], :unrestricted, true)
+    assert :ok = Enforcer.apply(capability, policy, 500)
+    assert {:ok, resource, :ready} = SpeechToText.readiness(capability)
+
+    ingress =
+      start_supervised!(
+        {Ingress,
+         identity ++
+           [
+             capability: capability,
+             owner: self(),
+             input_admission: :open,
+             maximum_age_ms: 1_000,
+             maximum_bytes: 65_536,
+             maximum_frames: 20,
+             maximum_consecutive_overflows: 3
+           ]},
+        id: make_ref()
+      )
+
+    assert :ok = Enforcer.apply(ingress, policy, 500)
+
+    track = %{track_id: "native-track", codec: :linear16, sample_rate: 16_000, channels: 1}
+    assert :ok = Ingress.prepare_track(ingress, track, resource)
+
+    frame =
+      struct!(
+        AudioFrame,
+        identity ++
+          Map.to_list(track) ++
+          [
+            sequence_number: 1,
+            timestamp: 0,
+            payload: <<0, 0>>,
+            received_at: System.monotonic_time(:millisecond)
+          ]
+      )
+
+    monitor = Process.monitor(capability)
+    assert :ok = Ingress.push(ingress, frame)
+    assert_receive {:probe_input, ^provider}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, text: "final evidence"}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :turn_ended, text: "final evidence"}}
+
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
   end
 
   defp start_capability(options \\ []) do
