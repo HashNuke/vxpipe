@@ -34,14 +34,15 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-test-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, observer: self()},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self()],
       maximum_requests: 2
     ]
 
@@ -105,7 +106,14 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     begin_transfer(plan, room, caller)
     assert_dial(provider, leg_id)
-    assert_receive {:test_tts_transport_started, _briefing_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
+    await_transfer_preparation(plan, System.monotonic_time(:millisecond) + 2_000)
     assert {:ok, leg} = LegSupervisor.lookup_outgoing(leg_id)
     socket = start_supervised!({TestTelephonySocket, observer: self()})
     event = PhoneTransferScenario.media_started_event(provider, leg_id)
@@ -241,6 +249,13 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     assert_dial(provider, leg_id)
     assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
+    await_transfer_preparation(plan, System.monotonic_time(:millisecond) + 2_000)
     assert {:ok, leg} = LegSupervisor.lookup_outgoing(leg_id)
 
     socket = start_supervised!({TestTelephonySocket, observer: self()})
@@ -414,7 +429,14 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     assert_detecting_dial(provider, leg_id)
 
-    assert_receive {:test_tts_transport_started, _briefing_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
+    await_transfer_preparation(plan, System.monotonic_time(:millisecond) + 2_000)
     assert {:ok, leg} = LegSupervisor.lookup_outgoing(leg_id)
     monitor = Process.monitor(leg)
 
@@ -535,4 +557,23 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   end
 
   defp assert_eventually(_assertion, 0), do: flunk("condition did not become true")
+
+  defp await_transfer_preparation(plan, deadline) do
+    [{authority, _value}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    case :sys.get_state(authority).pending_participant_transfer do
+      %{preparation: preparation} when not is_nil(preparation) ->
+        :ok
+
+      _pending ->
+        assert System.monotonic_time(:millisecond) < deadline,
+               "transfer preparation did not finish after private text-to-speech became ready"
+
+        receive do
+        after
+          10 -> await_transfer_preparation(plan, deadline)
+        end
+    end
+  end
 end

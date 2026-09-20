@@ -13,6 +13,10 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def playback_completed(sink), do: GenServer.call(sink, :playback_completed)
 
+  def defer_finish(sink, deferred?), do: GenServer.call(sink, {:defer_finish, deferred?})
+
+  def complete_finish(sink, result \\ :ok), do: GenServer.call(sink, {:complete_finish, result})
+
   @impl true
   def init(options) do
     {:ok,
@@ -20,6 +24,8 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
        block_output: Keyword.get(options, :block_output, false),
        defer_drain: Keyword.get(options, :defer_drain, false),
        pending_drain: nil,
+       defer_finish: false,
+       pending_finish: nil,
        defer_release: false,
        pending_release: nil,
        callback: nil,
@@ -83,6 +89,15 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
   def handle_call({:defer_drain, deferred?}, _from, state) when is_boolean(deferred?),
     do: {:reply, :ok, %{state | defer_drain: deferred?}}
 
+  def handle_call({:defer_finish, deferred?}, _from, %{pending_finish: nil} = state)
+      when is_boolean(deferred?),
+      do: {:reply, :ok, %{state | defer_finish: deferred?}}
+
+  def handle_call({:complete_finish, result}, _from, state) do
+    GenServer.reply(state.pending_finish, result)
+    {:reply, :ok, %{state | pending_finish: nil, defer_finish: false}}
+  end
+
   def handle_call({:block_output, blocked?}, _from, %{pending_output: nil} = state)
       when is_boolean(blocked?),
       do: {:reply, :ok, %{state | block_output: blocked?}}
@@ -107,7 +122,7 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
     end
   end
 
-  def handle_call({:vxpipe_audio_output_finish, turn, callback}, _from, state) do
+  def handle_call({:vxpipe_audio_output_finish, turn, callback}, from, state) do
     send(state.observer, {:test_audio_output_finish, self(), turn})
 
     if state.automatic_playback_ms do
@@ -118,7 +133,11 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
       )
     end
 
-    {:reply, :ok, %{state | callback: {callback, turn}}}
+    state = %{state | callback: {callback, turn}}
+
+    if state.defer_finish,
+      do: {:noreply, %{state | pending_finish: from}},
+      else: {:reply, :ok, state}
   end
 
   def handle_call(:playback_started, _from, %{callback: {callback, turn}} = state) do

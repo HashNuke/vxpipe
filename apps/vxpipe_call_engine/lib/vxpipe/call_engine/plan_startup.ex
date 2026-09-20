@@ -547,27 +547,24 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:ok, nil} ->
         {:ok, nil}
 
-      {:ok, {provider_module, provider_config} = provider, settings} ->
-        with {transport, transport_options}
-             when is_atom(transport) and is_list(transport_options) <-
-               Keyword.get(settings, :transport),
-             maximum_requests when is_integer(maximum_requests) and maximum_requests > 0 <-
+      {:ok, selected_provider, settings} ->
+        with maximum_requests when is_integer(maximum_requests) and maximum_requests > 0 <-
                Keyword.get(settings, :maximum_requests),
-             asset_cache_identity when is_map(asset_cache_identity) <-
-               provider_module.asset_cache_identity(provider_config),
+             {:ok, provider, provider_private, descriptor} <-
+               TextToSpeechRuntime.provider(selected_provider, settings),
              {:ok, usage_provider} <-
-               text_to_speech_usage_provider(plan, selection, provider_module, provider_config) do
+               text_to_speech_usage_provider(plan, selection, provider) do
           {:ok,
            %TextToSpeechRuntime{
              asset_cache_identity:
-               asset_cache_identity
+               %{"descriptor" => descriptor.cache_identity}
                |> Map.put("selection", CapabilitySelection.identity(selection, plan.tenant_id))
                |> put_credential_cache_identity(Keyword.get(settings, :credential_identity)),
              call_id: plan.call_id,
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
              provider: provider,
-             transport: {transport, transport_options},
+             provider_private: provider_private,
              maximum_requests: maximum_requests,
              usage_provider: usage_provider
            }}
@@ -581,9 +578,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp text_to_speech_usage_provider(plan, selection, provider_module, provider_config) do
-    with true <- function_exported?(provider_module, :usage_identity, 1),
-         identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
+  defp text_to_speech_usage_provider(plan, selection, {provider_module, provider_options}) do
+    with {:ok, identity} <-
+           TextToSpeechRuntime.usage_identity(provider_module, provider_options) do
       identity
       |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
       |> ProviderContext.new()
@@ -639,6 +636,20 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         {:ok, _descriptor} -> {:ok, options}
         {:error, _reason} = error -> error
       end
+    end
+  end
+
+  defp configure_provider(
+         Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
+         options,
+         :text_to_speech
+       ),
+       do: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.new(options)
+
+  defp configure_provider(provider, options, :text_to_speech) do
+    case provider.configure(options) do
+      {:ok, _descriptor} -> {:ok, options}
+      {:error, _reason} = error -> error
     end
   end
 

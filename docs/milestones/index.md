@@ -86,56 +86,19 @@ checkpoints replace the public provider/transport split with semantic sessions, 
 and Deepgram one direction at a time. The [provider comparison](../speech-provider-comparison.md)
 covers Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini without adding those integrations.
 Research is complete. The earlier global prototype's startup-isolation regression and
-[evidence](../speech-startup-isolation.md) remain recorded. Existing rooms continue to use the
-original providers. The [revised ownership plan](../speech-session-ownership.md) requires scoped
-execution and both native STT/TTS proofs before integration: R → A → D → B → C → E → F → G → H.
-The [scoped room experiment](../scoped-speech-experiment.md) remains test-only bridge evidence.
+[evidence](../speech-startup-isolation.md) remain recorded. The [revised ownership
+plan](../speech-session-ownership.md) defines scoped execution. The accepted implementation order
+is R → A → D → B → C → F → E; G and H remain.
 
-Checkpoints R and A are accepted: **2 of 9 speech checkpoints complete**. The prior
-[adoption-authority repair](../speech-adoption-fix.md) was followed by
-[bounded deadlines and failure containment](../speech-deadlines-and-failure-containment.md).
-Local persistent admission/input workers preserve responsive cancellation; deterministic tests
-cover late handoff and close races. A completes the [native STT contract](../native-stt-contract.md),
-including metadata/event validation, bounded busy rejection, usage evidence and stale-input
-fencing. GPT-6 Astra xhigh reviewed both checkpoints. All five accepted-baseline root gates
-pass: 1,880 tests, zero failures, 40 excluded (seed 330044). Latest load evidence includes
-39,360 concurrent-fault turns, 68,400 paired legacy/native turns and 16,236 adoption-churn turns.
-Native TTS in D resumed after the user approved repair of
-[focused regression failures](../native-tts-deadline-findings.md) in its uncommitted implementation.
-Five deadline/direction tests, 106 speech/Morse cases, all four load lanes and all five
-root gates now pass on the repair: 1,886 tests, zero failures, 40 excluded, seed 801819.
-The user approved repair of the subsequent
-[cancellation defects](../native-tts-cancellation-findings.md). Five regressions were
-reproduced and fixed; 11 cancellation tests and 120 speech/Morse/usage cases pass.
-Astra reviewed the repair and load harness; 18 load trials pass with 5,904 cycles
-and the same number of replacement/STT turns. The TTS fault lane passes 492
-intentional failures/replacements. All five root gates passed on that cancellation repair, including
-1,897 tests, zero failures and 40 exclusions in the same-seed full rerun (520598).
-The initial two legacy Gateway timing failures and isolated passing rerun are retained.
-Prior handoff repair checks remain separate evidence.
-The subsequent [early-admission change](../native-tts-request-admission.md) reproduced
-a blocking regression:
-a paired test proves that cancel arriving before the speak Input result returns busy
-after fencing, then the fence expires and closes the allocation even after Input
-finishes. The Input-first control passes (2 cases, one failure; seed 530504).
-Earlier green root/load results do not certify this newer source.
-The [2026-09-20 complexity audit](../speech-complexity-audit.md) revises D toward one
-Channel-owned request/output state and one complete admission/cancel/replacement workflow.
-The separate Output process and custom receipt representation are proposed for removal
-and reconsideration respectively. The subsequent
-[isolated topology proof](../speech-topology-experiment.md) exercises the split and merged
-trees through real Morse encode/decode, authority, deadlines, event acknowledgements,
-watchdogs, pending cancellation, replacement, independent STT and retained input facts.
-Three final-source ramps complete 70,416 workflows through 256 call-equivalent scopes;
-at every tested concurrency where split passes all fixed budgets, merged also passes.
-This is a test-only preimplementation gate, not production proof or new implementation
-acceptance. The user authorized production integration after this gate passed.
-D2a first freezes the existing red test and current split-production load baseline;
-D2b/D2c then move state into Channel and remove Output, and D2d repeats production
-and topology load, independent review and all root gates. The existing runtime
-regression remains red while that work begins.
-D remains unaccepted and still precedes room migration. Reliability takes priority over
-small latency overhead; a speedup, capacity ceiling and net code reduction remain unproven.
+Speech integration is **7 of 9 checkpoints complete**. Morse and Deepgram STT and TTS now use
+owned semantic sessions for room conversation, opening audio and private transfer speech. The old
+STT/TTS public transport behaviours, intermediate bridges, Morse transport adapters and global
+speech task supervisors are removed. The E root gate passes 1,942 tests with zero failures and 42
+excluded (seed 530504). Its four-scheduler bounded load passes 3,936 TTS turns, 3,936 concurrent STT
+turns and 492 forced fault/replacement cycles. G adds reusable conformance profiles and the authoring
+guide; H completes configuration/documentation cleanup and final all-consumer acceptance. Detailed
+historical failures, repairs and load limits remain in the linked milestone evidence. Reliability
+takes priority over small latency overhead; these bounded local runs do not establish hosted capacity.
 The packaging/retention hold is unchanged.
 
 ## How to use this index

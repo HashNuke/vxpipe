@@ -1278,16 +1278,15 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport:
-        {TestTextToSpeechTransport,
-         [observer: self(), ready_on_start: Keyword.get(options, :tts_ready?, true)]},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self(), ready_on_start: Keyword.get(options, :tts_ready?, true)],
       maximum_requests: 2
     ]
 

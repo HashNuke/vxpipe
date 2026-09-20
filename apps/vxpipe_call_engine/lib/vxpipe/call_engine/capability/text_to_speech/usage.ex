@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Usage do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Speech.{Audio, Event, TTSUsage}
   alias Vxpipe.CallEngine.TextToSpeechRequest
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TextToSpeechAttempt}
   alias Vxpipe.CallEngine.Id
@@ -26,24 +26,15 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Usage do
     end
   end
 
-  @spec observe_signal(nil | map(), Signal.t()) :: nil | map()
-  def observe_signal(nil, %Signal{}), do: nil
+  @spec observe_event(nil | map(), Event.t(), nil | keyword(), map()) :: nil | map()
+  def observe_event(current, %Event{usage: usage}, context, media_format),
+    do: observe_snapshot(current, usage, context, media_format)
 
-  def observe_signal(%{usage: %TextToSpeechAttempt{} = usage} = current, %Signal{} = signal) do
-    %{current | usage: TextToSpeechAttempt.observe_signal(usage, signal)}
-  end
+  @spec observe_audio(nil | map(), Audio.t()) :: nil | map()
+  def observe_audio(current, %Audio{usage: %TTSUsage{} = usage}),
+    do: apply_snapshot(current, usage)
 
-  def observe_signal(current, %Signal{}), do: current
-
-  @spec observe_audio(nil | map(), binary()) :: nil | map()
-  def observe_audio(nil, audio) when is_binary(audio), do: nil
-
-  def observe_audio(%{usage: %TextToSpeechAttempt{} = usage} = current, audio)
-      when is_binary(audio) do
-    %{current | usage: TextToSpeechAttempt.observe_audio(usage, audio)}
-  end
-
-  def observe_audio(current, audio) when is_binary(audio), do: current
+  def observe_audio(current, %Audio{}), do: current
 
   @spec finish(nil | map(), :succeeded | :failed | :cancelled, pid()) :: nil | map()
   def finish(nil, outcome, owner)
@@ -66,4 +57,26 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Usage do
   def finish(current, outcome, owner)
       when outcome in [:succeeded, :failed, :cancelled] and is_pid(owner),
       do: current
+
+  defp observe_snapshot(current, nil, _context, _media_format), do: current
+
+  defp observe_snapshot(
+         %{usage: nil, request: request} = current,
+         %TTSUsage{} = usage,
+         context,
+         media_format
+       ) do
+    current
+    |> Map.put(:usage, start(request, context, media_format))
+    |> apply_snapshot(usage)
+  end
+
+  defp observe_snapshot(current, %TTSUsage{} = usage, _context, _media_format),
+    do: apply_snapshot(current, usage)
+
+  defp apply_snapshot(%{usage: %TextToSpeechAttempt{} = attempt} = current, usage) do
+    %{current | usage: TextToSpeechAttempt.observe_semantic(attempt, usage)}
+  end
+
+  defp apply_snapshot(current, _usage), do: current
 end

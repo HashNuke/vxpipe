@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.Provider.TextToSpeech.Signal do
+defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal do
   @moduledoc false
 
   @enforce_keys [:kind]

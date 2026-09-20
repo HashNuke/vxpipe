@@ -525,8 +525,9 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
-      transport: {TestTextToSpeechTransport, [observer: observer, ready_on_start: true]},
+      provider: FluxTextToSpeech.Session,
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: observer, ready_on_start: true],
       maximum_requests: 2
     ]
 

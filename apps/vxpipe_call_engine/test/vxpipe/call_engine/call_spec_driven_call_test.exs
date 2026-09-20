@@ -47,7 +47,6 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
-  alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseConfig
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
 
   alias Vxpipe.CallEngine.{
@@ -442,8 +441,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                    receiver.capabilities.text_to_speech,
                    plan.tenant_id
                  ) and
-               fact.payload["provider"]["request_id"] == "req" and
-               fact.payload["provider"]["operation_id"] == "speech-private"
+               fact.payload["provider"]["request_id"] == "speech-private" and
+               fact.payload["provider"]["operation_id"] == nil
            end)
   end
 
@@ -1471,9 +1470,10 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     default_tts = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [api_key: "unused-default"],
-      transport: {TestTextToSpeechTransport, []},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [],
       maximum_requests: 2
     ]
 
@@ -1488,10 +1488,10 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     text_to_speech =
       Keyword.put(default_tts, :providers, %{
-        MorseCodeTTS => [
+        MorseCodeTTS.Session => [
           enabled: true,
           provider_options: [],
-          transport: {MorseCodeTTS.Transport, []},
+          provider_private: [],
           maximum_requests: 2
         ]
       })
@@ -1525,10 +1525,10 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                plan.tenant_id
              )
 
-    assert {MorseCodeTTS, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
-             startup.text_to_speech.provider
-
-    assert startup.text_to_speech.transport == {MorseCodeTTS.Transport, []}
+    assert {MorseCodeTTS.Session, options} = startup.text_to_speech.provider
+    assert options[:sample_rate] == 16_000
+    assert options[:unit_duration_ms] == 20
+    assert startup.text_to_speech.provider_private == []
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     assert startup.text_to_speech.call_id == plan.call_id
     assert startup.text_to_speech.participant_id == receiver.participant_id
@@ -1542,7 +1542,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
              )
 
     assert Keyword.fetch!(default_stt, :provider) == Flux.Session
-    assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech
+    assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech.Session
   end
 
   test "keeps the active agent pinned after source prompt and inline selection change" do
@@ -1743,8 +1743,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     end
 
     configure_speech_runtime(
-      text_to_speech_transport:
-        {TestFailingTextToSpeechTransport, [observer: self(), before_failure: before_failure]}
+      text_to_speech_wire_module: TestFailingTextToSpeechTransport,
+      text_to_speech_wire_options: [observer: self(), before_failure: before_failure]
     )
 
     room_id = unique_id("room-provider-start-failure")
@@ -2158,18 +2158,18 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport:
-        Keyword.get(
-          options,
-          :text_to_speech_transport,
-          {TestTextToSpeechTransport, [observer: self(), ready_on_start: true]}
+      wire_module: Keyword.get(options, :text_to_speech_wire_module, TestTextToSpeechTransport),
+      wire_options:
+        Keyword.get(options, :text_to_speech_wire_options,
+          observer: self(),
+          ready_on_start: true
         ),
       maximum_requests: 2
     ]

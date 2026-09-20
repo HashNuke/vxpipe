@@ -33,14 +33,15 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-test-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, observer: self()},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self(), ready_on_start: true],
       maximum_requests: 2
     ]
 
@@ -79,6 +80,8 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
   end
 
   test "a protected phone destination opens one exact outbound leg before private handoff" do
+    configure_text_to_speech(ready_on_start: false)
+
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
@@ -133,6 +136,16 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
     assert timeout <= 30_000
 
     assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+    authority = room_authority(plan)
+    refute_transfer_preparation(authority, System.monotonic_time(:millisecond) + 250)
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
+    await_transfer_preparation(authority, System.monotonic_time(:millisecond) + 2_000)
 
     assert {:ok,
             %ConnectionAttachment{
@@ -468,6 +481,56 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
     assert_receive {:test_audio_output_finish, ^support_sink, _turn}, 2_000
     assert :ok = TestAudioOutputSink.playback_started(support_sink)
     assert :ok = TestAudioOutputSink.playback_completed(support_sink)
+  end
+
+  defp configure_text_to_speech(wire_options) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    text_to_speech = Keyword.fetch!(settings, :text_to_speech)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(text_to_speech, :wire_options, Keyword.put(wire_options, :observer, self()))
+      |> then(&Keyword.put(settings, :text_to_speech, &1))
+    )
+  end
+
+  defp refute_transfer_preparation(authority, deadline) do
+    case :sys.get_state(authority).pending_participant_transfer do
+      %{preparation: nil} ->
+        if System.monotonic_time(:millisecond) < deadline do
+          receive do
+          after
+            10 -> refute_transfer_preparation(authority, deadline)
+          end
+        end
+
+      _prepared ->
+        flunk("transfer preparation completed before private text-to-speech was ready")
+    end
+  end
+
+  defp await_transfer_preparation(authority, deadline) do
+    case :sys.get_state(authority).pending_participant_transfer do
+      %{preparation: preparation} when not is_nil(preparation) ->
+        :ok
+
+      _pending ->
+        assert System.monotonic_time(:millisecond) < deadline,
+               "transfer preparation did not finish after private text-to-speech became ready"
+
+        receive do
+        after
+          10 -> await_transfer_preparation(authority, deadline)
+        end
+    end
+  end
+
+  defp room_authority(plan) do
+    [{authority, _value}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    authority
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

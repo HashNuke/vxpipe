@@ -1,12 +1,7 @@
 defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
   @moduledoc false
 
-  @behaviour Vxpipe.CallEngine.Provider.TextToSpeech
-
-  @impl true
-  def readiness_mode, do: :provider_connected
-
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal
 
   @endpoint "wss://api.deepgram.com/v2/speak"
   @maximum_audio_bytes 1_048_576
@@ -28,7 +23,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
           sample_rate: pos_integer()
         }
 
-  @impl true
   def new(options) when is_list(options) do
     api_key = Keyword.get(options, :api_key)
     model = Keyword.get(options, :model, "flux-haley-en")
@@ -66,7 +60,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
     end
   end
 
-  @impl true
   def connection_options(%__MODULE__{} = config) do
     query =
       URI.encode_query(%{
@@ -81,35 +74,12 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
     }
   end
 
-  @impl true
-  def media_format(%__MODULE__{} = config) do
-    %{codec: :linear16, sample_rate: config.sample_rate, channels: 1, byte_order: :little}
-  end
-
-  @impl true
-  def asset_cache_identity(%__MODULE__{} = config) do
-    %{
-      "provider" => "deepgram_flux",
-      "model" => config.model,
-      "encoding" => Atom.to_string(config.encoding),
-      "sample_rate" => config.sample_rate
-    }
-  end
-
-  @impl true
-  def usage_identity(%__MODULE__{} = config) do
-    [name: "deepgram", model: config.model]
-  end
-
-  @impl true
   def encode_speak(text) when is_binary(text) and byte_size(text) <= @maximum_text_bytes do
     JSON.encode!(%{"type" => "Speak", "text" => text})
   end
 
-  @impl true
   def encode_flush, do: JSON.encode!(%{"type" => "Flush"})
 
-  @impl true
   def encode_interrupt(playback_offset_ms)
       when is_integer(playback_offset_ms) and playback_offset_ms >= 0 do
     JSON.encode!(%{
@@ -118,7 +88,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
     })
   end
 
-  @impl true
   def decode(payload) when is_binary(payload) do
     if byte_size(payload) > @maximum_message_bytes do
       {:error, :message_too_large}
@@ -131,7 +100,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
     end
   end
 
-  @impl true
   def decode_audio(payload) when is_binary(payload) do
     cond do
       byte_size(payload) == 0 -> {:error, :empty_audio}

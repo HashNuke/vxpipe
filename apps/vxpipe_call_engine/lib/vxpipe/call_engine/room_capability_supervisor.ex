@@ -5,12 +5,12 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   alias Vxpipe.CallEngine.Capability.{
     DeterministicText,
-    ModelInference,
-    TextToSpeech
+    ModelInference
   }
 
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree
+  alias Vxpipe.CallEngine.Capability.TextToSpeech.Tree, as: TextToSpeechTree
   alias Vxpipe.CallEngine.Speech.PrivateInit
 
   alias Vxpipe.CallEngine.OpeningAudio.{
@@ -73,22 +73,33 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         room_authority,
         participant_id,
         provider,
-        transport,
+        provider_private,
         maximum_requests,
         usage \\ nil
       ) do
-    options = [
-      owner: room_authority,
-      participant_id: participant_id,
-      provider: provider,
-      transport: transport,
-      maximum_requests: maximum_requests,
-      task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor,
-      name: text_to_speech_ref(incarnation_id, participant_id),
-      usage: usage
-    ]
+    with {:ok, private_init} <- PrivateInit.open(provider_private, 5_000) do
+      options = [
+        owner: room_authority,
+        participant_id: participant_id,
+        provider: provider,
+        provider_private: private_init,
+        maximum_requests: maximum_requests,
+        name: text_to_speech_ref(incarnation_id, participant_id),
+        usage: usage
+      ]
 
-    DynamicSupervisor.start_child(via(incarnation_id), {TextToSpeech, options})
+      result =
+        try do
+          DynamicSupervisor.start_child(via(incarnation_id), {TextToSpeechTree, options})
+        after
+          PrivateInit.close(private_init)
+        end
+
+      case result do
+        {:ok, tree} -> {:ok, TextToSpeechTree.capability(tree)}
+        {:error, _reason} = error -> error
+      end
+    end
   end
 
   def whereis_text_to_speech(incarnation_id, participant_id),
@@ -199,7 +210,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   end
 
   def stop_capability(incarnation_id, capability) do
-    DynamicSupervisor.terminate_child(via(incarnation_id), capability)
+    child = TextToSpeechTree.parent(capability) || capability
+    DynamicSupervisor.terminate_child(via(incarnation_id), child)
   end
 
   @spec stop_text_to_speech(String.t(), String.t()) :: :ok | {:error, term()}

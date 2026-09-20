@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   @moduledoc "Closed mapping from inline capability selections to internal adapters."
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
-  alias Vxpipe.CallEngine.Provider.{Deepgram, MorseCode}
+  alias Vxpipe.CallEngine.Provider.Deepgram
 
   @speech_keys [:encoding, :sample_rate]
   @morse_keys [
@@ -58,13 +58,13 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: {:ok, Deepgram.Flux.Session}
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "deepgram"}),
-    do: {:ok, Deepgram.FluxTextToSpeech}
+    do: {:ok, Deepgram.FluxTextToSpeech.Session}
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "morse"}),
-    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeTTS}
+    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session}
 
   def adapter(_selection), do: {:error, :unsupported_capability}
 
@@ -85,19 +85,28 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "morse", credential_name: nil, kind: kind}, options)
        when kind in [:speech_to_text, :text_to_speech] do
-    case MorseCode.Config.new(options) do
-      {:ok, _config} -> :ok
-      {:error, _reason} -> {:error, :unsupported_capability}
-    end
+    provider =
+      if kind == :speech_to_text,
+        do: Vxpipe.CallEngine.Provider.MorseCodeSTT.Session,
+        else: Vxpipe.CallEngine.Provider.MorseCodeTTS.Session
+
+    validate_provider(provider, options)
   end
 
   defp validate_speech(%{provider: "deepgram", kind: :speech_to_text}, options),
     do: Deepgram.Flux.validate_options(options)
 
   defp validate_speech(%{provider: "deepgram", kind: :text_to_speech}, options),
-    do: Deepgram.FluxTextToSpeech.validate_options(options)
+    do: validate_provider(Deepgram.FluxTextToSpeech.Session, options)
 
   defp validate_speech(_selection, _options), do: {:error, :unsupported_capability}
+
+  defp validate_provider(provider, options) do
+    case provider.configure(options) do
+      {:ok, _descriptor} -> :ok
+      {:error, _reason} -> {:error, :unsupported_capability}
+    end
+  end
 
   defp normalize(input, allowed) when is_map(input) do
     Enum.reduce_while(input, {:ok, []}, fn {key, value}, {:ok, acc} ->

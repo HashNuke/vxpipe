@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttemptTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Speech.TTSUsage
   alias Vxpipe.CallEngine.TextToSpeechRequest
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TextToSpeechAttempt}
 
@@ -17,12 +17,7 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttemptTest do
         provider_context(),
         media_format()
       )
-      |> TextToSpeechAttempt.observe_signal(%Signal{
-        kind: :speech_started,
-        request_id: "provider-request-1",
-        provider_speech_id: "provider-speech-1"
-      })
-      |> TextToSpeechAttempt.observe_audio(:binary.copy(<<0, 0>>, 16_000))
+      |> TextToSpeechAttempt.observe_semantic(usage(32_000, "provider-request-1"))
 
     assert {:ok, observations} =
              TextToSpeechAttempt.finish(attempt, :succeeded, @observed_at)
@@ -46,7 +41,7 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttemptTest do
                observation.call_id == "call-usage" and
                observation.tenant_id == "tenant-usage" and
                observation.provider.request_id == "provider-request-1" and
-               observation.provider.operation_id == "provider-speech-1" and
+               observation.provider.operation_id == nil and
                observation.attribution.participant_id == "participant-agent" and
                observation.attribution.activation_id == "activation-agent" and
                observation.attribution.turn_id == "turn-usage"
@@ -66,10 +61,7 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttemptTest do
         provider_context(),
         media_format()
       )
-      |> TextToSpeechAttempt.observe_signal(%Signal{
-        kind: :failed,
-        request_id: "provider-request-2"
-      })
+      |> TextToSpeechAttempt.observe_semantic(usage(0, "provider-request-2"))
 
     assert {:ok, [observation]} = TextToSpeechAttempt.finish(attempt, :failed, @observed_at)
 
@@ -90,12 +82,7 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttemptTest do
         provider_context(),
         media_format()
       )
-      |> TextToSpeechAttempt.observe_audio(:binary.copy(<<0, 0>>, 8_000))
-      |> TextToSpeechAttempt.observe_signal(%Signal{
-        kind: :speech_interrupted,
-        provider_speech_id: "provider-speech-3",
-        audio_played_ms: 20
-      })
+      |> TextToSpeechAttempt.observe_semantic(usage(16_000, "provider-request-3"))
 
     assert {:ok, observations} = TextToSpeechAttempt.finish(attempt, :cancelled, @observed_at)
 
@@ -134,5 +121,18 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttemptTest do
 
   defp media_format do
     %{codec: :linear16, sample_rate: 16_000, channels: 1, byte_order: :little}
+  end
+
+  defp usage(generated_bytes, provider_request_id) do
+    %TTSUsage{
+      session: :session,
+      request_ref: make_ref(),
+      input_characters: 1,
+      usage_identity: %{},
+      provider_request_id: provider_request_id,
+      provenance: :provider_reported,
+      generated_bytes: generated_bytes,
+      generation: :generating
+    }
   end
 end

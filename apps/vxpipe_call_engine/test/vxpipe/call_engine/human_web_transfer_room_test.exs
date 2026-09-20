@@ -42,7 +42,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       provider: Flux.Session,
       provider_options: [api_key: "runtime-test-secret"],
       wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: self()],
+      wire_options: [observer: self(), ready_on_start: true],
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 65_536,
@@ -53,14 +53,15 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-test-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, observer: self()},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self(), ready_on_start: true],
       maximum_requests: 2
     ]
 
@@ -1411,6 +1412,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                )
 
       authority = room_authority(plan)
+      await_transfer_preparation(authority, System.monotonic_time(:millisecond) + 2_000)
       pending = :sys.get_state(authority).pending_participant_transfer
       briefing = pending.preparation.text_to_speech
       briefing_monitor = Process.monitor(briefing.pid)
@@ -1443,6 +1445,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
       assert_receive {:test_audio_output_finish, ^support_sink, _turn}, 2_000
 
+      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
+                     50
+
+      refute_receive {:DOWN, ^briefing_monitor, :process, _, _}, 50
+      assert :ok = TestAudioOutputSink.playback_started(support_sink)
+      assert :ok = TestAudioOutputSink.playback_completed(support_sink)
+
       usage_facts = collect_tts_usage(2)
 
       assert Enum.all?(usage_facts, fn fact ->
@@ -1455,16 +1464,10 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                      plan.participants[plan.entry_receiver].capabilities.text_to_speech,
                      plan.tenant_id
                    ) and
-                 fact.payload["provider"]["request_id"] == "req" and
-                 fact.payload["provider"]["operation_id"] == "private-briefing"
+                 fact.payload["provider"]["request_id"] == "private-briefing" and
+                 fact.payload["provider"]["operation_id"] == nil
              end)
 
-      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
-                     50
-
-      refute_receive {:DOWN, ^briefing_monitor, :process, _, _}, 50
-      assert :ok = TestAudioOutputSink.playback_started(support_sink)
-      assert :ok = TestAudioOutputSink.playback_completed(support_sink)
       assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 2_000
 
       assert_receive {:transfer_phase, %{duration: briefing_duration},

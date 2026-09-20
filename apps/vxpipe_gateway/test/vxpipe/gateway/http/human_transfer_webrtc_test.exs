@@ -68,14 +68,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-test-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, observer: self()},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self()],
       maximum_requests: 2
     ]
 
@@ -108,10 +109,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         |> Keyword.put(:text_to_speech,
           enabled: false,
           providers: %{
-            MorseCodeTTS => [
+            MorseCodeTTS.Session => [
               enabled: true,
               provider_options: [],
-              transport: {MorseCodeTTS.Transport, [emit_interval_ms: 0]},
+              provider_private: [emit_interval_ms: 0],
               maximum_requests: 2
             ]
           }
@@ -439,6 +440,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
     for peer <- audience, do: await_tone(peer, 250, 2_000)
     original_players = wait_players(room.incarnation_id)
     assert map_size(original_players) == 4
@@ -1592,6 +1599,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       send(source_provider, {:test_agent_runtime_response, {:ok, response}})
       assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
 
+      TestTextToSpeechTransport.deliver_control(
+        briefing_tts,
+        ~s({"type":"Connected","request_id":"briefing-ready"})
+      )
+
       briefing_monitor = Process.monitor(briefing_tts)
 
       if recovers? do
@@ -2128,6 +2140,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       send(provider, {:test_agent_runtime_response, {:ok, response}})
       assert_receive {:test_tts_transport_started, briefing, _}, 2_000
 
+      TestTextToSpeechTransport.deliver_control(
+        briefing,
+        ~s({"type":"Connected","request_id":"briefing-ready"})
+      )
+
       support_client =
         plan
         |> issue_session(room, support.participant_id)
@@ -2381,6 +2398,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :agent_destination,
         :agent_model
       ] do
+    expected_briefing = if loss == :briefing_timeout, do: :playing, else: :completed
+
     @tag recovery_loss: loss
     test "recovers the held caller after #{loss} loss without replacing source media" do
       agent_destination? = unquote(loss) in [:agent_destination, :agent_model]
@@ -2450,6 +2469,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           preparer
         else
           assert_receive {:test_tts_transport_started, preparer, _}, 2_000
+
+          TestTextToSpeechTransport.deliver_control(
+            preparer,
+            ~s({"type":"Connected","request_id":"destination-ready"})
+          )
+
           preparer
         end
 
@@ -2528,7 +2553,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
         loss when loss in [:briefing_timeout, :acceptance_timeout] ->
           # Let the configured total attempt timer expire at the actual lifecycle boundary.
-          assert pending.briefing == if(loss == :briefing_timeout, do: :playing, else: :completed)
+          assert pending.briefing == unquote(expected_briefing)
 
         :phase ->
           Process.exit(pending.task.pid, :kill)
@@ -2637,6 +2662,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         send(retry_provider, {:test_agent_runtime_response, {:ok, retry_response}})
         assert_receive {:test_tts_transport_started, retry_briefing, _}, 2_000
 
+        TestTextToSpeechTransport.deliver_control(
+          retry_briefing,
+          ~s({"type":"Connected","request_id":"retry-briefing-ready"})
+        )
+
         retry_client =
           plan
           |> issue_session(room, support.participant_id, release)
@@ -2719,7 +2749,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
       send(source_provider, {:test_agent_runtime_response, {:ok, response}})
-      assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+      assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        briefing_tts,
+        ~s({"type":"Connected","request_id":"briefing-ready"})
+      )
 
       support_client =
         plan
@@ -3010,6 +3045,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
 
     support_client =
       plan
@@ -4516,7 +4556,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   defp assert_morse(connection, expected) do
-    assert {:ok, config} = MorseCodeTTS.new(@morse_options)
+    assert {:ok, config} = MorseCodeConfig.new(@morse_options)
     assert {:ok, morse} = MorseDecoder.new(config)
 
     assert_morse(

@@ -3,19 +3,17 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
 
   use GenServer
 
-  @behaviour Vxpipe.CallEngine.Provider.TextToSpeech.Transport
-
-  @impl true
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
 
-  @impl true
   def send_control(transport, payload), do: GenServer.call(transport, {:send_control, payload})
 
-  @impl true
   def close(transport), do: GenServer.call(transport, :close)
 
   def deliver_control(transport, payload), do: GenServer.cast(transport, {:control, payload})
-  def deliver_audio(transport, payload), do: GenServer.cast(transport, {:audio, payload})
+
+  def deliver_audio(transport, payload) do
+    GenServer.cast(transport, {:audio_with_result, make_ref(), payload})
+  end
 
   def deliver_audio_with_result(transport, payload) do
     reference = make_ref()
@@ -68,11 +66,6 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
   @impl true
   def handle_cast({:control, payload}, state) do
     send(state.owner, {:vxpipe_tts_transport, self(), {:control, payload}})
-    {:noreply, state}
-  end
-
-  def handle_cast({:audio, payload}, state) do
-    send(state.owner, {:vxpipe_tts_transport, self(), {:audio, payload}})
     {:noreply, state}
   end
 

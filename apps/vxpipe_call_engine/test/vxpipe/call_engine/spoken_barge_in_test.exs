@@ -70,7 +70,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
       ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_first"})
     )
 
-    TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
+    TestTextToSpeechTransport.deliver_audio(tts_transport, :binary.copy(<<1, 0>>, 960))
     assert_receive {:test_audio_output, ^sink, _frame}
     :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_event, %AgentSpeechStarted{sequence: 4}}
@@ -232,8 +232,9 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp text_to_speech_settings(observer) do
     [
       enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-      transport: {TestTextToSpeechTransport, [observer: observer, ready_on_start: true]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: observer, ready_on_start: true],
       maximum_requests: 2
     ]
   end

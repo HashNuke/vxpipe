@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   alias Vxpipe.CallEngine.Media.{AudioFrame, AudioOutputFrame}
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.MorseCode.Config
-  alias Vxpipe.CallEngine.Provider.MorseCode.{Decoder, Encoder}
+  alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
   alias Vxpipe.CallEngine.TestAudioOutputSink
 
@@ -55,9 +55,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     text_to_speech = [
       enabled: false,
       providers: %{
-        MorseCodeTTS => [
+        MorseCodeTTS.Session => [
           enabled: true,
-          transport: {MorseCodeTTS.Transport, [emit_interval_ms: 0]},
+          provider_private: [emit_interval_ms: 0],
           maximum_requests: 2
         ]
       }
@@ -161,7 +161,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     assert Enum.all?(frames, &(byte_size(&1.payload) <= 640))
 
     output_pcm = frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
-    assert {:ok, output_config} = MorseCodeTTS.new(sample_rate: 16_000, unit_duration_ms: 20)
+    assert {:ok, output_config} = Config.new(sample_rate: 16_000, unit_duration_ms: 20)
     assert {:ok, output_decoder} = Decoder.new(output_config)
     assert {:ok, output_decoder, output_events} = Decoder.push(output_decoder, output_pcm)
     assert {:ok, _output_decoder, []} = Decoder.flush(output_decoder)
@@ -336,7 +336,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
 
   defp assert_decodes_to(frames, expected_text) do
     output_pcm = frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
-    assert {:ok, output_config} = MorseCodeTTS.new(sample_rate: 16_000, unit_duration_ms: 20)
+    assert {:ok, output_config} = Config.new(sample_rate: 16_000, unit_duration_ms: 20)
     assert {:ok, output_decoder} = Decoder.new(output_config)
     assert {:ok, output_decoder, output_events} = Decoder.push(output_decoder, output_pcm)
     assert {:ok, _output_decoder, []} = Decoder.flush(output_decoder)

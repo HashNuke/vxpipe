@@ -5,11 +5,8 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket do
 
   @behaviour Socket
 
-  @behaviour Vxpipe.CallEngine.Provider.TextToSpeech.Transport
-
   @default_keepalive_interval 30_000
 
-  @impl true
   def start_link(options) do
     owner = Keyword.fetch!(options, :owner)
     transport_options = Keyword.fetch!(options, :transport_options)
@@ -25,12 +22,10 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket do
     )
   end
 
-  @impl true
   def send_control(socket, payload) when is_binary(payload) do
     Socket.send_frame(socket, {:text, payload})
   end
 
-  @impl true
   def close(socket) do
     Socket.close(socket, JSON.encode!(%{"type" => "Close"}))
   end

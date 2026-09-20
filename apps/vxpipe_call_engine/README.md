@@ -325,13 +325,12 @@ call spec, invocation, command, or RTVI message.
 
 ## Local Morse audio providers
 
-`Vxpipe.CallEngine.Provider.MorseCodeSTT.Session` and `MorseCodeTTS` are opt-in, in-process
+`Vxpipe.CallEngine.Provider.MorseCodeSTT.Session` and `MorseCodeTTS.Session` are opt-in, in-process
 implementations used for controlled audio. They encode and decode International Morse tones;
-they do not recognize spoken language, run VAD, or use a hosted API. Register the STT session
-under the speech setting's closed `:providers` map with ingress limits and no transport. The call
-spec selects `%{provider: "morse", model: "morse"}` with optional public signal settings under
-`options`; modules never enter call spec input. Existing TTS room consumers still use their
-configured transport until their room migration checkpoint.
+they do not recognize spoken language, run VAD, or use a hosted API. Register each session under
+its speech setting's closed `:providers` map. Neither direction has a public transport setting.
+The call spec selects `%{provider: "morse", model: "morse"}` with optional public signal settings
+under `options`; modules never enter call spec input.
 
 ```elixir
 speech_to_text: [
@@ -345,6 +344,15 @@ speech_to_text: [
         maximum_age_ms: 2_000,
         maximum_consecutive_overflows: 5
       ]
+    ]
+  }
+],
+text_to_speech: [
+  enabled: false,
+  providers: %{
+    Vxpipe.CallEngine.Provider.MorseCodeTTS.Session => [
+      enabled: true,
+      maximum_requests: 4
     ]
   }
 ]

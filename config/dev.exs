@@ -65,13 +65,12 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   ],
   text_to_speech: [
     enabled: true,
-    provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-    transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket, []},
+    provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
+    wire_module: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket,
     maximum_requests: 4,
     providers: %{
-      Vxpipe.CallEngine.Provider.MorseCodeTTS => [
+      Vxpipe.CallEngine.Provider.MorseCodeTTS.Session => [
         enabled: true,
-        transport: {Vxpipe.CallEngine.Provider.MorseCodeTTS.Transport, []},
         maximum_requests: 4
       ]
     }

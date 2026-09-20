@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
@@ -33,7 +33,12 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
            ] = stt.provider_private
 
     assert stt_config.api_key == "deepgram-tenant-private-marker"
-    assert {FluxTextToSpeech, tts_config} = startup.text_to_speech.provider
+    assert {TTSFluxSession, public_tts_config} = startup.text_to_speech.provider
+    assert public_tts_config[:model] == "flux-haley-en"
+
+    assert [config: tts_config, wire_module: _, wire_options: []] =
+             startup.text_to_speech.provider_private
+
     assert tts_config.api_key == "deepgram-tenant-private-marker"
 
     for provider <- ["google", "deepgram"] do
@@ -205,9 +210,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
       ],
       text_to_speech: [
         enabled: true,
-        provider: FluxTextToSpeech,
+        provider: TTSFluxSession,
         provider_options: [api_key: "retired-private-marker"],
-        transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket, []},
+        wire_options: [],
         maximum_requests: 4
       ]
     ]

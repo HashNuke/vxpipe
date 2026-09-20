@@ -779,9 +779,9 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
       )
       |> Keyword.put(:text_to_speech,
         enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-        transport:
-          {Vxpipe.CallEngine.TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
+        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
+        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+        wire_options: [observer: self(), ready_on_start: true],
         maximum_requests: 4
       )
     )

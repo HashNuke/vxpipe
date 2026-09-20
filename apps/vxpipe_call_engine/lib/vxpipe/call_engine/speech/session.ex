@@ -102,6 +102,13 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def ack(allocation, event), do: call(allocation, {:ack, event})
 
+  @doc "Release a completed TTS request after the consumer confirms local playout."
+  def settle_output(allocation, %Request{session: allocation, ref: reference}, played_ms)
+      when is_integer(played_ms) and played_ms >= 0,
+      do: call(allocation, {:settle_output, reference, played_ms})
+
+  def settle_output(_allocation, _request, _played_ms), do: {:error, :stale_request}
+
   @doc """
   Admit bounded text and return a request handle before provider acceptance.
   Actual submission arrives as `input_submitted`; clean provider rejection is a
@@ -161,6 +168,33 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   end
 
   def cancel(_allocation, _ticket, _played_ms), do: {:error, :stale_cancellation}
+
+  @doc "Start cancellation without blocking the consumer that must acknowledge terminal events."
+  def request_cancel(allocation, %Cancellation{} = ticket, played_ms) do
+    command = command(allocation)
+
+    if Allocation.valid?(allocation) do
+      request_id =
+        :gen.send_request(
+          Channel.address(allocation),
+          :"$gen_call",
+          {:command, allocation, command.deadline, {:cancel, command, ticket, played_ms}}
+        )
+
+      {:ok, request_id}
+    else
+      {:error, :closed}
+    end
+  catch
+    :exit, _reason -> {:error, :closed}
+  end
+
+  def request_cancel(_allocation, _ticket, _played_ms),
+    do: {:error, :stale_cancellation}
+
+  @doc false
+  def cancellation_response(message, request_id),
+    do: :gen.check_response(message, request_id)
 
   @doc "Check the exact current audio envelope before sink use."
   def validate_audio(allocation, audio), do: audio_call(allocation, :validate, audio)

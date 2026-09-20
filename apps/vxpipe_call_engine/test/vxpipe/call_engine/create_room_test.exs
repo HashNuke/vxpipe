@@ -34,14 +34,15 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :text_to_speech,
         enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
+        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
         provider_options: [
           api_key: "retired-global-private-marker",
           model: "flux-haley-en",
           encoding: :linear16,
           sample_rate: 48_000
         ],
-        transport: {Vxpipe.CallEngine.TestTextToSpeechTransport, [observer: self()]},
+        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+        wire_options: [observer: self()],
         maximum_requests: 2
       )
     )

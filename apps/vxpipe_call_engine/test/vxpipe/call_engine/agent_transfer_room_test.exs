@@ -891,11 +891,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     )
 
     blocked_monitor = Process.monitor(blocked_transport)
-    send(blocked_transport, :release_test_tts_transport_start)
-    assert_receive {:test_tts_transport_started, ^blocked_transport, _connection}, 2_000
     assert_receive {:DOWN, ^blocked_monitor, :process, ^blocked_transport, _reason}, 2_000
 
-    refute_receive {:test_tts_transport_started, _other_transport, _connection}, 100
+    refute_receive {:test_tts_transport_started, _transport, _connection}, 100
   end
 
   test "agent re-entry keeps identity, refreshes activation, and does not replay its greeting" do
@@ -1106,14 +1104,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-test-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, [observer: self()] ++ transport_options},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: Keyword.merge([observer: self()], transport_options),
       maximum_requests: 2
     ]
 

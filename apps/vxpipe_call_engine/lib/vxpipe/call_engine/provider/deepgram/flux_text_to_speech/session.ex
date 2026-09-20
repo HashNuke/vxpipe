@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
   @behaviour Vxpipe.CallEngine.Speech.TTSProvider
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{FluxTextToSpeech, FluxTextToSpeechSocket}
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, Playback, TTSProvider}
 
   @derive {Inspect, only: [:phase, :ready?, :terminal?]}
@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
     :channel,
     :phase,
     :request,
+    :last_terminal_request,
+    :pending_terminal,
     :speech_id,
     :wire,
     :wire_module,
@@ -134,6 +136,30 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
   end
 
   def handle_call(
+        {:cancel, reference, %Playback{request_ref: reference}},
+        _from,
+        %{request: nil, last_terminal_request: reference} = state
+      ) do
+    {:reply, :ok, %{state | last_terminal_request: nil}}
+  end
+
+  def handle_call(
+        {:cancel, reference, %Playback{request_ref: reference}},
+        _from,
+        %{request: reference, pending_terminal: {:terminal, provider_id}} = state
+      ) do
+    state = release_awaiting(state)
+
+    case Event.emit(state.channel, :cancelled,
+           request_ref: reference,
+           provider_request_id: provider_id
+         ) do
+      :ok -> {:reply, :ok, reset_request(state)}
+      _failure -> fail_call(state)
+    end
+  end
+
+  def handle_call(
         {:cancel, reference, %Playback{request_ref: reference} = playback},
         _from,
         %{request: reference, terminal?: false} = state
@@ -142,11 +168,11 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
 
     if playback.request_played_ms > 0 do
       case send_control(state, FluxTextToSpeech.encode_interrupt(playback.session_played_ms)) do
-        :ok -> {:reply, :ok, %{state | phase: :interrupting}}
+        :ok -> {:reply, :ok, %{state | pending_terminal: nil, phase: :interrupting}}
         _failure -> fail_call(state)
       end
     else
-      {:reply, :ok, %{state | phase: :discarding}}
+      {:reply, :ok, %{state | pending_terminal: nil, phase: :discarding}}
     end
   catch
     :exit, _reason -> fail_call(state)
@@ -207,7 +233,18 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
         } = state
       ) do
     acknowledge_wire(state, wire_reference, :ok)
-    {:noreply, %{state | awaiting: nil}}
+    state = %{state | awaiting: nil}
+
+    case state.pending_terminal do
+      nil ->
+        {:noreply, state}
+
+      {:terminal, provider_id} ->
+        case terminal(%{state | pending_terminal: nil}, provider_id) do
+          {:ok, state} -> {:noreply, state}
+          {:error, _reason} -> stop_session(state)
+        end
+    end
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -286,7 +323,9 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
 
   defp publish(%Signal{kind: :speech_completed} = signal, state) do
     with {:ok, state} <- associate_speech(state, signal.provider_speech_id) do
-      terminal(state, signal.provider_speech_id)
+      if state.awaiting,
+        do: {:ok, %{state | pending_terminal: {:terminal, signal.provider_speech_id}}},
+        else: terminal(state, signal.provider_speech_id)
     end
   end
 
@@ -309,9 +348,15 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
            request_ref: state.request,
            provider_request_id: provider_id
          ) do
-      :ok -> {:ok, %{state | awaiting: nil, phase: :completed, terminal?: true}}
-      {:error, :cancelled} -> fenced_terminal(state, provider_id)
-      _failure -> {:error, :session_failed}
+      :ok ->
+        reference = state.request
+        {:ok, %{reset_request(state) | last_terminal_request: reference}}
+
+      {:error, :cancelled} ->
+        fenced_terminal(state, provider_id)
+
+      _failure ->
+        {:error, :session_failed}
     end
   end
 
@@ -360,6 +405,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
     %{
       state
       | awaiting: nil,
+        pending_terminal: nil,
         phase: :idle,
         request: nil,
         speech_id: nil,
@@ -371,6 +417,8 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
     %{
       state
       | awaiting: nil,
+        last_terminal_request: nil,
+        pending_terminal: nil,
         phase: :active,
         request: reference,
         speech_id: nil,

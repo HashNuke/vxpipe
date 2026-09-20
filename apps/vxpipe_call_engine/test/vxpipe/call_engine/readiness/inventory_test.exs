@@ -570,27 +570,27 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
 
   test "captures supervised participant TTS even when it is outside the active room handle",
        context do
-    alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+    alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseTTSSession
     alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor}
     room = start_room(context.plan)
     assert {:ok, captured} = RoomInventory.capture(room.room, current_candidate(room.policy))
     incarnation = captured.identity.incarnation_id
     participant_id = context.ids["two"]
-    assert {:ok, provider} = MorseCodeTTS.new([])
 
     assert {:ok, tts} =
              RoomCapabilitySupervisor.start_text_to_speech(
                incarnation,
                room.room,
                participant_id,
-               {MorseCodeTTS, provider},
-               {MorseCodeTTS.Transport, []},
+               {MorseTTSSession, []},
+               [],
                2
              )
 
     assert {:ok, binding} = RoomAuthority.readiness_binding(room.room)
     assert binding.participants[participant_id].text_to_speech == tts
-    assert {:ok, resource, :ready} = Vxpipe.CallEngine.Capability.TextToSpeech.readiness(tts)
+    assert {:ok, resource, status} = Vxpipe.CallEngine.Capability.TextToSpeech.readiness(tts)
+    assert status in [:preparing, :ready]
     assert {:ok, binding} = RoomAuthority.readiness_binding(room.room)
     assert binding.participants[participant_id].text_to_speech == resource.instance
   end

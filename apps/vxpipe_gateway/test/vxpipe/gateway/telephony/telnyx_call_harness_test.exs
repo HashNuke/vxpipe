@@ -46,14 +46,15 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
+      provider: FluxTextToSpeech.Session,
       provider_options: [
         api_key: "runtime-test-secret",
         model: "flux-application-voice",
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, observer: self()},
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self()],
       maximum_requests: 2
     ]
 
@@ -399,6 +400,13 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
       assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
 
+      TestTextToSpeechTransport.deliver_control(
+        briefing_tts,
+        ~s({"type":"Connected","request_id":"briefing-ready"})
+      )
+
+      await_transfer_preparation(context.plan, System.monotonic_time(:millisecond) + 2_000)
+
       assert {:ok, _outbound_socket} =
                TestTelephonySocket.input(
                  outbound_transport,
@@ -629,6 +637,25 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       after
         10 -> await_transfer_state(expected, deadline)
       end
+    end
+  end
+
+  defp await_transfer_preparation(plan, deadline) do
+    [{authority, _value}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    case :sys.get_state(authority).pending_participant_transfer do
+      %{preparation: preparation} when not is_nil(preparation) ->
+        :ok
+
+      _pending ->
+        assert System.monotonic_time(:millisecond) < deadline,
+               "transfer preparation did not finish after private text-to-speech became ready"
+
+        receive do
+        after
+          10 -> await_transfer_preparation(plan, deadline)
+        end
     end
   end
 end

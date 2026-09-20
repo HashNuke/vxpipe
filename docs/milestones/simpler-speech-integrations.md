@@ -1,6 +1,6 @@
 # Simpler speech integrations
 
-Status: checkpoints R, A, D, B, C and F are accepted. B and C now include a live Deepgram
+Status: checkpoints R, A, D, B, C, F and E are accepted. B and C include a live Deepgram
 WebRTC/RTVI turn through the native STT session. C1–C4 provide the direct native Deepgram STT
 path. Morse and Deepgram use the same semantic STT contract, the room has one session path, and
 the old STT behaviours, connector, bridge, global connection-task supervisor and Morse transport adapter
@@ -11,10 +11,11 @@ dependency. A later real-ingress test found that the capability binding omitted 
 count; the binding now preserves the complete media format and the full local PeerConnection
 path delivers normalized audio. Focused real-codec tests, bounded 32-call semantic and codec
 loads, and all five root gates pass. F provides native Deepgram TTS with controlled-wire,
-cancellation, fault, bounded-load and hosted semantic-session evidence. Room TTS consumers move
-together in E next.
+cancellation, fault, bounded-load and hosted semantic-session evidence. E moves conversation,
+opening and private-transfer TTS together onto semantic sessions for Morse and Deepgram, removes
+the old public TTS transport path, and preserves exact output credit, interruption and readiness.
 
-Implementation is **6 of 9 checkpoints accepted**. The implementation order is
+Implementation is **7 of 9 checkpoints accepted**. The implementation order is
 **R → A → D → B → C → F → E → G → H**. F makes Deepgram TTS a native semantic provider before
 E switches every TTS consumer once for both Morse and Deepgram. No compatibility bridge,
 fallback execution path or dual public configuration API is part of the remaining plan.
@@ -538,37 +539,47 @@ Prerequisites: D and F. Outcome: room conversation, independent opening and priv
 all use semantic TTS sessions. Morse and Deepgram switch together, after which the old TTS
 behaviour/transport path and global audio-output task supervisor are deleted.
 
-- [ ] **E1 — Red consumer playback tests.** Extend `text_to_speech_turn_test.exs`,
+- [x] **E1 — Red consumer playback tests.** Extend `text_to_speech_turn_test.exs`,
   `opening_audio_room_test.exs` and the private-speech tests for both native providers. Withhold
   sink finish and prove generation completion does not finish the turn or release opening input.
   Interrupt one response, then complete a replacement without stale audio.
-- [ ] **E2 — Resolve both providers as sessions.** Update TTS branches of `plan_startup.ex`,
+- [x] **E2 — Resolve both providers as sessions.** Update TTS branches of `plan_startup.ex`,
   `text_to_speech_runtime.ex`, `capability_catalog.ex` and capability-supervisor/startup callers.
   Compose descriptor metadata with existing selection and credential-scoped cache identity. Give
   conversation, independent opening and private preparation separate purpose/generation handles.
   There is one semantic startup path and no provider compatibility bridge.
-- [ ] **E3 — Simplify capability orchestration.** Change `lib/capability/text_to_speech.ex` to
+- [x] **E3 — Simplify capability orchestration.** Change `lib/capability/text_to_speech.ex` to
   call semantic speak/cancel and consume request-scoped audio/terminal events. Keep its bounded
   queue, turn policy and locally confirmed playback responsibility. Use one persistent local
   sink worker for blocking output I/O; delete per-chunk Task bookkeeping after focused tests prove
   credit, interruption and failure acknowledgements remain responsive. Provider speech IDs and
   cumulative wire offsets stay inside the Deepgram session.
-- [ ] **E4 — Preserve accounting and cache.** Red-test rejected admission, admitted-but-unsent
+- [x] **E4 — Preserve accounting and cache.** Red-test rejected admission, admitted-but-unsent
   failure, submitted-text failure, fenced already-enveloped audio, duplicate terminal settlement,
   cancellation during sink drain followed by correct replacement offsets, warm-cache credential
   checks and independent opening/agent voices. Update usage modules only where event projection
   changes.
-- [ ] **E5 — Switch every consumer and delete the old path.** Route conversation, opening audio,
+- [x] **E5 — Switch every consumer and delete the old path.** Route conversation, opening audio,
   private briefing, transfer preparation and source restoration through the session boundary.
   Update trusted config and umbrella fixtures for Morse and Deepgram together. Delete the old TTS
   behaviours, public transport selection, Morse JSON transport and global audio-output task
   supervisor when the final caller moves. Obsolete settings fail clearly; they never select a
   fallback.
-- [ ] **Exit E.** Two full room turns for each provider fixture, interrupted replacement,
+- [x] **Exit E.** Two full room turns for each provider fixture, interrupted replacement,
   cold/warm independent openings and private speech pass with unchanged recording privacy and
   usage. Withhold one scope's output and prove another room and another same-room purpose remain
   usable. Record first audio, sink finish and confirmed playback separately. Source audit finds no
   old TTS callback/transport tuple outside provider-private wire helpers.
+
+E implementation evidence: room, opening, private transfer, restoration, interruption, usage and
+credential suites pass through one semantic capability path. The readiness regression found during
+the first root run is covered by a deterministic private-transfer test: preparation now waits in its
+existing phase task for the exact TTS readiness resource and leaves the RoomAuthority callback
+responsive. The final four-scheduler root run passes 1,942 tests with zero failures and 42 excluded
+(seed 530504). The bounded local handoff run passes 36 trials, 3,936 TTS turns, 3,936 concurrent STT
+turns and 492 forced Channel failures with successful replacement. It measures sink acceptance,
+not physical playout or hosted network capacity. See the
+[checkpoint labnotes](../../labnotes/20260920-2016-direct-tts-cutover.md).
 
 ## Checkpoint G — Authoring guide and contrasting contract profiles
 
@@ -696,7 +707,7 @@ for timing distributions, exact covered permissions and excluded production path
 | B | Accepted with C: native Morse and Deepgram rooms use connection-local semantic sessions; the temporary hosted adapter was deleted | 101 focused room/policy/startup cases pass; exact startup-failure case passes 20 repeats; all five root gates pass on the C cutover | Four-call bounded load and control-stress lanes pass with exact text, attribution and PCM; the live room loop passes with C |
 | C | Accepted: native Deepgram session, one room STT path and old STT contracts/globals removed; WebRTC mono/stereo input is normalized per connection with one decoder history and one optional full-stream encoder | Native local wire, 165 serial room/startup/policy cases and 54 capability/credential/ingress/wire cases pass; 22 deterministic Gateway boundary tests, 15 audio-pipeline/egress tests and 3 full PeerConnection tests pass; actual ingress preparation preserves channels; all five root gates pass (1,937 tests, zero failures, 41 excluded; seed 530504); Astra reviewed | At 32 calls the semantic load completes 38,400 turns with zero failures. Repeated four-scheduler codec loads keep transition operation p99 below 1.7 ms. A hosted `flux-general-multi` WebRTC/RTVI turn passes with temporary one-utterance audio |
 | F | Accepted: Deepgram TTS is a native scoped semantic session over its private Mint wire | 50 focused TTS and 13 controlled-wire/privacy cases pass; all five root gates pass (1,950 tests, zero failures, 42 excluded; seed 530504); Astra reviewed | 640/640 loaded requests pass; hosted `flux-haley-en` synthesis returns nonempty 48 kHz mono linear16 through the semantic session |
-| E | Not started; direct Morse/Deepgram consumer cutover with old TTS deletion | Pending | Room/opening/private playback proof pending |
+| E | Accepted: conversation, opening and private-transfer TTS share semantic sessions; old public TTS contracts, Morse transport and global output task supervisor are removed | Exact-credit, cancellation, readiness, usage and all five root gates pass (1,942 tests, zero failures, 42 excluded; seed 530504) | 36 bounded trials pass 3,936 TTS turns, 3,936 concurrent STT turns and 492 fault/replacement cycles on four schedulers |
 | G | Not started | Pending | Independent guide exercise pending |
 | H | Not started | Pending | Browser/hosted final acceptance pending |
 

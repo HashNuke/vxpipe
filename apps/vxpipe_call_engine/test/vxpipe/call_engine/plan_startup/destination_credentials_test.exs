@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{DestinationPreparer, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
@@ -24,7 +24,12 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       assert Keyword.fetch!(model.generation_options, :max_tokens) == 64
       refute Keyword.has_key?(model.generation_options, :temperature)
 
-      assert {FluxTextToSpeech, voice} = destination.text_to_speech.provider
+      assert {TTSFluxSession, public_voice} = destination.text_to_speech.provider
+      assert public_voice[:model] == "flux-haley-en"
+
+      assert [config: voice, wire_module: _, wire_options: _] =
+               destination.text_to_speech.provider_private
+
       assert voice.api_key == tenant <> "-voice-private-marker"
       assert voice.model == "flux-haley-en"
       assert voice.sample_rate == 24_000
@@ -84,7 +89,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
              tenant <> "-model-private-marker"
 
     assert Keyword.fetch!(second.agent_activation, :model).api_key == "new-model-private-marker"
-    assert {FluxTextToSpeech, voice} = second.text_to_speech.provider
+    assert {TTSFluxSession, _public_voice} = second.text_to_speech.provider
+
+    assert [config: voice, wire_module: _, wire_options: _] =
+             second.text_to_speech.provider_private
+
     assert voice.api_key == "new-voice-private-marker"
     old_listener = session_configuration(first_listener.speech_to_text)
     assert old_listener.api_key == tenant <> "-listener-private-marker"
@@ -255,9 +264,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       ],
       text_to_speech: [
         enabled: true,
-        provider: FluxTextToSpeech,
+        provider: TTSFluxSession,
         provider_options: [api_key: "retired-private-marker"],
-        transport: {Vxpipe.CallEngine.TestTextToSpeechTransport, [observer: self()]},
+        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+        wire_options: [observer: self()],
         maximum_requests: 4
       ]
     ]

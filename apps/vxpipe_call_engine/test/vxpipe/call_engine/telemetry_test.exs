@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
 
   alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
-  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseCodeTTS
 
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]

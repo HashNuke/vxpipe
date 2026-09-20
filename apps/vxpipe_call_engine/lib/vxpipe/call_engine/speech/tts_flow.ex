@@ -84,6 +84,30 @@ defmodule Vxpipe.CallEngine.Speech.TTSFlow do
     end
   end
 
+  def settle_completed(state, caller, reference, played_ms) do
+    cond do
+      caller != state.consumer ->
+        {:reply, {:error, :not_owner}, state}
+
+      not Allocation.valid?(state.allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      not is_nil(state.cancellation) ->
+        {:reply, {:error, :stale_request}, state}
+
+      true ->
+        case OutputState.settle_completed(
+               state.output,
+               reference,
+               played_ms,
+               state.descriptor.format
+             ) do
+          {:ok, output} -> {:reply, :ok, %{state | output: output}}
+          error -> {:reply, error, state}
+        end
+    end
+  end
+
   def settle(
         %{
           cancellation: %{accepted?: true} = cancellation,

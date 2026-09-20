@@ -259,10 +259,11 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
     )
 
     for pcm <- [<<1, 0, 2, 0>>, <<3, 0, 4, 0>>] do
-      TestTextToSpeechTransport.deliver_audio(tts, pcm)
+      reference = TestTextToSpeechTransport.deliver_audio_with_result(tts, pcm)
       assert_receive {:test_audio_output, ^sink, frame}, 1_000
       assert frame.payload == pcm
       assert frame.audio_scope == :private
+      assert_receive {:test_tts_audio_result, ^reference, :ok}, 1_000
     end
 
     TestTextToSpeechTransport.deliver_control(
@@ -294,9 +295,10 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
       )
       |> Keyword.put(:text_to_speech,
         enabled: true,
-        provider: FluxTextToSpeech,
+        provider: FluxTextToSpeech.Session,
         provider_options: [api_key: "retired-opening-private-marker", model: "retired-voice"],
-        transport: {TestTextToSpeechTransport, observer: self(), ready_on_start: true},
+        wire_module: TestTextToSpeechTransport,
+        wire_options: [observer: self(), ready_on_start: true],
         maximum_requests: 2
       )
 

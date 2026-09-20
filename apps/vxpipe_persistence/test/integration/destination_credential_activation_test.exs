@@ -266,10 +266,10 @@ defmodule Vxpipe.Persistence.Integration.DestinationCredentialActivationTest do
       )
       |> Keyword.put(:text_to_speech,
         enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
+        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
         provider_options: [api_key: "retired-private-marker"],
-        transport:
-          {Vxpipe.CallEngine.TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
+        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+        wire_options: [observer: self(), ready_on_start: true],
         maximum_requests: 4
       )
     )

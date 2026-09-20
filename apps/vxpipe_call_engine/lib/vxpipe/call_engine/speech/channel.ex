@@ -331,6 +331,10 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
+  def handle_call({:settle_output, reference, played_ms}, {caller, _tag}, state) do
+    TTSFlow.settle_completed(state, caller, reference, played_ms)
+  end
+
   def handle_call({:cancel, command, ticket, played_ms}, {caller, _tag} = from, state) do
     if Allocation.valid?(state.allocation) do
       case Cancellation.evaluate(

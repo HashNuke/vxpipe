@@ -5,10 +5,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
-  alias Vxpipe.CallEngine.Capability.TextToSpeech.Usage
-  alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
-  alias Vxpipe.CallEngine.Readiness.{Provider, Resource}
+  alias Vxpipe.CallEngine.Capability.TextToSpeech.{Output, Usage}
+  alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.CallEngine.Speech.{Audio, Event, Session}
   alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
@@ -52,45 +52,46 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   @impl true
   def init(options) do
-    Process.flag(:trap_exit, true)
     owner = Keyword.fetch!(options, :owner)
-    {provider_module, provider_config} = Keyword.fetch!(options, :provider)
-    {transport_module, transport_options} = Keyword.fetch!(options, :transport)
+    {provider, provider_options} = Keyword.fetch!(options, :provider)
+    scope = Keyword.fetch!(options, :speech_scope)
 
-    case transport_module.start_link(
-           owner: self(),
-           connection: provider_module.connection_options(provider_config),
-           transport_options: transport_options
-         ) do
-      {:ok, transport} ->
+    session_options = [
+      owner: self(),
+      consumer: self(),
+      provider: provider,
+      options: provider_options,
+      private: Keyword.get(options, :provider_private, []),
+      usage: true
+    ]
+
+    case Session.start(scope, session_options) do
+      {:ok, session, :starting} ->
         {:ok,
          %{
-           audio_output: nil,
+           cancellation: nil,
            current: nil,
+           descriptor: nil,
            maximum_requests: Keyword.get(options, :maximum_requests, 4),
-           media_format: provider_module.media_format(provider_config),
+           output: Keyword.fetch!(options, :output),
            owner: owner,
            pending: :queue.new(),
-           playback_offset_ms: 0,
-           provider_module: provider_module,
+           provider: provider,
            readiness_resource: readiness_resource(options),
-           readiness_status: Provider.initial_status(provider_module),
-           task_supervisor: Keyword.fetch!(options, :task_supervisor),
-           transport: transport,
-           transport_module: transport_module,
+           readiness_status: :preparing,
+           session: session,
            usage_context: Keyword.get(options, :usage)
          }}
 
       {:error, _reason} ->
-        Telemetry.provider_failure(:tts, provider_module, :transport_closed)
-        {:stop, :transport_start_failed}
+        Telemetry.provider_failure(:tts, provider, :provider_failed)
+        {:stop, :provider_start_failed}
     end
   end
 
   @impl true
-  def handle_call(:readiness, _from, state) do
-    {:reply, {:ok, state.readiness_resource, state.readiness_status}, state}
-  end
+  def handle_call(:readiness, _from, state),
+    do: {:reply, {:ok, state.readiness_resource, state.readiness_status}, state}
 
   def handle_call({:synthesize, request}, _from, state) do
     cond do
@@ -99,8 +100,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
       state.current == nil ->
         case start_request(request, state) do
-          {:ok, state} -> {:reply, :ok, state}
-          {:error, state} -> stop_unavailable(:transport_closed, {:error, :unavailable}, state)
+          {:ok, state} ->
+            {:reply, :ok, state}
+
+          {:error, reason, state} ->
+            stop_unavailable(reason, {:error, :unavailable}, state)
         end
 
       :queue.len(state.pending) >= state.maximum_requests ->
@@ -116,112 +120,111 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     {:reply, {:ok, interrupted}, %{state | pending: :queue.new()}}
   end
 
-  def handle_call(:interrupt, _from, %{current: %{phase: phase}} = state)
-      when phase in [:discarding, :interrupting] do
+  def handle_call(:interrupt, _from, %{cancellation: cancellation} = state)
+      when not is_nil(cancellation) do
     interrupted = Enum.map(:queue.to_list(state.pending), &{&1, 0})
     {:reply, {:ok, interrupted}, %{state | pending: :queue.new()}}
   end
 
-  def handle_call(:interrupt, _from, state) do
+  def handle_call(:interrupt, from, state) do
     current = state.current
     pending = Enum.map(:queue.to_list(state.pending), &{&1, 0})
 
-    {played_ms, state} = interrupt_output(current, state)
-    state = %{state | pending: :queue.new()}
+    with {:ok, ticket} <- Session.fence_output(state.session, current.handle),
+         {played_ms, state} <- interrupt_output(current, state),
+         {:ok, request_id} <- Session.request_cancel(state.session, ticket, played_ms) do
+      cancellation = %{
+        accepted?: false,
+        from: from,
+        interrupted: [{current.request, played_ms} | pending],
+        played_ms: played_ms,
+        request_id: request_id,
+        terminal?: current.phase in [:finishing, :draining],
+        ticket: ticket
+      }
 
-    case interrupt_provider(current, played_ms, state) do
-      {:ok, state} -> {:reply, {:ok, [{current.request, played_ms} | pending]}, state}
-      {:error, state} -> stop_unavailable(:transport_closed, {:error, :unavailable}, state)
+      {:noreply,
+       %{
+         state
+         | cancellation: cancellation,
+           current: %{current | phase: :cancelling},
+           pending: :queue.new()
+       }}
+    else
+      _failure -> stop_unavailable(:provider_failed, {:error, :unavailable}, state)
     end
   end
 
   @impl true
-  def handle_info(
-        {:vxpipe_tts_transport, transport, {:control, payload}},
-        %{transport: transport} = state
-      ) do
-    case state.provider_module.decode(payload) do
-      {:ok, %Signal{} = signal} ->
-        state = %{state | current: Usage.observe_signal(state.current, signal)}
-        handle_signal(signal, state)
+  def handle_info({:vxpipe_speech, %Event{kind: :ready, session: session} = event}, state)
+      when session == state.session do
+    with :ok <- Session.ack(session, event),
+         {:ok, descriptor} <- Session.describe(session) do
+      {:noreply, %{state | descriptor: descriptor, readiness_status: :ready}}
+    else
+      _failure -> stop_unavailable(:provider_failed, state)
+    end
+  end
 
-      {:ignore, _reason} ->
+  def handle_info({:vxpipe_speech, %Event{session: session} = event}, state)
+      when session == state.session do
+    handle_event(event, state)
+  end
+
+  def handle_info({:vxpipe_speech_audio, %Audio{session: session} = audio}, state)
+      when session == state.session do
+    handle_audio(audio, state)
+  end
+
+  def handle_info({:vxpipe_speech_closed, session, _reason}, %{session: session} = state),
+    do: stop_unavailable(:provider_failed, state)
+
+  def handle_info(
+        {:vxpipe_tts_output, output, reference, {:push, audio, result}},
+        %{output: output, current: %{handle: %{ref: reference}} = current} = state
+      ) do
+    cond do
+      result == :ok and current.phase != :cancelling ->
+        case Session.ack_audio(state.session, audio) do
+          :ok -> {:noreply, state}
+          {:error, _reason} -> stop_unavailable(:audio_output_failed, state)
+        end
+
+      result in [:ok, {:error, :interrupted}] and current.phase == :cancelling ->
         {:noreply, state}
 
-      {:error, _reason} ->
-        stop_unavailable(:invalid_provider_message, state)
+      true ->
+        stop_unavailable(:audio_output_failed, state)
     end
   end
 
   def handle_info(
-        {:vxpipe_tts_transport, transport, {:audio, reference, payload}},
-        %{transport: transport, audio_output: nil} = state
-      )
-      when is_reference(reference) do
-    case prepare_audio(payload, state) do
-      {:push, request, audio, state} ->
-        state = start_audio_output(request, audio, reference, state)
-        {:noreply, state}
+        {:vxpipe_tts_output, output, reference, {:finish, :ok}},
+        %{output: output, current: %{handle: %{ref: reference}} = current} = state
+      ) do
+    current = %{current | phase: :draining}
+    state = %{state | current: current}
 
-      {:drop, state} ->
-        send(transport, {:vxpipe_tts_audio_result, self(), reference, :ok})
-        {:noreply, state}
-
-      {:error, reason} ->
-        send(transport, {:vxpipe_tts_audio_result, self(), reference, {:error, reason}})
-        stop_unavailable(reason, state)
+    case Map.get(current, :playback_completed_ms) do
+      nil -> {:noreply, state}
+      total_ms -> complete_playback(total_ms, state)
     end
   end
 
   def handle_info(
-        {:vxpipe_tts_transport, transport, {:audio, reference, _payload}},
-        %{transport: transport} = state
-      )
-      when is_reference(reference) do
-    send(transport, {:vxpipe_tts_audio_result, self(), reference, {:error, :audio_output_busy}})
-    stop_unavailable(:audio_output_busy, state)
-  end
-
-  def handle_info(
-        {:vxpipe_tts_transport, transport, {:audio, payload}},
-        %{transport: transport} = state
-      ) do
-    case process_audio(payload, state) do
-      {:ok, state} -> {:noreply, state}
-      {:error, reason, state} -> stop_unavailable(reason, state)
-    end
-  end
-
-  def handle_info(
-        {:vxpipe_tts_transport, transport, {:closed, _reason}},
-        %{transport: transport} = state
-      ) do
-    stop_unavailable(:transport_closed, state)
-  end
+        {:vxpipe_tts_output, output, reference, {:finish, _error}},
+        %{output: output, current: %{handle: %{ref: reference}}} = state
+      ),
+      do: stop_unavailable(:audio_output_failed, state)
 
   def handle_info(
         {:vxpipe_audio_playback, sink, turn, :started},
         %{current: %{phase: phase, request: request}} = state
       )
       when sink == request.output_sink and turn == request.correlation_id and
-             phase not in [:discarding, :interrupting] do
+             phase != :cancelling do
     send(state.owner, {:vxpipe_tts_playback, self(), request, :started})
     {:noreply, state}
-  end
-
-  def handle_info(
-        {:vxpipe_audio_playback, sink, turn, {:completed, total_ms}},
-        %{current: %{phase: :draining, request: request}} = state
-      )
-      when sink == request.output_sink and turn == request.correlation_id and
-             is_integer(total_ms) and total_ms >= 0 do
-    send(state.owner, {:vxpipe_tts_playback, self(), request, :completed})
-    state = %{state | current: nil, playback_offset_ms: state.playback_offset_ms + total_ms}
-
-    case start_next(state) do
-      {:ok, state} -> {:noreply, state}
-      {:error, state} -> stop_unavailable(:transport_closed, state)
-    end
   end
 
   def handle_info(
@@ -230,53 +233,264 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       )
       when sink == request.output_sink and turn == request.correlation_id and
              is_integer(played_ms) and played_ms > 0 and is_integer(total_ms) and
-             total_ms > played_ms and phase not in [:discarding, :interrupting] do
+             total_ms > played_ms and phase != :cancelling do
     send(state.owner, {:vxpipe_tts_playback, self(), request, progress})
     {:noreply, %{state | current: Map.put(current, :played_ms, played_ms)}}
   end
 
   def handle_info(
-        {reference, result},
-        %{audio_output: %{task: %{ref: reference}} = output} = state
-      ) do
-    Process.demonitor(reference, [:flush])
-    state = %{state | audio_output: nil}
+        {:vxpipe_audio_playback, sink, turn, {:completed, total_ms}},
+        %{current: %{phase: :draining, request: request}} = state
+      )
+      when sink == request.output_sink and turn == request.correlation_id and
+             is_integer(total_ms) and total_ms >= 0,
+      do: complete_playback(total_ms, state)
 
-    cond do
-      result == :ok ->
-        acknowledge_audio_output(output, :ok)
-        {:noreply, state}
-
-      result == {:error, :interrupted} and state.current != nil and
-          state.current.phase in [:discarding, :interrupting] ->
-        acknowledge_audio_output(output, :ok)
-        {:noreply, state}
-
-      true ->
-        acknowledge_audio_output(output, {:error, :audio_output_failed})
-        stop_unavailable(:audio_output_failed, state)
-    end
+  def handle_info(
+        {:vxpipe_audio_playback, sink, turn, {:completed, total_ms}},
+        %{current: %{phase: :finishing, request: request} = current} = state
+      )
+      when sink == request.output_sink and turn == request.correlation_id and
+             is_integer(total_ms) and total_ms >= 0 do
+    {:noreply, %{state | current: Map.put(current, :playback_completed_ms, total_ms)}}
   end
 
   def handle_info(
-        {:DOWN, monitor, :process, _pid, _reason},
-        %{audio_output: %{task: %{ref: monitor}} = output} = state
+        message,
+        %{cancellation: %{accepted?: false, request_id: request_id} = cancellation} = state
       ) do
-    acknowledge_audio_output(output, {:error, :audio_output_failed})
-    stop_unavailable(:audio_output_failed, %{state | audio_output: nil})
-  end
+    case Session.cancellation_response(message, request_id) do
+      {:reply, {:ok, _playback}} ->
+        GenServer.reply(cancellation.from, {:ok, cancellation.interrupted})
 
-  def handle_info({:EXIT, transport, _reason}, %{transport: transport} = state) do
-    stop_unavailable(:transport_closed, state)
+        maybe_finish_cancellation(%{
+          state
+          | cancellation: %{cancellation | accepted?: true, from: nil}
+        })
+
+      {:reply, {:error, _reason}} ->
+        stop_unavailable(:provider_failed, state)
+
+      {:error, _reason} ->
+        stop_unavailable(:provider_failed, state)
+
+      :no_reply ->
+        {:noreply, state}
+    end
   end
 
   def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
   def terminate(_reason, state) do
-    stop_audio_output(state.audio_output)
-    _ = safe_close(state.transport_module, state.transport)
+    _ = Session.close(state.session)
     :ok
+  end
+
+  defp handle_event(%Event{kind: :input_submitted} = event, state) do
+    case state.current do
+      %{handle: %{ref: reference}} = current when reference == event.request_ref ->
+        current =
+          Usage.observe_event(current, event, state.usage_context, state.descriptor.format)
+
+        state = %{state | current: current}
+
+        case Session.ack(state.session, event) do
+          :ok ->
+            {:noreply, state}
+
+          {:error, _reason} ->
+            stop_unavailable(:provider_failed, state)
+        end
+
+      _other ->
+        stop_unavailable(:invalid_provider_message, state)
+    end
+  end
+
+  defp handle_event(%Event{kind: :completed} = event, state) do
+    case state.current do
+      %{handle: %{ref: reference}, request: request} = current
+      when reference == event.request_ref ->
+        current =
+          Usage.observe_event(current, event, state.usage_context, state.descriptor.format)
+
+        state = %{state | current: current}
+
+        with :ok <- Session.ack(state.session, event),
+             :ok <- Output.finish(state.output, self(), reference, request) do
+          {:noreply, %{state | current: %{current | phase: :finishing}}}
+        else
+          _failure -> stop_unavailable(:audio_output_failed, state)
+        end
+
+      _other ->
+        stop_unavailable(:invalid_provider_message, state)
+    end
+  end
+
+  defp handle_event(%Event{kind: :cancelled} = event, state) do
+    case state.current do
+      %{handle: %{ref: reference}} = current
+      when reference == event.request_ref and current.phase == :cancelling ->
+        current =
+          Usage.observe_event(current, event, state.usage_context, state.descriptor.format)
+
+        state = %{state | current: current}
+
+        case Session.ack(state.session, event) do
+          :ok ->
+            cancellation = %{state.cancellation | terminal?: true}
+            maybe_finish_cancellation(%{state | cancellation: cancellation})
+
+          {:error, _reason} ->
+            stop_unavailable(:provider_failed, state)
+        end
+
+      _other ->
+        stop_unavailable(:invalid_provider_message, state)
+    end
+  end
+
+  defp handle_event(%Event{kind: :failed, request_ref: reference} = event, state) do
+    case state.current do
+      %{handle: %{ref: ^reference}} ->
+        case Session.ack(state.session, event) do
+          :ok -> stop_unavailable(:provider_failed, state)
+          {:error, _reason} -> stop_unavailable(:invalid_provider_message, state)
+        end
+
+      _other ->
+        stop_unavailable(:invalid_provider_message, state)
+    end
+  end
+
+  defp handle_event(_event, state), do: stop_unavailable(:invalid_provider_message, state)
+
+  defp handle_audio(
+         %Audio{request_ref: reference} = audio,
+         %{current: %{handle: %{ref: reference}, phase: :cancelling} = current} = state
+       ) do
+    {:noreply, %{state | current: Usage.observe_audio(current, audio)}}
+  end
+
+  defp handle_audio(%Audio{request_ref: reference} = audio, state) do
+    case state.current do
+      %{handle: %{ref: ^reference}, phase: phase, request: request} = current
+      when phase not in [:cancelling, :finishing, :draining] ->
+        current = Usage.observe_audio(current, audio)
+        state = %{state | current: current}
+
+        with :ok <- Session.validate_audio(state.session, audio),
+             :ok <-
+               Output.push(
+                 state.output,
+                 self(),
+                 audio,
+                 request.output_sink,
+                 output_frame(request, audio, state)
+               ) do
+          current = observe_first_audio(current, state.provider)
+          {:noreply, %{state | current: current}}
+        else
+          _failure -> stop_unavailable(:audio_output_failed, state)
+        end
+
+      _other ->
+        stop_unavailable(:invalid_provider_message, state)
+    end
+  end
+
+  defp start_request(request, state) do
+    case Session.speak(state.session, request.text) do
+      {:ok, handle} ->
+        current = %{
+          first_audio_observed?: false,
+          handle: handle,
+          phase: :submitted,
+          played_ms: 0,
+          request: request,
+          started_at: Telemetry.started_at(),
+          usage: nil
+        }
+
+        {:ok, %{state | current: current}}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  defp start_next(state) do
+    case :queue.out(state.pending) do
+      {{:value, request}, pending} -> start_request(request, %{state | pending: pending})
+      {:empty, _pending} -> {:ok, state}
+    end
+  end
+
+  defp interrupt_output(current, state) do
+    case Output.interrupt(state.output, current.handle.ref, current.request, self()) do
+      {:ok, played_ms} -> {played_ms, state}
+      {:error, :wrong_turn} -> {0, state}
+      {:error, _reason} -> {0, state}
+    end
+  end
+
+  defp finish_cancellation(state) do
+    _current = Usage.finish(state.current, :cancelled, state.owner)
+    state = %{state | cancellation: nil, current: nil}
+
+    case start_next(state) do
+      {:ok, state} -> {:noreply, state}
+      {:error, reason, state} -> stop_unavailable(reason, state)
+    end
+  end
+
+  defp maybe_finish_cancellation(%{cancellation: %{accepted?: true, terminal?: true}} = state),
+    do: finish_cancellation(state)
+
+  defp maybe_finish_cancellation(state), do: {:noreply, state}
+
+  defp complete_playback(total_ms, state) do
+    request = state.current.request
+    handle = state.current.handle
+
+    case Session.settle_output(state.session, handle, total_ms) do
+      :ok ->
+        _current = Usage.finish(state.current, :succeeded, state.owner)
+        send(state.owner, {:vxpipe_tts_playback, self(), request, :completed})
+        state = %{state | current: nil}
+
+        case start_next(state) do
+          {:ok, state} -> {:noreply, state}
+          {:error, reason, state} -> stop_unavailable(reason, state)
+        end
+
+      {:error, _reason} ->
+        stop_unavailable(:provider_failed, state)
+    end
+  end
+
+  defp output_frame(request, %Audio{payload: payload}, state) do
+    format = state.descriptor.format
+
+    struct!(AudioOutputFrame, %{
+      tenant_id: request.tenant_id,
+      room_id: request.room_id,
+      incarnation_id: request.incarnation_id,
+      participant_id: request.participant_id,
+      connection_id: request.connection_id,
+      command_id: request.command_id,
+      correlation_id: request.correlation_id,
+      codec: format.encoding,
+      sample_rate: format.sample_rate,
+      channels: format.channels,
+      byte_order: format.byte_order,
+      payload: payload,
+      audio_scope: audio_scope(request.purpose),
+      output_generation: request.output_generation,
+      reply_to: self()
+    })
   end
 
   defp readiness_resource(options) do
@@ -286,274 +500,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       binding: Keyword.get(options, :readiness_binding),
       instance: self(),
       generation: make_ref(),
-      configuration:
-        Resource.signature(
-          {Keyword.fetch!(options, :provider), Keyword.fetch!(options, :transport)}
-        ),
+      configuration: Resource.signature(Keyword.fetch!(options, :provider)),
       policy_interval: nil,
       adapter: __MODULE__
     }
-  end
-
-  defp handle_signal(%Signal{kind: :connected}, state) do
-    {:noreply, %{state | readiness_status: Provider.connected(state.readiness_status)}}
-  end
-
-  defp handle_signal(%Signal{kind: :speech_started, provider_speech_id: speech_id}, state) do
-    case state.current do
-      %{phase: :awaiting_start} = current ->
-        {:noreply, %{state | current: %{current | phase: :streaming, speech_id: speech_id}}}
-
-      %{phase: :discarding} = current ->
-        {:noreply, %{state | current: %{current | speech_id: speech_id}}}
-
-      _other ->
-        stop_unavailable(:invalid_provider_state, state)
-    end
-  end
-
-  defp handle_signal(%Signal{kind: :speech_completed, provider_speech_id: speech_id}, state) do
-    case state.current do
-      %{phase: phase, request: request, speech_id: ^speech_id}
-      when phase in [:streaming, :awaiting_start] ->
-        case OutputSink.finish(request.output_sink, request.correlation_id, self()) do
-          :ok ->
-            state = finish_usage(:succeeded, state)
-            {:noreply, %{state | current: %{state.current | phase: :draining}}}
-
-          {:error, _reason} ->
-            stop_unavailable(:audio_output_failed, state)
-        end
-
-      %{phase: phase, speech_id: ^speech_id}
-      when phase in [:discarding, :interrupting] ->
-        finish_interruption(state.playback_offset_ms, finish_usage(:cancelled, state))
-
-      _other ->
-        stop_unavailable(:invalid_provider_state, state)
-    end
-  end
-
-  defp handle_signal(
-         %Signal{
-           kind: :speech_interrupted,
-           provider_speech_id: speech_id,
-           audio_played_ms: audio_played_ms
-         },
-         state
-       ) do
-    case state.current do
-      %{phase: :interrupting, speech_id: ^speech_id} ->
-        state = finish_usage(:cancelled, state)
-        finish_interruption(max(audio_played_ms, state.playback_offset_ms), state)
-
-      _other ->
-        stop_unavailable(:invalid_provider_state, state)
-    end
-  end
-
-  defp handle_signal(%Signal{kind: :failed}, state), do: stop_unavailable(:provider_failed, state)
-  defp handle_signal(%Signal{kind: :warning}, state), do: {:noreply, state}
-  defp handle_signal(%Signal{kind: _other}, state), do: {:noreply, state}
-
-  defp start_request(request, state) do
-    started_at = Telemetry.started_at()
-    speak = state.provider_module.encode_speak(request.text)
-    flush = state.provider_module.encode_flush()
-
-    case safe_send_control(state.transport_module, state.transport, speak) do
-      :ok ->
-        state = %{
-          state
-          | current: %{
-              phase: :awaiting_start,
-              played_ms: 0,
-              request: request,
-              speech_id: nil,
-              started_at: started_at,
-              first_audio_observed?: false,
-              usage: Usage.start(request, state.usage_context, state.media_format)
-            }
-        }
-
-        case safe_send_control(state.transport_module, state.transport, flush) do
-          :ok -> {:ok, state}
-          {:error, _reason} -> {:error, state}
-        end
-
-      {:error, _reason} ->
-        {:error, state}
-    end
-  end
-
-  defp process_audio(payload, state) do
-    case prepare_audio(payload, state) do
-      {:push, request, audio, state} ->
-        state = observe_first_audio(state)
-
-        case OutputSink.push(request.output_sink, output_frame(request, audio, state)) do
-          :ok -> {:ok, state}
-          {:error, _reason} -> {:error, :audio_output_failed, state}
-        end
-
-      {:drop, state} ->
-        {:ok, state}
-
-      {:error, reason} ->
-        {:error, reason, state}
-    end
-  end
-
-  defp prepare_audio(payload, state) do
-    case state.current do
-      %{phase: :streaming, request: request} ->
-        case state.provider_module.decode_audio(payload) do
-          {:audio, audio} ->
-            state = %{state | current: Usage.observe_audio(state.current, audio)}
-            {:push, request, audio, state}
-
-          {:error, _reason} ->
-            {:error, :audio_output_failed}
-        end
-
-      %{phase: phase} when phase in [:discarding, :interrupting] ->
-        case state.provider_module.decode_audio(payload) do
-          {:audio, audio} ->
-            state = %{state | current: Usage.observe_audio(state.current, audio)}
-            {:drop, state}
-
-          {:error, _reason} ->
-            {:error, :audio_output_failed}
-        end
-
-      _other ->
-        {:error, :audio_output_failed}
-    end
-  end
-
-  defp start_audio_output(request, audio, transport_reference, state) do
-    state = observe_first_audio(state)
-    frame = output_frame(request, audio, state)
-
-    task =
-      Task.Supervisor.async_nolink(state.task_supervisor, fn ->
-        OutputSink.push(request.output_sink, frame)
-      end)
-
-    audio_output = %{
-      task: task,
-      transport: state.transport,
-      transport_reference: transport_reference
-    }
-
-    %{state | audio_output: audio_output}
-  end
-
-  defp interrupt_output(current, state) do
-    result =
-      OutputSink.interrupt(
-        current.request.output_sink,
-        current.request.correlation_id,
-        self()
-      )
-
-    case result do
-      {:ok, played_ms} ->
-        {played_ms, state}
-
-      {:error, :wrong_turn} when state.audio_output != nil ->
-        stop_audio_output(state.audio_output)
-        acknowledge_audio_output(state.audio_output, :ok)
-        {0, %{state | audio_output: nil}}
-
-      {:error, _reason} ->
-        {0, state}
-    end
-  end
-
-  defp acknowledge_audio_output(output, result) do
-    send(
-      output.transport,
-      {:vxpipe_tts_audio_result, self(), output.transport_reference, result}
-    )
-  end
-
-  defp stop_audio_output(nil), do: :ok
-
-  defp stop_audio_output(output) do
-    Process.demonitor(output.task.ref, [:flush])
-    _ = Task.shutdown(output.task, :brutal_kill)
-    :ok
-  end
-
-  defp interrupt_provider(%{phase: :draining}, played_ms, state) do
-    {:ok, %{state | current: nil, playback_offset_ms: state.playback_offset_ms + played_ms}}
-  end
-
-  defp interrupt_provider(%{phase: :streaming} = current, played_ms, state)
-       when played_ms > 0 do
-    playback_offset_ms = state.playback_offset_ms + played_ms
-    interrupt = state.provider_module.encode_interrupt(playback_offset_ms)
-
-    case safe_send_control(state.transport_module, state.transport, interrupt) do
-      :ok ->
-        {:ok,
-         %{
-           state
-           | current: %{current | phase: :interrupting},
-             playback_offset_ms: playback_offset_ms
-         }}
-
-      {:error, _reason} ->
-        {:error, state}
-    end
-  end
-
-  defp interrupt_provider(current, played_ms, state) do
-    {:ok,
-     %{
-       state
-       | current: %{current | phase: :discarding},
-         playback_offset_ms: state.playback_offset_ms + played_ms
-     }}
-  end
-
-  defp finish_interruption(playback_offset_ms, state) do
-    state = %{state | current: nil, playback_offset_ms: playback_offset_ms}
-
-    case start_next(state) do
-      {:ok, state} -> {:noreply, state}
-      {:error, state} -> stop_unavailable(:transport_closed, state)
-    end
-  end
-
-  defp start_next(state) do
-    case :queue.out(state.pending) do
-      {{:value, request}, pending} ->
-        start_request(request, %{state | pending: pending})
-
-      {:empty, _pending} ->
-        {:ok, state}
-    end
-  end
-
-  defp output_frame(request, audio, state) do
-    struct!(AudioOutputFrame, %{
-      tenant_id: request.tenant_id,
-      room_id: request.room_id,
-      incarnation_id: request.incarnation_id,
-      participant_id: request.participant_id,
-      connection_id: request.connection_id,
-      command_id: request.command_id,
-      correlation_id: request.correlation_id,
-      codec: state.media_format.codec,
-      sample_rate: state.media_format.sample_rate,
-      channels: state.media_format.channels,
-      byte_order: state.media_format.byte_order,
-      payload: audio,
-      output_generation: request.output_generation,
-      reply_to: self()
-    })
   end
 
   defp valid_request?(request) do
@@ -573,44 +523,27 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       byte_size(request.text) <= @maximum_text_bytes and is_pid(request.output_sink)
   end
 
+  defp observe_first_audio(%{first_audio_observed?: false} = current, provider) do
+    Telemetry.tts_first_audio(current.started_at, provider)
+    %{current | first_audio_observed?: true}
+  end
+
+  defp observe_first_audio(current, _provider), do: current
+
+  defp audio_scope(:transfer_briefing), do: :private
+  defp audio_scope(_purpose), do: :conversation
+
   defp stop_unavailable(reason, state) do
-    state = finish_usage(:failed, state)
-    Telemetry.provider_failure(:tts, state.provider_module, reason)
+    _current = Usage.finish(state.current, :failed, state.owner)
+    Telemetry.provider_failure(:tts, state.provider, reason)
     send(state.owner, {:vxpipe_tts_unavailable, self(), reason})
     {:stop, reason, state}
   end
 
   defp stop_unavailable(reason, reply, state) do
-    state = finish_usage(:failed, state)
-    Telemetry.provider_failure(:tts, state.provider_module, reason)
+    _current = Usage.finish(state.current, :failed, state.owner)
+    Telemetry.provider_failure(:tts, state.provider, reason)
     send(state.owner, {:vxpipe_tts_unavailable, self(), reason})
     {:stop, reason, reply, state}
-  end
-
-  defp safe_send_control(module, transport, payload) do
-    try do
-      module.send_control(transport, payload)
-    catch
-      :exit, _reason -> {:error, :transport_closed}
-    end
-  end
-
-  defp safe_close(module, transport) do
-    try do
-      module.close(transport)
-    catch
-      :exit, _reason -> :ok
-    end
-  end
-
-  defp observe_first_audio(%{current: %{first_audio_observed?: false} = current} = state) do
-    Telemetry.tts_first_audio(current.started_at, state.provider_module)
-    %{state | current: %{current | first_audio_observed?: true}}
-  end
-
-  defp observe_first_audio(state), do: state
-
-  defp finish_usage(outcome, state) do
-    %{state | current: Usage.finish(state.current, outcome, state.owner)}
   end
 end

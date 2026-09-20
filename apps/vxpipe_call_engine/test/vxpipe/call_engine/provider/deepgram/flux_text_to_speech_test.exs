@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal
 
   test "builds a redacted streaming linear16 connection" do
     assert {:ok, provider} =
@@ -31,9 +31,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechTest do
            }
 
     assert connection.headers == [{"Authorization", "Token secret-value"}]
-
-    assert FluxTextToSpeech.media_format(provider) ==
-             %{codec: :linear16, sample_rate: 48_000, channels: 1, byte_order: :little}
   end
 
   test "rejects unsupported streaming configurations" do

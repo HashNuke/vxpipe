@@ -87,6 +87,53 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSessionTest do
     interrupt(session, wire, second, "dg_sp_second", 60)
   end
 
+  test "completed playback contributes to the next interrupt offset" do
+    {session, wire} = start_session()
+    assert {:ok, first_handle} = Session.speak(session, "first")
+    first = first_handle.ref
+    assert_control(wire, %{"type" => "Speak", "text" => "first"})
+    assert_control(wire, %{"type" => "Flush"})
+    assert %Event{kind: :input_submitted, request_ref: ^first} = next_event(session)
+    accept_audio(session, wire, first, :binary.copy(<<1, 0>>, 160))
+
+    TestTextToSpeechTransport.deliver_control(
+      wire,
+      JSON.encode!(%{"type" => "SpeechMetadata", "speech_id" => "completed-first"})
+    )
+
+    assert %Event{kind: :completed, request_ref: ^first} = next_event(session)
+    assert :ok = Session.settle_output(session, first_handle, 10)
+
+    second = speak(session, wire, "second")
+    accept_audio(session, wire, second, :binary.copy(<<2, 0>>, 160))
+    assert {:ok, ticket} = Session.fence_output(session, second)
+    assert {:ok, %{session_played_ms: 15}} = Session.cancel(session, ticket, 5)
+    assert_interrupt(wire, 15)
+    interrupt(session, wire, second, "cancelled-second", 5)
+  end
+
+  test "cancellation consumes terminal already received behind final audio credit" do
+    {session, wire} = start_session()
+    request = speak(session, wire, "held-final-credit")
+    wire_reference = TestTextToSpeechTransport.deliver_audio_with_result(wire, <<1, 0>>)
+
+    assert_receive {:vxpipe_speech_audio,
+                    %Audio{session: ^session, request_ref: ^request} = audio},
+                   500
+
+    assert :ok = Session.validate_audio(session, audio)
+
+    TestTextToSpeechTransport.deliver_control(
+      wire,
+      JSON.encode!(%{"type" => "SpeechMetadata", "speech_id" => "already-terminal"})
+    )
+
+    assert {:ok, ticket} = Session.fence_output(session, request)
+    assert {:ok, %{request_played_ms: 0}} = Session.cancel(session, ticket, 0)
+    assert_receive {:test_tts_audio_result, ^wire_reference, :ok}, 500
+    assert %Event{kind: :cancelled, provider_request_id: "already-terminal"} = next_event(session)
+  end
+
   test "provider completion between fence and cancel settles as one cancellation" do
     {session, wire} = start_session()
     request = speak(session, wire, "already finishing")

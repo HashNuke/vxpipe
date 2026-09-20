@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttempt do
   @moduledoc false
 
   alias Membrane.{RawAudio, Time}
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Speech.TTSUsage
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
   alias Vxpipe.CallEngine.Usage.{
@@ -70,20 +70,10 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttempt do
     }
   end
 
-  @spec observe_signal(t(), Signal.t()) :: t()
-  def observe_signal(%__MODULE__{} = attempt, %Signal{} = signal) do
-    provider = %{
-      attempt.provider
-      | request_id: signal.request_id || attempt.provider.request_id,
-        operation_id: signal.provider_speech_id || attempt.provider.operation_id
-    }
-
-    %{attempt | provider: provider}
-  end
-
-  @spec observe_audio(t(), binary()) :: t()
-  def observe_audio(%__MODULE__{} = attempt, payload) when is_binary(payload) do
-    %{attempt | generated_audio_bytes: attempt.generated_audio_bytes + byte_size(payload)}
+  @spec observe_semantic(t(), TTSUsage.t()) :: t()
+  def observe_semantic(%__MODULE__{} = attempt, %TTSUsage{} = usage) do
+    provider = %{attempt.provider | request_id: usage.provider_request_id}
+    %{attempt | provider: provider, generated_audio_bytes: usage.generated_bytes}
   end
 
   @spec finish(t(), :succeeded | :failed | :cancelled, DateTime.t()) ::
@@ -184,6 +174,20 @@ defmodule Vxpipe.CallEngine.Usage.TextToSpeechAttempt do
 
   defp raw_audio_format(%{
          codec: :linear16,
+         sample_rate: sample_rate,
+         channels: channels,
+         byte_order: byte_order
+       })
+       when is_integer(sample_rate) and sample_rate > 0 and is_integer(channels) and channels > 0 do
+    %RawAudio{
+      sample_format: sample_format(byte_order),
+      sample_rate: sample_rate,
+      channels: channels
+    }
+  end
+
+  defp raw_audio_format(%{
+         encoding: :linear16,
          sample_rate: sample_rate,
          channels: channels,
          byte_order: byte_order

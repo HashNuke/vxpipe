@@ -43,8 +43,9 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
 
     text_to_speech = [
       enabled: true,
-      provider: FluxTextToSpeech,
-      transport: {FluxTextToSpeechSocket, [connect_timeout: 10_000, receive_timeout: 30_000]},
+      provider: FluxTextToSpeech.Session,
+      wire_module: FluxTextToSpeechSocket,
+      wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],
       maximum_requests: 4
     ]
 

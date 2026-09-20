@@ -99,8 +99,10 @@ defmodule Vxpipe.CallEngine.SpeechTTSUsageProbe do
     do: {:reply, {:error, :stale_request}, state}
 
   @impl true
-  def handle_info({:vxpipe_speech_credit, _channel, _request, _credit, :ok}, state),
-    do: {:noreply, state}
+  def handle_info({:vxpipe_speech_credit, _channel, request, credit, :ok}, state) do
+    send(state.observer, {:usage_probe_audio_credited, request, credit})
+    {:noreply, state}
+  end
 
   defp submit_audio(%{audio?: true, channel: channel}, reference),
     do: Channel.submit(channel, reference, :binary.copy(<<1, 0>>, 160))

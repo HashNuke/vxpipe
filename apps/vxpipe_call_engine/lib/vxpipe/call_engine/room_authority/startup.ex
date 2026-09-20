@@ -259,7 +259,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
            owner,
            participant_id,
            runtime.provider,
-           runtime.transport,
+           runtime.provider_private,
            runtime.maximum_requests,
            text_to_speech_usage(runtime, participant_id)
          ) do

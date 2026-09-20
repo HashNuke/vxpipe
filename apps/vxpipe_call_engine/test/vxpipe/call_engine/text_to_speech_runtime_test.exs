@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntimeTest do
   alias Vxpipe.CallEngine.TextToSpeechRuntime
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
-  test "inspection excludes provider and transport credentials" do
+  test "inspection excludes provider-private credentials" do
     sentinel = "private-runtime-credential"
 
     assert {:ok, usage_provider} =
@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntimeTest do
 
     runtime = %TextToSpeechRuntime{
       provider: {ExampleProvider, %{api_key: sentinel}},
-      transport: {ExampleTransport, [authorization: sentinel]},
+      provider_private: [authorization: sentinel],
       maximum_requests: 2,
       asset_cache_identity: %{"voice" => "test-voice"},
       call_id: "call-test",

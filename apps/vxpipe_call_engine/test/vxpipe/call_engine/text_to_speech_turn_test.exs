@@ -33,8 +33,9 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
 
     text_to_speech = [
       enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-      transport: {TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
+      wire_module: TestTextToSpeechTransport,
+      wire_options: [observer: self(), ready_on_start: true],
       maximum_requests: 2
     ]
 
@@ -157,7 +158,8 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     TestTextToSpeechTransport.deliver_audio(transport, <<1, 0, 2, 0>>)
 
     assert_receive {:test_audio_output, ^sink,
-                    %AudioOutputFrame{connection_id: "conn-tts", payload: <<1, 0, 2, 0>>}}
+                    %AudioOutputFrame{connection_id: "conn-tts", payload: <<1, 0, 2, 0>>}},
+                   1_000
 
     TestTextToSpeechTransport.deliver_control(
       transport,
@@ -236,8 +238,8 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
       ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_first"})
     )
 
-    TestTextToSpeechTransport.deliver_audio(transport, <<1, 0, 2, 0>>)
-    assert_receive {:test_audio_output, ^first_sink, %AudioOutputFrame{}}
+    TestTextToSpeechTransport.deliver_audio(transport, :binary.copy(<<1, 0>>, 960))
+    assert_receive {:test_audio_output, ^first_sink, %AudioOutputFrame{}}, 1_000
     :ok = TestAudioOutputSink.playback_started(first_sink)
     assert_receive {:vxpipe_event, %AgentSpeechStarted{sequence: 4}}
     :ok = TestAudioOutputSink.playback_progress(first_sink, 20, 100)
@@ -360,7 +362,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     )
 
     TestTextToSpeechTransport.deliver_audio(transport, audio)
-    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{payload: ^audio}}
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{payload: ^audio}}, 1_000
 
     TestTextToSpeechTransport.deliver_control(
       transport,

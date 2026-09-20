@@ -212,11 +212,7 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
   def record_playback(%__MODULE__{} = output, reference, played_ms, format) do
     case output.request do
       %{ref: ^reference, fenced?: true} = request ->
-        maximum =
-          div(
-            (request.accepted_bytes + request.uncredited_bytes) * 1_000,
-            format.sample_rate * 2
-          )
+        maximum = playback_maximum(request, format)
 
         if is_integer(played_ms) and played_ms >= request.played_ms and played_ms <= maximum do
           total = output.session_played_ms + played_ms - request.played_ms
@@ -259,6 +255,26 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
     end
   end
 
+  def settle_completed(%__MODULE__{} = output, reference, played_ms, _format) do
+    case output.request do
+      %{
+        ref: ^reference,
+        terminal?: true,
+        terminal_result: :completed,
+        fenced?: false
+      } = request ->
+        if is_integer(played_ms) and played_ms >= request.played_ms do
+          total = output.session_played_ms + played_ms - request.played_ms
+          {:ok, %{output | request: nil, pending_audio: nil, session_played_ms: total}}
+        else
+          {:error, :invalid_playback}
+        end
+
+      _request ->
+        {:error, :stale_request}
+    end
+  end
+
   def take_pending(%__MODULE__{} = output),
     do: {output.pending_audio, %{output | pending_audio: nil}}
 
@@ -288,4 +304,11 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
     do:
       is_binary(audio) and byte_size(audio) in 1..@maximum_audio_bytes and
         rem(byte_size(audio), 2) == 0
+
+  defp playback_maximum(request, format) do
+    div(
+      (request.accepted_bytes + request.uncredited_bytes) * 1_000,
+      format.sample_rate * format.channels * 2
+    )
+  end
 end
