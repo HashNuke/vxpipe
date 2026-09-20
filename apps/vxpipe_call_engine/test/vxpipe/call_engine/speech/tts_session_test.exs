@@ -41,6 +41,72 @@ defmodule Vxpipe.CallEngine.Speech.TTSSessionTest do
     refute_received {:vxpipe_speech, %Event{kind: :completed}}
   end
 
+  test "a provider output limit rejects before submission and leaves the allocation usable" do
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    {:ok, allocation, :starting} =
+      Session.start(CapabilityTree.scope(tree),
+        provider: MorseSession,
+        usage: true,
+        options: [
+          sample_rate: 8_000,
+          unit_duration_ms: 20,
+          maximum_audio_bytes: 5_000
+        ],
+        private: [emit_interval_ms: 0]
+      )
+
+    assert_receive {:vxpipe_speech, %Event{session: ^allocation, kind: :ready} = ready}, 5_000
+    assert :ok = Session.ack(allocation, ready)
+    assert {:ok, rejected} = Session.speak(allocation, "T")
+
+    assert_receive {:vxpipe_speech,
+                    %Event{
+                      session: ^allocation,
+                      request_ref: rejected_ref,
+                      kind: :failed,
+                      reason: :output_too_large
+                    } = failed},
+                   500
+
+    assert rejected_ref == rejected.ref
+    assert failed.usage == nil
+    assert {:error, :busy} = Session.speak(allocation, "E")
+    assert :ok = Session.ack(allocation, failed)
+    refute_received {:vxpipe_speech_tts_usage, _, _}
+
+    assert {:ok, accepted} = Session.speak(allocation, "E")
+    {audio, events} = drain(allocation, accepted.ref, [], [])
+    assert byte_size(audio) == 4_800
+    assert Enum.map(events, & &1.kind) == [:input_submitted, :completed]
+  end
+
+  test "a long phrase drains beyond one chunk limit before completion" do
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    {:ok, allocation, :starting} =
+      Session.start(CapabilityTree.scope(tree),
+        provider: MorseSession,
+        options: [
+          sample_rate: 8_000,
+          unit_duration_ms: 20,
+          maximum_audio_bytes: 1_000_000
+        ],
+        private: [emit_interval_ms: 0]
+      )
+
+    assert_receive {:vxpipe_speech, %Event{session: ^allocation, kind: :ready} = ready}, 5_000
+    assert :ok = Session.ack(allocation, ready)
+
+    text = String.duplicate("E", 128)
+    assert {:ok, request} = Session.speak(allocation, text)
+    {audio, events} = drain(allocation, request.ref, [], [])
+
+    assert byte_size(audio) == 4_800 + 127 * 1_280
+    assert byte_size(audio) > 131_072
+    assert Enum.map(events, & &1.kind) == [:input_submitted, :completed]
+  end
+
   defp drain(allocation, request, chunks, events) do
     receive do
       {:vxpipe_speech_audio, %{__struct__: Audio, session: ^allocation} = audio} ->

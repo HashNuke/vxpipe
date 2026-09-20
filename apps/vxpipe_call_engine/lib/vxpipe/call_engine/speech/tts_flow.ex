@@ -49,7 +49,8 @@ defmodule Vxpipe.CallEngine.Speech.TTSFlow do
          ) do
       {:ok, playback, output} ->
         cancellation = %{state.cancellation | playback: playback}
-        route_cancel(%{state | cancellation: cancellation, output: output}, command, from)
+        state = %{state | cancellation: cancellation, output: output}
+        route_cancel(state, command, from)
 
       error ->
         {:reply, error, state}

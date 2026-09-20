@@ -5,6 +5,6 @@ defmodule Vxpipe.CallEngine.Speech.Audio do
   """
   @enforce_keys [:session, :request_ref, :producer, :sequence, :ref, :payload]
   @derive {Inspect, only: [:session, :request_ref, :sequence, :ref]}
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [usage: nil]
   @type t :: %__MODULE__{}
 end

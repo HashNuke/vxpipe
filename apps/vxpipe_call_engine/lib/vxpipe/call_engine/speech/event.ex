@@ -1,8 +1,10 @@
 defmodule Vxpipe.CallEngine.Speech.Event do
   @moduledoc """
   A semantic speech event. The channel stamps session identity, producer and order.
-  Consumers must successfully call `Speech.Session.ack/2` before using an event.
-  Transcript text and provider identifiers are excluded from inspection.
+  Consumers must successfully call `Speech.Session.ack/2` before acting on live
+  semantic fields. An attached TTS usage snapshot is immutable historical
+  evidence and remains valid if the live event is later revoked. Transcript text
+  and provider identifiers are excluded from inspection.
   """
 
   alias Vxpipe.CallEngine.Speech.Channel
@@ -19,6 +21,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :turn_ref,
     :text,
     :provider_request_id,
+    :usage,
     :readiness,
     :endpointing,
     :reason

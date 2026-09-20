@@ -12,7 +12,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     OutputState,
     ProviderName,
     ScopeControl,
-    TTSFlow
+    TTSFlow,
+    TTSUsage
   }
 
   @credit_timeout 15_000
@@ -24,8 +25,13 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   def address(allocation), do: CapabilityTree.address({allocation.generation, :channel})
   def bind(channel), do: GenServer.call(channel, :bind, 5_000)
 
-  def configure(allocation, module, descriptor, timeout),
-    do: GenServer.call(address(allocation), {:configure, module, descriptor, timeout}, 5_000)
+  def configure(allocation, module, descriptor, usage?, timeout),
+    do:
+      GenServer.call(
+        address(allocation),
+        {:configure, module, descriptor, usage?, timeout},
+        5_000
+      )
 
   def started(allocation, pid), do: GenServer.call(address(allocation), {:started, pid}, 5_000)
 
@@ -57,6 +63,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        events: EventQueue.new(),
        input: nil,
        output: OutputState.new(),
+       usage?: false,
        cancellation: nil,
        last_cancellation: nil,
        ready_acked?: false
@@ -77,12 +84,13 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  def handle_call({:configure, module, descriptor, timeout}, _from, state) do
+  def handle_call({:configure, module, descriptor, usage?, timeout}, _from, state) do
     {:reply, :ok,
      %{
        state
        | module: module,
          descriptor: descriptor,
+         usage?: usage?,
          call_timeout: timeout
      }}
   end
@@ -137,8 +145,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
           {:ok, envelope} ->
             deadline = System.monotonic_time(:millisecond) + @credit_timeout
             timer = Process.send_after(self(), {:credit_expired, envelope.ref}, @credit_timeout)
-            output = OutputState.await_audio(state.output, envelope, timer, deadline)
-            {:reply, {:ok, envelope.ref}, dispatch_audio(%{state | output: output})}
+
+            output =
+              OutputState.await_audio(state.output, envelope, timer, deadline, state.usage?)
+
+            state = %{state | output: output}
+            {:reply, {:ok, envelope.ref}, dispatch_audio(state)}
 
           error ->
             {:reply, error, state}
@@ -247,6 +259,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not is_nil(state.output.request) ->
         {:reply, {:error, :busy}, state}
 
+      not EventQueue.idle?(state.events) ->
+        {:reply, {:error, :busy}, state}
+
       not is_nil(state.input) ->
         {:reply, {:error, :busy}, state}
 
@@ -353,7 +368,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
       true ->
         case accept_event(event, state) do
-          {:ok, state} -> publish_event(event, producer, state)
+          {:ok, event, state} -> publish_event(event, producer, state)
           :failed -> fail(state, :session_failed)
           error -> {:reply, error, state}
         end
@@ -384,7 +399,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   defp enqueue_event(state, event, producer) do
-    {_event, events} = EventQueue.enqueue(state.events, event, state.allocation, producer)
+    delivered? = pre_deliver_terminal?(state.events, event)
+
+    {event, events} =
+      EventQueue.enqueue(state.events, event, state.allocation, producer, delivered?)
+
+    if delivered?, do: send(state.consumer, {:vxpipe_speech, event})
     activate(%{state | events: events})
   end
 
@@ -575,8 +595,11 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   defp dispatch(%{active?: true} = state) do
     if Allocation.valid?(state.allocation) do
       case EventQueue.take(state.events) do
-        {:ok, event, events} ->
+        {:ok, event, false, events} ->
           send(state.consumer, {:vxpipe_speech, event})
+          %{state | events: events}
+
+        {:ok, _event, true, events} ->
           %{state | events: events}
 
         :empty ->
@@ -589,8 +612,19 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp dispatch(state), do: state
 
+  defp pre_deliver_terminal?(
+         %EventQueue{
+           awaiting: %Event{kind: :input_submitted, request_ref: reference}
+         },
+         %Event{kind: kind, request_ref: reference}
+       )
+       when kind in [:completed, :cancelled],
+       do: true
+
+  defp pre_deliver_terminal?(_events, _event), do: false
+
   defp accept_event(
-         %Event{kind: :cancelled, request_ref: reference},
+         %Event{kind: :cancelled, request_ref: reference} = event,
          %{
            output: %OutputState{
              request: %{ref: reference, fenced?: true, terminal?: false}
@@ -600,9 +634,18 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        )
        when not is_nil(cancellation) do
     if remaining(cancellation.ticket) > 0 and Allocation.valid?(state.allocation) do
-      case OutputState.mark_terminal(state.output, reference) do
-        {:ok, output} -> TTSFlow.settle(%{state | output: output})
-        _error -> :failed
+      case OutputState.mark_terminal(state.output, event) do
+        {:ok, output} ->
+          state = %{state | output: output}
+          event = attach_usage(event, state)
+
+          case TTSFlow.settle(state) do
+            {:ok, state} -> {:ok, event, state}
+            :failed -> :failed
+          end
+
+        _error ->
+          :failed
       end
     else
       :failed
@@ -610,18 +653,22 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   defp accept_event(
-         %Event{kind: kind, request_ref: reference},
+         %Event{kind: kind, request_ref: reference} = event,
          %{output: %OutputState{request: %{ref: reference, terminal?: false}}} = state
        )
        when kind in [:input_submitted, :completed] do
     result =
       if kind == :input_submitted,
-        do: OutputState.mark_submitted(state.output, reference),
-        else: OutputState.complete(state.output, reference)
+        do: OutputState.mark_submitted(state.output, event),
+        else: OutputState.complete(state.output, event)
 
     case result do
-      {:ok, output} -> {:ok, %{state | output: output}}
-      error -> error
+      {:ok, output} ->
+        state = %{state | output: output}
+        {:ok, attach_usage(event, state), state}
+
+      error ->
+        error
     end
   end
 
@@ -629,7 +676,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        when kind in [:input_submitted, :completed, :cancelled],
        do: {:error, :stale_request}
 
-  defp accept_event(_event, state), do: {:ok, state}
+  defp accept_event(event, state), do: {:ok, event, state}
 
   defp acknowledged(%Event{kind: :ready}, state), do: %{state | ready_acked?: true}
 
@@ -648,7 +695,6 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
            output: %OutputState{
              request: %{
                ref: reference,
-               submitted_acked?: true,
                terminal?: false,
                fenced?: false
              },
@@ -714,6 +760,11 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   defp reply_input(nil, _reply), do: :ok
   defp reply_input(%{from: nil}, _reply), do: :ok
   defp reply_input(%{from: from}, reply), do: GenServer.reply(from, reply)
+
+  defp attach_usage(event, %{usage?: true, allocation: allocation, output: output}),
+    do: %{event | usage: TTSUsage.snapshot(allocation, output.request)}
+
+  defp attach_usage(event, _state), do: event
 
   defp remaining(command),
     do: max(command.deadline - System.monotonic_time(:millisecond), 0)

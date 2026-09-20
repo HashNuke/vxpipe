@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Speech.TTSCancellationTest do
   @moduletag :capture_log
 
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseSession
-  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Session}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Input, Session}
 
   test "fencing held credit cancels once and permits clean different-text replacement" do
     tree = start_supervised!({CapabilityTree, owner: self()})
@@ -164,6 +164,8 @@ defmodule Vxpipe.CallEngine.Speech.TTSCancellationTest do
     event(allocation, :input_submitted)
     assert_receive {:vxpipe_speech_audio, %{request_ref: ^replacement} = audio}, 500
     channel = GenServer.whereis(Channel.address(allocation))
+    _ = :sys.get_state(GenServer.whereis(Input.address(allocation)))
+    _ = :sys.get_state(channel)
     :ok = :sys.suspend(channel)
     job = Task.Supervisor.async_nolink(tasks, fn -> Session.cancel(allocation, ticket, 0) end)
 

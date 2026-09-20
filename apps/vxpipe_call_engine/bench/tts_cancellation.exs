@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
 
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: STT
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: TTS
-  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Session}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Channel, Event, Session, TTSUsage}
 
   @report List.first(System.argv()) || "/tmp/tts-cancellation.json"
   @rounds 24
@@ -44,13 +44,13 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
         rounds: @rounds,
         repeats: 3,
         workload:
-          "1/8/32 scopes, each with persistent native Morse STT and TTS; 24 cancellation/replacement cycles on the same TTS allocation; first chunk pending or credited with second withheld; caller reports 10ms; STT ends while TTS credit is withheld; replacement T drains fully then cancels with zero reported playback",
+          "1/8/32 scopes, each with persistent native Morse STT and TTS; TTS usage snapshots travel inside bounded event/audio envelopes; 24 cancellation/replacement cycles on the same TTS allocation; first chunk pending or credited with second withheld; caller reports 10ms; STT ends while TTS credit is withheld; replacement T drains fully then cancels with zero reported playback",
         assertions:
-          "independent E recognition and T PCM, exact request identity, stale credit/timer rejection, duplicate fence/cancel stability, bounded last-result eviction, exact cumulative caller-reported playback, provider/channel/tree teardown, empty scope supervisors",
+          "independent E recognition and T PCM, exact request identity, stale credit/timer rejection, duplicate fence/cancel stability, bounded last-result eviction, exact cumulative caller-reported playback, a usage snapshot on every submitted/terminal event and audio envelope with no independent usage-message stream, provider/channel/tree teardown, empty scope supervisors",
         timing_boundaries:
           "cancel_terminal_us is observed after cancel returns; generation end includes completed event acknowledgement; sink acceptance end includes last credit ACK; stale credit/timer checks occur after replacement submission; fixed pending-then-credited order, no warmup",
         limits:
-          "bounded correctness/load diagnostic, not a capacity limit or comparative performance result; supplied playback numbers are accounting evidence, not an actual sink clock; no physical playback, room integration, hosted providers or network; already-delivered envelopes cannot be recalled by a fence",
+          "bounded correctness/load diagnostic, not a capacity limit or comparative performance result; supplied playback numbers are accounting evidence, not an actual sink clock; no physical playback, room integration, hosted providers or network; historical usage snapshots remain evidence after live envelope revocation",
         trials: trials
       })
     )
@@ -63,21 +63,26 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
 
     scopes =
       for _ <- 1..count do
-        id = make_ref()
-        tree = start_supervised!(Supervisor.child_spec({CapabilityTree, owner: observer}, id: id))
-        {id, CapabilityTree.scope(tree)}
+        tree_id = make_ref()
+
+        tree =
+          start_supervised!(Supervisor.child_spec({CapabilityTree, owner: observer}, id: tree_id))
+
+        {tree_id, CapabilityTree.scope(tree)}
       end
 
     gate = make_ref()
 
     jobs =
-      Enum.map(scopes, fn {_id, scope} ->
+      Enum.map(scopes, fn {_tree_id, scope} ->
         Task.Supervisor.async_nolink(tasks, fn ->
           stt = candidate(scope, STT)
-          tts = candidate(scope, TTS)
+          tts = candidate(scope, TTS, true)
           send(observer, {:waiting, self()})
           assert_receive {:go, ^gate}, 5_000
-          samples = for round <- 1..@rounds, do: round(stt, tts, credit, round)
+
+          samples = Enum.map(1..@rounds, &round(stt, tts, credit, &1))
+
           started = now()
           close(tts)
           close(stt)
@@ -95,9 +100,9 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
     results = Enum.map(jobs, &Task.await(&1, 30_000))
     samples = Enum.flat_map(results, & &1.samples)
 
-    Enum.each(scopes, fn {id, scope} ->
+    Enum.each(scopes, fn {tree_id, scope} ->
       assert %{active: 0} = DynamicSupervisor.count_children(scope.sessions)
-      stop_supervised!(id)
+      stop_supervised!(tree_id)
     end)
 
     IO.puts(
@@ -111,6 +116,7 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
       cancellation_cycles: length(samples),
       completed_replacements: length(samples),
       stt_turns: length(samples),
+      usage_snapshots: Enum.sum(Enum.map(samples, & &1.usage_snapshots)),
       metrics:
         Map.new(@metrics, fn key -> {key, stats(Enum.map(samples, &Map.fetch!(&1, key)))} end),
       close_both_us: stats(Enum.map(results, & &1.close_us)),
@@ -131,7 +137,7 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
 
     started = now()
     assert {:ok, %{ref: request}} = Session.speak(tts, "E")
-    assert event(tts, :input_submitted).request_ref == request
+    assert event(tts, :input_submitted, true).request_ref == request
     first = audio(tts, request)
     assert first.payload == binary_part(prefix, 0, 320)
     first_audio_us = now() - started
@@ -170,7 +176,7 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
     assert playback.request_ref == request
     assert playback.request_played_ms == 10
     assert playback.session_played_ms == round * 10
-    assert event(tts, :cancelled).request_ref == request
+    assert event(tts, :cancelled, true).request_ref == request
     cancel_terminal_us = now() - started
     assert {:ok, ^playback} = Session.cancel(tts, ticket, 10)
     assert {:ok, ^ticket} = Session.fence_output(tts, request)
@@ -179,13 +185,15 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
     started = now()
     assert {:ok, %{ref: replacement}} = Session.speak(tts, "T")
     assert replacement != request
-    assert event(tts, :input_submitted).request_ref == replacement
+    assert event(tts, :input_submitted, true).request_ref == replacement
     provider = Session.provider(tts)
     send(provider, {:vxpipe_speech_credit, channel, request, held.ref, :ok})
     send(provider, {:emit, request})
     send(channel, {:credit_expired, held.ref})
 
-    {pcm, first_us, sink_end_us} = drain(tts, replacement, started, [], nil, nil)
+    {pcm, first_us, sink_end_us, replacement_snapshots} =
+      drain(tts, replacement, started, [], nil, nil, 0)
+
     generation_end_us = now() - started
     assert pcm == expected_t
     assert {:error, :stale_audio} = Session.ack_audio(tts, held)
@@ -201,6 +209,7 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
     assert {:ok, ^completed_ticket} = Session.fence_output(tts, replacement)
     assert {:error, :stale_cancellation} = Session.cancel(tts, ticket, 10)
     refute_received {:vxpipe_speech, %Event{session: ^tts}}
+    refute_received {:vxpipe_speech_tts_usage, _, _}
 
     %{
       first_audio_us: first_audio_us,
@@ -211,14 +220,16 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
       replacement_generation_end_us: generation_end_us,
       replacement_sink_acceptance_end_us: sink_end_us,
       stt_text_us: stt_text_us,
-      stt_end_us: stt_end_us
+      stt_end_us: stt_end_us,
+      usage_snapshots: replacement_snapshots + if(credit == :credited, do: 5, else: 4)
     }
   end
 
-  defp candidate(scope, provider) do
+  defp candidate(scope, provider, usage? \\ false) do
     {:ok, allocation, :starting} =
       Session.start(scope,
         provider: provider,
+        usage: usage?,
         options: @settings,
         private: [emit_interval_ms: 0]
       )
@@ -231,25 +242,51 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
     assert_receive {:vxpipe_speech_audio, %{session: ^allocation} = audio}, 5_000
     assert audio.request_ref == request
     assert byte_size(audio.payload) == 320
+
+    assert %TTSUsage{session: ^allocation, request_ref: ^request, generation: :generating} =
+             audio.usage
+
     assert :ok = Session.validate_audio(allocation, audio)
     audio
   end
 
-  defp drain(allocation, request, started, chunks, first_us, sink_end_us) do
+  defp drain(allocation, request, started, chunks, first_us, sink_end_us, usage_snapshots) do
     receive do
       {:vxpipe_speech_audio, %{session: ^allocation} = audio} ->
         assert audio.request_ref == request
         assert byte_size(audio.payload) == 320
+
+        assert %TTSUsage{session: ^allocation, request_ref: ^request, generation: :generating} =
+                 audio.usage
+
         first_us = first_us || now() - started
         assert :ok = Session.validate_audio(allocation, audio)
         assert :ok = Session.ack_audio(allocation, audio)
-        drain(allocation, request, started, [audio.payload | chunks], first_us, now() - started)
+
+        drain(
+          allocation,
+          request,
+          started,
+          [audio.payload | chunks],
+          first_us,
+          now() - started,
+          usage_snapshots + 1
+        )
 
       {:vxpipe_speech, %Event{session: ^allocation, kind: :completed} = completed} ->
         assert completed.request_ref == request
+
+        assert %TTSUsage{
+                 session: ^allocation,
+                 request_ref: ^request,
+                 generation: :completed
+               } = completed.usage
+
         assert :ok = Session.ack(allocation, completed)
         assert length(chunks) == 17
-        {chunks |> Enum.reverse() |> IO.iodata_to_binary(), first_us, sink_end_us}
+
+        {chunks |> Enum.reverse() |> IO.iodata_to_binary(), first_us, sink_end_us,
+         usage_snapshots + 1}
 
       {:vxpipe_speech, %Event{session: ^allocation}} ->
         flunk("unexpected or duplicate control event")
@@ -258,10 +295,16 @@ defmodule Vxpipe.CallEngine.TTSCancellationBench do
     end
   end
 
-  defp event(allocation, kind) do
+  defp event(allocation, kind, usage? \\ false) do
     assert_receive {:vxpipe_speech, %Event{session: ^allocation} = event}, 5_000
     assert event.kind == kind
     assert event.generation == allocation.generation
+
+    if usage? do
+      generation = if kind == :input_submitted, do: :submitted, else: kind
+      assert %TTSUsage{session: ^allocation, generation: ^generation} = event.usage
+    end
+
     assert :ok = Session.ack(allocation, event)
     event
   end

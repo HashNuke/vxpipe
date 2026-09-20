@@ -42,6 +42,7 @@ defmodule Vxpipe.CallEngine.Speech.SessionTree do
              allocation,
              provider,
              descriptor,
+             Keyword.get(public, :usage, false),
              Keyword.get(public, :call_timeout, 5_000)
            ),
          {:ok, pid} <-

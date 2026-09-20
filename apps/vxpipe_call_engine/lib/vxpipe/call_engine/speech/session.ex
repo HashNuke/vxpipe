@@ -26,7 +26,7 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     timeout = Keyword.get(options, :call_timeout, @timeout)
 
     if is_integer(budget) and budget > 0 and is_integer(timeout) and timeout in 1..@timeout and
-         valid_roles?(options) do
+         valid_roles?(options) and valid_usage?(options) do
       reserve(scope, options, budget, timeout)
     else
       {:error, :invalid_configuration}
@@ -41,6 +41,8 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     is_pid(owner) and
       ((is_pid(consumer) and is_nil(lease)) or (is_nil(consumer) and is_pid(lease)))
   end
+
+  defp valid_usage?(options), do: Keyword.get(options, :usage, false) in [true, false]
 
   defp reserve(scope, options, budget, timeout) do
     owner = Keyword.get(options, :owner, self())

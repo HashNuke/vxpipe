@@ -226,7 +226,7 @@ defmodule Vxpipe.CallEngine.Speech.ScopeControl do
       notified?: false
     }
 
-    public = Keyword.take(options, [:provider, :options, :call_timeout])
+    public = Keyword.take(options, [:provider, :options, :call_timeout, :usage])
     Admission.submit(allocation, public)
 
     {:reply, {:ok, allocation, :starting}, put_entry(state, allocation, entry)}

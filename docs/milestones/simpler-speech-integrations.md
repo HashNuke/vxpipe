@@ -8,7 +8,17 @@ makes that public regression and its later clean-rejection ordering green: Chann
 owns request, credit, playback and fence state while Input remains the blocking
 provider worker. Final production load and Astra review pass. A clean umbrella
 test rerun and all other root gates pass, so D2 is accepted. D4/D5 remain open and
-D is not accepted. The earlier isolated
+D is not accepted. D4 now has a repaired implementation candidate: Astra found
+that standalone facts could accumulate under selective receive, a focused test
+reproduced 77 queued facts, and usage evidence now travels only inside the
+existing bounded event/audio envelopes. A second review then found PCM accepted while its
+envelope remained buffered behind a submission ACK; the repaired Channel delivers the ordered
+envelope before provider success while withholding live sink authority until that ACK. Final
+review then identified the same accepted-but-buffered window for a zero-audio terminal;
+matching completion and cancellation events are now delivered in provider order and promoted
+after submission ACK without duplication. Final Astra review is clear and four root gates pass;
+the full umbrella gate remains open after unrelated deadlines failed under measured host pressure.
+The earlier isolated
 [topology proof](../speech-topology-experiment.md) implements the same proposed
 owner shape without changing production code. Across three fresh runs its merged
 path passed every concurrency where the split reference passed, and its first
@@ -356,24 +366,43 @@ and must not expand this repair into a startup rewrite.
   audio, idempotent cancellation, one terminal result and prompt owner/producer teardown.
   A blocked TTS sink must not stop same-room STT or another scope's synthesis/cancellation.
   Implement the complete workflow through these focused red/green steps, accepting it together:
-  - [ ] Fence a held `E` envelope, reject its stale validation/credit, confirm sink interruption,
+  - [x] Fence a held `E` envelope, reject its stale validation/credit, confirm sink interruption,
     emit exactly one cancelled terminal, then independently verify `T` PCM on the same allocation.
-  - [ ] Prove cancellation during pending provider acceptance through the actual consumer API.
+  - [x] Prove cancellation during pending provider acceptance through the actual consumer API.
     The new Request handle returns after bounded engine admission; its pending-cancellation
     regression must be repaired before the workflow is accepted. Retain at most one matching
     pending cancel in Channel, use the same Input worker, and extend no original deadline.
     Record submission arriving after fencing without reopening audio; settle a definite
     pre-submission rejection locally. Reject replacement before terminal isolation.
-  - [ ] Prove historical submitted-input/provider-ID/generated-byte evidence survives allocation
-    and whole-scope failure while the consumer is held. First test bounded immutable facts
-    delivered to the existing independently owned usage consumer; live media ACK revocation
-    must not erase accounting. Do not select packed atomics or a new journal by default.
-  - [ ] Add authenticated actual-playback reports, monotonic request totals and cumulative
+  - [x] Prove historical submitted-input/provider-ID/generated-byte evidence survives allocation
+    and whole-scope failure while the consumer is held. Attach bounded immutable snapshots to
+    the existing event/audio envelopes delivered to the independently owned consumer; live
+    media ACK revocation must not erase historical accounting. Prove exact Channel `:DOWN`
+    ordering and that media progress cannot leave an independent fact stream queued. Do not
+    select packed atomics or a new journal by default.
+  - [x] Add authenticated actual-playback reports, monotonic request totals and cumulative
     deltas, bounded replay metadata and settlement before replacement. Cancellation during
     sink drain after `completed` must update playback without a second generation terminal.
-  - [ ] Prove final-credit completion gating, abandoned cancellation expiry, done/cancel
+  - [x] Prove final-credit completion gating, abandoned cancellation expiry, done/cancel
     races, long-phrase drain, stale old events, ownership loss, output limits/redaction and
     sibling STT/unrelated TTS progress while one output remains blocked.
+
+D4 progress: all five internal slices are implemented. The first two were accepted by D2's
+focused regressions, production cancellation/handoff loads, Astra review and root gates. The
+[usage/playback evidence](../native-tts-usage-playback.md) covers the remaining slices with
+38 focused TTS tests, 164 broader speech/Morse/usage tests and a fresh 1/8/32-scope load.
+Review rejected the first standalone-message representation after a red test reproduced 77
+queued facts. A later held-submission-ACK test reproduced provider-accepted PCM disappearing in
+all three allocation/scope/owner fault modes; the repaired Channel sends the ordered envelope
+before provider success while validation remains ACK-gated. Two zero-audio red tests then found
+the corresponding terminal-only metadata window; matching completion/cancellation is now sent
+before provider success and promoted after the submission ACK without duplicate delivery. The
+final load carries 132,840
+snapshots across 5,904 cycles with no second usage stream. Final Astra review is clear and
+four root gates pass. D4 remains open because three full-suite attempts under machine pressure produced shifting unrelated
+deadline failures; the first two exact failures passed alone. Per the bounded-resource direction,
+no further full or load run was made and D4 remains unchecked.
+
 - [ ] **D5 — Standalone demo.** Document one text-to-PCM/WAV example and its format/sample
   assumptions. Add an opt-in latency lane for first audio, generation completion and controlled
   sink-playout completion under load, separately from STT. Keep generated audio artifacts
@@ -629,7 +658,7 @@ for timing distributions, exact covered permissions and excluded production path
 | --- | --- | --- | --- |
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
-| D | D0–D3 implemented; D2 accepted with Channel as the sole TTS output-state owner and Input retained for blocking provider work; D4/D5 open | 25 focused TTS cases and 125 speech/Morse cases pass. Final production lanes pass 5,904 cancellation/replacement/STT cycles plus 3,936 TTS and 3,936 STT turns with 492 intentional Channel faults/replacements. Astra found no D2 source blocker. All five root gates pass, including 1,905 tests with zero failures and 40 excluded (seed 530504) | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. This does not claim production fixed-budget latency parity. Complete historical usage/playback, standalone demo and room migration remain open |
+| D | D0–D3 implemented; D2 accepted with Channel as the sole TTS output-state owner and Input retained for blocking provider work; D4 candidate repaired and Astra-reviewed; D5 open | D2 gates remain green. D4 passes 38 focused TTS cases and 164 speech/Morse/usage cases plus 5,904 cancellation/replacement/STT load cycles with 132,840 bounded usage snapshots and fixed cleanup. Four root gates pass; the full umbrella gate remains open after shifting unrelated deadline failures under measured host pressure | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. D4's fact stream accumulated 77 messages under selective receive; later red tests caught accepted PCM and zero-audio terminal metadata retained only inside Channel. All three representations were repaired before commit. Standalone demo and room migration remain open |
 | B | Not started | Pending | Real room loop pending |
 | C | Not started | Pending | Local wire and hosted STT pending |
 | E | Not started | Pending | Room/opening proof pending |
@@ -772,6 +801,27 @@ The existing paired reproduction still reports 2 tests, one failure (seed 530504
 The [audit](../speech-complexity-audit.md) records rejected oversimplifications, later
 initializer/lifetime candidates and verification gates. No runtime changes or acceptance
 result from this design review; checkpoint order and 2/9 progress are unchanged.
+
+D4 accounting design review (2026-09-20), separate from implementation progress:
+the required facts are submission identity, provider ID/provenance and cumulative generated
+bytes; playback remains an authenticated consumer report returned by cancellation. A separate
+recipient, standalone fact message, settlement message, ledger and receipt protocol are all
+unnecessary. Existing Event and Audio envelopes already provide the required bounded delivery
+and exact attribution, so Channel attaches immutable snapshots to them. This preserves one
+state owner and one flow-control path. Channel sends the first audio envelope after the matching
+submission-event signal and before acknowledging that PCM to the provider; validation remains
+blocked until the submission ACK. The design intentionally treats a delivered snapshot as
+historical evidence after live envelope revocation. Room usage projection remains E's
+responsibility; D4 does not add room attribution or finalize billing. Dependency order and 2/9
+accepted-checkpoint progress are unchanged.
+
+D4 terminal-order review (2026-09-20), separate from implementation acceptance:
+zero-audio completion and cancellation can carry the first provider request ID while the
+submission event still awaits consumer ACK. Focused red tests proved that accepting those
+provider calls while retaining the terminal only in Channel loses historical evidence on
+allocation failure. Channel now sends only the matching terminal behind that submission,
+records delivery in the existing EventQueue and promotes it after submission ACK without
+resending. This keeps one ordered semantic stream and adds no supervisor, process or protocol.
 
 D topology proof and production resumption (2026-09-20): the isolated split/merged
 experiment completed 70,416 workflows across three final-source runs through 256

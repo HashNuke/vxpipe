@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Speech.OutputState do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Speech.{Audio, Playback, Request}
+  alias Vxpipe.CallEngine.Speech.{Audio, Event, Playback, Request, TTSUsage}
 
   @maximum_audio_bytes 131_072
 
@@ -17,10 +17,14 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
 
     request = %{
       ref: reference,
-      handle: handle,
+      input_characters: handle.input_characters,
+      usage_identity: handle.usage_identity,
+      provider_request_id: nil,
+      provenance: nil,
       submitted?: false,
       submitted_acked?: false,
       terminal?: false,
+      terminal_result: nil,
       fenced?: false,
       rejected?: false,
       awaiting: nil,
@@ -61,14 +65,16 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
     end
   end
 
-  def await_audio(%__MODULE__{} = output, envelope, timer, deadline) do
-    awaiting = %{audio: envelope, timer: timer, deadline: deadline}
-
+  def await_audio(%__MODULE__{} = output, envelope, timer, deadline, usage?) do
     request = %{
       output.request
-      | awaiting: awaiting,
-        generated_bytes: output.request.generated_bytes + byte_size(envelope.payload)
+      | generated_bytes: output.request.generated_bytes + byte_size(envelope.payload)
     }
+
+    usage = if usage?, do: TTSUsage.snapshot(envelope.session, request)
+    envelope = %{envelope | usage: usage}
+    awaiting = %{audio: envelope, timer: timer, deadline: deadline}
+    request = %{request | awaiting: awaiting}
 
     %{
       output
@@ -83,6 +89,7 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
       %{
         fenced?: false,
         terminal?: false,
+        submitted_acked?: true,
         awaiting: %{audio: expected, deadline: deadline}
       } ->
         audio == expected and deadline > now
@@ -121,10 +128,24 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
 
   def audio_operation(%__MODULE__{}, _operation, _audio, _now), do: {:error, :stale_audio}
 
-  def mark_submitted(%__MODULE__{} = output, reference) do
+  def mark_submitted(
+        %__MODULE__{} = output,
+        %Event{
+          request_ref: reference,
+          provider_request_id: provider_request_id,
+          provenance: provenance
+        }
+      ) do
     case output.request do
       %{ref: ^reference, terminal?: false, submitted?: false} = request ->
-        {:ok, %{output | request: %{request | submitted?: true}}}
+        request = %{
+          request
+          | submitted?: true,
+            provider_request_id: provider_request_id,
+            provenance: provenance
+        }
+
+        {:ok, %{output | request: request}}
 
       _request ->
         {:error, :stale_request}
@@ -138,13 +159,15 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
     end
   end
 
-  def complete(%__MODULE__{} = output, reference) do
+  def complete(%__MODULE__{} = output, %Event{request_ref: reference} = event) do
     case output.request do
       %{ref: ^reference, fenced?: true} ->
         {:error, :cancelled}
 
       %{ref: ^reference, terminal?: false, submitted?: true, awaiting: nil} = request ->
-        {:ok, %{output | request: %{request | terminal?: true}}}
+        with {:ok, request} <- merge_provider_request_id(request, event.provider_request_id) do
+          {:ok, %{output | request: %{request | terminal?: true, terminal_result: :completed}}}
+        end
 
       %{ref: ^reference, terminal?: false} ->
         {:error, :output_pending}
@@ -154,10 +177,12 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
     end
   end
 
-  def mark_terminal(%__MODULE__{} = output, reference) do
+  def mark_terminal(%__MODULE__{} = output, %Event{request_ref: reference} = event) do
     case output.request do
       %{ref: ^reference, fenced?: true, terminal?: false} = request ->
-        {:ok, %{output | request: %{request | terminal?: true}}}
+        with {:ok, request} <- merge_provider_request_id(request, event.provider_request_id) do
+          {:ok, %{output | request: %{request | terminal?: true, terminal_result: :cancelled}}}
+        end
 
       _request ->
         {:error, :stale_request}
@@ -244,6 +269,20 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
        do: true
 
   defp open?(%__MODULE__{}, _reference), do: false
+
+  defp merge_provider_request_id(request, nil), do: {:ok, request}
+
+  defp merge_provider_request_id(%{provider_request_id: nil} = request, provider_request_id),
+    do: {:ok, %{request | provider_request_id: provider_request_id}}
+
+  defp merge_provider_request_id(
+         %{provider_request_id: provider_request_id} = request,
+         provider_request_id
+       ),
+       do: {:ok, request}
+
+  defp merge_provider_request_id(_request, _provider_request_id),
+    do: {:error, :invalid_event}
 
   defp valid_audio?(audio),
     do:
