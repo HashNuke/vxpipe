@@ -7,8 +7,8 @@ and split-production baseline before the ownership change. The approved repair n
 makes that public regression and its later clean-rejection ordering green: Channel
 owns request, credit, playback and fence state while Input remains the blocking
 provider worker. Final production load and Astra review pass. A clean umbrella
-test rerun and all other root gates pass, so D2 is accepted. D4/D5 remain open and
-D is not accepted. D4 now has a repaired implementation candidate: Astra found
+test rerun and all other root gates pass, so D2 is accepted. D4 remains open, D5 is
+accepted and D is not accepted. D4 now has a repaired implementation candidate: Astra found
 that standalone facts could accumulate under selective receive, a focused test
 reproduced 77 queued facts, and usage evidence now travels only inside the
 existing bounded event/audio envelopes. A second review then found PCM accepted while its
@@ -403,10 +403,19 @@ four root gates pass. D4 remains open because three full-suite attempts under ma
 deadline failures; the first two exact failures passed alone. Per the bounded-resource direction,
 no further full or load run was made and D4 remains unchecked.
 
-- [ ] **D5 — Standalone demo.** Document one text-to-PCM/WAV example and its format/sample
+- [x] **D5 — Standalone demo.** Document one text-to-PCM/WAV example and its format/sample
   assumptions. Add an opt-in latency lane for first audio, generation completion and controlled
   sink-playout completion under load, separately from STT. Keep generated audio artifacts
   outside version control and retain safe volume.
+
+D5 acceptance: `examples/native_morse_tts.exs` drains the semantic session into an explicitly
+requested WAV path after descriptor and envelope validation. Independent parsing confirms the
+`SOS` artifact is 16 kHz mono signed PCM16, 2.46 seconds, with peak amplitude 2,048. The opt-in
+`bench/tts_latency.exs` lane separates envelope receipt, generation completion and a validated
+PCM-duration sink clock. It caps concurrency at half of online schedulers; a 1×1 smoke passes
+and a request above the 4-worker cap on this machine fails before starting workers. Astra review
+is clear. No larger load was run for D5.
+
 - [ ] **Exit D.** A long phrase drains completely with one chunk in flight, the independently
   checked replacement is clean, pending cancellation and failure accounting pass together,
   and current room TTS remains usable with focused/load/review and all root gates green.
@@ -658,7 +667,7 @@ for timing distributions, exact covered permissions and excluded production path
 | --- | --- | --- | --- |
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
-| D | D0–D3 implemented; D2 accepted with Channel as the sole TTS output-state owner and Input retained for blocking provider work; D4 candidate repaired and Astra-reviewed; D5 open | D2 gates remain green. D4 passes 38 focused TTS cases and 164 speech/Morse/usage cases plus 5,904 cancellation/replacement/STT load cycles with 132,840 bounded usage snapshots and fixed cleanup. Four root gates pass; the full umbrella gate remains open after shifting unrelated deadline failures under measured host pressure | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. D4's fact stream accumulated 77 messages under selective receive; later red tests caught accepted PCM and zero-audio terminal metadata retained only inside Channel. All three representations were repaired before commit. Standalone demo and room migration remain open |
+| D | D0–D3 and D5 implemented; D2 accepted with Channel as the sole TTS output-state owner and Input retained for blocking provider work; D4 candidate repaired and Astra-reviewed | D2 gates remain green. D4 passes 38 focused TTS cases and 164 speech/Morse/usage cases plus 5,904 cancellation/replacement/STT load cycles with 132,840 bounded usage snapshots and fixed cleanup. Four root gates pass; the full umbrella gate remains open after shifting unrelated deadline failures under measured host pressure. D5's example and 1×1 capped timing smoke pass; Astra reviewed both | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. D4's fact stream accumulated 77 messages under selective receive; later red tests caught accepted PCM and zero-audio terminal metadata retained only inside Channel. All three representations were repaired before commit. D5's WAV parses as 16 kHz mono PCM16 with peak 2,048. Room migration remains open |
 | B | Not started | Pending | Real room loop pending |
 | C | Not started | Pending | Local wire and hosted STT pending |
 | E | Not started | Pending | Room/opening proof pending |
@@ -822,6 +831,13 @@ provider calls while retaining the terminal only in Channel loses historical evi
 allocation failure. Channel now sends only the matching terminal behind that submission,
 records delivery in the existing EventQueue and promotes it after submission ACK without
 resending. This keeps one ordered semantic stream and adds no supervisor, process or protocol.
+
+D5 implementation review (2026-09-20): the standalone example uses the public semantic
+Session protocol, validates the descriptor and each envelope, and writes only an explicitly
+requested demonstration artifact. The timing lane is opt-in and caps workers at half of online
+schedulers. Astra corrected its sink clock from pre-validation receipt to post-validation
+acceptance while retaining receipt-based first audio. The corrected 1×1 smoke and independent
+WAV parse pass. D5 is accepted without a larger load; D4 and Exit D remain open.
 
 D topology proof and production resumption (2026-09-20): the isolated split/merged
 experiment completed 70,416 workflows across three final-source runs through 256

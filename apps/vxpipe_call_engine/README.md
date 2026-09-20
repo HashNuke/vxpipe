@@ -90,6 +90,36 @@ a final transcript. A local ready event means initialized, and turn end means th
 observed its configured silence gap. The descriptor reports locally measured usage without
 a fabricated hosted request ID. Existing room providers are migrated in subsequent checkpoints.
 
+## Standalone semantic Morse synthesis
+
+Run the native TTS example from this application directory. Give it supported Morse text and
+an output path outside version control:
+
+```shell
+MIX_ENV=test mix run examples/native_morse_tts.exs "SOS" /tmp/vxpipe-morse-sos.wav
+```
+
+The example uses the semantic `Speech.Session` API, validates and credits every PCM envelope,
+checks the provider descriptor, and wraps the drained raw stream in a standard RIFF/WAVE header.
+Its fixed format is 16 kHz, mono, signed little-endian linear PCM with 16-bit samples. The local
+Morse provider uses a 700 Hz tone, 60 ms Morse unit, and amplitude 2,048 (6.25% of signed-16 peak).
+It synthesizes Morse tones rather than human speech. Generated WAV files are demonstration
+artifacts; write them to `/tmp` or another ignored output directory and listen at a conservative
+device volume.
+
+An opt-in local timing lane measures first audio, generation completion, and completion of a
+controlled sink clock separately:
+
+```shell
+MIX_ENV=test mix run bench/tts_latency.exs /tmp/vxpipe-tts-latency.json 4 10
+```
+
+The final two arguments are concurrency and rounds per worker. Concurrency cannot exceed half of
+the BEAM's online schedulers, and the lane never runs in the default test suite. The sink clock
+schedules completion from the accepted PCM duration; it does not use an audio device and does not
+measure acoustic, browser, carrier, hosted-provider, or network latency. Use it as a bounded local
+processing diagnostic rather than a machine capacity claim.
+
 Its first vertical slice accepts a `Vxpipe.CallEngine.Command.CreateRoom`, starts
 a room incarnation through the named `Vxpipe.CallEngine.RoomSupervisor`, and
 returns a `Vxpipe.CallEngine.Room.Snapshot`. The room authority is a significant,
