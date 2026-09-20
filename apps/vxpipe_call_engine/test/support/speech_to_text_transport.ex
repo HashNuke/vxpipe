@@ -45,6 +45,7 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
        observer: observer,
        owner: owner,
        pending_audio: nil,
+       before_close: Keyword.get(transport_options, :before_close, fn -> :ok end),
        send_mode: Keyword.get(transport_options, :send_mode, :immediate)
      }}
   end
@@ -61,6 +62,7 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
   end
 
   def handle_call(:close, _from, state) do
+    :ok = state.before_close.()
     send(state.observer, {:test_stt_transport_closed, self()})
     {:stop, :normal, :ok, state}
   end
