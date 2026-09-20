@@ -1,6 +1,6 @@
 # Simpler speech integrations
 
-Status: checkpoints R, A, D, B, C, F and E are accepted. B and C include a live Deepgram
+Status: checkpoints R, A, D, B, C, F, E and G are accepted. B and C include a live Deepgram
 WebRTC/RTVI turn through the native STT session. C1–C4 provide the direct native Deepgram STT
 path. Morse and Deepgram use the same semantic STT contract, the room has one session path, and
 the old STT behaviours, connector, bridge, global connection-task supervisor and Morse transport adapter
@@ -14,8 +14,10 @@ loads, and all five root gates pass. F provides native Deepgram TTS with control
 cancellation, fault, bounded-load and hosted semantic-session evidence. E moves conversation,
 opening and private-transfer TTS together onto semantic sessions for Morse and Deepgram, removes
 the old public TTS transport path, and preserves exact output credit, interruption and readiness.
+G adds a shared conformance harness, contrasting request/context/batch/segmented profiles and a
+compiled provider-authoring guide.
 
-Implementation is **7 of 9 checkpoints accepted**. The implementation order is
+Implementation is **8 of 9 checkpoints accepted**. The implementation order is
 **R → A → D → B → C → F → E → G → H**. F makes Deepgram TTS a native semantic provider before
 E switches every TTS consumer once for both Morse and Deepgram. No compatibility bridge,
 fallback execution path or dual public configuration API is part of the remaining plan.
@@ -39,6 +41,7 @@ Design sources:
 [semantic contract](../speech-provider-contract.md),
 [WebRTC Opus stereo decision](../issues/webrtc-opus-stereo-input.md),
 [provider comparison](../speech-provider-comparison.md),
+[provider authoring guide](../speech-integration-guide.md),
 [architecture](../architecture.md),
 [inline selections](../inline-provider-selections.md),
 [current platform/tenant credential inheritance](../platform-and-tenant-services.md),
@@ -586,27 +589,27 @@ not physical playout or hosted network capacity. See the
 Prerequisites: C and F. Outcome: a developer follows the guide to implement and run a provider using the public
 behaviour/helpers, without depending on Call Engine private messages or any real new account.
 
-- [ ] **G1 — Shared conformance harness.** Extract project-owned assertions from A/D into
+- [x] **G1 — Shared conformance harness.** Extract project-owned assertions from A/D into
   `test/support/speech_provider_contract.ex` (or cohesive separate STT/TTS files). Expose setup
   hooks and observable assertions, not assumptions about provider internals or OTP behavior.
   Require explicit owned scopes, isolation/deadline/queued-cancellation assertions and proof
   that a quick starting handle cannot substitute for provider readiness.
-- [ ] **G2 — Request TTS profile.** Add a test-only provider whose owned worker returns streamed
+- [x] **G2 — Request TTS profile.** Add a test-only provider whose owned worker returns streamed
   audio without connected/started wire messages; test bounded whole-response adaptation too.
   Prove cancellation/owner death terminate the worker and late completion cannot revive output.
-- [ ] **G3 — Context and batch profiles.** Add controlled scenarios for context-tagged cancel
+- [x] **G3 — Context and batch profiles.** Add controlled scenarios for context-tagged cancel
   and multiple/coalesced synthesis-batch boundaries. Prove a flush count or first batch `done`
   cannot finish the engine request. These model Cartesia/ElevenLabs/Rime distinctions, without
   purporting to be those providers' protocol implementations.
-- [ ] **G4 — Segmented STT profile.** Test revised partials, committed segments, optional eager/
+- [x] **G4 — Segmented STT profile.** Test revised partials, committed segments, optional eager/
   resume and actual end-of-turn separately. Reject a manual-finalize/no-endpointing descriptor
   at conversational admission. Include a provider with no upstream sequence numbers and prove
   local envelope ordering without inventing upstream deduplication evidence.
-- [ ] **G5 — Guide and runnable example.** Add `docs/speech-integration-guide.md` with a complete
+- [x] **G5 — Guide and runnable example.** Add `docs/speech-integration-guide.md` with a complete
   minimal provider, descriptor, private credential flow, registration location, event/error
   table, bounded delivery example and exact conformance commands. Exercise the example as code
   in test support. Update the Call Engine README and link the comparison's supported/deferred modes.
-- [ ] **Exit G.** Both native providers and the independent structural profiles pass the shared
+- [x] **Exit G.** Both native providers and the independent structural profiles pass the shared
   checks; the guide requires neither a public transport module nor raw message tuples. Helpers
   do not assume WebSockets, vendor speech-start events or equal provider feature sets.
 
@@ -708,7 +711,7 @@ for timing distributions, exact covered permissions and excluded production path
 | C | Accepted: native Deepgram session, one room STT path and old STT contracts/globals removed; WebRTC mono/stereo input is normalized per connection with one decoder history and one optional full-stream encoder | Native local wire, 165 serial room/startup/policy cases and 54 capability/credential/ingress/wire cases pass; 22 deterministic Gateway boundary tests, 15 audio-pipeline/egress tests and 3 full PeerConnection tests pass; actual ingress preparation preserves channels; all five root gates pass (1,937 tests, zero failures, 41 excluded; seed 530504); Astra reviewed | At 32 calls the semantic load completes 38,400 turns with zero failures. Repeated four-scheduler codec loads keep transition operation p99 below 1.7 ms. A hosted `flux-general-multi` WebRTC/RTVI turn passes with temporary one-utterance audio |
 | F | Accepted: Deepgram TTS is a native scoped semantic session over its private Mint wire | 50 focused TTS and 13 controlled-wire/privacy cases pass; all five root gates pass (1,950 tests, zero failures, 42 excluded; seed 530504); Astra reviewed | 640/640 loaded requests pass; hosted `flux-haley-en` synthesis returns nonempty 48 kHz mono linear16 through the semantic session |
 | E | Accepted: conversation, opening and private-transfer TTS share semantic sessions; old public TTS contracts, Morse transport and global output task supervisor are removed | Exact-credit, cancellation, readiness, usage and all five root gates pass (1,942 tests, zero failures, 42 excluded; seed 530504) | 36 bounded trials pass 3,936 TTS turns, 3,936 concurrent STT turns and 492 fault/replacement cycles on four schedulers |
-| G | Not started | Pending | Independent guide exercise pending |
+| G | Accepted: shared conformance harness, request/context/batch/segmented profiles and compiled authoring guide | 14 focused contract and 154 broader speech cases pass; all five root gates pass (1,956 tests, zero failures, 42 excluded; seed 674921); Astra reviewed | Guide source exactly matches its compiled example; structural profiles require no hosted account |
 | H | Not started | Pending | Browser/hosted final acceptance pending |
 
 ## Specification review

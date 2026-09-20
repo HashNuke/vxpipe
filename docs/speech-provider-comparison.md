@@ -9,7 +9,8 @@ Recommendation: a small semantic session API works for standalone streaming STT 
 provided it explicitly separates transcript stability, turn completion, synthesis completion,
 playback completion and cancellation isolation. Batch transcription and conversational
 speech-to-speech sessions need distinct contracts. See the
-[design](speech-provider-contract.md) and [implementation milestone](milestones/simpler-speech-integrations.md).
+[design](speech-provider-contract.md), [implementation milestone](milestones/simpler-speech-integrations.md)
+and [provider authoring guide](speech-integration-guide.md).
 
 ## Comparison
 

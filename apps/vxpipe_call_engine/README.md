@@ -3,6 +3,16 @@
 The `vxpipe_call_engine` OTP application owns Vxpipe's protocol-neutral call
 lifecycle and processing runtime.
 
+## Speech provider authoring
+
+The [speech integration guide](../../docs/speech-integration-guide.md) defines the public STT and
+TTS behaviours, descriptor and event rules, private credential flow, bounded audio credit,
+cancellation lifecycle, closed production registration, and exact conformance commands. Its
+complete minimal TTS provider is compiled from test support and run by the shared contract suite.
+The [provider comparison](../../docs/speech-provider-comparison.md) explains which request,
+streaming, batching, segment and turn-detection shapes fit the current contracts and which modes
+remain separate or deferred.
+
 ## Standalone semantic Morse recognition
 
 The experimental scoped implementation of [simpler speech integrations](../../docs/milestones/simpler-speech-integrations.md)

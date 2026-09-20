@@ -56,6 +56,20 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
 
   def validate(_descriptor), do: {:error, :invalid_descriptor}
 
+  @doc "Validate an STT descriptor for a conversation that requires end-of-turn authority."
+  def validate_conversational_stt(%__MODULE__{} = descriptor) do
+    with :ok <- validate(descriptor),
+         true <- descriptor.kind == :stt,
+         true <- descriptor.endpointing in [:provider_semantic, :provider_gap],
+         true <- descriptor.speech_start? do
+      :ok
+    else
+      _invalid -> {:error, :invalid_descriptor}
+    end
+  end
+
+  def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
+
   defp valid_kind?(%{kind: :stt, cache_identity: nil}), do: true
 
   defp valid_kind?(%{kind: :tts, cache_identity: identity} = descriptor),

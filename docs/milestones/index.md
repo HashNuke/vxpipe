@@ -88,15 +88,16 @@ covers Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini without adding those in
 Research is complete. The earlier global prototype's startup-isolation regression and
 [evidence](../speech-startup-isolation.md) remain recorded. The [revised ownership
 plan](../speech-session-ownership.md) defines scoped execution. The accepted implementation order
-is R → A → D → B → C → F → E; G and H remain.
+is R → A → D → B → C → F → E → G; H remains.
 
-Speech integration is **7 of 9 checkpoints complete**. Morse and Deepgram STT and TTS now use
+Speech integration is **8 of 9 checkpoints complete**. Morse and Deepgram STT and TTS now use
 owned semantic sessions for room conversation, opening audio and private transfer speech. The old
 STT/TTS public transport behaviours, intermediate bridges, Morse transport adapters and global
-speech task supervisors are removed. The E root gate passes 1,942 tests with zero failures and 42
-excluded (seed 530504). Its four-scheduler bounded load passes 3,936 TTS turns, 3,936 concurrent STT
-turns and 492 forced fault/replacement cycles. G adds reusable conformance profiles and the authoring
-guide; H completes configuration/documentation cleanup and final all-consumer acceptance. Detailed
+speech task supervisors are removed. A shared conformance harness now covers native and contrasting
+provider profiles, and its compiled authoring guide documents the public boundary. The G root gate
+passes 1,956 tests with zero failures and 42 excluded (seed 674921). E's four-scheduler bounded load
+passes 3,936 TTS turns, 3,936 concurrent STT turns and 492 forced fault/replacement cycles. H completes
+configuration/documentation cleanup and final all-consumer acceptance. Detailed
 historical failures, repairs and load limits remain in the linked milestone evidence. Reliability
 takes priority over small latency overhead; these bounded local runs do not establish hosted capacity.
 The packaging/retention hold is unchanged.
@@ -147,7 +148,7 @@ progress without claiming the entire milestone is complete.
 27. [x] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
-30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Scoped ownership R and native STT A are accepted (2/9). D's test-only merged topology passes its isolated pointwise load gate with one fewer allocation process, and production integration is authorized. D2a must preserve the current red regression and capture the split-production load baseline before ownership changes. Room migration remains pending.
+30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Eight of nine checkpoints are accepted: Morse and Deepgram use scoped semantic STT/TTS sessions, obsolete public transports/globals are removed, and the shared conformance harness plus compiled authoring guide pass all root gates. Final configuration, all-consumer, rendered, hosted-when-available and bounded load acceptance remain in H.
 31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -507,7 +508,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | In progress; Storybook refinement locally reviewed 2026-09-18 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity remain required. Compact provider cards, credential modals with service dropdowns, alternative voice-readiness previews and tenant resumption are prototyped; the default name is Demo. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Production integration planned; recipe prototype locally reviewed 2026-09-18 | Tenant services-to-recipes stories include blocked/ready states and explicit provider choice. Root-home/demo-mode behavior, durable publication and real debug-console launch retain their incomplete acceptance gates. |
-| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | R/A accepted; 2/9 complete; D production integration resumed | The pending-Input cancellation regression remains the production red boundary (2 paired cases, one failure; seed 530504). A test-only merged topology passes three pointwise fixed-budget ramps through 256 call-equivalent scopes and 70,416 workflows, with one fewer allocation process. The user authorized integration; D2a captures the split-production baseline before D2b/D2c change ownership. D remains unaccepted until the real workflow, repeated load, independent review and all root gates pass. |
+| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | R/A/D/B/C/F/E/G accepted; 8/9 complete; H pending | Native room STT/TTS, opening and private-transfer speech use scoped semantic sessions. The shared provider harness, contrasting structural profiles and compiled authoring guide pass 14 focused and 154 broader cases; all five G root gates pass with 1,956 tests, zero failures and 42 excluded (seed 674921). Final configuration/all-consumer acceptance, rendered inspection and final bounded load/audit remain in H. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 
 ## Planning verification

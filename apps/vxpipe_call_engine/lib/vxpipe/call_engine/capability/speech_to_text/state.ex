@@ -330,7 +330,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
          true <- Code.ensure_loaded?(provider_module),
          true <- function_exported?(provider_module, :configure, 1),
          {:ok, descriptor} <- provider_module.configure(provider_options),
-         :ok <- Descriptor.validate(descriptor),
+         :ok <- Descriptor.validate_conversational_stt(descriptor),
          {:ok, session} <-
            start_native_session(
              demanded?,

@@ -10,6 +10,18 @@ defmodule Vxpipe.CallEngine.Speech.TTSProvider do
 
   defdelegate start_link(module, private_init), to: Vxpipe.CallEngine.Speech.ProviderProcess
 
+  @doc "Match one exact Channel audio-credit notification without decoding its private message."
+  @spec credit(term(), pid(), reference(), reference()) :: :ok | :stale
+  def credit(
+        {:vxpipe_speech_credit, channel, request_ref, credit_ref, :ok},
+        channel,
+        request_ref,
+        credit_ref
+      ),
+      do: :ok
+
+  def credit(_message, _channel, _request_ref, _credit_ref), do: :stale
+
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback speak(pid(), reference(), String.t()) :: :ok | {:error, atom()}
