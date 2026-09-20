@@ -82,8 +82,11 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     with {:ok, metadata} <- metadata(allocation), do: {:ok, metadata.descriptor}
   end
 
-  def adopt(allocation, consumer) do
-    command = command(allocation)
+  def adopt(allocation, consumer),
+    do: adopt(allocation, consumer, System.monotonic_time(:millisecond) + allocation.call_timeout)
+
+  def adopt(allocation, consumer, deadline) when is_integer(deadline) do
+    command = command(allocation, min(deadline, operation_deadline(allocation)))
 
     try do
       result = request(allocation, {:adopt, consumer, command}, command.deadline)
@@ -225,6 +228,17 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     :exit, _reason -> if(tree(allocation), do: {:error, :unavailable}, else: :ok)
   end
 
+  @doc false
+  def retire(allocation, deadline) when is_integer(deadline) do
+    case ScopeControl.close(allocation, :closed, deadline) do
+      {:ok, _tree} -> :ok
+      error -> error
+    end
+  catch
+    :exit, {:timeout, _call} -> {:error, :close_timeout}
+    :exit, _reason -> if(tree(allocation), do: {:error, :unavailable}, else: :ok)
+  end
+
   defp await_closed(nil, _deadline), do: :ok
 
   defp await_closed(tree, deadline) do
@@ -274,12 +288,19 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   end
 
   defp command(allocation) do
+    command(allocation, operation_deadline(allocation))
+  end
+
+  defp command(_allocation, deadline) do
     %{
       ref: make_ref(),
-      deadline: System.monotonic_time(:millisecond) + allocation.call_timeout,
+      deadline: deadline,
       token: :atomics.new(1, [])
     }
   end
+
+  defp operation_deadline(allocation),
+    do: System.monotonic_time(:millisecond) + allocation.call_timeout
 
   defp adoption_timeout(allocation, command) do
     if :atomics.compare_exchange(command.token, 1, 0, 2) == 1, do: retire(allocation)

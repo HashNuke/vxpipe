@@ -64,6 +64,23 @@ defmodule Vxpipe.CallEngine.SpeechSessionProbe do
   end
 
   @impl true
+  def handle_call({:audio, _audio}, _from, %{input_result: :final_then_fail} = state) do
+    send(state.observer, {:probe_input, self()})
+    turn_ref = make_ref()
+    :ok = Event.emit(state.channel, :speech_started, turn_ref: turn_ref)
+    :ok = Event.emit(state.channel, :transcript, turn_ref: turn_ref, text: "final evidence")
+
+    :ok =
+      Event.emit(state.channel, :turn_ended,
+        turn_ref: turn_ref,
+        text: "final evidence",
+        endpointing: :provider_gap,
+        audio_duration_ms: 10
+      )
+
+    {:stop, :provider_failed, state}
+  end
+
   def handle_call({:audio, _audio}, _from, state) do
     send(state.observer, {:probe_input, self()})
 

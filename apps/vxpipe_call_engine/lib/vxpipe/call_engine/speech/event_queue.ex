@@ -15,6 +15,12 @@ defmodule Vxpipe.CallEngine.Speech.EventQueue do
   def idle?(%__MODULE__{awaiting: nil, pending_count: 0}), do: true
   def idle?(%__MODULE__{}), do: false
 
+  @doc false
+  def pending_kind?(%__MODULE__{} = events, kind) do
+    match?(%{kind: ^kind}, events.awaiting) or
+      Enum.any?(:queue.to_list(events.pending), fn {event, _delivered?} -> event.kind == kind end)
+  end
+
   def enqueue(%__MODULE__{} = events, event, allocation, producer, delivered? \\ false) do
     event = %{
       event

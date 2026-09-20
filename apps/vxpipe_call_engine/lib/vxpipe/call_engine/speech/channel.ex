@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     Allocation,
     CapabilityTree,
     Cancellation,
+    ChannelFailure,
     Event,
     EventQueue,
     Input,
@@ -52,6 +53,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        scope_monitor: Process.monitor(allocation.scope.control),
        producer: nil,
        producer_monitor: nil,
+       producer_down?: false,
+       producer_drain_timer: nil,
        consumer: allocation.consumer,
        descriptor: nil,
        module: nil,
@@ -203,6 +206,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not Allocation.valid?(allocation) ->
         {:reply, {:error, :closed}, state}
 
+      state.producer_down? ->
+        {:reply, {:error, :closed}, state}
+
       not state.active? ->
         {:reply, {:error, :not_ready}, state}
 
@@ -286,7 +292,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
           {:reply, {:ok, handle}, %{state | input: input, output: output}}
         else
-          false -> fail(state, :command_timeout)
+          false -> ChannelFailure.fail(state, :command_timeout)
           error -> {:reply, error, state}
         end
     end
@@ -309,7 +315,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       state.cancellation && state.cancellation.ticket.request_ref == reference ->
         if remaining(state.cancellation.ticket) > 0,
           do: {:reply, {:ok, state.cancellation.ticket}, state},
-          else: fail(state, :command_timeout)
+          else: ChannelFailure.fail(state, :command_timeout)
 
       is_nil(state.output.request) or state.output.request.ref != reference ->
         {:reply, {:error, :stale_request}, state}
@@ -320,7 +326,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       true ->
         case TTSFlow.fence(state, command, reference) do
           {:ok, ticket, state} -> {:reply, {:ok, ticket}, state}
-          {:error, reason} -> fail(state, reason)
+          {:error, reason} -> ChannelFailure.fail(state, reason)
         end
     end
   end
@@ -342,11 +348,11 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
           {:reply, reply, state}
 
         {:fail, reason} ->
-          fail(state, reason)
+          ChannelFailure.fail(state, reason)
 
         {:continue, command} ->
           case TTSFlow.begin_cancel(state, command, played_ms, from) do
-            :failed -> input_failed(state)
+            :failed -> ChannelFailure.input_failed(state)
             result -> result
           end
       end
@@ -363,13 +369,16 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not Event.supported?(event, state.descriptor) ->
         {:reply, {:error, :invalid_event}, state}
 
+      is_nil(state.consumer) and event.kind != :ready ->
+        {:reply, :discarded, state}
+
       EventQueue.full?(state.events, @maximum_pending) ->
-        fail(state, :event_overflow)
+        ChannelFailure.fail(state, :event_overflow)
 
       true ->
         case accept_event(event, state) do
           {:ok, event, state} -> publish_event(event, producer, state)
-          :failed -> fail(state, :session_failed)
+          :failed -> ChannelFailure.fail(state, :session_failed)
           error -> {:reply, error, state}
         end
     end
@@ -382,7 +391,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       case EventQueue.acknowledge(state.events, event) do
         {:ok, events} ->
           state = acknowledged(event, %{state | events: events})
-          {:reply, :ok, state |> dispatch() |> dispatch_audio()}
+          state = state |> dispatch() |> dispatch_audio()
+          ChannelFailure.reply_after_ack(state)
 
         error ->
           {:reply, error, state}
@@ -418,23 +428,27 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
           worker != GenServer.whereis(Input.address(state.allocation)) ->
             {:noreply, state}
 
+          Allocation.valid?(state.allocation) and ChannelFailure.drainable_stt_failure?(state) and
+              (remaining(command) == 0 or result == {:error, :session_failed}) ->
+            {:noreply, ChannelFailure.begin_producer_failure_drain(state)}
+
           remaining(command) == 0 or not Allocation.valid?(state.allocation) or
               result == {:error, :session_failed} ->
-            input_failed(state)
+            ChannelFailure.input_failed(state)
 
           true ->
             case finished_input(command, result, state) do
               {:ok, state, reply} ->
                 if remaining(command) > 0 and Allocation.valid?(state.allocation) do
                   Process.cancel_timer(input.timer)
-                  reply_input(input, reply)
+                  ChannelFailure.reply_input(input, reply)
                   continue_after_input(command, result, %{state | input: nil})
                 else
-                  input_failed(state)
+                  ChannelFailure.input_failed(state)
                 end
 
               :failed ->
-                input_failed(state)
+                ChannelFailure.input_failed(state)
             end
         end
 
@@ -450,7 +464,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        )
        when not is_nil(pending) do
     case TTSFlow.resume_pending(state, pending) do
-      :failed -> input_failed(state)
+      :failed -> ChannelFailure.input_failed(state)
       result -> result
     end
   end
@@ -466,19 +480,22 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        when not is_nil(pending) do
     case TTSFlow.settle_rejected_pending(state, pending) do
       {:ok, state, reply, pending} ->
-        reply_input(pending, reply)
+        ChannelFailure.reply_input(pending, reply)
         {:noreply, state}
 
       :failed ->
-        input_failed(state)
+        ChannelFailure.input_failed(state)
     end
   end
 
   defp continue_after_input(_command, _result, state), do: {:noreply, state}
 
   @impl true
-  def handle_info({:input_expired, reference}, %{input: %{command: %{ref: reference}}} = state),
-    do: input_failed(state)
+  def handle_info({:input_expired, reference}, %{input: %{command: %{ref: reference}}} = state) do
+    if Allocation.valid?(state.allocation) and ChannelFailure.drainable_stt_failure?(state),
+      do: {:noreply, ChannelFailure.begin_producer_failure_drain(state)},
+      else: ChannelFailure.input_failed(state)
+  end
 
   def handle_info({:input_expired, _reference}, state), do: {:noreply, state}
 
@@ -486,7 +503,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
         {:credit_expired, reference},
         %{output: %OutputState{request: %{awaiting: %{audio: %{ref: reference}}}}} = state
       ) do
-    retire(state.allocation)
+    ChannelFailure.retire(state.allocation)
     ScopeControl.failed(state.allocation, :audio_output_failed)
     {:stop, :normal, state}
   end
@@ -497,8 +514,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
         {:cancellation_expired, reference},
         %{cancellation: %{ticket: %{ref: reference}}} = state
       ) do
-    reply_pending_cancel(state.cancellation, {:error, :session_failed})
-    retire(state.allocation)
+    ChannelFailure.reply_pending_cancel(state.cancellation, {:error, :session_failed})
+    ChannelFailure.retire(state.allocation)
     ScopeControl.failed(state.allocation, :command_timeout)
     {:stop, :normal, state}
   end
@@ -506,10 +523,32 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   def handle_info({:cancellation_expired, _reference}, state), do: {:noreply, state}
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
-      when monitor == state.producer_monitor or monitor == state.scope_monitor do
-    retire(state.allocation)
+      when monitor == state.scope_monitor do
+    ChannelFailure.retire(state.allocation)
     {:stop, :normal, state}
   end
+
+  def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
+      when monitor == state.producer_monitor do
+    state = %{state | producer: nil, producer_monitor: nil, producer_down?: true}
+
+    if ChannelFailure.drainable_stt_failure?(state) do
+      {:noreply, ChannelFailure.begin_producer_failure_drain(state)}
+    else
+      ChannelFailure.retire(state.allocation)
+      {:stop, :normal, state}
+    end
+  end
+
+  def handle_info(
+        {:producer_drain_expired, generation},
+        %{allocation: %{generation: generation}, producer_down?: true} = state
+      ) do
+    ChannelFailure.finish_producer_failure_drain(state)
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:producer_drain_expired, _generation}, state), do: {:noreply, state}
 
   @impl true
   def format_status(status) do
@@ -530,12 +569,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
             {:reply, :ok,
              dispatch(%{state | consumer: consumer, prepared?: false, active?: true})}
           else
-            fail(state, :command_timeout)
+            ChannelFailure.fail(state, :command_timeout)
           end
 
         {:error, :command_timeout} = error ->
           if :atomics.compare_exchange(command.token, 1, 0, 2) == 1,
-            do: fail(state, :command_timeout),
+            do: ChannelFailure.fail(state, :command_timeout),
             else: {:reply, error, state}
 
         error ->
@@ -583,7 +622,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       dispatch(%{state | active?: true})
     else
       :atomics.compare_exchange(command.token, 1, 0, 2)
-      retire(state.allocation)
+      ChannelFailure.retire(state.allocation)
       ScopeControl.failed(state.allocation, :startup_timeout)
       GenServer.cast(self(), :retire)
       state
@@ -744,23 +783,6 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  defp input_failed(state) do
-    retire(state.allocation)
-    reply_input(state.input, {:error, :session_failed})
-    reply_pending_cancel(state.cancellation, {:error, :session_failed})
-    ScopeControl.failed(state.allocation, :session_failed)
-    {:stop, :normal, state}
-  end
-
-  defp reply_pending_cancel(%{pending: pending}, reply) when not is_nil(pending),
-    do: reply_input(pending, reply)
-
-  defp reply_pending_cancel(_cancellation, _reply), do: :ok
-
-  defp reply_input(nil, _reply), do: :ok
-  defp reply_input(%{from: nil}, _reply), do: :ok
-  defp reply_input(%{from: from}, reply), do: GenServer.reply(from, reply)
-
   defp attach_usage(event, %{usage?: true, allocation: allocation, output: output}),
     do: %{event | usage: TTSUsage.snapshot(allocation, output.request)}
 
@@ -768,19 +790,4 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp remaining(command),
     do: max(command.deadline - System.monotonic_time(:millisecond), 0)
-
-  defp retire(allocation) do
-    Allocation.cancel(allocation)
-
-    case ProviderName.whereis_name(allocation) do
-      :undefined -> :ok
-      pid -> Process.exit(pid, :kill)
-    end
-  end
-
-  defp fail(state, reason) do
-    retire(state.allocation)
-    ScopeControl.failed(state.allocation, reason)
-    {:stop, :normal, {:error, reason}, state}
-  end
 end

@@ -234,6 +234,73 @@ defmodule Vxpipe.CallEngine.Speech.STTSessionTest do
     refute_received {:probe_input, _provider}
   end
 
+  test "provider failure settles pending input and drains accepted final evidence" do
+    session =
+      start_session(
+        provider: SpeechSessionProbe,
+        call_timeout: 200,
+        private: [observer: self(), input_result: :final_then_fail]
+      )
+
+    assert_receive {:probe_initializing, _provider, _channel}
+    assert_receive {:vxpipe_speech, ready}
+    assert :ok = Session.ack(session, ready)
+    tree = Session.tree(session)
+    monitor = Process.monitor(tree)
+
+    assert {:error, :closed} = Session.push_audio(session, <<0, 0>>)
+    assert_receive {:probe_input, _provider}
+    assert {:error, :closed} = Session.push_audio(session, <<0, 0>>)
+
+    assert_receive {:vxpipe_speech, %Event{kind: :speech_started} = started}
+    assert :ok = Session.ack(session, started)
+    assert_receive {:vxpipe_speech, %Event{kind: :transcript} = transcript}
+    assert transcript.text == "final evidence"
+    assert :ok = Session.ack(session, transcript)
+    assert_receive {:vxpipe_speech, %Event{kind: :turn_ended} = ended}
+    assert ended.text == "final evidence"
+    assert :ok = Session.ack(session, ended)
+    assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}, 500
+  end
+
+  test "provider failure bounds an unacknowledged final-event drain" do
+    session =
+      start_session(
+        provider: SpeechSessionProbe,
+        call_timeout: 30,
+        private: [observer: self()]
+      )
+
+    assert_receive {:probe_initializing, provider, _channel}
+    assert_receive {:vxpipe_speech, ready}
+    assert :ok = Session.ack(session, ready)
+    turn_ref = make_ref()
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: turn_ref]})
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :transcript, [turn_ref: turn_ref, text: "final evidence"]}
+             )
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended,
+                [
+                  turn_ref: turn_ref,
+                  text: "final evidence",
+                  endpointing: :provider_gap,
+                  audio_duration_ms: 10
+                ]}
+             )
+
+    tree = Session.tree(session)
+    monitor = Process.monitor(tree)
+    Process.exit(provider, :provider_failed)
+    assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}, 500
+  end
+
   test "events and process status hide text, audio and crash messages" do
     session = start_session(provider: MorseSession)
     assert_receive {:vxpipe_speech, ready}

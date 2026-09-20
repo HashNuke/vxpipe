@@ -9,6 +9,8 @@ defmodule Vxpipe.CallEngine.Speech.Event do
 
   alias Vxpipe.CallEngine.Speech.Channel
 
+  @maximum_text_bytes 65_536
+
   @derive {Inspect, only: [:kind, :session, :sequence, :turn_ref]}
   defstruct [
     :session,
@@ -21,6 +23,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :turn_ref,
     :text,
     :provider_request_id,
+    :audio_duration_ms,
     :usage,
     :readiness,
     :endpointing,
@@ -29,7 +32,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
 
   @type t :: %__MODULE__{}
 
-  @doc "Publish one bounded semantic event from the bound provider process."
+  @doc "Publish one bounded semantic event; `:discarded` means a prepared session was still fenced."
   def emit(channel, kind, fields \\ []), do: Channel.emit(channel, kind, fields)
 
   @doc false
@@ -93,14 +96,17 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   defp allowed_fields(:transcript), do: [:turn_ref, :text, :provider_request_id]
 
   defp allowed_fields(kind) when kind in [:turn_ended, :eager_turn_ended],
-    do: [:turn_ref, :text, :provider_request_id, :endpointing]
+    do: [:turn_ref, :text, :provider_request_id, :endpointing, :audio_duration_ms]
 
   defp allowed_fields(_kind), do: []
 
   defp valid?(event) do
     valid_kind?(event) and
+      (is_nil(event.audio_duration_ms) or
+         (is_integer(event.audio_duration_ms) and event.audio_duration_ms >= 0)) and
       (is_nil(event.text) or
-         (is_binary(event.text) and byte_size(event.text) <= 4_096 and String.valid?(event.text))) and
+         (is_binary(event.text) and byte_size(event.text) <= @maximum_text_bytes and
+            String.valid?(event.text))) and
       (is_nil(event.provider_request_id) or
          (is_binary(event.provider_request_id) and byte_size(event.provider_request_id) in 1..256 and
             String.valid?(event.provider_request_id)))
