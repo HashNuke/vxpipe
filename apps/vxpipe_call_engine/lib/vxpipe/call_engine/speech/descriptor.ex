@@ -4,13 +4,14 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   @enforce_keys [:kind, :settings, :format, :usage_identity, :readiness, :endpointing]
   @derive {Inspect,
            only: [:kind, :format, :readiness, :endpointing, :speech_start?, :eager_end?, :resume?]}
-  defstruct @enforce_keys ++ [speech_start?: false, eager_end?: false, resume?: false]
+  defstruct @enforce_keys ++
+              [speech_start?: false, eager_end?: false, resume?: false, cache_identity: nil]
 
-  @fields @enforce_keys ++ [:speech_start?, :eager_end?, :resume?]
+  @fields @enforce_keys ++ [:speech_start?, :eager_end?, :resume?, :cache_identity]
   @identity_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/
 
   @type t :: %__MODULE__{
-          kind: :stt,
+          kind: :stt | :tts,
           settings: map(),
           format: map(),
           usage_identity: map(),
@@ -18,7 +19,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           endpointing: :provider_semantic | :provider_gap | :external | :none,
           speech_start?: boolean(),
           eager_end?: boolean(),
-          resume?: boolean()
+          resume?: boolean(),
+          cache_identity: binary() | nil
         }
 
   @doc "Build public metadata. Provider-specific settings remain the provider's validation responsibility."
@@ -37,14 +39,15 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   @doc "Validate again at the engine boundary, including directly constructed descriptors."
   def validate(%__MODULE__{} = descriptor) do
     if Enum.sort(Map.keys(descriptor)) == Enum.sort([:__struct__ | @fields]) and
-         descriptor.kind == :stt and is_map(descriptor.settings) and
+         is_map(descriptor.settings) and
          valid_format?(descriptor.format) and valid_identity?(descriptor.usage_identity) and
          descriptor.readiness in [:initialized, :provider_acknowledged] and
          descriptor.endpointing in [:provider_semantic, :provider_gap, :external, :none] and
          is_boolean(descriptor.speech_start?) and is_boolean(descriptor.eager_end?) and
          is_boolean(descriptor.resume?) and
          (not descriptor.eager_end? or
-            descriptor.endpointing in [:provider_semantic, :provider_gap]) do
+            descriptor.endpointing in [:provider_semantic, :provider_gap]) and
+         valid_kind?(descriptor) do
       :ok
     else
       {:error, :invalid_descriptor}
@@ -52,6 +55,16 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   end
 
   def validate(_descriptor), do: {:error, :invalid_descriptor}
+
+  defp valid_kind?(%{kind: :stt, cache_identity: nil}), do: true
+
+  defp valid_kind?(%{kind: :tts, cache_identity: identity} = descriptor),
+    do:
+      is_binary(identity) and byte_size(identity) == 32 and
+        descriptor.format.encoding == :linear16 and descriptor.endpointing == :none and
+        not descriptor.speech_start? and not descriptor.eager_end? and not descriptor.resume?
+
+  defp valid_kind?(_descriptor), do: false
 
   defp valid_format?(
          %{

@@ -5,12 +5,17 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   alias Vxpipe.CallEngine.Speech.{
     Allocation,
     CapabilityTree,
+    Cancellation,
     Event,
+    EventQueue,
     Input,
+    OutputState,
     ProviderName,
-    ScopeControl
+    ScopeControl,
+    TTSFlow
   }
 
+  @credit_timeout 15_000
   @maximum_pending 32
 
   def start_link(allocation),
@@ -23,6 +28,10 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     do: GenServer.call(address(allocation), {:configure, module, descriptor, timeout}, 5_000)
 
   def started(allocation, pid), do: GenServer.call(address(allocation), {:started, pid}, 5_000)
+
+  @doc "Admit one provider PCM chunk and wait for its exact asynchronous credit."
+  def submit(channel, request, audio),
+    do: GenServer.call(channel, {:submit_audio, request, audio}, 5_000)
 
   def emit(channel, kind, fields) do
     with {:ok, event} <- Event.build(kind, fields),
@@ -45,11 +54,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        ready?: false,
        active?: false,
        prepared?: false,
-       sequence: 0,
-       awaiting: nil,
-       pending: :queue.new(),
-       pending_count: 0,
-       input: nil
+       events: EventQueue.new(),
+       input: nil,
+       output: OutputState.new(),
+       cancellation: nil,
+       last_cancellation: nil,
+       ready_acked?: false
      }}
   end
 
@@ -67,8 +77,15 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  def handle_call({:configure, module, descriptor, timeout}, _from, state),
-    do: {:reply, :ok, %{state | module: module, descriptor: descriptor, call_timeout: timeout}}
+  def handle_call({:configure, module, descriptor, timeout}, _from, state) do
+    {:reply, :ok,
+     %{
+       state
+       | module: module,
+         descriptor: descriptor,
+         call_timeout: timeout
+     }}
+  end
 
   def handle_call(:bind, {producer, _tag}, %{producer: nil} = state) do
     if Allocation.valid?(state.allocation) and
@@ -101,6 +118,71 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
+  def handle_call({:submit_audio, reference, audio}, {producer, _tag}, state) do
+    cond do
+      not Allocation.valid?(state.allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      producer != state.producer ->
+        {:reply, {:error, :unbound_producer}, state}
+
+      true ->
+        case OutputState.prepare_audio(
+               state.output,
+               state.allocation,
+               producer,
+               reference,
+               audio
+             ) do
+          {:ok, envelope} ->
+            deadline = System.monotonic_time(:millisecond) + @credit_timeout
+            timer = Process.send_after(self(), {:credit_expired, envelope.ref}, @credit_timeout)
+            output = OutputState.await_audio(state.output, envelope, timer, deadline)
+            {:reply, {:ok, envelope.ref}, dispatch_audio(%{state | output: output})}
+
+          error ->
+            {:reply, error, state}
+        end
+    end
+  end
+
+  def handle_call({:audio, deadline, operation, audio}, {caller, _tag}, state) do
+    cond do
+      caller != state.consumer ->
+        {:reply, {:error, :not_owner}, state}
+
+      deadline <= System.monotonic_time(:millisecond) ->
+        {:reply, {:error, :command_timeout}, state}
+
+      not Allocation.valid?(state.allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      true ->
+        case OutputState.audio_operation(
+               state.output,
+               operation,
+               audio,
+               System.monotonic_time(:millisecond)
+             ) do
+          {:ok, output} ->
+            {:reply, :ok, %{state | output: output}}
+
+          {:credit, awaiting, output} ->
+            Process.cancel_timer(awaiting.timer)
+
+            send(
+              audio.producer,
+              {:vxpipe_speech_credit, self(), audio.request_ref, audio.ref, :ok}
+            )
+
+            {:reply, :ok, %{state | output: output}}
+
+          error ->
+            {:reply, error, state}
+        end
+    end
+  end
+
   def handle_call({:input, allocation, command, audio}, {caller, _tag} = from, state) do
     cond do
       allocation != state.allocation or caller != state.consumer ->
@@ -111,6 +193,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
       not state.active? ->
         {:reply, {:error, :not_ready}, state}
+
+      state.descriptor.kind != :stt ->
+        {:reply, {:error, :unsupported_operation}, state}
 
       command.deadline <= System.monotonic_time(:millisecond) ->
         {:reply, {:error, :command_timeout}, state}
@@ -145,6 +230,116 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
+  def handle_call({:speak, command, reference, text}, {caller, _tag}, state) do
+    cond do
+      caller != state.consumer ->
+        {:reply, {:error, :not_owner}, state}
+
+      not Allocation.valid?(state.allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      not state.active? or not state.ready_acked? ->
+        {:reply, {:error, :not_ready}, state}
+
+      state.descriptor.kind != :tts ->
+        {:reply, {:error, :unsupported_operation}, state}
+
+      not is_nil(state.output.request) ->
+        {:reply, {:error, :busy}, state}
+
+      not is_nil(state.input) ->
+        {:reply, {:error, :busy}, state}
+
+      remaining(command) == 0 or :atomics.compare_exchange(command.token, 1, 0, 1) != :ok ->
+        {:reply, {:error, :command_timeout}, state}
+
+      true ->
+        with true <- remaining(command) > 0 and Allocation.valid?(state.allocation),
+             {:ok, handle, output} <-
+               OutputState.admit(
+                 state.output,
+                 state.allocation,
+                 state.consumer,
+                 state.descriptor,
+                 reference,
+                 text
+               ) do
+          command = Map.put(command, :operation, {:speak, reference})
+          timer = Process.send_after(self(), {:input_expired, command.ref}, remaining(command))
+          input = %{command: command, from: nil, timer: timer, claimed?: false}
+          Input.submit(state.allocation, command, text)
+
+          {:reply, {:ok, handle}, %{state | input: input, output: output}}
+        else
+          false -> fail(state, :command_timeout)
+          error -> {:reply, error, state}
+        end
+    end
+  end
+
+  def handle_call({:fence_output, command, reference}, {caller, _tag}, state) do
+    cond do
+      caller != state.consumer ->
+        {:reply, {:error, :not_owner}, state}
+
+      not Allocation.valid?(state.allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      is_nil(state.descriptor) or state.descriptor.kind != :tts ->
+        {:reply, {:error, :unsupported_operation}, state}
+
+      state.last_cancellation && state.last_cancellation.ticket.request_ref == reference ->
+        {:reply, {:ok, state.last_cancellation.ticket}, state}
+
+      state.cancellation && state.cancellation.ticket.request_ref == reference ->
+        if remaining(state.cancellation.ticket) > 0,
+          do: {:reply, {:ok, state.cancellation.ticket}, state},
+          else: fail(state, :command_timeout)
+
+      is_nil(state.output.request) or state.output.request.ref != reference ->
+        {:reply, {:error, :stale_request}, state}
+
+      remaining(command) == 0 or :atomics.compare_exchange(command.token, 1, 0, 1) != :ok ->
+        {:reply, {:error, :command_timeout}, state}
+
+      true ->
+        case TTSFlow.fence(state, command, reference) do
+          {:ok, ticket, state} -> {:reply, {:ok, ticket}, state}
+          {:error, reason} -> fail(state, reason)
+        end
+    end
+  end
+
+  def handle_call({:cancel, command, ticket, played_ms}, {caller, _tag} = from, state) do
+    if Allocation.valid?(state.allocation) do
+      case Cancellation.evaluate(
+             command,
+             ticket,
+             played_ms,
+             caller,
+             state.consumer,
+             state.allocation,
+             state.cancellation,
+             state.last_cancellation,
+             System.monotonic_time(:millisecond)
+           ) do
+        {:reply, reply} ->
+          {:reply, reply, state}
+
+        {:fail, reason} ->
+          fail(state, reason)
+
+        {:continue, command} ->
+          case TTSFlow.begin_cancel(state, command, played_ms, from) do
+            :failed -> input_failed(state)
+            result -> result
+          end
+      end
+    else
+      {:reply, {:error, :closed}, state}
+    end
+  end
+
   def handle_call({:emit, event}, {producer, _tag}, %{producer: producer} = state) do
     cond do
       not Allocation.valid?(state.allocation) ->
@@ -153,40 +348,45 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not Event.supported?(event, state.descriptor) ->
         {:reply, {:error, :invalid_event}, state}
 
-      state.pending_count >= @maximum_pending ->
+      EventQueue.full?(state.events, @maximum_pending) ->
         fail(state, :event_overflow)
 
       true ->
-        event = %{
-          event
-          | session: state.allocation,
-            generation: state.allocation.generation,
-            producer: producer,
-            sequence: state.sequence + 1
-        }
-
-        state = %{
-          state
-          | sequence: event.sequence,
-            pending: :queue.in(event, state.pending),
-            pending_count: state.pending_count + 1,
-            ready?: state.ready? or event.kind == :ready
-        }
-
-        {:reply, :ok, activate(state)}
+        case accept_event(event, state) do
+          {:ok, state} -> publish_event(event, producer, state)
+          :failed -> fail(state, :session_failed)
+          error -> {:reply, error, state}
+        end
     end
   end
 
   def handle_call({:emit, _event}, _from, state), do: {:reply, {:error, :unbound_producer}, state}
 
-  def handle_call({:ack, event}, {consumer, _tag}, %{consumer: consumer, awaiting: event} = state)
-      when not is_nil(event) do
-    if Allocation.valid?(state.allocation),
-      do: {:reply, :ok, dispatch(%{state | awaiting: nil})},
-      else: {:reply, {:error, :closed}, state}
+  def handle_call({:ack, event}, {consumer, _tag}, %{consumer: consumer} = state) do
+    if Allocation.valid?(state.allocation) do
+      case EventQueue.acknowledge(state.events, event) do
+        {:ok, events} ->
+          state = acknowledged(event, %{state | events: events})
+          {:reply, :ok, state |> dispatch() |> dispatch_audio()}
+
+        error ->
+          {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :closed}, state}
+    end
   end
 
   def handle_call({:ack, _event}, _from, state), do: {:reply, {:error, :stale_event}, state}
+
+  defp publish_event(event, producer, state) do
+    {:reply, :ok, enqueue_event(state, event, producer)}
+  end
+
+  defp enqueue_event(state, event, producer) do
+    {_event, events} = EventQueue.enqueue(state.events, event, state.allocation, producer)
+    activate(%{state | events: events})
+  end
 
   @impl true
   def handle_cast(:retire, state), do: {:stop, :normal, state}
@@ -198,13 +398,24 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
           worker != GenServer.whereis(Input.address(state.allocation)) ->
             {:noreply, state}
 
-          remaining(command) == 0 or result == {:error, :session_failed} ->
+          remaining(command) == 0 or not Allocation.valid?(state.allocation) or
+              result == {:error, :session_failed} ->
             input_failed(state)
 
           true ->
-            Process.cancel_timer(input.timer)
-            GenServer.reply(input.from, result)
-            {:noreply, %{state | input: nil}}
+            case finished_input(command, result, state) do
+              {:ok, state, reply} ->
+                if remaining(command) > 0 and Allocation.valid?(state.allocation) do
+                  Process.cancel_timer(input.timer)
+                  reply_input(input, reply)
+                  continue_after_input(command, result, %{state | input: nil})
+                else
+                  input_failed(state)
+                end
+
+              :failed ->
+                input_failed(state)
+            end
         end
 
       _input ->
@@ -212,11 +423,67 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
+  defp continue_after_input(
+         %{operation: {:speak, _reference}},
+         :ok,
+         %{cancellation: %{pending: pending}} = state
+       )
+       when not is_nil(pending) do
+    case TTSFlow.resume_pending(state, pending) do
+      :failed -> input_failed(state)
+      result -> result
+    end
+  end
+
+  defp continue_after_input(
+         %{operation: {:speak, _reference}},
+         {:error, _reason},
+         %{
+           output: %OutputState{request: %{rejected?: true}},
+           cancellation: %{pending: pending}
+         } = state
+       )
+       when not is_nil(pending) do
+    case TTSFlow.settle_rejected_pending(state, pending) do
+      {:ok, state, reply, pending} ->
+        reply_input(pending, reply)
+        {:noreply, state}
+
+      :failed ->
+        input_failed(state)
+    end
+  end
+
+  defp continue_after_input(_command, _result, state), do: {:noreply, state}
+
   @impl true
   def handle_info({:input_expired, reference}, %{input: %{command: %{ref: reference}}} = state),
     do: input_failed(state)
 
   def handle_info({:input_expired, _reference}, state), do: {:noreply, state}
+
+  def handle_info(
+        {:credit_expired, reference},
+        %{output: %OutputState{request: %{awaiting: %{audio: %{ref: reference}}}}} = state
+      ) do
+    retire(state.allocation)
+    ScopeControl.failed(state.allocation, :audio_output_failed)
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:credit_expired, _reference}, state), do: {:noreply, state}
+
+  def handle_info(
+        {:cancellation_expired, reference},
+        %{cancellation: %{ticket: %{ref: reference}}} = state
+      ) do
+    reply_pending_cancel(state.cancellation, {:error, :session_failed})
+    retire(state.allocation)
+    ScopeControl.failed(state.allocation, :command_timeout)
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:cancellation_expired, _reference}, state), do: {:noreply, state}
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
       when monitor == state.producer_monitor or monitor == state.scope_monitor do
@@ -262,7 +529,13 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   defp execute(message, from, _deadline, state), do: handle_call(message, from, state)
 
   defp activate(
-         %{started?: true, ready?: true, active?: false, consumer: nil, prepared?: false} = state
+         %{
+           started?: true,
+           events: %EventQueue{ready?: true},
+           active?: false,
+           consumer: nil,
+           prepared?: false
+         } = state
        ) do
     if Allocation.valid?(state.allocation) do
       send(state.allocation.lease, {:vxpipe_speech_prepared, state.allocation, state.descriptor})
@@ -272,7 +545,14 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  defp activate(%{started?: true, ready?: true, active?: false, consumer: consumer} = state)
+  defp activate(
+         %{
+           started?: true,
+           events: %EventQueue{ready?: true},
+           active?: false,
+           consumer: consumer
+         } = state
+       )
        when is_pid(consumer) do
     authority = state.allocation.lease || state.allocation.consumer
 
@@ -292,11 +572,16 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp activate(state), do: dispatch(state)
 
-  defp dispatch(%{active?: true, awaiting: nil, pending_count: count} = state) when count > 0 do
+  defp dispatch(%{active?: true} = state) do
     if Allocation.valid?(state.allocation) do
-      {{:value, event}, pending} = :queue.out(state.pending)
-      send(state.consumer, {:vxpipe_speech, event})
-      %{state | awaiting: event, pending: pending, pending_count: count - 1}
+      case EventQueue.take(state.events) do
+        {:ok, event, events} ->
+          send(state.consumer, {:vxpipe_speech, event})
+          %{state | events: events}
+
+        :empty ->
+          state
+      end
     else
       state
     end
@@ -304,12 +589,131 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp dispatch(state), do: state
 
+  defp accept_event(
+         %Event{kind: :cancelled, request_ref: reference},
+         %{
+           output: %OutputState{
+             request: %{ref: reference, fenced?: true, terminal?: false}
+           },
+           cancellation: cancellation
+         } = state
+       )
+       when not is_nil(cancellation) do
+    if remaining(cancellation.ticket) > 0 and Allocation.valid?(state.allocation) do
+      case OutputState.mark_terminal(state.output, reference) do
+        {:ok, output} -> TTSFlow.settle(%{state | output: output})
+        _error -> :failed
+      end
+    else
+      :failed
+    end
+  end
+
+  defp accept_event(
+         %Event{kind: kind, request_ref: reference},
+         %{output: %OutputState{request: %{ref: reference, terminal?: false}}} = state
+       )
+       when kind in [:input_submitted, :completed] do
+    result =
+      if kind == :input_submitted,
+        do: OutputState.mark_submitted(state.output, reference),
+        else: OutputState.complete(state.output, reference)
+
+    case result do
+      {:ok, output} -> {:ok, %{state | output: output}}
+      error -> error
+    end
+  end
+
+  defp accept_event(%Event{kind: kind}, _state)
+       when kind in [:input_submitted, :completed, :cancelled],
+       do: {:error, :stale_request}
+
+  defp accept_event(_event, state), do: {:ok, state}
+
+  defp acknowledged(%Event{kind: :ready}, state), do: %{state | ready_acked?: true}
+
+  defp acknowledged(
+         %Event{kind: :input_submitted, request_ref: reference},
+         %{output: %OutputState{request: %{ref: reference}}} = state
+       ),
+       do: %{state | output: OutputState.mark_submission_acked(state.output, reference)}
+
+  defp acknowledged(_event, state), do: state
+
+  defp dispatch_audio(
+         %{
+           active?: true,
+           ready_acked?: true,
+           output: %OutputState{
+             request: %{
+               ref: reference,
+               submitted_acked?: true,
+               terminal?: false,
+               fenced?: false
+             },
+             pending_audio: %{request_ref: reference} = audio
+           }
+         } = state
+       ) do
+    if Allocation.valid?(state.allocation) do
+      send(state.consumer, {:vxpipe_speech_audio, audio})
+      {_audio, output} = OutputState.take_pending(state.output)
+      %{state | output: output}
+    else
+      state
+    end
+  end
+
+  defp dispatch_audio(state), do: state
+
+  defp finished_input(%{operation: {:cancel, _reference}}, :ok, state) do
+    TTSFlow.finish_cancel(state)
+  end
+
+  defp finished_input(
+         %{operation: {:speak, reference}} = command,
+         {:error, reason} = result,
+         state
+       ) do
+    case TTSFlow.reject(command, result, state) do
+      {:ok, state} ->
+        if remaining(command) > 0 and Allocation.valid?(state.allocation) and
+             not EventQueue.full?(state.events, @maximum_pending) do
+          {:ok, event} = Event.build(:failed, request_ref: reference, reason: reason)
+          {:ok, enqueue_event(state, event, state.producer), result}
+        else
+          :failed
+        end
+
+      :failed ->
+        :failed
+    end
+  end
+
+  defp finished_input(command, result, state) do
+    case TTSFlow.reject(command, result, state) do
+      {:ok, state} -> {:ok, state, result}
+      :failed -> :failed
+    end
+  end
+
   defp input_failed(state) do
     retire(state.allocation)
-    GenServer.reply(state.input.from, {:error, :session_failed})
+    reply_input(state.input, {:error, :session_failed})
+    reply_pending_cancel(state.cancellation, {:error, :session_failed})
     ScopeControl.failed(state.allocation, :session_failed)
     {:stop, :normal, state}
   end
+
+  defp reply_pending_cancel(%{pending: pending}, reply) when not is_nil(pending),
+    do: reply_input(pending, reply)
+
+  defp reply_pending_cancel(_cancellation, _reply), do: :ok
+
+  defp reply_input(nil, _reply), do: :ok
+  defp reply_input(%{from: nil}, _reply), do: :ok
+  defp reply_input(%{from: from}, reply), do: GenServer.reply(from, reply)
 
   defp remaining(command),
     do: max(command.deadline - System.monotonic_time(:millisecond), 0)

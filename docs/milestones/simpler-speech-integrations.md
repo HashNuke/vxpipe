@@ -2,17 +2,18 @@
 
 Status: checkpoints R and A accepted; production integration of native TTS
 checkpoint D resumed on 2026-09-20 after the isolated topology gate passed and the
-user approved integration. The existing early-admission cancellation regression is
-the required red starting point, not an accepted runtime state. An admitted
-request can be fenced while its Input result is pending; cancel returns busy, then
-the uncompleted fence expires and closes the allocation. A later isolated
-[topology proof](../speech-topology-experiment.md) implements the proposed merged
-state owner without changing production code. Across three fresh runs its merged
+user approved integration. D2a preserved the early-admission cancellation failure
+and split-production baseline before the ownership change. The approved repair now
+makes that public regression and its later clean-rejection ordering green: Channel
+owns request, credit, playback and fence state while Input remains the blocking
+provider worker. Final production load and Astra review pass. A clean umbrella
+test rerun and all other root gates pass, so D2 is accepted. D4/D5 remain open and
+D is not accepted. The earlier isolated
+[topology proof](../speech-topology-experiment.md) implements the same proposed
+owner shape without changing production code. Across three fresh runs its merged
 path passed every concurrency where the split reference passed, and its first
-observed fixed-budget miss was no earlier. The original
-runtime regression remains red and D remains unaccepted. D2a freezes that failure
-and the current split-production load baseline before D2b changes ownership. The prior cancellation
-repair passed its own review, load and root checks; those results predate this change.
+observed fixed-budget miss was no earlier. The prior cancellation repair passed
+its own review, load and root checks; those results predate this change.
 Implementation: **2 of 9 checkpoints complete**. The revised order is
 **R → A → D → B → C → E → F → G → H**, preserving existing checkpoint identities.
 The user-requested baseline commit records the experimental standalone prototype and evidence;
@@ -277,7 +278,7 @@ See [cancellation findings](../native-tts-cancellation-findings.md). The cancell
 turns; the TTS fault lane passes 492 intentional failures/replacements. All five
 root checks pass, including the 1,897-test same-seed rerun. The initial two legacy
 Gateway failures and isolated passing rerun remain recorded in the findings. D3 is
-implemented in the working tree; D2/D4/D5 and D acceptance remain open.
+implemented in the working tree; D4/D5 and D acceptance remain open.
 The next early-admission slice passed its first two tests but introduced a held-credit
 cancellation regression. The paired control/reproduction passes when Input finishes
 first and fails when cancel arrives first, even after Input subsequently finishes
@@ -285,8 +286,10 @@ first and fails when cancel arrives first, even after Input subsequently finishe
 [admission finding and proposed repair](../native-tts-request-admission.md).
 That production change was paused under the user's tested-instability rule.
 After D0 passed, the user explicitly resumed production integration on 2026-09-20.
-Production rooms retain the legacy path, and the original red test must turn green
-without weakening its barriers. No D checkpoint commit has been made.
+The Channel-owned repair now makes the original test and the independently found
+clean-rejection ordering green without weakening their barriers. Production rooms
+retain the legacy path. The D2 checkpoint records the accepted native-session
+ownership change separately from later room migration.
 
 The 2026-09-20 [complexity audit](../speech-complexity-audit.md) proposes merging
 Output's bounded credit/playback state into Channel, retaining the independent
@@ -313,32 +316,32 @@ and must not expand this repair into a startup rewrite.
 - [x] **D1 — Red streaming test.** Add `test/vxpipe/call_engine/speech/tts_session_test.exs` for
   native Morse speak, acknowledged bounded audio and one terminal completion. Assert sample
   runs with the existing independent fixture/decoder, not solely an encoder/decoder round trip.
-- [ ] **D2 — TTS contract and Channel-owned output.** Add `lib/speech/tts_provider.ex` and typed
+- [x] **D2 — TTS contract and Channel-owned output.** Add `lib/speech/tts_provider.ex` and typed
   TTS request/event support. Define admission versus `input_submitted`; reuse A's descriptor,
   identity and bounded event delivery, with R's explicit local scope. Channel owns one
   authoritative request and bounded PCM credit/playback state. Keep blocking
   provider execution in Input and actual sink I/O outside Channel. Remove unread request/state
   copies; do not introduce a global TTS supervisor, queue or per-frame Task factory.
   Implement this as four reviewable vertical steps while accepting the workflow together:
-  - [ ] **D2a — Freeze the red boundary and split baseline.** Keep the original paired
+  - [x] **D2a — Freeze the red boundary and split baseline.** Keep the original paired
     pending-Input cancellation reproduction red. Retain exact event-ACK, direct-credit,
     abandoned-fence and replacement expectations at the production session boundary.
     Run the current split production handoff/cancellation load lanes with fixed settings
     and persist the machine-readable pre-merge artifact before changing ownership. Do
     not substitute the test prototype for the production failure or baseline.
-  - [ ] **D2b — Move authoritative state.** Move Output's current request, outstanding
+  - [x] **D2b — Move authoritative state.** Move Output's current request, outstanding
     audio, generated/accepted bytes, played totals, credit timer and fence phase into
     `lib/speech/channel.ex`. Route `Session.validate_audio/2`, `Session.ack_audio/2`
     and provider chunk submission directly to Channel with the same consumer/provider
     authority and fixed deadlines. Update `provider/morse_code_tts/session.ex` to use
     that boundary. Retain the independent `Input` process for provider `speak` and
     `cancel` calls; keep sink I/O outside the Channel callback cycle.
-  - [ ] **D2c — Remove the process boundary.** Remove Output from SessionTree and its
+  - [x] **D2c — Remove the process boundary.** Remove Output from SessionTree and its
     monitor/control handoffs in `lib/speech/session_tree.ex`, then delete
     `lib/speech/output.ex` after every caller has moved. Update provider initialization
     and tests that reference the Output PID. Prove the allocation still has one-for-all
     significant-child teardown and that independent STT and sibling TTS scopes survive.
-  - [ ] **D2d — Runtime parity gate.** Make the original regression and complete
+  - [x] **D2d — Runtime parity gate.** Make the original regression and complete
     production workflow green. Repeat the same production handoff/cancellation lanes
     against the D2a artifact and run the isolated fixed-budget topology ramp through at
     least 256 scopes. The merged runtime must introduce no earlier fixed-budget failure,
@@ -626,7 +629,7 @@ for timing distributions, exact covered permissions and excluded production path
 | --- | --- | --- | --- |
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
-| D | Production integration resumed; D0/D1/D3 implemented; D2a red boundary and split baseline next | Current runtime: paired Input/cancel ordering still reproduces closure (2 tests, 1 failure; seed 530504). Isolated topology: 4 focused tests and three fresh pointwise fixed-gate ramps pass; Astra independently recalculated the reports and found no D0 blocker. D2a must persist the pre-merge production load artifact before ownership changes | Isolated 70,416-workflow proof reaches 256 scopes. It does not accept runtime or rooms. D2 must make the production workflow green without an earlier fixed-budget failure or cleanup leak; complete usage/playback, demo, review and root gates remain open |
+| D | D0–D3 implemented; D2 accepted with Channel as the sole TTS output-state owner and Input retained for blocking provider work; D4/D5 open | 25 focused TTS cases and 125 speech/Morse cases pass. Final production lanes pass 5,904 cancellation/replacement/STT cycles plus 3,936 TTS and 3,936 STT turns with 492 intentional Channel faults/replacements. Astra found no D2 source blocker. All five root gates pass, including 1,905 tests with zero failures and 40 excluded (seed 530504) | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. This does not claim production fixed-budget latency parity. Complete historical usage/playback, standalone demo and room migration remain open |
 | B | Not started | Pending | Real room loop pending |
 | C | Not started | Pending | Local wire and hosted STT pending |
 | E | Not started | Pending | Room/opening proof pending |
@@ -780,3 +783,42 @@ artifact. D2b moves authoritative output state into Channel, D2c removes the Out
 process, and D2d reruns production load, topology load, independent review and all
 root gates. D remains unaccepted and room migration remains blocked until those
 gates pass.
+
+D2a split-production baseline (2026-09-20): the seed-530504 paired regression again
+produced two tests with one failure before ownership edits. Two fresh cancellation
+load attempts reproduced `{:error, :busy}` after at least 2,208 completed cycles,
+so the harness correctly withheld its success JSON; the raw second-run log is
+retained. The separate handoff/fault lane passed all 36 trials, 3,936 TTS turns,
+3,936 STT turns and 492 intentional Output failures/replacements. The machine was
+an 8-core Apple M2 with 16 GiB RAM, Elixir 1.19.5 and OTP 28. These artifacts freeze
+the split behavior; they do not accept D or turn the known cancellation failure
+into a capacity claim.
+
+D2 implementation repair (2026-09-20): after the pending-cancel repair and
+Channel-owned output passed 24 focused TTS tests, 124 speech/Morse tests and both
+production load lanes, independent review identified an untested ordering. A new
+public-boundary reproduction fences a pending request, lets the provider reject it
+cleanly before `cancel`, then calls `cancel(ticket, 0)`. The current implementation
+cleared the request while retaining the fence; `cancel` then crashed Channel in
+playback accounting and returned `{:error, :closed}` (3 tests, 1 failure, seed
+530504). This proved instability in the in-progress D workflow and work paused
+before repair. The user then authorized retaining bounded terminal request facts
+until the later authorized cancellation settles the original fence locally. The
+same command now passes all 3 cases; the focused TTS selection passes 25 tests and
+the speech/Morse selection passes 125 tests with the same seed. Final production
+loads pass 5,904 cancellation/replacement/STT cycles and 3,936 TTS plus 3,936 STT
+turns with 492 intentional Channel failures/replacements. Post-trial process counts
+remain fixed at 244 and 245 respectively. Astra found no remaining source blocker
+for this bounded repair. The first post-integration isolated adapter ramp also had
+a nonrepeated fixed-budget miss at 8 scopes; three consecutive fresh reruns passed. Because that
+adapter code is unchanged by the production merge, the preserved miss is not causal
+evidence against the production topology and does not prove production fixed-budget
+latency parity. Three consecutive post-integration reruns pass through 256 scopes
+with split/merged first misses of 64/64, 32/128 and 128/128 and no pointwise
+violation. Four root gates and the 807-test Call Engine suite pass. Earlier
+full-suite failures were either isolated legacy timing cases or new readiness
+assertions using 500 ms instead of the public 5-second startup budget. The latter
+now use the contract budget without relaxing request or cancellation timing. The
+full umbrella rerun passes 1,905 tests with zero failures and 40 excluded at seed
+530504. All five root gates are green, so D2 and D2b–D2d are accepted. D4/D5 and
+Exit D remain open.

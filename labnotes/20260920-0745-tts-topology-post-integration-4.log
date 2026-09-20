@@ -1,0 +1,44 @@
+
+09:09:10.538 [info] SessionManager started
+Running ExUnit with seed: 0, max_cases: 16
+
+topology=split repeat=1 scopes=1 cycles=8
+topology=merged repeat=1 scopes=1 cycles=8
+topology=split repeat=1 scopes=8 cycles=64
+topology=merged repeat=1 scopes=8 cycles=64
+topology=split repeat=1 scopes=32 cycles=256
+topology=merged repeat=1 scopes=32 cycles=256
+topology=split repeat=1 scopes=64 cycles=512
+topology=merged repeat=1 scopes=64 cycles=512
+topology=split repeat=1 scopes=128 cycles=1024
+topology=merged repeat=1 scopes=128 cycles=1024
+topology=split repeat=1 scopes=256 cycles=2048
+topology=merged repeat=1 scopes=256 cycles=2048
+topology=merged repeat=2 scopes=1 cycles=8
+topology=split repeat=2 scopes=1 cycles=8
+topology=merged repeat=2 scopes=8 cycles=64
+topology=split repeat=2 scopes=8 cycles=64
+topology=merged repeat=2 scopes=32 cycles=256
+topology=split repeat=2 scopes=32 cycles=256
+topology=merged repeat=2 scopes=64 cycles=512
+topology=split repeat=2 scopes=64 cycles=512
+topology=merged repeat=2 scopes=128 cycles=1024
+topology=split repeat=2 scopes=128 cycles=1024
+topology=merged repeat=2 scopes=256 cycles=2048
+topology=split repeat=2 scopes=256 cycles=2048
+topology=split repeat=3 scopes=1 cycles=8
+topology=merged repeat=3 scopes=1 cycles=8
+topology=split repeat=3 scopes=8 cycles=64
+topology=merged repeat=3 scopes=8 cycles=64
+topology=split repeat=3 scopes=32 cycles=256
+topology=merged repeat=3 scopes=32 cycles=256
+topology=split repeat=3 scopes=64 cycles=512
+topology=merged repeat=3 scopes=64 cycles=512
+topology=split repeat=3 scopes=128 cycles=1024
+topology=merged repeat=3 scopes=128 cycles=1024
+topology=split repeat=3 scopes=256 cycles=2048
+topology=merged repeat=3 scopes=256 cycles=2048
+Topology report written to ../../labnotes/20260920-0745-tts-topology-post-integration-4.json; split knee=128 merged knee=128
+.
+Finished in 9.9 seconds (0.2s on load, 0.00s async, 9.6s sync)
+1 test, 0 failures

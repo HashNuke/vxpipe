@@ -13,18 +13,7 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
   their event channel before blocking work. The OTP timeout owns the child even
   before bind, including a child trapping exits during initialization.
   """
-  def start_link(module, private_init) do
-    remaining =
-      Keyword.fetch!(private_init, :start_deadline) - System.monotonic_time(:millisecond)
-
-    if remaining > 0 do
-      allocation = Keyword.fetch!(private_init, :allocation)
-      name = Vxpipe.CallEngine.Speech.ProviderName.address(allocation)
-      GenServer.start_link(module, private_init, timeout: remaining, name: name)
-    else
-      {:error, :startup_timeout}
-    end
-  end
+  defdelegate start_link(module, private_init), to: Vxpipe.CallEngine.Speech.ProviderProcess
 
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()

@@ -1,0 +1,26 @@
+
+08:38:47.989 [info] SessionManager started
+Running ExUnit with seed: 0, max_cases: 16
+
+TTS cancellation repeat=1 scopes=1 credit=pending: 24 cycles
+TTS cancellation repeat=1 scopes=1 credit=credited: 24 cycles
+TTS cancellation repeat=1 scopes=8 credit=pending: 192 cycles
+TTS cancellation repeat=1 scopes=8 credit=credited: 192 cycles
+TTS cancellation repeat=1 scopes=32 credit=pending: 768 cycles
+TTS cancellation repeat=1 scopes=32 credit=credited: 768 cycles
+TTS cancellation repeat=2 scopes=1 credit=pending: 24 cycles
+TTS cancellation repeat=2 scopes=1 credit=credited: 24 cycles
+TTS cancellation repeat=2 scopes=8 credit=pending: 192 cycles
+TTS cancellation repeat=2 scopes=8 credit=credited: 192 cycles
+TTS cancellation repeat=2 scopes=32 credit=pending: 768 cycles
+TTS cancellation repeat=2 scopes=32 credit=credited: 768 cycles
+TTS cancellation repeat=3 scopes=1 credit=pending: 24 cycles
+TTS cancellation repeat=3 scopes=1 credit=credited: 24 cycles
+TTS cancellation repeat=3 scopes=8 credit=pending: 192 cycles
+TTS cancellation repeat=3 scopes=8 credit=credited: 192 cycles
+TTS cancellation repeat=3 scopes=32 credit=pending: 768 cycles
+TTS cancellation repeat=3 scopes=32 credit=credited: 768 cycles
+TTS cancellation report written to ../../labnotes/20260920-0745-tts-cancellation-final.json; 18 trials
+.
+Finished in 9.2 seconds (0.3s on load, 0.00s async, 8.9s sync)
+1 test, 0 failures

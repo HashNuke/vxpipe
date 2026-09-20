@@ -38,7 +38,7 @@ defmodule Vxpipe.CallEngine.Speech.Input do
          {:ok, module, provider} <-
            GenServer.call(Channel.address(allocation), {:claim_input, command.ref}, remaining) do
       if command.deadline > System.monotonic_time(:millisecond) and Allocation.valid?(allocation),
-        do: accepted(module.push_audio(provider, audio)),
+        do: execute_provider(module, provider, command, audio),
         else: {:error, :session_failed}
     else
       _failure -> {:error, :session_failed}
@@ -52,4 +52,35 @@ defmodule Vxpipe.CallEngine.Speech.Input do
   defp accepted(:ok), do: :ok
   defp accepted({:error, :busy}), do: {:error, :busy}
   defp accepted(_failure), do: {:error, :session_failed}
+
+  defp execute_provider(module, provider, %{operation: {:speak, reference}}, text) do
+    case module.speak(provider, reference, text) do
+      :ok ->
+        :ok
+
+      {:error, reason}
+      when reason in [
+             :busy,
+             :empty_text,
+             :invalid_text,
+             :input_too_large,
+             :output_too_large,
+             :unsupported_character
+           ] ->
+        {:error, reason}
+
+      _failure ->
+        {:error, :session_failed}
+    end
+  end
+
+  defp execute_provider(module, provider, %{operation: {:cancel, reference}}, playback) do
+    case module.cancel(provider, reference, playback) do
+      :ok -> :ok
+      _failure -> {:error, :session_failed}
+    end
+  end
+
+  defp execute_provider(module, provider, _command, audio),
+    do: accepted(module.push_audio(provider, audio))
 end

@@ -1,0 +1,84 @@
+
+07:52:36.779 [info] SessionManager started
+Running ExUnit with seed: 0, max_cases: 16
+
+TTS cancellation repeat=1 scopes=1 credit=pending: 24 cycles
+TTS cancellation repeat=1 scopes=1 credit=credited: 24 cycles
+TTS cancellation repeat=1 scopes=8 credit=pending: 192 cycles
+TTS cancellation repeat=1 scopes=8 credit=credited: 192 cycles
+TTS cancellation repeat=1 scopes=32 credit=pending: 768 cycles
+TTS cancellation repeat=1 scopes=32 credit=credited: 768 cycles
+TTS cancellation repeat=2 scopes=1 credit=pending: 24 cycles
+TTS cancellation repeat=2 scopes=1 credit=credited: 24 cycles
+TTS cancellation repeat=2 scopes=8 credit=pending: 192 cycles
+TTS cancellation repeat=2 scopes=8 credit=credited: 192 cycles
+
+
+  1) test repeated cancellation preserves replacement PCM, reported playback and sibling STT (Vxpipe.CallEngine.TTSCancellationBench)
+     bench/tts_cancellation.exs:30
+     ** (exit) exited in: Task.await(%Task{mfa: {:erlang, :apply, 2}, owner: #PID<0.447.0>, pid: #PID<0.2582.0>, ref: #Reference<0.0.57219.2517357331.2106654725.135656>}, 30000)
+        ** (EXIT) an exception was raised:
+          match (=) failed
+          code:  assert {:ok, playback} = Session.cancel(tts, ticket, 10)
+          left:  {:ok, playback}
+          right: {:error, :busy}
+          stacktrace:
+            bench/tts_cancellation.exs:171: Vxpipe.CallEngine.TTSCancellationBench.round/4
+            (elixir 1.19.5) lib/enum.ex:4539: Enum.map_range/4
+            (elixir 1.19.5) lib/enum.ex:4539: Enum.map_range/4
+            (elixir 1.19.5) lib/enum.ex:4539: Enum.map/2
+            bench/tts_cancellation.exs:80: anonymous fn/4 in Vxpipe.CallEngine.TTSCancellationBench.trial/4
+            (elixir 1.19.5) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+            (elixir 1.19.5) lib/task/supervised.ex:40: Task.Supervised.reply/4
+
+     stacktrace:
+       (elixir 1.19.5) lib/task.ex:888: Task.await_receive/3
+       (elixir 1.19.5) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+       (elixir 1.19.5) lib/enum.ex:1688: Enum."-map/2-lists^map/1-1-"/2
+       bench/tts_cancellation.exs:95: Vxpipe.CallEngine.TTSCancellationBench.trial/4
+       bench/tts_cancellation.exs:35: anonymous fn/5 in Vxpipe.CallEngine.TTSCancellationBench."test repeated cancellation preserves replacement PCM, reported playback and sibling STT"/1
+       (elixir 1.19.5) lib/enum.ex:2520: Enum."-reduce/3-lists^foldl/2-0-"/3
+       (elixir 1.19.5) lib/enum.ex:4562: Enum.reduce_range/5
+       bench/tts_cancellation.exs:34: (test)
+
+     The following output was logged:
+
+     07:52:42.712 [error] Task #PID<0.2607.0> started from #PID<0.447.0> terminating
+     ** (ExUnit.AssertionError)
+
+     match (=) failed
+     code:  assert {:ok, playback} = Session.cancel(tts, ticket, 10)
+     left:  {:ok, playback}
+     right: {:error, :busy}
+
+         bench/tts_cancellation.exs:171: Vxpipe.CallEngine.TTSCancellationBench.round/4
+         (elixir 1.19.5) lib/enum.ex:4539: Enum.map_range/4
+         (elixir 1.19.5) lib/enum.ex:4539: Enum.map_range/4
+         (elixir 1.19.5) lib/enum.ex:4539: Enum.map/2
+         bench/tts_cancellation.exs:80: anonymous fn/4 in Vxpipe.CallEngine.TTSCancellationBench.trial/4
+         (elixir 1.19.5) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+         (elixir 1.19.5) lib/task/supervised.ex:40: Task.Supervised.reply/4
+     Function: #Function<17.108423979/0 in Vxpipe.CallEngine.TTSCancellationBench.trial/4>
+         Args: []
+
+     07:52:42.712 [error] Task #PID<0.2582.0> started from #PID<0.447.0> terminating
+     ** (ExUnit.AssertionError)
+
+     match (=) failed
+     code:  assert {:ok, playback} = Session.cancel(tts, ticket, 10)
+     left:  {:ok, playback}
+     right: {:error, :busy}
+
+         bench/tts_cancellation.exs:171: Vxpipe.CallEngine.TTSCancellationBench.round/4
+         (elixir 1.19.5) lib/enum.ex:4539: Enum.map_range/4
+         (elixir 1.19.5) lib/enum.ex:4539: Enum.map_range/4
+         (elixir 1.19.5) lib/enum.ex:4539: Enum.map/2
+         bench/tts_cancellation.exs:80: anonymous fn/4 in Vxpipe.CallEngine.TTSCancellationBench.trial/4
+         (elixir 1.19.5) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+         (elixir 1.19.5) lib/task/supervised.ex:40: Task.Supervised.reply/4
+     Function: #Function<17.108423979/0 in Vxpipe.CallEngine.TTSCancellationBench.trial/4>
+         Args: []
+
+
+Finished in 6.0 seconds (0.2s on load, 0.00s async, 5.7s sync)
+1 test, 1 failure

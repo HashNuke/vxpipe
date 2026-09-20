@@ -9,8 +9,10 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   alias Vxpipe.CallEngine.Speech.{
     Allocation,
+    Cancellation,
     Channel,
     ProviderName,
+    Request,
     Scope,
     ScopeControl,
     SessionTree
@@ -94,6 +96,87 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   end
 
   def ack(allocation, event), do: call(allocation, {:ack, event})
+
+  @doc """
+  Admit bounded text and return a request handle before provider acceptance.
+  Actual submission arrives as `input_submitted`; clean provider rejection is a
+  correlated `failed` event. Synchronous errors mean engine admission failed.
+  """
+  def speak(allocation, text) when is_binary(text) and byte_size(text) in 1..4_096 do
+    command = command(allocation)
+    reference = make_ref()
+
+    try do
+      result = request(allocation, {:speak, command, reference, text}, command.deadline)
+
+      if match?({:ok, %Request{}}, result) and remaining(command.deadline) == 0,
+        do: input_timeout(allocation, command),
+        else: result
+    catch
+      :exit, {:timeout, _call} -> input_timeout(allocation, command)
+      :exit, _reason -> {:error, :closed}
+    end
+  end
+
+  def speak(_allocation, _text), do: {:error, :invalid_text}
+
+  @doc "Fence exact request audio before interrupting the sink; the returned deadline is fixed."
+  def fence_output(allocation, %Request{session: allocation, ref: reference}),
+    do: fence_output(allocation, reference)
+
+  def fence_output(allocation, reference) do
+    command = command(allocation)
+
+    try do
+      result = request(allocation, {:fence_output, command, reference}, command.deadline)
+
+      if match?({:ok, %Cancellation{}}, result) and remaining(command.deadline) == 0,
+        do: input_timeout(allocation, command),
+        else: result
+    catch
+      :exit, {:timeout, _call} -> input_timeout(allocation, command)
+      :exit, _reason -> {:error, :closed}
+    end
+  end
+
+  @doc """
+  Complete a fence after sink interruption with actual request-relative played ms.
+  The original fence deadline bounds mutations. A retained successful result may
+  be read again under a fresh bounded call, without changing playback or a replacement.
+  """
+  def cancel(allocation, %Cancellation{} = ticket, played_ms) do
+    command = command(allocation)
+
+    try do
+      request(allocation, {:cancel, command, ticket, played_ms}, command.deadline)
+    catch
+      :exit, {:timeout, _call} -> input_timeout(allocation, command)
+      :exit, _reason -> {:error, :closed}
+    end
+  end
+
+  def cancel(_allocation, _ticket, _played_ms), do: {:error, :stale_cancellation}
+
+  @doc "Check the exact current audio envelope before sink use."
+  def validate_audio(allocation, audio), do: audio_call(allocation, :validate, audio)
+  @doc "Release PCM credit after bounded sink acceptance; this does not report playback."
+  def ack_audio(allocation, audio), do: audio_call(allocation, :ack, audio)
+
+  defp audio_call(allocation, operation, audio) do
+    deadline = System.monotonic_time(:millisecond) + allocation.call_timeout
+
+    if Allocation.valid?(allocation),
+      do:
+        GenServer.call(
+          Channel.address(allocation),
+          {:audio, deadline, operation, audio},
+          remaining(deadline)
+        ),
+      else: {:error, :closed}
+  catch
+    :exit, {:timeout, _call} -> {:error, :command_timeout}
+    :exit, _reason -> {:error, :closed}
+  end
 
   @doc """
   Submit 1..131072 bytes with one outstanding command per allocation. `:ok` means

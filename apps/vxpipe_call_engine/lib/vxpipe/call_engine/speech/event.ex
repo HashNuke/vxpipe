@@ -14,11 +14,14 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :producer,
     :sequence,
     :kind,
+    :request_ref,
+    :provenance,
     :turn_ref,
     :text,
     :provider_request_id,
     :readiness,
-    :endpointing
+    :endpointing,
+    :reason
   ]
 
   @type t :: %__MODULE__{}
@@ -44,19 +47,44 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :ready, readiness: readiness}, descriptor),
     do: descriptor.readiness == readiness
 
-  def supported?(%__MODULE__{kind: :speech_started}, descriptor), do: descriptor.speech_start?
-  def supported?(%__MODULE__{kind: :turn_resumed}, descriptor), do: descriptor.resume?
+  def supported?(%__MODULE__{kind: :speech_started}, %{kind: :stt} = descriptor),
+    do: descriptor.speech_start?
 
-  def supported?(%__MODULE__{kind: :eager_turn_ended, endpointing: evidence}, descriptor),
-    do: descriptor.eager_end? and descriptor.endpointing == evidence
+  def supported?(%__MODULE__{kind: :turn_resumed}, %{kind: :stt} = descriptor),
+    do: descriptor.resume?
 
-  def supported?(%__MODULE__{kind: :turn_ended, endpointing: evidence}, descriptor),
-    do: descriptor.endpointing == evidence
+  def supported?(
+        %__MODULE__{kind: :eager_turn_ended, endpointing: evidence},
+        %{kind: :stt} = descriptor
+      ),
+      do: descriptor.eager_end? and descriptor.endpointing == evidence
 
-  def supported?(%__MODULE__{kind: :transcript}, _descriptor), do: true
+  def supported?(
+        %__MODULE__{kind: :turn_ended, endpointing: evidence},
+        %{kind: :stt} = descriptor
+      ),
+      do: descriptor.endpointing == evidence
+
+  def supported?(%__MODULE__{kind: :transcript}, %{kind: :stt}), do: true
+
+  def supported?(
+        %__MODULE__{kind: :input_submitted, provenance: provenance},
+        %{kind: :tts} = descriptor
+      ),
+      do: provenance == descriptor.usage_identity.provenance
+
+  def supported?(%__MODULE__{kind: kind}, %{kind: :tts}) when kind in [:completed, :cancelled],
+    do: true
+
   def supported?(_event, _descriptor), do: false
 
   defp allowed_fields(:ready), do: [:readiness, :provider_request_id]
+  defp allowed_fields(:input_submitted), do: [:request_ref, :provenance, :provider_request_id]
+  defp allowed_fields(:failed), do: [:request_ref, :reason]
+
+  defp allowed_fields(kind) when kind in [:completed, :cancelled],
+    do: [:request_ref, :provider_request_id]
+
   defp allowed_fields(:speech_started), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:turn_resumed), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:transcript), do: [:turn_ref, :text, :provider_request_id]
@@ -77,6 +105,29 @@ defmodule Vxpipe.CallEngine.Speech.Event do
 
   defp valid_kind?(%__MODULE__{kind: :ready, readiness: mode}),
     do: mode in [:initialized, :provider_acknowledged]
+
+  defp valid_kind?(%__MODULE__{
+         kind: :input_submitted,
+         request_ref: reference,
+         provenance: provenance
+       }),
+       do: is_reference(reference) and provenance in [:locally_measured, :provider_reported]
+
+  defp valid_kind?(%__MODULE__{kind: kind, request_ref: reference})
+       when kind in [:completed, :cancelled],
+       do: is_reference(reference)
+
+  defp valid_kind?(%__MODULE__{kind: :failed, request_ref: reference, reason: reason}),
+    do:
+      is_reference(reference) and
+        reason in [
+          :busy,
+          :empty_text,
+          :invalid_text,
+          :input_too_large,
+          :output_too_large,
+          :unsupported_character
+        ]
 
   defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference})
        when kind in [:speech_started, :turn_resumed],

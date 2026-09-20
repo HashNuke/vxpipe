@@ -1,0 +1,44 @@
+
+08:39:12.790 [info] SessionManager started
+Running ExUnit with seed: 0, max_cases: 16
+
+TTS repeat=1 scopes=1 delay=0 mode=direct: 8 turns
+TTS repeat=1 scopes=1 delay=0 mode=adopted: 8 turns
+TTS repeat=1 scopes=1 delay=2 mode=direct: 8 turns
+TTS repeat=1 scopes=1 delay=2 mode=adopted: 8 turns
+TTS repeat=1 scopes=8 delay=0 mode=direct: 64 turns
+TTS repeat=1 scopes=8 delay=0 mode=adopted: 64 turns
+TTS repeat=1 scopes=8 delay=2 mode=direct: 64 turns
+TTS repeat=1 scopes=8 delay=2 mode=adopted: 64 turns
+TTS repeat=1 scopes=32 delay=0 mode=direct: 256 turns
+TTS repeat=1 scopes=32 delay=0 mode=adopted: 256 turns
+TTS repeat=1 scopes=32 delay=2 mode=direct: 256 turns
+TTS repeat=1 scopes=32 delay=2 mode=adopted: 256 turns
+TTS repeat=2 scopes=1 delay=0 mode=direct: 8 turns
+TTS repeat=2 scopes=1 delay=0 mode=adopted: 8 turns
+TTS repeat=2 scopes=1 delay=2 mode=direct: 8 turns
+TTS repeat=2 scopes=1 delay=2 mode=adopted: 8 turns
+TTS repeat=2 scopes=8 delay=0 mode=direct: 64 turns
+TTS repeat=2 scopes=8 delay=0 mode=adopted: 64 turns
+TTS repeat=2 scopes=8 delay=2 mode=direct: 64 turns
+TTS repeat=2 scopes=8 delay=2 mode=adopted: 64 turns
+TTS repeat=2 scopes=32 delay=0 mode=direct: 256 turns
+TTS repeat=2 scopes=32 delay=0 mode=adopted: 256 turns
+TTS repeat=2 scopes=32 delay=2 mode=direct: 256 turns
+TTS repeat=2 scopes=32 delay=2 mode=adopted: 256 turns
+TTS repeat=3 scopes=1 delay=0 mode=direct: 8 turns
+TTS repeat=3 scopes=1 delay=0 mode=adopted: 8 turns
+TTS repeat=3 scopes=1 delay=2 mode=direct: 8 turns
+TTS repeat=3 scopes=1 delay=2 mode=adopted: 8 turns
+TTS repeat=3 scopes=8 delay=0 mode=direct: 64 turns
+TTS repeat=3 scopes=8 delay=0 mode=adopted: 64 turns
+TTS repeat=3 scopes=8 delay=2 mode=direct: 64 turns
+TTS repeat=3 scopes=8 delay=2 mode=adopted: 64 turns
+TTS repeat=3 scopes=32 delay=0 mode=direct: 256 turns
+TTS repeat=3 scopes=32 delay=0 mode=adopted: 256 turns
+TTS repeat=3 scopes=32 delay=2 mode=direct: 256 turns
+TTS repeat=3 scopes=32 delay=2 mode=adopted: 256 turns
+TTS handoff report written to ../../labnotes/20260920-0745-tts-handoff-final.json; 36 trials
+.
+Finished in 12.4 seconds (0.2s on load, 0.00s async, 12.1s sync)
+1 test, 0 failures

@@ -1,0 +1,55 @@
+
+08:07:04.746 [info] SessionManager started
+Running ExUnit with seed: 0, max_cases: 16
+
+topology=split repeat=1 scopes=1 cycles=8
+topology=merged repeat=1 scopes=1 cycles=8
+topology=split repeat=1 scopes=8 cycles=64
+topology=merged repeat=1 scopes=8 cycles=64
+topology=split repeat=1 scopes=32 cycles=256
+topology=merged repeat=1 scopes=32 cycles=256
+topology=split repeat=1 scopes=64 cycles=512
+topology=merged repeat=1 scopes=64 cycles=512
+topology=split repeat=1 scopes=128 cycles=1024
+topology=merged repeat=1 scopes=128 cycles=1024
+topology=split repeat=1 scopes=256 cycles=2048
+topology=merged repeat=1 scopes=256 cycles=2048
+topology=merged repeat=2 scopes=1 cycles=8
+topology=split repeat=2 scopes=1 cycles=8
+topology=merged repeat=2 scopes=8 cycles=64
+topology=split repeat=2 scopes=8 cycles=64
+topology=merged repeat=2 scopes=32 cycles=256
+topology=split repeat=2 scopes=32 cycles=256
+topology=merged repeat=2 scopes=64 cycles=512
+topology=split repeat=2 scopes=64 cycles=512
+topology=merged repeat=2 scopes=128 cycles=1024
+topology=split repeat=2 scopes=128 cycles=1024
+topology=merged repeat=2 scopes=256 cycles=2048
+topology=split repeat=2 scopes=256 cycles=2048
+topology=split repeat=3 scopes=1 cycles=8
+topology=merged repeat=3 scopes=1 cycles=8
+topology=split repeat=3 scopes=8 cycles=64
+topology=merged repeat=3 scopes=8 cycles=64
+topology=split repeat=3 scopes=32 cycles=256
+topology=merged repeat=3 scopes=32 cycles=256
+topology=split repeat=3 scopes=64 cycles=512
+topology=merged repeat=3 scopes=64 cycles=512
+topology=split repeat=3 scopes=128 cycles=1024
+topology=merged repeat=3 scopes=128 cycles=1024
+topology=split repeat=3 scopes=256 cycles=2048
+topology=merged repeat=3 scopes=256 cycles=2048
+Topology report written to ../../labnotes/20260920-0745-tts-topology-post-integration.json; split knee=64 merged knee=8
+
+
+  1) test merged owner does not cross fixed degradation gates before split owner (Vxpipe.CallEngine.TTSTopologyComparisonBench)
+     bench/tts_topology_comparison.exs:35
+     Assertion with >= failed
+     code:  assert knee_rank(merged_knee, maximum) >= knee_rank(split_knee, maximum)
+     left:  8
+     right: 64
+     stacktrace:
+       bench/tts_topology_comparison.exs:115: (test)
+
+
+Finished in 15.4 seconds (0.5s on load, 0.00s async, 14.9s sync)
+1 test, 1 failure
