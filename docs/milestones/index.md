@@ -97,10 +97,39 @@ Checkpoints R and A are accepted: **2 of 9 speech checkpoints complete**. The pr
 Local persistent admission/input workers preserve responsive cancellation; deterministic tests
 cover late handoff and close races. A completes the [native STT contract](../native-stt-contract.md),
 including metadata/event validation, bounded busy rejection, usage evidence and stale-input
-fencing. GPT-6 Astra xhigh reviewed both checkpoints. All five current root gates
+fencing. GPT-6 Astra xhigh reviewed both checkpoints. All five accepted-baseline root gates
 pass: 1,880 tests, zero failures, 40 excluded (seed 330044). Latest load evidence includes
 39,360 concurrent-fault turns, 68,400 paired legacy/native turns and 16,236 adoption-churn turns.
-Native TTS in D is next and still precedes room migration. Reliability takes priority over
+Native TTS in D resumed after the user approved repair of
+[focused regression failures](../native-tts-deadline-findings.md) in its uncommitted implementation.
+Five deadline/direction tests, 106 speech/Morse cases, all four load lanes and all five
+root gates now pass on the repair: 1,886 tests, zero failures, 40 excluded, seed 801819.
+The user approved repair of the subsequent
+[cancellation defects](../native-tts-cancellation-findings.md). Five regressions were
+reproduced and fixed; 11 cancellation tests and 120 speech/Morse/usage cases pass.
+Astra reviewed the repair and load harness; 18 load trials pass with 5,904 cycles
+and the same number of replacement/STT turns. The TTS fault lane passes 492
+intentional failures/replacements. All five root gates passed on that cancellation repair, including
+1,897 tests, zero failures and 40 exclusions in the same-seed full rerun (520598).
+The initial two legacy Gateway timing failures and isolated passing rerun are retained.
+Prior handoff repair checks remain separate evidence.
+The subsequent [early-admission change](../native-tts-request-admission.md) is paused:
+a paired test proves that cancel arriving before the speak Input result returns busy
+after fencing, then the fence expires and closes the allocation even after Input
+finishes. The Input-first control passes (2 cases, one failure; seed 530504).
+Earlier green root/load results do not certify this newer source.
+The [2026-09-20 complexity audit](../speech-complexity-audit.md) revises D toward one
+Channel-owned request/output state and one complete admission/cancel/replacement workflow.
+The separate Output process and custom receipt representation are proposed for removal
+and reconsideration respectively. The subsequent
+[isolated topology proof](../speech-topology-experiment.md) exercises the split and merged
+trees through real Morse encode/decode, authority, deadlines, event acknowledgements,
+watchdogs, pending cancellation, replacement, independent STT and retained input facts.
+Three final-source ramps complete 70,416 workflows through 256 call-equivalent scopes;
+at every tested concurrency where split passes all fixed budgets, merged also passes.
+This is a test-only preimplementation gate, not production proof or new implementation
+acceptance. The existing runtime regression remains red.
+D remains unaccepted and still precedes room migration. Reliability takes priority over
 small latency overhead; a speedup, capacity ceiling and net code reduction remain unproven.
 The packaging/retention hold is unchanged.
 
@@ -150,7 +179,7 @@ progress without claiming the entire milestone is complete.
 27. [x] [Operator login and admin dashboard](operator-login-and-admin-dashboard.md) — After Storybook approval, issue a short-lived local login challenge, establish an installation-wide operator session, and integrate each approved React page with its real backend slice.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
-30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Scoped ownership R and native STT A are accepted (2/9); native TTS D is next, before room migration.
+30. [ ] [Simpler speech integrations](simpler-speech-integrations.md) — Introduce semantic STT/TTS sessions, migrate Morse and Deepgram through nine runnable checkpoints, and provide a tested authoring guide with contrasting provider contract profiles. Scoped ownership R and native STT A are accepted (2/9). D's test-only merged topology passes its isolated pointwise load gate with one fewer allocation process, but the newer production early-admission change remains paused after a paired test reproduced failed cancellation and allocation closure. Room migration remains pending.
 31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -510,7 +539,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | In progress; Storybook refinement locally reviewed 2026-09-18 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity remain required. Compact provider cards, credential modals with service dropdowns, alternative voice-readiness previews and tenant resumption are prototyped; the default name is Demo. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Production integration planned; recipe prototype locally reviewed 2026-09-18 | Tenant services-to-recipes stories include blocked/ready states and explicit provider choice. Root-home/demo-mode behavior, durable publication and real debug-console launch retain their incomplete acceptance gates. |
-| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | R accepted; 1/9 checkpoints complete | Scoped admission, exact ownership, absolute deadlines and fault/load gates pass with independent review and 1,868 umbrella tests. A/D native proofs remain before room migration; earlier global-prototype failure evidence is retained. No speedup, capacity ceiling or new hosted support is claimed. |
+| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | R/A accepted; 2/9 complete; D early-admission work paused | The handoff and cancellation repairs passed their prior review and checks. Newer early admission introduces a proved pending-Input cancellation regression (2 paired cases, one failure; seed 530504), so runtime work is paused and earlier checks do not certify this source. A test-only merged topology now passes three pointwise fixed-budget ramps through 256 call-equivalent scopes and 70,416 workflows, with one fewer allocation process. This preimplementation result does not clear the runtime failure or establish production capacity, a universal speedup, net code reduction or new hosted support. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 
 ## Planning verification

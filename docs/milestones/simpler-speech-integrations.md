@@ -1,6 +1,15 @@
 # Simpler speech integrations
 
-Status: checkpoints R and A accepted; native TTS checkpoint D is next.
+Status: checkpoints R and A accepted; native TTS checkpoint D runtime work is paused
+after an early-admission change reproduced a cancellation regression. An admitted
+request can be fenced while its Input result is pending; cancel returns busy, then
+the uncompleted fence expires and closes the allocation. A later isolated
+[topology proof](../speech-topology-experiment.md) implements the proposed merged
+state owner without changing production code. Across three fresh runs its merged
+path passed every concurrency where the split reference passed, and its first
+observed fixed-budget miss was no earlier. The original
+runtime regression remains red and D remains unaccepted. The prior cancellation
+repair passed its own review, load and root checks; those results predate this change.
 Implementation: **2 of 9 checkpoints complete**. The revised order is
 **R → A → D → B → C → E → F → G → H**, preserving existing checkpoint identities.
 The user-requested baseline commit records the experimental standalone prototype and evidence;
@@ -31,6 +40,8 @@ Retain the implemented readiness/preparation contracts linked below; the remaini
 acceptance in other milestones is not a prerequisite for changing the speech boundary.
 
 Design sources:
+[complexity audit and complete-workflow revision](../speech-complexity-audit.md),
+[isolated topology proof](../speech-topology-experiment.md),
 [revised ownership proposal](../speech-session-ownership.md),
 [semantic contract](../speech-provider-contract.md),
 [provider comparison](../speech-provider-comparison.md),
@@ -105,6 +116,9 @@ behavior, not final room ancestry, all permission boundaries or a completed chec
   Any capacity claim needs a separate bounded, sustained paced ramp with latency/error gates,
   scheduler utilization, queues and memory, plus operating headroom. Short Morse runs do not
   establish hosted/network/codec production capacity.
+  The later isolated topology ramp reaches 256 call-equivalent scopes and records a
+  fixed-gate miss rather than claiming production capacity. Its real Morse provider/decoder
+  work and test-only owner do not replace the room, policy, codec or hosted-provider lanes.
 - **Failure handling:** the prototype proves specific held-start, deadline, owner-loss,
   failed-credit and interrupted-replacement behavior. It does not establish faster recovery
   than `main`. R tests allocation/capability failure separately; B/E repeat at real room
@@ -246,13 +260,79 @@ The report preserves earlier failures, the nonrepeated tail spike and workload l
 Prerequisites: R and A; execute D before B. Outcome: a standalone scoped `speak` request
 produces independently checked PCM; cancellation while delivery is backpressured remains responsive and a replacement request finishes cleanly.
 
-- [ ] **D1 — Red streaming test.** Add `test/vxpipe/call_engine/speech/tts_session_test.exs` for
+Previously paused: the new Output authority handoff delivered readiness after the startup deadline
+in a deterministic scheduling test; wrong-direction audio input returned a session failure.
+The [reproduction and proposed repair](../native-tts-deadline-findings.md) record both red
+tests (seed 530504). The user approved repair; five focused deadline/direction regressions
+now pass on the repair, with 106 speech/Morse tests and all four load lanes green.
+All five root gates passed on that repair (1,886 tests, zero failures, seed 801819).
+The subsequent cancellation pause is resolved by a user-approved repair. The two
+original failures and three related deadline/playback failures were reproduced
+before fixing them (7 tests, 5 failures → zero; seed 670445). All 11 cancellation
+cases and 120 speech/Morse/usage cases now pass; Astra reviewed the repaired source.
+See [cancellation findings](../native-tts-cancellation-findings.md). The cancellation load diagnostic passes 5,904 cycles with replacement/STT
+turns; the TTS fault lane passes 492 intentional failures/replacements. All five
+root checks pass, including the 1,897-test same-seed rerun. The initial two legacy
+Gateway failures and isolated passing rerun remain recorded in the findings. D2/D3 have partial implementations; D4/D5 and D acceptance remain open.
+The next early-admission slice passed its first two tests but introduced a held-credit
+cancellation regression. The paired control/reproduction passes when Input finishes
+first and fails when cancel arrives first, even after Input subsequently finishes
+(2 tests, one failure, seed 530504). See the
+[admission finding and proposed repair](../native-tts-request-admission.md).
+Work is paused under the user's tested-instability rule. Production rooms retain
+the legacy path. No D checkpoint commit has been made.
+
+The 2026-09-20 [complexity audit](../speech-complexity-audit.md) proposes merging
+Output's bounded credit/playback state into Channel, retaining the independent
+Input worker, and testing ordinary owner-held historical usage facts before
+choosing receipt storage. The user accepts implementing the whole workflow
+together. Admission, cancellation, settlement and replacement are one acceptance
+unit; small red/green steps remain useful, but none alone certifies D. The audit
+does not implement the production merge or clear the existing failure. The
+[isolated proof](../speech-topology-experiment.md) now validates the candidate
+topology with actual Morse encoding/decoding, authority, deadlines, event ACKs and
+watchdogs: merged first misses were 128/128/128 scopes versus split 64/32/128
+across three fresh runs and 70,416 workflows. This is a preimplementation gate,
+not D acceptance. Later initializer and lifetime cleanup must have separate proof
+and must not expand this repair into a startup rewrite.
+
+- [x] **D0 — Isolated topology gate.** Build test-only faithful split and merged
+  allocation trees. Run the complete admission/cancel/replacement workflow with
+  exact native Morse PCM, real decode/turn events, exact consumer authority,
+  API-entry/fence deadlines, event ACKs, credit/cancellation watchdogs, independent
+  STT and retained input facts. Correct the split reference to credit Output
+  directly. Pass three fresh fixed-gate ramps through 256 scopes and independent
+  Astra review. This proves feasibility only; it changes no runtime checkbox.
+
+- [x] **D1 — Red streaming test.** Add `test/vxpipe/call_engine/speech/tts_session_test.exs` for
   native Morse speak, acknowledged bounded audio and one terminal completion. Assert sample
   runs with the existing independent fixture/decoder, not solely an encoder/decoder round trip.
 - [ ] **D2 — TTS contract/output helper.** Add `lib/speech/tts_provider.ex`, `output.ex` and typed
   TTS request/event support. Define admission versus `input_submitted`; reuse A's descriptor,
-  identity and bounded event delivery, with R's explicit local scope. Add local provider/output
-  workers; do not introduce a global TTS supervisor, queue or per-frame Task factory.
+  identity and bounded event delivery, with R's explicit local scope. Channel owns one
+  authoritative request and bounded PCM credit/playback state; `output.ex` may remain a pure
+  helper, with no separate Output process or synchronous lifecycle handoffs. Keep blocking
+  provider execution in Input and actual sink I/O outside Channel. Remove unread request/state
+  copies; do not introduce a global TTS supervisor, queue or per-frame Task factory.
+  Implement this as four reviewable vertical steps while accepting the workflow together:
+  - [ ] **D2a — Real red boundary.** Keep the original paired pending-Input
+    cancellation reproduction red. Add the exact event-ACK, direct-credit and
+    abandoned-fence expectations to the production session boundary before changing
+    ownership. Do not substitute the test prototype for this failure.
+  - [ ] **D2b — Move authoritative state.** Move Output's current request, outstanding
+    audio, generated/accepted bytes, played totals, credit timer and fence phase into
+    Channel. Route session audio validation/credit to Channel with the same consumer
+    authority and fixed deadlines. Keep provider submission and blocking calls outside
+    the Channel callback cycle.
+  - [ ] **D2c — Remove the process boundary.** Remove Output from SessionTree and its
+    monitor/control handoffs. Delete only state and lifecycle code made unreachable;
+    retain a pure cohesive helper only if it reduces Channel logic without owning state.
+    Prove significant-child teardown and independent STT/sibling TTS behavior.
+  - [ ] **D2d — Runtime parity gate.** Make the original regression and complete
+    production workflow green, then compare the real split baseline and merged runtime
+    with the same fixed budgets through at least 256 isolated scopes. Preserve raw
+    failures and relative-tail variation. Astra review and all five root gates precede
+    any D commit or checkbox.
 - [ ] **D3 — Native provider.** Add `lib/provider/morse_code_tts/session.ex` using the existing
   incremental Encoder. Remove Speak/Flush/Interrupt JSON from this native path; retain the old
   room entry temporarily until E. Preserve sample pacing, output format and size limits.
@@ -260,12 +340,32 @@ produces independently checked PCM; cancellation while delivery is backpressured
   audio and mid-output, race done/cancel, then synthesize again. Prove bounded memory, no stale
   audio, idempotent cancellation, one terminal result and prompt owner/producer teardown.
   A blocked TTS sink must not stop same-room STT or another scope's synthesis/cancellation.
+  Implement the complete workflow through these focused red/green steps, accepting it together:
+  - [ ] Fence a held `E` envelope, reject its stale validation/credit, confirm sink interruption,
+    emit exactly one cancelled terminal, then independently verify `T` PCM on the same allocation.
+  - [ ] Prove cancellation during pending provider acceptance through the actual consumer API.
+    The new Request handle returns after bounded engine admission; its pending-cancellation
+    regression must be repaired before the workflow is accepted. Retain at most one matching
+    pending cancel in Channel, use the same Input worker, and extend no original deadline.
+    Record submission arriving after fencing without reopening audio; settle a definite
+    pre-submission rejection locally. Reject replacement before terminal isolation.
+  - [ ] Prove historical submitted-input/provider-ID/generated-byte evidence survives allocation
+    and whole-scope failure while the consumer is held. First test bounded immutable facts
+    delivered to the existing independently owned usage consumer; live media ACK revocation
+    must not erase accounting. Do not select packed atomics or a new journal by default.
+  - [ ] Add authenticated actual-playback reports, monotonic request totals and cumulative
+    deltas, bounded replay metadata and settlement before replacement. Cancellation during
+    sink drain after `completed` must update playback without a second generation terminal.
+  - [ ] Prove final-credit completion gating, abandoned cancellation expiry, done/cancel
+    races, long-phrase drain, stale old events, ownership loss, output limits/redaction and
+    sibling STT/unrelated TTS progress while one output remains blocked.
 - [ ] **D5 — Standalone demo.** Document one text-to-PCM/WAV example and its format/sample
   assumptions. Add an opt-in latency lane for first audio, generation completion and controlled
   sink-playout completion under load, separately from STT. Keep generated audio artifacts
   outside version control and retain safe volume.
 - [ ] **Exit D.** A long phrase drains completely with one chunk in flight, the independently
-  checked replacement is clean, and current room TTS remains usable with all relevant gates green.
+  checked replacement is clean, pending cancellation and failure accounting pass together,
+  and current room TTS remains usable with focused/load/review and all root gates green.
 
 ## Checkpoint B — Room STT and policy integration
 
@@ -514,7 +614,7 @@ for timing distributions, exact covered permissions and excluded production path
 | --- | --- | --- | --- |
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
-| D | Not started | Pending | PCM playback/replacement pending |
+| D | Earlier streaming/cancellation repairs verified; runtime early-admission work paused; isolated merged topology gate passed | Prior repair: all root gates, 1,897 tests, zero failures. Current runtime: paired Input/cancel ordering still reproduces closure (2 tests, 1 failure; seed 530504). Isolated topology: 4 focused tests and three fresh pointwise fixed-gate ramps pass; Astra independently recalculated the reports and found no D0 blocker | Isolated 70,416-workflow proof reaches 256 scopes. Merged passes every concurrency where split passes and its first miss is no earlier in all three final runs. It is not runtime/room acceptance. Queued production cancellation, complete usage/playback, demo and root gates remain open |
 | B | Not started | Pending | Real room loop pending |
 | C | Not started | Pending | Local wire and hosted STT pending |
 | E | Not started | Pending | Room/opening proof pending |
@@ -584,3 +684,75 @@ The complete root rerun passed with seed 330044: 1,880 tests, zero failures, 40 
 Final serial load diagnostics passed 123,996 measured turns. R and A are accepted (2/9);
 D is next. The user's reliability priority accepts small processing overhead without waiving
 failure, delivery, privacy or cleanup gates. Room migration remains pending.
+
+D interim review (2026-09-19): GPT-6 Astra xhigh identified a post-Output-handoff
+deadline gap and missing wrong-direction input guard. Deterministic focused tests
+reproduced both failures (2 tests, 2 failures, seed 530504). Implementation is paused
+under the user's tested-instability rule; the [repair proposal](../native-tts-deadline-findings.md)
+is not implemented or accepted. Earlier streaming and 101 speech/Morse test passes
+do not supersede these failures. R/A remain the accepted baseline; progress stays 2/9.
+
+D repair review and verification (2026-09-19): user explicitly approved repair and
+resumed work. Five focused regressions went from red to green, including late adoption
+and rejected-input cleanup. Astra reviewed the repaired source and revised load harness.
+The 106-case speech/Morse selection, four serial load lanes and all five root gates
+passed (1,886 tests, zero failures, 40 excluded; seed 801819).
+See the [repair evidence](../native-tts-deadline-findings.md).
+This repairs the demonstrated handoff defects; D cancellation/playback and final
+acceptance remain open, so progress stays 2/9.
+
+D remaining-contract review (2026-09-19): Astra reviewed D2–D5 separately from
+repair verification. The next red slice is held-credit cancellation followed by
+different-text replacement on the same allocation. Pending provider acceptance
+needs an explicit consumer-visible request-identity decision; a foreign caller
+must not stand in for authorized cancellation in a test. Actual playback totals,
+terminal/submission evidence and controlled playback load remain implementation
+gates, not newly demonstrated regressions. The D4 sub-checklist records that order
+without changing checkpoint identities or accepting partial work.
+
+D cancellation interim review and pause (2026-09-19): the first two cancellation
+tests and 111 speech/Morse/usage cases passed. Astra then identified settled-fence
+and queued-audio state gaps. Two added regressions reproduced failed allocation
+reuse and stale audio delivery (4 tests, 2 failures, seed 670445). Work was paused
+under the user's tested-instability rule. The
+[finding report](../native-tts-cancellation-findings.md) separates tested failures
+from the then review-only deadline/playback concerns. No repair preceded the
+user's approval, and no D checkpoint was accepted at that pause.
+
+
+D cancellation repair review (2026-09-19): the user approved the repair. All five
+findings were reproduced before implementation (7 tests, 5 failures, seed 670445),
+then passed on the minimal repair. Eleven cancellation cases now cover both
+callback/terminal orders, missing terminal expiry and foreign timeout authority;
+120 speech/Morse/usage cases pass. Astra reviewed the test barriers and repaired
+source without a remaining blocker for this bounded slice. Cancellation load passes 18 trials and 5,904 cycles plus replacement/STT turns;
+all five root gates pass after the full same-seed rerun (1,897 tests, zero failures,
+40 excluded; seed 520598). The initial two legacy Gateway timing failures and
+isolated 10-case passing rerun remain documented without a demonstrated repair
+cause. The current TTS handoff/fault lane also passes 3,936 TTS and 3,936 STT turns
+plus 492 intentional failures/replacements. D remains unaccepted; progress stays 2/9.
+
+
+D early-admission review and pause (2026-09-19): two tests first failed because the
+actual consumer could not receive a request while provider acceptance was held,
+then passed after bounded engine admission returned a typed Request. The broader
+122-case selection exposed previously working cancellation returning busy. A paired
+isolated test confirms the cause: cancel arriving before the matching Input result
+returns busy after fencing; releasing/finishing Input does not complete cancellation,
+and the fence later expires with descendant teardown and failed replacement. The
+Input-first control passes. Two paired cases, one failure, seed 530504. Astra reviewed
+the barriers and causal interpretation. The [repair proposal](../native-tts-request-admission.md)
+retains one bounded cancel command until Input finishes without extending deadlines
+or adding a worker. Work is paused under the user's tested-instability rule. No repair,
+rollback or D commit followed this finding; R/A remain accepted and progress stays 2/9.
+
+D complexity design review (2026-09-20), separate from implementation: source inspection
+and GPT-6 Astra xhigh review identify Output's separate state-owning process as unnecessary
+for its current bounded, non-I/O work. The revised D2/D4 tasks remove that process and
+duplicate state while retaining independent blocking work, actual-playback semantics,
+original deadlines and one pending cancellation. Custom receipt storage is no longer a
+chosen design; survival of committed usage facts remains a required tested contract.
+The existing paired reproduction still reports 2 tests, one failure (seed 530504, 0.8 s).
+The [audit](../speech-complexity-audit.md) records rejected oversimplifications, later
+initializer/lifetime candidates and verification gates. No runtime changes or acceptance
+result from this design review; checkpoint order and 2/9 progress are unchanged.
