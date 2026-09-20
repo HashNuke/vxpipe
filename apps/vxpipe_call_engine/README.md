@@ -13,9 +13,10 @@ dot plus an end gap; it does not use the Morse encoder to supply its expected re
 The [original startup-isolation defect](../../docs/speech-startup-isolation.md) and latency
 measurements remain recorded. The new API requires the explicit local scopes described in
 the [ownership plan](../../docs/speech-session-ownership.md); its isolated held-start and
-adoption tests pass. Checkpoints R and A are accepted; native TTS D and room migration
-remain subsequent gates. See the [native STT verification](../../docs/native-stt-contract.md)
-for contract, load and regression evidence.
+adoption tests pass. Checkpoints R and A are accepted; native TTS D has completed its standalone
+slices, and room STT integration is in progress. See the
+[native STT verification](../../docs/native-stt-contract.md) for contract, load and regression
+evidence.
 The [scoped room experiment](../../docs/scoped-speech-experiment.md) supplies a separate test-only
 prototype and reproducible paired load checks for policy, turns, output and interruption.
 
@@ -324,12 +325,30 @@ call spec, invocation, command, or RTVI message.
 
 ## Local Morse audio providers
 
-`Vxpipe.CallEngine.Provider.MorseCodeSTT` and `MorseCodeTTS` are opt-in, in-process
-implementations of the ordinary speech capability contracts. They encode and decode controlled
-International Morse tones; they do not recognize spoken language, run VAD, or use a hosted API.
-The application must register each implementation under the relevant speech setting's closed
-`:providers` map. The call spec selects `%{provider: "morse", model: "morse"}` with
-optional public signal settings under `options`; modules never enter call spec input.
+`Vxpipe.CallEngine.Provider.MorseCodeSTT.Session` and `MorseCodeTTS` are opt-in, in-process
+implementations used for controlled audio. They encode and decode International Morse tones;
+they do not recognize spoken language, run VAD, or use a hosted API. Register the STT session
+under the speech setting's closed `:providers` map with ingress limits and no transport. The call
+spec selects `%{provider: "morse", model: "morse"}` with optional public signal settings under
+`options`; modules never enter call spec input. Existing TTS room consumers still use their
+configured transport until their room migration checkpoint.
+
+```elixir
+speech_to_text: [
+  enabled: false,
+  providers: %{
+    Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
+      enabled: true,
+      media_ingress: [
+        maximum_frames: 50,
+        maximum_bytes: 262_144,
+        maximum_age_ms: 2_000,
+        maximum_consecutive_overflows: 5
+      ]
+    ]
+  }
+]
+```
 
 The direct signal format is signed 16-bit little-endian mono PCM. Supported sample rates are
 8, 16, 24, and 48 kHz. Defaults are 16 kHz, a 700 Hz tone, amplitude 4,096, a 60 ms dot unit,

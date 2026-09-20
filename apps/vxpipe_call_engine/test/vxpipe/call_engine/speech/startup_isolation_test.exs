@@ -4,14 +4,17 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
   @moduletag :capture_log
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
+  alias Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree
+  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
   alias Vxpipe.CallEngine.Capability.SpeechToText.TransportConnector
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor
-  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, PrivateInit, Session}
   alias Vxpipe.CallEngine.{SpeechSessionProbe, TestSpeechToTextTransport}
 
   @jobs 8
@@ -113,6 +116,120 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
     after
       send(held_capability, :release_connection)
       Task.await(slow_start, 2_000)
+    end
+  end
+
+  test "a held native initializer leaves a same-room connection recognizing" do
+    assert {:module, SpeechSessionProbe} = Code.ensure_loaded(SpeechSessionProbe)
+    slow_command = command("native-slow")
+    fast_command = peer_command(slow_command, "native-fast")
+    start_supervised!({RoomCapabilitySupervisor, incarnation_id: slow_command.incarnation_id})
+
+    assert {:ok, _capability, _ingress} =
+             start_native(slow_command, SpeechSessionProbe,
+               observer: self(),
+               hold_before_bind?: true
+             )
+
+    assert_receive {:probe_before_bind, held_provider, _channel}, 1_000
+
+    try do
+      assert {:ok, capability, _ingress} = start_native(fast_command, MorseSession)
+      assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+      assert :ok = SpeechToText.push_audio(capability, frame(fast_command))
+
+      assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_ended, text: "E"}},
+                     @observation_window
+    after
+      send(held_provider, :release_bind)
+    end
+  end
+
+  test "private initialization closes when its allocating owner exits before claim", %{
+    tasks: tasks
+  } do
+    test = self()
+
+    owner =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        {:ok, handle} = PrivateInit.open([secret: "owner-loss-private-sentinel"], 5_000)
+        send(test, {:private_init_opened, handle})
+
+        receive do
+          :stop_private_init_owner -> :ok
+        end
+      end)
+
+    assert_receive {:private_init_opened, handle}, 1_000
+    holder_monitor = Process.monitor(handle.pid)
+    send(owner.pid, :stop_private_init_owner)
+    assert :ok = Task.await(owner, 1_000)
+    assert_receive {:DOWN, ^holder_monitor, :process, _holder, :normal}, 1_000
+    assert {:error, :unavailable} = PrivateInit.claim(handle)
+  end
+
+  test "a held hosted bridge initializer leaves a same-room native connection recognizing" do
+    sentinel = "connection-tree-private-init-sentinel"
+    slow_command = command("bridge-slow")
+    fast_command = peer_command(slow_command, "bridge-fast")
+    start_supervised!({RoomCapabilitySupervisor, incarnation_id: slow_command.incarnation_id})
+
+    assert {:ok, config} =
+             Flux.new(
+               api_key: "startup-isolation-fixture",
+               model: "flux-general-en",
+               encoding: :opus,
+               sample_rate: 48_000
+             )
+
+    public = LegacyBridge.public_options(Flux, config)
+
+    assert {:ok, held_capability, _ingress} =
+             start_native(slow_command, {LegacyBridge, public},
+               provider: Flux,
+               config: config,
+               transport:
+                 {TestSpeechToTextTransport,
+                  [
+                    observer: self(),
+                    before_connect: held_connection(self()),
+                    private_header: sentinel
+                  ]}
+             )
+
+    assert_receive {:legacy_start_held, held_bridge}, 1_000
+    held_tree = ConnectionTree.parent(held_capability)
+
+    assert [{capability_supervisor, _value}] =
+             Registry.lookup(
+               Vxpipe.CallEngine.RoomRegistry,
+               {:capability_supervisor, slow_command.incarnation_id}
+             )
+
+    for process <- [capability_supervisor, held_tree] do
+      refute inspect(:sys.get_status(process), limit: :infinity, printable_limit: :infinity) =~
+               sentinel
+    end
+
+    try do
+      assert {:ok, capability, _ingress} = start_native(fast_command, MorseSession)
+      assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+      assert :ok = SpeechToText.push_audio(capability, frame(fast_command))
+
+      assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_ended, text: "E"}},
+                     @observation_window
+
+      monitor = Process.monitor(held_tree)
+
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          Process.exit(held_capability, :kill)
+          assert_receive {:DOWN, ^monitor, :process, ^held_tree, _reason}, 1_000
+        end)
+
+      refute logs =~ sentinel
+    after
+      send(held_bridge, :release_connection)
     end
   end
 
@@ -258,6 +375,29 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
     )
   end
 
+  defp start_native(command, provider, provider_private \\ [])
+
+  defp start_native(command, provider, provider_private) when is_atom(provider),
+    do: start_native(command, {provider, []}, provider_private)
+
+  defp start_native(command, {provider, provider_options}, provider_private) do
+    RoomCapabilitySupervisor.start_speech_to_text(
+      command.incarnation_id,
+      self(),
+      command,
+      {provider, provider_options},
+      nil,
+      [
+        maximum_age_ms: 1_000,
+        maximum_bytes: 131_072,
+        maximum_frames: 32,
+        maximum_consecutive_overflows: 3
+      ],
+      nil,
+      provider_private: provider_private
+    )
+  end
+
   defp command(label) do
     suffix = System.unique_integer([:positive, :monotonic])
 
@@ -273,6 +413,23 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
       )
 
     command
+  end
+
+  defp peer_command(command, label) do
+    suffix = System.unique_integer([:positive, :monotonic])
+
+    {:ok, peer} =
+      AttachConnection.new(
+        tenant_id: command.tenant_id,
+        actor_id: command.actor_id,
+        room_id: command.room_id,
+        incarnation_id: command.incarnation_id,
+        participant_id: command.participant_id,
+        connection_id: "conn-#{label}-#{suffix}",
+        deadline: command.deadline
+      )
+
+    peer
   end
 
   defp frame(command) do

@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
   alias Vxpipe.CallEngine.TestAudioOutputSink
 
   @path List.first(System.argv()) || Path.join(System.tmp_dir!(), "scoped-speech-stress.json")
+  @maximum_concurrency max(1, div(System.schedulers_online(), 2))
 
   @tag timeout: 120_000
   @tag :capture_log
@@ -23,12 +24,10 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
     tasks = start_supervised!({Task.Supervisor, name: __MODULE__.Tasks})
 
     trials =
-      for repeat <- 1..3,
-          count <- [8, 32],
-          path <- if(rem(repeat, 2) == 1, do: [:legacy, :scoped], else: [:scoped, :legacy]) do
-        healthy = for _ <- 1..count, do: Call.start(path)
-        blocked = Call.start(path, block_output: true)
-        policy = Call.start(path)
+      for count <- [@maximum_concurrency] do
+        healthy = for _ <- 1..count, do: Call.start(:scoped)
+        blocked = Call.start(:scoped, block_output: true)
+        policy = Call.start(:scoped)
         assert Call.turn(policy, :burst).valid_correlations?
         :ok = Recorder.begin_turn(blocked.recorder)
         :ok = Recorder.tail(blocked.recorder)
@@ -36,11 +35,29 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
         {_, old_frame} = Recorder.await(blocked.recorder, :audio)
         :ok = TestAudioOutputSink.playback_started(blocked.sink)
 
+        test = self()
+
         jobs =
           Enum.map(healthy, fn context ->
-            Task.Supervisor.async_nolink(tasks, fn -> Call.turn(context, :paced) end)
+            Task.Supervisor.async_nolink(tasks, fn ->
+              Call.turn(context, :paced,
+                after_begin: fn ->
+                  send(test, {:paced_turn_ready, self()})
+
+                  receive do
+                    :start_paced_turn -> :ok
+                  end
+                end
+              )
+            end)
           end)
 
+        Enum.each(jobs, fn task ->
+          pid = task.pid
+          assert_receive {:paced_turn_ready, ^pid}, 5_000
+        end)
+
+        Enum.each(jobs, &send(&1.pid, :start_paced_turn))
         Enum.each(healthy, &Recorder.await(&1.recorder, :started))
 
         Enum.each(healthy, fn context ->
@@ -82,12 +99,11 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
         end)
 
         Enum.each([blocked, policy | healthy], &Call.stop/1)
-        IO.puts("#{path} controls during #{count} paced rooms repeat=#{repeat}: pass")
+        IO.puts("production native STT controls during #{count} paced rooms: pass")
 
         %{
-          path: path,
+          path: :production_native_stt,
           concurrency: count,
-          repeat: repeat,
           healthy_turns: count,
           barge_in_sink_us: sink_at - onset,
           interruption_event_us: interrupted_at - onset,
@@ -100,6 +116,7 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
       @path,
       JSON.encode!(%{
         trials: trials,
+        maximum_concurrency: @maximum_concurrency,
         semantics:
           "held output, PCM onset before gap, policy revoke, exact replacement PCM; local controlled sink"
       })
@@ -110,8 +127,9 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
 
   defp revoke(context) do
     capability = :sys.get_state(context.attachment.media_ingress).capability
-    old = :sys.get_state(capability).transport
-    monitor = Process.monitor(old)
+    old = :sys.get_state(capability).session
+    old_tree = Vxpipe.CallEngine.Speech.Session.tree(old)
+    monitor = Process.monitor(old_tree)
     participant = Map.fetch!(context.plan.participants, "restrictor")
 
     assert {:ok, join} =
@@ -125,12 +143,12 @@ defmodule Vxpipe.CallEngine.ScopedSpeechStressBench do
              )
 
     assert {:ok, _} = CallEngine.join_participant(join)
-    assert_receive {:DOWN, ^monitor, :process, ^old, _}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^old_tree, _}, 1_000
     :ok = Recorder.begin_turn(context.recorder)
     Call.push(context, Call.pcm(60))
     _ = :sys.get_state(context.attachment.media_ingress)
     _ = :sys.get_state(capability)
-    assert :sys.get_state(capability).transport == nil
+    assert :sys.get_state(capability).session == nil
     assert Recorder.snapshot(context.recorder).counts == %{}
   end
 

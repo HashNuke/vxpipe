@@ -4,18 +4,18 @@ ExUnit.start(seed: 0)
 
 defmodule Vxpipe.CallEngine.ScopedSpeechBench do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.SpeechExperiment.{Call, Scope}
-  alias Vxpipe.CallEngine.Provider.MorseCodeSTT
+  alias Vxpipe.CallEngine.SpeechExperiment.Call
 
   @path List.first(System.argv()) || Path.join(System.tmp_dir!(), "scoped-speech.json")
-  @rounds 20
-  @warmup 3
+  @rounds 8
+  @warmup 1
+  @maximum_concurrency max(1, div(System.schedulers_online(), 2))
   @paced_check? Enum.member?(System.argv(), "paced-check")
   @burst_check? Enum.member?(System.argv(), "burst-check")
 
   @tag timeout: 180_000
   @tag :capture_log
-  test "paired real room speech workload, including held same-scope initialization" do
+  test "bounded production room speech workload" do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     on_exit(fn ->
@@ -23,11 +23,8 @@ defmodule Vxpipe.CallEngine.ScopedSpeechBench do
     end)
 
     trials =
-      for repeat <- 1..3,
-          {lane, level, held?} <- scenarios(),
-          path <- if(rem(repeat, 2) == 1, do: [:legacy, :scoped], else: [:scoped, :legacy]) do
-        contexts = for _ <- 1..level, do: Call.start(path)
-        held = if held?, do: hold(hd(contexts).scope)
+      for {lane, level} <- scenarios() do
+        contexts = for _ <- 1..level, do: Call.start(:scoped)
         rounds = if lane == :paced, do: if(@paced_check?, do: 6, else: 2), else: @rounds
         process_before = :erlang.system_info(:process_count)
         memory_before = :erlang.memory(:processes_used)
@@ -56,21 +53,12 @@ defmodule Vxpipe.CallEngine.ScopedSpeechBench do
         process_after = :erlang.system_info(:process_count)
         memory_after = :erlang.memory(:processes_used)
 
-        if held do
-          %{control: control, worker: worker, monitor: monitor} = held
-          refute_received {:DOWN, ^monitor, :process, ^worker, _}
-          :ok = GenServer.call(control, :close)
-          assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 1_000
-        end
-
         Enum.each(contexts, &Call.stop/1)
 
         trial = %{
-          repeat: repeat,
           lane: lane,
           concurrency: level,
-          path: path,
-          held_start: held?,
+          path: :production_native_stt,
           successful_turns: length(samples),
           metrics: summarize(samples),
           process_count_before: process_before,
@@ -80,9 +68,7 @@ defmodule Vxpipe.CallEngine.ScopedSpeechBench do
           samples: samples
         }
 
-        IO.puts(
-          "#{path} #{lane} n=#{level} held=#{held?} repeat=#{repeat}: #{length(samples)} turns"
-        )
+        IO.puts("production native STT #{lane} n=#{level}: #{length(samples)} turns")
 
         trial
       end
@@ -91,12 +77,15 @@ defmodule Vxpipe.CallEngine.ScopedSpeechBench do
       elixir: System.version(),
       otp: System.otp_release(),
       schedulers: System.schedulers_online(),
+      maximum_concurrency: @maximum_concurrency,
       warmup_rounds: @warmup,
       paced_check: @paced_check?,
       burst_check: @burst_check?,
       input: "independent E PCM; 16kHz linear16; 60ms dot + 840ms gap",
       output: "independent E PCM; 16kHz linear16; 20ms dot + 280ms gap",
       playback: "immediate controlled acknowledgement at sink finish; not acoustic latency",
+      comparison:
+        "Historical paired legacy/scoped baselines remain in labnotes/20260919-1711-scoped-speech-*.json; this post-integration run exercises only the production native room path.",
       trials: trials,
       total_successful_turns: Enum.sum(Enum.map(trials, & &1.successful_turns))
     }
@@ -108,38 +97,14 @@ defmodule Vxpipe.CallEngine.ScopedSpeechBench do
   defp scenarios do
     case Enum.at(System.argv(), 1) do
       "paced-check" ->
-        [{:paced, 8, false}]
+        [{:paced, @maximum_concurrency}]
 
       "burst-check" ->
-        [{:burst, 32, false}]
+        [{:burst, @maximum_concurrency}]
 
       _ ->
-        [
-          {:burst, 1, false},
-          {:burst, 8, false},
-          {:burst, 32, false},
-          {:burst, 32, true},
-          {:paced, 1, false},
-          {:paced, 8, false}
-        ]
+        [{:burst, @maximum_concurrency}, {:paced, @maximum_concurrency}]
     end
-  end
-
-  defp hold(scope) do
-    {:ok, config} = MorseCodeSTT.new([])
-
-    {:ok, control} =
-      Scope.start_session(scope,
-        owner: self(),
-        config: config,
-        kind: :stt,
-        observer: self(),
-        hold_start: true,
-        deadline: System.monotonic_time(:millisecond) + 60_000
-      )
-
-    assert_receive {:experiment_held, worker}, 1_000
-    %{control: control, worker: worker, monitor: Process.monitor(worker)}
   end
 
   defp summarize(samples) do

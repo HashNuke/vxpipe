@@ -441,9 +441,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         {:ok, nil}
 
       {:ok, {provider_module, provider_config} = provider, settings} ->
-        with {transport, transport_options}
-             when is_atom(transport) and is_list(transport_options) <-
-               Keyword.get(settings, :transport),
+        with {:ok, runtime_provider, provider_private} <-
+               SpeechToTextRuntime.provider(provider, settings),
              media_ingress when is_list(media_ingress) <-
                Keyword.get(settings, :media_ingress),
              {:ok, usage_provider} <-
@@ -453,8 +452,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              call_id: plan.call_id,
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
-             provider: provider,
-             transport: {transport, transport_options},
+             provider: runtime_provider,
+             provider_private: provider_private,
+             transport: nil,
              usage_provider: usage_provider,
              media_ingress:
                Keyword.put(
@@ -475,8 +475,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp speech_to_text_usage_provider(plan, participant, provider_module, provider_config) do
     selection = participant.capabilities.speech_to_text
 
-    with true <- function_exported?(provider_module, :usage_identity, 1),
-         identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
+    with {:ok, identity} <- SpeechToTextRuntime.usage_identity(provider_module, provider_config) do
       identity
       |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
       |> ProviderContext.new()
@@ -612,9 +611,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, selected_options} <- CapabilityCatalog.speech_options(selection),
          {:ok, selected_options} <- authenticate_speech(selected_options, credential),
          true <- Code.ensure_loaded?(provider),
-         true <- function_exported?(provider, :new, 1),
-         {:ok, provider_config} <-
-           provider.new(selected_options) do
+         {:ok, provider_config} <- configure_provider(provider, selected_options, kind) do
       settings =
         if credential do
           identity =
@@ -633,6 +630,26 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   rescue
     _exception -> {:error, unsupported_speech_configuration_reason(kind)}
+  end
+
+  defp configure_provider(provider, options, :speech_to_text) do
+    if function_exported?(provider, :configure, 1) do
+      case provider.configure(options) do
+        {:ok, _descriptor} -> {:ok, options}
+        {:error, _reason} = error -> error
+      end
+    else
+      configure_legacy_provider(provider, options)
+    end
+  end
+
+  defp configure_provider(provider, options, _kind),
+    do: configure_legacy_provider(provider, options)
+
+  defp configure_legacy_provider(provider, options) do
+    if function_exported?(provider, :new, 1),
+      do: provider.new(options),
+      else: {:error, :invalid_configuration}
   end
 
   defp provider_settings(settings, provider) when is_list(settings) do
@@ -733,8 +750,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     )
   end
 
-  defp unsupported(path, reason) do
-    {:error,
-     Error.new(@error_code, @error_message, details: %{"path" => path, "reason" => reason})}
-  end
+  defp unsupported(path, reason),
+    do:
+      {:error,
+       Error.new(@error_code, @error_message, details: %{"path" => path, "reason" => reason})}
 end

@@ -15,8 +15,11 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Barrier do
 
     Enum.reduce_while(enforcers, MapSet.new(), fn {enforcer, registration}, applied ->
       case apply_enforcer(enforcer, registration.connection, snapshot, deadline) do
-        :ok -> {:cont, MapSet.put(applied, enforcer)}
-        {:error, _reason} -> {:halt, {:error, :enforcement_failed, enforcer, applied}}
+        :ok ->
+          {:cont, MapSet.put(applied, enforcer)}
+
+        {:error, _reason} ->
+          {:halt, {:error, :enforcement_failed, enforcer, applied}}
       end
     end)
     |> case do

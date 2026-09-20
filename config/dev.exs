@@ -52,9 +52,8 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
       maximum_consecutive_overflows: 5
     ],
     providers: %{
-      Vxpipe.CallEngine.Provider.MorseCodeSTT => [
+      Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
         enabled: true,
-        transport: {Vxpipe.CallEngine.Provider.MorseCodeSTT.Transport, []},
         media_ingress: [
           maximum_frames: 50,
           maximum_bytes: 262_144,

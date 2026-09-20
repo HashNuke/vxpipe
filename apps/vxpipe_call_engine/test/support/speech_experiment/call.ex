@@ -18,8 +18,9 @@ defmodule Vxpipe.CallEngine.SpeechExperiment.Call do
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Diagnostics.{AgentRuntimeModelProvider, ModelFixture}
   alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
-  alias Vxpipe.CallEngine.SpeechExperiment.{Recorder, Scope, STTBridge, TTSBridge}
+  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.CallEngine.SpeechExperiment.{Recorder, Scope, TTSBridge}
 
   def start(path, options \\ []) do
     id = "speech-experiment-#{System.unique_integer([:positive, :monotonic])}"
@@ -101,10 +102,11 @@ defmodule Vxpipe.CallEngine.SpeechExperiment.Call do
     }
   end
 
-  def turn(context, lane) do
+  def turn(context, lane, options \\ []) do
     payload = pcm(60)
     <<prefix::binary-size(7_680), tail::binary>> = payload
     :ok = Recorder.begin_turn(context.recorder)
+    Keyword.get(options, :after_begin, fn -> :ok end).()
 
     {admission, lateness} =
       if lane == :paced do
@@ -227,13 +229,8 @@ defmodule Vxpipe.CallEngine.SpeechExperiment.Call do
     System.monotonic_time(:microsecond) - started
   end
 
-  defp configure(path, scope, fixture, recorder, options) do
+  defp configure(path, scope, fixture, recorder, _options) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-
-    stt =
-      if path == :scoped,
-        do: {STTBridge, [scope: scope] ++ options},
-        else: {MorseCodeSTT.Transport, []}
 
     tts =
       if path == :scoped,
@@ -253,9 +250,8 @@ defmodule Vxpipe.CallEngine.SpeechExperiment.Call do
       |> Keyword.put(:speech_to_text,
         enabled: false,
         providers: %{
-          MorseCodeSTT => [
+          MorseSTTSession => [
             enabled: true,
-            transport: stt,
             media_ingress: [
               maximum_frames: 100,
               maximum_bytes: 262_144,

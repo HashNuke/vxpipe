@@ -13,10 +13,12 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
     GenServer.start_link(__MODULE__, options, name: name(Keyword.fetch!(options, :command)))
   end
 
-  def attach(command, output) do
+  def attach(command, output, options \\ []) do
     connection =
       ExUnit.Callbacks.start_supervised!(
-        {__MODULE__, command: command, output: output, observer: self()},
+        {__MODULE__,
+         [command: command, output: output, observer: self()] ++
+           Keyword.take(options, [:input_track])},
         id: {__MODULE__, command.connection_id}
       )
 
@@ -51,8 +53,20 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
       if demand.audio_input? or demand.speech_to_text?,
         do: Map.get(binding, :input_track, input_track())
 
-    {:ok, [binding.resource], track}
+    with {:ok, speech} <- prepare_speech(binding, track, demand.speech_to_text?) do
+      {:ok, [binding.resource | speech], track}
+    end
   end
+
+  defp prepare_speech(_binding, _track, false), do: {:ok, []}
+
+  defp prepare_speech(%{attachment: %{media_ingress: ingress}}, track, true)
+       when is_pid(ingress) do
+    with :ok <- Ingress.prepare_track(ingress, track),
+         do: Ingress.readiness_resources(ingress)
+  end
+
+  defp prepare_speech(_binding, _track, true), do: {:ok, []}
 
   defp await_output_preparation(
          %{output_preparation_observer: observer},
@@ -71,9 +85,13 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   defp await_output_preparation(_binding, _demand), do: :ok
 
   @impl true
-  def prepare_candidate(binding, candidate, demand, options) do
+  def prepare_candidate(binding, _candidate, demand, options) do
     {:ok, _resource, :ready} = readiness(binding.instance)
-    {:ok, base, track} = prepare_binding(binding, candidate.snapshot, demand)
+    await_output_preparation(binding, demand)
+
+    track =
+      if demand.audio_input? or demand.speech_to_text?,
+        do: Map.get(binding, :input_track, input_track())
 
     if demand.speech_to_text? do
       provider = Keyword.fetch!(options, :speech_to_text)
@@ -81,9 +99,9 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
 
       with :ok <- Ingress.prepare_track(ingress, track, provider),
            {:ok, resources} <- Ingress.readiness_resources(ingress, provider),
-           do: {:ok, base ++ resources, track, []}
+           do: {:ok, [binding.resource | resources], track, []}
     else
-      {:ok, base, track, []}
+      {:ok, [binding.resource], track, []}
     end
   end
 

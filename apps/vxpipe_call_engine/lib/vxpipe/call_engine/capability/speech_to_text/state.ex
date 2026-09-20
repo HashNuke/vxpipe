@@ -425,6 +425,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
          demanded?
        ) do
     with %Vxpipe.CallEngine.Speech.Scope{} = scope <- Keyword.get(options, :speech_scope),
+         true <- Code.ensure_loaded?(provider_module),
          true <- function_exported?(provider_module, :configure, 1),
          {:ok, descriptor} <- provider_module.configure(provider_options),
          :ok <- Descriptor.validate(descriptor),

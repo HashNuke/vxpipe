@@ -24,6 +24,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   alias Vxpipe.CallEngine.Media.{AudioFrame, AudioOutputFrame}
   alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
   alias Vxpipe.CallEngine.Provider.MorseCode.{Decoder, Encoder}
+  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
   alias Vxpipe.CallEngine.TestAudioOutputSink
 
   setup do
@@ -43,9 +44,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     speech_to_text = [
       enabled: false,
       providers: %{
-        MorseCodeSTT => [
+        MorseCodeSTTSession => [
           enabled: true,
-          transport: {MorseCodeSTT.Transport, []},
           media_ingress: media_ingress_options()
         ]
       }
@@ -99,7 +99,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, attachment} = Vxpipe.CallEngine.TestTransferConnection.attach(command, sink)
+    assert {:ok, attachment} =
+             Vxpipe.CallEngine.TestTransferConnection.attach(command, sink,
+               input_track: %{
+                 track_id: "track-morse",
+                 codec: :linear16,
+                 sample_rate: 16_000,
+                 channels: 1
+               }
+             )
+
     Vxpipe.CallEngine.TestCallStartup.await_ready(plan.room_id)
     push_text(attachment, plan, room, caller, connection_id, "SOS", 1)
 

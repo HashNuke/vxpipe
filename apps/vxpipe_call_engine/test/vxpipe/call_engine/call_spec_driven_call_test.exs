@@ -44,7 +44,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
   }
 
   alias Vxpipe.CallEngine.Tool.CurrentTime
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
+  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseConfig
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
@@ -1477,10 +1478,9 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     speech_to_text =
       Keyword.put(default_stt, :providers, %{
-        MorseCodeSTT => [
+        MorseSTTSession => [
           enabled: true,
           provider_options: [],
-          transport: {MorseCodeSTT.Transport, []},
           media_ingress: media_ingress_options()
         ]
       })
@@ -1507,10 +1507,12 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     speech_to_text =
       Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
 
-    assert {MorseCodeSTT, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
-             speech_to_text.provider
+    assert {MorseSTTSession, stt_options} = speech_to_text.provider
+    assert Keyword.fetch!(stt_options, :sample_rate) == 16_000
+    assert Keyword.fetch!(stt_options, :unit_duration_ms) == 20
 
-    assert speech_to_text.transport == {MorseCodeSTT.Transport, []}
+    assert speech_to_text.provider_private == []
+    assert speech_to_text.transport == nil
     assert speech_to_text.call_id == plan.call_id
     assert speech_to_text.participant_id == caller.participant_id
     assert speech_to_text.activation_id == caller.activation_id

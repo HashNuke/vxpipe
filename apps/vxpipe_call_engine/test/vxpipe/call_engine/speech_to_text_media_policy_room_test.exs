@@ -189,7 +189,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert_receive {:test_stt_transport_started, replacement, _connection}
     track = Map.take(preparation_frame(context, 1), [:track_id, :codec, :sample_rate, :channels])
 
-    assert {:error, :unsupported_audio} =
+    assert {:error, :track_already_prepared} =
              Ingress.prepare_track(ingress, %{track | codec: :linear16}, provider)
 
     assert :ok = Ingress.prepare_track(ingress, track, provider)
@@ -730,8 +730,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
       end)
 
     try do
-      assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :shutdown}, 500
-      assert_receive {:DOWN, ^ingress_monitor, :process, ^ingress, :shutdown}, 500
+      assert_receive {:DOWN, ^capability_monitor, :process, ^capability, _capability_reason}, 500
+      assert_receive {:DOWN, ^ingress_monitor, :process, ^ingress, _ingress_reason}, 500
       assert :ok = Task.await(stop, 500)
     after
       try do
@@ -1354,7 +1354,16 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, attachment} = Vxpipe.CallEngine.TestTransferConnection.attach(command, nil)
+    assert {:ok, attachment} =
+             Vxpipe.CallEngine.TestTransferConnection.attach(command, nil,
+               input_track: %{
+                 track_id: "track-stt-policy",
+                 codec: :opus,
+                 sample_rate: 48_000,
+                 channels: 1
+               }
+             )
+
     attachment
   end
 

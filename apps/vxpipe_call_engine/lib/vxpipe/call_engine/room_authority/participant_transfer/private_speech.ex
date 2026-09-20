@@ -127,6 +127,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
     ]
 
     options = [
+      provider_private: runtime.provider_private,
       initial_policy: base,
       preparation: [
         owner: pending.task.pid,

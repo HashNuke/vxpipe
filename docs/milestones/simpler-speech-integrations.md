@@ -425,15 +425,15 @@ is clear. No larger load was run for D5.
 Prerequisites: R, A and D. Outcome: the ordinary Morse audio room uses the new STT session while Deepgram remains available
 through one private migration bridge. Denying transcription demand prevents speech processing.
 
-- [ ] **B1 — Red room test.** Extend `provider/morse_code/room_round_trip_test.exs` to select the
+- [x] **B1 — Red room test.** Extend `provider/morse_code/room_round_trip_test.exs` to select the
   native session with no transport registration, assert attributed text, and finish the response.
-- [ ] **B2 — Resolve the session.** Update `lib/capability_catalog.ex`, STT branches in
+- [x] **B2 — Resolve the session.** Update `lib/capability_catalog.ex`, STT branches in
   `plan_startup.ex`, `speech_to_text_runtime.ex` and owning startup/supervisor calls. Use the
   descriptor and existing credential source; add a private legacy-STT bridge only for Deepgram.
   Nest the STT capability/ingress and its workers under the connection's speech tree. Migrate
   speech lookup, stop, monitoring and readiness bindings together using exact allocation
   handles, preserving public room command results and unrelated direct-child capability APIs.
-- [ ] **B3 — Preserve policy allocation.** Change `lib/capability/speech_to_text.ex` and its
+- [x] **B3 — Preserve policy allocation.** Change `lib/capability/speech_to_text.ex` and its
   `state.ex`, `transport_connector.ex`, `policy_preparation.ex` and private-allocation integration
   to bind session events instead of wire messages. Replace the hard-coded global connection
   task supervisor with the local scope, including inside the Deepgram bridge. Prepared sessions
@@ -441,11 +441,11 @@ through one private migration bridge. Denying transcription demand prevents spee
   Remove connector owner/provider kill chains made unnecessary by the new parentage. Preserve
   readiness-before-event ordering and pending-policy lease monitoring; document any connector
   code temporarily retained for the Deepgram bridge and remove that bridge in C.
-- [ ] **B4 — Red privacy races, then implement.** Test no-demand startup, revoke/relax, a delayed
+- [x] **B4 — Red privacy races, then implement.** Test no-demand startup, revoke/relax, a delayed
   old transcript, immediate ready during connection, cancelled preparation and unrelated policy
   changes. Add connection/participant departure, same-room peer progress and stale-stop versus
   new-generation tests. Retain exact interval attribution and fresh readiness for replacements.
-- [ ] **B5 — Usage/config/docs.** Preserve STT accepted-audio/final-text counting, provider IDs
+- [x] **B5 — Usage/config/docs.** Preserve STT accepted-audio/final-text counting, provider IDs
   and payload-free telemetry. Update the Morse entry in root `config/dev.exs` and the room
   example. Keep hosted configuration working through the bridge.
 - [ ] **Exit B.** Native Morse STT completes the real room loop; media-policy, readiness,
@@ -668,7 +668,7 @@ for timing distributions, exact covered permissions and excluded production path
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
 | D | D0–D3 and D5 implemented; D2 accepted with Channel as the sole TTS output-state owner and Input retained for blocking provider work; D4 candidate repaired and Astra-reviewed | D2 gates remain green. D4 passes 38 focused TTS cases and 164 speech/Morse/usage cases plus 5,904 cancellation/replacement/STT load cycles with 132,840 bounded usage snapshots and fixed cleanup. Four root gates pass; the full umbrella gate remains open after shifting unrelated deadline failures under measured host pressure. D5's example and 1×1 capped timing smoke pass; Astra reviewed both | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. D4's fact stream accumulated 77 messages under selective receive; later red tests caught accepted PCM and zero-audio terminal metadata retained only inside Channel. All three representations were repaired before commit. D5's WAV parses as 16 kHz mono PCM16 with peak 2,048. Room migration remains open |
-| B | Not started | Pending | Real room loop pending |
+| B | B1–B5 implemented; native Morse rooms use connection-local semantic sessions and hosted STT uses one private bridge | 101 focused room/policy/startup cases pass; exact startup-failure case passes 20 repeats; final root gates pending | Four-call bounded load and control-stress lanes pass with exact text, attribution and PCM; Astra checkpoint review repairs are covered by red/green privacy and generation tests |
 | C | Not started | Pending | Local wire and hosted STT pending |
 | E | Not started | Pending | Room/opening proof pending |
 | F | Not started | Pending | Local wire and hosted TTS pending |

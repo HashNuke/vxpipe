@@ -6,12 +6,12 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   alias Vxpipe.CallEngine.Capability.{
     DeterministicText,
     ModelInference,
-    SpeechToText,
     TextToSpeech
   }
 
   alias Vxpipe.CallEngine.Command.AttachConnection
-  alias Vxpipe.CallEngine.Media.Ingress
+  alias Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree
+  alias Vxpipe.CallEngine.Speech.PrivateInit
 
   alias Vxpipe.CallEngine.OpeningAudio.{
     Asset,
@@ -112,36 +112,42 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
       connection_id: command.connection_id
     ]
 
-    capability_options =
-      identity ++
-        [
-          owner: room_authority,
-          provider: provider,
-          transport: transport,
-          usage: usage
-        ] ++ Keyword.take(initialization_options, [:initial_policy, :preparation])
+    private = Keyword.get(initialization_options, :provider_private, [])
+    expires_in = max(DateTime.diff(command.deadline, DateTime.utc_now(), :millisecond), 1)
 
-    case DynamicSupervisor.start_child(
-           via(incarnation_id),
-           {SpeechToText, capability_options}
-         ) do
-      {:ok, capability} ->
-        case DynamicSupervisor.start_child(
-               via(incarnation_id),
-               {Ingress,
-                identity ++
-                  [capability: capability] ++ media_ingress_options}
-             ) do
-          {:ok, ingress} ->
-            {:ok, capability, ingress}
+    with {:ok, private_init} <- PrivateInit.open(private, expires_in) do
+      capability_options =
+        identity ++
+          [
+            owner: room_authority,
+            provider: provider,
+            provider_private: private_init,
+            transport: transport,
+            usage: usage
+          ] ++ Keyword.take(initialization_options, [:initial_policy, :preparation])
 
-          {:error, _reason} = error ->
-            _ = DynamicSupervisor.terminate_child(via(incarnation_id), capability)
-            error
+      tree_options = [
+        owner: room_authority,
+        incarnation_id: incarnation_id,
+        connection_id: command.connection_id,
+        capability_options: capability_options,
+        ingress_options: identity ++ media_ingress_options
+      ]
+
+      result =
+        try do
+          DynamicSupervisor.start_child(via(incarnation_id), {ConnectionTree, tree_options})
+        after
+          PrivateInit.close(private_init)
         end
 
-      {:error, _reason} = error ->
-        error
+      case result do
+        {:ok, tree} ->
+          ConnectionTree.children(tree)
+
+        {:error, _reason} = error ->
+          error
+      end
     end
   end
 
@@ -207,8 +213,15 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   end
 
   def stop_speech_to_text(incarnation_id, capability, ingress) do
-    _ = DynamicSupervisor.terminate_child(via(incarnation_id), ingress)
-    _ = DynamicSupervisor.terminate_child(via(incarnation_id), capability)
+    case ConnectionTree.parent(capability) do
+      tree when is_pid(tree) ->
+        _ = DynamicSupervisor.terminate_child(via(incarnation_id), tree)
+
+      nil ->
+        _ = DynamicSupervisor.terminate_child(via(incarnation_id), ingress)
+        _ = DynamicSupervisor.terminate_child(via(incarnation_id), capability)
+    end
+
     :ok
   end
 

@@ -14,8 +14,10 @@ defmodule Vxpipe.CallEngine.Speech.CapabilityTree do
     }
   end
 
-  def start_link(options),
-    do: Supervisor.start_link(__MODULE__, options, name: address({:capability, make_ref()}))
+  def start_link(options) do
+    name = Keyword.get(options, :name, address({:capability, make_ref()}))
+    Supervisor.start_link(__MODULE__, options, name: name)
+  end
 
   def scope(tree) do
     children = Map.new(Supervisor.which_children(tree), fn {id, pid, _, _} -> {id, pid} end)

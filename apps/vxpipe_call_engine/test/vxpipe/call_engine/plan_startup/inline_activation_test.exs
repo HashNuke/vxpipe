@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
+  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
@@ -22,7 +23,15 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     caller = plan.participants["caller"]
     stt = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
-    assert {Flux, stt_config} = stt.provider
+    assert {LegacyBridge, public_stt_config} = stt.provider
+    assert public_stt_config[:model] == "flux-general-en"
+
+    assert [
+             provider: Flux,
+             config: stt_config,
+             transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxSocket, []}
+           ] = stt.provider_private
+
     assert stt_config.api_key == "deepgram-tenant-private-marker"
     assert {FluxTextToSpeech, tts_config} = startup.text_to_speech.provider
     assert tts_config.api_key == "deepgram-tenant-private-marker"
@@ -69,7 +78,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert worker in Task.Supervisor.children(Vxpipe.CallEngine.ReadinessTaskSupervisor)
     send(worker, :resolve)
     assert_receive {:connection_speech_prepared, {:ok, runtime}}
-    assert {Flux, configuration} = runtime.provider
+    assert {LegacyBridge, _public_stt_config} = runtime.provider
+
+    assert [provider: Flux, config: configuration, transport: {_transport, []}] =
+             runtime.provider_private
+
     assert configuration.api_key == "deepgram-tenant-private-marker"
   end
 

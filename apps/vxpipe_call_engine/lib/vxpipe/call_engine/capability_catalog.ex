@@ -61,7 +61,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: {:ok, Deepgram.FluxTextToSpeech}
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
-    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT}
+    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeTTS}

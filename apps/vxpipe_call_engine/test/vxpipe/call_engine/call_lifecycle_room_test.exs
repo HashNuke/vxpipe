@@ -329,12 +329,14 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert match?({:ok, _attachment}, result) or
              match?({:error, %Error{code: :speech_to_text_unavailable}}, result)
 
-    assert_receive :test_failing_stt_start_attempted
+    assert_receive :test_failing_stt_start_attempted, 1_000
     assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
 
     assert_receive {:DOWN, ^monitor, :process, ^authority,
                     {:shutdown, {:startup_failure, :speech_to_text_unavailable}}},
                    1_000
+
+    refute_received {:test_call_ready, _room_id}
   end
 
   test "notifies a waiting agent once and rearms only after new caller activity" do

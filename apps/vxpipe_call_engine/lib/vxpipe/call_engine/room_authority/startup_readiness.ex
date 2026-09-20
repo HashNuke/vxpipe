@@ -75,6 +75,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
   def failed(_state, _reason), do: :ok
 
+  def capability_failed(%{startup: startup} = state, reason) when startup != nil do
+    cancel_probe(startup.readiness, state)
+    cancel_probe(startup.release_task, state)
+
+    startup = %{
+      startup
+      | readiness: nil,
+        release_task: nil,
+        ready_graph: nil,
+        resources_ready?: false
+    }
+
+    state = %{state | startup: startup}
+    _ = failed(state, reason)
+    state
+  end
+
   def bind(%CreateRoom{}, _incarnation_id), do: {:ok, nil}
 
   def bind(%ResolvedCallPlan{}, incarnation_id) do

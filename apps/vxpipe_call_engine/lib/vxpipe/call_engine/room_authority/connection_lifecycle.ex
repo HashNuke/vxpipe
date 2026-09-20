@@ -460,9 +460,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   defp register_speech_to_text_enforcers(authority, capability, ingress, connection) do
     with {:ok, _snapshot} <-
-           MediaPolicyAuthority.register_connection_enforcer(authority, ingress, connection),
-         {:ok, _snapshot} <-
-           MediaPolicyAuthority.register_connection_enforcer(authority, capability, connection) do
+           MediaPolicyAuthority.register_connection_enforcers(
+             authority,
+             [ingress, capability],
+             connection
+           ) do
       :ok
     end
   end
@@ -559,6 +561,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       Process.demonitor(speech_to_text.capability_monitor, [:flush])
       Process.demonitor(speech_to_text.ingress_monitor, [:flush])
 
+      retire_policy_enforcers(
+        state.media_policy_authority,
+        connection.pid,
+        [speech_to_text.capability, speech_to_text.ingress]
+      )
+
       :ok =
         RoomCapabilitySupervisor.stop_speech_to_text(
           state.snapshot.incarnation_id,
@@ -577,14 +585,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         send(connection.pid, {:vxpipe_connection_unavailable, :speech_to_text_unavailable})
       end
 
-      %{
+      state = %{
         state
         | connections: Map.put(state.connections, connection_id, connection),
           speech_to_text_monitors: speech_to_text_monitors
       }
+
+      if notify? and state.startup != nil and not state.startup_ready? do
+        StartupReadiness.capability_failed(state, :speech_to_text_unavailable)
+      else
+        state
+      end
     else
       state
     end
+  end
+
+  defp retire_policy_enforcers(nil, _connection, _enforcers), do: :ok
+
+  defp retire_policy_enforcers(authority, connection, enforcers) do
+    case MediaPolicyAuthority.retire_connection_enforcers(authority, connection, enforcers) do
+      :ok -> :ok
+    end
+  catch
+    :exit, _reason -> :ok
   end
 
   defp pop_monitor(connection_id, state) do

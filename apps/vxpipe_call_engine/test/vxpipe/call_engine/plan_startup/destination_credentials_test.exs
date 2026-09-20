@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
+  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{DestinationPreparer, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
@@ -29,7 +30,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       assert voice.sample_rate == 24_000
 
       assert {:ok, listener} = PlanStartup.human_destination(plan, human, options)
-      assert {Flux, recognition} = listener.speech_to_text.provider
+      recognition = bridge_configuration(listener.speech_to_text)
       assert recognition.api_key == tenant <> "-listener-private-marker"
       assert recognition.encoding == :linear16
       assert recognition.sample_rate == 16_000
@@ -85,9 +86,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
     assert Keyword.fetch!(second.agent_activation, :model).api_key == "new-model-private-marker"
     assert {FluxTextToSpeech, voice} = second.text_to_speech.provider
     assert voice.api_key == "new-voice-private-marker"
-    assert {Flux, old_listener} = first_listener.speech_to_text.provider
+    old_listener = bridge_configuration(first_listener.speech_to_text)
     assert old_listener.api_key == tenant <> "-listener-private-marker"
-    assert {Flux, new_listener} = second_listener.speech_to_text.provider
+    new_listener = bridge_configuration(second_listener.speech_to_text)
     assert new_listener.api_key == "new-listener-private-marker"
     refute inspect(second) =~ "private-marker"
   end
@@ -259,6 +260,20 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
         maximum_requests: 4
       ]
     ]
+  end
+
+  defp bridge_configuration(runtime) do
+    assert {LegacyBridge, public_config} = runtime.provider
+    assert is_binary(public_config[:model])
+
+    assert [
+             provider: Flux,
+             config: configuration,
+             transport: {Vxpipe.CallEngine.TestSpeechToTextTransport, transport_options}
+           ] = runtime.provider_private
+
+    assert Keyword.fetch!(transport_options, :observer) == self()
+    configuration
   end
 
   defp plan(tenant) do
