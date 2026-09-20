@@ -38,31 +38,30 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     speech_to_text = [
-      enabled: true,
-      provider: Flux.Session,
-      provider_options: [api_key: "runtime-test-secret"],
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: self(), ready_on_start: true],
-      media_ingress: [
-        maximum_frames: 50,
-        maximum_bytes: 65_536,
-        maximum_age_ms: 1_000,
-        maximum_consecutive_overflows: 10
-      ]
+      providers: %{
+        Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: self(), ready_on_start: true],
+          media_ingress: [
+            maximum_frames: 50,
+            maximum_bytes: 65_536,
+            maximum_age_ms: 1_000,
+            maximum_consecutive_overflows: 10
+          ]
+        ]
+      }
     ]
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "runtime-test-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: self(), ready_on_start: true],
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: self(), ready_on_start: true],
+          maximum_requests: 2
+        ]
+      }
     ]
 
     Application.put_env(

@@ -282,24 +282,29 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
       original
       |> Keyword.update!(:opening_audio, &Keyword.put(&1, :cache, cache))
       |> Keyword.put(:speech_to_text,
-        enabled: true,
-        provider: Flux.Session,
-        wire_module: TestSpeechToTextTransport,
-        wire_options: [observer: self(), ready_on_start: true],
-        media_ingress: [
-          maximum_frames: 8,
-          maximum_bytes: 1_024,
-          maximum_age_ms: 1_000,
-          maximum_consecutive_overflows: 2
-        ]
+        providers: %{
+          Flux.Session => [
+            enabled: true,
+            wire_module: TestSpeechToTextTransport,
+            wire_options: [observer: self(), ready_on_start: true],
+            media_ingress: [
+              maximum_frames: 8,
+              maximum_bytes: 1_024,
+              maximum_age_ms: 1_000,
+              maximum_consecutive_overflows: 2
+            ]
+          ]
+        }
       )
       |> Keyword.put(:text_to_speech,
-        enabled: true,
-        provider: FluxTextToSpeech.Session,
-        provider_options: [api_key: "retired-opening-private-marker", model: "retired-voice"],
-        wire_module: TestTextToSpeechTransport,
-        wire_options: [observer: self(), ready_on_start: true],
-        maximum_requests: 2
+        providers: %{
+          FluxTextToSpeech.Session => [
+            enabled: true,
+            wire_module: TestTextToSpeechTransport,
+            wire_options: [observer: self(), ready_on_start: true],
+            maximum_requests: 2
+          ]
+        }
       )
 
     Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)

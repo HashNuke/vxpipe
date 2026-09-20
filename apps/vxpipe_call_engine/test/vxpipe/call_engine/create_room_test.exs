@@ -26,24 +26,21 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
              )
   end
 
-  test "a deterministic raw room cannot start speech from global credentials" do
+  test "a deterministic raw room cannot start configured speech without an inline plan" do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :text_to_speech,
-        enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
-        provider_options: [
-          api_key: "retired-global-private-marker",
-          model: "flux-haley-en",
-          encoding: :linear16,
-          sample_rate: 48_000
-        ],
-        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
-        wire_options: [observer: self()],
-        maximum_requests: 2
+        providers: %{
+          Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+            enabled: true,
+            wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+            wire_options: [observer: self()],
+            maximum_requests: 2
+          ]
+        }
       )
     )
 
@@ -72,29 +69,26 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
              CallEngine.create_room(%{command | agent: :model_inference})
   end
 
-  test "a raw connection cannot start recognition from global credentials" do
+  test "a raw connection cannot start configured recognition without an inline plan" do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :speech_to_text,
-        enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
-        provider_options: [
-          api_key: "retired-global-private-marker",
-          model: "flux-general-en",
-          encoding: :opus,
-          sample_rate: 48_000
-        ],
-        wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
-        wire_options: [observer: self()],
-        media_ingress: [
-          maximum_frames: 50,
-          maximum_bytes: 65_536,
-          maximum_age_ms: 1_000,
-          maximum_consecutive_overflows: 10
-        ]
+        providers: %{
+          Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+            enabled: true,
+            wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
+            wire_options: [observer: self()],
+            media_ingress: [
+              maximum_frames: 50,
+              maximum_bytes: 65_536,
+              maximum_age_ms: 1_000,
+              maximum_consecutive_overflows: 10
+            ]
+          ]
+        }
       )
     )
 

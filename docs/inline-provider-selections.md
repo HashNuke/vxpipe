@@ -17,6 +17,13 @@ Local Morse and explicitly configured test fixtures need no tenant credential.
 The fixture configuration cannot select the hosted ReqLLM adapter; hosted model calls must
 use their upstream provider selection and the tenant credential source.
 
+Speech host configuration is a closed `providers` map keyed by the registered STT or TTS
+session module. Each entry contains only host-owned enablement, media/queue bounds and optional
+private wire module/options. There is no top-level default provider, public transport setting or
+open-ended module entry. `PlanStartup` rejects unknown modules and fields before it creates a room,
+then combines the exact registered entry with the Call Spec's public model/media options and a
+fresh credential snapshot.
+
 Calls checks credentials separately from ordinary draft support validation. Missing, revoked,
 unreadable or mismatched credentials prevent save; publication and preparation check again.
 Capability startup resolves a fresh private snapshot inside the existing preparation worker.

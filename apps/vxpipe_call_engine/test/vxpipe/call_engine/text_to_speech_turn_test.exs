@@ -32,11 +32,14 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     text_to_speech = [
-      enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: self(), ready_on_start: true],
-      maximum_requests: 2
+      providers: %{
+        Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: self(), ready_on_start: true],
+          maximum_requests: 2
+        ]
+      }
     ]
 
     agent_runtime =
@@ -313,6 +316,26 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     assert_receive {:test_tts_control, ^transport, replacement_speak}
     assert JSON.decode!(replacement_speak) == %{"type" => "Speak", "text" => replacement_text}
     assert_receive {:test_tts_control, ^transport, _replacement_flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_replacement"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(transport, <<5, 0, 6, 0>>)
+
+    assert_receive {:test_audio_output, ^second_sink, %AudioOutputFrame{payload: <<5, 0, 6, 0>>}}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"dg_sp_replacement"})
+    )
+
+    assert_receive {:test_audio_output_finish, ^second_sink, "turn-interrupter"}
+    :ok = TestAudioOutputSink.playback_started(second_sink)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: "turn-interrupter"}}
+    :ok = TestAudioOutputSink.playback_completed(second_sink)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "turn-interrupter"}}
   end
 
   defp attach(room, participant, connection_id, sink) do

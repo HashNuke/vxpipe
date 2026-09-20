@@ -4,6 +4,15 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.Provider.Deepgram
 
+  @speech_to_text_adapters [
+    Deepgram.Flux.Session,
+    Vxpipe.CallEngine.Provider.MorseCodeSTT.Session
+  ]
+  @text_to_speech_adapters [
+    Deepgram.FluxTextToSpeech.Session,
+    Vxpipe.CallEngine.Provider.MorseCodeTTS.Session
+  ]
+
   @speech_keys [:encoding, :sample_rate]
   @morse_keys [
     :amplitude,
@@ -68,8 +77,74 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   def adapter(_selection), do: {:error, :unsupported_capability}
 
+  @doc false
+  def provider_settings(settings, provider, kind) when is_list(settings) do
+    with {:ok, settings} <- Keyword.validate(settings, providers: %{}),
+         providers when is_map(providers) <- Keyword.fetch!(settings, :providers),
+         {:ok, providers} <- validate_provider_registry(providers, kind),
+         {:ok, provider_settings} when is_list(provider_settings) <-
+           Map.fetch(providers, provider) do
+      {:ok, provider_settings}
+    else
+      _missing_or_invalid -> {:error, :provider_not_configured}
+    end
+  end
+
+  def provider_settings(_settings, _provider, _kind), do: {:error, :provider_not_configured}
+
   def credential_required?(%CapabilitySelection{provider: provider}),
     do: provider not in ["fixture", "morse"]
+
+  defp speech_adapters(:speech_to_text), do: @speech_to_text_adapters
+  defp speech_adapters(:text_to_speech), do: @text_to_speech_adapters
+  defp speech_adapters(_kind), do: []
+
+  defp validate_provider_registry(providers, kind) do
+    Enum.reduce_while(providers, {:ok, %{}}, fn {provider, settings}, {:ok, validated} ->
+      with true <- provider in speech_adapters(kind),
+           true <- is_list(settings),
+           {:ok, settings} <- validate_provider_settings(provider, kind, settings) do
+        {:cont, {:ok, Map.put(validated, provider, settings)}}
+      else
+        _invalid -> {:halt, {:error, :provider_not_configured}}
+      end
+    end)
+  end
+
+  defp validate_provider_settings(Deepgram.Flux.Session, :speech_to_text, settings) do
+    Keyword.validate(settings,
+      enabled: false,
+      media_ingress: nil,
+      wire_module: Deepgram.FluxSocket,
+      wire_options: []
+    )
+  end
+
+  defp validate_provider_settings(
+         Vxpipe.CallEngine.Provider.MorseCodeSTT.Session,
+         :speech_to_text,
+         settings
+       ),
+       do: Keyword.validate(settings, enabled: false, media_ingress: nil)
+
+  defp validate_provider_settings(Deepgram.FluxTextToSpeech.Session, :text_to_speech, settings) do
+    Keyword.validate(settings,
+      enabled: false,
+      maximum_requests: nil,
+      wire_module: Deepgram.FluxTextToSpeechSocket,
+      wire_options: []
+    )
+  end
+
+  defp validate_provider_settings(
+         Vxpipe.CallEngine.Provider.MorseCodeTTS.Session,
+         :text_to_speech,
+         settings
+       ),
+       do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
+  defp validate_provider_settings(_provider, _kind, _settings),
+    do: {:error, :provider_not_configured}
 
   def speech_options(%CapabilitySelection{provider: "deepgram", model: model, options: input}) do
     with {:ok, options} <- normalize(input, @speech_keys),

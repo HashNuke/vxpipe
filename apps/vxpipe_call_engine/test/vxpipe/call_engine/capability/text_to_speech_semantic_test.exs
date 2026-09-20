@@ -27,6 +27,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
     assert_receive {:usage_probe_submitted, request_ref, _provider_request_id}
     assert is_reference(request_ref)
     assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-semantic"}}, 500
+    assert_receive {:usage_probe_audio_credited, ^request_ref, _credit}
 
     provider = semantic_provider(capability)
     assert :ok = GenServer.call(provider, :complete)

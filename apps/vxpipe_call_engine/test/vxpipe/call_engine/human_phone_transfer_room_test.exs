@@ -32,17 +32,14 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
       |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "runtime-test-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: self(), ready_on_start: true],
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: self(), ready_on_start: true],
+          maximum_requests: 2
+        ]
+      }
     ]
 
     Application.put_env(
@@ -486,11 +483,18 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
   defp configure_text_to_speech(wire_options) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
     text_to_speech = Keyword.fetch!(settings, :text_to_speech)
+    providers = Keyword.fetch!(text_to_speech, :providers)
+
+    provider_settings =
+      providers
+      |> Map.fetch!(FluxTextToSpeech.Session)
+      |> Keyword.put(:wire_options, Keyword.put(wire_options, :observer, self()))
 
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
-      Keyword.put(text_to_speech, :wire_options, Keyword.put(wire_options, :observer, self()))
+      text_to_speech
+      |> Keyword.put(:providers, Map.put(providers, FluxTextToSpeech.Session, provider_settings))
       |> then(&Keyword.put(settings, :text_to_speech, &1))
     )
   end

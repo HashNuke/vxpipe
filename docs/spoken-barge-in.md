@@ -18,8 +18,8 @@ interruption from RTP energy. Provider turn evidence is the semantic trigger.
 1. The WebRTC connection forwards every valid inbound audio packet through the
    connection's bounded, protocol-neutral media ingress, including while agent
    output is queued or playing.
-2. The participant's speech-to-text capability streams that audio to its
-   configured provider. Output state does not pause this provider stream.
+2. The participant's connection-owned speech-to-text capability pushes that audio through
+   its scoped semantic session. Output state does not pause the provider-private wire.
 3. A normalized `StartOfTurn` reaches the room authority with the internal
    identity of the speech-to-text capability that produced it.
 4. The room verifies that capability is still bound to the same tenant, room
@@ -111,12 +111,12 @@ boundary stopped. No fixed end-to-end latency is promised by this checkpoint.
 ## Verification evidence
 
 - A call-engine vertical test starts real room STT and TTS capability processes
-  with fake transports, begins paced agent playout, injects `StartOfTurn`, and
+  with controlled private wires, begins paced agent playout, injects `StartOfTurn`, and
   proves local playout and synthesis are interrupted before `EndOfTurn`.
 - The same test proves interruption attribution and the new participant turn
   share one generated command/correlation identity, the committed transcript
-  produces replacement output, and replacement synthesis waits for the old
-  provider boundary.
+  produces replacement output through `AgentSpeechStarted` and `AgentTurnCompleted`,
+  and replacement synthesis waits for the old semantic request boundary.
 - A second engine test proves speech start while idle emits no false
   interruption.
 - Gateway turn-state tests prove spoken output remains serialized without any

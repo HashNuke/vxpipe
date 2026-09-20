@@ -33,17 +33,14 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
       |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "runtime-test-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: self()],
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: self()],
+          maximum_requests: 2
+        ]
+      }
     ]
 
     Application.put_env(

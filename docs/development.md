@@ -75,7 +75,8 @@ for platform inheritance, tenant overrides and matching Console webhook URLs.
 
 Local calls select `%{provider: "fixture", model: "test:scripted"}` for model inference
 and `%{provider: "morse", model: "morse", options: %{sample_rate: 16_000}}` for speech.
-The embedding host explicitly configures the fixture adapter and Morse transport.
+The embedding host explicitly configures the fixture adapter and Morse session provider in
+the closed STT/TTS provider maps.
 These local selections need no provider credential. The repository's default browser sample
 uses the provisioned Google/Deepgram tenant; there is no environment switch for changing it.
 
@@ -86,7 +87,7 @@ cd apps/vxpipe_call_engine
 mix test test/vxpipe/call_engine/provider/morse_code/room_round_trip_test.exs
 ```
 
-That test configures a supervised local model fixture and both Morse transports, sends
+That test configures a supervised local model fixture and both Morse semantic sessions, sends
 encoded caller audio, and verifies the reply through the real audio output path.
 Browser microphone RTP is Opus; Morse STT accepts mono little-endian linear16.
 

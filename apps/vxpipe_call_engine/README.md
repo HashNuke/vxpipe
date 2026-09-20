@@ -344,7 +344,6 @@ under `options`; modules never enter call spec input.
 
 ```elixir
 speech_to_text: [
-  enabled: false,
   providers: %{
     Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
       enabled: true,
@@ -358,7 +357,6 @@ speech_to_text: [
   }
 ],
 text_to_speech: [
-  enabled: false,
   providers: %{
     Vxpipe.CallEngine.Provider.MorseCodeTTS.Session => [
       enabled: true,

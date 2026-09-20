@@ -1313,17 +1313,19 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     speech_to_text = [
-      enabled: true,
-      provider: FluxSession,
-      provider_options: [api_key: "runtime-secret"],
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: self()] ++ transport_options,
-      media_ingress: [
-        maximum_frames: 8,
-        maximum_bytes: 1024,
-        maximum_age_ms: 1_000,
-        maximum_consecutive_overflows: 2
-      ]
+      providers: %{
+        FluxSession => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: self()] ++ transport_options,
+          media_ingress: [
+            maximum_frames: 8,
+            maximum_bytes: 1024,
+            maximum_age_ms: 1_000,
+            maximum_consecutive_overflows: 2
+          ]
+        ]
+      }
     ]
 
     Application.put_env(

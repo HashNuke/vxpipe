@@ -1,11 +1,35 @@
 # Speech complexity audit
 
-Status: design review, 2026-09-20. R/A remain accepted; D remains unaccepted and
-implementation is paused after the proved admission/cancellation regression.
-This audit changes the proposed implementation, not the running speech path.
-The user accepts implementing the complete request workflow together and prefers
-simple ownership and OTP shutdown over custom recovery. No runtime code changed
-during this audit.
+Status: implemented and accepted through checkpoints D, C and E on 2026-09-20.
+The complete request workflow uses one live output-state owner, blocking calls remain
+isolated, and OTP supervision supplies descendant shutdown. The intermediate tested
+regressions and repair sequence remain below as historical evidence.
+
+## Final implementation outcome
+
+`Speech.Channel` is the sole owner of semantic event ordering, TTS request state, audio
+credit, fencing, cancellation and playback settlement. `Speech.Input` remains the bounded
+worker for provider calls that can block or call back into Channel. The capability-level
+`TextToSpeech.Output` worker remains because it performs blocking sink I/O independently of
+the capability mailbox; it does not duplicate semantic request authority.
+
+Against `main`, the completed STT/TTS cutover deletes nine production modules: the old STT
+connector, four public provider/transport behaviour modules, and the four Morse facade/JSON
+transport modules. Those behaviour modules contained 23 callback declarations. The application
+also drops the global STT connection and TTS output task supervisors. Deepgram's Mint sockets
+remain provider-private wires below native semantic sessions. Morse and Deepgram now use the
+same public session contract; there is no compatibility execution path or second host schema.
+
+This migration is a net source addition because the scoped ownership, semantic contract,
+provider implementations and explicit reliability tests are new. Moved or newly explicit code
+is not counted as deleted complexity. The reduction is in live authorities and public contracts:
+one session API, one closed registry shape, no global speech executor and one TTS request owner.
+
+The retained monitors enforce domain obligations that supervision alone cannot infer: owner/lease
+authority, consumer replacement, current provider loss, room/connection identity and readiness
+generation. Readiness ordering, policy admission, usage evidence, output credit and confirmed
+playback also remain explicit. OTP owns parent/child lifetime and significant-child shutdown;
+there is no automatic reconnect, replay or custom recovery coordinator.
 
 ## Recommendation
 
@@ -159,21 +183,21 @@ work from known zero usage. Do not add synchronous persistence to the media path
 Treat this as one D workflow with small internal red/green steps, not separately
 accepted early-return and cancellation features:
 
-- [ ] Describe pending admission → fence → sink interruption → provider isolation
+- [x] Describe pending admission → fence → sink interruption → provider isolation
   → complete replacement in public-boundary tests, including failure usage facts.
-- [ ] Merge Output state into Channel, remove unread state, and make the pending
+- [x] Merge Output state into Channel, remove unread state, and make the pending
   cancellation path pass without retries or another worker. Preserve separate
   generation and playback facts; keep pure helpers cohesive.
-- [ ] Prove usage evidence survives allocation/scope loss with a held consumer;
+- [x] Prove usage evidence survives allocation/scope loss with a held consumer;
   use the smallest bounded owner-based mechanism that passes. No storage
   representation is accepted by this audit.
-- [ ] Run the speech/Morse/usage selection. Adapt process-specific tests and fault
+- [x] Run the speech/Morse/usage selection. Adapt process-specific tests and fault
   injection to the surviving boundary without deleting observable guarantees.
-- [ ] Rerun cancellation and fault loads at 1/8/32 scopes with held credit and
+- [x] Rerun cancellation and fault loads at 1/8/32 scopes with held credit and
   sibling STT. Report first-audio/text, generation/turn end, fence/cancel and
   replacement timings, failures, queues and memory. Compare like-for-like paths;
   prior Output-kill results become historical after Output ceases to be a process.
-- [ ] Obtain independent review and pass all five root gates before D acceptance
+- [x] Obtain independent review and pass all five root gates before D acceptance
   or room migration. Keep any reproduced change-caused instability paused.
 
 Evaluate initializer-supervisor and remaining lifetime deletions as distinct

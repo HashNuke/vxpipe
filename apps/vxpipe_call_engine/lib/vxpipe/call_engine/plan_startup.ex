@@ -92,7 +92,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
       %CapabilitySelection{} = selection ->
         with {:ok, provider} <- CapabilityCatalog.adapter(selection),
-             {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
+             {:ok, settings} <-
+               CapabilityCatalog.provider_settings(Keyword.get(options, kind), provider, kind),
              true <- Keyword.get(settings, :enabled) == true do
           :ok
         else
@@ -601,7 +602,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          kind
        ) do
     with {:ok, provider} <- CapabilityCatalog.adapter(selection),
-         {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
+         {:ok, settings} <-
+           CapabilityCatalog.provider_settings(Keyword.get(options, kind), provider, kind),
          true <- Keyword.get(settings, :enabled) == true,
          {:ok, credential} <- CredentialSource.resolve(tenant_id, selection, options),
          {:ok, selected_options} <- CapabilityCatalog.speech_options(selection),
@@ -661,28 +663,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       do: provider.new(options),
       else: {:error, :invalid_configuration}
   end
-
-  defp provider_settings(settings, provider) when is_list(settings) do
-    if Keyword.get(settings, :provider) == provider do
-      {:ok, settings}
-    else
-      case Keyword.get(settings, :providers, %{}) do
-        providers when is_map(providers) ->
-          case Map.fetch(providers, provider) do
-            {:ok, provider_settings} when is_list(provider_settings) ->
-              {:ok, provider_settings}
-
-            _missing_or_invalid ->
-              {:error, :provider_not_configured}
-          end
-
-        _invalid_registry ->
-          {:error, :provider_not_configured}
-      end
-    end
-  end
-
-  defp provider_settings(_settings, _provider), do: {:error, :provider_not_configured}
 
   defp put_credential_cache_identity(identity, nil), do: identity
 

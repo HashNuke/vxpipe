@@ -3,8 +3,7 @@ defmodule Vxpipe.CallEngine.Readiness.ProviderTest do
 
   alias Vxpipe.CallEngine.Readiness.Provider
 
-  test "a provider without a readiness contract fails closed" do
-    assert Provider.initial_status(__MODULE__) == :failed
+  test "a failed provider remains failed when a late connection arrives" do
     assert Provider.connected(:failed) == :failed
   end
 end

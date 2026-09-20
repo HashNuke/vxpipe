@@ -6,12 +6,15 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
     AgentSpeechStarted,
+    AgentTurnCompleted,
     AgentTurnInterrupted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
     TextOutput
   }
+
+  alias Vxpipe.CallEngine.Media.AudioOutputFrame
 
   alias Vxpipe.CallEngine.{
     TestCallStartup,
@@ -157,6 +160,25 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
 
     assert_receive {:test_tts_control, ^tts_transport, replacement_speak}
     assert JSON.decode!(replacement_speak) == %{"type" => "Speak", "text" => replacement_text}
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_replacement"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(tts_transport, <<5, 0, 6, 0>>)
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{payload: <<5, 0, 6, 0>>}}
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"dg_sp_replacement"})
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, ^audio_turn_id}
+    :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: ^audio_turn_id}}
+    :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^audio_turn_id}}
   end
 
   test "provider speech start while the agent is idle does not emit an interruption" do
@@ -216,26 +238,32 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
 
   defp speech_to_text_settings(observer) do
     [
-      enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: observer, ready_on_start: true],
-      media_ingress: [
-        maximum_frames: 50,
-        maximum_bytes: 262_144,
-        maximum_age_ms: 2_000,
-        maximum_consecutive_overflows: 5
-      ]
+      providers: %{
+        Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: observer, ready_on_start: true],
+          media_ingress: [
+            maximum_frames: 50,
+            maximum_bytes: 262_144,
+            maximum_age_ms: 2_000,
+            maximum_consecutive_overflows: 5
+          ]
+        ]
+      }
     ]
   end
 
   defp text_to_speech_settings(observer) do
     [
-      enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: observer, ready_on_start: true],
-      maximum_requests: 2
+      providers: %{
+        Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: observer, ready_on_start: true],
+          maximum_requests: 2
+        ]
+      }
     ]
   end
 

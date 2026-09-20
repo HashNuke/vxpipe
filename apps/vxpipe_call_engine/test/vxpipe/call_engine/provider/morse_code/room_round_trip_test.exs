@@ -14,7 +14,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   alias Vxpipe.CallEngine.Command.AttachConnection
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechProgressed,
+    AgentSpeechStarted,
     AgentTurnCompleted,
+    AgentTurnInterrupted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -43,7 +46,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
       |> Keyword.put(:fixture, {AgentRuntimeModelProvider, [fixture: fixture]})
 
     speech_to_text = [
-      enabled: false,
       providers: %{
         MorseCodeSTTSession => [
           enabled: true,
@@ -53,11 +55,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     ]
 
     text_to_speech = [
-      enabled: false,
       providers: %{
         MorseCodeTTS.Session => [
           enabled: true,
-          provider_private: [emit_interval_ms: 0],
           maximum_requests: 2
         ]
       }
@@ -79,7 +79,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     :ok
   end
 
-  test "runs encoded caller audio through a local reply and real audio output" do
+  test "interrupts a local reply with encoded caller audio and completes the replacement" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
@@ -156,35 +156,46 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
 
     assert receiver_id == receiver.participant_id
 
-    frames = collect_output(sink, correlation_id, [])
-    assert length(frames) > 10
-    assert Enum.all?(frames, &(byte_size(&1.payload) <= 640))
+    assert_receive {:test_audio_output, ^sink,
+                    %AudioOutputFrame{correlation_id: ^correlation_id} = first_frame},
+                   1_000
 
-    output_pcm = frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
-    assert {:ok, output_config} = Config.new(sample_rate: 16_000, unit_duration_ms: 20)
-    assert {:ok, output_decoder} = Decoder.new(output_config)
-    assert {:ok, output_decoder, output_events} = Decoder.push(output_decoder, output_pcm)
-    assert {:ok, _output_decoder, []} = Decoder.flush(output_decoder)
-    assert List.last(output_events) == {:final, "OK"}
+    assert byte_size(first_frame.payload) <= 640
+    :ok = TestAudioOutputSink.playback_started(sink)
 
-    :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: ^correlation_id}},
+                   1_000
+
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
 
     assert_receive {:vxpipe_event,
-                    %AgentTurnCompleted{
-                      participant_id: ^receiver_id,
-                      source_participant_id: ^caller_id,
-                      correlation_id: ^correlation_id
-                    }},
+                    %AgentSpeechProgressed{correlation_id: ^correlation_id, played_ms: 20}},
                    1_000
 
     push_text(attachment, plan, room, caller, connection_id, "ET", 100)
+
+    assert_receive {:test_audio_output_interrupt, ^sink, ^correlation_id, 20}, 1_000
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnInterrupted{
+                      participant_id: ^receiver_id,
+                      source_participant_id: ^caller_id,
+                      correlation_id: ^correlation_id,
+                      interrupted_by_participant_id: ^caller_id,
+                      interrupted_by_connection_id: ^connection_id,
+                      interruption_command_id: interruption_command_id,
+                      interruption_correlation_id: second_correlation_id,
+                      played_ms: 20
+                    }},
+                   1_000
 
     assert_receive {:vxpipe_event,
                     %ParticipantTurnStarted{
                       participant_id: ^caller_id,
                       connection_id: ^connection_id,
                       modality: :audio,
-                      correlation_id: second_correlation_id
+                      command_id: ^interruption_command_id,
+                      correlation_id: ^second_correlation_id
                     }},
                    1_000
 
@@ -229,6 +240,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                       correlation_id: ^second_correlation_id
                     }},
                    1_000
+
+    refute_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation_id}}
   end
 
   defp compile_plan do

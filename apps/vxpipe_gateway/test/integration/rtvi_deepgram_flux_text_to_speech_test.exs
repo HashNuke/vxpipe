@@ -42,11 +42,14 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      wire_module: FluxTextToSpeechSocket,
-      wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],
-      maximum_requests: 4
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: FluxTextToSpeechSocket,
+          wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],
+          maximum_requests: 4
+        ]
+      }
     ]
 
     settings =

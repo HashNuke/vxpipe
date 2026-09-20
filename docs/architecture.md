@@ -3490,9 +3490,9 @@ Production ingress remains deployment-specific.
 ## Deterministic testing facilities
 
 Vxpipe includes opt-in in-process Morse/tone STT and TTS adapters in the call-engine
-library. They implement the ordinary speech capability and local transport boundaries;
+library. They implement the same scoped semantic-session boundary as hosted providers;
 they do not bypass room turns, participant attribution, output acknowledgements,
-interruption, or playout completion. A compiled provider profile must resolve through
+interruption, or playout completion. A compiled provider selection must resolve through
 the application's closed provider registry. No call/client input can choose a transport
 module directly.
 
@@ -3506,11 +3506,10 @@ the [call-engine README](../apps/vxpipe_call_engine/README.md#local-morse-audio-
 [Morse audio milestone](milestones/morse-code-audio-providers.md).
 
 These encode/decode controlled tones, not ordinary speech, VAD, or a local speech model.
-Direct PCM verification is distinct from browser microphone processing: the current
-WebRTC ingress supplies Opus and is not claimed as Morse STT input. The opt-in Console
-profile therefore uses typed input with 48 kHz Morse TTS; the complete local STT/model/TTS
-round trip runs at the engine's direct-PCM boundary without speech credentials or network
-access.
+The complete local STT/model/TTS round trip runs at the engine's direct-PCM boundary without
+speech credentials or network access. WebRTC ingress separately decodes mono or stereo Opus,
+downmixes when necessary, resamples once to the selected session's strict mono format, and
+preserves one decoder history per connection.
 
 The adapters support:
 
@@ -3631,6 +3630,29 @@ speech synthesis, outbound audio, provider credentials, reconnection,
 production authentication, TURN policy, persistence, or room recovery. The
 detailed decision and verification evidence are in
 [`deterministic-text-turn.md`](deterministic-text-turn.md).
+
+### Current scoped speech-session boundary
+
+Every STT and TTS provider implements one semantic session contract. A local
+`Speech.CapabilityTree` owns admission, control and the dynamic session supervisor for exactly
+one capability lifetime. Each allocation starts a temporary `SessionTree`: `Channel` owns
+semantic event order, TTS request/fence/playback state and one-envelope audio credit; `Input`
+contains potentially blocking provider calls; the provider and its private I/O are temporary
+children. Significant-child shutdown retires the allocation without reconnecting or replaying it.
+
+Room ownership and attribution remain explicit above that tree. Caller STT belongs to the exact
+participant connection, agent TTS belongs to the selected agent participant, and opening/private
+transfer speech uses separately owned trees with its existing lease and readiness deadline. A
+failed allocation does not share a supervisor, queue or executor with another call. Provider
+readiness is a semantic event and provider completion remains separate from confirmed local
+playout.
+
+Application configuration exposes only a closed `providers` map for each direction. A Call Spec
+selects a public provider/model/media shape; `PlanStartup` matches it to one registered session,
+resolves credentials privately and rejects unknown host keys or modules before room creation.
+Deepgram sockets and controlled test wires are provider-private implementation details. There is
+no global speech executor, public wire selection, automatic reconnect, replay or alternate speech
+path.
 
 ### Implemented Deepgram Flux audio-turn slice
 
@@ -3981,15 +4003,14 @@ pinned prompt, `:req_llm` model and static host Actions with application-owned r
 bounds. It starts both participant subtrees and installs the receiver's stable coordinator
 reference as the room text capability. An unused catalog agent starts no participant or
 activation process. Plan startup also combines the caller's selected STT and receiver's
-selected TTS public options with application-owned credentials, transports and queue/ingress
-policy before participant admission. Each speech setting retains its top-level implementation as
-the application default and may expose a closed `:providers` map for additional implementations.
-The compiled provider module must match that default or an exact registered module key; call input
-cannot construct a module or select an unregistered transport. This permits different pinned call
-profiles, including in-process Morse providers, without changing legacy room defaults. It retains
-those typed provider runtimes for the room,
+selected TTS public options with application-owned credentials, private wire settings and
+queue/ingress policy before participant admission. Each direction exposes only a closed
+`:providers` map keyed by registered semantic session modules. The compiled provider module must
+match an exact registered key; call input cannot construct a module or select a wire. This permits
+different pinned call profiles, including in-process Morse providers. It retains those typed
+provider runtimes for the room,
 starts TTS with the receiver and starts the pinned STT when the caller connection attaches.
-Existing preset startup remains intact. A resolved-plan room now starts its dedicated
+A resolved-plan room now starts its dedicated
 CallVariables owner alongside, rather than inside, RoomAuthority and binds only its active
 agent's permitted generated Actions. The temporary gateway adapter may supply trusted,
 server-configured initial variables to the invocation; the browser room-creation body cannot

@@ -1459,42 +1459,40 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
-    default_stt = [
-      enabled: true,
-      provider: Flux.Session,
-      provider_options: [api_key: "unused-default"],
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [],
-      media_ingress: media_ingress_options()
-    ]
-
-    default_tts = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [api_key: "unused-default"],
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [],
-      maximum_requests: 2
-    ]
-
-    speech_to_text =
-      Keyword.put(default_stt, :providers, %{
+    speech_to_text = [
+      providers: %{
+        Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [],
+          media_ingress: media_ingress_options()
+        ],
         MorseSTTSession => [
           enabled: true,
-          provider_options: [],
           media_ingress: media_ingress_options()
         ]
-      })
+      }
+    ]
 
-    text_to_speech =
-      Keyword.put(default_tts, :providers, %{
+    text_to_speech = [
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [],
+          maximum_requests: 2
+        ],
         MorseCodeTTS.Session => [
           enabled: true,
-          provider_options: [],
-          provider_private: [],
           maximum_requests: 2
         ]
-      })
+      }
+    ]
+
+    default_stt = speech_to_text |> Keyword.fetch!(:providers) |> Map.fetch!(Flux.Session)
+
+    default_tts =
+      text_to_speech |> Keyword.fetch!(:providers) |> Map.fetch!(FluxTextToSpeech.Session)
 
     assert {:ok, startup} =
              PlanStartup.new(plan,
@@ -1541,8 +1539,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                plan.tenant_id
              )
 
-    assert Keyword.fetch!(default_stt, :provider) == Flux.Session
-    assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech.Session
+    assert Keyword.fetch!(default_stt, :wire_module) == TestSpeechToTextTransport
+    assert Keyword.fetch!(default_tts, :wire_module) == TestTextToSpeechTransport
   end
 
   test "keeps the active agent pinned after source prompt and inline selection change" do
@@ -1609,8 +1607,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                owner: self(),
                agent_runtime: agent_runtime,
                agent_request_options: [],
-               speech_to_text: [enabled: false],
-               text_to_speech: [enabled: false]
+               speech_to_text: [providers: %{}],
+               text_to_speech: [providers: %{}]
              )
 
     assert startup.agent_activation[:provider] == "fixture"
@@ -1634,8 +1632,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                owner: self(),
                agent_runtime: agent_runtime,
                agent_request_options: [],
-               speech_to_text: [enabled: false],
-               text_to_speech: [enabled: false]
+               speech_to_text: [providers: %{}],
+               text_to_speech: [providers: %{}]
              )
   end
 
@@ -2143,35 +2141,30 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     speech_to_text = [
-      enabled: true,
-      provider: Flux.Session,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-general-en",
-        encoding: :opus,
-        sample_rate: 48_000
-      ],
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: self(), ready_on_start: true],
-      media_ingress: media_ingress_options()
+      providers: %{
+        Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: self(), ready_on_start: true],
+          media_ingress: media_ingress_options()
+        ]
+      }
     ]
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "runtime-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: Keyword.get(options, :text_to_speech_wire_module, TestTextToSpeechTransport),
-      wire_options:
-        Keyword.get(options, :text_to_speech_wire_options,
-          observer: self(),
-          ready_on_start: true
-        ),
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module:
+            Keyword.get(options, :text_to_speech_wire_module, TestTextToSpeechTransport),
+          wire_options:
+            Keyword.get(options, :text_to_speech_wire_options,
+              observer: self(),
+              ready_on_start: true
+            ),
+          maximum_requests: 2
+        ]
+      }
     ]
 
     Application.put_env(

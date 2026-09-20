@@ -53,6 +53,57 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
              PlanStartup.new(plan(), Keyword.delete(options(), :credential_source))
   end
 
+  test "obsolete or open-ended speech host settings fail validation" do
+    stt_settings =
+      options()
+      |> Keyword.fetch!(:speech_to_text)
+      |> Keyword.fetch!(:providers)
+      |> Map.fetch!(FluxSession)
+
+    tts_settings =
+      options()
+      |> Keyword.fetch!(:text_to_speech)
+      |> Keyword.fetch!(:providers)
+      |> Map.fetch!(TTSFluxSession)
+
+    invalid_settings = [
+      {:speech_to_text, Keyword.put(stt_settings, :provider, FluxSession)},
+      {:speech_to_text, Keyword.put(stt_settings, :provider_options, api_key: "obsolete")},
+      {:speech_to_text,
+       [
+         enabled: true,
+         providers: %{FluxSession => stt_settings}
+       ]},
+      {:speech_to_text,
+       [
+         providers: %{
+           FluxSession => stt_settings,
+           Vxpipe.CallEngine.SpeechGuideTTSProvider => [enabled: true]
+         }
+       ]},
+      {:speech_to_text,
+       [
+         providers: %{
+           FluxSession => stt_settings,
+           Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
+             enabled: true,
+             media_ingress: [],
+             provider_private: [ignored: true]
+           ]
+         }
+       ]},
+      {:text_to_speech, Keyword.put(tts_settings, :provider, TTSFluxSession)},
+      {:text_to_speech, Keyword.put(tts_settings, :provider_private, ignored: true)}
+    ]
+
+    for {kind, settings} <- invalid_settings do
+      invalid = Keyword.put(options(), kind, settings)
+
+      assert {:error, %{code: :unsupported_call_plan}} =
+               PlanStartup.validate(plan(), invalid)
+    end
+  end
+
   test "connection speech credentials resolve in an owned preparation worker" do
     plan = plan()
     caller = plan.participants["caller"]
@@ -197,23 +248,27 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
         |> Keyword.fetch!(:agent_runtime)
         |> Keyword.put(:model_provider_options, api_key: "retired-private-marker"),
       speech_to_text: [
-        enabled: true,
-        provider: FluxSession,
-        provider_options: [api_key: "retired-private-marker"],
-        wire_options: [],
-        media_ingress: [
-          maximum_frames: 50,
-          maximum_bytes: 262_144,
-          maximum_age_ms: 2_000,
-          maximum_consecutive_overflows: 5
-        ]
+        providers: %{
+          FluxSession => [
+            enabled: true,
+            wire_options: [],
+            media_ingress: [
+              maximum_frames: 50,
+              maximum_bytes: 262_144,
+              maximum_age_ms: 2_000,
+              maximum_consecutive_overflows: 5
+            ]
+          ]
+        }
       ],
       text_to_speech: [
-        enabled: true,
-        provider: TTSFluxSession,
-        provider_options: [api_key: "retired-private-marker"],
-        wire_options: [],
-        maximum_requests: 4
+        providers: %{
+          TTSFluxSession => [
+            enabled: true,
+            wire_options: [],
+            maximum_requests: 4
+          ]
+        }
       ]
     ]
   end

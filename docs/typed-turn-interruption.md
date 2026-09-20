@@ -69,13 +69,13 @@ Cancellation proceeds from the listener outward:
 
 1. Per-connection audio egress clears unsent RTP, PCM remainder, and pending
    output operations and reports confirmed paced playout.
-2. The text-to-speech capability keeps at most one sink write in a supervised
-   task, so bounded RTP backpressure cannot block its control mailbox. It drops
-   older queued requests and quarantines late audio for the canceled provider
-   turn.
-3. If speech is active and some audio played, the provider receives an interrupt
-   with the cumulative session playback offset. Replacement synthesis waits for
-   the old provider boundary before starting on the persistent session.
+2. The text-to-speech capability keeps at most one sink write in its supervised
+   output worker, so bounded RTP backpressure cannot block its control mailbox. It drops
+   older queued requests and quarantines late audio for the canceled semantic request.
+3. The capability fences the exact request in its scoped speech session and retains the
+   cancellation request identity until settlement. If speech is active and some audio played,
+   the provider receives an interrupt with the cumulative session playback offset. Replacement
+   synthesis waits for the old request's terminal boundary before starting on the same session.
 4. In-flight model work is killed, queued model work is removed, and completed
    interrupted turn pairs are removed from volatile model context. This is
    conservative when exact heard text is unavailable: later context must not
@@ -134,7 +134,8 @@ boundary.
   history removal, replacement admission in the same Session, and survival of a separately
   supervised tool worker.
 - A room vertical test proves participant B can interrupt participant A's spoken
-  turn and that every identity in `AgentTurnInterrupted` is authoritative.
+  turn, that every identity in `AgentTurnInterrupted` is authoritative, and that
+  replacement audio reaches `AgentSpeechStarted` and `AgentTurnCompleted`.
 - Gateway codec and turn-state tests prove standard `bot-interrupted`, attributed
   `server-message`, interruption state release, and the absence of false
   completed-spoken progress.

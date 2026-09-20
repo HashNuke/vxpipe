@@ -571,17 +571,14 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "test-runtime-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
-      wire_options: [observer: self(), ready_on_start: true],
-      maximum_requests: 4
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+          wire_options: [observer: self(), ready_on_start: true],
+          maximum_requests: 4
+        ]
+      }
     ]
 
     Application.put_env(

@@ -766,23 +766,29 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
       Vxpipe.CallEngine.Application,
       settings
       |> Keyword.put(:speech_to_text,
-        enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
-        wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
-        wire_options: [observer: self(), ready_on_start: true],
-        media_ingress: [
-          maximum_frames: 50,
-          maximum_bytes: 262_144,
-          maximum_age_ms: 2_000,
-          maximum_consecutive_overflows: 5
-        ]
+        providers: %{
+          Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+            enabled: true,
+            wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
+            wire_options: [observer: self(), ready_on_start: true],
+            media_ingress: [
+              maximum_frames: 50,
+              maximum_bytes: 262_144,
+              maximum_age_ms: 2_000,
+              maximum_consecutive_overflows: 5
+            ]
+          ]
+        }
       )
       |> Keyword.put(:text_to_speech,
-        enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
-        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
-        wire_options: [observer: self(), ready_on_start: true],
-        maximum_requests: 4
+        providers: %{
+          Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+            enabled: true,
+            wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+            wire_options: [observer: self(), ready_on_start: true],
+            maximum_requests: 4
+          ]
+        }
       )
     )
 

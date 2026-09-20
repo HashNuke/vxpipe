@@ -511,24 +511,30 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     speech_to_text = [
-      enabled: true,
-      provider: Flux.Session,
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: observer, ready_on_start: true],
-      media_ingress: [
-        maximum_frames: 50,
-        maximum_bytes: 262_144,
-        maximum_age_ms: 2_000,
-        maximum_consecutive_overflows: 5
-      ]
+      providers: %{
+        Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: observer, ready_on_start: true],
+          media_ingress: [
+            maximum_frames: 50,
+            maximum_bytes: 262_144,
+            maximum_age_ms: 2_000,
+            maximum_consecutive_overflows: 5
+          ]
+        ]
+      }
     ]
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: observer, ready_on_start: true],
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: observer, ready_on_start: true],
+          maximum_requests: 2
+        ]
+      }
     ]
 
     settings =

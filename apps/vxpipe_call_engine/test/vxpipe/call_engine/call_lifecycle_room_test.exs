@@ -634,22 +634,19 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     speech_to_text = [
-      enabled: true,
-      provider: Flux.Session,
-      provider_options: [
-        api_key: "test-runtime-secret",
-        model: "flux-general-en",
-        encoding: :opus,
-        sample_rate: 48_000
-      ],
-      wire_module: wire_module,
-      wire_options: wire_options,
-      media_ingress: [
-        maximum_frames: 8,
-        maximum_bytes: 1_024,
-        maximum_age_ms: 1_000,
-        maximum_consecutive_overflows: 2
-      ]
+      providers: %{
+        Flux.Session => [
+          enabled: true,
+          wire_module: wire_module,
+          wire_options: wire_options,
+          media_ingress: [
+            maximum_frames: 8,
+            maximum_bytes: 1_024,
+            maximum_age_ms: 1_000,
+            maximum_consecutive_overflows: 2
+          ]
+        ]
+      }
     ]
 
     Application.put_env(

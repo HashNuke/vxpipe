@@ -1103,17 +1103,14 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "runtime-test-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: TestTextToSpeechTransport,
-      wire_options: Keyword.merge([observer: self()], transport_options),
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: Keyword.merge([observer: self()], transport_options),
+          maximum_requests: 2
+        ]
+      }
     ]
 
     Application.put_env(

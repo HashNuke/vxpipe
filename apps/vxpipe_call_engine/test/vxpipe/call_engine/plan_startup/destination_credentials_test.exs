@@ -250,25 +250,29 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       credential_source: {TestTenantCredentialSource, context},
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       speech_to_text: [
-        enabled: true,
-        provider: FluxSession,
-        provider_options: [api_key: "retired-private-marker"],
-        wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
-        wire_options: [observer: self()],
-        media_ingress: [
-          maximum_frames: 50,
-          maximum_bytes: 262_144,
-          maximum_age_ms: 2_000,
-          maximum_consecutive_overflows: 5
-        ]
+        providers: %{
+          FluxSession => [
+            enabled: true,
+            wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
+            wire_options: [observer: self()],
+            media_ingress: [
+              maximum_frames: 50,
+              maximum_bytes: 262_144,
+              maximum_age_ms: 2_000,
+              maximum_consecutive_overflows: 5
+            ]
+          ]
+        }
       ],
       text_to_speech: [
-        enabled: true,
-        provider: TTSFluxSession,
-        provider_options: [api_key: "retired-private-marker"],
-        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
-        wire_options: [observer: self()],
-        maximum_requests: 4
+        providers: %{
+          TTSFluxSession => [
+            enabled: true,
+            wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+            wire_options: [observer: self()],
+            maximum_requests: 4
+          ]
+        }
       ]
     ]
   end

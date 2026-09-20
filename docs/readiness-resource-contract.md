@@ -149,8 +149,8 @@ remain registered throughout preparation and retain their ordinary failure contr
 
 Private STT initialization accepts an internal `initial_policy` snapshot through
 `RoomCapabilitySupervisor.start_speech_to_text/8`. When that policy requires no speech session,
-the capability starts without a transport. Enforcement still installs the actual current policy;
-later demand starts the existing connector. Preparing the candidate uses the existing scoped
+the capability starts without an allocation. Enforcement still installs the actual current policy;
+later demand starts a scoped semantic session. Preparing the candidate uses the existing scoped
 session, provider acknowledgement and ingress-track readiness. Adopting the pair through the
 candidate barrier keeps that exact session, and an ingress initialized closed stays closed until
 explicit release. Ordinary constructor callers retain their existing behavior.
@@ -166,7 +166,7 @@ persistent transfer coordinator.
 A private speech pair can receive an internal `preparation` option alongside `initial_policy`.
 It pins the original phase `owner`, `attempt_id` and absolute `deadline_ms` before any provider
 preparation starts. The base policy must exclude the participant. Invalid/expired scope is rejected
-before a provider transport starts. Subsequent preparation must use that exact scope; a different
+before a provider session starts. Subsequent preparation must use that exact scope; a different
 owner, attempt or extended deadline cannot reuse the allocation.
 
 The temporary STT actor owns this allocation lease. On owner loss or expiry, it explicitly discards
@@ -371,15 +371,15 @@ the same binding; another owner/attempt or a changed deadline cannot replace or 
 Preparation compares the participant's scoped speech permissions and demand. An unchanged session
 returns its existing resource. A denied future source requires no speech resource and keeps its
 current session until commit. An affected, still-demanded source initializes a separate provider
-connection through the existing supervised connector while the installed session remains available.
-The shared provider readiness contract applies: initialized providers need their bound transport,
+session through the capability's supervised local scope while the installed session remains available.
+The shared provider readiness contract applies: initialized providers need their bound private wire,
 and providers with an explicit connection acknowledgement remain preparing until it arrives.
 Preparation sends no audio to the new connection and publishes none of its transcript signals.
 
 Prepared resources include a lease token in their binding. The collector observes the actual pending
 session, and the same descriptor remains valid when policy application adopts it. Commit rejects
 failed, expired or unready preparations. A matching ready replacement is installed without starting
-another connection; the old session closes through its existing transport lifecycle. Normal speech
+another connection; the old session closes through the semantic session lifecycle. Normal speech
 resource queries then report the adopted generation and interval. Stale cleanup cannot close it.
 Pending provider sequence positions are retained so ignored preparation events cannot be replayed
 into room transcripts after adoption. Provider connection/failure usage stays in the existing
@@ -529,16 +529,16 @@ and startup/transfer use are still required before this becomes a complete room 
 ## Speech-provider adapters
 
 STT and TTS expose bounded `readiness/1` queries returning their actual descriptor and initialization
-status. Speech providers declare one of two initialization contracts:
+status. The semantic session descriptor declares one of two initialization contracts:
 
-- `provider_connected`: the configured transport must deliver the provider's normalized connection
-  acknowledgement. Both Deepgram speech adapters and local Morse STT use this contract.
-- `initialized`: validated local/client initialization is sufficient. Local Morse TTS uses this
-  contract; no fabricated handshake or synthesized probe is needed.
+- `provider_acknowledged`: the provider-private wire must deliver the normalized connection
+  acknowledgement. Both Deepgram speech sessions use this contract.
+- `initialized`: validated local initialization is sufficient. Local Morse STT and TTS use this
+  contract; neither fabricates a handshake or synthesized probe.
 
 A missing/unsupported provider contract reports failed. STT retains its connected evidence and
 session generation through unrelated policy revisions. Closing/replacing its provider session
-invalidates that evidence and changes the generation; callbacks from the old transport cannot
+invalidates that evidence and changes the generation; callbacks from the old wire cannot
 restore it. TTS retains its initialized generation across ordinary interruption.
 
 These queries prove the provider component's readiness. Codec/ingress binding, private output,

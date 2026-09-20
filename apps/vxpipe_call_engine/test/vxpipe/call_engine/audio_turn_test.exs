@@ -171,16 +171,19 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
 
   defp speech_to_text_settings(observer) do
     [
-      enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: observer, ready_on_start: true],
-      media_ingress: [
-        maximum_frames: 50,
-        maximum_bytes: 262_144,
-        maximum_age_ms: 2_000,
-        maximum_consecutive_overflows: 5
-      ]
+      providers: %{
+        Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: observer, ready_on_start: true],
+          media_ingress: [
+            maximum_frames: 50,
+            maximum_bytes: 262_144,
+            maximum_age_ms: 2_000,
+            maximum_consecutive_overflows: 5
+          ]
+        ]
+      }
     ]
   end
 

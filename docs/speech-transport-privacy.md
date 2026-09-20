@@ -8,22 +8,23 @@ dependencies directly, keeping authentication in the HTTP upgrade only.
 ## Responsibility and behavior
 
 `SocketConnection` owns connection, upgrade and frame encoding/decoding. `Socket` owns
-the supervised process, close, ping replies and TTS acknowledgements. The existing
-Flux facades retain their speech transport contracts. Connect, upgrade, send and output
+the supervised process, close, ping replies and TTS acknowledgements. Deepgram's STT and
+TTS session providers own the semantic speech contract; the sockets are provider-private
+wires and cannot be selected by a Call Spec. Connect, upgrade, send and output
 acknowledgement are bounded. Failures return safe reasons without provider response data.
-The transport does not reconnect automatically.
+The wire does not reconnect automatically.
 
-TTS acknowledgements are asynchronous so closing a connection remains responsive while
+TTS acknowledgements are asynchronous so closing a session remains responsive while
 output is pending. Active-once socket delivery pauses reads while audio is unacknowledged;
 the existing 15-second output deadline closes a stalled stream. Upgrade handling preserves
 provider frames that arrive in the same read as the HTTP upgrade. Routine inspection and
 crash status exclude buffered payloads; STT capability state inspection also excludes its
-connection headers and transport settings.
+connection headers and private wire settings.
 
 Filtering one telemetry subscriber was rejected because other subscribers would still
 receive the credentials. Patching the installed dependency was rejected because the fix
 would not survive a dependency reinstall. Mint owns the WebSocket protocol implementation;
-Vxpipe owns its speech lifecycle. ReqLLM still needs WebSockex transitively, so its lock
+Vxpipe owns its scoped speech-session lifecycle. ReqLLM still needs WebSockex transitively, so its lock
 entry remains unchanged.
 
 ## Verification

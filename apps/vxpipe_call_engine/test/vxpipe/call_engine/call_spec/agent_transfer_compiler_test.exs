@@ -387,8 +387,8 @@ defmodule Vxpipe.CallEngine.CallSpec.AgentTransferCompilerTest do
                owner: self(),
                agent_runtime: agent_runtime,
                agent_request_options: [],
-               speech_to_text: [enabled: false],
-               text_to_speech: [enabled: false]
+               speech_to_text: [providers: %{}],
+               text_to_speech: [providers: %{}]
              )
 
     assert startup.agent_activation[:tool_invocation_timeout_ms] == 121_000

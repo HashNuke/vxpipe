@@ -45,31 +45,30 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       |> Keyword.put(:fixture, {TestSelectiveAgentRuntimeModelProvider, [owner: self()]})
 
     text_to_speech = [
-      enabled: true,
-      provider: FluxTextToSpeech.Session,
-      provider_options: [
-        api_key: "runtime-test-secret",
-        model: "flux-application-voice",
-        encoding: :linear16,
-        sample_rate: 48_000
-      ],
-      wire_module: TestTextToSpeechTransport,
-      wire_options: [observer: self()],
-      maximum_requests: 2
+      providers: %{
+        FluxTextToSpeech.Session => [
+          enabled: true,
+          wire_module: TestTextToSpeechTransport,
+          wire_options: [observer: self()],
+          maximum_requests: 2
+        ]
+      }
     ]
 
     speech_to_text = [
-      enabled: true,
-      provider: Flux.Session,
-      provider_options: [api_key: "runtime-test-secret"],
-      wire_module: TestSpeechToTextTransport,
-      wire_options: [observer: self()],
-      media_ingress: [
-        maximum_frames: 8,
-        maximum_bytes: 1_024,
-        maximum_age_ms: 1_000,
-        maximum_consecutive_overflows: 2
-      ]
+      providers: %{
+        Flux.Session => [
+          enabled: true,
+          wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: self()],
+          media_ingress: [
+            maximum_frames: 8,
+            maximum_bytes: 1_024,
+            maximum_age_ms: 1_000,
+            maximum_consecutive_overflows: 2
+          ]
+        ]
+      }
     ]
 
     Application.put_env(

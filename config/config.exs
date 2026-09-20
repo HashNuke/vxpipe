@@ -83,9 +83,9 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     stale_after_ms: 300_000,
     refresh_timeout_ms: 30_000
   ],
-  speech_to_text: [enabled: false],
+  speech_to_text: [providers: %{}],
   telemetry: [sample_interval_ms: 1_000],
-  text_to_speech: [enabled: false]
+  text_to_speech: [providers: %{}]
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
   http: [

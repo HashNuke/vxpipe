@@ -1,6 +1,6 @@
 # Simpler speech integrations
 
-Status: checkpoints R, A, D, B, C, F, E and G are accepted. B and C include a live Deepgram
+Status: checkpoints R, A, D, B, C, F, E, G and H are accepted. B and C include a live Deepgram
 WebRTC/RTVI turn through the native STT session. C1–C4 provide the direct native Deepgram STT
 path. Morse and Deepgram use the same semantic STT contract, the room has one session path, and
 the old STT behaviours, connector, bridge, global connection-task supervisor and Morse transport adapter
@@ -17,10 +17,10 @@ the old public TTS transport path, and preserves exact output credit, interrupti
 G adds a shared conformance harness, contrasting request/context/batch/segmented profiles and a
 compiled provider-authoring guide.
 
-Implementation is **8 of 9 checkpoints accepted**. The implementation order is
+Implementation is **9 of 9 checkpoints accepted**. The implementation order is
 **R → A → D → B → C → F → E → G → H**. F makes Deepgram TTS a native semantic provider before
 E switches every TTS consumer once for both Morse and Deepgram. No compatibility bridge,
-fallback execution path or dual public configuration API is part of the remaining plan.
+fallback execution path or dual public configuration API is part of the final design.
 Historical experiments and intermediate commits remain evidence only; they do not define the
 final runtime. The detailed R/A/D/B findings remain in their linked architecture reports and
 checkpoint labnotes.
@@ -618,38 +618,38 @@ behaviour/helpers, without depending on Call Engine private messages or any real
 Prerequisite: G. Outcome: source and embedded configurations run only the final contract, existing call specs
 still load, and all remaining references are deliberate private wire implementations.
 
-- [ ] **H1 — Finish config migration.** Remove obsolete public provider/transport settings and
+- [x] **H1 — Finish config migration.** Remove obsolete public provider/transport settings and
   callback behaviours still found in `plan_startup.ex`, runtime structs, root `config/dev.exs`,
   test support and embedded examples. C already removes the global STT connection-task
   supervisor; E removes the audio-output task supervisor with the old TTS path. Never add a
   replacement global speech executor. Keep host limits and closed catalog validation explicit.
   Obsolete settings fail clearly; do not silently ignore them or introduce persisted bridges.
-- [ ] **H2 — Verify activation boundaries.** Run focused credential tests in Engine, Calls and
+- [x] **H2 — Verify activation boundaries.** Run focused credential tests in Engine, Calls and
   Persistence for tenant override/platform inheritance, fresh lookup on new activation, retained
   snapshots in running sessions, opening cache scope, private briefing and source restoration.
   Stored Call Specs/plans keep their current schema and contain no private session data.
-- [ ] **H3 — End-to-end acceptance.** Run the deterministic direct-PCM room demo, existing
+- [x] **H3 — End-to-end acceptance.** Run the deterministic direct-PCM room demo, existing
   native WebRTC/egress regression tests and existing hosted STT/TTS lanes. Exercise typed and
   spoken interruption followed by another usable turn. Carrier-specific new live calls are not
   required for an unchanged transport boundary; affected carrier media regression tests remain.
-- [ ] **H4 — Documentation and rendered check.** Update architecture, development, interruption,
+- [x] **H4 — Documentation and rendered check.** Update architecture, development, interruption,
   readiness, inline-selection and privacy docs to describe the implemented boundary. Inspect
   the existing sample call using `agent-browser`/Chrome for connected, speaking, interrupted and
   replacement states. Record any unavailable browser/provider check explicitly; source review
   cannot establish rendered or audible behavior.
-- [ ] **H5 — Final audit/gates.** Search for legacy callbacks/tuples outside provider-private
+- [x] **H5 — Final audit/gates.** Search for legacy callbacks/tuples outside provider-private
   modules, inspect status/diffs, run all common root gates, and record actual results and unresolved
   external checks. Inspect actual speech ancestry and run the scoped isolation, paired burst
   and paced latency lanes for STT and TTS. Report each repeat, count and latency distribution;
   reproduced stability failures keep room migration pending its gates. No new hosted provider or format may
   appear merely because it was compared.
-- [ ] **H6 — Demonstrate simplification.** Record removed modules/callbacks and lifetime/task
+- [x] **H6 — Demonstrate simplification.** Record removed modules/callbacks and lifetime/task
   bookkeeping against the pre-migration baseline, plus retained monitors and their domain
   responsibilities. Confirm C's STT deletion and E's direction-wide TTS deletion rather than
   counting moved code as eliminated complexity. Do not delete policy, lease, readiness-ordering, usage or
   playback logic simply because a supervisor now owns the worker. No arbitrary line-count
   target substitutes for passing the behavioral gates.
-- [ ] **Exit H.** Complete the evidence ledger, all required acceptance lanes and author guide;
+- [x] **Exit H.** Complete the evidence ledger, all required acceptance lanes and author guide;
   mark the milestone/index complete together only then. Packaging and retention holds remain.
 
 ## Verification map and commands
@@ -712,7 +712,7 @@ for timing distributions, exact covered permissions and excluded production path
 | F | Accepted: Deepgram TTS is a native scoped semantic session over its private Mint wire | 50 focused TTS and 13 controlled-wire/privacy cases pass; all five root gates pass (1,950 tests, zero failures, 42 excluded; seed 530504); Astra reviewed | 640/640 loaded requests pass; hosted `flux-haley-en` synthesis returns nonempty 48 kHz mono linear16 through the semantic session |
 | E | Accepted: conversation, opening and private-transfer TTS share semantic sessions; old public TTS contracts, Morse transport and global output task supervisor are removed | Exact-credit, cancellation, readiness, usage and all five root gates pass (1,942 tests, zero failures, 42 excluded; seed 530504) | 36 bounded trials pass 3,936 TTS turns, 3,936 concurrent STT turns and 492 fault/replacement cycles on four schedulers |
 | G | Accepted: shared conformance harness, request/context/batch/segmented profiles and compiled authoring guide | 14 focused contract and 154 broader speech cases pass; all five root gates pass (1,956 tests, zero failures, 42 excluded; seed 674921); Astra reviewed | Guide source exactly matches its compiled example; structural profiles require no hosted account |
-| H | Not started | Pending | Browser/hosted final acceptance pending |
+| H | Accepted: closed host provider maps, final all-consumer fixtures, replacement-turn assertions, dead callback-probe removal and synchronized architecture/acceptance docs | 185-case Engine migration selection, 57 Calls/Persistence activation cases, 33 scoped lifecycle cases, 29 native WebRTC boundary cases, focused carrier/interruption/direct-PCM cases and all five root gates pass (1,957 tests, zero failures, 42 excluded; seed 0); exact semantic TTS ordering case passes 100 repeats; Astra reviewed | Native and full-WebRTC hosted TTS pass. Hosted STT fixture unavailable. The 1440×1000 room-creation page renders without page errors; connected/speaking/interrupted/replacement states are unavailable because this development environment has neither managed sample admission nor credentials for its explicit trusted path. Bounded final STT/TTS reports use four schedulers and at most four/two workers; direct Morse playback interruption and replacement complete in one room test |
 
 ## Specification review
 

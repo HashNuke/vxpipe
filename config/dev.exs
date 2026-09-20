@@ -42,16 +42,16 @@ config :vxpipe_calls, Vxpipe.Calls, registries: %{host_tools: sample_host_tools}
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [context_compaction: [enabled: true]],
   speech_to_text: [
-    enabled: true,
-    provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
-    wire_options: [],
-    media_ingress: [
-      maximum_frames: 50,
-      maximum_bytes: 262_144,
-      maximum_age_ms: 2_000,
-      maximum_consecutive_overflows: 5
-    ],
     providers: %{
+      Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+        enabled: true,
+        media_ingress: [
+          maximum_frames: 50,
+          maximum_bytes: 262_144,
+          maximum_age_ms: 2_000,
+          maximum_consecutive_overflows: 5
+        ]
+      ],
       Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
         enabled: true,
         media_ingress: [
@@ -64,11 +64,11 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     }
   ],
   text_to_speech: [
-    enabled: true,
-    provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
-    wire_module: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket,
-    maximum_requests: 4,
     providers: %{
+      Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+        enabled: true,
+        maximum_requests: 4
+      ],
       Vxpipe.CallEngine.Provider.MorseCodeTTS.Session => [
         enabled: true,
         maximum_requests: 4
