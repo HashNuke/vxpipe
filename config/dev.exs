@@ -43,8 +43,8 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [context_compaction: [enabled: true]],
   speech_to_text: [
     enabled: true,
-    provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
-    transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxSocket, []},
+    provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
+    wire_options: [],
     media_ingress: [
       maximum_frames: 50,
       maximum_bytes: 262_144,

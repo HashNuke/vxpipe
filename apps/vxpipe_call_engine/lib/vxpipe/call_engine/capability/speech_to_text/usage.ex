@@ -102,23 +102,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.Usage do
     :ok
   end
 
-  defp active?(%State{mode: :native, session: session, readiness_status: :ready}),
+  defp active?(%State{session: session, readiness_status: :ready}),
     do: not is_nil(session)
 
-  defp active?(%State{mode: :legacy, transport: transport}), do: is_pid(transport)
   defp active?(%State{}), do: false
 
-  defp same_session?(%State{mode: :native, session: session}, %State{
-         mode: :native,
-         session: session
-       }),
-       do: true
-
-  defp same_session?(%State{mode: :legacy, transport: transport}, %State{
-         mode: :legacy,
-         transport: transport
-       }),
-       do: true
+  defp same_session?(%State{session: session}, %State{session: session}),
+    do: true
 
   defp same_session?(%State{}, %State{}), do: false
 end

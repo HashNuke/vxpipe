@@ -2,8 +2,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{DestinationPreparer, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
   alias Vxpipe.CallEngine.{TestTenantCredentialSource, TestTurnCall}
@@ -30,7 +30,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       assert voice.sample_rate == 24_000
 
       assert {:ok, listener} = PlanStartup.human_destination(plan, human, options)
-      recognition = bridge_configuration(listener.speech_to_text)
+      recognition = session_configuration(listener.speech_to_text)
       assert recognition.api_key == tenant <> "-listener-private-marker"
       assert recognition.encoding == :linear16
       assert recognition.sample_rate == 16_000
@@ -86,9 +86,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
     assert Keyword.fetch!(second.agent_activation, :model).api_key == "new-model-private-marker"
     assert {FluxTextToSpeech, voice} = second.text_to_speech.provider
     assert voice.api_key == "new-voice-private-marker"
-    old_listener = bridge_configuration(first_listener.speech_to_text)
+    old_listener = session_configuration(first_listener.speech_to_text)
     assert old_listener.api_key == tenant <> "-listener-private-marker"
-    new_listener = bridge_configuration(second_listener.speech_to_text)
+    new_listener = session_configuration(second_listener.speech_to_text)
     assert new_listener.api_key == "new-listener-private-marker"
     refute inspect(second) =~ "private-marker"
   end
@@ -242,9 +242,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       speech_to_text: [
         enabled: true,
-        provider: Flux,
+        provider: FluxSession,
         provider_options: [api_key: "retired-private-marker"],
-        transport: {Vxpipe.CallEngine.TestSpeechToTextTransport, [observer: self()]},
+        wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
+        wire_options: [observer: self()],
         media_ingress: [
           maximum_frames: 50,
           maximum_bytes: 262_144,
@@ -262,17 +263,17 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
     ]
   end
 
-  defp bridge_configuration(runtime) do
-    assert {LegacyBridge, public_config} = runtime.provider
+  defp session_configuration(runtime) do
+    assert {FluxSession, public_config} = runtime.provider
     assert is_binary(public_config[:model])
 
     assert [
-             provider: Flux,
              config: configuration,
-             transport: {Vxpipe.CallEngine.TestSpeechToTextTransport, transport_options}
+             wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
+             wire_options: wire_options
            ] = runtime.provider_private
 
-    assert Keyword.fetch!(transport_options, :observer) == self()
+    assert Keyword.fetch!(wire_options, :observer) == self()
     configuration
   end
 

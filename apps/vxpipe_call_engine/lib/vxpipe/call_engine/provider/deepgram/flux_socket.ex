@@ -5,20 +5,15 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxSocket do
 
   @behaviour Socket
 
-  @behaviour Vxpipe.CallEngine.Provider.SpeechToText.Transport
-
-  @impl Vxpipe.CallEngine.Provider.SpeechToText.Transport
   def start_link(options) do
     owner = Keyword.fetch!(options, :owner)
     Socket.start_link(options, __MODULE__, %{owner: owner})
   end
 
-  @impl Vxpipe.CallEngine.Provider.SpeechToText.Transport
   def send_audio(socket, audio) when is_binary(audio) do
     Socket.send_frame(socket, {:binary, audio})
   end
 
-  @impl Vxpipe.CallEngine.Provider.SpeechToText.Transport
   def close(socket) do
     Socket.close(socket, JSON.encode!(%{"type" => "CloseStream"}))
   end

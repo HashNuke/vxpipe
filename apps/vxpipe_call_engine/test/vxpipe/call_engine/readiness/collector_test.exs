@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Speech.CapabilityTree
   alias Vxpipe.CallEngine.{RoomMixer, TestSpeechToTextTransport}
 
   test "combines actual provider and room evidence and rejects a changed policy binding" do
@@ -34,6 +35,8 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
                sample_rate: 48_000
              )
 
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
     stt =
       start_supervised!(
         {SpeechToText,
@@ -42,8 +45,17 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
              owner: self(),
              participant_id: "caller",
              connection_id: "connection",
-             provider: {Flux, provider},
-             transport: {TestSpeechToTextTransport, [observer: self()]}
+             speech_scope: CapabilityTree.scope(tree),
+             provider:
+               {Flux.Session,
+                model: provider.model,
+                encoding: provider.encoding,
+                sample_rate: provider.sample_rate},
+             provider_private: [
+               config: provider,
+               wire_module: TestSpeechToTextTransport,
+               wire_options: [observer: self()]
+             ]
            ]}
       )
 

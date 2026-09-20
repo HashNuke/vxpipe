@@ -21,7 +21,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   }
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
+  alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseCodeConfig
+  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.MorseCode.Decoder, as: MorseDecoder
   alias Vxpipe.CallEngine.Provider.MorseCode.Encoder, as: MorseEncoder
   alias Vxpipe.Gateway.HTTP.Endpoint
@@ -52,9 +54,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [api_key: "runtime-test-secret"],
-      transport: {TestSpeechToTextTransport, observer: self()},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self()],
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 65_536,
@@ -95,10 +98,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         |> Keyword.put(:speech_to_text,
           enabled: false,
           providers: %{
-            MorseCodeSTT => [
+            MorseCodeSTTSession => [
               enabled: true,
               provider_options: [],
-              transport: {MorseCodeSTT.Transport, []},
               media_ingress: Keyword.fetch!(speech_to_text, :media_ingress)
             ]
           }
@@ -4417,7 +4419,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   defp send_morse(connection, text) do
-    assert {:ok, config} = MorseCodeSTT.new(@morse_options)
+    assert {:ok, config} = MorseCodeConfig.new(@morse_options)
     assert {:ok, pcm} = MorseEncoder.encode(config, text)
     pcm = pcm <> :binary.copy(<<0, 0>>, 2_880)
 

@@ -217,8 +217,9 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp speech_to_text_settings(observer) do
     [
       enabled: true,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
-      transport: {TestSpeechToTextTransport, [observer: observer, ready_on_start: true]},
+      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: observer, ready_on_start: true],
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,

@@ -35,6 +35,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.Gateway.WebRTC.{
     ConnectionPeerSupervisor,
     IncomingAudio,
+    OpusInput,
     SmallWebRTCSignalling,
     SpeechInput,
     TransferSideband
@@ -626,20 +627,32 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   defp forward_audio(nil, _track_id, _packet, state), do: {:drop, state}
 
   defp forward_audio(codec, track_id, packet, state) do
-    track = %{
-      track_id: to_string(track_id),
-      codec: :opus,
-      sample_rate: codec.clock_rate,
-      channels: codec.channels || 1
-    }
+    if IncomingAudio.receive_only?(state.attachment) do
+      {:drop, state}
+    else
+      prepare_and_deliver_audio(codec, track_id, packet, state)
+    end
+  end
 
-    case SpeechInput.prepare(state.attachment, track, state.speech_input) do
-      {:ok, _output, input} ->
-        state = %{state | speech_input: input}
-        {deliver_audio(codec, track_id, packet, state), state}
+  defp prepare_and_deliver_audio(codec, track_id, packet, state) do
+    with {:ok, channels} <- OpusInput.track_channels(codec) do
+      track = %{
+        track_id: to_string(track_id),
+        codec: :opus,
+        sample_rate: codec.clock_rate,
+        channels: channels
+      }
 
-      {:error, _reason} ->
-        {:unavailable, state}
+      case SpeechInput.prepare(state.attachment, track, state.speech_input) do
+        {:ok, _output, input} ->
+          state = %{state | speech_input: input}
+          {deliver_audio(codec, track_id, packet, state), state}
+
+        {:error, _reason} ->
+          {:unavailable, state}
+      end
+    else
+      {:error, :unsupported_codec} -> {:drop, state}
     end
   end
 

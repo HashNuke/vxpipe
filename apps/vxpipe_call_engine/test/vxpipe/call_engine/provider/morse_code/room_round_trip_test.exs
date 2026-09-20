@@ -22,7 +22,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   }
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, AudioOutputFrame}
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.CallEngine.Provider.MorseCode.Config
   alias Vxpipe.CallEngine.Provider.MorseCode.{Decoder, Encoder}
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
   alias Vxpipe.CallEngine.TestAudioOutputSink
@@ -306,7 +307,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   end
 
   defp push_text(attachment, plan, room, caller, connection_id, text, first_sequence) do
-    assert {:ok, input_config} = MorseCodeSTT.new(sample_rate: 16_000, unit_duration_ms: 20)
+    assert {:ok, input_config} = Config.new(sample_rate: 16_000, unit_duration_ms: 20)
     assert {:ok, input_pcm} = Encoder.encode(input_config, text)
 
     input_pcm

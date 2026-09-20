@@ -1,7 +1,9 @@
 defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{FluxSocket, FluxTextToSpeechSocket}
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxSocket, FluxTextToSpeechSocket}
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.TestSpeechWireServer
 
   @moduletag :integration
@@ -141,6 +143,64 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
     assert :ok = FluxSocket.close(socket)
   end
 
+  test "native STT maps a coalesced Connected frame and drops a duplicate turn sequence" do
+    connected =
+      JSON.encode!(%{"type" => "Connected", "request_id" => "request-1", "sequence_id" => 0})
+
+    server =
+      start_supervised!(
+        {Vxpipe.CallEngine.TestSpeechUpgradeServer, owner: self(), frames: [text: connected]}
+      )
+
+    assert_receive {:speech_upgrade_endpoint, endpoint}
+
+    assert {:ok, config} =
+             Flux.new(
+               api_key: @secret,
+               model: "flux-general-en",
+               encoding: :opus,
+               sample_rate: 48_000
+             )
+
+    config = %{config | endpoint: endpoint}
+
+    scope =
+      start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
+      |> CapabilityTree.scope()
+
+    assert {:ok, session, :starting} =
+             Session.start(scope,
+               provider: FluxSession,
+               options: [
+                 model: config.model,
+                 encoding: config.encoding,
+                 sample_rate: config.sample_rate
+               ],
+               private: [config: config, wire_options: []]
+             )
+
+    assert_receive {:speech_upgrade_connected, ^server}, 1_000
+    assert %Event{kind: :ready, provider_request_id: "request-1"} = next_event(session)
+
+    send(
+      server,
+      {:send,
+       [
+         text: turn_message("StartOfTurn", 1, "hello"),
+         text: turn_message("Update", 1, "FORBIDDEN"),
+         text: turn_message("Update", 2, "hello there"),
+         text: turn_message("EndOfTurn", 3, "hello there", "model")
+       ]}
+    )
+
+    assert %Event{kind: :speech_started} = next_event(session)
+    assert %Event{kind: :transcript, text: "hello"} = next_event(session)
+    assert %Event{kind: :transcript, text: "hello there"} = next_event(session)
+    assert %Event{kind: :turn_ended, text: "hello there"} = next_event(session)
+    refute_received {:vxpipe_speech, %Event{text: "FORBIDDEN"}}
+    assert :ok = Session.close(session)
+  end
+
   test "an unacknowledged output closes at the fixed output deadline", context do
     socket = start_socket(FluxTextToSpeechSocket, context.endpoint)
     assert_receive {:speech_wire_connected, peer}
@@ -174,6 +234,30 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
 
   def observe(_event, _measurements, metadata, owner) do
     send(owner, {:speech_transport_telemetry, self(), metadata})
+  end
+
+  defp next_event(session) do
+    assert_receive {:vxpipe_speech, %Event{session: ^session} = event}, 1_000
+    assert :ok = Session.ack(session, event)
+    event
+  end
+
+  defp turn_message(event, sequence, transcript, trigger \\ nil) do
+    message = %{
+      "type" => "TurnInfo",
+      "request_id" => "request-1",
+      "sequence_id" => sequence,
+      "event" => event,
+      "turn_index" => 0,
+      "audio_window_start" => 0.0,
+      "audio_window_end" => 1.0,
+      "transcript" => transcript,
+      "words" => [],
+      "end_of_turn_confidence" => 0.8
+    }
+
+    message = if trigger, do: Map.put(message, "trigger", trigger), else: message
+    JSON.encode!(message)
   end
 
   defp start_socket(module, endpoint, options \\ []) do

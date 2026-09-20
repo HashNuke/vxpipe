@@ -5,12 +5,10 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree
-  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
-  alias Vxpipe.CallEngine.Capability.SpeechToText.TransportConnector
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
-  alias Vxpipe.CallEngine.Provider.MorseCodeSTT
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor
@@ -81,41 +79,25 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
              "had a #{@startup_budget} ms startup budget. All decoded E after release."
   end
 
-  test "existing room startup keeps an unrelated room's Morse recognition usable", %{tasks: tasks} do
-    owner = self()
+  test "a stalled Deepgram wire keeps an unrelated room's Morse recognition usable" do
     slow_command = command("slow")
     fast_command = command("fast")
     start_supervised!({RoomCapabilitySupervisor, incarnation_id: slow_command.incarnation_id})
     start_supervised!({RoomCapabilitySupervisor, incarnation_id: fast_command.incarnation_id})
-    {:ok, config} = MorseCodeSTT.new([])
 
-    slow_start =
-      Task.Supervisor.async_nolink(tasks, fn ->
-        start_legacy(
-          slow_command,
-          owner,
-          config,
-          {TestSpeechToTextTransport, observer: owner, before_connect: held_connection(owner)}
-        )
-      end)
-
-    assert_receive {:legacy_start_held, held_capability}, 1_000
+    {provider, private} = deepgram_provider(before_connect: held_wire(self()))
+    assert {:ok, _held_capability, _ingress} = start_native(slow_command, provider, private)
+    assert_receive {:test_stt_wire_held, held_wire}, 1_000
 
     try do
-      fast_start =
-        Task.Supervisor.async_nolink(tasks, fn ->
-          start_legacy(fast_command, owner, config, {MorseCodeSTT.Transport, []})
-        end)
-
-      assert {:ok, capability, _ingress} = Task.await(fast_start, @observation_window)
+      assert {:ok, capability, _ingress} = start_native(fast_command, MorseSession)
       assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
       assert :ok = SpeechToText.push_audio(capability, frame(fast_command))
 
       assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_ended, text: "E"}},
                      @observation_window
     after
-      send(held_capability, :release_connection)
-      Task.await(slow_start, 2_000)
+      send(held_wire, :release_wire)
     end
   end
 
@@ -168,36 +150,19 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
     assert {:error, :unavailable} = PrivateInit.claim(handle)
   end
 
-  test "a held hosted bridge initializer leaves a same-room native connection recognizing" do
+  test "a held Deepgram initializer leaves a same-room Morse connection recognizing" do
     sentinel = "connection-tree-private-init-sentinel"
-    slow_command = command("bridge-slow")
-    fast_command = peer_command(slow_command, "bridge-fast")
+    slow_command = command("deepgram-slow")
+    fast_command = peer_command(slow_command, "morse-fast")
     start_supervised!({RoomCapabilitySupervisor, incarnation_id: slow_command.incarnation_id})
 
-    assert {:ok, config} =
-             Flux.new(
-               api_key: "startup-isolation-fixture",
-               model: "flux-general-en",
-               encoding: :opus,
-               sample_rate: 48_000
-             )
-
-    public = LegacyBridge.public_options(Flux, config)
+    {provider, private} =
+      deepgram_provider(before_connect: held_wire(self()), private_header: sentinel)
 
     assert {:ok, held_capability, _ingress} =
-             start_native(slow_command, {LegacyBridge, public},
-               provider: Flux,
-               config: config,
-               transport:
-                 {TestSpeechToTextTransport,
-                  [
-                    observer: self(),
-                    before_connect: held_connection(self()),
-                    private_header: sentinel
-                  ]}
-             )
+             start_native(slow_command, provider, private)
 
-    assert_receive {:legacy_start_held, held_bridge}, 1_000
+    assert_receive {:test_stt_wire_held, held_wire}, 1_000
     held_tree = ConnectionTree.parent(held_capability)
 
     assert [{capability_supervisor, _value}] =
@@ -229,43 +194,7 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
 
       refute logs =~ sentinel
     after
-      send(held_bridge, :release_connection)
-    end
-  end
-
-  test "existing replacement connector admits Morse while another connection is held" do
-    # The real capability traps exits from linked connector tasks too.
-    Process.flag(:trap_exit, true)
-    {:ok, config} = MorseCodeSTT.new([])
-
-    {:ok, slow} =
-      TransportConnector.start(TestSpeechToTextTransport, %{},
-        observer: self(),
-        before_connect: held_connection(self())
-      )
-
-    assert_receive {:legacy_start_held, held_connector}, 1_000
-
-    try do
-      {:ok, fast} =
-        TransportConnector.start(
-          MorseCodeSTT.Transport,
-          MorseCodeSTT.connection_options(config),
-          []
-        )
-
-      connector = fast.pid
-      assert_receive {:vxpipe_stt_connected, ^connector, transport}, @observation_window
-
-      try do
-        assert :ok = MorseCodeSTT.Transport.send_audio(transport, reference_e())
-        assert "E" == receive_legacy_final(transport)
-      after
-        stop_connector(fast)
-      end
-    after
-      send(held_connector, :release_connection)
-      stop_connector(slow)
+      send(held_wire, :release_wire)
     end
   end
 
@@ -338,41 +267,36 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
     if event.kind == :turn_ended, do: event.text, else: receive_semantic_final(session)
   end
 
-  defp receive_legacy_final(transport) do
-    assert_receive {:vxpipe_stt_transport, ^transport, {:message, payload}}, @observation_window
-    assert {:ok, signal} = MorseCodeSTT.decode(payload)
-    if signal.kind == :turn_ended, do: signal.text, else: receive_legacy_final(transport)
-  end
-
-  defp held_connection(observer) do
+  defp held_wire(observer) do
     fn ->
-      send(observer, {:legacy_start_held, self()})
+      send(observer, {:test_stt_wire_held, self()})
 
       receive do
-        :release_connection -> :ok
+        :release_wire -> :ok
       end
     end
   end
 
-  defp stop_connector(connector) do
-    pid = connector.pid
-    monitor = Process.monitor(pid)
-    :ok = TransportConnector.stop(connector)
-    assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 1_000
-  end
+  defp deepgram_provider(wire_options) do
+    {:ok, config} =
+      Flux.new(
+        api_key: "startup-isolation-fixture",
+        model: "flux-general-en",
+        encoding: :opus,
+        sample_rate: 48_000
+      )
 
-  defp start_legacy(command, owner, config, transport) do
-    RoomCapabilitySupervisor.start_speech_to_text(
-      command.incarnation_id,
-      owner,
-      command,
-      {MorseCodeSTT, config},
-      transport,
-      maximum_age_ms: 1_000,
-      maximum_bytes: 131_072,
-      maximum_frames: 32,
-      maximum_consecutive_overflows: 3
-    )
+    provider =
+      {FluxSession,
+       model: config.model, encoding: config.encoding, sample_rate: config.sample_rate}
+
+    private = [
+      config: config,
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self()] ++ wire_options
+    ]
+
+    {provider, private}
   end
 
   defp start_native(command, provider, provider_private \\ [])
@@ -386,7 +310,6 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
       self(),
       command,
       {provider, provider_options},
-      nil,
       [
         maximum_age_ms: 1_000,
         maximum_bytes: 131_072,

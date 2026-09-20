@@ -3,9 +3,6 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
 
   use GenServer
 
-  @behaviour Vxpipe.CallEngine.Provider.SpeechToText.Transport
-
-  @impl true
   def start_link(options) do
     options
     |> Keyword.fetch!(:transport_options)
@@ -15,10 +12,8 @@ defmodule Vxpipe.CallEngine.TestSpeechToTextTransport do
     GenServer.start_link(__MODULE__, options)
   end
 
-  @impl true
   def send_audio(transport, audio), do: GenServer.call(transport, {:send_audio, audio})
 
-  @impl true
   def close(transport), do: GenServer.call(transport, :close)
 
   def deliver(transport, payload), do: GenServer.cast(transport, {:deliver, payload})

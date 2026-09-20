@@ -6,12 +6,7 @@ ExUnit.start(seed: 0)
 defmodule Vxpipe.CallEngine.SpeechLatencyBench do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Capability.SpeechToText
-  alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.CallEngine.Provider.MorseCodeSTT
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
-  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
-  alias Vxpipe.CallEngine.RoomCapabilitySupervisor
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
@@ -31,7 +26,7 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
     trials =
       for repeat <- 1..@repeats,
           level <- @levels,
-          path <- if(rem(repeat, 2) == 1, do: [:legacy, :semantic], else: [:semantic, :legacy]),
+          path <- [:semantic],
           held? <- held_scenarios(path, level, repeat) do
         run_trial(tasks, path, level, repeat, held?)
       end
@@ -84,18 +79,10 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
     gate = make_ref()
 
     rooms =
-      if path == :legacy do
-        for _ <- 1..count do
-          incarnation = "rinc-bench-#{System.unique_integer([:positive, :monotonic])}"
-          supervisor = start_supervised!({RoomCapabilitySupervisor, incarnation_id: incarnation})
-          {incarnation, supervisor}
-        end
-      else
-        for _ <- 1..count do
-          id = make_ref()
-          tree = start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: id))
-          {:scope, id, CapabilityTree.scope(tree)}
-        end
+      for _ <- 1..count do
+        id = make_ref()
+        tree = start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: id))
+        {:scope, id, CapabilityTree.scope(tree)}
       end
 
     jobs =
@@ -189,33 +176,6 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
     %{path: :semantic, pid: pid}
   end
 
-  defp start_client(:legacy, {incarnation, supervisor}) do
-    {:ok, config} = MorseCodeSTT.new([])
-
-    identity = [
-      tenant_id: "tenant-bench",
-      room_id: "room-#{incarnation}",
-      incarnation_id: incarnation,
-      participant_id: "human",
-      connection_id: "conn"
-    ]
-
-    {:ok, pid} =
-      DynamicSupervisor.start_child(
-        supervisor,
-        {SpeechToText,
-         identity ++
-           [
-             owner: self(),
-             provider: {MorseCodeSTT, config},
-             transport: {MorseCodeSTT.Transport, []}
-           ]}
-      )
-
-    assert_receive {:vxpipe_stt_signal, ^pid, _, %Signal{kind: :connected}}, 5_000
-    %{path: :legacy, pid: pid, identity: identity, supervisor: supervisor}
-  end
-
   defp measure_turn(client, round) do
     {prefix, suffix} = client.pcm
     started = now()
@@ -239,26 +199,6 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
 
   defp push(%{path: :semantic, pid: pid}, pcm, _sequence), do: Session.push_audio(pid, pcm)
 
-  defp push(%{path: :legacy} = client, pcm, sequence) do
-    frame =
-      struct!(
-        AudioFrame,
-        client.identity ++
-          [
-            track_id: "morse",
-            codec: :linear16,
-            sample_rate: 16_000,
-            channels: 1,
-            sequence_number: sequence,
-            timestamp: sequence * 320,
-            payload: pcm,
-            received_at: System.monotonic_time(:millisecond)
-          ]
-      )
-
-    SpeechToText.push_audio(client.pid, frame)
-  end
-
   defp receive_kind(%{path: :semantic, pid: pid}, kind) do
     expected = %{started: :speech_started, text: :transcript, ended: :turn_ended}
     assert_receive {:vxpipe_speech, %Event{session: ^pid} = event}, 5_000
@@ -268,22 +208,7 @@ defmodule Vxpipe.CallEngine.SpeechLatencyBench do
     now()
   end
 
-  defp receive_kind(%{path: :legacy, pid: pid}, kind) do
-    expected = %{started: :turn_started, text: :transcript_updated, ended: :turn_ended}
-    assert_receive {:vxpipe_stt_signal, ^pid, _, %Signal{} = signal}, 5_000
-    assert signal.kind == Map.fetch!(expected, kind)
-    if kind != :started, do: assert(signal.text == "E")
-    now()
-  end
-
   defp close_client(%{path: :semantic, pid: pid}), do: Session.close(pid)
-
-  defp close_client(%{path: :legacy} = client),
-    do:
-      DynamicSupervisor.terminate_child(
-        client.supervisor,
-        client.pid
-      )
 
   defp hold_start(_tasks) do
     id = make_ref()

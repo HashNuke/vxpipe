@@ -282,8 +282,9 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
       |> Keyword.update!(:opening_audio, &Keyword.put(&1, :cache, cache))
       |> Keyword.put(:speech_to_text,
         enabled: true,
-        provider: Flux,
-        transport: {TestSpeechToTextTransport, observer: self(), ready_on_start: true},
+        provider: Flux.Session,
+        wire_module: TestSpeechToTextTransport,
+        wire_options: [observer: self(), ready_on_start: true],
         media_ingress: [
           maximum_frames: 8,
           maximum_bytes: 1_024,

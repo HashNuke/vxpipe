@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
   alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
+  alias Membrane.Opus.Encoder.Native, as: OpusEncoder
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTurnCall}
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
@@ -343,16 +344,45 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
     assert_receive {:test_tts_control, ^tts_transport, _speak}
     assert_receive {:test_tts_control, ^tts_transport, _flush}
 
-    packet =
-      Packet.new(<<1, 2, 3, 4>>,
+    empty_packet =
+      Packet.new(<<>>,
         payload_type: 111,
         sequence_number: 1,
+        timestamp: 0,
+        ssrc: 123
+      )
+
+    assert :ok = PeerConnection.send_rtp(client, audio_track.id, empty_packet)
+
+    stereo = stereo_opus_packet()
+
+    packet =
+      Packet.new(stereo,
+        payload_type: 111,
+        sequence_number: 2,
         timestamp: 960,
         ssrc: 123
       )
 
     assert :ok = PeerConnection.send_rtp(client, audio_track.id, packet)
-    assert_receive {:test_stt_audio, ^stt_transport, <<1, 2, 3, 4>>}, 5_000
+    assert_receive {:test_stt_audio, ^stt_transport, normalized_stereo}, 5_000
+    assert <<_configuration::5, 0::1, _frame_code::2, _rest::binary>> = normalized_stereo
+
+    payload = mono_opus_packet()
+
+    packet =
+      Packet.new(payload,
+        payload_type: 111,
+        sequence_number: 3,
+        timestamp: 1_920,
+        ssrc: 123
+      )
+
+    assert :ok = PeerConnection.send_rtp(client, audio_track.id, packet)
+    assert_receive {:test_stt_audio, ^stt_transport, normalized_mono}, 5_000
+
+    assert {:ok, 1} =
+             Vxpipe.Gateway.WebRTC.OpusInput.packet_channels(normalized_mono)
 
     refute_receive {:ex_webrtc, ^client, {:data, ^client_channel, _message}}
 
@@ -482,8 +512,9 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
-      transport: {TestSpeechToTextTransport, [observer: observer, ready_on_start: true]},
+      provider: Flux.Session,
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: observer, ready_on_start: true],
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,
@@ -558,5 +589,27 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     message = if trigger == nil, do: message, else: Map.put(message, "trigger", trigger)
     JSON.encode!(message)
+  end
+
+  defp mono_opus_packet do
+    opus_packet(1)
+  end
+
+  defp stereo_opus_packet do
+    opus_packet(2)
+  end
+
+  defp opus_packet(channels) do
+    encoder = OpusEncoder.create(48_000, channels, 2_048, 64_000, 3_001)
+
+    pcm =
+      for sample <- 0..959, channel <- 1..channels, into: <<>> do
+        frequency = if channel == 1, do: 440, else: 660
+        value = round(:math.sin(2 * :math.pi() * frequency * sample / 48_000) * 16_000)
+        <<value::little-signed-16>>
+      end
+
+    assert {:ok, payload} = OpusEncoder.encode_packet(encoder, pcm, 960)
+    payload
   end
 end

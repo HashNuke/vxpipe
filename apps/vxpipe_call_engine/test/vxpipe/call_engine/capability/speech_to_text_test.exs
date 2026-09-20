@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
@@ -105,14 +106,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       connection_id: "conn-demo"
     ]
 
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
     capability =
       start_supervised!(
         {SpeechToText,
          identity ++
            [
              owner: self(),
-             provider: {Flux, provider},
-             transport: {TestSpeechToTextTransport, [observer: self()]}
+             speech_scope: CapabilityTree.scope(tree),
+             provider:
+               {FluxSession,
+                model: provider.model,
+                encoding: provider.encoding,
+                sample_rate: provider.sample_rate},
+             provider_private: [
+               config: provider,
+               wire_module: TestSpeechToTextTransport,
+               wire_options: [observer: self()]
+             ]
            ]}
       )
 
@@ -123,6 +135,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                     }}
 
     refute url =~ "runtime-secret"
+
+    TestSpeechToTextTransport.deliver(transport, connected_message("direct", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
 
     unsupported = audio_frame(identity, codec: :linear16)
     assert {:error, :unsupported_audio} = SpeechToText.push_audio(capability, unsupported)
@@ -142,26 +157,32 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                       incarnation_id: "rinc-demo",
                       participant_id: "part-human",
                       connection_id: "conn-demo"
-                    }, %Signal{kind: :turn_started, text: "hello", provider_sequence: 1}}
+                    }, %Signal{kind: :turn_started, text: ""}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, text: "hello"}}
 
     refute_receive {:vxpipe_stt_signal, ^capability, _, ^payload}
   end
 
-  test "ignores repeated provider sequence numbers and terminates on transport failure" do
+  test "ignores repeated provider sequence numbers and terminates on provider failure" do
     attach_provider_events(:deepgram)
     {capability, transport} = start_capability()
-    payload = turn_message("Update", 4, "hello")
+    TestSpeechToTextTransport.deliver(transport, connected_message("duplicates", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    payload = turn_message("StartOfTurn", 4, "hello")
 
     TestSpeechToTextTransport.deliver(transport, payload)
-    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{provider_sequence: 4}}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :transcript_updated}}
 
     TestSpeechToTextTransport.deliver(transport, payload)
-    refute_receive {:vxpipe_stt_signal, ^capability, _, %Signal{provider_sequence: 4}}
+    refute_receive {:vxpipe_stt_signal, ^capability, _, _}
 
     monitor = Process.monitor(capability)
     TestSpeechToTextTransport.disconnect(transport, :closed)
 
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}, 500
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}, 500
 
     assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
                     %{capability: :stt} = metadata},
@@ -169,7 +190,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
     assert metadata == %{capability: :stt, provider: :deepgram, category: :unavailable}
 
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}, 500
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 500
   end
 
   test "does not turn malformed provider messages into domain signals" do
@@ -177,8 +198,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     monitor = Process.monitor(capability)
     TestSpeechToTextTransport.deliver(transport, ~s({"type":"TurnInfo"}))
 
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :invalid_provider_message}, 500
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :invalid_provider_message}, 500
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}, 500
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 500
     refute_receive {:vxpipe_stt_signal, ^capability, _, _}
   end
 
@@ -186,9 +207,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     {capability, transport} = start_capability()
     initial = snapshot(0, ["part-human"], :unrestricted, true)
     assert :ok = Enforcer.apply(capability, initial, 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("retained", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
 
     TestSpeechToTextTransport.deliver(transport, turn_message("StartOfTurn", 4, "before"))
     assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{policy_revision: 0}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, policy_revision: 0}}
 
     joined = snapshot(1, ["part-human", "part-support"], :unrestricted, true)
     assert :ok = Enforcer.apply(capability, joined, 500)
@@ -201,7 +227,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     TestSpeechToTextTransport.deliver(transport, turn_message("EndOfTurn", 5, "after"))
 
     assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{policy_revision: 0, provider_sequence: 5}}
+                    %Signal{kind: :turn_ended, policy_revision: 0}}
 
     refute_receive {:vxpipe_stt_signal, ^capability, _, %Signal{provider_sequence: 4}}
   end
@@ -220,13 +246,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
     refute_receive {:test_stt_transport_started, _transport, _connection}
 
+    TestSpeechToTextTransport.deliver(first_transport, connected_message("first", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
     TestSpeechToTextTransport.deliver(first_transport, turn_message("StartOfTurn", 1, "first"))
 
     assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{provider_sequence: 1, policy_revision: 0}}
+                    %Signal{kind: :turn_started, policy_revision: 0}}
 
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, policy_revision: 0}}
+
+    first_monitor = Process.monitor(first_transport)
     assert :ok = Enforcer.apply(capability, snapshot(1, ["part-human"], %{}, false), 500)
-    assert_receive {:test_stt_transport_closed, ^first_transport}
+    assert_receive {:DOWN, ^first_monitor, :process, ^first_transport, _reason}
     assert {:error, :policy_denied} = SpeechToText.push_audio(capability, audio_frame(identity))
 
     routes = %{"part-human" => MapSet.new(["part-recipient"])}
@@ -247,7 +280,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     TestSpeechToTextTransport.deliver(second_transport, turn_message("StartOfTurn", 1, "second"))
 
     assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{provider_sequence: 1, policy_revision: 2}}
+                    %Signal{kind: :turn_started, policy_revision: 2}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, policy_revision: 2}}
 
     second_monitor = Process.monitor(second_transport)
 
@@ -258,7 +294,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                500
              )
 
-    assert_receive {:DOWN, ^second_monitor, :process, ^second_transport, :shutdown}
+    assert_receive {:DOWN, ^second_monitor, :process, ^second_transport, _reason}
     assert_receive {:test_stt_transport_started, third_transport, _connection}
     refute third_transport == second_transport
   end
@@ -283,36 +319,36 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       start_capability(transport_options: [before_connect: before_connect])
 
     assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
+    original_monitor = Process.monitor(original_transport)
     assert :ok = Enforcer.apply(capability, snapshot(1, ["part-human"], %{}, true), 500)
-    assert_receive {:stt_reconnecting, first_connector}
-    first_monitor = Process.monitor(first_connector)
-    assert_receive {:test_stt_transport_closed, ^original_transport}
+    assert_receive {:stt_reconnecting, first_wire}
+    first_monitor = Process.monitor(first_wire)
+    assert_receive {:DOWN, ^original_monitor, :process, ^original_transport, _reason}
 
     assert :ok = Enforcer.apply(capability, snapshot(2, ["part-human"], :unrestricted, true), 500)
-    assert_receive {:DOWN, ^first_monitor, :process, ^first_connector, :shutdown}
-    assert_receive {:stt_reconnecting, second_connector}
+    assert_receive {:DOWN, ^first_monitor, :process, ^first_wire, _reason}
+    assert_receive {:stt_reconnecting, second_wire}
 
     # Old provider callbacks cannot acquire the new interval's permissions.
-    send(
-      capability,
-      {:vxpipe_stt_transport, original_transport,
-       {:message, turn_message("EndOfTurn", 10, "old interval")}}
+    TestSpeechToTextTransport.deliver(
+      original_transport,
+      turn_message("EndOfTurn", 10, "old interval")
     )
 
     _ = :sys.get_state(capability)
     refute_receive {:vxpipe_stt_signal, ^capability, _, _}
 
-    send(second_connector, :connect)
+    send(second_wire, :connect)
     assert_receive {:test_stt_transport_started, replacement, _connection}
     TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
 
     assert_receive {:vxpipe_stt_signal, ^capability, _,
                     %Signal{kind: :connected, policy_revision: 2}}
 
-    second_monitor = Process.monitor(second_connector)
+    second_monitor = Process.monitor(second_wire)
     replacement_monitor = Process.monitor(replacement)
     assert :ok = stop_supervised({SpeechToText, "conn-demo"})
-    assert_receive {:DOWN, ^second_monitor, :process, ^second_connector, _reason}
+    assert_receive {:DOWN, ^second_monitor, :process, ^second_wire, _reason}
     assert_receive {:DOWN, ^replacement_monitor, :process, ^replacement, _reason}
   end
 
@@ -322,7 +358,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
 
     TestSpeechToTextTransport.deliver(transport, connected_message("request-1", 0))
-    TestSpeechToTextTransport.deliver(transport, turn_message("Update", 1, "Hello"))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    TestSpeechToTextTransport.deliver(transport, turn_message("StartOfTurn", 1, "Hello"))
 
     assert_receive {:vxpipe_usage_observations, ^capability, [started]}
     assert started.outcome == :in_progress
@@ -354,8 +391,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert failed.measurement == nil
     assert failed.attempt_id == first.attempt_id
     assert failed.attribution.service_interval_id == first.attribution.service_interval_id
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
   end
 
   test "rotates service intervals and suppresses denied transcript character counts" do
@@ -386,12 +423,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       connected_message("provider-request-2", 0)
     )
 
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
     TestSpeechToTextTransport.deliver(
       second_transport,
-      turn_message("EndOfTurn", 1, "not retained")
+      turn_message("StartOfTurn", 1, "not retained")
     )
 
-    assert_receive {:vxpipe_usage_observations, ^capability, [started, audio]}
+    TestSpeechToTextTransport.deliver(
+      second_transport,
+      turn_message("EndOfTurn", 2, "not retained")
+    )
+
+    assert_receive {:vxpipe_usage_observations, ^capability, [started]}
+    assert_receive {:vxpipe_usage_observations, ^capability, [audio]}
     assert started.outcome == :in_progress
     assert started.measurement == nil
     assert audio.measurement.component == "recognized_audio_duration"
@@ -401,7 +446,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
              cancelled.attribution.service_interval_id
   end
 
-  test "retains a failed session after the transport accepted audio without a provider signal" do
+  test "retains a failed session after the provider accepted audio without a signal" do
     {capability, transport} = start_capability(usage: usage_context())
 
     identity = [
@@ -411,6 +456,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       participant_id: "part-human",
       connection_id: "conn-demo"
     ]
+
+    TestSpeechToTextTransport.deliver(transport, connected_message("accepted-audio", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
 
     assert :ok = SpeechToText.push_audio(capability, audio_frame(identity))
     assert_receive {:test_stt_audio, ^transport, <<1, 2, 3>>}
@@ -424,8 +472,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert_receive {:vxpipe_usage_observations, ^capability, [failed]}
     assert failed.outcome == :failed
     assert failed.measurement == nil
-    assert failed.provider.request_id == nil
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}
+    assert failed.provider.request_id == "accepted-audio"
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
   end
 
   test "async ingress receives final evidence before a failed native input closes the capability" do
@@ -449,8 +497,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
              owner: self(),
              speech_scope: CapabilityTree.scope(tree),
              provider: {SpeechSessionProbe, []},
-             provider_private: [observer: self(), input_result: :final_then_fail],
-             transport: nil
+             provider_private: [observer: self(), input_result: :final_then_fail]
            ]},
         id: make_ref()
       )
@@ -525,6 +572,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                sample_rate: 48_000
              )
 
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
+    provider_options = [
+      model: provider.model,
+      encoding: provider.encoding,
+      sample_rate: provider.sample_rate
+    ]
+
+    provider_private = [
+      config: provider,
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self()] ++ Keyword.get(options, :transport_options, [])
+    ]
+
     start_supervised!(
       {SpeechToText,
        [
@@ -534,10 +595,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
          incarnation_id: "rinc-demo",
          participant_id: "part-human",
          connection_id: "conn-demo",
-         provider: {Flux, provider},
-         transport:
-           {TestSpeechToTextTransport,
-            [observer: self()] ++ Keyword.get(options, :transport_options, [])},
+         speech_scope: CapabilityTree.scope(tree),
+         provider: {FluxSession, provider_options},
+         provider_private: provider_private,
          usage: Keyword.get(options, :usage)
        ] ++ Keyword.take(options, [:initial_policy])}
     )

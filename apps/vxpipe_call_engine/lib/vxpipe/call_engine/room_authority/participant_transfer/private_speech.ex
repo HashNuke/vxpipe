@@ -141,7 +141,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
            self(),
            command,
            runtime.provider,
-           runtime.transport,
            Keyword.put(runtime.media_ingress, :input_admission, :closed),
            usage,
            options

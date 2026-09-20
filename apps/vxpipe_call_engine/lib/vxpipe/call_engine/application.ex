@@ -22,7 +22,6 @@ defmodule Vxpipe.CallEngine.Application do
     base_children = [
       {Registry, keys: :unique, name: Vxpipe.CallEngine.RoomRegistry},
       {Task.Supervisor, name: Vxpipe.CallEngine.AudioOutputTaskSupervisor},
-      {Task.Supervisor, name: Vxpipe.CallEngine.SpeechToTextConnectionTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ModelInferenceTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ArchiveWriterTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ReadinessTaskSupervisor},

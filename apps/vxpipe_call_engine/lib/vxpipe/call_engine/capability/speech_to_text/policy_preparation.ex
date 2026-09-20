@@ -11,8 +11,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
     SpeechToTextDemand
   }
 
-  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
-  alias Vxpipe.CallEngine.Readiness.Provider
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Telemetry
 
@@ -194,12 +192,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
     end
   end
 
-  def connected(state, transport) do
-    pending = state.pending_policy
-    session = Usage.start_session(%{pending.state | transport: transport})
-    %{state | pending_policy: %{pending | state: session}}
-  end
-
   def prepared(%{pending_policy: %{state: session} = pending} = state, allocation, descriptor) do
     case State.prepared(session, allocation, descriptor) do
       {:ok, session} -> {:ok, %{state | pending_policy: %{pending | state: session}}}
@@ -209,54 +201,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
 
   def prepared(_state, _allocation, _descriptor), do: {:error, :stale_session}
 
-  def bridge_failed(
-        %{pending_policy: %{state: %{session: allocation}} = pending} = state,
-        allocation
-      ) do
-    session = %{pending.state | readiness_status: :failed, usage: nil}
-    %{state | pending_policy: %{pending | state: session, failed?: true}}
-  end
-
-  def bridge_failed(state, _allocation), do: state
-
-  def message(state, payload) do
-    pending = state.pending_policy
-    session = pending.state
-
-    case session.provider_module.decode(payload) do
-      {:ok, %Signal{provider_sequence: sequence}}
-      when sequence <= session.last_provider_sequence ->
-        state
-
-      {:ok, %Signal{kind: :connected} = signal} ->
-        session =
-          %{
-            session
-            | readiness_status: Provider.connected(session.readiness_status),
-              last_provider_sequence: signal.provider_sequence
-          }
-          |> Usage.observe_signal(signal)
-
-        %{state | pending_policy: %{pending | state: session}}
-
-      {:ok, %Signal{kind: :failed}} ->
-        fail(state, :provider_failed)
-
-      {:error, _reason} ->
-        fail(state, :invalid_provider_message)
-
-      {:ok, %Signal{provider_sequence: sequence}} ->
-        session = %{session | last_provider_sequence: sequence}
-        %{state | pending_policy: %{pending | state: session}}
-
-      _private_provider_event ->
-        state
-    end
-  end
-
   def fail(state, reason \\ :cancelled) do
     pending = state.pending_policy
-    failed? = reason in [:provider_failed, :invalid_provider_message, :transport_closed]
+    failed? = reason in [:provider_failed, :invalid_provider_message]
     cleanup(pending, if(failed?, do: :failed, else: :cancelled))
 
     if failed? and pending.state != nil and not pending.failed?,
@@ -264,7 +211,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
 
     session =
       if pending.state do
-        %{pending.state | transport: nil, connector: nil, usage: nil, readiness_status: :failed}
+        %{pending.state | session: nil, usage: nil, readiness_status: :failed}
       end
 
     %{state | pending_policy: %{pending | state: session, failed?: true}}

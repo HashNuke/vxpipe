@@ -1161,7 +1161,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       incarnation_id: room.incarnation_id,
       participant_id: caller.participant_id,
       connection_id: connection_id,
-      track_id: "track-opening",
+      track_id: "embedded",
       codec: :opus,
       sample_rate: 48_000,
       channels: 1,
@@ -1259,14 +1259,15 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [
         api_key: "runtime-secret",
         model: "flux-general-en",
         encoding: :opus,
         sample_rate: 48_000
       ],
-      transport: {TestSpeechToTextTransport, [observer: self(), ready_on_start: true]},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self(), ready_on_start: true],
       media_ingress: [
         maximum_frames: 8,
         maximum_bytes: 1_024,

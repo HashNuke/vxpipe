@@ -630,19 +630,20 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     )
   end
 
-  defp configure_speech_to_text(transport) do
+  defp configure_speech_to_text({wire_module, wire_options}) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [
         api_key: "test-runtime-secret",
         model: "flux-general-en",
         encoding: :opus,
         sample_rate: 48_000
       ],
-      transport: transport,
+      wire_module: wire_module,
+      wire_options: wire_options,
       media_ingress: [
         maximum_frames: 8,
         maximum_bytes: 1_024,

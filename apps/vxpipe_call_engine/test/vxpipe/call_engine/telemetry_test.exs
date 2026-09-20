@@ -2,7 +2,8 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Telemetry
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
+  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
 
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
@@ -124,7 +125,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
 
     assert is_integer(duration) and duration >= 0
 
-    assert :ok = Telemetry.provider_failure(:stt, MorseCodeSTT, :provider_failed)
+    assert :ok = Telemetry.provider_failure(:stt, MorseSTTSession, :provider_failed)
 
     assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
                     %{capability: :stt, provider: :morse, category: :unavailable}}

@@ -7,6 +7,8 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.CallEngine.Speech.CapabilityTree
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
 
   @identity [
@@ -129,6 +131,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
            ]}
       )
 
+    connect_transport(capability, transport)
     assert :ok = Ingress.push(ingress, audio_frame(1, <<1, 1, 1>>))
     assert_receive {:test_stt_audio, ^transport, <<1, 1, 1>>}
 
@@ -186,6 +189,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
            ]}
       )
 
+    connect_transport(capability, transport)
     assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
     assert_receive {:test_stt_audio, ^transport, <<1>>}
 
@@ -212,6 +216,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
            ]}
       )
 
+    connect_transport(capability, transport)
     assert :ok = Ingress.push(ingress, audio_frame(1, <<1, 1, 1>>))
     assert_receive {:test_stt_audio, ^transport, <<1, 1, 1>>}
     assert :ok = Ingress.push(ingress, audio_frame(2, <<2, 2, 2>>))
@@ -244,6 +249,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
 
     ingress_monitor = Process.monitor(ingress)
 
+    connect_transport(capability, transport)
     assert :ok = Ingress.push(ingress, audio_frame(1, <<1, 1, 1>>))
     assert_receive {:test_stt_audio, ^transport, <<1, 1, 1>>}
     assert {:error, :queue_full} = Ingress.push(ingress, audio_frame(2, <<2>>))
@@ -274,6 +280,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
            ]}
       )
 
+    connect_transport(capability, transport)
     assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
     assert_receive {:test_stt_audio, ^transport, <<1>>}
     assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>))
@@ -338,15 +345,27 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
                sample_rate: 48_000
              )
 
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
+    provider_options = [
+      model: provider.model,
+      encoding: provider.encoding,
+      sample_rate: provider.sample_rate
+    ]
+
     capability =
       start_supervised!(
         {SpeechToText,
          @identity ++
            [
              owner: self(),
-             provider: {Flux, provider},
-             transport:
-               {TestSpeechToTextTransport, Keyword.put(transport_options, :observer, self())}
+             speech_scope: CapabilityTree.scope(tree),
+             provider: {FluxSession, provider_options},
+             provider_private: [
+               config: provider,
+               wire_module: TestSpeechToTextTransport,
+               wire_options: Keyword.put(transport_options, :observer, self())
+             ]
            ]}
       )
 

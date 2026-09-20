@@ -10,6 +10,7 @@ defmodule Vxpipe.Gateway.WebRTC.OpusEncoder do
   @frame_samples 960
   @sample_rate 48_000
   @signal_voice 3_001
+  @valid_frame_samples [120, 240, 480, 960, 1_920, 2_880]
 
   def new(_options) do
     {:ok,
@@ -32,4 +33,15 @@ defmodule Vxpipe.Gateway.WebRTC.OpusEncoder do
   end
 
   def encode(_encoder, _pcm), do: {:error, :invalid_pcm_frame}
+
+  def encode(encoder, pcm, frame_samples)
+      when is_binary(pcm) and frame_samples in @valid_frame_samples and
+             byte_size(pcm) == frame_samples * @channels * 2 do
+    case Native.encode_packet(encoder, pcm, frame_samples) do
+      {:ok, opus} when is_binary(opus) and byte_size(opus) > 0 -> {:ok, opus}
+      {:error, _reason} -> {:error, :encode_failed}
+    end
+  end
+
+  def encode(_encoder, _pcm, _frame_samples), do: {:error, :invalid_pcm_frame}
 end

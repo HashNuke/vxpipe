@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudio do
 
   alias ExWebRTC.{MediaStreamTrack, RTPCodecParameters, RTPTransceiver}
   alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.Gateway.WebRTC.OpusInput
 
   def resolve(direction, transceivers, output_track) when direction in [:input, :output] do
     candidates = Enum.filter(transceivers, &usable?(&1, direction, output_track))
@@ -42,6 +43,7 @@ defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudio do
 
   defp project_track(transceiver, direction, codec) do
     track = if direction == :input, do: transceiver.receiver.track, else: transceiver.sender.track
+    channels = codec.channels || 2
 
     if is_integer(track.id) or (is_binary(track.id) and byte_size(track.id) > 0) do
       {:ready,
@@ -50,7 +52,7 @@ defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudio do
            track_id: to_string(track.id),
            codec: :opus,
            sample_rate: codec.clock_rate,
-           channels: codec.channels || 1
+           channels: channels
          },
          configuration:
            Resource.signature({transceiver.id, transceiver.mid, direction, track.id, codec})
@@ -70,11 +72,14 @@ defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudio do
   defp codec(%{codecs: []}, :input), do: :missing
 
   defp codec(transceiver, :input) do
-    case Enum.find(transceiver.codecs, &supported?/1) do
+    case Enum.find(transceiver.codecs, &supported_input?/1) do
       nil -> :unsupported
       codec -> {:ok, codec}
     end
   end
+
+  defp supported_input?(%RTPCodecParameters{} = codec),
+    do: OpusInput.supported?(codec)
 
   defp supported?(%RTPCodecParameters{mime_type: mime, clock_rate: 48_000, channels: channels})
        when is_binary(mime) and channels in [nil, 1, 2],

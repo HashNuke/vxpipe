@@ -236,11 +236,12 @@ pause and report when tests prove a stability problem.
 | Spawn a Task for every input chunk | Replace with measured persistent local execution while preserving bounds and responsive control. |
 | Discard the baseline prototype now | Unnecessary for call restoration; old room paths remain in use. Retain useful decoder/event tests and evidence, replace the rejected global wiring in the first implementation checkpoint. |
 
-The revised delivery order is **R → A → D → B → C → E → F → G → H**. R proves ownership and
+The revised delivery order is **R → A → D → B → C → F → E → G → H**. R proves ownership and
 admission; A and D prove real native STT/TTS in isolation before any room migration. Then
-migrate STT and TTS one direction/provider at a time, retaining private bridges only until
-their provider migrates. Existing Call Specs, provider names, credential selection, privacy,
-usage and playback behavior remain authoritative.
+migrate one direction at a time: both providers implement the semantic contract before that
+direction's consumers switch once and the old path is deleted. No compatibility bridge or
+fallback path is part of the final design. Existing Call Specs, provider names, credential
+selection, privacy, usage and playback behavior remain authoritative.
 
 ## Design review and implementation status
 

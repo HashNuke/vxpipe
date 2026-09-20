@@ -79,14 +79,15 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :speech_to_text,
         enabled: true,
-        provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+        provider: Vxpipe.CallEngine.Provider.Deepgram.Flux.Session,
         provider_options: [
           api_key: "retired-global-private-marker",
           model: "flux-general-en",
           encoding: :opus,
           sample_rate: 48_000
         ],
-        transport: {Vxpipe.CallEngine.TestSpeechToTextTransport, [observer: self()]},
+        wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
+        wire_options: [observer: self()],
         media_ingress: [
           maximum_frames: 50,
           maximum_bytes: 65_536,

@@ -1,6 +1,7 @@
 defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudioTest do
   use ExUnit.Case, async: true
 
+  alias ExSDP.Attribute.FMTP
   alias ExWebRTC.{MediaStreamTrack, RTPCodecParameters, RTPReceiver, RTPSender, RTPTransceiver}
   alias Vxpipe.Gateway.WebRTC.NegotiatedAudio
 
@@ -17,6 +18,7 @@ defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudioTest do
     assert {:ready, input} = NegotiatedAudio.resolve(:input, [transceiver], track)
     assert input.track.track_id == to_string(transceiver.receiver.track.id)
     assert input.track.sample_rate == 48_000
+    assert input.track.channels == 2
 
     pcmu = %RTPCodecParameters{
       mime_type: "audio/PCMU",
@@ -28,6 +30,22 @@ defmodule Vxpipe.Gateway.WebRTC.NegotiatedAudioTest do
     incompatible = %{transceiver | sender: %{transceiver.sender | codec: pcmu}, codecs: [pcmu]}
     assert {:failed, nil} = NegotiatedAudio.resolve(:output, [incompatible], track)
     assert {:failed, nil} = NegotiatedAudio.resolve(:input, [incompatible], track)
+  end
+
+  test "does not treat an FMTP stereo preference as incoming channel evidence" do
+    transceiver = transceiver()
+
+    stereo = %{
+      hd(transceiver.codecs)
+      | sdp_fmtp_line: %FMTP{pt: 111, stereo: true}
+    }
+
+    transceiver = %{transceiver | codecs: [stereo]}
+
+    assert {:ready, input} =
+             NegotiatedAudio.resolve(:input, [transceiver], transceiver.sender.track.id)
+
+    assert input.track.channels == 2
   end
 
   test "does not pick an arbitrary input when multiple active tracks are negotiated" do

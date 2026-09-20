@@ -55,7 +55,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       do: {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM}
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "deepgram"}),
-    do: {:ok, Deepgram.Flux}
+    do: {:ok, Deepgram.Flux.Session}
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "deepgram"}),
     do: {:ok, Deepgram.FluxTextToSpeech}

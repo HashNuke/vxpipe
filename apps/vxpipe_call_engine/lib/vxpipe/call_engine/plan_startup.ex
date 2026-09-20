@@ -454,7 +454,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              activation_id: participant.activation_id,
              provider: runtime_provider,
              provider_private: provider_private,
-             transport: nil,
              usage_provider: usage_provider,
              media_ingress:
                Keyword.put(
@@ -633,20 +632,20 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp configure_provider(provider, options, :speech_to_text) do
-    if function_exported?(provider, :configure, 1) do
+    if provider == Vxpipe.CallEngine.Provider.Deepgram.Flux.Session do
+      Vxpipe.CallEngine.Provider.Deepgram.Flux.new(options)
+    else
       case provider.configure(options) do
         {:ok, _descriptor} -> {:ok, options}
         {:error, _reason} = error -> error
       end
-    else
-      configure_legacy_provider(provider, options)
     end
   end
 
   defp configure_provider(provider, options, _kind),
-    do: configure_legacy_provider(provider, options)
+    do: configure_provider_struct(provider, options)
 
-  defp configure_legacy_provider(provider, options) do
+  defp configure_provider_struct(provider, options) do
     if function_exported?(provider, :new, 1),
       do: provider.new(options),
       else: {:error, :invalid_configuration}

@@ -64,9 +64,10 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [api_key: "runtime-test-secret"],
-      transport: {TestSpeechToTextTransport, [observer: self()]},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self()],
       media_ingress: [
         maximum_frames: 8,
         maximum_bytes: 1_024,

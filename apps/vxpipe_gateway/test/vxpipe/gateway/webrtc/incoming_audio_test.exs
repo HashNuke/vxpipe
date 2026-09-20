@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudioTest do
 
   alias ExRTP.Packet
   alias ExWebRTC.RTPCodecParameters
+  alias Membrane.Opus.Encoder.Native
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility
   alias Vxpipe.Gateway.Session.Snapshot
@@ -17,9 +18,27 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudioTest do
     }
 
     assert :drop =
-             IncomingAudio.forward(codec(), "monitor-track", packet(),
+             IncomingAudio.forward(codec(), "monitor-track", packet(stereo_opus_packet()),
                session: session(),
                connection_id: "conn-monitor",
+               attachment: attachment,
+               room_audio_ingress: nil,
+               received_at: 1_000
+             )
+  end
+
+  test "drops an empty Opus packet without making an admitted input unavailable" do
+    attachment = %ConnectionAttachment{
+      room_monitor: make_ref(),
+      media_ingress: nil,
+      room_audio_input_mode: :enabled,
+      room_audio_output_mode: :full_mix
+    }
+
+    assert :drop =
+             IncomingAudio.forward(codec(), "input-track", packet(<<>>),
+               session: session(),
+               connection_id: "conn-input",
                attachment: attachment,
                room_audio_ingress: nil,
                received_at: 1_000
@@ -35,14 +54,26 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudioTest do
     }
   end
 
-  defp packet do
+  defp packet(payload) do
     %Packet{
       payload_type: 111,
       sequence_number: 1,
       timestamp: 960,
       ssrc: 123,
-      payload: <<1, 2, 3>>
+      payload: payload
     }
+  end
+
+  defp stereo_opus_packet do
+    encoder = Native.create(48_000, 2, 2_048, 64_000, 3_001)
+
+    pcm =
+      for _sample <- 0..959, into: <<>> do
+        <<1_000::little-signed-16, -500::little-signed-16>>
+      end
+
+    assert {:ok, payload} = Native.encode_packet(encoder, pcm, 960)
+    payload
   end
 
   defp session do

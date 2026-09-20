@@ -18,30 +18,41 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   def forward(nil, _track_id, %Packet{}, _options), do: :drop
 
   def forward(%RTPCodecParameters{} = codec, track_id, %Packet{} = packet, options) do
+    attachment = Keyword.fetch!(options, :attachment)
+
     result =
-      with {:ok, frame} <-
-             AudioFrame.from_rtp(
-               Keyword.fetch!(options, :session),
-               Keyword.fetch!(options, :connection_id),
-               track_id,
-               codec,
-               packet,
-               Keyword.fetch!(options, :received_at)
-             ) do
-        deliver(frame, options)
+      if receive_only?(attachment) do
+        :drop
+      else
+        with {:ok, frame} <-
+               AudioFrame.from_rtp(
+                 Keyword.fetch!(options, :session),
+                 Keyword.fetch!(options, :connection_id),
+                 track_id,
+                 codec,
+                 packet,
+                 Keyword.fetch!(options, :received_at)
+               ) do
+          deliver(frame, options)
+        end
       end
 
     classify(result)
   end
 
+  @doc false
+  def receive_only?(%ConnectionAttachment{
+        media_ingress: nil,
+        room_audio_input_mode: :disabled
+      }),
+      do: true
+
+  def receive_only?(%ConnectionAttachment{}), do: false
+
   defp deliver(frame, options) do
     attachment = Keyword.fetch!(options, :attachment)
 
-    if receive_only?(attachment) do
-      :drop
-    else
-      deliver_to_inputs(attachment, frame, options)
-    end
+    deliver_to_inputs(attachment, frame, options)
   end
 
   defp deliver_to_inputs(attachment, frame, options) do
@@ -57,14 +68,6 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
       true -> :unavailable
     end
   end
-
-  defp receive_only?(%ConnectionAttachment{
-         media_ingress: nil,
-         room_audio_input_mode: :disabled
-       }),
-       do: true
-
-  defp receive_only?(%ConnectionAttachment{}), do: false
 
   defp deliver_speech_audio(%ConnectionAttachment{media_ingress: nil}, _frame, _input),
     do: :disabled
@@ -89,6 +92,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
     reason in [
       :buffer_full,
       :duplicate_frame,
+      :invalid_packet,
       :media_overloaded,
       :queue_full,
       :stale_frame,

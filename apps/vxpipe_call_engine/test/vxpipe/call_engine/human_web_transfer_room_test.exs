@@ -39,9 +39,10 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [api_key: "runtime-test-secret"],
-      transport: {TestSpeechToTextTransport, observer: self()},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self()],
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 65_536,
@@ -189,7 +190,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       assert speech.private_allocation.owner == pending.task.pid
       assert speech.private_allocation.attempt_id == attempt_id
       assert speech.private_allocation.deadline_ms == pending.deadline_ms
-      assert speech.transport == nil
+      refute Map.has_key?(speech, :transport)
       assert :sys.get_state(ingress).opening_input_admission == :closed
 
       _ =

@@ -228,7 +228,6 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
              room_authority,
              command,
              runtime.provider,
-             runtime.transport,
              Keyword.put(runtime.media_ingress, :input_admission, :closed),
              speech_to_text_usage(runtime),
              provider_private: runtime.provider_private

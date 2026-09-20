@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
   alias Membrane.Opus.Encoder.Native
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Gateway.Media.PCMFrame
-  alias Vxpipe.Gateway.WebRTC.AudioPipeline
+  alias Vxpipe.Gateway.WebRTC.{AudioPipeline, OpusDecoder}
 
   @application_voip 2_048
   @automatic_bitrate -1_000
@@ -134,6 +134,39 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
     assert byte_size(pcm) == 1_920
   end
 
+  test "preserves one decoder history across mono and stereo room packets" do
+    pipeline_id = start_pipeline()
+    assert :ok = AudioPipeline.prepare_track(pipeline_id, @input_track)
+    packets = transition_packets()
+    assert {:ok, reference_decoder} = OpusDecoder.new(48_000)
+
+    expected =
+      Enum.map(packets, fn packet ->
+        assert {:ok, pcm} = OpusDecoder.decode(reference_decoder, packet)
+        pcm
+      end)
+
+    packets
+    |> Enum.with_index(1)
+    |> Enum.each(fn {packet, index} ->
+      assert :ok =
+               AudioPipeline.push(
+                 pipeline_id,
+                 frame(index, 96_000 + (index - 1) * 960, 1_043 + (index - 1) * 20, packet)
+               )
+    end)
+
+    actual =
+      Enum.map(packets, fn _packet ->
+        assert_receive {:vxpipe_audio_pipeline, ^pipeline_id, %PCMFrame{payload: pcm}},
+                       @pipeline_timeout
+
+        pcm
+      end)
+
+    assert actual == expected
+  end
+
   test "rejects transport input outside the pipeline's pinned identity and track" do
     pipeline_id = start_pipeline()
     packet = encode(:binary.copy(<<1_000::little-signed-16>>, 960), 1, 960)
@@ -193,6 +226,30 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
 
     assert {:ok, packet} = Native.encode_packet(encoder, pcm, frame_samples)
     packet
+  end
+
+  defp transition_packets do
+    encoders = %{
+      1 => Native.create(48_000, 1, @application_voip, @automatic_bitrate, @signal_voice),
+      2 => Native.create(48_000, 2, @application_voip, @automatic_bitrate, @signal_voice)
+    }
+
+    [1, 1, 2, 2, 1, 1]
+    |> Enum.with_index()
+    |> Enum.map(fn {channels, packet_index} ->
+      pcm =
+        for sample <- 0..959, channel <- 1..channels, into: <<>> do
+          frequency = if channel == 1, do: 440, else: 660
+          offset = packet_index * 960 + sample
+          value = round(:math.sin(2 * :math.pi() * frequency * offset / 48_000) * 16_000)
+          <<value::little-signed-16>>
+        end
+
+      assert {:ok, packet} =
+               Native.encode_packet(Map.fetch!(encoders, channels), pcm, 960)
+
+      packet
+    end)
   end
 
   defp frame(sequence_number, timestamp, received_at, payload) do

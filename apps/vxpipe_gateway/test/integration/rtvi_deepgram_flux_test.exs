@@ -18,7 +18,6 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{
     Flux,
-    FluxSocket,
     FluxTextToSpeech,
     FluxTextToSpeechSocket
   }
@@ -55,8 +54,8 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
-      transport: {FluxSocket, [connect_timeout: 10_000, receive_timeout: 30_000]},
+      provider: Flux.Session,
+      wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],
       media_ingress: [
         maximum_frames: 50,
         maximum_bytes: 262_144,

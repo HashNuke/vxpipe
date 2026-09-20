@@ -10,6 +10,7 @@ defmodule Vxpipe.Gateway.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
+      compilers: [:unifex, :bundlex] ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -31,10 +32,12 @@ defmodule Vxpipe.Gateway.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.12"},
+      {:bundlex, "~> 1.2", runtime: false},
       {:cors_plug, "~> 3.0"},
       {:ex_sctp, "~> 0.1.3"},
       {:ex_webrtc, "~> 0.17.0"},
       {:membrane_opus_plugin, "~> 0.21.0"},
+      {:membrane_precompiled_dependency_provider, "~> 0.2.0", runtime: false},
       {:membrane_raw_audio_parser_plugin, "~> 0.5.0"},
       {:membrane_realtimer_plugin, "~> 0.11.1"},
       {:membrane_rtp_opus_plugin, "~> 0.10.3"},
@@ -43,6 +46,7 @@ defmodule Vxpipe.Gateway.MixProject do
       {:plug, "~> 1.20"},
       {:req, "~> 0.7.4"},
       {:telemetry, "~> 1.3"},
+      {:unifex, "~> 1.0", runtime: false},
       {:websock, "~> 0.5"},
       {:websock_adapter, "~> 0.6"},
       {:vxpipe_call_engine, in_umbrella: true},

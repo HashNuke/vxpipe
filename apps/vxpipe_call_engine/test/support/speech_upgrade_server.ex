@@ -16,11 +16,13 @@ defmodule Vxpipe.CallEngine.TestSpeechUpgradeServer do
       {:speech_upgrade_endpoint, "ws://127.0.0.1:#{port}/speech"}
     )
 
-    {:ok, {listener, Keyword.get(options, :frames, text: "initial")}, {:continue, :accept}}
+    {:ok,
+     {listener, Keyword.fetch!(options, :owner), Keyword.get(options, :frames, text: "initial")},
+     {:continue, :accept}}
   end
 
   @impl true
-  def handle_continue(:accept, {listener, frames}) do
+  def handle_continue(:accept, {listener, owner, frames}) do
     {:ok, socket} = :gen_tcp.accept(listener, 5_000)
     :ok = :gen_tcp.close(listener)
     {:ok, {:http_request, :GET, _path, _version}} = :gen_tcp.recv(socket, 0, 5_000)
@@ -41,11 +43,24 @@ defmodule Vxpipe.CallEngine.TestSpeechUpgradeServer do
         Enum.map(frames, &frame/1)
       ])
 
+    send(owner, {:speech_upgrade_connected, self()})
     {:noreply, socket}
   end
 
-  defp frame({:text, text}), do: [<<0x81, byte_size(text)>>, text]
-  defp frame({:binary, data}), do: [<<0x82, byte_size(data)>>, data]
+  @impl true
+  def handle_info({:send, frames}, socket) do
+    :ok = :gen_tcp.send(socket, Enum.map(frames, &frame/1))
+    {:noreply, socket}
+  end
+
+  defp frame({:text, text}), do: frame(0x81, text)
+  defp frame({:binary, data}), do: frame(0x82, data)
+
+  defp frame(opcode, payload) when byte_size(payload) <= 125,
+    do: [<<opcode, byte_size(payload)>>, payload]
+
+  defp frame(opcode, payload) when byte_size(payload) <= 65_535,
+    do: [<<opcode, 126, byte_size(payload)::16>>, payload]
 
   defp headers(socket, key) do
     case :gen_tcp.recv(socket, 0, 5_000) do

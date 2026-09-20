@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer}
   alias Vxpipe.CallEngine.Readiness.Collector
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.Speech.Channel
 
   test "prepares changed speech policy without replacing the live session until commit" do
@@ -409,67 +410,6 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     end
   end
 
-  test "prepared session cannot commit when its owner exits during old-session retirement" do
-    context = preparation_room()
-    test = self()
-    close_gate = :atomics.new(1, [])
-
-    before_close = fn ->
-      if :atomics.compare_exchange(close_gate, 1, 0, 1) == :ok do
-        send(test, {:held_stt_close, self()})
-
-        receive do
-          :release_stt_close -> :ok
-        after
-          2_000 -> exit(:close_not_released)
-        end
-      else
-        :ok
-      end
-    end
-
-    {capability, ingress} = start_legacy_speech(context, before_close: before_close)
-    assert_receive {:test_stt_transport_started, source, _connection}, 1_000
-    assert {:ok, source_resource, :preparing} = SpeechToText.readiness(capability)
-    source_collector = collect([source_resource], context.room.incarnation_id)
-    TestSpeechToTextTransport.deliver(source, connected_message())
-    assert_receive {:vxpipe_readiness_changed, ^source_collector, %{status: :ready}}, 1_000
-    owner = start_supervised!({Agent, fn -> :preparing end}, id: :retirement_owner)
-    options = Keyword.put(preparation_options(), :owner, owner)
-
-    assert {:ok, prepared} =
-             SpeechToText.prepare_policy(capability, context.candidate, options)
-
-    assert_receive {:test_stt_transport_started, replacement, _connection}, 1_000
-    replacement_collector = collect(prepared.resources, context.room.incarnation_id)
-    TestSpeechToTextTransport.deliver(replacement, connected_message())
-
-    assert_receive {:vxpipe_readiness_changed, ^replacement_collector, %{status: :ready}},
-                   1_000
-
-    apply =
-      Task.async(fn ->
-        Enforcer.apply(capability, context.candidate.snapshot, 4_000)
-      end)
-
-    try do
-      assert_receive {:held_stt_close, ^source}, 1_000
-      stop_supervised!(:retirement_owner)
-      send(source, :release_stt_close)
-      assert {:error, :policy_not_ready} = Task.await(apply, 1_000)
-      assert {:ok, _resource, :failed} = SpeechToText.readiness(capability)
-    after
-      send(source, :release_stt_close)
-      Task.shutdown(apply, :brutal_kill)
-
-      CallEngine.RoomCapabilitySupervisor.stop_speech_to_text(
-        context.room.incarnation_id,
-        capability,
-        ingress
-      )
-    end
-  end
-
   test "policy commit waits only for old session retirement acceptance" do
     context = preparation_room()
     deadline = now() + 4_000
@@ -517,10 +457,12 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
              )
 
     assert_receive {:test_stt_transport_started, replacement, _connection}
+    collector = collect(first.resources, context.room.incarnation_id)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}, 1_000
     monitor = Process.monitor(replacement)
     TestSpeechToTextTransport.disconnect(replacement, :closed)
     assert_receive {:DOWN, ^monitor, :process, ^replacement, _reason}, 1_000
-    _ = :sys.get_state(context.capability)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :failed}}, 1_000
     assert {:ok, ^original, :ready} = SpeechToText.readiness(context.capability)
     assert {:ok, _resource, :failed} = SpeechToText.readiness_binding(hd(first.resources))
     assert :ok = SpeechToText.discard_policy(context.capability, first.token)
@@ -920,11 +862,20 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
                context.room.incarnation_id,
                room_authority,
                command,
-               {Flux, provider},
-               {TestSpeechToTextTransport, [observer: self()]},
+               {FluxSession,
+                model: provider.model,
+                encoding: provider.encoding,
+                sample_rate: provider.sample_rate},
                ingress_options,
                nil,
-               private_initialization(base, options)
+               private_initialization(base, options) ++
+                 [
+                   provider_private: [
+                     config: provider,
+                     wire_module: TestSpeechToTextTransport,
+                     wire_options: [observer: self()]
+                   ]
+                 ]
              )
 
     assert :ok = Enforcer.apply(ingress, base, 1_000)
@@ -938,60 +889,6 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
       observer: observer,
       connection_id: connection_id
     }
-  end
-
-  defp start_legacy_speech(context, transport_options) do
-    caller = context.caller
-    base = context.candidate.base_snapshot
-    connection_id = unique_id("held-retirement")
-
-    [{room_authority, _}] =
-      Registry.lookup(CallEngine.RoomRegistry, {context.plan.tenant_id, context.plan.room_id})
-
-    assert {:ok, command} =
-             AttachConnection.new(
-               tenant_id: context.plan.tenant_id,
-               actor_id: context.plan.actor_id,
-               room_id: context.plan.room_id,
-               incarnation_id: context.room.incarnation_id,
-               participant_id: caller.participant_id,
-               connection_id: connection_id,
-               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-             )
-
-    assert {:ok, provider} =
-             Flux.new(
-               api_key: "held-retirement-fixture",
-               model: "flux-general-en",
-               encoding: :opus,
-               sample_rate: 48_000
-             )
-
-    ingress_options = [
-      input_admission: :closed,
-      maximum_age_ms: 1_000,
-      maximum_bytes: 65_536,
-      maximum_frames: 20,
-      maximum_consecutive_overflows: 3
-    ]
-
-    transport_options = Keyword.put(transport_options, :observer, self())
-
-    assert {:ok, capability, ingress} =
-             CallEngine.RoomCapabilitySupervisor.start_speech_to_text(
-               context.room.incarnation_id,
-               room_authority,
-               command,
-               {Flux, provider},
-               {TestSpeechToTextTransport, transport_options},
-               ingress_options,
-               nil,
-               initial_policy: base
-             )
-
-    assert :ok = Enforcer.apply(ingress, base, 1_000)
-    assert :ok = Enforcer.apply(capability, base, 1_000)
-    {capability, ingress}
   end
 
   defp private_initialization(base, nil), do: [initial_policy: base]
@@ -1417,9 +1314,10 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: FluxSession,
       provider_options: [api_key: "runtime-secret"],
-      transport: {TestSpeechToTextTransport, [observer: self()] ++ transport_options},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self()] ++ transport_options,
       media_ingress: [
         maximum_frames: 8,
         maximum_bytes: 1024,

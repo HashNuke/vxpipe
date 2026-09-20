@@ -99,7 +99,6 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         room_authority,
         %AttachConnection{} = command,
         provider,
-        transport,
         media_ingress_options,
         usage \\ nil,
         initialization_options \\ []
@@ -122,7 +121,6 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
             owner: room_authority,
             provider: provider,
             provider_private: private_init,
-            transport: transport,
             usage: usage
           ] ++ Keyword.take(initialization_options, [:initial_policy, :preparation])
 

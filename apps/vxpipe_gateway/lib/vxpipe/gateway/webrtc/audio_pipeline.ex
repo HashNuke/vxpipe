@@ -12,7 +12,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
   alias Membrane.{Buffer, Pipeline, Time}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Readiness.Resource
-  alias Vxpipe.Gateway.Media.{MonoMixer, OpusInputPreparation, PCMFrame, PCMSink}
+  alias Vxpipe.Gateway.Media.{OpusInputPreparation, OpusMonoDecoder, PCMFrame, PCMSink}
   alias Vxpipe.Gateway.WebRTC.AudioPipeline.{PacketSource, RoomTimestamp}
 
   @sample_rate 48_000
@@ -25,7 +25,6 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
               :parser,
               :input_preparation,
               :decoder,
-              :channel_mixer,
               :frame_parser,
               :sink
             ])
@@ -85,8 +84,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
       |> child(:depayloader, Membrane.RTP.Opus.Depayloader)
       |> child(:parser, Membrane.Opus.Parser)
       |> child(:input_preparation, OpusInputPreparation)
-      |> child(:decoder, %Membrane.Opus.Decoder{sample_rate: @sample_rate})
-      |> child(:channel_mixer, MonoMixer)
+      |> child(:decoder, OpusMonoDecoder)
       |> child(:frame_parser, %Membrane.RawAudioParser{
         chunk_duration: Time.milliseconds(20)
       })

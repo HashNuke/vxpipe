@@ -2,8 +2,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -23,13 +23,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     caller = plan.participants["caller"]
     stt = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
-    assert {LegacyBridge, public_stt_config} = stt.provider
+    assert {FluxSession, public_stt_config} = stt.provider
     assert public_stt_config[:model] == "flux-general-en"
 
     assert [
-             provider: Flux,
              config: stt_config,
-             transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxSocket, []}
+             wire_module: Vxpipe.CallEngine.Provider.Deepgram.FluxSocket,
+             wire_options: []
            ] = stt.provider_private
 
     assert stt_config.api_key == "deepgram-tenant-private-marker"
@@ -78,9 +78,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert worker in Task.Supervisor.children(Vxpipe.CallEngine.ReadinessTaskSupervisor)
     send(worker, :resolve)
     assert_receive {:connection_speech_prepared, {:ok, runtime}}
-    assert {LegacyBridge, _public_stt_config} = runtime.provider
+    assert {FluxSession, _public_stt_config} = runtime.provider
 
-    assert [provider: Flux, config: configuration, transport: {_transport, []}] =
+    assert [
+             config: configuration,
+             wire_module: Vxpipe.CallEngine.Provider.Deepgram.FluxSocket,
+             wire_options: []
+           ] =
              runtime.provider_private
 
     assert configuration.api_key == "deepgram-tenant-private-marker"
@@ -189,9 +193,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
         |> Keyword.put(:model_provider_options, api_key: "retired-private-marker"),
       speech_to_text: [
         enabled: true,
-        provider: Flux,
+        provider: FluxSession,
         provider_options: [api_key: "retired-private-marker"],
-        transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxSocket, []},
+        wire_options: [],
         media_ingress: [
           maximum_frames: 50,
           maximum_bytes: 262_144,

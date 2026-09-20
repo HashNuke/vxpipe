@@ -1462,9 +1462,10 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     default_stt = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [api_key: "unused-default"],
-      transport: {TestSpeechToTextTransport, []},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [],
       media_ingress: media_ingress_options()
     ]
 
@@ -1512,7 +1513,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     assert Keyword.fetch!(stt_options, :unit_duration_ms) == 20
 
     assert speech_to_text.provider_private == []
-    assert speech_to_text.transport == nil
+    refute Map.has_key?(speech_to_text, :transport)
     assert speech_to_text.call_id == plan.call_id
     assert speech_to_text.participant_id == caller.participant_id
     assert speech_to_text.activation_id == caller.activation_id
@@ -1540,7 +1541,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                plan.tenant_id
              )
 
-    assert Keyword.fetch!(default_stt, :provider) == Flux
+    assert Keyword.fetch!(default_stt, :provider) == Flux.Session
     assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech
   end
 
@@ -2143,14 +2144,15 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     speech_to_text = [
       enabled: true,
-      provider: Flux,
+      provider: Flux.Session,
       provider_options: [
         api_key: "runtime-secret",
         model: "flux-general-en",
         encoding: :opus,
         sample_rate: 48_000
       ],
-      transport: {TestSpeechToTextTransport, [observer: self(), ready_on_start: true]},
+      wire_module: TestSpeechToTextTransport,
+      wire_options: [observer: self(), ready_on_start: true],
       media_ingress: media_ingress_options()
     ]
 

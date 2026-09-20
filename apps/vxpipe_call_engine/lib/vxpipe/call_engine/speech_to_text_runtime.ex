@@ -1,13 +1,13 @@
 defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [
     :provider,
     :provider_private,
-    :transport,
     :media_ingress,
     :call_id,
     :participant_id,
@@ -19,7 +19,6 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   @type t :: %__MODULE__{
           provider: {module(), term()},
           provider_private: keyword(),
-          transport: {module(), keyword()} | nil,
           media_ingress: keyword(),
           call_id: String.t(),
           participant_id: String.t(),
@@ -27,23 +26,42 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
           usage_provider: Vxpipe.CallEngine.Usage.ProviderContext.t()
         }
 
-  def provider({provider, options} = selected, settings) do
-    if function_exported?(provider, :configure, 1) do
-      case Keyword.get(settings, :transport) do
-        nil -> {:ok, selected, []}
-        _configured_transport -> {:error, :unexpected_transport}
-      end
+  def provider({FluxSession, %Flux{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         wire_module when is_atom(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Provider.Deepgram.FluxSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
+      public = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
+
+      {:ok, {FluxSession, public},
+       [config: config, wire_module: wire_module, wire_options: wire_options]}
     else
-      with {transport, transport_options}
-           when is_atom(transport) and is_list(transport_options) <-
-             Keyword.get(settings, :transport),
-           public when is_list(public) <- LegacyBridge.public_options(provider, options) do
-        {:ok, {LegacyBridge, public},
-         [provider: provider, config: options, transport: {transport, transport_options}]}
-      else
-        _invalid -> {:error, :invalid_transport}
-      end
+      _invalid -> {:error, :invalid_configuration}
     end
+  end
+
+  def provider({provider, options} = selected, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         nil <- Keyword.get(settings, :wire_module),
+         nil <- Keyword.get(settings, :wire_options),
+         true <- function_exported?(provider, :configure, 1),
+         {:ok, _descriptor} <- provider.configure(options) do
+      {:ok, selected, []}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  def usage_identity(FluxSession, %Flux{} = config) do
+    usage_identity(
+      FluxSession,
+      model: config.model,
+      encoding: config.encoding,
+      sample_rate: config.sample_rate
+    )
   end
 
   def usage_identity(provider, options) do

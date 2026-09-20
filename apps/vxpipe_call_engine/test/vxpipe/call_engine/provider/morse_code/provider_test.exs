@@ -1,53 +1,9 @@
 defmodule Vxpipe.CallEngine.Provider.MorseCode.ProviderTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.MorseCode.Config
-  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal, as: STTSignal
   alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal, as: TTSSignal
-
-  test "MorseCodeSTT exposes local configuration and normalized signals" do
-    assert {:ok, %Config{} = config} = MorseCodeSTT.new(sample_rate: 16_000)
-    assert MorseCodeSTT.connection_options(config) == %{config: config}
-    refute Map.has_key?(MorseCodeSTT.connection_options(config), :url)
-    assert MorseCodeSTT.media_format(config) == %{codec: :linear16, sample_rate: 16_000}
-
-    assert {:ok,
-            %STTSignal{
-              kind: :turn_started,
-              provider_sequence: 1,
-              provider_turn_index: 0,
-              request_id: "morse-local",
-              text: ""
-            }} =
-             MorseCodeSTT.decode(
-               JSON.encode!(%{
-                 "type" => "TurnInfo",
-                 "event" => "StartOfTurn",
-                 "sequence_id" => 1,
-                 "turn_index" => 0,
-                 "request_id" => "morse-local",
-                 "transcript" => ""
-               })
-             )
-
-    assert {:ok, %STTSignal{kind: :turn_ended, text: "SOS", trigger: "morse_end_gap"}} =
-             MorseCodeSTT.decode(
-               JSON.encode!(%{
-                 "type" => "TurnInfo",
-                 "event" => "EndOfTurn",
-                 "sequence_id" => 2,
-                 "turn_index" => 0,
-                 "request_id" => "morse-local",
-                 "transcript" => "SOS",
-                 "trigger" => "morse_end_gap"
-               })
-             )
-
-    assert {:error, :invalid_configuration} = MorseCodeSTT.new(sample_rate: 44_100)
-    assert {:error, :invalid_message} = MorseCodeSTT.decode(~s({"type":"TurnInfo"}))
-    assert {:error, :invalid_json} = MorseCodeSTT.decode("not-json")
-  end
 
   test "MorseCodeTTS uses the ordinary speech control and audio contract" do
     assert {:ok, %Config{} = config} = MorseCodeTTS.new(sample_rate: 16_000)

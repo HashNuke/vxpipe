@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioFrame do
   alias ExWebRTC.RTPCodecParameters
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Gateway.Session.Snapshot
+  alias Vxpipe.Gateway.WebRTC.OpusInput
 
   @spec from_rtp(
           Snapshot.t(),
@@ -13,7 +14,9 @@ defmodule Vxpipe.Gateway.WebRTC.AudioFrame do
           RTPCodecParameters.t(),
           Packet.t(),
           integer()
-        ) :: {:ok, AudioFrame.t()} | {:error, :unsupported_codec | :invalid_packet}
+        ) ::
+          {:ok, AudioFrame.t()}
+          | {:error, :unsupported_codec | :invalid_packet}
   def from_rtp(
         %Snapshot{} = session,
         connection_id,
@@ -24,6 +27,8 @@ defmodule Vxpipe.Gateway.WebRTC.AudioFrame do
       )
       when is_binary(connection_id) and is_integer(received_at) do
     with {:ok, engine_codec} <- engine_codec(codec.mime_type),
+         {:ok, _packet_channels} <- OpusInput.channels(codec, packet.payload),
+         {:ok, channels} <- OpusInput.track_channels(codec),
          true <- codec.payload_type == packet.payload_type,
          true <- is_binary(packet.payload) and byte_size(packet.payload) > 0,
          {:ok, normalized_track_id} <- normalize_track_id(track_id) do
@@ -37,7 +42,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioFrame do
          track_id: normalized_track_id,
          codec: engine_codec,
          sample_rate: codec.clock_rate,
-         channels: codec.channels || 1,
+         channels: channels,
          sequence_number: packet.sequence_number,
          timestamp: packet.timestamp,
          payload: packet.payload,
@@ -45,6 +50,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioFrame do
        }}
     else
       {:error, :unsupported_codec} -> {:error, :unsupported_codec}
+      {:error, :invalid_packet} -> {:error, :invalid_packet}
       _invalid -> {:error, :invalid_packet}
     end
   end

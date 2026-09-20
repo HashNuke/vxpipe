@@ -24,15 +24,19 @@ defmodule Vxpipe.Gateway.Media.MonoMixer do
 
   @impl true
   def handle_buffer(:input, %Buffer{} = buffer, _context, %{channels: 1} = state) do
-    {[buffer: {:output, buffer}], state}
+    {[buffer: {:output, %{buffer | payload: downmix(buffer.payload, 1)}}], state}
   end
 
   def handle_buffer(:input, %Buffer{} = buffer, _context, %{channels: 2} = state) do
-    payload =
-      for <<left::little-signed-16, right::little-signed-16 <- buffer.payload>>, into: <<>> do
-        <<div(left + right, 2)::little-signed-16>>
-      end
+    {[buffer: {:output, %{buffer | payload: downmix(buffer.payload, 2)}}], state}
+  end
 
-    {[buffer: {:output, %{buffer | payload: payload}}], state}
+  @doc false
+  def downmix(payload, 1) when is_binary(payload), do: payload
+
+  def downmix(payload, 2) when is_binary(payload) do
+    for <<left::little-signed-16, right::little-signed-16 <- payload>>, into: <<>> do
+      <<div(left + right, 2)::little-signed-16>>
+    end
   end
 end

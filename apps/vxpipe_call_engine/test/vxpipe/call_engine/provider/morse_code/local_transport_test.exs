@@ -1,91 +1,13 @@
 defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Capability.{SpeechToText, TextToSpeech}
-  alias Vxpipe.CallEngine.Media.{AudioFrame, AudioOutputFrame}
+  alias Vxpipe.CallEngine.Capability.TextToSpeech
+  alias Vxpipe.CallEngine.Media.AudioOutputFrame
 
-  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
-  alias Vxpipe.CallEngine.Provider.MorseCode.{Decoder, Encoder}
-  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.CallEngine.Provider.MorseCode.Decoder
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.TextToSpeechRequest
-
-  test "local STT keeps repeated turns separate across arbitrary chunk boundaries" do
-    assert {:ok, config} = MorseCodeSTT.new(unit_duration_ms: 20)
-    identity = identity()
-
-    capability =
-      start_supervised!(
-        {SpeechToText,
-         identity ++
-           [
-             owner: self(),
-             provider: {MorseCodeSTT, config},
-             transport: {MorseCodeSTT.Transport, []}
-           ]}
-      )
-
-    assert {:ok, pcm} = Encoder.encode(config, "SOS")
-
-    pcm
-    |> split_repeatedly([1, 637, 2_003, 17])
-    |> Enum.with_index(1)
-    |> Enum.each(fn {payload, sequence} ->
-      assert :ok = SpeechToText.push_audio(capability, audio_frame(identity, sequence, payload))
-    end)
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{
-                      kind: :turn_started,
-                      provider_turn_index: 0,
-                      text: ""
-                    }}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :transcript_updated, text: "S"}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :transcript_updated, text: "SO"}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :transcript_updated, text: "SOS"}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{
-                      kind: :turn_ended,
-                      provider_turn_index: 0,
-                      text: "SOS",
-                      trigger: "morse_end_gap"
-                    }}
-
-    assert {:ok, second_pcm} = Encoder.encode(config, "ET")
-
-    second_pcm
-    |> split_repeatedly([911, 2_009, 3])
-    |> Enum.with_index(100)
-    |> Enum.each(fn {payload, sequence} ->
-      assert :ok = SpeechToText.push_audio(capability, audio_frame(identity, sequence, payload))
-    end)
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :turn_started, provider_turn_index: 1}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :transcript_updated, provider_turn_index: 1, text: "E"}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :transcript_updated, provider_turn_index: 1, text: "ET"}}
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{
-                      kind: :turn_ended,
-                      provider_turn_index: 1,
-                      text: "ET",
-                      trigger: "morse_end_gap"
-                    }}
-  end
 
   test "local TTS drains a long request completely through bounded output frames" do
     assert {:ok, config} = MorseCodeTTS.new(unit_duration_ms: 20)
@@ -224,34 +146,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
     refute_receive {:test_audio_output, ^sink, %AudioOutputFrame{}}
   end
 
-  test "local STT reports an unsupported tone and terminates its failed capability" do
-    assert {:ok, config} = MorseCodeSTT.new(unit_duration_ms: 20)
-    identity = identity()
-
-    capability =
-      start_supervised!(
-        {SpeechToText,
-         identity ++
-           [
-             owner: self(),
-             provider: {MorseCodeSTT, config},
-             transport: {MorseCodeSTT.Transport, []}
-           ]}
-      )
-
-    monitor = Process.monitor(capability)
-    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
-    assert {:ok, wrong_config} = MorseCodeSTT.new(unit_duration_ms: 20, frequency_hz: 1_200)
-    assert {:ok, wrong_tone} = Encoder.encode(wrong_config, "E")
-    assert :ok = SpeechToText.push_audio(capability, audio_frame(identity, 1, wrong_tone))
-
-    assert_receive {:vxpipe_stt_signal, ^capability, _,
-                    %Signal{kind: :failed, provider_code: "UNSUPPORTED_FREQUENCY"}}
-
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}, 1_000
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 1_000
-  end
-
   defp collect_output(sink, correlation_id, frames) do
     receive do
       {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: ^correlation_id} = frame} ->
@@ -262,35 +156,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
     after
       2_000 -> flunk("timed out waiting for Morse audio output")
     end
-  end
-
-  defp identity do
-    suffix = Integer.to_string(System.unique_integer([:positive, :monotonic]))
-
-    [
-      tenant_id: "tenant-test",
-      room_id: "room-#{suffix}",
-      incarnation_id: "rinc-#{suffix}",
-      participant_id: "human-#{suffix}",
-      connection_id: "conn-#{suffix}"
-    ]
-  end
-
-  defp audio_frame(identity, sequence, payload) do
-    struct!(
-      AudioFrame,
-      identity ++
-        [
-          track_id: "track-morse",
-          codec: :linear16,
-          sample_rate: 16_000,
-          channels: 1,
-          sequence_number: sequence,
-          timestamp: sequence * 320,
-          payload: payload,
-          received_at: System.monotonic_time(:millisecond)
-        ]
-    )
   end
 
   defp request(participant_id, correlation_id, text, sink) do
@@ -308,23 +173,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
       output_sink: sink
     }
   end
-
-  defp split_repeatedly(binary, sizes), do: split_repeatedly(binary, sizes, sizes, [])
-
-  defp split_repeatedly(<<>>, _remaining_sizes, _all_sizes, chunks),
-    do: Enum.reverse(chunks)
-
-  defp split_repeatedly(binary, [], all_sizes, chunks),
-    do: split_repeatedly(binary, all_sizes, all_sizes, chunks)
-
-  defp split_repeatedly(binary, [size | sizes], all_sizes, chunks)
-       when byte_size(binary) > size do
-    <<chunk::binary-size(size), rest::binary>> = binary
-    split_repeatedly(rest, sizes, all_sizes, [chunk | chunks])
-  end
-
-  defp split_repeatedly(binary, _sizes, _all_sizes, chunks),
-    do: Enum.reverse([binary | chunks])
 
   defp unique_id(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
 end

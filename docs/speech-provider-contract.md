@@ -114,6 +114,9 @@ selected provider; TTS mono little-endian linear16 at a supported sample rate. N
 resampling, new codecs or silent format conversion is introduced. Format validation also
 distinguishes raw Opus packets from containerized Opus and raw PCM from WAV. Adapters perform
 bounded rechunking/pacing where their wire protocol needs it. Do not universally require 48 kHz.
+WebRTC raw Opus is initially mono-only: classify channel mode from each packet rather than SDP
+FMTP, and reject actual stereo until the bounded Membrane conversion in the
+[stereo input issue](issues/webrtc-opus-stereo-input.md) is implemented and accepted.
 
 `private_init` contains the validated descriptor, private resolved credentials, trusted host
 settings, and an opaque session event channel. Credentials are resolved at existing activation
@@ -190,7 +193,7 @@ Native events are `ready`, `speech_started`, `transcript`, `turn_ended`, optiona
 snapshot for the identified turn. `turn_ended` carries its final snapshot and ends that turn;
 a provider's finalized transcript segment alone does not prove the person finished speaking.
 Adapters assemble segmented results when necessary and supply genuine endpointing evidence.
-The existing legacy room signal names `turn_started`/`transcript_updated` remain internal
+The existing room signal names `turn_started`/`transcript_updated` remain internal
 projections during migration; the native helper does not expose both spellings.
 
 The conversational path requires provider-owned endpointing and the speech-start evidence
@@ -313,18 +316,18 @@ tenant/selection/credential binding and version. Voice/model/audio settings stil
 identity. Cache hits never bypass current credential checks. Independent opening TTS, private
 briefing, transfer preparation and source restoration use the same semantic session path.
 
-Migrate one direction/provider at a time. Temporary engine-private bridges adapt the remaining
-old providers; they are not selectable public providers and own no new room queue. Remove each
-bridge as soon as its final provider migrates. Update trusted host configuration/tests in the
-same checkpoint. No legacy persisted Call Spec format is added. Old internal transport modules
-may remain as private implementations where useful, with no public selection or requirement.
+Migrate one direction at a time. First make both built-in providers implement the semantic
+contract, then switch that direction's consumers once and delete the old public behaviour and
+transport configuration. Provider-specific socket/parser modules may remain private wire
+helpers, with no public selection or fallback role. Update trusted host configuration and tests
+in the same cutover. Stored Call Specs keep their current schema.
 
 | Alternative | Decision and implication |
 | --- | --- |
 | Only write a guide or add a macro over the old behaviours | Rejected: reduces typing but leaves wire messages and transport selection in the engine. |
 | Return a complete audio binary or lazy Enumerable | Rejected as the sole contract: hides streaming ownership, cancellation and backpressure; a request worker may adapt such a source internally with explicit bounds. |
 | One generic speech behaviour with optional callbacks for everything | Rejected: STT ingress and TTS output have different operations and lifecycle contracts. |
-| Replace all providers/capabilities at once | Rejected: makes attribution, privacy and output regressions hard to isolate and leaves no usable intermediate checkpoint. |
+| Replace STT and TTS together | Rejected: makes attribution, privacy and output regressions hard to isolate. Cut over one direction after both built-in providers implement it. |
 | Introduce a speech umbrella package immediately | Deferred: current consumers and policy adapters are in Call Engine; package extraction is a separate dependency decision after the API is proven. |
 | Add the compared hosted providers to prove generality | Deferred: requires new auth/model/product support. Use request-style, context-cancellation, batch-completion and segmented-transcript test profiles as bounded structural counterexamples. |
 | Treat Gemini Live as standalone STT plus TTS | Rejected for this scope: Live also owns model generation, context and tools; it requires a separate realtime-agent boundary decision. Dedicated Gemini TTS remains a plausible request-based adapter. |

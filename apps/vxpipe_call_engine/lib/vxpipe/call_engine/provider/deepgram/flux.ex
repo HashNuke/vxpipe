@@ -1,11 +1,6 @@
 defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
   @moduledoc false
 
-  @behaviour Vxpipe.CallEngine.Provider.SpeechToText
-
-  @impl true
-  def readiness_mode, do: :provider_connected
-
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 
   @endpoint "wss://api.deepgram.com/v2/listen"
@@ -28,7 +23,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
           sample_rate: pos_integer()
         }
 
-  @impl true
   def new(options) when is_list(options) do
     api_key = Keyword.get(options, :api_key)
     model = Keyword.get(options, :model, "flux-general-en")
@@ -60,7 +54,6 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
        else: {:error, :invalid_configuration}
   end
 
-  @impl true
   def connection_options(%__MODULE__{} = config) do
     query =
       URI.encode_query(%{
@@ -75,17 +68,14 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
     }
   end
 
-  @impl true
   def media_format(%__MODULE__{} = config) do
     %{codec: config.encoding, sample_rate: config.sample_rate}
   end
 
-  @impl true
   def usage_identity(%__MODULE__{} = config) do
     [name: "deepgram", model: config.model]
   end
 
-  @impl true
   def decode(payload) when is_binary(payload) do
     if byte_size(payload) > @maximum_message_bytes do
       {:error, :message_too_large}

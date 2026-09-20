@@ -1,52 +1,41 @@
-defmodule Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge do
+defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux.Session do
   @moduledoc false
 
   use GenServer
 
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxSocket}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event}
 
   @derive {Inspect, only: [:last_sequence]}
   defstruct [
-    :allocation,
     :channel,
-    :provider,
-    :transport,
-    :transport_module,
+    :wire,
+    :wire_module,
     last_sequence: -1,
     turns: %{}
   ]
 
-  def public_options(Flux, %Flux{} = config) do
-    [
-      format: provider_format(Flux.media_format(config)),
-      model: config.model,
-      readiness: :provider_acknowledged
-    ]
-  end
-
-  def public_options(_provider, _config), do: nil
-
   @impl true
   def configure(options) do
-    with {:ok, options} <- Keyword.validate(options, [:format, :model, :readiness]),
-         format when is_map(format) <- Keyword.get(options, :format),
-         model when is_binary(model) <- Keyword.get(options, :model),
-         readiness when readiness in [:initialized, :provider_acknowledged] <-
-           Keyword.get(options, :readiness) do
+    with {:ok, options} <- Keyword.validate(options, [:model, :encoding, :sample_rate]),
+         :ok <- Flux.validate_options(options) do
+      model = Keyword.get(options, :model, "flux-general-en")
+      encoding = Keyword.fetch!(options, :encoding)
+      sample_rate = Keyword.fetch!(options, :sample_rate)
+
       Descriptor.new(
         kind: :stt,
-        settings: %{model: model},
-        format: format,
+        settings: %{model: model, encoding: encoding, sample_rate: sample_rate},
+        format: provider_format(%{codec: encoding, sample_rate: sample_rate}),
         usage_identity: %{
           provider: :deepgram,
           model: model,
           provenance: :provider_reported
         },
-        readiness: readiness,
+        readiness: :provider_acknowledged,
         endpointing: :provider_semantic,
         speech_start?: true,
         eager_end?: true,
@@ -74,28 +63,28 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge do
 
   @impl true
   def init(options) do
+    descriptor = Keyword.fetch!(options, :descriptor)
     channel = Keyword.fetch!(options, :channel)
-    allocation = Keyword.fetch!(options, :allocation)
     private = Keyword.fetch!(options, :private)
-    provider = Keyword.fetch!(private, :provider)
     config = Keyword.fetch!(private, :config)
-    {transport_module, transport_options} = Keyword.fetch!(private, :transport)
-    connection = provider.connection_options(config)
+    wire_module = Keyword.get(private, :wire_module, FluxSocket)
+    wire_options = Keyword.get(private, :wire_options, [])
 
-    with :ok <- Channel.bind(channel),
-         {:ok, transport} <-
-           transport_module.start_link(
+    with %Flux{} <- config,
+         true <- matching_configuration?(descriptor, config),
+         true <- valid_wire?(wire_module, wire_options),
+         :ok <- Channel.bind(channel),
+         {:ok, wire} <-
+           wire_module.start_link(
              owner: self(),
-             connection: connection,
-             transport_options: transport_options
+             connection: Flux.connection_options(config),
+             transport_options: wire_options
            ) do
       {:ok,
        %__MODULE__{
-         allocation: allocation,
          channel: channel,
-         provider: provider,
-         transport: transport,
-         transport_module: transport_module
+         wire: wire,
+         wire_module: wire_module
        }}
     else
       _error -> {:stop, :initialization_failed}
@@ -104,58 +93,58 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge do
 
   @impl true
   def handle_call({:push_audio, audio}, _from, state) do
-    case state.transport_module.send_audio(state.transport, audio) do
+    case state.wire_module.send_audio(state.wire, audio) do
       :ok -> {:reply, :ok, state}
-      {:error, _reason} -> fail_bridge_call(state)
+      {:error, _reason} -> fail_call(state)
     end
   catch
-    :exit, _reason -> fail_bridge_call(state)
+    :exit, _reason -> fail_call(state)
   end
 
   def handle_call(:close, _from, state) do
-    case state.transport_module.close(state.transport) do
+    case state.wire_module.close(state.wire) do
       :ok -> {:stop, :normal, :ok, state}
-      _error -> fail_bridge_call(state)
+      _error -> fail_call(state)
     end
   catch
-    :exit, _reason -> fail_bridge_call(state)
+    :exit, _reason -> fail_call(state)
   end
 
   @impl true
   def handle_info(
-        {:vxpipe_stt_transport, transport, {:message, payload}},
-        %{transport: transport} = state
+        {:vxpipe_stt_transport, wire, {:message, payload}},
+        %{wire: wire} = state
       ) do
-    case state.provider.decode(payload) do
+    case Flux.decode(payload) do
       {:ok, %Signal{provider_sequence: sequence}} when sequence <= state.last_sequence ->
         {:noreply, state}
 
       {:ok, %Signal{} = signal} ->
         case publish(signal, state) do
           {:ok, state} -> {:noreply, %{state | last_sequence: signal.provider_sequence}}
-          {:error, _reason} -> stop_bridge(state)
+          {:error, _reason} -> stop_session(state)
         end
 
       {:ignore, _reason} ->
         {:noreply, state}
 
       {:error, _reason} ->
-        stop_bridge(state)
+        stop_session(state)
     end
   end
 
   def handle_info(
-        {:vxpipe_stt_transport, transport, {:closed, _reason}},
-        %{transport: transport} = state
+        {:vxpipe_stt_transport, wire, {:closed, _reason}},
+        %{wire: wire} = state
       ),
-      do: stop_bridge(state)
+      do: stop_session(state)
 
   def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
   def format_status(status) do
     status
-    |> Map.put(:state, :legacy_stt_bridge)
+    |> Map.put(:state, :deepgram_flux_stt)
     |> Map.put(:message, :redacted)
     |> Map.put(:reason, :redacted)
     |> Map.put(:log, [])
@@ -256,25 +245,31 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.LegacyBridge do
     )
   end
 
-  defp stop_bridge(state) do
-    notify_failure(state.allocation)
-    _ = state.transport_module.close(state.transport)
+  defp stop_session(state) do
+    _ = state.wire_module.close(state.wire)
     {:stop, {:shutdown, :session_failed}, state}
   catch
     :exit, _reason -> {:stop, {:shutdown, :session_failed}, state}
   end
 
-  defp fail_bridge_call(state) do
-    notify_failure(state.allocation)
+  defp fail_call(state) do
     {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
   end
 
-  defp notify_failure(%{lease: lease} = allocation) when is_pid(lease) do
-    send(lease, {:legacy_stt_bridge_failed, allocation})
-    :ok
+  defp matching_configuration?(descriptor, config) do
+    descriptor.settings == %{
+      model: config.model,
+      encoding: config.encoding,
+      sample_rate: config.sample_rate
+    } and
+      descriptor.format == provider_format(Flux.media_format(config))
   end
 
-  defp notify_failure(_allocation), do: :ok
+  defp valid_wire?(module, options) do
+    is_atom(module) and is_list(options) and Keyword.keyword?(options) and
+      Code.ensure_loaded?(module) and function_exported?(module, :start_link, 1) and
+      function_exported?(module, :send_audio, 2) and function_exported?(module, :close, 1)
+  end
 
   defp provider_format(%{codec: :linear16, sample_rate: sample_rate}) do
     %{

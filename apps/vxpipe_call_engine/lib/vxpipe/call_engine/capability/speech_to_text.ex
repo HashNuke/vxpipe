@@ -89,9 +89,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       {:ok, state} ->
         {:ok, Usage.start_session(state)}
 
-      {:error, :transport_start_failed, provider_module} ->
-        Telemetry.provider_failure(:stt, provider_module, :transport_closed)
-        {:stop, :transport_start_failed}
+      {:error, :provider_start_failed, provider_module} ->
+        Telemetry.provider_failure(:stt, provider_module, :provider_failed)
+        {:stop, :provider_start_failed}
 
       {:error, reason} when reason in [:invalid_initial_policy, :invalid_preparation] ->
         {:stop, reason}
@@ -147,9 +147,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       {:error, reason} ->
         {:reply, {:error, reason}, state}
 
-      {:error, :transport_start_failed, state} ->
-        Telemetry.provider_failure(:stt, state.provider_module, :transport_closed)
-        {:reply, {:error, :transport_start_failed}, state}
+      {:error, :provider_start_failed, state} ->
+        Telemetry.provider_failure(:stt, state.provider_module, :provider_failed)
+        {:reply, {:error, :provider_start_failed}, state}
 
       {:error, reason, state} ->
         {:reply, {:error, reason}, state}
@@ -177,24 +177,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
         %{private_allocation: %{token: token}} = state
       ),
       do: stop_private_allocation(state)
-
-  def handle_info(
-        {:vxpipe_stt_connected, connector, transport},
-        %{pending_policy: %{state: %{connector: %{pid: connector}}}} = state
-      ),
-      do: {:noreply, PolicyPreparation.connected(state, transport)}
-
-  def handle_info(
-        {:vxpipe_stt_transport, transport, {:message, payload}},
-        %{pending_policy: %{state: %{transport: transport}}} = state
-      ),
-      do: {:noreply, PolicyPreparation.message(state, payload)}
-
-  def handle_info(
-        {:vxpipe_stt_transport, transport, {:closed, _reason}},
-        %{pending_policy: %{state: %{transport: transport}}} = state
-      ),
-      do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
 
   def handle_info(
         {:vxpipe_speech_prepared, allocation, descriptor},
@@ -226,43 +208,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       ),
       do: stop_unavailable(:provider_failed, state)
 
-  def handle_info({:legacy_stt_bridge_failed, allocation}, state),
-    do: {:noreply, PolicyPreparation.bridge_failed(state, allocation)}
-
   def handle_info(
         {:DOWN, monitor, :process, _owner, _reason},
         %{pending_policy: %{monitor: monitor}} = state
       ),
       do: {:noreply, PolicyPreparation.fail(state)}
 
-  def handle_info(
-        {:DOWN, monitor, :process, _connector, _reason},
-        %{pending_policy: %{state: %{connector: %{monitor: monitor}}}} = state
-      ),
-      do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
-
-  def handle_info(
-        {:EXIT, transport, _reason},
-        %{pending_policy: %{state: %{transport: transport}}} = state
-      ),
-      do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
-
   def handle_info({:stt_policy_expired, token}, %{pending_policy: %{token: token}} = state),
     do: {:noreply, PolicyPreparation.fail(state)}
-
-  def handle_info(
-        {:vxpipe_stt_connected, connector, transport},
-        %{connector: %{pid: connector}, transport: nil} = state
-      ) do
-    {:noreply, Usage.start_session(%{state | transport: transport})}
-  end
-
-  def handle_info(
-        {:DOWN, monitor, :process, connector, _reason},
-        %{connector: %{pid: connector, monitor: monitor}} = state
-      ) do
-    stop_unavailable(:transport_closed, state)
-  end
 
   def handle_info({:vxpipe_stt_audio, ingress, reference, frame}, state)
       when is_pid(ingress) and is_reference(reference) do
@@ -277,34 +230,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
       {:error, :unavailable} ->
         acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unavailable})
-        stop_unavailable(:transport_closed, state)
+        stop_unavailable(:provider_failed, state)
 
       :ok ->
         acknowledge_audio(ingress, reference, frame.sequence_number, :ok)
         {:noreply, Usage.accept_input(state)}
     end
-  end
-
-  def handle_info(
-        {:vxpipe_stt_transport, transport, {:message, payload}},
-        %{transport: transport} = state
-      ) do
-    case state.provider_module.decode(payload) do
-      {:ok, %Signal{} = signal} -> handle_signal(signal, state)
-      {:ignore, _reason} -> {:noreply, state}
-      {:error, _reason} -> stop_unavailable(:invalid_provider_message, state)
-    end
-  end
-
-  def handle_info(
-        {:vxpipe_stt_transport, transport, {:closed, _reason}},
-        %{transport: transport} = state
-      ) do
-    stop_unavailable(:transport_closed, state)
-  end
-
-  def handle_info({:EXIT, transport, _reason}, %{transport: transport} = state) do
-    stop_unavailable(:transport_closed, state)
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -377,7 +308,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   defp maybe_report_provider_failure(reason, provider)
-       when reason in [:transport_closed, :invalid_provider_message, :provider_failed] do
+       when reason in [:invalid_provider_message, :provider_failed] do
     Telemetry.provider_failure(:stt, provider, reason)
   end
 
