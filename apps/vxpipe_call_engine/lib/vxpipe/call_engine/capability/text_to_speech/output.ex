@@ -7,10 +7,13 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
   alias Vxpipe.CallEngine.Speech.Audio
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
-  @call_timeout 15_000
+  @request_timeout 4_000
+  @call_timeout 4_500
 
-  def start_link(options),
-    do: GenServer.start_link(__MODULE__, nil, Keyword.take(options, [:name]))
+  def start_link(options) do
+    init_options = Keyword.take(options, [:request_timeout])
+    GenServer.start_link(__MODULE__, init_options, Keyword.take(options, [:name]))
+  end
 
   def push(output, owner, %Audio{} = audio, sink, %AudioOutputFrame{} = frame)
       when is_pid(output) and is_pid(owner) and is_pid(sink) do
@@ -32,45 +35,76 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
   end
 
   @impl true
-  def init(nil), do: {:ok, %{output: nil, interrupt: nil}}
+  def init(options) do
+    request_timeout = Keyword.get(options, :request_timeout, @request_timeout)
+    true = is_integer(request_timeout) and request_timeout > 0
+    {:ok, %{output: nil, interrupt: nil, request_timeout: request_timeout}}
+  end
 
   @impl true
   def handle_info({:push, owner, audio, sink, frame}, %{output: nil} = state) do
-    request_id = request(sink, {:vxpipe_audio_output, frame})
+    {request_id, timer} =
+      request(sink, {:vxpipe_audio_output, frame}, state.request_timeout)
 
     pending = %{
       id: request_id,
       owner: owner,
       reference: audio.request_ref,
-      result: {:push, audio}
+      result: {:push, audio},
+      timer: timer
     }
 
     {:noreply, %{state | output: pending}}
   end
 
   def handle_info({:finish, owner, request_ref, request}, %{output: nil} = state) do
-    request_id =
-      request(request.output_sink, {:vxpipe_audio_output_finish, request.correlation_id, owner})
+    {request_id, timer} =
+      request(
+        request.output_sink,
+        {:vxpipe_audio_output_finish, request.correlation_id, owner},
+        state.request_timeout
+      )
 
-    pending = %{id: request_id, owner: owner, reference: request_ref, result: :finish}
+    pending = %{
+      id: request_id,
+      owner: owner,
+      reference: request_ref,
+      result: :finish,
+      timer: timer
+    }
+
     {:noreply, %{state | output: pending}}
+  end
+
+  def handle_info(
+        {:vxpipe_tts_output_timeout, request_id},
+        %{interrupt: %{id: request_id} = pending} = state
+      ) do
+    result = deadline_result(pending)
+    state = retire_interrupted_output(result, pending, state)
+    GenServer.reply(pending.from, result)
+    {:noreply, %{state | interrupt: nil}}
+  end
+
+  def handle_info(
+        {:vxpipe_tts_output_timeout, request_id},
+        %{output: %{id: request_id} = pending} = state
+      ) do
+    deliver_output(self(), pending, deadline_result(pending))
+    {:noreply, %{state | output: nil}}
   end
 
   def handle_info(message, state) do
     case response(message, state.interrupt) do
       {:reply, result, pending} ->
+        state = retire_interrupted_output(result, pending, state)
         GenServer.reply(pending.from, result)
         {:noreply, %{state | interrupt: nil}}
 
       :no_reply ->
         case response(message, state.output) do
           {:reply, result, pending} ->
-            result =
-              if pending.result == :finish,
-                do: {:finish, result},
-                else: append(pending.result, result)
-
-            send(pending.owner, {:vxpipe_tts_output, self(), pending.reference, result})
+            deliver_output(self(), pending, result)
             {:noreply, %{state | output: nil}}
 
           :no_reply ->
@@ -81,13 +115,15 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
 
   @impl true
   def handle_call({:interrupt, request_ref, request, callback}, from, %{interrupt: nil} = state) do
-    request_id =
+    {request_id, timer} =
       request(
         request.output_sink,
-        {:vxpipe_audio_output_interrupt, request.correlation_id, callback}
+        {:vxpipe_audio_output_interrupt, request.correlation_id, callback},
+        state.request_timeout
       )
 
-    {:noreply, %{state | interrupt: %{id: request_id, from: from, reference: request_ref}}}
+    pending = %{id: request_id, from: from, reference: request_ref, timer: timer}
+    {:noreply, %{state | interrupt: pending}}
   end
 
   @impl true
@@ -99,16 +135,66 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Output do
     |> Map.put(:log, [])
   end
 
-  defp request(server, message), do: :gen.send_request(server, :"$gen_call", message)
+  defp request(server, message, timeout) do
+    request_id = :gen.send_request(server, :"$gen_call", message)
+    timer = Process.send_after(self(), {:vxpipe_tts_output_timeout, request_id}, timeout)
+    {request_id, timer}
+  end
 
   defp response(_message, nil), do: :no_reply
 
   defp response(message, pending) do
     case :gen.check_response(message, pending.id) do
-      {:reply, result} -> {:reply, result, pending}
-      {:error, _reason} -> {:reply, {:error, :sink_unavailable}, pending}
-      :no_reply -> :no_reply
+      {:reply, result} ->
+        cancel_timer(pending)
+        {:reply, result, pending}
+
+      {:error, _reason} ->
+        cancel_timer(pending)
+        {:reply, {:error, :sink_unavailable}, pending}
+
+      :no_reply ->
+        :no_reply
     end
+  end
+
+  defp retire_interrupted_output(
+         {:ok, _played_ms},
+         %{reference: reference},
+         %{output: %{reference: reference} = output} = state
+       ) do
+    abandon(output)
+    %{state | output: nil}
+  end
+
+  defp retire_interrupted_output(_result, _pending, state), do: state
+
+  defp deadline_result(pending) do
+    case :gen.receive_response(pending.id, 0) do
+      {:reply, result} -> result
+      {:error, _reason} -> {:error, :sink_unavailable}
+      :timeout -> {:error, :sink_unavailable}
+    end
+  end
+
+  defp abandon(pending) do
+    cancel_timer(pending)
+    _ = :gen.receive_response(pending.id, 0)
+    :ok
+  end
+
+  defp cancel_timer(pending) do
+    _ = Process.cancel_timer(pending.timer)
+    :ok
+  end
+
+  defp deliver_output(output, pending, result) do
+    result =
+      if pending.result == :finish,
+        do: {:finish, result},
+        else: append(pending.result, result)
+
+    send(pending.owner, {:vxpipe_tts_output, output, pending.reference, result})
   end
 
   defp append({:push, audio}, result), do: {:push, audio, result}

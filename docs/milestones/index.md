@@ -90,13 +90,14 @@ Research is complete. The earlier global prototype's startup-isolation regressio
 plan](../speech-session-ownership.md) defines scoped execution. The accepted implementation order
 is R → A → D → B → C → F → E → G; H remains.
 
-Speech integration is **8 of 9 checkpoints complete**. Morse and Deepgram STT and TTS now use
+Speech integration is **9 of 9 checkpoints complete**. Morse and Deepgram STT and TTS now use
 owned semantic sessions for room conversation, opening audio and private transfer speech. The old
 STT/TTS public transport behaviours, intermediate bridges, Morse transport adapters and global
 speech task supervisors are removed. A shared conformance harness now covers native and contrasting
-provider profiles, and its compiled authoring guide documents the public boundary. The G root gate
-passes 1,956 tests with zero failures and 42 excluded (seed 674921). E's four-scheduler bounded load
-passes 3,936 TTS turns, 3,936 concurrent STT turns and 492 forced fault/replacement cycles. H completes
+provider profiles, and its compiled authoring guide documents the public boundary. The final
+post-audit root gate passes 1,961 tests with zero failures and 42 excluded (seed 0). E's repaired
+deadline/order group passes 255 executions, and three four-scheduler bounded runs each pass 3,936
+TTS turns, 3,936 concurrent STT turns and 492 forced fault/replacement cycles. H completes
 configuration/documentation cleanup and final all-consumer acceptance. Detailed
 historical failures, repairs and load limits remain in the linked milestone evidence. Reliability
 takes priority over small latency overhead; these bounded local runs do not establish hosted capacity.
@@ -508,7 +509,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Operator login and admin dashboard](operator-login-and-admin-dashboard.md#specification-review) | Complete; all 7 checkpoints independently reviewed | The installation operator login and React admin cover tenants, call specs, calls, service credentials and responsive live/historical call inspection. |
 | [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md#specification-review) | In progress; Storybook refinement locally reviewed 2026-09-18 | Distinct platform principal, trusted first issuance, explicit tenant delegation and repeat-safe demo identity remain required. Compact provider cards, credential modals with service dropdowns, alternative voice-readiness previews and tenant resumption are prototyped; the default name is Demo. |
 | [Getting Started and example calls](getting-started-and-example-calls.md#specification-review) | Production integration planned; recipe prototype locally reviewed 2026-09-18 | Tenant services-to-recipes stories include blocked/ready states and explicit provider choice. Root-home/demo-mode behavior, durable publication and real debug-console launch retain their incomplete acceptance gates. |
-| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Complete; R/A/D/B/C/F/E/G/H accepted; 9/9 | Native room STT/TTS, opening and private-transfer speech use scoped semantic sessions. Closed provider-map configuration, all-consumer activation, interruption/replacement, rendered inspection, provider checks and bounded final loads are recorded. All five H root gates pass with 1,957 tests, zero failures and 42 excluded (seed 0); Astra reviewed. |
+| [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Complete; R/A/D/B/C/F/E/G/H accepted; 9/9 | Native room STT/TTS, opening and private-transfer speech use scoped semantic sessions. Closed provider-map configuration, all-consumer activation, interruption/replacement, rendered inspection, provider checks and bounded final loads are recorded. The post-audit sink interruption repair passes all five root gates with 1,961 tests, zero failures and 42 excluded (seed 0); Astra reviewed. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 
 ## Planning verification

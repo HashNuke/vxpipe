@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.SpeechTTSUsageProbe do
      %{
        channel: channel,
        observer: Keyword.fetch!(private, :observer),
+       hold_cancel?: Keyword.get(private, :hold_cancel?, false),
        id_at: Keyword.get(private, :id_at, :submission),
        audio?: Keyword.get(private, :audio?, true),
        request: nil,
@@ -81,6 +82,14 @@ defmodule Vxpipe.CallEngine.SpeechTTSUsageProbe do
   end
 
   def handle_call({:cancel, reference, _playback}, _from, %{request: reference} = state) do
+    if state.hold_cancel? do
+      send(state.observer, {:usage_probe_cancel_held, self(), reference})
+
+      receive do
+        :release_usage_probe_cancel -> :ok
+      end
+    end
+
     result =
       if state.terminal? do
         :ok

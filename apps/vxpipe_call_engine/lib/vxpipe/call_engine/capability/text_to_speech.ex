@@ -131,7 +131,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     pending = Enum.map(:queue.to_list(state.pending), &{&1, 0})
 
     with {:ok, ticket} <- Session.fence_output(state.session, current.handle),
-         {played_ms, state} <- interrupt_output(current, state),
+         {:ok, played_ms, state} <- interrupt_output(current, state),
          {:ok, request_id} <- Session.request_cancel(state.session, ticket, played_ms) do
       cancellation = %{
         accepted?: false,
@@ -151,7 +151,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
            pending: :queue.new()
        }}
     else
-      _failure -> stop_unavailable(:provider_failed, {:error, :unavailable}, state)
+      {:error, :audio_output_failed, state} ->
+        stop_unavailable(:audio_output_failed, {:error, :unavailable}, state)
+
+      _failure ->
+        stop_unavailable(:provider_failed, {:error, :unavailable}, state)
     end
   end
 
@@ -197,6 +201,16 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
         stop_unavailable(:audio_output_failed, state)
     end
   end
+
+  def handle_info(
+        {:vxpipe_tts_output, output, reference, {:finish, result}},
+        %{
+          output: output,
+          current: %{handle: %{ref: reference}, phase: :cancelling}
+        } = state
+      )
+      when result in [:ok, {:error, :interrupted}],
+      do: {:noreply, state}
 
   def handle_info(
         {:vxpipe_tts_output, output, reference, {:finish, :ok}},
@@ -430,9 +444,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   defp interrupt_output(current, state) do
     case Output.interrupt(state.output, current.handle.ref, current.request, self()) do
-      {:ok, played_ms} -> {played_ms, state}
-      {:error, :wrong_turn} -> {0, state}
-      {:error, _reason} -> {0, state}
+      {:ok, played_ms} -> {:ok, played_ms, state}
+      {:error, :wrong_turn} -> {:ok, 0, state}
+      {:error, _reason} -> {:error, :audio_output_failed, state}
     end
   end
 

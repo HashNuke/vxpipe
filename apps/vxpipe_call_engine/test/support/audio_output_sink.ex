@@ -25,6 +25,9 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
        defer_drain: Keyword.get(options, :defer_drain, false),
        pending_drain: nil,
        defer_finish: false,
+       finish_result_on_interrupt:
+         Keyword.get(options, :finish_result_on_interrupt, {:error, :interrupted}),
+       settle_finish_on_interrupt: Keyword.get(options, :settle_finish_on_interrupt, true),
        pending_finish: nil,
        defer_release: false,
        pending_release: nil,
@@ -174,7 +177,15 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
       GenServer.reply(state.pending_output, {:error, :interrupted})
     end
 
-    {:reply, {:ok, state.played_ms}, %{state | callback: nil, pending_output: nil, played_ms: 0}}
+    if state.pending_finish != nil and state.settle_finish_on_interrupt do
+      GenServer.reply(state.pending_finish, state.finish_result_on_interrupt)
+    end
+
+    pending_finish =
+      if state.settle_finish_on_interrupt, do: nil, else: state.pending_finish
+
+    {:reply, {:ok, state.played_ms},
+     %{state | callback: nil, pending_finish: pending_finish, pending_output: nil, played_ms: 0}}
   end
 
   def handle_call({:vxpipe_audio_output_interrupt, _turn, _callback}, _from, state) do

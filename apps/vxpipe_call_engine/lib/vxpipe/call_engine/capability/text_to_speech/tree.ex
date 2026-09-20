@@ -40,6 +40,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Tree do
     scope_name = address(self(), :scope)
     output_name = address(self(), :output)
 
+    output_options =
+      [name: output_name]
+      |> maybe_put_request_timeout(options)
+
     children = [
       Supervisor.child_spec(
         {CapabilityTree, owner: Keyword.fetch!(options, :owner), name: scope_name},
@@ -47,7 +51,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Tree do
         restart: :temporary,
         significant: true
       ),
-      Supervisor.child_spec({Output, name: output_name},
+      Supervisor.child_spec({Output, output_options},
         id: Output,
         restart: :temporary,
         significant: true
@@ -84,5 +88,12 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech.Tree do
 
   defp address(tree, kind) do
     {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {__MODULE__, tree, kind}}}
+  end
+
+  defp maybe_put_request_timeout(output_options, options) do
+    case Keyword.fetch(options, :output_request_timeout) do
+      {:ok, timeout} -> Keyword.put(output_options, :request_timeout, timeout)
+      :error -> output_options
+    end
   end
 end

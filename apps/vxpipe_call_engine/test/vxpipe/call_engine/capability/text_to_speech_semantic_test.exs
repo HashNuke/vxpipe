@@ -78,6 +78,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     :ok = TestAudioOutputSink.defer_finish(sink, true)
     capability = start_capability()
+    monitor = Process.monitor(capability)
     assert {:ok, _resource, :ready} = await_ready(capability)
 
     first = request("turn-completed-interrupt", sink)
@@ -90,8 +91,22 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
     assert_receive {:test_audio_output_finish, ^sink, "turn-completed-interrupt"}
 
     assert {:ok, [{^first, 0}]} = TextToSpeech.interrupt(capability)
+    :ok = TestAudioOutputSink.defer_finish(sink, false)
     assert :ok = TextToSpeech.synthesize(capability, replacement)
-    assert_receive {:usage_probe_submitted, _replacement_reference, _provider_request_id}
+    assert_receive {:usage_probe_submitted, replacement_reference, _provider_request_id}
+
+    assert_receive {:test_audio_output, ^sink,
+                    %{correlation_id: "turn-after-completed-interrupt"}}
+
+    assert_receive {:usage_probe_audio_credited, ^replacement_reference, _credit}
+
+    assert :ok = GenServer.call(semantic_provider(capability), :complete)
+    assert_receive {:test_audio_output_finish, ^sink, "turn-after-completed-interrupt"}
+    :ok = TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_tts_playback, ^capability, ^replacement, :completed}
+    refute_receive {:vxpipe_tts_playback, ^capability, ^first, :completed}
+    refute_receive {:DOWN, ^monitor, :process, ^capability, _reason}
   end
 
   test "accepted cancellation drains held sink output before starting a replacement" do
@@ -114,6 +129,98 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
     assert_receive {:usage_probe_submitted, _replacement_reference, _provider_request_id}
     assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-after-held-output"}}
     refute_receive {:test_audio_output, ^sink, %{correlation_id: "turn-held-output"}}
+  end
+
+  test "successful interruption retires an unanswered finish before replacement audio" do
+    sink =
+      start_supervised!(
+        {TestAudioOutputSink, observer: self(), settle_finish_on_interrupt: false}
+      )
+
+    :ok = TestAudioOutputSink.defer_finish(sink, true)
+    capability = start_capability()
+    assert {:ok, _resource, :ready} = await_ready(capability)
+
+    first = request("turn-unanswered-finish", sink)
+    replacement = request("turn-after-unanswered-finish", sink)
+    assert :ok = TextToSpeech.synthesize(capability, first)
+    assert_receive {:usage_probe_submitted, first_reference, _provider_request_id}
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-unanswered-finish"}}
+    assert_receive {:usage_probe_audio_credited, ^first_reference, _credit}
+    assert :ok = GenServer.call(semantic_provider(capability), :complete)
+    assert_receive {:test_audio_output_finish, ^sink, "turn-unanswered-finish"}
+
+    assert {:ok, [{^first, 0}]} = TextToSpeech.interrupt(capability)
+    assert :ok = TextToSpeech.synthesize(capability, replacement)
+    assert_receive {:usage_probe_submitted, replacement_reference, _provider_request_id}
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-after-unanswered-finish"}}
+
+    :ok = TestAudioOutputSink.complete_finish(sink, {:error, :interrupted})
+    assert_receive {:usage_probe_audio_credited, ^replacement_reference, _credit}
+
+    assert :ok = GenServer.call(semantic_provider(capability), :complete)
+    assert_receive {:test_audio_output_finish, ^sink, "turn-after-unanswered-finish"}
+    :ok = TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_tts_playback, ^capability, ^replacement, :completed}
+    refute_receive {:vxpipe_tts_playback, ^capability, ^first, :completed}
+  end
+
+  test "a successful finish reply cannot overtake pending cancellation" do
+    sink =
+      start_supervised!({TestAudioOutputSink, observer: self(), finish_result_on_interrupt: :ok})
+
+    :ok = TestAudioOutputSink.defer_finish(sink, true)
+    capability = start_capability(provider_private: [observer: self(), hold_cancel?: true])
+    assert {:ok, _resource, :ready} = await_ready(capability)
+
+    first = request("turn-finish-cancel-race", sink)
+    replacement = request("turn-after-finish-cancel-race", sink)
+    assert :ok = TextToSpeech.synthesize(capability, first)
+    assert_receive {:usage_probe_submitted, first_reference, _provider_request_id}
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-finish-cancel-race"}}
+    assert_receive {:usage_probe_audio_credited, ^first_reference, _credit}
+    assert :ok = GenServer.call(semantic_provider(capability), :complete)
+    assert_receive {:test_audio_output_finish, ^sink, "turn-finish-cancel-race"}
+
+    interruption = Task.async(fn -> TextToSpeech.interrupt(capability) end)
+    assert_receive {:usage_probe_cancel_held, provider, ^first_reference}
+    assert_receive {:test_audio_output_interrupt, ^sink, "turn-finish-cancel-race", 0}
+
+    %{output: output} = :sys.get_state(capability)
+    _ = :sys.get_state(output)
+    _ = :sys.get_state(capability)
+    send(capability, {:vxpipe_audio_playback, sink, first.correlation_id, {:completed, 0}})
+    _ = :sys.get_state(capability)
+    send(provider, :release_usage_probe_cancel)
+
+    assert Task.await(interruption, 500) == {:ok, [{first, 0}]}
+    assert :ok = TextToSpeech.synthesize(capability, replacement)
+    assert_receive {:usage_probe_submitted, _replacement_reference, _provider_request_id}
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-after-finish-cancel-race"}}
+  end
+
+  test "sink interruption timeout fails the capability before replacement admission" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability(output_request_timeout: 10)
+    assert {:ok, _resource, :ready} = await_ready(capability)
+
+    request = request("turn-sink-interrupt-timeout", sink)
+    assert :ok = TextToSpeech.synthesize(capability, request)
+    assert_receive {:usage_probe_submitted, request_ref, _provider_request_id}
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: "turn-sink-interrupt-timeout"}}
+    assert_receive {:usage_probe_audio_credited, ^request_ref, _credit}
+
+    monitor = Process.monitor(capability)
+    :ok = :sys.suspend(sink)
+
+    try do
+      assert {:error, :unavailable} = TextToSpeech.interrupt(capability)
+      assert_receive {:DOWN, ^monitor, :process, ^capability, :audio_output_failed}
+      assert {:error, :unavailable} = TextToSpeech.synthesize(capability, request)
+    after
+      :ok = :sys.resume(sink)
+    end
   end
 
   test "retains accepted usage when the speech allocation closes before acknowledgement" do
@@ -187,22 +294,32 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
 
     tree =
       try do
-        start_supervised!(
-          {Tree,
-           owner: self(),
-           participant_id: "agent-semantic",
-           provider: {provider, []},
-           provider_private: private_init,
-           maximum_requests: 1,
-           usage: Keyword.get(options, :usage),
-           name:
-             {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {__MODULE__, self(), make_ref()}}}}
-        )
+        tree_options =
+          [
+            owner: self(),
+            participant_id: "agent-semantic",
+            provider: {provider, []},
+            provider_private: private_init,
+            maximum_requests: 1,
+            usage: Keyword.get(options, :usage),
+            name:
+              {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {__MODULE__, self(), make_ref()}}}
+          ]
+          |> maybe_put_output_request_timeout(options)
+
+        start_supervised!({Tree, tree_options})
       after
         PrivateInit.close(private_init)
       end
 
     Tree.capability(tree)
+  end
+
+  defp maybe_put_output_request_timeout(tree_options, options) do
+    case Keyword.fetch(options, :output_request_timeout) do
+      {:ok, timeout} -> Keyword.put(tree_options, :output_request_timeout, timeout)
+      :error -> tree_options
+    end
   end
 
   defp semantic_provider(capability) do
