@@ -1,18 +1,15 @@
 defmodule Vxpipe.CallEngine.Integration.DeepgramFluxTextToSpeechTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{
-    FluxTextToSpeech,
-    FluxTextToSpeechSocket
-  }
-
-  alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
 
   @moduletag :integration
   @moduletag timeout: 60_000
 
-  test "streams nonempty 48 kHz linear16 audio and a terminal boundary" do
-    provider =
+  test "native session streams nonempty 48 kHz linear16 audio and a terminal boundary" do
+    config =
       FluxTextToSpeech.new!(
         api_key: System.fetch_env!("DEEPGRAM_API_KEY"),
         model: "flux-haley-en",
@@ -20,93 +17,84 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxTextToSpeechTest do
         sample_rate: 48_000
       )
 
-    socket =
-      start_supervised!(%{
-        id: {FluxTextToSpeechSocket, System.unique_integer([:positive])},
-        start:
-          {FluxTextToSpeechSocket, :start_link,
-           [
-             [
-               owner: self(),
-               connection: FluxTextToSpeech.connection_options(provider),
-               transport_options: [connect_timeout: 10_000, receive_timeout: 30_000]
-             ]
-           ]},
-        restart: :temporary
-      })
+    tree = start_supervised!({CapabilityTree, owner: self()})
 
-    assert %Signal{kind: :connected} = await_control(socket, :connected, 10_000)
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: FluxSession,
+               options: [
+                 model: config.model,
+                 encoding: config.encoding,
+                 sample_rate: config.sample_rate
+               ],
+               private: [
+                 config: config,
+                 wire_options: [connect_timeout: 10_000, receive_timeout: 30_000]
+               ],
+               start_timeout: 15_000
+             )
 
-    :ok =
-      FluxTextToSpeechSocket.send_control(
-        socket,
-        FluxTextToSpeech.encode_speak("Hello from the Vxpipe streaming audio test.")
-      )
+    assert %Event{kind: :ready, readiness: :provider_acknowledged} =
+             ready = await_event(session, 15_000)
 
-    :ok = FluxTextToSpeechSocket.send_control(socket, FluxTextToSpeech.encode_flush())
+    assert :ok = Session.ack(session, ready)
 
-    assert %Signal{kind: :speech_started, provider_speech_id: speech_id} =
-             await_control(socket, :speech_started, 10_000)
+    assert {:ok, %{ref: request}} =
+             Session.speak(session, "Hello from the Vxpipe semantic speech test.")
 
-    assert is_binary(speech_id)
-    {audio_bytes, completed} = await_audio_and_completion(socket, speech_id, 0, 20_000)
+    assert {audio_bytes, speech_id} = await_synthesis(session, request, 0, 20_000)
     assert audio_bytes > 0
-    assert %Signal{kind: :speech_completed, provider_speech_id: ^speech_id} = completed
+    assert rem(audio_bytes, 2) == 0
+    assert is_binary(speech_id)
+    assert :ok = Session.close(session)
   end
 
-  defp await_control(socket, kind, timeout) do
+  defp await_synthesis(session, request, audio_bytes, timeout) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    do_await_control(socket, kind, deadline)
+    do_await_synthesis(session, request, audio_bytes, deadline)
   end
 
-  defp do_await_control(socket, kind, deadline) do
+  defp do_await_synthesis(session, request, audio_bytes, deadline) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
     receive do
-      {:vxpipe_tts_transport, ^socket, {:control, payload}} ->
-        case FluxTextToSpeech.decode(payload) do
-          {:ok, %Signal{kind: ^kind} = signal} -> signal
-          {:ok, %Signal{kind: :failed, provider_code: code}} -> flunk("Flux TTS failed: #{code}")
-          _other -> do_await_control(socket, kind, deadline)
-        end
+      {:vxpipe_speech_audio,
+       %Audio{session: ^session, request_ref: ^request, payload: payload} = audio} ->
+        assert :ok = Session.validate_audio(session, audio)
+        assert :ok = Session.ack_audio(session, audio)
+        do_await_synthesis(session, request, audio_bytes + byte_size(payload), deadline)
 
-      {:vxpipe_tts_transport, ^socket, {:closed, reason}} ->
-        flunk("Flux TTS closed before #{kind}: #{inspect(reason)}")
-    after
-      remaining -> flunk("timed out waiting for Flux TTS #{kind}")
-    end
-  end
+      {:vxpipe_speech,
+       %Event{session: ^session, request_ref: ^request, kind: :input_submitted} = event} ->
+        assert :ok = Session.ack(session, event)
+        do_await_synthesis(session, request, audio_bytes, deadline)
 
-  defp await_audio_and_completion(socket, speech_id, audio_bytes, timeout) do
-    deadline = System.monotonic_time(:millisecond) + timeout
-    do_await_audio_and_completion(socket, speech_id, audio_bytes, deadline)
-  end
+      {:vxpipe_speech,
+       %Event{
+         session: ^session,
+         request_ref: ^request,
+         kind: :completed,
+         provider_request_id: speech_id
+       } = event} ->
+        assert :ok = Session.ack(session, event)
+        {audio_bytes, speech_id}
 
-  defp do_await_audio_and_completion(socket, speech_id, audio_bytes, deadline) do
-    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+      {:vxpipe_speech, %Event{session: ^session, request_ref: ^request, kind: :failed} = event} ->
+        flunk("Flux TTS failed: #{inspect(event.reason)}")
 
-    receive do
-      {:vxpipe_tts_transport, ^socket, {:audio, reference, audio}} ->
-        assert {:audio, audio} = FluxTextToSpeech.decode_audio(audio)
-        send(socket, {:vxpipe_tts_audio_result, self(), reference, :ok})
-        do_await_audio_and_completion(socket, speech_id, audio_bytes + byte_size(audio), deadline)
-
-      {:vxpipe_tts_transport, ^socket, {:control, payload}} ->
-        case FluxTextToSpeech.decode(payload) do
-          {:ok, %Signal{kind: :speech_completed, provider_speech_id: ^speech_id} = signal} ->
-            {audio_bytes, signal}
-
-          {:ok, %Signal{kind: :failed, provider_code: code}} ->
-            flunk("Flux TTS failed: #{code}")
-
-          _other ->
-            do_await_audio_and_completion(socket, speech_id, audio_bytes, deadline)
-        end
-
-      {:vxpipe_tts_transport, ^socket, {:closed, reason}} ->
+      {:vxpipe_speech_closed, ^session, reason} ->
         flunk("Flux TTS closed before completion: #{inspect(reason)}")
     after
       remaining -> flunk("timed out waiting for Flux TTS audio completion")
+    end
+  end
+
+  defp await_event(session, timeout) do
+    receive do
+      {:vxpipe_speech, %Event{session: ^session} = event} -> event
+      {:vxpipe_speech_closed, ^session, reason} -> flunk("Flux TTS closed: #{inspect(reason)}")
+    after
+      timeout -> flunk("timed out waiting for Flux TTS readiness")
     end
   end
 end

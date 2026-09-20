@@ -1,9 +1,16 @@
 defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxSocket, FluxTextToSpeechSocket}
+  alias Vxpipe.CallEngine.Provider.Deepgram.{
+    Flux,
+    FluxSocket,
+    FluxTextToSpeech,
+    FluxTextToSpeechSocket
+  }
+
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
-  alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: FluxTTSSession
+  alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.TestSpeechWireServer
 
   @moduletag :integration
@@ -199,6 +206,127 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
     assert %Event{kind: :turn_ended, text: "hello there"} = next_event(session)
     refute_received {:vxpipe_speech, %Event{text: "FORBIDDEN"}}
     assert :ok = Session.close(session)
+  end
+
+  test "native TTS maps wire audio without requiring speech-start and completes after credit",
+       context do
+    assert {:ok, config} =
+             FluxTextToSpeech.new(
+               api_key: @secret,
+               model: "flux-haley-en",
+               encoding: :linear16,
+               sample_rate: 16_000
+             )
+
+    config = %{config | endpoint: context.endpoint}
+
+    scope =
+      start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
+      |> CapabilityTree.scope()
+
+    assert {:ok, session, :starting} =
+             Session.start(scope,
+               provider: FluxTTSSession,
+               options: [
+                 model: config.model,
+                 encoding: config.encoding,
+                 sample_rate: config.sample_rate
+               ],
+               private: [config: config, wire_options: []]
+             )
+
+    assert_receive {:speech_wire_authorization, ["Token " <> @secret]}
+    assert_receive {:speech_wire_connected, peer}
+
+    send(
+      peer,
+      {:send, [text: JSON.encode!(%{"type" => "Connected", "request_id" => "connection-tts"})]}
+    )
+
+    assert %Event{
+             kind: :ready,
+             provider_request_id: "connection-tts",
+             readiness: :provider_acknowledged
+           } = next_event(session)
+
+    assert {:ok, %{ref: request}} = Session.speak(session, "Hello")
+
+    assert_receive {:speech_wire_frame, ^peer, :text, speak}
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Hello"}
+    assert_receive {:speech_wire_frame, ^peer, :text, flush}
+    assert JSON.decode!(flush) == %{"type" => "Flush"}
+
+    assert %Event{kind: :input_submitted, request_ref: ^request} = next_event(session)
+
+    audio = <<1::little-signed-16, 2::little-signed-16>>
+
+    send(
+      peer,
+      {:send,
+       [
+         binary: audio,
+         text:
+           JSON.encode!(%{
+             "type" => "SpeechMetadata",
+             "speech_id" => "dg_sp_native_tts"
+           })
+       ]}
+    )
+
+    assert_receive {:vxpipe_speech_audio,
+                    %Audio{session: ^session, request_ref: ^request, payload: ^audio} = envelope},
+                   1_000
+
+    assert :ok = Session.validate_audio(session, envelope)
+    refute_receive {:vxpipe_speech, %Event{kind: :completed}}, 20
+    assert :ok = Session.ack_audio(session, envelope)
+
+    assert %Event{
+             kind: :completed,
+             request_ref: ^request,
+             provider_request_id: "dg_sp_native_tts"
+           } = next_event(session)
+
+    assert {:ok, completed_ticket} = Session.fence_output(session, request)
+    assert {:ok, _playback} = Session.cancel(session, completed_ticket, 0)
+
+    assert {:ok, %{ref: cancelled_request}} = Session.speak(session, "Stop")
+    assert_receive {:speech_wire_frame, ^peer, :text, _speak}
+    assert_receive {:speech_wire_frame, ^peer, :text, _flush}
+    assert %Event{kind: :input_submitted, request_ref: ^cancelled_request} = next_event(session)
+
+    cancelled_audio = <<3::little-signed-16, 4::little-signed-16>>
+
+    send(
+      peer,
+      {:send,
+       [
+         binary: cancelled_audio,
+         text:
+           JSON.encode!(%{
+             "type" => "SpeechMetadata",
+             "speech_id" => "dg_sp_cancelled_tts"
+           })
+       ]}
+    )
+
+    assert_receive {:vxpipe_speech_audio,
+                    %Audio{
+                      session: ^session,
+                      request_ref: ^cancelled_request,
+                      payload: ^cancelled_audio
+                    } = fenced_envelope},
+                   1_000
+
+    assert :ok = Session.validate_audio(session, fenced_envelope)
+    assert {:ok, cancellation} = Session.fence_output(session, cancelled_request)
+    assert {:ok, _playback} = Session.cancel(session, cancellation, 0)
+
+    assert %Event{
+             kind: :cancelled,
+             request_ref: ^cancelled_request,
+             provider_request_id: "dg_sp_cancelled_tts"
+           } = next_event(session)
   end
 
   test "an unacknowledged output closes at the fixed output deadline", context do

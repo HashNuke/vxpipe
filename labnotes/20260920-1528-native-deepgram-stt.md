@@ -239,5 +239,18 @@ message, and a five-participant WebRTC handoff missed one ordered audio phase. B
 passed alone with the same seed (1/0 each), so the first run does not establish a change-caused
 failure. A second bounded umbrella run passed 1,937 tests with zero failures and 41 exclusions
 using seed 530504. The required final GPT-6 Astra xhigh review found no remaining P0, P1 or P2
-issues. Hosted Deepgram acceptance and Linux/release portability were outside that review and
-remain explicit limits.
+issues. Linux/release portability was outside that review and remains an explicit limit.
+
+## Hosted acceptance follow-up
+
+On 2026-09-20 the tagged full WebRTC/RTVI lane ran with the configured Deepgram credential and a
+temporary generated 48 kHz mono Ogg Opus fixture. The final one-utterance fixture included
+leading and trailing silence, produced a nonempty `flux-general-multi` transcript through the
+`/v2/listen` endpoint, completed the agent response and returned nonempty output audio: one test,
+zero failures (seed 530504).
+
+Two earlier fixture shapes were rejected as acceptance evidence. The first had no post-speech
+silence and timed out before turn completion. The second contained two sentences, which the
+provider correctly split into two turns; the room completed, but the old test's single-final
+assertion compared both echoes with only the last transcript. The passing single-utterance run
+shows these were fixture/test-shape problems rather than migration-caused call instability.

@@ -98,5 +98,13 @@ unchanged. See the [WebRTC Opus stereo decision](issues/webrtc-opus-stereo-input
 semantic load completed 38,400 turns at 32 calls with zero failures. Repeated final codec runs
 kept transition operation p99 below 1.7 ms; deadline misses varied with scheduler wake lag and
 also appeared in no-codec controls, so they do not prove change-caused instability. All five
-root gates pass: 1,937 tests, zero failures and 41 excluded with seed 530504. The
-credential-dependent live Flux/RTVI lane remains separate exit evidence.
+root gates pass: 1,937 tests, zero failures and 41 excluded with seed 530504.
+
+The credential-dependent live Flux/RTVI lane subsequently passed using a temporary, generated
+48 kHz mono Ogg Opus fixture with one utterance and explicit endpointing silence. The complete
+WebRTC path reached provider-acknowledged readiness, produced a nonempty final transcript through
+`flux-general-multi` at Deepgram's `/v2/listen` endpoint, completed the model/TTS response and
+returned nonempty Opus output. An initial fixture without trailing silence timed out before turn
+completion; a two-sentence fixture then completed two correct turns and violated only the test's
+single-turn assertion. Neither reproduced a change-caused call failure. The one-utterance fixture
+matched the lane's contract and passed.

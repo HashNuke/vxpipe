@@ -1,18 +1,20 @@
 # Simpler speech integrations
 
-Status: checkpoints R, A and D are accepted. B1–B5 are implemented and remain coupled to C's
-final STT acceptance. C1–C4 now have a direct native Deepgram STT implementation candidate: Morse and
-Deepgram use the same semantic STT contract, the room has one session path, and the old STT
-behaviours, connector, bridge, global connection-task supervisor and Morse transport adapter
+Status: checkpoints R, A, D, B, C and F are accepted. B and C now include a live Deepgram
+WebRTC/RTVI turn through the native STT session. C1–C4 provide the direct native Deepgram STT
+path. Morse and Deepgram use the same semantic STT contract, the room has one session path, and
+the old STT behaviours, connector, bridge, global connection-task supervisor and Morse transport adapter
 are deleted. The proven WebRTC regressions are repaired at the connection boundary: empty input
 is dropped, receive-only input is ignored before inspection, and real mono or stereo Opus is
 normalized to the selected provider's strict mono format with the existing Membrane/libopus
 dependency. A later real-ingress test found that the capability binding omitted its channel
 count; the binding now preserves the complete media format and the full local PeerConnection
 path delivers normalized audio. Focused real-codec tests, bounded 32-call semantic and codec
-loads, and all five root gates pass. C's credential-dependent hosted lane remains open.
+loads, and all five root gates pass. F provides native Deepgram TTS with controlled-wire,
+cancellation, fault, bounded-load and hosted semantic-session evidence. Room TTS consumers move
+together in E next.
 
-Implementation is **3 of 9 checkpoints accepted**. The implementation order is now
+Implementation is **6 of 9 checkpoints accepted**. The implementation order is
 **R → A → D → B → C → F → E → G → H**. F makes Deepgram TTS a native semantic provider before
 E switches every TTS consumer once for both Morse and Deepgram. No compatibility bridge,
 fallback execution path or dual public configuration API is part of the remaining plan.
@@ -430,7 +432,7 @@ after the C cutover.
 - [x] **B5 — Usage/config/docs.** Preserve STT accepted-audio/final-text counting, provider IDs
   and payload-free telemetry. Update the Morse entry in root `config/dev.exs` and the room
   example. Keep hosted configuration working through the bridge.
-- [ ] **Exit B.** Evaluate this gate with C; an intermediate bridge is not an accepted endpoint.
+- [x] **Exit B.** Evaluate this gate with C; an intermediate bridge is not an accepted endpoint.
   Native Morse and Deepgram STT complete the real room loop; media-policy, readiness,
   barge-in, usage and redaction tests pass alongside the existing hosted adapter tests.
   The old startup coupling test also passes through real room composition and both provider
@@ -457,17 +459,21 @@ session. A tagged local wire server proves framing/authentication; live acceptan
 - [x] **C4 — Remove STT bridge.** Update Deepgram selection/config and test fixtures; remove the
   migration bridge and old STT transport requirements from engine startup. Private wire helpers
   may remain. Update the STT authoring example and usage/telemetry mapping.
-- [ ] **Exit C.** Local wire, STT room/policy and credential boundary tests pass. Run the existing
+- [x] **Exit C.** Local wire, STT room/policy and credential boundary tests pass. Run the existing
   tagged live Flux/RTVI lane when its inputs are available; record missing credentials/audio or
   endpoint mismatches as hosted acceptance blockers, without claiming local fixtures prove parity.
 
-C implementation candidate: `Provider.Deepgram.Flux.Session` translates provider frames into
+C implementation: `Provider.Deepgram.Flux.Session` translates provider frames into
 typed session events and keeps `FluxSocket` private. Runtime configuration rejects the removed
 `transport`/`transport_options` settings. The room capability has one session state, and the old
 STT behaviours, connector, bridge, global connection task supervisor and Morse JSON transport
 are deleted. Focused local-wire, room, policy, startup and cross-application evidence is recorded
 in [native STT room integration](../native-stt-room-integration.md) and the checkpoint labnotes.
-Exit C remains open until the credential-dependent live lane is recorded.
+The credential-dependent live lane passed with a temporary 48 kHz mono Ogg Opus fixture generated
+outside the repository. The fixture used one utterance with leading and trailing silence so the
+test's existing single-turn endpointing contract applied. The full WebRTC/RTVI path recognized
+nonempty text, completed the agent turn and produced nonempty output audio using the configured
+`flux-general-multi` STT model and Deepgram's `/v2/listen` endpoint.
 
 C regression and repair (2026-09-20): the direct WebRTC microphone test reproducibly accepted a
 frame into ingress and then failed it at the semantic capability as unsupported
@@ -497,25 +503,34 @@ Prerequisites: D and C. Outcome: Deepgram TTS implements the same standalone sem
 `speak`/`cancel` contract as Morse through its existing private Mint wire helper. Room consumers
 remain unchanged until E; this checkpoint adds no bridge, fallback or second public API.
 
-- [ ] **F1 — Red hosted mapping test.** Drive a native session through controlled protocol
+- [x] **F1 — Red hosted mapping test.** Drive a native session through controlled protocol
   frames and the tagged local wire server. Cover admitted Speak followed by failed Flush, first
   audio without a provider speech-start event, ordered completion after all audio is accepted,
   and provider identifiers arriving independently from audio.
-- [ ] **F2 — Provider ownership.** Add `lib/provider/deepgram/flux_text_to_speech/session.ex`;
+- [x] **F2 — Provider ownership.** Add `lib/provider/deepgram/flux_text_to_speech/session.ex`;
   reuse validated configuration/parsing and the private Mint socket beneath the allocation's
   local worker tree. Own speak/flush commands, wire correlation, cumulative offset translation
   and safe interruption/drain boundaries entirely inside the provider session.
-- [ ] **F3 — Red isolation tests, then implement.** Test cancel before speech start, zero-played
+- [x] **F3 — Red isolation tests, then implement.** Test cancel before speech start, zero-played
   cancellation, late old audio, cancellation with outstanding sink credit, failed terminal
   isolation, provider disconnect and owner loss. Keep one authoritative request mapping and
   bounded waits. Do not reconnect, replay or route to Morse/another provider on failure.
-- [ ] **F4 — Private wire and configuration proof.** Keep socket options and credentials in the
+- [x] **F4 — Private wire and configuration proof.** Keep socket options and credentials in the
   trusted private initializer; expose only semantic provider options and the descriptor. Verify
   credential/header/payload redaction and reject old public transport settings. Keep existing
   room configuration untouched until the direction-wide cutover in E.
-- [ ] **Exit F.** Standalone local-wire, cancellation, long-output, failure and sibling-isolation
+- [x] **Exit F.** Standalone local-wire, cancellation, long-output, failure and sibling-isolation
   tests pass for native Deepgram TTS. Run the existing tagged live TTS lane when credentials are
   available and record the actual endpoint/model; missing live evidence stays explicit.
+
+F implementation and verification evidence:
+[native Deepgram TTS session](../native-deepgram-tts-session.md).
+The native hosted lane passed against `wss://api.deepgram.com/v2/speak` with `flux-haley-en`,
+48 kHz mono linear16. The exact cancellation request identifier remains retained across the
+fence, late provider terminal and replacement admission, so retries settle the original request
+once. Fifty focused semantic TTS cases, 13 controlled-wire/privacy cases and 640 bounded loaded
+requests pass. GPT-6 Astra xhigh found no remaining P0–P2 issue under the documented accounting
+boundary. All five root gates pass on the accepted implementation.
 
 ## Checkpoint E — Direct room TTS cutover and playback
 
@@ -539,7 +554,7 @@ behaviour/transport path and global audio-output task supervisor are deleted.
   credit, interruption and failure acknowledgements remain responsive. Provider speech IDs and
   cumulative wire offsets stay inside the Deepgram session.
 - [ ] **E4 — Preserve accounting and cache.** Red-test rejected admission, admitted-but-unsent
-  failure, submitted-text failure, discarded generated audio, duplicate terminal settlement,
+  failure, submitted-text failure, fenced already-enveloped audio, duplicate terminal settlement,
   cancellation during sink drain followed by correct replacement offsets, warm-cache credential
   checks and independent opening/agent voices. Update usage modules only where event projection
   changes.
@@ -678,9 +693,9 @@ for timing distributions, exact covered permissions and excluded production path
 | R | Accepted: local scopes, persistent admission/input, bounded handoff and exact close | 70 speech cases and 770 Call Engine tests pass; all five root gates pass (1,868 tests, zero failures, 40 excluded; seed 892574); Astra reviewed | Latest evidence: 39,360 concurrent-fault turns, 68,400 unchanged legacy/native turns, 16,236 adoption-churn turns; historical reports retained |
 | A | Accepted: validated native STT metadata/events and bounded input acceptance | 103 focused cases, including 82 speech cases, pass; all five root gates pass (1,880 tests, zero failures, 40 excluded; seed 330044); Astra reviewed | Verbatim example and final 123,996 latency/fault/adoption turns pass; earlier runs and tails retained |
 | D | Accepted: Channel is the sole TTS output-state owner and Input is retained for blocking provider work; cancellation, playback and retained usage slices are complete | 38 focused TTS cases and 164 speech/Morse/usage cases pass, plus 5,904 cancellation/replacement/STT load cycles with 132,840 bounded usage snapshots and fixed cleanup. The later C cutover passes all five root gates (1,937 tests, zero failures, 41 excluded; seed 530504). D5's example and 1×1 capped timing smoke pass; Astra reviewed both | The initial post-integration isolated threshold miss is preserved; three consecutive identical reruns through 256 scopes pass with no pointwise violation. D4's fact stream accumulated 77 messages under selective receive; later red tests caught accepted PCM and zero-audio terminal metadata retained only inside Channel. All three representations were repaired. D5's WAV parses as 16 kHz mono PCM16 with peak 2,048. Room migration remains open |
-| B | B1–B5 implemented; native Morse rooms use connection-local semantic sessions. Its temporary hosted adapter is removed by C and is not an accepted architecture. | 101 focused room/policy/startup cases pass; exact startup-failure case passes 20 repeats; all five root gates pass on the C cutover | Four-call bounded load and control-stress lanes pass with exact text, attribution and PCM; evaluate Exit B together with C |
-| C | C1–C4 implementation candidate: native Deepgram session, one room STT path and old STT contracts/globals removed; WebRTC mono/stereo input is normalized per connection with one decoder history and one optional full-stream encoder | Native local wire, 165 serial room/startup/policy cases and 54 capability/credential/ingress/wire cases pass; 22 deterministic Gateway boundary tests, 15 audio-pipeline/egress tests and 3 full PeerConnection tests pass; actual ingress preparation preserves channels; all five root gates pass (1,937 tests, zero failures, 41 excluded; seed 530504); Astra reviewed | At 32 calls the semantic load completes 38,400 turns with zero failures. Repeated four-scheduler codec loads keep transition operation p99 below 1.7 ms; sporadic deadline misses track scheduler wake lag and also occur in no-codec controls. Run live Flux/RTVI when inputs are available |
-| F | Not started; precedes E so Deepgram is native before consumer cutover | Pending | Local wire and hosted TTS pending |
+| B | Accepted with C: native Morse and Deepgram rooms use connection-local semantic sessions; the temporary hosted adapter was deleted | 101 focused room/policy/startup cases pass; exact startup-failure case passes 20 repeats; all five root gates pass on the C cutover | Four-call bounded load and control-stress lanes pass with exact text, attribution and PCM; the live room loop passes with C |
+| C | Accepted: native Deepgram session, one room STT path and old STT contracts/globals removed; WebRTC mono/stereo input is normalized per connection with one decoder history and one optional full-stream encoder | Native local wire, 165 serial room/startup/policy cases and 54 capability/credential/ingress/wire cases pass; 22 deterministic Gateway boundary tests, 15 audio-pipeline/egress tests and 3 full PeerConnection tests pass; actual ingress preparation preserves channels; all five root gates pass (1,937 tests, zero failures, 41 excluded; seed 530504); Astra reviewed | At 32 calls the semantic load completes 38,400 turns with zero failures. Repeated four-scheduler codec loads keep transition operation p99 below 1.7 ms. A hosted `flux-general-multi` WebRTC/RTVI turn passes with temporary one-utterance audio |
+| F | Accepted: Deepgram TTS is a native scoped semantic session over its private Mint wire | 50 focused TTS and 13 controlled-wire/privacy cases pass; all five root gates pass (1,950 tests, zero failures, 42 excluded; seed 530504); Astra reviewed | 640/640 loaded requests pass; hosted `flux-haley-en` synthesis returns nonempty 48 kHz mono linear16 through the semantic session |
 | E | Not started; direct Morse/Deepgram consumer cutover with old TTS deletion | Pending | Room/opening/private playback proof pending |
 | G | Not started | Pending | Independent guide exercise pending |
 | H | Not started | Pending | Browser/hosted final acceptance pending |
