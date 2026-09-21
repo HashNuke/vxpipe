@@ -25,6 +25,14 @@ defmodule Vxpipe.Providers.RegistryTest do
              Registry.fetch_capability("telnyx", :telephony)
     assert {:error, :unsupported_provider_capability} =
              Registry.fetch_capability("telnyx", :stt)
+
+    assert {:ok, Vxpipe.Providers.Google} = Registry.fetch("google")
+    assert {:ok, Vxpipe.Providers.Google.Credential} =
+             Registry.fetch_capability("google", :credential)
+    assert {:ok, Vxpipe.Providers.Google.CredentialValidation} =
+             Registry.fetch_capability("google", :credential_validation)
+    assert {:error, :unsupported_provider_capability} =
+             Registry.fetch_capability("google", :stt)
   end
 
   test "unknown names and capabilities never select a fallback" do
@@ -47,6 +55,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "catalog contains explicit capability metadata" do
     assert Registry.catalog() == %{
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
+             "google" => [:credential, :credential_validation],
              "telnyx" => [:credential, :credential_validation, :telephony]
            }
   end

@@ -49,7 +49,9 @@ integration. The `vxpipe_providers` child owns manifests, credential schemas and
 test-request descriptions. Deepgram's speech sessions and sockets use the
 `Vxpipe.Providers.Deepgram` namespace while compiling in CallEngine. Telnyx's signed webhook,
 media socket, telephony profile and HTTP handlers use `Vxpipe.Providers.Telnyx` while compiling in
-Gateway. Console executes both declared probes. Other provider integrations retain their existing
+Gateway. Google AI Studio's credential schema and probe use `Vxpipe.Providers.Google`; its model
+inference continues through shared ReqLLM. Console executes these declared probes. Other provider
+integrations retain their existing
 names until migrated. The
 [provider-package milestone](milestones/provider-integration-packages.md) tracks that progression.
 

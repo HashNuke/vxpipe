@@ -1,8 +1,9 @@
 # Provider integration packages
 
-Status: Deepgram and Telnyx integrations migrated and tested; the shared registry declares both.
-Implementation is **2 of 7 provider/final checkpoints complete**. Each provider is migrated, tested,
-fixed and committed as a complete unit before the next provider is added to the registry.
+Status: Deepgram, Telnyx and Google AI Studio integrations migrated and tested; the shared registry
+declares all three. Implementation is **3 of 7 provider/final checkpoints complete**. Each provider
+is migrated, tested, fixed and committed as a complete unit before the next provider is added to the
+registry.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Telnyx calls](telnyx-calls.md), and
@@ -81,9 +82,14 @@ final root umbrella suite remains in checkpoint G.
 
 ## Checkpoint C — Google AI Studio package
 
-- [ ] Add its credential schema and optional credential-test request to the fixed manifest; route
+- [x] Add its credential schema and optional credential-test request to the fixed manifest; route
   Calls and Console through it without moving shared ReqLLM inference.
-- [ ] Exit: credential shape, test/save and explicit absence of speech/telephony capabilities pass.
+- [x] Exit: credential shape, test/save and explicit absence of speech/telephony capabilities pass.
+
+Google evidence: new schema/probe and manifest tests first failed on missing modules and registry
+entry (four failures). They now pass 6/6. Calls' operator credential tests pass 18/18; complete
+Calls and Console suites pass 117/117 and 186/186 (one excluded). Shared ReqLLM inference remains
+in AgentRuntime and no Google speech or telephony capability is declared.
 
 ## Checkpoint D — Rime package
 

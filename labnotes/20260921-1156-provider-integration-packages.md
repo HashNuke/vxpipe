@@ -64,3 +64,13 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
   186 (one excluded), Persistence 184 (12 excluded), all zero failures. Root format,
   warnings-as-errors compile, strict Credo and unused-dependency checks pass. The final umbrella
   suite remains the milestone's final checkpoint.
+
+## Google AI Studio provider checkpoint
+
+- The contract tests failed on missing schema/probe modules and registry entry (four failures),
+  then passed 6/6. Google owns its bounded API-key shape and read-only model-list probe in
+  `vxpipe_providers`; Calls and Console resolve these through the manifest. The shared ReqLLM model
+  runtime remains in AgentRuntime, and the manifest declares no STT, TTS or telephony capability.
+- Calls operator credential tests pass 18/18. Complete Calls and Console suites pass 117/117 and
+  186/186 (one excluded). No network interoperability probe was run; the default lane uses a
+  synthetic request adapter.
