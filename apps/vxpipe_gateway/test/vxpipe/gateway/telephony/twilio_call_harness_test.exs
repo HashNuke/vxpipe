@@ -19,7 +19,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     MediaSupervisor
   }
 
-  alias Vxpipe.Gateway.Telephony.Twilio.MediaSocket
+  alias Vxpipe.Providers.Twilio.TelephonyMediaSocket
 
   alias Vxpipe.Gateway.{
     TelephonyHarnessBackend,
@@ -187,7 +187,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       transport_monitor = Process.monitor(transport)
 
       assert {:ok, _binding, _socket} =
-               TestTelephonySocket.open(transport, MediaSocket, fn ->
+               TestTelephonySocket.open(transport, TelephonyMediaSocket, fn ->
                  TwilioFixture.open_media(
                    context.endpoint,
                    context.service_options,
@@ -347,7 +347,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
         start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
 
       assert {:ok, inbound_binding, inbound_socket} =
-               TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
+               TestTelephonySocket.open(inbound_transport, TelephonyMediaSocket, fn ->
                  TwilioFixture.open_media(
                    context.endpoint,
                    context.service_options,
@@ -371,7 +371,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       assert dial.to == "+15550001002"
 
       assert {:ok, _outbound_binding, _outbound_socket} =
-               TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
+               TestTelephonySocket.open(outbound_transport, TelephonyMediaSocket, fn ->
                  TwilioFixture.open_media(
                    context.endpoint,
                    context.service_options,

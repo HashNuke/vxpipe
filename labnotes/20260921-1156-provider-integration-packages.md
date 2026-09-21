@@ -83,3 +83,18 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
   not declare a speech capability without a concrete speech runtime.
 - Provider suite passes 12/12; complete Calls and Console suites pass 117/117 and 186/186
   (one excluded), all zero failures.
+
+## Twilio provider checkpoint
+
+- Contract tests failed on missing schema/probe and manifest (four failures), then passed 6/6.
+  Twilio now owns account/stream/call identifier checks, credential schema/probe, HTTP webhook and
+  media handlers, telephony adapter, pipelines, and `TelephonyMediaSocket` in its provider namespace.
+  The pure identifier and credential modules compile in `vxpipe_providers`; concrete telephony
+  modules continue to compile in Gateway. Calls, Console and Gateway resolve the declared
+  capabilities without a compatibility path.
+- Focused provider/HTTP/carrier tests pass 68/68. The broader Gateway telephony suite passes
+  108/108; full Calls and Console suites pass 117/117 and 186/186 (one excluded). All zero failures.
+  The default lane does not contact Twilio's external API.
+- Root format, warnings-as-errors compilation, strict Credo and unused-dependency checks pass.
+  A test-build module-loader check confirms old Twilio media/HTTP, Telnyx socket and Deepgram
+  speech module identities are unavailable after compilation.

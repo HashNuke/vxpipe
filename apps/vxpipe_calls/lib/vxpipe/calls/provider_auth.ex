@@ -2,11 +2,11 @@ defmodule Vxpipe.Calls.ProviderAuth do
   @moduledoc "Closed, local validation of supported provider credential payloads."
 
   @api_key_providers ["zenmux"]
-  @providers @api_key_providers ++ ["twilio"]
+  @providers @api_key_providers
 
   @spec validate(term(), term(), term()) :: :ok | {:error, :invalid_provider_auth}
   def validate(provider, kind, payload)
-      when provider in ["deepgram", "google", "rime", "telnyx"] do
+      when provider in ["deepgram", "google", "rime", "telnyx", "twilio"] do
     case Vxpipe.Providers.Registry.resolve_capability(provider, :credential) do
       {:ok, schema} -> schema.validate(kind, payload)
       {:error, _reason} -> {:error, :invalid_provider_auth}
@@ -20,27 +20,11 @@ defmodule Vxpipe.Calls.ProviderAuth do
       else: {:error, :invalid_provider_auth}
   end
 
-  def validate(
-        "twilio",
-        "account_sid_auth_token",
-        %{"account_sid" => sid, "auth_token" => token} = payload
-      )
-      when map_size(payload) == 2 and is_binary(token) and byte_size(token) in 1..4_096 do
-    if twilio_account_sid?(sid) and String.valid?(token),
-      do: :ok,
-      else: {:error, :invalid_provider_auth}
-  end
-
   def validate(_provider, _kind, _payload), do: {:error, :invalid_provider_auth}
 
-  @doc false
-  def twilio_account_sid?(value) when is_binary(value),
-    do: Regex.match?(~r/\AAC[0-9a-fA-F]{32}\z/, value)
-
-  def twilio_account_sid?(_value), do: false
-
   @spec binding(term(), term(), term()) :: :ok | {:error, atom()}
-  def binding(owner, provider, name) when provider in ["deepgram", "google", "rime", "telnyx"] do
+  def binding(owner, provider, name)
+      when provider in ["deepgram", "google", "rime", "telnyx", "twilio"] do
     with {:ok, _schema} <- Vxpipe.Providers.Registry.resolve_capability(provider, :credential) do
       provider_binding(owner, name)
     else

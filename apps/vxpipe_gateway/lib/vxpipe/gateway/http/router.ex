@@ -9,13 +9,12 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     CallAdmissions,
     RTVI,
     Rooms,
-    TelephonyIngressConfig,
-    TwilioEvents,
-    TwilioMedia
+    TelephonyIngressConfig
   }
 
   alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Providers.Telnyx
+  alias Vxpipe.Providers.Twilio
 
   @impl true
   def init(options) do
@@ -49,7 +48,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
       telnyx_media: Telnyx.Media.init(media_options),
-      twilio_media: TwilioMedia.init(media_options),
+      twilio_media: Twilio.Media.init(media_options),
       rtvi: options |> Keyword.get(:webrtc, []) |> RTVI.init()
     }
   end
@@ -115,7 +114,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         } = conn,
         options
       ) do
-    TwilioEvents.handle_voice(conn, options.telephony, ingress_key)
+    Twilio.Events.handle_voice(conn, options.telephony, ingress_key)
   end
 
   def call(
@@ -125,7 +124,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         } = conn,
         options
       ) do
-    TwilioEvents.handle_callback(conn, options.telephony, ingress_key, leg_id)
+    Twilio.Events.handle_callback(conn, options.telephony, ingress_key, leg_id)
   end
 
   def call(
@@ -145,7 +144,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         } = conn,
         options
       ) do
-    TwilioMedia.upgrade(conn, options.twilio_media, ingress_key, token)
+    Twilio.Media.upgrade(conn, options.twilio_media, ingress_key, token)
   end
 
   def call(

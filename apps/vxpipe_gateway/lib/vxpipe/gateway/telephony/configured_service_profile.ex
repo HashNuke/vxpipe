@@ -1,7 +1,6 @@
 defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceProfile do
   @moduledoc false
 
-  alias Vxpipe.Gateway.Telephony.Twilio.ServiceProfile, as: TwilioProfile
   alias Vxpipe.Providers.Registry
 
   @derive {Inspect, only: [:provider, :provider_connection_id, :adapter]}
@@ -33,7 +32,11 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceProfile do
         end
 
       :twilio ->
-        TwilioProfile.new(options)
+        with {:ok, profile} <- Registry.resolve_capability("twilio", :telephony) do
+          profile.new(options)
+        else
+          {:error, _reason} -> {:error, :invalid_telephony_service_configuration}
+        end
 
       _unsupported ->
         {:error, :invalid_telephony_service_configuration}

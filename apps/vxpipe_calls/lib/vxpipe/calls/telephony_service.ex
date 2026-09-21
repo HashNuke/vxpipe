@@ -121,7 +121,7 @@ defmodule Vxpipe.Calls.TelephonyService do
 
   defp provider_metadata?(%{provider: "twilio"} = service),
     do:
-      ProviderAuth.twilio_account_sid?(service.provider_connection_id) and
+      Vxpipe.Providers.Twilio.Identifier.account_sid?(service.provider_connection_id) and
         is_nil(service.public_key)
 
   defp provider_metadata?(_service), do: false

@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.ProviderEndpoint do
 
   alias Vxpipe.Gateway.Telephony.ConfiguredService
   alias Vxpipe.Providers.Telnyx.PublicEndpoint, as: TelnyxEndpoint
-  alias Vxpipe.Gateway.Telephony.Twilio.PublicEndpoint, as: TwilioEndpoint
+  alias Vxpipe.Providers.Twilio.PublicEndpoint, as: TwilioEndpoint
 
   @spec event_url(ConfiguredService.t(), String.t()) :: String.t()
   def event_url(%ConfiguredService{identity: %{provider: :telnyx}} = service, _leg_id) do

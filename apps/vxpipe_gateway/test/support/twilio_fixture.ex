@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.TwilioFixture do
 
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.Telephony.ConfiguredService
-  alias Vxpipe.Gateway.Telephony.Twilio.{MediaSocket, PublicEndpoint}
+  alias Vxpipe.Providers.Twilio.{TelephonyMediaSocket, PublicEndpoint}
 
   def post_voice(endpoint, service_options, parameters) do
     {:ok, service} = ConfiguredService.new(service_options)
@@ -36,11 +36,12 @@ defmodule Vxpipe.Gateway.TwilioFixture do
     with 101 <- upgraded.status,
          [
            {:websocket,
-            {MediaSocket, %{binding: binding, clock: clock},
+            {TelephonyMediaSocket, %{binding: binding, clock: clock},
              [timeout: 30_000, max_frame_size: 131_072, early_validate_upgrade: false]}}
          ] <- sent_upgrades(upgraded),
-         {:ok, socket} <- MediaSocket.init(%{binding: binding, clock: clock}),
-         {:ok, socket} <- MediaSocket.handle_in(text(start(call_sid, stream_sid)), socket),
+         {:ok, socket} <- TelephonyMediaSocket.init(%{binding: binding, clock: clock}),
+         {:ok, socket} <-
+           TelephonyMediaSocket.handle_in(text(start(call_sid, stream_sid)), socket),
          {:ok, socket} <- Vxpipe.Gateway.TestSocketDispatch.await(socket) do
       {:ok, binding, socket}
     else

@@ -23,10 +23,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaPipelineSet do
 
   def resolve(:twilio) do
     pipeline_set(
-      Vxpipe.Gateway.Telephony.Twilio.AudioOutputPipeline,
-      Vxpipe.Gateway.Telephony.Twilio.PlaybackClearer,
-      Vxpipe.Gateway.Telephony.Twilio.AudioEgressPipeline,
-      Vxpipe.Gateway.Telephony.Twilio.AudioIngressPipeline
+      Vxpipe.Providers.Twilio.AudioOutputPipeline,
+      Vxpipe.Providers.Twilio.PlaybackClearer,
+      Vxpipe.Providers.Twilio.AudioEgressPipeline,
+      Vxpipe.Providers.Twilio.AudioIngressPipeline
     )
   end
 

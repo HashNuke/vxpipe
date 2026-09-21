@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
+defmodule Vxpipe.Providers.Twilio.MediaTest do
   use ExUnit.Case, async: true
 
   import Plug.Conn
@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
 
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, MediaAdmission, MediaBinding}
-  alias Vxpipe.Gateway.Telephony.Twilio.{MediaSocket, PublicEndpoint}
+  alias Vxpipe.Providers.Twilio.{TelephonyMediaSocket, PublicEndpoint}
 
   @account_sid "AC00000000000000000000000000000000"
   @auth_token "twilio-test-auth-token"
@@ -56,7 +56,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioMediaTest do
 
     assert [
              {:websocket,
-              {MediaSocket, %{binding: context.binding, clock: context.clock},
+              {TelephonyMediaSocket, %{binding: context.binding, clock: context.clock},
                [timeout: 30_000, max_frame_size: 131_072, early_validate_upgrade: false]}}
            ] == sent_upgrades(upgraded)
 

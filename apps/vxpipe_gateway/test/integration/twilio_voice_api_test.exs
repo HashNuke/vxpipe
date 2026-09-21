@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Integration.TwilioVoiceAPITest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
-  alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
+  alias Vxpipe.Providers.Twilio.Adapter, as: TwilioAdapter
 
   @moduletag :integration
   @moduletag :twilio_live

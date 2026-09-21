@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.TestTwilioTelephonyAdapter do
   @behaviour Vxpipe.CallEngine.Telephony.Adapter
 
   alias Vxpipe.CallEngine.Telephony.{Submission, Webhook}
-  alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
+  alias Vxpipe.Providers.Twilio.Adapter, as: TwilioAdapter
 
   @call_sid "CA00000000000000000000000000000001"
 

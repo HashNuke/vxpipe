@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Gateway.Media.RoomAudioIngress
-  alias Vxpipe.Gateway.Telephony.Twilio.PCMU.Codec
+  alias Vxpipe.Providers.Twilio.PCMU.Codec
 
   def speech_track(%{codec: :pcmu, sample_rate: 8_000, channels: 1} = track),
     do: %{track | codec: :linear16}

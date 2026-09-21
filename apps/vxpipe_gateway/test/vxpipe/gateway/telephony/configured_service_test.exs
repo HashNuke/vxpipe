@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
 
   alias Vxpipe.Gateway.Telephony.ConfiguredService
   alias Vxpipe.Providers.Telnyx.Adapter
-  alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
+  alias Vxpipe.Providers.Twilio.Adapter, as: TwilioAdapter
 
   test "rejects application-scoped carrier credentials" do
     for options <- [valid_options(), valid_twilio_options()] do

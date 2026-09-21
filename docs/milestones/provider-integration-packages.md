@@ -1,9 +1,9 @@
 # Provider integration packages
 
-Status: Deepgram, Telnyx, Google AI Studio and Rime integrations migrated and tested; the shared
-registry declares all four. Implementation is **4 of 7 provider/final checkpoints complete**. Each
-provider is migrated, tested, fixed and committed as a complete unit before the next provider is
-added to the registry.
+Status: Deepgram, Telnyx, Google AI Studio, Rime and Twilio integrations migrated and tested; the
+shared registry declares all five. Implementation is **5 of 7 provider/final checkpoints complete**.
+Each provider is migrated, tested, fixed and committed as a complete unit before the next provider
+is added to the registry.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Telnyx calls](telnyx-calls.md), and
@@ -104,10 +104,18 @@ capability until a concrete Rime speech integration exists.
 
 ## Checkpoint E — Twilio package
 
-- [ ] Move provider-specific telephony modules and tests to `Vxpipe.Providers.Twilio`, with the
+- [x] Move provider-specific telephony modules and tests to `Vxpipe.Providers.Twilio`, with the
   credential schema/test and actual telephony capability in its manifest.
-- [ ] Migrate Gateway, Calls and Console consumers while preserving webhook, media and call behavior.
-- [ ] Exit: carrier, HTTP/media and affected transfer suites pass with no old module loaded.
+- [x] Migrate Gateway, Calls and Console consumers while preserving webhook, media and call behavior.
+- [x] Exit: carrier, HTTP/media and affected transfer suites pass with no old module loaded.
+
+Twilio evidence: new schema/probe and manifest tests failed before implementation (four failures),
+then passed 6/6. Focused provider, signed HTTP and carrier harness tests pass 68/68; the broader
+Gateway telephony suite passes 108/108. Complete Calls and Console suites pass 117/117 and 186/186
+(one excluded). The provider now owns its identifier checks and `TelephonyMediaSocket`; the old
+Twilio production namespaces are absent from source. Full umbrella acceptance remains in G.
+The test-build module-loader check also reports the obsolete Twilio, Telnyx and Deepgram modules
+unavailable.
 
 ## Checkpoint F — Zenmux package
 

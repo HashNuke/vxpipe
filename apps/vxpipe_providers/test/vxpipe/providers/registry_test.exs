@@ -41,6 +41,16 @@ defmodule Vxpipe.Providers.RegistryTest do
              Registry.fetch_capability("rime", :credential_validation)
     assert {:error, :unsupported_provider_capability} =
              Registry.fetch_capability("rime", :tts)
+
+    assert {:ok, Vxpipe.Providers.Twilio} = Registry.fetch("twilio")
+    assert {:ok, Vxpipe.Providers.Twilio.Credential} =
+             Registry.fetch_capability("twilio", :credential)
+    assert {:ok, Vxpipe.Providers.Twilio.CredentialValidation} =
+             Registry.fetch_capability("twilio", :credential_validation)
+    assert {:ok, Vxpipe.Providers.Twilio.ServiceProfile} =
+             Registry.fetch_capability("twilio", :telephony)
+    assert {:error, :unsupported_provider_capability} =
+             Registry.fetch_capability("twilio", :stt)
   end
 
   test "unknown names and capabilities never select a fallback" do
@@ -65,7 +75,8 @@ defmodule Vxpipe.Providers.RegistryTest do
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
              "google" => [:credential, :credential_validation],
              "rime" => [:credential, :credential_validation],
-             "telnyx" => [:credential, :credential_validation, :telephony]
+             "telnyx" => [:credential, :credential_validation, :telephony],
+             "twilio" => [:credential, :credential_validation, :telephony]
            }
   end
 end

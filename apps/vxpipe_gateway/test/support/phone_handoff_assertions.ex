@@ -8,7 +8,7 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.Gateway.TestTelephonySocket
   alias Vxpipe.Gateway.Telephony.MediaSupervisor
-  alias Vxpipe.Gateway.Telephony.Twilio.PCMU.Codec
+  alias Vxpipe.Providers.Twilio.PCMU.Codec
 
   def scenario_options(mode) do
     base = [

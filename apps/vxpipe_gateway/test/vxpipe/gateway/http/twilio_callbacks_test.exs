@@ -7,7 +7,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioCallbacksTest do
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, IngressIdentity}
-  alias Vxpipe.Gateway.Telephony.Twilio.PublicEndpoint
+  alias Vxpipe.Providers.Twilio.PublicEndpoint
   alias Vxpipe.Gateway.TestTelephonyIngress
 
   @account_sid "AC00000000000000000000000000000000"
