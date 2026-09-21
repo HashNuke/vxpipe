@@ -194,3 +194,8 @@ one connection across AI and telephony sections; its public key is optional for
 AI use and required for the telephony credential state. Rime/Telnyx AI execution,
 production credential persistence and number routing remain unimplemented gates;
 see the [tenant setup decision](../tenant-setup-experience.md).
+
+Follow-up, 2026-09-21: the service picker now takes installed capabilities from the provider
+registry through the authenticated binding-directory response. Current provider choices and badges
+are recorded in the [tenant setup decision](../tenant-setup-experience.md); the earlier prototype
+speech-to-speech preview and future capability labels were removed.

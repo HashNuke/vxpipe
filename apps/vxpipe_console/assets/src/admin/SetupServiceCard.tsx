@@ -65,6 +65,7 @@ export function SetupServiceCard({
       ) : null}
       <div className="setup-service-card-footer">
         <div className="setup-tags">
+          {provider.capabilities.length === 0 ? <span>Credentials only</span> : null}
           {provider.capabilities.map((capability) => (
             <span key={capability}>
               {capabilityLabels[capability]}

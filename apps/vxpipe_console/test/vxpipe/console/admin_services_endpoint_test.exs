@@ -503,6 +503,15 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                "https://callbacks.example.test/voice/webhooks/tenants/#{@tenant_key}/telnyx"
            }
 
+    assert json_response(conn, 200)["provider_capabilities"] == %{
+             "deepgram" => ["credential", "credential_validation", "stt", "tts"],
+             "google" => ["credential", "credential_validation"],
+             "rime" => ["credential", "credential_validation"],
+             "telnyx" => ["credential", "credential_validation", "telephony"],
+             "twilio" => ["credential", "credential_validation", "telephony"],
+             "zenmux" => ["credential", "credential_validation"]
+           }
+
     refute conn.resp_body =~ "payload"
 
     configure_credential_repository({:ok, %{tenant: nil, bindings: [binding]}})

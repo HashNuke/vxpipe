@@ -23,6 +23,11 @@ const binding = (provider: string, status = "connected", name = provider) => ({
   saved_fields: [],
   last_validated_at: null,
 });
+const providerCapabilities = {
+  deepgram: ["credential", "stt", "tts"],
+  google: ["credential"],
+  telnyx: ["credential", "telephony"],
+};
 
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -39,6 +44,7 @@ test("an unavailable optional service does not block sample readiness or progres
       ? response({ tenant })
       : response({
           tenant,
+          provider_capabilities: providerCapabilities,
           bindings: [
             binding("google"),
             binding("deepgram"),
@@ -64,7 +70,7 @@ test("retries a failed effective directory read without treating it as empty set
     if (url === "/admin/api/onboarding/demo-tenant")
       return response({ tenant });
     return available
-      ? response({ tenant, bindings: [binding("google"), binding("deepgram")] })
+      ? response({ tenant, bindings: [binding("google"), binding("deepgram")], provider_capabilities: providerCapabilities })
       : response({}, 503);
   });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
@@ -88,6 +94,7 @@ test("onboarding counts inherited services and opens the tenant service inventor
     if (String(url).endsWith("/service-bindings"))
       return response({
         tenant,
+        provider_capabilities: providerCapabilities,
         bindings: [binding("google"), binding("deepgram")],
       });
     if (String(url).endsWith("/services"))
@@ -126,6 +133,7 @@ test("unavailable and alternate named bindings cannot make onboarding samples re
       ? response({ tenant })
       : response({
           tenant,
+          provider_capabilities: providerCapabilities,
           bindings: [
             binding("google"),
             binding("deepgram", "unavailable"),

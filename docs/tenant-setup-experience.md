@@ -70,15 +70,12 @@ readiness, and navigation must not reset another tenant's progress.
 Once voice services are configured, onboarding does not require a sample call
 spec or a telephony provider. Sample recipes remain an optional next step.
 
-## Speech-to-speech preview boundary
+## Speech-to-speech boundary
 
-The ordinary provider catalog remains accurate to implemented integrations. Dedicated
-`SpeechToSpeechPreview` and `SpeechToSpeechConnectedPreview` stories inject a future
-Google speech-to-speech capability into a local catalog fixture. This is a design
-preview, not a new runtime provider, a supported model identifier, or a claim that
-current Google credentials unlock realtime audio in production. The credential
-form uses dummy values and sends nothing upstream. Per-recipe alternatives and
-provider/model availability must be resolved server-side during production wiring.
+No current provider declares speech-to-speech support. Setup does not offer it or
+count it toward sample readiness. The earlier design-preview stories were removed
+when Setup was aligned with implemented integrations. Per-recipe requirements still
+allow this capability to be added when a real runtime integration exists.
 
 ## Tenant API-key permissions
 
@@ -104,19 +101,18 @@ unimplemented administrative APIs. Values shown in the prototype begin with
 
 ## Providers and models
 
-The prototype's versioned `setupCatalog.json` separates service capability labels,
-convenience `defaultModels`, and supported `sampleCapabilities`. The onboarding
-picker is limited to Deepgram, Rime, Google AI Studio and Telnyx. Vertex AI,
-Zenmux and Twilio are deferred from this UI (`availableInSetup: false`); their
-catalog entries and saved defaults remain available for future integration.
+Setup uses the authenticated binding-directory response's `provider_capabilities`
+from `Vxpipe.Providers.Registry` to show registered credential providers and their
+implemented STT, TTS and telephony capabilities. The frontend catalog supplies
+display names, descriptions, and current sample defaults. Deepgram, Rime, Google
+AI Studio, Zenmux, Telnyx and Twilio are available today. Vertex AI is not offered.
+Google and Zenmux model inference uses the separate shared ReqLLM runtime.
 
-Deepgram, Rime and Google AI Studio ask for an API key. Telnyx asks for an API key
-for API calls and an optional public key for webhook validation. The public key
-is required for telephony, not AI-only use. When supplied, it must be a base64
-Ed25519 public key of 32 bytes. The prototype uses one Telnyx connection in both
-sections: AI shows Connected after an API key is saved; Telephony shows Public key
-needed until the public key is also configured. Editing either card updates the
-same connection. Updating an API key without re-entering a previously configured
+Deepgram, Rime, Google AI Studio, Zenmux and Telnyx ask for an API key. Twilio
+asks for an Account SID and auth token. Telnyx additionally accepts a public key
+for webhook validation. When supplied, it must be a base64 Ed25519 public key of
+32 bytes. Telnyx appears only in Telephony, with a Public key needed indicator
+until the key is configured. Updating its API key without re-entering a saved
 public key preserves that configuration; this form does not revoke keys.
 
 The shared credential form exposes the public-key field only when the onboarding
@@ -126,30 +122,19 @@ available when credential testing is unsupported. Storybook callbacks simulate t
 operations; the production contract is documented in
 [Provider credential testing and storage](provider-credential-validation.md).
 
-Rime exposes TTS ([Rime API-key documentation](https://docs.rime.ai/docs/lovable)).
-Telnyx belongs to AI and telephony groups; its AI labels cover
-[STT](https://developers.telnyx.com/docs/inference/audio-language-models),
-[LLM](https://developers.telnyx.com/api/inference/inference-embedding/chat-public-chat-completions-post/)
-and [TTS](https://developers.telnyx.com/api-reference/text-to-speech-commands/generate-speech-from-text).
-Its [public key verifies webhook signatures](https://support.telnyx.com/en/articles/4334722-how-to-leverage-webhooks).
+Rime currently supports credential storage and testing only. Setup labels it
+**Credentials only**, without a TTS badge. Google AI Studio offers LLM, while
+Deepgram offers STT and TTS. Telnyx and Twilio offer telephony. Provider product
+features do not appear as Vxpipe capabilities until integrated.
 
 Current onboarding sample mappings use Deepgram for STT/TTS and Google AI Studio
-for LLM. Rime, Google speech and Telnyx AI runtime adapters remain future work.
+or Zenmux for LLM. Rime, Google speech and Telnyx AI runtime adapters remain future work.
 A capability counts toward sample readiness only when listed in
 `sampleCapabilities` and supplied with a default model. Credential setup alone
 does not implement those adapters or complete phone-number routing.
 
-Both Google catalog entries retain STT, LLM, TTS and speech-to-speech labels.
-Google documents [Gemini transcription](https://ai.google.dev/gemini-api/docs/transcribe),
-[Vertex transcription](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/samples/googlegenaisdk-textgen-transcript-with-gcs-audio),
-and [Gemini TTS through AI Studio and Vertex](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts).
-
-Both Google entries store these user-selected defaults:
-
-- STT: `gemini-3.5-transcribe-live`
-- LLM: `gemini-3.8-flash`
-- TTS: `gemini-3.1-flash-tts-preview`
-- Speech-to-speech: `gemini-3.8-live`
+Current language-model defaults are `gemini-2.5-flash` for Google AI Studio and
+`openai/gpt-5` for Zenmux.
 
 Deepgram defaults:
 
@@ -157,8 +142,7 @@ Deepgram defaults:
 - TTS: `flux-hannah-en`
 
 Default models are convenience selections, not an exhaustive model catalog or a
-restriction on explicit choices. They do not establish runtime adapter support.
-This explanation belongs in internal configuration/documentation, not UI copy.
+restriction on explicit choices. They do not by themselves establish runtime readiness.
 
 Telnyx telephony is optional for browser recipes;
 carrier credentials alone do not establish number routing or callback readiness.

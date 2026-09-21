@@ -55,9 +55,10 @@ Capability presence and runtime readiness are different facts:
 Credential testing is optional and does not determine whether another capability may be configured.
 Model inference remains the shared ReqLLM integration. Provider manifests do not duplicate ReqLLM;
 Google and Zenmux model support continues through the agent-runtime catalog.
-The Console setup catalog currently includes future provider-product labels; see the
-[catalog alignment issue](issues/setup-catalog-runtime-capabilities.md). It is not the authority for
-implemented call capabilities.
+The Console's authenticated service-binding response includes `provider_capabilities` from the
+fixed registry. Setup offers only registered credential providers and intersects speech/telephony
+badges with that response. Google and Zenmux LLM labels remain explicit Console metadata for the
+shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtime-capabilities.md).
 
 ## Existing provider manifests
 

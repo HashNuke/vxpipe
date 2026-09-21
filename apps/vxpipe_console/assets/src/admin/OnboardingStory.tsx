@@ -47,8 +47,6 @@ export type OnboardingScenario =
   | "tenant-override"
   | "tenant-override-error"
   | "service-picker"
-  | "speech-to-speech"
-  | "speech-to-speech-connected"
   | "creating-tenant"
   | "choose-services"
   | "enter-credentials"
@@ -157,7 +155,6 @@ function initialConnections(scenario: OnboardingScenario): SetupConnection[] {
   if (scenario === "telnyx-ai-only") return [connection("telnyx")];
   if (scenario === "telnyx-connected")
     return [{ ...connection("telnyx"), telephonyPublicKeyConfigured: true }];
-  if (scenario === "speech-to-speech-connected") return [connection("google")];
   if (scenario.startsWith("api-key"))
     return [connection("deepgram"), connection("google")];
   if (
@@ -220,18 +217,7 @@ export function OnboardingStory({
   scenario: OnboardingScenario;
   theme: "dark" | "light";
 }) {
-  // Future-capability fixture only; the current Google runtime remains LLM-only.
-  const providers = scenario.startsWith("speech-to-speech")
-    ? setupProviders.map((provider) =>
-        provider.id === "google"
-          ? {
-              ...provider,
-              capabilities: ["s2s" as const],
-              sampleCapabilities: ["s2s" as const],
-            }
-          : provider,
-      )
-    : setupProviders;
+  const providers = setupProviders;
   const [page, setPage] = useState<SetupPage>(
     scenario.startsWith("platform-")
       ? "platform"

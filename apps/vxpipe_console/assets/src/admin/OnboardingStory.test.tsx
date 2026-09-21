@@ -242,7 +242,7 @@ test("the supported default model reaches the chosen recipe", () => {
   expect(
     screen.queryByRole("combobox", { name: "Language model provider" }),
   ).not.toBeInTheDocument();
-  expect(screen.getByText("gemini-3.8-flash")).toBeVisible();
+  expect(screen.getByText("gemini-2.5-flash")).toBeVisible();
   fireEvent.click(
     screen.getByRole("button", { name: "Load Voice conversation" }),
   );
@@ -294,7 +294,7 @@ test("updating a speech service preserves the sample model provider", () => {
     screen.getByRole("button", { name: "Continue to Setup Call Specs" }),
   );
   expect(screen.getByText("Google AI Studio")).toBeVisible();
-  expect(screen.getByText("gemini-3.8-flash")).toBeVisible();
+  expect(screen.getByText("gemini-2.5-flash")).toBeVisible();
 });
 
 test("the tenant directory resumes a services-ready tenant at API keys", () => {
@@ -406,38 +406,6 @@ test("the AI service picker clears drafts and keeps the add card after connected
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 
-test("speech-to-speech preview completes service setup but only unlocks compatible recipes", () => {
-  vi.useFakeTimers();
-  render(<OnboardingStory scenario="speech-to-speech" theme="dark" />);
-  selectService("google");
-  expect(screen.getByRole("dialog")).toHaveTextContent("Speech-to-speech");
-  fireEvent.change(screen.getByLabelText("API key"), {
-    target: { value: "storybook-example-key" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  act(() => vi.advanceTimersByTime(1000));
-  expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue to Setup Call Specs" }),
-  );
-  expect(
-    screen.getByRole("button", { name: "Load Voice conversation" }),
-  ).toBeEnabled();
-  expect(
-    screen.getByRole("button", { name: "Load Agent handoff" }),
-  ).toBeDisabled();
-  expect(
-    screen.getByRole("button", { name: "Load Human handoff" }),
-  ).toBeDisabled();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Load Voice conversation" }),
-  );
-  const preview = screen.getByRole("dialog", { name: "Voice conversation" });
-  expect(preview).toHaveTextContent("Speech-to-speech");
-  expect(preview).not.toHaveTextContent("Speech-to-text");
-});
-
 test("telephony remains optional and does not complete voice readiness", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="choose-services" theme="light" />);
@@ -471,7 +439,6 @@ test("telephony remains optional and does not complete voice readiness", () => {
   ]);
   expect(serviceButtons("AI providers")).toEqual([
     "Connect a service",
-    "Manage Telnyx",
     "Connect a service",
   ]);
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
@@ -505,24 +472,24 @@ test("connected cards separate connection status from the Manage action", () => 
 });
 
 test.each([["google", "Google AI Studio"]])(
-  "%s shows its speech and language capabilities without promising unsupported sample models",
+  "%s shows only its implemented language capability",
   (provider, name) => {
     vi.useFakeTimers();
     render(<OnboardingStory scenario="choose-services" theme="dark" />);
     selectService(provider);
     const dialog = screen.getByRole("dialog", { name: `Connect ${name}` });
-    for (const capability of ["Speech-to-text", "LLM", "Text-to-speech"]) {
-      expect(within(dialog).getByText(capability)).toBeVisible();
-    }
+    expect(within(dialog).getByText("LLM")).toBeVisible();
+    expect(within(dialog).queryByText("Speech-to-text")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Text-to-speech")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "storybook-example-key" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     act(() => vi.advanceTimersByTime(1000));
     const card = screen.getByRole("article", { name });
-    for (const capability of ["Speech-to-text", "LLM", "Text-to-speech"]) {
-      expect(within(card).getByText(capability)).toBeVisible();
-    }
+    expect(within(card).getByText("LLM")).toBeVisible();
+    expect(within(card).queryByText("Speech-to-text")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Text-to-speech")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   },
 );
@@ -533,7 +500,7 @@ test("Rime connects with an API key and belongs to AI services", () => {
   selectService("rime");
   expect(
     screen.getByRole("dialog", { name: "Connect Rime" }),
-  ).toHaveTextContent("Text-to-speech");
+  ).not.toHaveTextContent("Text-to-speech");
   expect(
     screen
       .getByRole("form", { name: "Credential setup" })
@@ -557,46 +524,33 @@ test("Rime connects with an API key and belongs to AI services", () => {
   ).not.toBeInTheDocument();
 });
 
-test("Telnyx is one connection managed from either service group", () => {
+test("Telnyx is one telephony connection", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="choose-services" theme="dark" />);
-  selectService("telnyx", "AI providers");
+  selectService("telnyx", "Telephony");
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-telnyx-key" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
-  expect(
-    within(screen.getByRole("region", { name: "AI providers" })).getByText(
-      "Connected",
-    ),
-  ).toBeVisible();
+  expect(within(screen.getByRole("region", { name: "AI providers" })).queryByText("Connected")).not.toBeInTheDocument();
   expect(
     within(screen.getByRole("region", { name: "Telephony" })).getByText(
       "Public key needed",
     ),
   ).toBeVisible();
-  for (const group of ["Telephony", "AI providers"]) {
-    const region = screen.getByRole("region", { name: group });
-    expect(
-      within(region).getAllByRole("article", { name: "Telnyx" }),
-    ).toHaveLength(1);
-    fireEvent.click(
-      within(region).getByRole("button", { name: "Manage Telnyx" }),
-    );
+  for (let count = 0; count < 2; count++) {
+    const region = screen.getByRole("region", { name: "Telephony" });
+    expect(within(region).getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
+    fireEvent.click(within(region).getByRole("button", { name: "Manage Telnyx" }));
     expect(screen.getByLabelText("API key")).toHaveValue("");
     expect(screen.getByLabelText("Public key")).toHaveValue("");
     const options = within(screen.getByRole("combobox", { name: "Service" }));
-    if (group === "AI providers")
-      expect(options.getByRole("option", { name: "Rime" })).toBeInTheDocument();
-    else
-      expect(
-        options.queryByRole("option", { name: "Rime" }),
-      ).not.toBeInTheDocument();
+    expect(options.queryByRole("option", { name: "Rime" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "updated-storybook-key" },
     });
-    if (group === "Telephony") {
+    if (count === 0) {
       fireEvent.change(screen.getByLabelText("Public key"), {
         target: { value: btoa("q".repeat(32)) },
       });
@@ -604,12 +558,12 @@ test("Telnyx is one connection managed from either service group", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     act(() => vi.advanceTimersByTime(1000));
   }
-  expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(2);
+  expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
   expect(screen.queryByText("Public key needed")).not.toBeInTheDocument();
-  expect(screen.getAllByText("Connected")).toHaveLength(2);
+  expect(screen.getAllByText("Connected")).toHaveLength(1);
 });
 
-test("onboarding offers only the selected launch services without duplicate Telnyx options", () => {
+test("onboarding offers only installed AI and telephony services in their groups", () => {
   render(<OnboardingStory scenario="service-picker" theme="dark" />);
   const service = screen.getByRole("combobox", { name: "Service" });
   expect(
@@ -621,6 +575,8 @@ test("onboarding offers only the selected launch services without duplicate Teln
     "Deepgram",
     "Rime",
     "Google AI Studio",
+    "Zenmux",
     "Telnyx",
+    "Twilio",
   ]);
 });

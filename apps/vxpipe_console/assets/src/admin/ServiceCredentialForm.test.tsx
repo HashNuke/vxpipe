@@ -11,6 +11,15 @@ import { ServiceCredentialForm } from "./ServiceCredentialForm";
 
 afterEach(cleanup);
 
+test("credential setup offers the installed provider catalog", () => {
+  render(<ServiceCredentialForm onCancel={vi.fn()} onSubmit={vi.fn()} status="idle" />);
+  const provider = screen.getByLabelText("Provider");
+  expect(provider).toHaveTextContent("Rime");
+  expect(provider).toHaveTextContent("Zenmux");
+  expect(provider).toHaveTextContent("Twilio");
+  expect(provider).not.toHaveTextContent("Google Vertex AI");
+});
+
 test("shows only the credential fields owned by the selected provider", () => {
   render(
     <ServiceCredentialForm

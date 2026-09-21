@@ -154,6 +154,7 @@ export function ServiceSetupModal({
           <>
             {bindingName ? <p>Binding: {bindingName}</p> : null}
             <div className="setup-tags setup-modal-capabilities">
+              {provider.capabilities.length === 0 ? <span>Credentials only</span> : null}
               {provider.capabilities.map((capability) => (
                 <span key={capability}>{capabilityLabels[capability]}</span>
               ))}

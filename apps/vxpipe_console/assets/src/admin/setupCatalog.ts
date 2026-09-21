@@ -29,18 +29,41 @@ export function effectiveSetupConnections(
 export type SetupTenant = { key: string; name: string; demo?: boolean };
 export type SetupProvider = {
   id: SetupProviderId;
-  availableInSetup?: boolean;
   name: string;
   description: string;
-  // Provider labels and model defaults can include future integrations.
   capabilities: Array<VoiceCapability | "telephony">;
   defaultModels: Partial<Record<VoiceCapability, string>>;
   sampleCapabilities: VoiceCapability[];
 };
 
-export const setupProviders = (catalog.providers as SetupProvider[]).filter(
-  (provider) => provider.availableInSetup !== false,
-);
+export const setupProviders = catalog.providers as SetupProvider[];
+export type ProviderCapabilities = Record<string, string[]>;
+
+export function installedSetupProviders(
+  installed: ProviderCapabilities,
+): SetupProvider[] {
+  return setupProviders.flatMap((provider) => {
+    const declared = installed[provider.id];
+    if (!declared?.includes("credential")) return [];
+    const capabilities = provider.capabilities.filter(
+      (capability) => capability === "llm" || declared.includes(capability),
+    );
+    return [
+      {
+        ...provider,
+        capabilities,
+        sampleCapabilities: provider.sampleCapabilities.filter((capability) =>
+          capabilities.includes(capability),
+        ),
+        defaultModels: Object.fromEntries(
+          Object.entries(provider.defaultModels).filter(([capability]) =>
+            capabilities.includes(capability as VoiceCapability),
+          ),
+        ),
+      },
+    ];
+  });
+}
 export type SetupServiceGroup = "ai" | "telephony";
 export function providerInGroup(
   provider: SetupProvider,
@@ -48,7 +71,7 @@ export function providerInGroup(
 ) {
   return group === "telephony"
     ? provider.capabilities.includes("telephony")
-    : provider.capabilities.some((capability) => capability !== "telephony");
+    : !provider.capabilities.includes("telephony");
 }
 export const voiceCapabilities: VoiceCapability[] = ["stt", "llm", "tts"];
 export const capabilityLabels = {

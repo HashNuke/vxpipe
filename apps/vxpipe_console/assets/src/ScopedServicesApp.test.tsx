@@ -24,6 +24,44 @@ const binding = (provider: string, source = "platform", name = provider) => ({
   saved_fields: ["api_key"],
   last_validated_at: null,
 });
+const providerCapabilities = {
+  deepgram: ["credential", "stt", "tts"],
+  google: ["credential"],
+  rime: ["credential"],
+  telnyx: ["credential", "telephony"],
+  twilio: ["credential", "telephony"],
+  zenmux: ["credential"],
+};
+
+test("Setup picker offers installed services with only working capability badges", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  const fetchImpl = vi.fn(async () => response({
+    tenant: null,
+    bindings: [],
+    provider_capabilities: providerCapabilities,
+  }));
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  await screen.findByRole("heading", { name: "Platform services" });
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Connect a service" })[0]);
+  const picker = screen.getByRole("combobox", { name: "Service" });
+  expect(picker).toHaveTextContent("Zenmux");
+  expect(picker).not.toHaveTextContent("Google Vertex AI");
+  fireEvent.change(picker, { target: { value: "google" } });
+  const dialog = screen.getByRole("dialog", { name: "Connect Google AI Studio" });
+  expect(dialog).toHaveTextContent("LLM");
+  expect(dialog).not.toHaveTextContent("Speech-to-text");
+  expect(dialog).not.toHaveTextContent("Text-to-speech");
+  expect(dialog).not.toHaveTextContent("Speech-to-speech");
+
+  fireEvent.change(picker, { target: { value: "rime" } });
+  expect(screen.getByRole("dialog", { name: "Connect Rime" })).toHaveTextContent("Credentials only");
+  expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Text-to-speech");
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  fireEvent.click(screen.getAllByRole("button", { name: "Connect a service" })[2]);
+  expect(screen.getByRole("combobox", { name: "Service" })).toHaveTextContent("Twilio");
+  expect(screen.getByRole("combobox", { name: "Service" })).not.toHaveTextContent("Rime");
+});
 
 test("Telnyx saves the public key and shows backend URLs and saved-field metadata", async () => {
   window.history.replaceState({}, "", "/admin/platform/services");
@@ -37,6 +75,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
       return new Response(
         JSON.stringify({
           tenant: null,
+          provider_capabilities: providerCapabilities,
           bindings: saved
             ? [
                 {
@@ -57,7 +96,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
   await screen.findByRole("heading", { name: "Platform services" });
   fireEvent.click(
-    screen.getAllByRole("button", { name: "Connect a service" })[0],
+    screen.getAllByRole("button", { name: "Connect a service" })[2],
   );
   fireEvent.change(screen.getByLabelText("Service"), {
     target: { value: "telnyx" },
@@ -116,7 +155,7 @@ test("platform services test and save separately, then edit the exact persisted 
         bindings = [];
         return new Response(null, { status: 204 });
       }
-      return new Response(JSON.stringify({ tenant: null, bindings }));
+      return new Response(JSON.stringify({ tenant: null, bindings, provider_capabilities: providerCapabilities }));
     },
   );
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
@@ -214,6 +253,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
       }
       return response({
         tenant: null,
+        provider_capabilities: providerCapabilities,
         bindings: saved ? [binding("rime")] : [],
       });
     },

@@ -1,24 +1,31 @@
 # Setup catalog and runtime capability metadata
 
-The Console setup catalog currently describes provider product offerings and future integrations.
-Its capability badges are static frontend data, separate from the implemented capability manifests
-in `Vxpipe.Providers.Registry`. For example, the setup dialog labels Google AI Studio with speech
-capabilities and Rime with text-to-speech, while Vxpipe currently declares only their credential
-schema/test capabilities. Google model inference uses the shared ReqLLM runtime. Connecting a
-credential therefore does not make every badge usable by a call plan.
+Status: resolved 2026-09-21.
 
-This difference predates the provider-package migration and does not change the call runtime. The
-setup catalog has a separate `sampleCapabilities` filter, so sample recipes only use the configured
-Deepgram speech and shared model capabilities. The backend manifest remains the authoritative
-answer for Vxpipe-owned STT, TTS and telephony implementations.
+The earlier Console catalog described future product offerings as if they were integrated. Its
+Google, Rime and Telnyx speech badges did not match `Vxpipe.Providers.Registry`. The setup dialog
+therefore implied that saving credentials made unsupported call paths available.
 
-To align the setup UI in a future slice, expose the implemented capability catalog to the Console
-and separate those labels from future/provider-product offerings. Keep model inference's shared
-ReqLLM support distinct. Verify provider cards, connection dialogs, sample readiness and a
-rendered desktop/mobile pass. Do not infer runtime readiness from a manifest entry; configured
-credentials and owning-runtime startup still decide whether a call can use it.
+The authenticated platform and tenant binding-directory responses now include
+`provider_capabilities` from the fixed registry. Setup validates this field, offers only providers
+with an installed credential capability, and intersects STT, TTS and telephony labels with the
+declared capabilities. Missing catalog data makes Setup unavailable. The frontend catalog contains
+only current provider presentation and sample defaults; it no longer contains Vertex AI or future
+speech labels. Google and Zenmux LLM entries are explicit metadata for the separate shared ReqLLM
+path. Rime remains available for credential storage/testing and is labeled **Credentials only**;
+it does not count toward voice sample readiness. The previous future speech-to-speech Storybook
+preview was removed.
 
-Verification: the provider registry contract suite asserts exact supported and absent
-capabilities. On 2026-09-21, the rendered Google connection dialog displayed the four static
-product badges at desktop and mobile widths, while the registry declared credential schema and
-testing only. No credential was submitted during that inspection.
+This does not change call runtime behavior. A manifest declares support, while configured
+credentials and owning-runtime startup still determine whether a particular call is ready.
+
+Verification: the endpoint contract first failed because `provider_capabilities` was absent. The
+frontend projection, rendered picker, and credential form tests first failed on unsupported labels
+and missing current providers. Focused backend and frontend suites pass after implementation.
+The local authenticated Console was inspected at desktop and 390-pixel mobile widths: Google
+showed LLM only, Rime showed Credentials only, and the telephony picker offered Telnyx and Twilio.
+The older onboarding view also showed Credentials only for a browser-local synthetic Rime binding.
+No credential was submitted.
+The full umbrella suite passed 1,979 tests with zero failures (42 excluded); the Console frontend
+suite passed 189 tests. Root format, warnings-as-errors compile, strict Credo and unused-dependency
+checks, frontend type checking and lint also passed.

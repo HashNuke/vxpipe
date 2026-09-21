@@ -215,6 +215,7 @@ test("starts the Demo onboarding flow when the installation has no tenants", asy
     return response({
       tenant: { key: "DEMOabcdefgh1234", name: "Demo" },
       bindings: [],
+      provider_capabilities: {},
     });
   });
 

@@ -45,7 +45,12 @@ defmodule Vxpipe.Console.AdminServicesController do
             if(is_binary(scope), do: PublicEndpoint.scoped_event_url(origin, {:tenant, scope}))
         }
 
-        json(conn, Map.put(directory, :webhook_urls, urls))
+        json(
+          conn,
+          directory
+          |> Map.put(:webhook_urls, urls)
+          |> Map.put(:provider_capabilities, Registry.catalog())
+        )
 
       {:error, :tenant_not_found} ->
         conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})

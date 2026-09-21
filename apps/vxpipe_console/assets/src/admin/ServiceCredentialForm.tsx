@@ -9,15 +9,12 @@ import type {
   ServiceProvider,
 } from "./serviceTypes";
 import { validateCredentialDraft } from "./validateCredentialDraft";
+import { setupProviders } from "./setupCatalog";
 
-const providers: Array<{ value: ServiceProvider; label: string }> = [
-  { value: "google", label: "Google AI Studio" },
-  { value: "vertex_ai", label: "Google Vertex AI" },
-  { value: "zenmux", label: "Zenmux" },
-  { value: "deepgram", label: "Deepgram" },
-  { value: "telnyx", label: "Telnyx" },
-  { value: "twilio", label: "Twilio" },
-];
+const providers = setupProviders.map((provider) => ({
+  value: provider.id,
+  label: provider.name,
+}));
 
 export function ServiceCredentialForm({
   initialProvider = "google",

@@ -33,8 +33,6 @@ const meta = {
         "creating-tenant",
         "choose-services",
         "service-picker",
-        "speech-to-speech",
-        "speech-to-speech-connected",
         "enter-credentials",
         "validating",
         "validation-error",
@@ -139,22 +137,6 @@ export const Narrow: Story = {
 };
 
 export const ServicePicker: Story = { args: { scenario: "service-picker" } };
-export const SpeechToSpeechPreview: Story = {
-  args: { scenario: "speech-to-speech" },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          "Future-capability design preview: the Google card stands in for a speech-to-speech integration. No audio model or provider capability is added to the runtime. Only the voice-conversation recipe accepts this simulated path; handoff recipes retain their existing pipeline requirements.",
-      },
-    },
-  },
-};
-export const SpeechToSpeechConnectedPreview: Story = {
-  ...SpeechToSpeechPreview,
-  args: { scenario: "speech-to-speech-connected" },
-};
-
 export const TelnyxAiOnly: Story = { args: { scenario: "telnyx-ai-only" } };
 export const TelnyxConnected: Story = {
   args: { scenario: "telnyx-connected" },

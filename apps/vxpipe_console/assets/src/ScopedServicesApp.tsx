@@ -12,12 +12,10 @@ import {
   type BindingDirectory,
 } from "./admin/serviceBindingsApi";
 import {
-  setupProviders,
+  installedSetupProviders,
   voiceSetupReady,
-  type SetupProvider,
   type SetupServiceScope,
 } from "./admin/setupCatalog";
-import catalog from "./admin/setupCatalog.json";
 import {
   credentialRequest,
   testCredentialRequest,
@@ -273,11 +271,9 @@ export function ScopedServicesApp({
   const primary = bindings.filter(
     (binding) => binding.name === binding.provider,
   );
-  const providers = (catalog.providers as SetupProvider[]).filter(
-    (provider) =>
-      setupProviders.includes(provider) ||
-      bindings.some((binding) => binding.provider === provider.id),
-  );
+  const providers = directory
+    ? installedSetupProviders(directory.providerCapabilities)
+    : [];
   const named = bindings.filter((binding) => binding.name !== binding.provider);
   const selected = modal?.provider
     ? bindings.find(

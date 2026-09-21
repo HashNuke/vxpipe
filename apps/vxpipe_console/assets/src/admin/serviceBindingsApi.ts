@@ -1,5 +1,5 @@
 import catalog from "./setupCatalog.json";
-import type { SetupConnection, SetupServiceScope } from "./setupCatalog";
+import type { ProviderCapabilities, SetupConnection, SetupServiceScope } from "./setupCatalog";
 
 export type ServiceBinding = SetupConnection & {
   name: string;
@@ -10,6 +10,7 @@ export type ServiceBinding = SetupConnection & {
 export type BindingDirectory = {
   tenant: { key: string; name: string } | null;
   bindings: ServiceBinding[];
+  providerCapabilities: ProviderCapabilities;
   webhookUrls?: { platform: string; tenant: string | null };
 };
 
@@ -36,6 +37,14 @@ export function parseBindingDirectory(
   if (
     !record(value) ||
     !Array.isArray(value.bindings) ||
+    !record(value.provider_capabilities) ||
+    Object.keys(value.provider_capabilities).length > 32 ||
+    !Object.values(value.provider_capabilities).every(
+      (capabilities) =>
+        Array.isArray(capabilities) &&
+        capabilities.length <= 16 &&
+        capabilities.every((capability) => typeof capability === "string"),
+    ) ||
     value.bindings.length > 1500
   )
     throw invalid();
@@ -109,6 +118,7 @@ export function parseBindingDirectory(
   return {
     tenant: tenant as BindingDirectory["tenant"],
     bindings,
+    providerCapabilities: value.provider_capabilities as ProviderCapabilities,
     webhookUrls,
   };
 }
