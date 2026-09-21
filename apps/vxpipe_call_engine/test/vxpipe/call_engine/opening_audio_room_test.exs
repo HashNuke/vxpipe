@@ -25,7 +25,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.OpeningAudio.{AssetCache, Download}
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
 

@@ -1,9 +1,9 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.Socket do
+defmodule Vxpipe.Providers.Deepgram.Socket do
   @moduledoc false
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.SocketConnection
+  alias Vxpipe.Providers.Deepgram.SocketConnection
 
   @callback handle_frame(tuple(), map()) :: {:ok, map()} | {:await, reference(), map()}
   @callback handle_disconnect(term(), map()) :: {:ok, map()}

@@ -42,7 +42,8 @@ defmodule Vxpipe.CallEngine.MixProject do
       {:req_llm, "~> 1.22"},
       {:telemetry, "~> 1.3"},
       {:vxpipe_agent_runtime, in_umbrella: true},
-      {:vxpipe_mcp, in_umbrella: true}
+      {:vxpipe_mcp, in_umbrella: true},
+      {:vxpipe_providers, in_umbrella: true}
     ]
   end
 end

@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextRedactionTest do
         },
         transport_options: [token: "private-transport-marker"],
         identity: %{participant_id: "participant"},
-        provider_module: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+        provider_module: Vxpipe.Providers.Deepgram.Flux,
         readiness_status: :ready
       )
 

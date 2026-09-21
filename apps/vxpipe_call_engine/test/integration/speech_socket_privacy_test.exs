@@ -1,15 +1,15 @@
 defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{
+  alias Vxpipe.Providers.Deepgram.{
     Flux,
-    FluxSocket,
+    STTSocket,
     FluxTextToSpeech,
-    FluxTextToSpeechSocket
+    TTSSocket
   }
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: FluxTTSSession
+  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxTTSSession
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.TestSpeechWireServer
 
@@ -32,10 +32,10 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   end
 
   test "STT authenticates only on the wire and preserves frames, ping and close", context do
-    socket = start_socket(FluxSocket, context.endpoint)
+    socket = start_socket(STTSocket, context.endpoint)
     assert_receive {:speech_wire_authorization, ["Token " <> @secret]}
     assert_receive {:speech_wire_connected, peer}
-    assert :ok = FluxSocket.send_audio(socket, <<1, 2, 3>>)
+    assert :ok = STTSocket.send_audio(socket, <<1, 2, 3>>)
     assert_receive {:speech_wire_frame, ^peer, :binary, <<1, 2, 3>>}
 
     send(peer, {:send, [text: "transcript", binary: "binary-transcript", ping: "probe"]})
@@ -44,17 +44,17 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
     assert_receive {:speech_wire_frame, ^peer, :pong, "probe"}
 
     monitor = Process.monitor(socket)
-    assert :ok = FluxSocket.close(socket)
+    assert :ok = STTSocket.close(socket)
     assert_receive {:speech_wire_frame, ^peer, :text, ~s({"type":"CloseStream"})}
     assert_receive {:DOWN, ^monitor, :process, ^socket, _reason}
     assert_private_telemetry(socket)
   end
 
   test "TTS authenticates only on the wire and acknowledges output before continuing", context do
-    socket = start_socket(FluxTextToSpeechSocket, context.endpoint)
+    socket = start_socket(TTSSocket, context.endpoint)
     assert_receive {:speech_wire_authorization, ["Token " <> @secret]}
     assert_receive {:speech_wire_connected, peer}
-    assert :ok = FluxTextToSpeechSocket.send_control(socket, "speak")
+    assert :ok = TTSSocket.send_control(socket, "speak")
     assert_receive {:speech_wire_frame, ^peer, :text, "speak"}
 
     send(peer, {:send, [binary: <<4, 5>>, text: "completed"]})
@@ -64,26 +64,26 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
     assert_receive {:vxpipe_tts_transport, ^socket, {:control, "completed"}}
 
     monitor = Process.monitor(socket)
-    assert :ok = FluxTextToSpeechSocket.close(socket)
+    assert :ok = TTSSocket.close(socket)
     assert_receive {:speech_wire_frame, ^peer, :text, ~s({"type":"Close"})}
     assert_receive {:DOWN, ^monitor, :process, ^socket, _reason}
     assert_private_telemetry(socket)
   end
 
   test "TTS close remains responsive while output acknowledgement is pending", context do
-    socket = start_socket(FluxTextToSpeechSocket, context.endpoint)
+    socket = start_socket(TTSSocket, context.endpoint)
     assert_receive {:speech_wire_connected, peer}
     send(peer, {:send, [binary: <<4, 5>>]})
     assert_receive {:vxpipe_tts_transport, ^socket, {:audio, _reference, <<4, 5>>}}
 
     monitor = Process.monitor(socket)
-    assert :ok = FluxTextToSpeechSocket.close(socket)
+    assert :ok = TTSSocket.close(socket)
     assert_receive {:speech_wire_frame, ^peer, :text, ~s({"type":"Close"})}
     assert_receive {:DOWN, ^monitor, :process, ^socket, :normal}
   end
 
   test "TTS ignores another owner's acknowledgement and closes on output failure", context do
-    socket = start_socket(FluxTextToSpeechSocket, context.endpoint)
+    socket = start_socket(TTSSocket, context.endpoint)
     assert_receive {:speech_wire_connected, peer}
     send(peer, {:send, [binary: <<4, 5>>, text: "completed"]})
     assert_receive {:vxpipe_tts_transport, ^socket, {:audio, reference, <<4, 5>>}}
@@ -103,7 +103,7 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   end
 
   test "provider close reports one safe failure without reconnecting", context do
-    socket = start_socket(FluxSocket, context.endpoint)
+    socket = start_socket(STTSocket, context.endpoint)
     assert_receive {:speech_wire_connected, peer}
     monitor = Process.monitor(socket)
     send(peer, :close)
@@ -118,7 +118,7 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
 
     {result, log} =
       ExUnit.CaptureLog.with_log(fn ->
-        start_supervised(socket_spec(FluxSocket, TestSpeechWireServer.endpoint(server), []))
+        start_supervised(socket_spec(STTSocket, TestSpeechWireServer.endpoint(server), []))
       end)
 
     assert {:error, {:connection_unavailable, _child}} = result
@@ -133,7 +133,7 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
 
     result =
       start_supervised(
-        socket_spec(FluxSocket, TestSpeechWireServer.endpoint(server), receive_timeout: 40)
+        socket_spec(STTSocket, TestSpeechWireServer.endpoint(server), receive_timeout: 40)
       )
 
     assert {:error, {:connection_unavailable, _child}} = result
@@ -145,9 +145,9 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   test "an initial provider frame received with the HTTP upgrade is delivered" do
     start_supervised!({Vxpipe.CallEngine.TestSpeechUpgradeServer, owner: self()})
     assert_receive {:speech_upgrade_endpoint, endpoint}
-    socket = start_socket(FluxSocket, endpoint)
+    socket = start_socket(STTSocket, endpoint)
     assert_receive {:vxpipe_stt_transport, ^socket, {:message, "initial"}}
-    assert :ok = FluxSocket.close(socket)
+    assert :ok = STTSocket.close(socket)
   end
 
   test "native STT maps a coalesced Connected frame and drops a duplicate turn sequence" do
@@ -330,7 +330,7 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
   end
 
   test "an unacknowledged output closes at the fixed output deadline", context do
-    socket = start_socket(FluxTextToSpeechSocket, context.endpoint)
+    socket = start_socket(TTSSocket, context.endpoint)
     assert_receive {:speech_wire_connected, peer}
     send(peer, {:send, [binary: <<4, 5>>]})
     assert_receive {:vxpipe_tts_transport, ^socket, {:audio, _reference, <<4, 5>>}}
@@ -346,18 +346,18 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
     )
 
     assert_receive {:speech_upgrade_endpoint, endpoint}
-    socket = start_socket(FluxTextToSpeechSocket, endpoint)
+    socket = start_socket(TTSSocket, endpoint)
     assert_receive {:vxpipe_tts_transport, ^socket, {:audio, _reference, <<4, 5>>}}
     refute inspect(:sys.get_state(socket), limit: :infinity) =~ @secret
     refute inspect(:sys.get_status(socket), limit: :infinity) =~ @secret
-    assert :ok = FluxTextToSpeechSocket.close(socket)
+    assert :ok = TTSSocket.close(socket)
   end
 
   test "TTS sends its configured keepalive ping", context do
-    socket = start_socket(FluxTextToSpeechSocket, context.endpoint, keepalive_interval: 20)
+    socket = start_socket(TTSSocket, context.endpoint, keepalive_interval: 20)
     assert_receive {:speech_wire_connected, peer}
     assert_receive {:speech_wire_frame, ^peer, :ping, ""}
-    assert :ok = FluxTextToSpeechSocket.close(socket)
+    assert :ok = TTSSocket.close(socket)
   end
 
   def observe(_event, _measurements, metadata, owner) do

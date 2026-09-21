@@ -43,7 +43,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [context_compaction: [enabled: true]],
   speech_to_text: [
     providers: %{
-      Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+      Vxpipe.Providers.Deepgram.Flux.Session => [
         enabled: true,
         media_ingress: [
           maximum_frames: 50,
@@ -65,7 +65,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   ],
   text_to_speech: [
     providers: %{
-      Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+      Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session => [
         enabled: true,
         maximum_requests: 4
       ],

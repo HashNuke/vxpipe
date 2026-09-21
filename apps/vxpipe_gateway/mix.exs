@@ -50,7 +50,8 @@ defmodule Vxpipe.Gateway.MixProject do
       {:websock, "~> 0.5"},
       {:websock_adapter, "~> 0.6"},
       {:vxpipe_call_engine, in_umbrella: true},
-      {:vxpipe_calls, in_umbrella: true}
+      {:vxpipe_calls, in_umbrella: true},
+      {:vxpipe_providers, in_umbrella: true}
     ]
   end
 end

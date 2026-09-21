@@ -2,18 +2,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   @moduledoc "Closed mapping from inline capability selections to internal adapters."
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
-  alias Vxpipe.CallEngine.Provider.Deepgram
+  alias Vxpipe.Providers.Deepgram
+  alias Vxpipe.Providers.Registry
 
-  @speech_to_text_adapters [
-    Deepgram.Flux.Session,
-    Vxpipe.CallEngine.Provider.MorseCodeSTT.Session
-  ]
-  @text_to_speech_adapters [
-    Deepgram.FluxTextToSpeech.Session,
-    Vxpipe.CallEngine.Provider.MorseCodeTTS.Session
-  ]
-
-  @speech_keys [:encoding, :sample_rate]
   @morse_keys [
     :amplitude,
     :detection_threshold,
@@ -64,10 +55,10 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       do: {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM}
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "deepgram"}),
-    do: {:ok, Deepgram.Flux.Session}
+    do: Registry.resolve_capability("deepgram", :stt)
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "deepgram"}),
-    do: {:ok, Deepgram.FluxTextToSpeech.Session}
+    do: Registry.resolve_capability("deepgram", :tts)
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
@@ -95,8 +86,16 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def credential_required?(%CapabilitySelection{provider: provider}),
     do: provider not in ["fixture", "morse"]
 
-  defp speech_adapters(:speech_to_text), do: @speech_to_text_adapters
-  defp speech_adapters(:text_to_speech), do: @text_to_speech_adapters
+  defp speech_adapters(:speech_to_text) do
+    {:ok, deepgram} = Registry.fetch_capability("deepgram", :stt)
+    [deepgram, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
+  end
+
+  defp speech_adapters(:text_to_speech) do
+    {:ok, deepgram} = Registry.fetch_capability("deepgram", :tts)
+    [deepgram, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+  end
+
   defp speech_adapters(_kind), do: []
 
   defp validate_provider_registry(providers, kind) do
@@ -112,12 +111,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   end
 
   defp validate_provider_settings(Deepgram.Flux.Session, :speech_to_text, settings) do
-    Keyword.validate(settings,
-      enabled: false,
-      media_ingress: nil,
-      wire_module: Deepgram.FluxSocket,
-      wire_options: []
-    )
+    Deepgram.Speech.settings(:speech_to_text, settings)
   end
 
   defp validate_provider_settings(
@@ -128,12 +122,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
        do: Keyword.validate(settings, enabled: false, media_ingress: nil)
 
   defp validate_provider_settings(Deepgram.FluxTextToSpeech.Session, :text_to_speech, settings) do
-    Keyword.validate(settings,
-      enabled: false,
-      maximum_requests: nil,
-      wire_module: Deepgram.FluxTextToSpeechSocket,
-      wire_options: []
-    )
+    Deepgram.Speech.settings(:text_to_speech, settings)
   end
 
   defp validate_provider_settings(
@@ -147,10 +136,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: {:error, :provider_not_configured}
 
   def speech_options(%CapabilitySelection{provider: "deepgram", model: model, options: input}) do
-    with {:ok, options} <- normalize(input, @speech_keys),
-         {:ok, encoding} <- encoding(Keyword.get(options, :encoding)) do
-      {:ok, options |> Keyword.put(:encoding, encoding) |> Keyword.put(:model, model)}
-    end
+    Deepgram.Speech.selection_options(model, input)
   end
 
   def speech_options(%CapabilitySelection{provider: "morse", model: "morse", options: input}),
@@ -193,7 +179,4 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   end
 
   defp normalize(_input, _allowed), do: {:error, :unsupported_capability}
-  defp encoding("opus"), do: {:ok, :opus}
-  defp encoding("linear16"), do: {:ok, :linear16}
-  defp encoding(_value), do: {:error, :unsupported_capability}
 end

@@ -1,12 +1,12 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
+defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session do
   @moduledoc false
 
   use GenServer
 
   @behaviour Vxpipe.CallEngine.Speech.TTSProvider
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{FluxTextToSpeech, FluxTextToSpeechSocket}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal
+  alias Vxpipe.Providers.Deepgram.{FluxTextToSpeech, TTSSocket}
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Signal
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, Playback, TTSProvider}
 
   @derive {Inspect, only: [:phase, :ready?, :terminal?]}
@@ -80,7 +80,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session do
     channel = options |> Keyword.fetch!(:channel) |> GenServer.whereis()
     private = Keyword.fetch!(options, :private)
     config = Keyword.fetch!(private, :config)
-    wire_module = Keyword.get(private, :wire_module, FluxTextToSpeechSocket)
+    wire_module = Keyword.get(private, :wire_module, TTSSocket)
     wire_options = Keyword.get(private, :wire_options, [])
 
     with %FluxTextToSpeech{} <- config,

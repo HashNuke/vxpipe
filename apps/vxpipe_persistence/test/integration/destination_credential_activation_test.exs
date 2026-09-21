@@ -266,7 +266,7 @@ defmodule Vxpipe.Persistence.Integration.DestinationCredentialActivationTest do
       )
       |> Keyword.put(:text_to_speech,
         providers: %{
-          Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+          Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session => [
             enabled: true,
             wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
             wire_options: [observer: self(), ready_on_start: true],

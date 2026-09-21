@@ -239,7 +239,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp speech_to_text_settings(observer) do
     [
       providers: %{
-        Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+        Vxpipe.Providers.Deepgram.Flux.Session => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: observer, ready_on_start: true],
@@ -257,7 +257,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   defp text_to_speech_settings(observer) do
     [
       providers: %{
-        Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: observer, ready_on_start: true],

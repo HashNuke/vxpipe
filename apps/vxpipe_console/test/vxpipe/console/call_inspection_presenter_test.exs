@@ -153,7 +153,7 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     archived_selection = %{
       __struct__: CapabilitySelection,
       kind: :speech_to_text,
-      provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+      provider: Vxpipe.Providers.Deepgram.Flux,
       profile: "deepgram-flux-stt",
       options: %{model: "flux-general-en"}
     }
@@ -168,7 +168,7 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     assert presented_caller["value"]["capabilities"] == [
              %{
                "name" => "STT",
-               "provider" => Vxpipe.CallEngine.Provider.Deepgram.Flux,
+               "provider" => Vxpipe.Providers.Deepgram.Flux,
                "model" => "flux-general-en"
              }
            ]

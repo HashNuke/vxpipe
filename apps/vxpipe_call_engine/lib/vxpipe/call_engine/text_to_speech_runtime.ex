@@ -1,8 +1,8 @@
 defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxSession
 
   @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}
   @enforce_keys [
@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
            Keyword.get(
              settings,
              :wire_module,
-             Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket
+             Vxpipe.Providers.Deepgram.TTSSocket
            ),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do

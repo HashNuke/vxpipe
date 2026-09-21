@@ -1,11 +1,11 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux.Session do
+defmodule Vxpipe.Providers.Deepgram.Flux.Session do
   @moduledoc false
 
   use GenServer
 
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxSocket}
+  alias Vxpipe.Providers.Deepgram.{Flux, STTSocket}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event}
 
@@ -67,7 +67,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux.Session do
     channel = Keyword.fetch!(options, :channel)
     private = Keyword.fetch!(options, :private)
     config = Keyword.fetch!(private, :config)
-    wire_module = Keyword.get(private, :wire_module, FluxSocket)
+    wire_module = Keyword.get(private, :wire_module, STTSocket)
     wire_options = Keyword.get(private, :wire_options, [])
 
     with %Flux{} <- config,

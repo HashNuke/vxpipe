@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Integration.DeepgramFluxOpusTest do
   use ExUnit.Case, async: false
 
   alias ExWebRTC.Media.Ogg.Reader
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxSocket}
+  alias Vxpipe.Providers.Deepgram.{Flux, STTSocket}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 
   @moduletag :integration
@@ -22,9 +22,9 @@ defmodule Vxpipe.Gateway.Integration.DeepgramFluxOpusTest do
 
     socket =
       start_supervised!(%{
-        id: {FluxSocket, System.unique_integer([:positive])},
+        id: {STTSocket, System.unique_integer([:positive])},
         start:
-          {FluxSocket, :start_link,
+          {STTSocket, :start_link,
            [
              [
                owner: self(),
@@ -55,7 +55,7 @@ defmodule Vxpipe.Gateway.Integration.DeepgramFluxOpusTest do
   defp stream_packets(reader, socket) do
     case Reader.next_packet(reader) do
       {:ok, {packet, duration_ms}, reader} ->
-        assert :ok = FluxSocket.send_audio(socket, packet)
+        assert :ok = STTSocket.send_audio(socket, packet)
         pace(duration_ms)
         stream_packets(reader, socket)
 

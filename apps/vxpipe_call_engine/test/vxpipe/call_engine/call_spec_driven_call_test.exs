@@ -46,7 +46,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
   alias Vxpipe.CallEngine.Tool.CurrentTime
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
 
   alias Vxpipe.CallEngine.{

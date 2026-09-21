@@ -9,7 +9,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     TestTextToSpeechTransport
   }
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.Gateway.TestTelephonySocket
 
   alias Vxpipe.Gateway.Telephony.{

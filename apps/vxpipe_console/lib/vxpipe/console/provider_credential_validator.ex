@@ -6,7 +6,6 @@ defmodule Vxpipe.Console.ProviderCredentialValidator do
   alias Vxpipe.Console.Provider
 
   @credential_validators %{
-    "deepgram" => Provider.Deepgram.CredentialValidation,
     "google" => Provider.Google.CredentialValidation,
     "rime" => Provider.Rime.CredentialValidation,
     "telnyx" => Provider.Telnyx.CredentialValidation,
@@ -28,6 +27,13 @@ defmodule Vxpipe.Console.ProviderCredentialValidator do
     _exception -> {:error, :provider_validation_unavailable}
   catch
     _kind, _reason -> {:error, :provider_validation_unavailable}
+  end
+
+  defp request("deepgram", auth_kind, payload) do
+    with {:ok, validator} <-
+           Vxpipe.Providers.Registry.resolve_capability("deepgram", :credential_validation) do
+      validator.request(auth_kind, payload)
+    end
   end
 
   defp request(provider, auth_kind, payload) do

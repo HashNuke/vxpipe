@@ -1,8 +1,8 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechTest do
+defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeechTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Signal
 
   test "builds a redacted streaming linear16 connection" do
     assert {:ok, provider} =

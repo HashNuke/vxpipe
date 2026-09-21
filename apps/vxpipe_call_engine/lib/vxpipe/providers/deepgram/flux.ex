@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
+defmodule Vxpipe.Providers.Deepgram.Flux do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal

@@ -172,7 +172,7 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
   defp speech_to_text_settings(observer) do
     [
       providers: %{
-        Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+        Vxpipe.Providers.Deepgram.Flux.Session => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: observer, ready_on_start: true],

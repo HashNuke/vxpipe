@@ -1,8 +1,8 @@
 defmodule Vxpipe.CallEngine.Integration.DeepgramFluxTextToSpeechTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxSession
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
 
   @moduletag :integration

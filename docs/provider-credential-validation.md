@@ -45,11 +45,11 @@ credential version was tested by this contract.
 ## Provider-owned modules
 
 Provider-specific knowledge lives under a provider directory in the umbrella child that owns the
-integration. For example, Console credential probes live under
-`Vxpipe.Console.Provider.<Provider>.CredentialValidation`, Deepgram speech sessions live under
-`Vxpipe.CallEngine.Provider.Deepgram`, and carrier media/webhook adapters live under their Gateway
-telephony provider namespaces. Shared workflows depend on behaviours and dispatch through a fixed
-provider registry; they do not contain provider URLs, authentication headers or wire formats.
+integration. The `vxpipe_providers` child owns manifests, credential schemas and pure credential
+test-request descriptions. Deepgram's speech sessions and sockets use the
+`Vxpipe.Providers.Deepgram` namespace while compiling in CallEngine; Console executes the declared
+probe. Other provider integrations retain their existing names until migrated. The
+[provider-package milestone](milestones/provider-integration-packages.md) tracks that progression.
 
 This is the current lightweight provider-package boundary. Adding a provider means adding its local
 credential schema, optional credential-test module, and only the runtime adapters it actually

@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
+defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeech do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Signal
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Signal
 
   @endpoint "wss://api.deepgram.com/v2/speak"
   @maximum_audio_bytes 1_048_576

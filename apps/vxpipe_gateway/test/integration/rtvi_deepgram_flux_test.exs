@@ -16,10 +16,10 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
   alias ExWebRTC.Media.Ogg.Reader
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{
+  alias Vxpipe.Providers.Deepgram.{
     Flux,
     FluxTextToSpeech,
-    FluxTextToSpeechSocket
+    TTSSocket
   }
 
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTenantCredentialSource, TestTurnCall}
@@ -71,7 +71,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
       providers: %{
         FluxTextToSpeech.Session => [
           enabled: true,
-          wire_module: FluxTextToSpeechSocket,
+          wire_module: TTSSocket,
           wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],
           maximum_requests: 4
         ]

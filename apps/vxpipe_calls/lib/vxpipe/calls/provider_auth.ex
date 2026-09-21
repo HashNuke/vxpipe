@@ -1,10 +1,17 @@
 defmodule Vxpipe.Calls.ProviderAuth do
   @moduledoc "Closed, local validation of supported provider credential payloads."
 
-  @api_key_providers ["google", "deepgram", "zenmux", "telnyx", "rime"]
+  @api_key_providers ["google", "zenmux", "telnyx", "rime"]
   @providers @api_key_providers ++ ["twilio"]
 
   @spec validate(term(), term(), term()) :: :ok | {:error, :invalid_provider_auth}
+  def validate("deepgram", kind, payload) do
+    case Vxpipe.Providers.Registry.resolve_capability("deepgram", :credential) do
+      {:ok, schema} -> schema.validate(kind, payload)
+      {:error, _reason} -> {:error, :invalid_provider_auth}
+    end
+  end
+
   def validate("telnyx", "api_key", %{"api_key" => key, "public_key" => public_key} = payload)
       when map_size(payload) == 2 do
     with :ok <- validate("telnyx", "api_key", %{"api_key" => key}),
@@ -52,7 +59,21 @@ defmodule Vxpipe.Calls.ProviderAuth do
   def twilio_account_sid?(_value), do: false
 
   @spec binding(term(), term(), term()) :: :ok | {:error, atom()}
+  def binding(owner, "deepgram", name) do
+    with {:ok, _schema} <- Vxpipe.Providers.Registry.resolve_capability("deepgram", :credential) do
+      provider_binding(owner, name)
+    else
+      {:error, _reason} -> {:error, :invalid_provider_auth}
+    end
+  end
+
   def binding(owner, provider, name) when provider in @providers do
+    provider_binding(owner, name)
+  end
+
+  def binding(_tenant_key, _provider, _name), do: {:error, :invalid_provider_auth}
+
+  defp provider_binding(owner, name) do
     with :ok <- owner(owner) do
       if is_binary(name) and byte_size(name) <= 128 and
            Regex.match?(~r/\A[a-zA-Z0-9][a-zA-Z0-9_-]*\z/, name),
@@ -60,8 +81,6 @@ defmodule Vxpipe.Calls.ProviderAuth do
          else: {:error, :invalid_credential_name}
     end
   end
-
-  def binding(_tenant_key, _provider, _name), do: {:error, :invalid_provider_auth}
 
   def owner(:platform), do: :ok
   def owner({:tenant, key}), do: tenant_key(key)

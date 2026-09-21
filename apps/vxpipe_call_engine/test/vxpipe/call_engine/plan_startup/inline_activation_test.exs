@@ -2,8 +2,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
+  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -28,7 +28,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     assert [
              config: stt_config,
-             wire_module: Vxpipe.CallEngine.Provider.Deepgram.FluxSocket,
+             wire_module: Vxpipe.Providers.Deepgram.STTSocket,
              wire_options: []
            ] = stt.provider_private
 
@@ -138,7 +138,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     assert [
              config: configuration,
-             wire_module: Vxpipe.CallEngine.Provider.Deepgram.FluxSocket,
+             wire_module: Vxpipe.Providers.Deepgram.STTSocket,
              wire_options: []
            ] =
              runtime.provider_private

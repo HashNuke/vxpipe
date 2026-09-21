@@ -19,8 +19,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
   alias Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer}
   alias Vxpipe.CallEngine.Readiness.Collector
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.Flux
+  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.Speech.Channel
 
   test "prepares changed speech policy without replacing the live session until commit" do

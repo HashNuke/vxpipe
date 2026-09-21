@@ -25,7 +25,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     ToolCallStarted
   }
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.Providers.Deepgram.Flux
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)

@@ -28,8 +28,10 @@ Each provider root implements `Vxpipe.Providers`:
 ```
 
 `Vxpipe.Providers.Registry` is the only provider-name registry. It supports exact lookup and reports
-`{:error, :unsupported_provider}` or `{:error, :unsupported_provider_capability}`. Internal modules
-may live under the provider directory without appearing in the manifest.
+`{:error, :unsupported_provider}` or `{:error, :unsupported_provider_capability}`. Its
+`resolve_capability/2` also checks that the implementation is installed; a partial library build
+returns `{:error, :provider_implementation_unavailable}` instead of calling an absent module.
+Internal modules may live under the provider directory without appearing in the manifest.
 
 Capability presence and runtime readiness are different facts:
 
@@ -50,7 +52,7 @@ Google and Zenmux model support continues through the agent-runtime catalog.
 | Google AI Studio | yes | yes | no | no | no |
 | Telnyx | yes | yes | no | no | yes |
 | Rime | yes | yes | no | no | no |
-| Twilio | yes | yes | no | no | existing integration migrates separately |
+| Twilio | yes | yes | no | no | yes |
 | Zenmux | yes | yes | no | no | no |
 
 The table describes Vxpipe-owned provider capabilities. ReqLLM model support is deliberately outside
@@ -92,3 +94,8 @@ catalog consumers can distinguish unsupported capabilities without maintaining t
 lists. Provider-private helpers remain private. This migration changes module identity and catalog
 lookup but must not change call topology, supervision, retry, cancellation, media or persistence
 behavior.
+
+The migration proceeds one provider at a time. The registry declares a provider only when its
+schema, credential probe, concrete capabilities and consumers have moved together and passed their
+focused tests. The final checkpoint removes any remaining duplicate provider lists and runs the
+full umbrella acceptance gates.

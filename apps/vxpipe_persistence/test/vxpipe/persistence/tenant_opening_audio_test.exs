@@ -6,7 +6,7 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.OpeningAudio.AssetCache
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
 
   alias Vxpipe.CallEngine.{
     RoomAuthority,

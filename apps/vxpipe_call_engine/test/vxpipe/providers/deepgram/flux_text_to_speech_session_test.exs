@@ -1,9 +1,9 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSessionTest do
+defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeechSessionTest do
   use ExUnit.Case, async: true
   @moduletag :capture_log
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseSession
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.{SpeechSessionOwner, TestTextToSpeechTransport}

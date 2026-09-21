@@ -20,7 +20,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     TestSpeechToTextTransport
   }
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseCodeConfig
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS

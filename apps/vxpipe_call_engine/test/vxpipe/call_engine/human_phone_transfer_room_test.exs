@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl, SendText}
   alias Vxpipe.CallEngine.Event.ToolCallCompleted
   alias Vxpipe.CallEngine.Event.ToolCallFailed
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.Telephony.{OutboundLegRequest, OutboundLegRequestResolver}
 
   setup do

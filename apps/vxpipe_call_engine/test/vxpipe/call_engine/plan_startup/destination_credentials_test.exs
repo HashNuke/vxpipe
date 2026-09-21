@@ -2,8 +2,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
+  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{DestinationPreparer, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
   alias Vxpipe.CallEngine.{TestTenantCredentialSource, TestTurnCall}

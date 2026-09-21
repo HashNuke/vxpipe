@@ -30,7 +30,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   setup do

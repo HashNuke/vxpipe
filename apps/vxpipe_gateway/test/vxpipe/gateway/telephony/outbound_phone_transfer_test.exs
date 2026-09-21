@@ -12,7 +12,7 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   }
 
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.Telephony.{EndLeg, LegReference}
 
   alias Vxpipe.Gateway.Telephony.{

@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
   alias Vxpipe.CallEngine.{RoomCapabilitySupervisor, TestReadinessAdapter}
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.Providers.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Speech.CapabilityTree
   alias Vxpipe.CallEngine.{RoomMixer, TestSpeechToTextTransport}

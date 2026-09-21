@@ -1,8 +1,8 @@
 defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.Flux
+  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [
@@ -30,7 +30,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),
          wire_module when is_atom(wire_module) <-
-           Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Provider.Deepgram.FluxSocket),
+           Keyword.get(settings, :wire_module, Vxpipe.Providers.Deepgram.STTSocket),
          wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
          true <- Keyword.keyword?(wire_options) do
       public = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]

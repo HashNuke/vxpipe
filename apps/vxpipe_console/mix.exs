@@ -42,7 +42,8 @@ defmodule Vxpipe.Console.MixProject do
       {:vxpipe_artifacts, in_umbrella: true},
       {:vxpipe_calls, in_umbrella: true},
       {:vxpipe_gateway, in_umbrella: true},
-      {:vxpipe_persistence, in_umbrella: true}
+      {:vxpipe_persistence, in_umbrella: true},
+      {:vxpipe_providers, in_umbrella: true}
     ]
   end
 end

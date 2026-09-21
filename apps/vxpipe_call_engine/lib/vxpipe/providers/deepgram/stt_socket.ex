@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxSocket do
+defmodule Vxpipe.Providers.Deepgram.STTSocket do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Socket
+  alias Vxpipe.Providers.Deepgram.Socket
 
   @behaviour Socket
 

@@ -27,3 +27,21 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
 - Existing Deepgram code is under `Vxpipe.CallEngine.Provider.Deepgram`; existing Telnyx code is
   under `Vxpipe.Gateway.Telephony.Telnyx`; credential-test builders are under
   `Vxpipe.Console.Provider.<Provider>`.
+
+## Deepgram provider checkpoint
+
+- Registry and credential tests first failed on missing contract/schema modules (3 and 2 tests).
+  The new `vxpipe_providers` child has no runtime process or dependency on Console, CallEngine or
+  Gateway. Its current fixed manifest declares Deepgram only; other providers remain on their
+  existing paths until their complete per-provider migrations.
+- Deepgram now owns its credential schema and pure test-request description in `vxpipe_providers`.
+  Its STT/TTS implementation modules, including `STTSocket` and `TTSSocket`, live in CallEngine under
+  the `Vxpipe.Providers.Deepgram` namespace. Provider-specific option validation lives beside those
+  sessions. Calls and Console resolve the declared credential capabilities; CallEngine resolves
+  STT/TTS adapters through the manifest. No runtime supervision or call logic changed.
+- Green evidence: provider tests 6, CallEngine complete 846 (14 excluded), local speech socket
+  integration 13, Calls complete 117, Console complete 186 (one excluded); all zero failures.
+  Root format, warnings-as-errors compile, strict Credo and unused dependency checks pass.
+  Old Deepgram module names are absent from source and tests. In a provider-only test environment,
+  `Registry.resolve_capability("deepgram", :stt)` returns
+  `{:error, :provider_implementation_unavailable}` rather than calling an absent module.

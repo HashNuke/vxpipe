@@ -8,12 +8,12 @@ defmodule Vxpipe.CallEngine.Telemetry do
   excluded.
   """
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.Providers.Deepgram.Flux
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session,
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session,
     as: DeepgramTextToSpeech
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseCodeTTS
 

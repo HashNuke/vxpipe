@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket do
+defmodule Vxpipe.Providers.Deepgram.TTSSocket do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Socket
+  alias Vxpipe.Providers.Deepgram.Socket
 
   @behaviour Socket
 

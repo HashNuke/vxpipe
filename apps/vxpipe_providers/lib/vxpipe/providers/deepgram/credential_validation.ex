@@ -1,7 +1,6 @@
-defmodule Vxpipe.Console.Provider.Deepgram.CredentialValidation do
+defmodule Vxpipe.Providers.Deepgram.CredentialValidation do
   @moduledoc false
-
-  @behaviour Vxpipe.Console.Provider.CredentialValidation
+  @behaviour Vxpipe.Providers.CredentialValidation
 
   @impl true
   def request("api_key", %{"api_key" => api_key} = payload) when map_size(payload) == 1 do
@@ -12,5 +11,5 @@ defmodule Vxpipe.Console.Provider.Deepgram.CredentialValidation do
      ]}
   end
 
-  def request(_auth_kind, _payload), do: {:error, :provider_validation_unsupported}
+  def request(_kind, _payload), do: {:error, :provider_validation_unsupported}
 end

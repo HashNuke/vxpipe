@@ -34,7 +34,7 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :text_to_speech,
         providers: %{
-          Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech.Session => [
+          Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session => [
             enabled: true,
             wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
             wire_options: [observer: self()],
@@ -77,7 +77,7 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :speech_to_text,
         providers: %{
-          Vxpipe.CallEngine.Provider.Deepgram.Flux.Session => [
+          Vxpipe.Providers.Deepgram.Flux.Session => [
             enabled: true,
             wire_module: Vxpipe.CallEngine.TestSpeechToTextTransport,
             wire_options: [observer: self()],

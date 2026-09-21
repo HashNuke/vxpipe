@@ -22,7 +22,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl, SendText}
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   alias Vxpipe.CallEngine.Capability.SpeechToText

@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, ToolCallCompleted, ToolCallStarted}
   alias Vxpipe.CallEngine.Archive.Fact
   alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, IntegrationCatalog}
 
   setup do

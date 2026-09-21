@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.SocketConnection do
+defmodule Vxpipe.Providers.Deepgram.SocketConnection do
   @moduledoc false
 
   @send_timeout 5_000

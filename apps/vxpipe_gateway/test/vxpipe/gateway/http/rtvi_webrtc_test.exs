@@ -7,7 +7,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
   alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
   alias Membrane.Opus.Encoder.Native, as: OpusEncoder
-  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTurnCall}
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.TestTextToSpeechTransport

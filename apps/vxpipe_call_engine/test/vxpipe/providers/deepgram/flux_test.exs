@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTest do
+defmodule Vxpipe.Providers.Deepgram.FluxTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
+  alias Vxpipe.Providers.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 
   describe "decode/1" do

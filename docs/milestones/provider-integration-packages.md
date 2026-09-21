@@ -1,6 +1,8 @@
 # Provider integration packages
 
-Status: specification reviewed; implementation is **0 of 5 checkpoints complete**.
+Status: Deepgram integration migrated and tested; the shared registry currently declares Deepgram.
+Implementation is **1 of 7 provider/final checkpoints complete**. Each provider is migrated, tested,
+fixed and committed as a complete unit before the next provider is added to the registry.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Telnyx calls](telnyx-calls.md), and
@@ -33,54 +35,76 @@ admission and credential storage remain behaviorally unchanged.
   concrete integrations implement contracts owned by CallEngine and Gateway. Logical provider
   namespaces preserve those dependency directions without adding processes.
 - [x] The registry is fixed and has no legacy or fallback lookup.
+- [x] Provider-by-provider migration keeps the shared registry incremental: each commit includes a
+  provider's complete declared capabilities, credential schema/test, consumers and focused evidence.
 
-## Checkpoint A — Contract and fixed catalog
+## Checkpoint A — Deepgram and shared contract
 
-- [ ] Add the dependency-light `vxpipe_providers` umbrella child with the `Vxpipe.Providers`
-  contract, capability types and `Vxpipe.Providers.Registry`.
-- [ ] Add manifests for every currently configurable provider and focused tests for exact supported,
-  unsupported-provider and unsupported-capability results.
-- [ ] Make provider/auth validation resolve provider-owned credential schemas through the registry.
-- [ ] Exit: Calls and provider-contract focused suites pass, with no provider list remaining in
-  `Vxpipe.Calls.ProviderAuth`.
-
-## Checkpoint B — Provider-owned credential testing
-
-- [ ] Move credential-test contracts and request builders to `Vxpipe.Providers.<Provider>`.
-- [ ] Make the Console HTTP executor resolve the declared credential-test capability rather than its
-  own provider map.
-- [ ] Preserve one bounded request, disabled retries/redirects, secret filtering and independent Save.
-- [ ] Exit: all provider request-shape and test/save endpoint tests pass; unsupported lookup performs
-  no network request.
-
-## Checkpoint C — Deepgram package
-
-- [ ] Move Deepgram modules and tests to the `Vxpipe.Providers.Deepgram` namespace.
-- [ ] Rename the concrete wire modules to `STTSocket` and `TTSSocket`; retain their shared private
+- [x] Add dependency-light `vxpipe_providers`, the capability contract and a fixed registry with
+  exact unsupported-provider/capability and unavailable-implementation results.
+- [x] Move Deepgram credential schema and bounded test-request construction into its manifest;
+  resolve these through the registry from Calls and Console.
+- [x] Move Deepgram modules and tests to the `Vxpipe.Providers.Deepgram` namespace.
+- [x] Rename the concrete wire modules to `STTSocket` and `TTSSocket`; retain their shared private
   connection machinery and existing semantic session contracts.
-- [ ] Replace CallEngine's Deepgram provider-name/module lists with manifest lookup while keeping
+- [x] Replace CallEngine's Deepgram provider-name/module lists with manifest lookup while keeping
   provider-specific option validation inside the Deepgram package.
-- [ ] Exit: native Deepgram STT/TTS focused suites, shared speech conformance and affected room tests
+- [x] Exit: native Deepgram STT/TTS focused suites, shared speech conformance and affected room tests
   pass with no old Deepgram module loaded.
 
-## Checkpoint D — Telnyx package
+Deepgram evidence: the contract tests failed before the registry/schema existed (3 registry and 2
+credential tests). The provider tests now pass 6/6; CallEngine's full 846-test suite passes with
+zero failures (14 excluded). The controlled local speech-socket integration lane passes 13/13;
+Calls and Console complete suites pass 117/117 and 186/186 (one excluded in Console). The root
+format, warnings-as-errors compilation, strict Credo and unused-dependency checks pass. A
+provider-only test environment resolves Deepgram STT as `provider_implementation_unavailable`.
+The Deepgram module-namespace search finds no old references in source or tests. The final umbrella
+suite and broader consumers remain part of checkpoint G.
+
+## Checkpoint B — Telnyx package
 
 - [ ] Move Telnyx-specific modules and tests to `Vxpipe.Providers.Telnyx`.
 - [ ] Rename `MediaSocket` to `TelephonyMediaSocket` and update HTTP/media/telephony composition.
+- [ ] Move Telnyx credential schema/test into its manifest and migrate Calls/Console consumers.
 - [ ] Resolve Telnyx telephony support through its manifest without changing signed webhook,
   admission, media, transfer, cancellation or cleanup behavior.
 - [ ] Exit: Telnyx unit, HTTP, media, carrier-harness and affected transfer tests pass with no old
   Telnyx module loaded.
 
-## Checkpoint E — Consumers, documentation and final acceptance
+## Checkpoint C — Google AI Studio package
+
+- [ ] Add its credential schema and optional credential-test request to the fixed manifest; route
+  Calls and Console through it without moving shared ReqLLM inference.
+- [ ] Exit: credential shape, test/save and explicit absence of speech/telephony capabilities pass.
+
+## Checkpoint D — Rime package
+
+- [ ] Add the provider-owned credential schema and credential-test request to its manifest; migrate
+  Calls and Console consumers without inventing an unsupported runtime capability.
+- [ ] Exit: credential shape, test/save and unsupported-capability tests pass.
+
+## Checkpoint E — Twilio package
+
+- [ ] Move provider-specific telephony modules and tests to `Vxpipe.Providers.Twilio`, with the
+  credential schema/test and actual telephony capability in its manifest.
+- [ ] Migrate Gateway, Calls and Console consumers while preserving webhook, media and call behavior.
+- [ ] Exit: carrier, HTTP/media and affected transfer suites pass with no old module loaded.
+
+## Checkpoint F — Zenmux package
+
+- [ ] Add the credential schema/test to its manifest and migrate Calls/Console; leave model inference
+  in shared ReqLLM.
+- [ ] Exit: credential shape, test/save and unsupported-capability tests pass.
+
+## Checkpoint G — Final consumers and acceptance
 
 - [ ] Remove duplicated backend provider capability lists and update provider authoring/credential
   documentation with the manifest workflow.
-- [ ] Prove manifests report the actual Deepgram, Google and Telnyx capabilities and explicitly deny
-  absent capabilities.
+- [ ] Prove manifests report every migrated provider's actual capabilities and explicitly deny absent
+  capabilities; preserve bounded credential probes and independent Save.
 - [ ] Search compiled source and tests for obsolete provider namespaces; do not retain aliases,
   wrappers or fallback modules.
 - [ ] Run the relevant frontend checks, rendered Console inspection if catalog output changes, all
   five root gates and bounded existing speech/telephony regression lanes.
-- [ ] Exit: implementation is 5 of 5 complete, the index is synchronized, and each checkpoint is
+- [ ] Exit: implementation is 7 of 7 complete, the index is synchronized, and each provider is
   committed as a usable vertical slice.
