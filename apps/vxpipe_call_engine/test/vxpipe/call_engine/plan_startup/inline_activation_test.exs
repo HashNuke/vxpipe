@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
   alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTSSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -46,6 +47,52 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     end
 
     refute :erlang.term_to_binary(plan) =~ "private-marker"
+  end
+
+  test "Rime TTS activation resolves its own credential and exposes only public options" do
+    plan =
+      plan(%{
+        provider: "rime",
+        model: "coda",
+        options: %{speaker: "astra", sample_rate: 24_000}
+      })
+
+    options = options()
+
+    {TestTenantCredentialSource, {observer, bindings}} =
+      Keyword.fetch!(options, :credential_source)
+
+    bindings =
+      Map.put(bindings, {"tenant-inline", "rime", "default"}, %{
+        "api_key" => "synthetic-rime-private-marker"
+      })
+
+    options =
+      Keyword.put(options, :credential_source, {TestTenantCredentialSource, {observer, bindings}})
+
+    tts = Keyword.fetch!(options, :text_to_speech)
+    providers = Keyword.fetch!(tts, :providers)
+
+    tts =
+      Keyword.put(
+        tts,
+        :providers,
+        Map.put(providers, RimeTTSSession, enabled: true, maximum_requests: 4)
+      )
+
+    options = Keyword.put(options, :text_to_speech, tts)
+
+    assert {:ok, startup} = PlanStartup.new(plan, options)
+    assert {RimeTTSSession, public} = startup.text_to_speech.provider
+    assert public[:speaker] == "astra"
+    assert public[:sample_rate] == 24_000
+
+    assert [config: config, wire_module: Vxpipe.Providers.Rime.TTSSocket, wire_options: []] =
+             startup.text_to_speech.provider_private
+
+    assert config.api_key == "synthetic-rime-private-marker"
+    refute inspect(startup) =~ "synthetic-rime-private-marker"
+    assert_received {:tenant_credential_resolved, "tenant-inline", "rime", "default"}
   end
 
   test "ambient private settings cannot rescue an absent tenant source" do
@@ -273,7 +320,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     ]
   end
 
-  defp plan do
+  defp plan(
+         tts_selection \\ %{
+           provider: "deepgram",
+           model: "flux-haley-en",
+           options: %{encoding: "linear16", sample_rate: 48_000}
+         }
+       ) do
     source = %{
       schema_version: "20260915.01",
       entry_caller: "caller",
@@ -291,11 +344,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
             model: "gemini-2.5-flash",
             options: %{temperature: 0.2}
           },
-          text_to_speech: %{
-            provider: "deepgram",
-            model: "flux-haley-en",
-            options: %{encoding: "linear16", sample_rate: 48_000}
-          }
+          text_to_speech: tts_selection
         }
       },
       participants: %{

@@ -648,6 +648,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
        ),
        do: Vxpipe.Providers.Deepgram.FluxTextToSpeech.new(options)
 
+  defp configure_provider(Vxpipe.Providers.Rime.TTSSession, options, :text_to_speech),
+    do: Vxpipe.Providers.Rime.TTS.new(options)
+
   defp configure_provider(provider, options, :text_to_speech) do
     case provider.configure(options) do
       {:ok, _descriptor} -> {:ok, options}

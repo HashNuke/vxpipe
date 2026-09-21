@@ -124,13 +124,12 @@ available when credential testing is unsupported. Storybook callbacks simulate t
 operations; the production contract is documented in
 [Provider credential testing and storage](provider-credential-validation.md).
 
-Rime currently supports credential storage and testing only. Setup does not show
-an unsupported capability badge. Google AI Studio offers LLM, while
+Rime supports Coda TTS. Google AI Studio offers LLM, while
 Deepgram offers STT and TTS. Telnyx and Twilio offer telephony. Provider product
 features do not appear as Vxpipe capabilities until integrated.
 
-Current onboarding sample mappings use Deepgram for STT/TTS and Google AI Studio
-or Zenmux for LLM. Rime, Google speech and Telnyx AI runtime adapters remain future work.
+Current onboarding sample mappings use Deepgram for STT/TTS, Rime for TTS and Google AI Studio
+or Zenmux for LLM. Google speech and Telnyx AI runtime adapters remain future work.
 A capability counts toward sample readiness only when listed in
 `sampleCapabilities` and supplied with a default model. Credential setup alone
 does not implement those adapters or complete phone-number routing.
@@ -142,6 +141,10 @@ Deepgram defaults:
 
 - STT: `flux-general-multi`
 - TTS: `flux-hannah-en`
+
+Rime defaults to Coda TTS with the `astra` speaker at 24 kHz. Its prepared WebSocket accepts
+complete text and streams mono PCM; `done` ends the serialized synthesis batch. An interrupted
+batch is discarded until that boundary before another request starts.
 
 Default models are convenience selections, not an exhaustive model catalog or a
 restriction on explicit choices. They do not by themselves establish runtime readiness.

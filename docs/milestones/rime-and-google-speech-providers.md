@@ -34,6 +34,9 @@ only capabilities that run in this build, with capability tags wrapping on servi
   speech-start evidence. Do not infer user turns from a timer or transcript-only completion.
 - [x] Keep credentials out of tests, logging, status and documentation. Live checks resolve saved
   encrypted credentials only inside a local command and print safe outcome/timing metadata.
+- [x] Name provider-facing session APIs after the capability, not the current model family.
+  Keep `coda` and Deepgram Flux model names in selection/configuration and wire translation.
+  Deepgram TTS call specs will select a voice; the provider will construct its wire model.
 - [x] Establish each provider capability with a failing focused contract test, then implement and
   commit the complete provider slice with configuration, session, registry, call consumer and UI.
 
@@ -48,16 +51,17 @@ changing call ownership. [Rime streaming HTTP](https://docs.rime.ai/api-referenc
 [Rime JSON WebSocket](https://docs.rime.ai/api-reference/coda/websockets-json) specify the wire
 formats and `done` semantics.
 
-## Checkpoint A — Rime Coda TTS
+## Checkpoint A — Rime TTS
 
 - [x] Prove the saved credential can synthesize a short utterance as raw PCM at the selected
   sample rate; record first-audio and completion without audio or secret output. Cancellation
   remains to be verified with the session.
-- [ ] Add pure Rime TTS option validation and a semantic TTS session with bounded request and
+- [x] Add pure Rime TTS option validation and a semantic TTS session with bounded request and
   read deadlines, bounded audio credit, request-scoped cancellation and safe status/error output.
-- [ ] Register `:tts`, accept Rime call-spec selections/settings, and exercise activation,
-  playback, barge-in and cleanup through project-owned integration tests.
-- [ ] Update provider capability tags and setup choices only after the runtime path passes.
+- [x] Register `:tts`, accept Rime call-spec selections/settings, and exercise activation and
+  playback through project-owned integration tests. Room barge-in and cleanup still need the
+  checkpoint exit's broader checks.
+- [x] Update provider capability tags and setup choices after a working live semantic session.
 - [ ] Exit: focused Rime/provider/call tests, rendered desktop/mobile services, bounded load
   comparison, and root gates pass; commit one provider checkpoint.
 

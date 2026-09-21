@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.Providers.Deepgram
+  alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
 
   @morse_keys [
@@ -60,6 +61,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "deepgram"}),
     do: Registry.resolve_capability("deepgram", :tts)
 
+  def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "rime"}),
+    do: Registry.resolve_capability("rime", :tts)
+
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
 
@@ -93,7 +97,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp speech_adapters(:text_to_speech) do
     {:ok, deepgram} = Registry.fetch_capability("deepgram", :tts)
-    [deepgram, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+    {:ok, rime} = Registry.fetch_capability("rime", :tts)
+    [deepgram, rime, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
   end
 
   defp speech_adapters(_kind), do: []
@@ -125,6 +130,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     Deepgram.Speech.settings(:text_to_speech, settings)
   end
 
+  defp validate_provider_settings(TTSSession, :text_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
   defp validate_provider_settings(
          Vxpipe.CallEngine.Provider.MorseCodeTTS.Session,
          :text_to_speech,
@@ -137,6 +145,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   def speech_options(%CapabilitySelection{provider: "deepgram", model: model, options: input}) do
     Deepgram.Speech.selection_options(model, input)
+  end
+
+  def speech_options(%CapabilitySelection{
+        provider: "rime",
+        kind: :text_to_speech,
+        model: "coda",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:speaker, :sample_rate]),
+         {:ok, public} <- TTS.public_options(Keyword.put(options, :model, "coda")) do
+      {:ok, [model: public.model, speaker: public.speaker, sample_rate: public.sample_rate]}
+    end
   end
 
   def speech_options(%CapabilitySelection{provider: "morse", model: "morse", options: input}),
@@ -159,6 +179,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "deepgram", kind: :text_to_speech}, options),
     do: validate_provider(Deepgram.FluxTextToSpeech.Session, options)
+
+  defp validate_speech(%{provider: "rime", kind: :text_to_speech}, options),
+    do: validate_provider(TTSSession, options)
 
   defp validate_speech(_selection, _options), do: {:error, :unsupported_capability}
 

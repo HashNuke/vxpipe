@@ -72,7 +72,7 @@ shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtim
 | Deepgram | yes | yes | yes | yes | no |
 | Google AI Studio | yes | yes | no | no | no |
 | Telnyx | yes | yes | no | no | yes |
-| Rime | yes | yes | no | no | no |
+| Rime | yes | yes | no | yes | no |
 | Twilio | yes | yes | no | no | yes |
 | Zenmux | yes | yes | no | no | no |
 
@@ -86,10 +86,13 @@ The accepted concrete names are:
 ```text
 Vxpipe.Providers.Deepgram.STTSocket
 Vxpipe.Providers.Deepgram.TTSSocket
+Vxpipe.Providers.Rime.TTSSocket
 Vxpipe.Providers.Telnyx.TelephonyMediaSocket
 Vxpipe.Providers.Twilio.TelephonyMediaSocket
 ```
 
+Rime TTS was added after the original package migration; its implementation and acceptance are
+tracked in [Rime and Google speech providers](milestones/rime-and-google-speech-providers.md).
 The socket names describe provider wire implementations. Public speech consumers continue to use
 semantic STT/TTS sessions, and telephony consumers continue to use the provider-neutral telephony
 contracts. Generic room, turn, policy, permission, readiness, media and persistence modules remain
@@ -104,7 +107,9 @@ outside provider namespaces.
 2. Put concrete speech sessions and sockets in CallEngine or telephony adapters, profiles, HTTP
    handlers and media sockets in Gateway, under the same `Vxpipe.Providers.<Provider>` namespace.
    Follow the [speech provider contract](speech-provider-contract.md) for STT/TTS semantics. The
-   manifest names the public session or profile, not every private helper.
+   manifest names the public session or profile, not every private helper. Name public sessions
+   after their capability (`STTSession`, `TTSSession`), leaving model families and wire versions
+   in selection settings and private protocol modules.
 3. Use `Registry.resolve_capability/2` at consumers. Keep configuration validation and readiness in
    their owning runtime; a supported manifest entry alone does not imply a usable call. Do not add
    another provider-name dispatch table or a fallback module.

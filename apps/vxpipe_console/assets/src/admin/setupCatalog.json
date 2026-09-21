@@ -15,10 +15,12 @@
     {
       "id": "rime",
       "name": "Rime",
-      "description": "Store and test Rime credentials. Call audio is not supported yet.",
-      "capabilities": [],
-      "defaultModels": {},
-      "sampleCapabilities": []
+      "description": "Speak with Rime Coda.",
+      "capabilities": ["tts"],
+      "defaultModels": {
+        "tts": "coda"
+      },
+      "sampleCapabilities": ["tts"]
     },
     {
       "id": "google",

@@ -9,7 +9,8 @@ defmodule Vxpipe.Providers.Rime do
   def capabilities do
     %{
       credential: Vxpipe.Providers.Rime.Credential,
-      credential_validation: Vxpipe.Providers.Rime.CredentialValidation
+      credential_validation: Vxpipe.Providers.Rime.CredentialValidation,
+      tts: Vxpipe.Providers.Rime.TTSSession
     }
   end
 end

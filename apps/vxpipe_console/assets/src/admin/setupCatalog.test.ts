@@ -4,7 +4,7 @@ import { installedSetupProviders } from "./setupCatalog";
 const capabilities = {
   deepgram: ["credential", "credential_validation", "stt", "tts"],
   google: ["credential", "credential_validation"],
-  rime: ["credential", "credential_validation"],
+  rime: ["credential", "credential_validation", "tts"],
   telnyx: ["credential", "credential_validation", "telephony"],
   twilio: ["credential", "credential_validation", "telephony"],
   zenmux: ["credential", "credential_validation"],
@@ -24,7 +24,7 @@ test("Setup offers installed providers and only their implemented call capabilit
     "stt",
     "tts",
   ]);
-  expect(providers.find((provider) => provider.id === "rime")?.capabilities).toEqual([]);
+  expect(providers.find((provider) => provider.id === "rime")?.capabilities).toEqual(["tts"]);
   expect(providers.find((provider) => provider.id === "google")?.capabilities).toEqual([
     "llm",
   ]);

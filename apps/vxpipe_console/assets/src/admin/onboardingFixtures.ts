@@ -17,7 +17,7 @@ const providerDetails: Record<
   },
   google: { label: "Google AI Studio", services: ["Language model"] },
   zenmux: { label: "Zenmux", services: ["Language model"] },
-  rime: { label: "Rime", services: ["Credentials only"] },
+  rime: { label: "Rime", services: ["Text to speech"] },
   telnyx: { label: "Telnyx", services: ["Telephony"] },
   twilio: { label: "Twilio", services: ["Telephony"] },
 };

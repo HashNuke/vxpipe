@@ -28,7 +28,7 @@ const binding = (provider: string, source = "platform", name = provider) => ({
 const providerCapabilities = {
   deepgram: ["credential", "stt", "tts"],
   google: ["credential"],
-  rime: ["credential"],
+  rime: ["credential", "tts"],
   telnyx: ["credential", "telephony"],
   twilio: ["credential", "telephony"],
   zenmux: ["credential"],
@@ -81,7 +81,7 @@ test("Setup picker offers installed services with only working capability badges
 
   fireEvent.change(picker, { target: { value: "rime" } });
   expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Credentials only");
-  expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Text-to-speech");
+  expect(screen.getByRole("dialog", { name: "Connect Rime" })).toHaveTextContent("Text-to-speech");
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   expect(screen.getByRole("combobox", { name: "Service" })).toHaveTextContent("Twilio");

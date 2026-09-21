@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
 
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.Providers.Rime.{TTS, TTSSession}
 
   @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}
   @enforce_keys [
@@ -43,6 +44,24 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
 
       with {:ok, descriptor} <- FluxSession.configure(public) do
         {:ok, {FluxSession, public},
+         [config: config, wire_module: wire_module, wire_options: wire_options], descriptor}
+      end
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  def provider({TTSSession, %TTS{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         wire_module when is_atom(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.Providers.Rime.TTSSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
+      public = [model: config.model, speaker: config.speaker, sample_rate: config.sample_rate]
+
+      with {:ok, descriptor} <- TTSSession.configure(public) do
+        {:ok, {TTSSession, public},
          [config: config, wire_module: wire_module, wire_options: wire_options], descriptor}
       end
     else

@@ -505,7 +505,7 @@ test("Rime connects with an API key in the shared service list", () => {
   selectService("rime");
   expect(
     screen.getByRole("dialog", { name: "Connect Rime" }),
-  ).not.toHaveTextContent("Text-to-speech");
+  ).toHaveTextContent("Text-to-speech");
   expect(
     screen
       .getByRole("form", { name: "Credential setup" })
@@ -517,6 +517,7 @@ test("Rime connects with an API key in the shared service list", () => {
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.getByRole("button", { name: "Manage Rime" })).toBeVisible();
+  expect(within(screen.getByRole("article", { name: "Rime" })).getByText("Text-to-speech")).toBeVisible();
   expect(screen.queryByText("Credentials only")).not.toBeInTheDocument();
 });
 

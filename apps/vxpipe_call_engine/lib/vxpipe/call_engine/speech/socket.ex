@@ -1,9 +1,9 @@
-defmodule Vxpipe.Providers.Deepgram.Socket do
+defmodule Vxpipe.CallEngine.Speech.Socket do
   @moduledoc false
 
   use GenServer
 
-  alias Vxpipe.Providers.Deepgram.SocketConnection
+  alias Vxpipe.CallEngine.Speech.SocketConnection
 
   @callback handle_frame(tuple(), map()) :: {:ok, map()} | {:await, reference(), map()}
   @callback handle_disconnect(term(), map()) :: {:ok, map()}
@@ -128,7 +128,7 @@ defmodule Vxpipe.Providers.Deepgram.Socket do
   @impl true
   def format_status(status) do
     status
-    |> Map.put(:state, %{transport: :deepgram_websocket})
+    |> Map.put(:state, %{transport: :speech_websocket})
     |> Map.put(:message, :redacted)
     |> Map.put(:reason, :redacted)
     |> Map.put(:log, [])

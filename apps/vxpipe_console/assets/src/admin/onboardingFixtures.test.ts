@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { onboardingProvider } from "./onboardingFixtures";
 
-test("the onboarding inventory does not label credential-only Rime as speech", () => {
-  expect(onboardingProvider("rime", "valid").services).toEqual(["Credentials only"]);
+test("the onboarding inventory presents working Rime speech", () => {
+  expect(onboardingProvider("rime", "valid").services).toEqual(["Text to speech"]);
 });

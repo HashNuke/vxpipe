@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseCodeTTS
+  alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTS
 
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
@@ -129,6 +130,29 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
 
     assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
                     %{capability: :stt, provider: :morse, category: :unavailable}}
+  end
+
+  test "attributes Rime synthesis and failure to the declared provider" do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    assert :ok =
+             :telemetry.attach_many(
+               handler_id,
+               [@tts_first_audio_event, @provider_failure_event],
+               &__MODULE__.handle_event/4,
+               self()
+             )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+    assert :ok = Telemetry.tts_first_audio(Telemetry.started_at(), RimeTTS)
+
+    assert_receive {:embedded_telemetry, @tts_first_audio_event, _measurements,
+                    %{provider: :rime}}
+
+    assert :ok = Telemetry.provider_failure(:tts, RimeTTS, :provider_failed)
+
+    assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
+                    %{capability: :tts, provider: :rime, category: :unavailable}}
   end
 
   def handle_event(event, measurements, metadata, test_pid) do
