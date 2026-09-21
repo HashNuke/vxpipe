@@ -231,45 +231,39 @@ export function ServiceSetupModal({
                   state.operation === "removal" ? "Updating…" : "Saving…"
                 }
                 beforeActions={webhook}
+                onRemove={
+                  connected &&
+                  !state.overriding &&
+                  onRemove &&
+                  !(scope.kind === "tenant" && hasPlatform && onUsePlatform)
+                    ? () => onRemove(provider.id)
+                    : undefined
+                }
               />
             )}
             {!inherited &&
             connected &&
-            (onRemove ||
-              (scope.kind === "tenant" && hasPlatform && onUsePlatform)) &&
+            scope.kind === "tenant" &&
+            hasPlatform &&
+            onUsePlatform &&
             !state.overriding ? (
               <div className="setup-scope-actions setup-restore-platform">
-                {scope.kind === "tenant" && hasPlatform && onUsePlatform ? (
-                  <>
-                    <p>
-                      Switching to the platform service removes this tenant
-                      override
-                      {provider.id === "telnyx"
-                        ? " and changes its webhook URL"
-                        : ""}
-                      .
-                      {provider.id === "telnyx" && webhookUrl
-                        ? " Update your Telnyx Voice API application after switching."
-                        : ""}
-                    </p>
-                    <Button
-                      disabled={state.status === "submitting"}
-                      onClick={() => onUsePlatform?.(provider.id)}
-                    >
-                      Use platform service
-                    </Button>
-                  </>
-                ) : null}
-                {onRemove &&
-                !(scope.kind === "tenant" && hasPlatform && onUsePlatform) ? (
-                  <Button
-                    variant="ghost"
-                    disabled={state.status === "submitting"}
-                    onClick={() => onRemove?.(provider.id)}
-                  >
-                    Remove service
-                  </Button>
-                ) : null}
+                <p>
+                  Switching to the platform service removes this tenant override
+                  {provider.id === "telnyx"
+                    ? " and changes its webhook URL"
+                    : ""}
+                  .
+                  {provider.id === "telnyx" && webhookUrl
+                    ? " Update your Telnyx Voice API application after switching."
+                    : ""}
+                </p>
+                <Button
+                  disabled={state.status === "submitting"}
+                  onClick={() => onUsePlatform(provider.id)}
+                >
+                  Use platform service
+                </Button>
               </div>
             ) : null}
             {scope.kind === "tenant" && !inherited ? (

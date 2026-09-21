@@ -42,6 +42,7 @@ export function ServiceCredentialForm({
   onSubmit,
   onTest,
   beforeActions,
+  onRemove,
   savedFields = [],
 }: {
   initialProvider?: ServiceProvider;
@@ -57,6 +58,7 @@ export function ServiceCredentialForm({
   onSubmit: (draft: CredentialDraft) => void;
   onTest?: (draft: CredentialDraft) => Promise<CredentialTestResult>;
   beforeActions?: ReactNode;
+  onRemove?: () => void;
   savedFields?: CredentialField[];
 }) {
   const [provider, setProvider] = useState<ServiceProvider>(initialProvider);
@@ -259,31 +261,54 @@ export function ServiceCredentialForm({
         </p>
       ) : null}
       {beforeActions}
-      <div className="flex flex-wrap justify-end gap-2">
-        {showCancel ? (
+      <div className="setup-credential-actions" role="group" aria-label="Service actions">
+        {onRemove ? (
           <Button
+            aria-label="Remove service"
+            className="setup-remove-action"
             disabled={pending}
-            onClick={() => {
-              clearSecrets();
-              onCancel();
-            }}
+            onClick={onRemove}
             type="button"
             variant="ghost"
           >
-            Cancel
+            Remove
+            <span className="setup-remove-suffix"> service</span>
           </Button>
         ) : null}
-        <Button
-          disabled={pending || !onTest || !supportedProvider}
-          onClick={() => void testCredentials()}
-          type="button"
-          variant="ghost"
-        >
-          {testing ? "Testing…" : "Test credentials"}
-        </Button>
-        <Button disabled={pending || !supportedProvider} type="submit">
-          {saving ? submittingLabel : submitLabel}
-        </Button>
+        <div className="setup-credential-primary-actions">
+          {showCancel ? (
+            <Button
+              disabled={pending}
+              onClick={() => {
+                clearSecrets();
+                onCancel();
+              }}
+              type="button"
+              variant="ghost"
+            >
+              Cancel
+            </Button>
+          ) : null}
+          <Button
+            aria-label={testing ? "Testing credentials" : "Test credentials"}
+            disabled={pending || !onTest || !supportedProvider}
+            onClick={() => void testCredentials()}
+            type="button"
+            variant="ghost"
+          >
+            {testing ? (
+              "Testing…"
+            ) : (
+              <>
+                <span className="setup-test-full">Test credentials</span>
+                <span aria-hidden="true" className="setup-test-short">Test</span>
+              </>
+            )}
+          </Button>
+          <Button disabled={pending || !supportedProvider} type="submit">
+            {saving ? submittingLabel : submitLabel}
+          </Button>
+        </div>
       </div>
     </form>
   );

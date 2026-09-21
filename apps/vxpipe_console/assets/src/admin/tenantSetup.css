@@ -226,6 +226,49 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.setup-credential-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.setup-credential-primary-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.setup-remove-action {
+  color: var(--admin-red);
+}
+.setup-remove-action:hover {
+  color: var(--admin-red);
+  background: var(--admin-red-soft);
+}
+.setup-test-short {
+  display: none;
+}
+@media (max-width: 430px) {
+  .setup-credential-actions,
+  .setup-credential-primary-actions {
+    gap: 4px;
+  }
+  .setup-credential-actions button {
+    padding-inline: 6px;
+  }
+  .setup-remove-suffix {
+    display: none;
+  }
+}
+@media (max-width: 359px) {
+  .setup-test-full {
+    display: none;
+  }
+  .setup-test-short {
+    display: inline;
+  }
+}
 .setup-restore-platform {
   margin-top: 24px;
   padding-top: 20px;
