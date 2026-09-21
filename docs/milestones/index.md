@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 32 milestone specifications: 24 complete and 8 incomplete. Milestone 17, Telnyx calls and
+Status: 33 milestone specifications: 24 complete and 9 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -103,6 +103,11 @@ historical failures, repairs and load limits remain in the linked milestone evid
 takes priority over small latency overhead; these bounded local runs do not establish hosted capacity.
 The packaging/retention hold is unchanged.
 
+The 2026-09-21 [provider integration package](provider-integration-packages.md) milestone follows
+the speech migration. It introduces one fixed capability manifest per provider and moves existing
+Deepgram, Telnyx and credential-test implementations under `Vxpipe.Provider.*` without changing
+runtime topology. Its five implementation checkpoints remain pending.
+
 ## How to use this index
 
 Implement in the order below. Product/operator entries describe runnable vertical slices;
@@ -150,8 +155,9 @@ progress without claiming the entire milestone is complete.
 28. [ ] [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md) — Establish explicit platform-key API authority, one stable demo tenant and resumable tenant credential setup through the operator application. Storybook now separates shared service setup, tenant API keys and call-spec setup; API-key choices map to calls or admin + calls. The default demo display name is Demo.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
 30. [x] [Simpler speech integrations](simpler-speech-integrations.md) — All nine checkpoints are accepted: Morse and Deepgram use scoped semantic STT/TTS sessions, obsolete public transports/globals are removed, and final configuration, all-consumer, rendered, hosted-when-available and bounded load acceptance pass their gates.
-31. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-32. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+31. [ ] [Provider integration packages](provider-integration-packages.md) — Declare provider capabilities once and group Deepgram, Telnyx and credential integrations under `Vxpipe.Provider.*` without changing their runtime ownership.
+32. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+33. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
