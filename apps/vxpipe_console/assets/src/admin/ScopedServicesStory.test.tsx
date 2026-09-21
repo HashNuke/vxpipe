@@ -112,6 +112,10 @@ test("inherited services count toward readiness and Telnyx overrides use an inde
 
 test("inherited services have no disable or remove control", () => {
   render(<OnboardingStory scenario="inherited-services" theme="dark" />);
+  const card = screen.getByRole("article", { name: "Deepgram" });
+  expect(
+    within(card).queryByRole("button", { name: "More actions for Deepgram" }),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
   expect(
     screen.queryByRole("button", { name: /Disable|Remove service/ }),

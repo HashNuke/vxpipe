@@ -228,37 +228,19 @@
 }
 .setup-credential-actions {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.setup-credential-primary-actions {
-  display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  margin-left: auto;
-}
-.setup-remove-action {
-  color: var(--admin-red);
-}
-.setup-remove-action:hover {
-  color: var(--admin-red);
-  background: var(--admin-red-soft);
 }
 .setup-test-short {
   display: none;
 }
 @media (max-width: 430px) {
-  .setup-credential-actions,
-  .setup-credential-primary-actions {
+  .setup-credential-actions {
     gap: 4px;
   }
   .setup-credential-actions button {
     padding-inline: 6px;
-  }
-  .setup-remove-suffix {
-    display: none;
   }
 }
 @media (max-width: 359px) {
@@ -616,12 +598,61 @@
 .setup-service-card-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-shrink: 0;
 }
-.setup-service-edit {
+.setup-service-card-button-group {
+  display: inline-flex;
+  border: 1px solid var(--admin-line);
+  border-radius: 6px;
+}
+.setup-service-card-button-group > button {
   width: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 0;
   padding: 0;
+}
+.setup-service-card-button-group > button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.setup-service-card-button-group > .setup-service-more {
+  border-left: 1px solid var(--admin-line);
+  border-radius: 0 4px 4px 0;
+}
+.setup-service-card-button-group > button:only-child {
+  border-radius: 4px;
+}
+.setup-service-card-menu {
+  z-index: 50;
+  min-width: 224px;
+  padding: 4px;
+  border: 1px solid var(--admin-line);
+  border-radius: 6px;
+  background: var(--admin-panel);
+}
+.setup-service-card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--admin-red);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.setup-service-card-menu-item:hover,
+.setup-service-card-menu-item:focus-visible {
+  background: var(--admin-red-soft);
+}
+.setup-service-card-menu-item svg {
+  flex-shrink: 0;
 }
 .setup-service-heading {
   display: flex;

@@ -39,8 +39,10 @@ It does not restore environment-based provider credentials or implicit failure f
   satisfy runtime and onboarding readiness through the resolution rules above, but
   tenant pages do not display them, label them as inherited, or offer platform
   credential actions.
-- **Use platform service** deletes the tenant credential. **Remove service** deletes
-  the credential at its own scope. There are no dormant tenant credentials: adding
+- **Use platform service** deletes the tenant credential and returns to the inherited
+  service. **Remove credentials** is available from the vertical-ellipsis menu beside
+  Edit on a saved service card and deletes credentials at that card's own scope.
+  There are no dormant tenant credentials: adding
   a credential again creates a new identity, requiring fresh preparation for readers
   pinned to the deleted identity. Existing legacy telephony references prevent deletion
   until their application binding is removed. API-key revocation is a separate concern.

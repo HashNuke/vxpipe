@@ -1,13 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ServiceSetupModal } from "./ServiceSetupModal";
 
 afterEach(cleanup);
 
-test("keeps removal with the other credential actions without submitting the form", () => {
-  const remove = vi.fn();
-  const submit = vi.fn();
-
+test("credential dialog keeps only its edit actions", () => {
   render(
     <ServiceSetupModal
       state={{ provider: "deepgram", status: "idle" }}
@@ -15,20 +12,16 @@ test("keeps removal with the other credential actions without submitting the for
       scope={{ kind: "platform" }}
       onClose={vi.fn()}
       onSelect={vi.fn()}
-      onSubmit={submit}
+      onSubmit={vi.fn()}
       onTest={vi.fn(async () => ({ status: "valid" as const }))}
-      onRemove={remove}
     />,
   );
 
-  const actions = within(screen.getByRole("group", { name: "Service actions" }));
-  for (const name of ["Remove service", "Cancel", "Test credentials", "Save"]) {
+  const actions = within(screen.getByRole("group", { name: "Credential actions" }));
+  for (const name of ["Cancel", "Test credentials", "Save"]) {
     expect(actions.getByRole("button", { name })).toBeVisible();
   }
-
-  fireEvent.click(actions.getByRole("button", { name: "Remove service" }));
-  expect(remove).toHaveBeenCalledWith("deepgram");
-  expect(submit).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();
 });
 
 test.each([

@@ -14,6 +14,7 @@ import {
 import {
   installedSetupProviders,
   voiceSetupReady,
+  type SetupProviderId,
   type SetupServiceScope,
 } from "./admin/setupCatalog";
 import {
@@ -55,8 +56,10 @@ export function ScopedServicesApp({
   const [modal, setModal] = useState<Modal | null>(null);
   const [retry, setRetry] = useState(0);
   const [notice, setNotice] = useState("");
+  const [removingProvider, setRemovingProvider] = useState<SetupProviderId | null>(null);
   const saving = useRef<AbortController | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
+  const main = useRef<HTMLElement | null>(null);
   const tenantKey = scope.kind === "tenant" ? scope.tenantKey : null;
   const prefix =
     tenantKey === null
@@ -98,6 +101,7 @@ export function ScopedServicesApp({
   }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry]);
 
   function open(next: Modal) {
+    if (saving.current) return;
     trigger.current = document.activeElement as HTMLElement;
     setModal(next);
     setNotice("");
@@ -166,7 +170,7 @@ export function ScopedServicesApp({
     }
   }
 
-  async function removeCredential() {
+  async function usePlatformService() {
     if (!modal?.provider || saving.current || !directory) return;
     const name = modal.bindingName ?? modal.provider;
     const selected = directory.bindings.find(
@@ -182,16 +186,37 @@ export function ScopedServicesApp({
     );
   }
 
+  async function removeCardCredentials(provider: SetupProviderId) {
+    if (modal || saving.current || !directory) return;
+    const selected = directory.bindings.find(
+      (binding) => binding.provider === provider && binding.name === provider,
+    );
+    if (!selected?.credentialId || (tenantKey && selected.source !== "tenant"))
+      return;
+    setNotice("");
+    await mutate(
+      `${prefix}/credentials/${encodeURIComponent(selected.credentialId)}`,
+      "DELETE",
+      undefined,
+      "removal",
+      provider,
+    );
+  }
+
   async function mutate(
     url: string,
     method: string,
     body: object | undefined,
     operation: "credentials" | "removal",
+    cardProvider?: SetupProviderId,
   ) {
-    if (!modal || saving.current) return;
+    if ((!modal && !cardProvider) || saving.current) return;
+    const activeModal = modal;
     const controller = new AbortController();
     saving.current = controller;
-    setModal({ ...modal, status: "submitting", operation, message: undefined });
+    if (cardProvider) setRemovingProvider(cardProvider);
+    else if (activeModal)
+      setModal({ ...activeModal, status: "submitting", operation, message: undefined });
     let stored = false;
     try {
       const response = await fetchImpl(url, {
@@ -215,7 +240,7 @@ export function ScopedServicesApp({
           operation === "removal"
             ? response.status === 409
               ? "This credential is used by a telephony service. Remove that service before removing its credentials."
-              : "Service could not be removed. Check the connection and try again."
+              : "Credentials could not be removed. Check the connection and try again."
             : response.status === 409
               ? "This binding already exists. Close this form and reload to edit it."
               : response.status === 422
@@ -234,32 +259,35 @@ export function ScopedServicesApp({
       const next = parseBindingDirectory(await reloaded.json(), scope);
       if (controller.signal.aborted) return;
       setDirectory(next);
-      setModal(null);
+      if (activeModal) setModal(null);
       setNotice(
-        operation === "removal" ? "Service removed." : "Service saved.",
+        operation === "removal" ? "Credentials removed." : "Service saved.",
       );
-      requestAnimationFrame(() => trigger.current?.focus());
+      requestAnimationFrame(() =>
+        cardProvider ? main.current?.focus() : trigger.current?.focus(),
+      );
     } catch (error) {
       if (controller.signal.aborted) return;
       if (stored) {
-        setModal(null);
+        if (activeModal) setModal(null);
         setPhase("unavailable");
         setNotice(
           operation === "removal"
-            ? "Service removed. Retry to load the current state."
+            ? "Credentials removed. Retry to load the current state."
             : "Service saved. Retry to load its current state.",
         );
-      } else
-        setModal({
-          ...modal,
-          status: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Credentials could not be saved. Try again.",
-        });
+      } else {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Credentials could not be saved. Try again.";
+        if (cardProvider) setNotice(message);
+        else if (activeModal)
+          setModal({ ...activeModal, status: "error", message });
+      }
     } finally {
       if (saving.current === controller) saving.current = null;
+      if (cardProvider && !controller.signal.aborted) setRemovingProvider(null);
     }
   }
 
@@ -318,7 +346,9 @@ export function ScopedServicesApp({
       }
     >
       <main
+        ref={main}
         className="tenant-setup"
+        tabIndex={-1}
         inert={modal !== null ? true : undefined}
         aria-hidden={modal !== null ? true : undefined}
         aria-busy={phase === "loading"}
@@ -336,6 +366,8 @@ export function ScopedServicesApp({
             )}
             unavailable={phase === "unavailable"}
             onRetry={() => setRetry((value) => value + 1)}
+            removingProvider={removingProvider}
+            onRemoveCredentials={removeCardCredentials}
             onConnect={(provider, group) =>
               open({ provider, group, status: "idle" })
             }
@@ -460,8 +492,7 @@ export function ScopedServicesApp({
                 }
               : undefined
           }
-          onUsePlatform={tenantKey ? removeCredential : undefined}
-          onRemove={removeCredential}
+          onUsePlatform={tenantKey ? usePlatformService : undefined}
         />
       ) : null}
     </AdminShell>

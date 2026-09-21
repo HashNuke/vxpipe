@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./App";
@@ -224,7 +225,11 @@ test("platform services test and save separately, then edit the exact persisted 
   expect(
     screen.queryByRole("button", { name: /Disable/ }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Remove service" }));
+  expect(screen.queryByRole("button", { name: "Remove credentials" })).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  const card = screen.getByRole("article", { name: "Deepgram" });
+  fireEvent.click(within(card).getByRole("button", { name: "More actions for Deepgram" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
   await waitFor(() =>
     expect(
       screen.queryByRole("button", { name: "Manage Deepgram" }),
@@ -234,6 +239,29 @@ test("platform services test and save separately, then edit the exact persisted 
     "/admin/api/platform/credentials/deepgram-id",
     expect.objectContaining({ method: "DELETE" }),
   );
+});
+
+test("failed card removal keeps the credentials visible and reports the error", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) =>
+    options?.method === "DELETE"
+      ? response({ error: { code: "in_use" } }, 409)
+      : response({
+          tenant: null,
+          bindings: [binding("deepgram")],
+          provider_capabilities: providerCapabilities,
+        }),
+  );
+
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  const card = await screen.findByRole("article", { name: "Deepgram" });
+  fireEvent.click(within(card).getByRole("button", { name: "More actions for Deepgram" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
+
+  expect(
+    await screen.findByText(/credential is used by a telephony service/),
+  ).toHaveAttribute("role", "status");
+  expect(screen.getByRole("article", { name: "Deepgram" })).toBeVisible();
 });
 
 test("keeps Save usable when a platform credential cannot be tested", async () => {

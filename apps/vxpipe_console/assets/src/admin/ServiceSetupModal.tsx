@@ -43,7 +43,6 @@ export function ServiceSetupModal({
   platformConnections = [],
   onOverride,
   onUsePlatform,
-  onRemove,
   onManagePlatform,
   telephonySetup = true,
   bindingName,
@@ -64,7 +63,6 @@ export function ServiceSetupModal({
   platformConnections?: SetupConnection[];
   onOverride?: () => void;
   onUsePlatform?: (provider: SetupProviderId) => void;
-  onRemove?: (provider: SetupProviderId) => void;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const provider = state.provider
@@ -231,14 +229,6 @@ export function ServiceSetupModal({
                   state.operation === "removal" ? "Updating…" : "Saving…"
                 }
                 beforeActions={webhook}
-                onRemove={
-                  connected &&
-                  !state.overriding &&
-                  onRemove &&
-                  !(scope.kind === "tenant" && hasPlatform && onUsePlatform)
-                    ? () => onRemove(provider.id)
-                    : undefined
-                }
               />
             )}
             {!inherited &&

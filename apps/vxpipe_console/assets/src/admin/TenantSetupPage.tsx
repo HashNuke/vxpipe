@@ -16,6 +16,8 @@ export function TenantSetupPage({
   tenant,
   connections,
   onConnect,
+  onRemoveCredentials,
+  removingProvider = null,
   onBrowse,
   providers = setupProviders,
   onApiKeys,
@@ -28,6 +30,8 @@ export function TenantSetupPage({
   tenant: SetupTenant;
   connections: SetupConnection[];
   onConnect: (provider: SetupProviderId, group: SetupServiceGroup) => void;
+  onRemoveCredentials?: (provider: SetupProviderId) => void;
+  removingProvider?: SetupProviderId | null;
   onBrowse: (group: "ai" | "telephony") => void;
   providers?: SetupProvider[];
   onApiKeys?: () => void;
@@ -64,19 +68,31 @@ export function TenantSetupPage({
       Connect a service
     </Button>
   );
-  const card = (provider: SetupProvider, group: SetupServiceGroup) => (
-    <SetupServiceCard
-      key={provider.id}
-      provider={provider}
-      connection={connections.find((item) => item.provider === provider.id)}
-      platform={platform}
-      overridesPlatform={
-        !platform &&
-        platformConnections.some((item) => item.provider === provider.id)
-      }
-      onSelect={() => onConnect(provider.id, group)}
-    />
-  );
+  const card = (provider: SetupProvider, group: SetupServiceGroup) => {
+    const connection = connections.find((item) => item.provider === provider.id);
+    const overridesPlatform =
+      !platform && platformConnections.some((item) => item.provider === provider.id);
+
+    return (
+      <SetupServiceCard
+        key={provider.id}
+        provider={provider}
+        connection={connection}
+        platform={platform}
+        overridesPlatform={overridesPlatform}
+        busy={removingProvider !== null}
+        removing={removingProvider === provider.id}
+        onSelect={() => onConnect(provider.id, group)}
+        onRemoveCredentials={
+          onRemoveCredentials &&
+          (platform || connection?.source !== "platform") &&
+          !overridesPlatform
+            ? () => onRemoveCredentials(provider.id)
+            : undefined
+        }
+      />
+    );
+  };
   if (unavailable)
     return (
       <div className="setup-unavailable" role="alert">

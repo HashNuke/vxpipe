@@ -492,6 +492,10 @@ export function OnboardingStory({
             onConnect={(provider, group) =>
               setModal({ provider, group, status: "idle" })
             }
+            onRemoveCredentials={(provider) => {
+              const update = platformPage ? setPlatformConnections : setConnections;
+              update((current) => current.filter((item) => item.provider !== provider));
+            }}
             onRetry={() => setUnavailable(false)}
             onApiKeys={() => navigatePage("keys")}
             tenant={tenant}
@@ -580,15 +584,6 @@ export function OnboardingStory({
           }
           onUsePlatform={(provider) => {
             setConnections((current) =>
-              current.filter((item) => item.provider !== provider),
-            );
-            setModal(null);
-          }}
-          onRemove={(provider) => {
-            const update = platformPage
-              ? setPlatformConnections
-              : setConnections;
-            update((current) =>
               current.filter((item) => item.provider !== provider),
             );
             setModal(null);

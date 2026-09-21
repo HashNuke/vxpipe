@@ -396,6 +396,7 @@ test("the AI service picker clears drafts and keeps the add card after connected
   expect(serviceButtons("AI providers")).toEqual([
     "Connect a service",
     "Manage Rime",
+    "More actions for Rime",
     "Connect a service",
   ]);
   expect(serviceButtons("Telephony")).toEqual([
@@ -435,6 +436,7 @@ test("telephony remains optional and does not complete voice readiness", () => {
   expect(serviceButtons("Telephony")).toEqual([
     "Connect a service",
     "Manage Telnyx",
+    "More actions for Telnyx",
     "Connect a service",
   ]);
   expect(serviceButtons("AI providers")).toEqual([
@@ -449,8 +451,11 @@ test("the add card stays last with multiple connected AI providers", () => {
   expect(serviceButtons("AI providers")).toEqual([
     "Connect a service",
     "Manage Deepgram",
+    "More actions for Deepgram",
     "Manage Rime",
+    "More actions for Rime",
     "Manage Google AI Studio",
+    "More actions for Google AI Studio",
     "Connect a service",
   ]);
   expect(serviceButtons("Telephony")).toEqual([
@@ -469,6 +474,21 @@ test("connected cards separate connection status from the Manage action", () => 
     within(card).getByRole("button", { name: "Manage Deepgram" }),
   );
   expect(screen.getByRole("dialog", { name: "Manage Deepgram" })).toBeVisible();
+});
+
+test("the service card groups Edit and the credential-removal menu", () => {
+  render(<OnboardingStory scenario="multiple-providers" theme="dark" />);
+  const card = screen.getByRole("article", { name: "Deepgram" });
+  const actions = within(card).getByRole("group", { name: "Deepgram actions" });
+
+  expect(within(actions).getByRole("button", { name: "Manage Deepgram" })).toBeVisible();
+  fireEvent.click(
+    within(actions).getByRole("button", { name: "More actions for Deepgram" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
+
+  expect(screen.queryByRole("article", { name: "Deepgram" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("dialog", { name: "Manage Deepgram" })).not.toBeInTheDocument();
 });
 
 test.each([["google", "Google AI Studio"]])(
