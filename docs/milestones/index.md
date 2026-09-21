@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 33 milestone specifications: 24 complete and 9 incomplete. Milestone 17, Telnyx calls and
+Status: 34 milestone specifications: 24 complete and 10 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -158,8 +158,9 @@ progress without claiming the entire milestone is complete.
 29. [ ] [Getting Started and example calls](getting-started-and-example-calls.md) — With explicit demo opt-in, keep setup tracking and individually ready sample links at `/`, launching the same debug console; production behavior is the default. The tenant services-to-recipes Storybook prototype is available; revised production integration remains pending.
 30. [x] [Simpler speech integrations](simpler-speech-integrations.md) — All nine checkpoints are accepted: Morse and Deepgram use scoped semantic STT/TTS sessions, obsolete public transports/globals are removed, and final configuration, all-consumer, rendered, hosted-when-available and bounded load acceptance pass their gates.
 31. [x] [Provider integration packages](provider-integration-packages.md) — Declare provider capabilities once and group Deepgram, Telnyx and credential integrations under `Vxpipe.Providers.*` without changing their runtime ownership.
-32. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-33. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+32. [ ] [Rime and Google speech providers](rime-and-google-speech-providers.md) — Add complete Rime TTS and Google TTS/STT call integrations through scoped semantic sessions, proving each capability before advertising it.
+33. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+34. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
