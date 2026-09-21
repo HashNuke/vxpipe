@@ -631,13 +631,18 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp configure_provider(provider, options, :speech_to_text) do
-    if provider == Vxpipe.Providers.Deepgram.STTSession do
-      Vxpipe.Providers.Deepgram.Flux.new(options)
-    else
-      case provider.configure(options) do
-        {:ok, _descriptor} -> {:ok, options}
-        {:error, _reason} = error -> error
-      end
+    case provider do
+      Vxpipe.Providers.Deepgram.STTSession ->
+        Vxpipe.Providers.Deepgram.Flux.new(options)
+
+      Vxpipe.Providers.Google.STTSession ->
+        Vxpipe.Providers.Google.STT.new(options)
+
+      _other ->
+        case provider.configure(options) do
+          {:ok, _descriptor} -> {:ok, options}
+          {:error, _reason} = error -> error
+        end
     end
   end
 
@@ -650,6 +655,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp configure_provider(Vxpipe.Providers.Rime.TTSSession, options, :text_to_speech),
     do: Vxpipe.Providers.Rime.TTS.new(options)
+
+  defp configure_provider(Vxpipe.Providers.Google.TTSSession, options, :text_to_speech),
+    do: Vxpipe.Providers.Google.TTS.new(options)
 
   defp configure_provider(provider, options, :text_to_speech) do
     case provider.configure(options) do

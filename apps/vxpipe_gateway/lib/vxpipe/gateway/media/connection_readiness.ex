@@ -215,8 +215,10 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
          do: Ingress.prepare_track(binding.attachment.media_ingress, track)
   end
 
-  defp speech_track(%{transport: Vxpipe.Gateway.Telephony.MediaSession}, track),
-    do: {:ok, Vxpipe.Gateway.Telephony.IncomingAudio.speech_track(track)}
+  defp speech_track(%{transport: Vxpipe.Gateway.Telephony.MediaSession} = binding, track) do
+    with {:ok, target} <- Ingress.media_format(binding.attachment.media_ingress),
+         do: Vxpipe.Gateway.Telephony.IncomingAudio.speech_track(track, target)
+  end
 
   defp speech_track(%{transport: Vxpipe.Gateway.WebRTC.Connection, instance: connection}, track),
     do: Vxpipe.Gateway.WebRTC.Connection.speech_track(connection, track)

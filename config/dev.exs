@@ -52,6 +52,15 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
           maximum_consecutive_overflows: 5
         ]
       ],
+      Vxpipe.Providers.Google.STTSession => [
+        enabled: true,
+        media_ingress: [
+          maximum_frames: 50,
+          maximum_bytes: 262_144,
+          maximum_age_ms: 2_000,
+          maximum_consecutive_overflows: 5
+        ]
+      ],
       Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
         enabled: true,
         media_ingress: [
@@ -70,6 +79,10 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
         maximum_requests: 4
       ],
       Vxpipe.Providers.Rime.TTSSession => [
+        enabled: true,
+        maximum_requests: 4
+      ],
+      Vxpipe.Providers.Google.TTSSession => [
         enabled: true,
         maximum_requests: 4
       ],

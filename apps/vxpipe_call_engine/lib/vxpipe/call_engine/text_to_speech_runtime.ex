@@ -4,6 +4,8 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.Providers.Deepgram.TTSSession, as: FluxSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
+  alias Vxpipe.Providers.Google.TTS, as: GoogleTTS
+  alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
 
   @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}
   @enforce_keys [
@@ -63,6 +65,24 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
       with {:ok, descriptor} <- TTSSession.configure(public) do
         {:ok, {TTSSession, public},
          [config: config, wire_module: wire_module, wire_options: wire_options], descriptor}
+      end
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  def provider({GoogleTTSSession, %GoogleTTS{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         nil <- Keyword.get(settings, :wire_module),
+         nil <- Keyword.get(settings, :wire_options),
+         request_module when is_atom(request_module) <-
+           Keyword.get(settings, :request_module, Vxpipe.Providers.Google.TTSRequest) do
+      public = [model: config.model, voice: config.voice]
+
+      with {:ok, descriptor} <- GoogleTTSSession.configure(public) do
+        {:ok, {GoogleTTSSession, public}, [config: config, request_module: request_module],
+         descriptor}
       end
     else
       _invalid -> {:error, :invalid_configuration}

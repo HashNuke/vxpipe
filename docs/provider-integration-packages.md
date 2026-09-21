@@ -70,7 +70,7 @@ shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtim
 | Provider | Credential schema | Credential test | STT | TTS | Telephony |
 | --- | --- | --- | --- | --- | --- |
 | Deepgram | yes | yes | yes | yes | no |
-| Google AI Studio | yes | yes | no | no | no |
+| Google AI Studio | yes | yes | yes | yes | no |
 | Telnyx | yes | yes | no | no | yes |
 | Rime | yes | yes | no | yes | no |
 | Twilio | yes | yes | no | no | yes |
@@ -87,12 +87,13 @@ The accepted concrete names are:
 Vxpipe.Providers.Deepgram.STTSocket
 Vxpipe.Providers.Deepgram.TTSSocket
 Vxpipe.Providers.Rime.TTSSocket
+Vxpipe.Providers.Google.STTSocket
 Vxpipe.Providers.Telnyx.TelephonyMediaSocket
 Vxpipe.Providers.Twilio.TelephonyMediaSocket
 ```
 
-Rime TTS was added after the original package migration; its implementation and acceptance are
-tracked in [Rime and Google speech providers](milestones/rime-and-google-speech-providers.md).
+Rime TTS and Google speech were added after the original package migration; their implementation
+and acceptance are tracked in [Rime and Google speech providers](milestones/rime-and-google-speech-providers.md).
 The socket names describe provider wire implementations. Public speech consumers continue to use
 semantic STT/TTS sessions, and telephony consumers continue to use the provider-neutral telephony
 contracts. Generic room, turn, policy, permission, readiness, media and persistence modules remain

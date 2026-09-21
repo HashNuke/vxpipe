@@ -19,6 +19,8 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
     :keepalive_interval,
     :awaiting,
     :pending_message,
+    :connect_options,
+    :transport_options,
     pending_frames: []
   ]
 
@@ -33,7 +35,44 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   def init({options, callback, callback_state}) do
     transport_options = Keyword.fetch!(options, :transport_options)
 
-    case SocketConnection.open(Keyword.fetch!(options, :connection), transport_options) do
+    if Keyword.get(options, :connect_mode) == :deferred do
+      {:ok,
+       %__MODULE__{
+         callback: callback,
+         callback_state: callback_state,
+         connect_options: Keyword.fetch!(options, :connection),
+         transport_options: transport_options
+       }, {:continue, :connect}}
+    else
+      connect(Keyword.fetch!(options, :connection), transport_options, callback, callback_state)
+    end
+  end
+
+  @impl true
+  def handle_continue(:connect, state) do
+    case SocketConnection.open(state.connect_options, state.transport_options) do
+      {:ok, connection, frames} ->
+        schedule_keepalive(Map.get(state.callback_state, :keepalive_interval))
+        send(state.callback_state.owner, {:vxpipe_socket_connected, self()})
+
+        {:noreply,
+         %{
+           state
+           | connection: connection,
+             connect_options: nil,
+             transport_options: nil,
+             keepalive_interval: Map.get(state.callback_state, :keepalive_interval)
+         }, {:continue, {:frames, frames}}}
+
+      {:error, _reason} ->
+        {:stop, :normal, disconnect(state)}
+    end
+  end
+
+  def handle_continue({:frames, frames}, state), do: handle_frames(frames, state)
+
+  defp connect(connection_options, transport_options, callback, callback_state) do
+    case SocketConnection.open(connection_options, transport_options) do
       {:ok, connection, frames} ->
         keepalive_interval = Map.get(callback_state, :keepalive_interval)
         schedule_keepalive(keepalive_interval)
@@ -55,9 +94,12 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   @impl true
-  def handle_continue({:frames, frames}, state), do: handle_frames(frames, state)
+  def handle_call({:send, _frame}, _from, %{connection: nil} = state),
+    do: {:reply, {:error, :not_ready}, state}
 
-  @impl true
+  def handle_call({:close, _payload}, _from, %{connection: nil} = state),
+    do: {:stop, :normal, :ok, state}
+
   def handle_call({:send, frame}, _from, state) do
     case SocketConnection.send_frame(state.connection, frame) do
       {:ok, connection} -> {:reply, :ok, %{state | connection: connection}}
@@ -108,6 +150,8 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
     end
   end
 
+  def handle_info(_message, %{connection: nil} = state), do: {:noreply, state}
+
   def handle_info(message, %{awaiting: awaiting} = state) when awaiting != nil do
     # Mint uses active-once delivery. Leave the one pending socket message unconsumed
     # until output is acknowledged; do not re-arm a growing provider audio queue.
@@ -135,6 +179,7 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   @impl true
+  def terminate(_reason, %{connection: nil}), do: :ok
   def terminate(_reason, state), do: SocketConnection.close(state.connection)
 
   defp handle_frames([], %{pending_message: nil} = state), do: {:noreply, state}

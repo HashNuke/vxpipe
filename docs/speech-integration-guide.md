@@ -216,10 +216,10 @@ end
 ```
 
 This small example performs no blocking I/O. A request-based integration should start its HTTP or
-SDK work beneath `SessionTree.commands/1`, cap a whole response before adapting it, and terminate
-the exact worker on cancellation. The tested
+SDK work beneath `SessionTree.commands/1`, bound each response frame and total response, and
+terminate the exact worker on cancellation. The tested
 [`SpeechRequestTTSProfile`](../apps/vxpipe_call_engine/test/support/speech_request_tts_profile.ex)
-shows streamed responses, bounded whole-response adaptation, context-tagged cancellation, stale
+shows streamed responses, bounded response adaptation, context-tagged cancellation, stale
 completion suppression, and multiple synthesis batches. Its worker never has more than one
 uncredited chunk. A batch `done` notification is adapter evidence; only the final engine request
 boundary becomes `:completed`.

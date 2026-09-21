@@ -477,15 +477,15 @@ test("the service card groups Edit and the credential-removal menu", () => {
 });
 
 test.each([["google", "Google AI Studio"]])(
-  "%s shows only its implemented language capability",
+  "%s shows all installed speech and language capabilities",
   (provider, name) => {
     vi.useFakeTimers();
     render(<OnboardingStory scenario="choose-services" theme="dark" />);
     selectService(provider);
     const dialog = screen.getByRole("dialog", { name: `Connect ${name}` });
     expect(within(dialog).getByText("LLM")).toBeVisible();
-    expect(within(dialog).queryByText("Speech-to-text")).not.toBeInTheDocument();
-    expect(within(dialog).queryByText("Text-to-speech")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Speech-to-text")).toBeVisible();
+    expect(within(dialog).getByText("Text-to-speech")).toBeVisible();
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "storybook-example-key" },
     });
@@ -493,9 +493,9 @@ test.each([["google", "Google AI Studio"]])(
     act(() => vi.advanceTimersByTime(1000));
     const card = screen.getByRole("article", { name });
     expect(within(card).getByText("LLM")).toBeVisible();
-    expect(within(card).queryByText("Speech-to-text")).not.toBeInTheDocument();
-    expect(within(card).queryByText("Text-to-speech")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(within(card).getByText("Speech-to-text")).toBeVisible();
+    expect(within(card).getByText("Text-to-speech")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   },
 );
 

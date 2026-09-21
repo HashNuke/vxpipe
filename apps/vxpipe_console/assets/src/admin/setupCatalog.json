@@ -25,12 +25,14 @@
     {
       "id": "google",
       "name": "Google AI Studio",
-      "description": "Connect Gemini language models.",
-      "capabilities": ["llm"],
+      "description": "Connect Gemini language, transcription, and speech synthesis.",
+      "capabilities": ["stt", "llm", "tts"],
       "defaultModels": {
-        "llm": "gemini-2.5-flash"
+        "stt": "gemini-3.5-transcribe-live",
+        "llm": "gemini-2.5-flash",
+        "tts": "gemini-3.1-flash-tts-preview"
       },
-      "sampleCapabilities": ["llm"]
+      "sampleCapabilities": ["stt", "llm", "tts"]
     },
     {
       "id": "zenmux",

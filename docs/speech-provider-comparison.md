@@ -25,6 +25,7 @@ and [provider authoring guide](speech-integration-guide.md).
 | ElevenLabs realtime STT | Base64 audio messages; replaceable partials and committed segments. | Manual or VAD-driven commits; a commit finalizes a segment. | Needs explicit endpointing provenance; do not equate every commit with a conversational turn. |
 | Gemini dedicated TTS | Text request; audio response, with streaming supported by documented newer TTS models. | Request-local completion; no persistent speech connection is necessary. | Semantic TTS through a bounded request worker. |
 | Gemini audio understanding | Audio file/inline audio plus a prompt; generated text including transcription. | Request completion, not a live speaker-turn event. | Batch/utterance transcription; unsuitable as a drop-in continuous STT provider. |
+| Gemini dedicated Live transcription | Realtime PCM input to a transcription-specific model. | Separate activity start/end and final input transcription; sessions have a lifetime limit. | Semantic STT with turn correlation and scoped socket renewal. |
 | Gemini Live | Bidirectional audio/model session with optional input/output transcription. | Server activity detection, interruption and model-turn lifecycle. | Separate realtime agent/session design; it also owns conversation/model behavior. |
 
 The rows are synthesized from the evidence below. “Fit” is an architectural inference, not
@@ -116,8 +117,8 @@ the engine must not infer either merely from an arbitrary committed segment.
 The [dedicated TTS guide](https://ai.google.dev/gemini-api/docs/speech-generation) explicitly
 distinguishes exact-text speech generation from Live conversation. It documents request-based
 single/multiple-speaker generation and streaming audio via the Interactions API for TTS
-models starting with version 3.1; its examples use 24 kHz 16-bit mono PCM. A future adapter
-must pin a supported API/model combination. Whole-response and streamed models have different
+models starting with version 3.1; its examples use 24 kHz 16-bit mono PCM. The implemented
+adapter pins a supported API/model combination. Whole-response and streamed models have different
 buffering/first-audio implications, but neither needs a fake connected/speech-started event.
 The reviewed page does not establish a speech-specific server cancellation guarantee; local
 request abortion and output suppression must not be reported as proof billing stopped.
@@ -130,9 +131,16 @@ request does not establish a live turn boundary.
 The [Live capability guide](https://ai.google.dev/gemini-api/docs/live-api/capabilities)
 documents input/output transcription alongside model audio, activity detection, server
 interruption and client playback clearing. Live uses little-endian PCM, with 24 kHz output
-and sample-rate-described input. Adapting that whole session as independent STT plus TTS would
-obscure its model/context/tool ownership. Keep Live as a separate future realtime-agent
-decision; this milestone does not replace Vxpipe's model loop.
+and sample-rate-described input. Adapting that general model session as independent STT plus TTS
+would obscure its model/context/tool ownership. Keep general Live as a separate future
+realtime-agent decision; this milestone does not replace Vxpipe's model loop.
+
+The later [dedicated Live transcription guide](https://ai.google.dev/gemini-api/docs/live-api/live-transcribe)
+documents a transcription-specific model that emits `voiceActivity` and input transcription
+without owning Vxpipe's agent response. Local probes verified two starts and two final turns on
+one session. The [Google speech integration](google-speech-integration.md) records the separate
+STT decision, lifetime limit and implementation evidence. This newer capability changes the
+earlier comparison's STT conclusion without making prompted audio understanding a live STT API.
 
 ## Abstractions supported by the comparison
 

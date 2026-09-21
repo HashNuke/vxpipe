@@ -7,9 +7,11 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
 
   def call_spec(options \\ []) do
     input =
-      if Keyword.get(options, :speech_to_text, false),
-        do: %{speech_to_text: speech("flux-general-en", "opus")},
-        else: %{}
+      case Keyword.get(options, :speech_to_text, false) do
+        false -> %{}
+        true -> %{speech_to_text: speech("flux-general-en", "opus")}
+        selection when is_map(selection) -> %{speech_to_text: selection}
+      end
 
     model = %{model_inference: %{provider: "fixture", model: "test:turns"}}
 

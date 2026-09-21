@@ -180,7 +180,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
                Vxpipe.Gateway.TestRoomAudioEngine,
                attachment,
                context.ingress,
-               audio_frame(context, 2)
+               audio_frame(context, 2),
+               nil
              )
 
     refute_receive {:prepared_pipeline_started, _, _}

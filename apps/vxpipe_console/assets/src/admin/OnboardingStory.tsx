@@ -269,7 +269,7 @@ export function OnboardingStory({
     ].includes(scenario)
       ? [
           connection("deepgram"),
-          connection("google"),
+          ...(scenario === "tenant-override-error" ? [] : [connection("google")]),
           { ...connection("telnyx"), telephonyPublicKeyConfigured: true },
         ]
       : [],

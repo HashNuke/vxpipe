@@ -24,6 +24,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
   }
 
   alias Vxpipe.CallEngine.TestAudioOutputSink
+  alias Vxpipe.CallEngine.TestGoogleSTTTransport
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
 
@@ -195,11 +196,71 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     refute_receive {:vxpipe_event, %AgentTurnInterrupted{}}
   end
 
-  defp create_attached_room(sink) do
+  test "Google live activity interrupts playout and its final transcript completes the same turn" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    {room, participant, _attachment} = create_attached_room(sink, :google)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+    assert_receive {:test_google_stt_started, stt_transport, _connection}
+
+    first = text_command(room, participant, "google-barge", "give me a long answer")
+    assert :ok = TestTransferConnection.send_text(first)
+    assert_receive {:vxpipe_event, %TextOutput{correlation_id: "google-barge"}}
+    assert_receive {:test_tts_control, ^tts_transport, _speak}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_google_barge"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, _frame}
+    assert :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: "google-barge"}}
+
+    TestGoogleSTTTransport.deliver(stt_transport, ~s({"voiceActivity":{"type":"ACTIVITY_START"}}))
+    assert_receive {:test_audio_output_interrupt, ^sink, "google-barge", _played_ms}
+    assert_receive {:vxpipe_event, %AgentTurnInterrupted{correlation_id: "google-barge"}}
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnStarted{modality: :audio, correlation_id: turn}}
+
+    TestGoogleSTTTransport.deliver(
+      stt_transport,
+      ~s({"serverContent":{"interimInputTranscription":{"text":"hello"}}})
+    )
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTranscription{correlation_id: ^turn, final: false, text: "hello"}}
+
+    TestGoogleSTTTransport.deliver(stt_transport, ~s({"voiceActivity":{"type":"ACTIVITY_END"}}))
+
+    TestGoogleSTTTransport.deliver(
+      stt_transport,
+      ~s({"serverContent":{"inputTranscription":{"text":"hello there"}}})
+    )
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTranscription{
+                      correlation_id: ^turn,
+                      final: true,
+                      text: "hello there"
+                    }}
+
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{correlation_id: ^turn}}
+  end
+
+  defp create_attached_room(sink, stt_provider \\ :deepgram) do
     room_id = unique_id("room")
 
+    stt =
+      case stt_provider do
+        :deepgram -> true
+        :google -> %{provider: "google", model: "gemini-3.5-transcribe-live"}
+      end
+
     {_plan, room, participant} =
-      TestTurnCall.start(room_id, speech_to_text: true, text_to_speech: true)
+      TestTurnCall.start(room_id, speech_to_text: stt, text_to_speech: true)
 
     assert {:ok, attach} =
              AttachConnection.new(
@@ -212,7 +273,14 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, attachment} = TestTransferConnection.attach(attach, sink)
+    connection_options =
+      if stt_provider == :google,
+        do: [
+          input_track: %{track_id: "embedded", codec: :linear16, sample_rate: 16_000, channels: 1}
+        ],
+        else: []
+
+    assert {:ok, attachment} = TestTransferConnection.attach(attach, sink, connection_options)
     TestCallStartup.await_ready(room_id)
     {room, participant, attachment}
   end
@@ -242,6 +310,17 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
         Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
+          wire_options: [observer: observer, ready_on_start: true],
+          media_ingress: [
+            maximum_frames: 50,
+            maximum_bytes: 262_144,
+            maximum_age_ms: 2_000,
+            maximum_consecutive_overflows: 5
+          ]
+        ],
+        Vxpipe.Providers.Google.STTSession => [
+          enabled: true,
+          wire_module: TestGoogleSTTTransport,
           wire_options: [observer: observer, ready_on_start: true],
           media_ingress: [
             maximum_frames: 50,

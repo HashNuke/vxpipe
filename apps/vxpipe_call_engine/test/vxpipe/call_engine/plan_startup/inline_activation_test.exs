@@ -5,6 +5,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   alias Vxpipe.Providers.Deepgram.TTSSession, as: TTSFluxSession
   alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTSSession
+  alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
+  alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -94,6 +96,78 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert config.api_key == "synthetic-rime-private-marker"
     refute inspect(startup) =~ "synthetic-rime-private-marker"
     assert_received {:tenant_credential_resolved, "tenant-inline", "rime", "default"}
+  end
+
+  test "Google TTS activation uses the selected voice and keeps its credential private" do
+    plan =
+      plan(%{
+        provider: "google",
+        model: "gemini-3.1-flash-tts-preview",
+        options: %{voice: "Kore"}
+      })
+
+    options = options()
+    tts = Keyword.fetch!(options, :text_to_speech)
+    providers = Keyword.fetch!(tts, :providers)
+
+    tts =
+      Keyword.put(
+        tts,
+        :providers,
+        Map.put(providers, GoogleTTSSession, enabled: true, maximum_requests: 4)
+      )
+
+    assert {:ok, startup} = PlanStartup.new(plan, Keyword.put(options, :text_to_speech, tts))
+    assert {GoogleTTSSession, public} = startup.text_to_speech.provider
+    assert public[:voice] == "Kore"
+    assert public[:model] == "gemini-3.1-flash-tts-preview"
+
+    assert [config: config, request_module: Vxpipe.Providers.Google.TTSRequest] =
+             startup.text_to_speech.provider_private
+
+    assert config.api_key == "google-tenant-private-marker"
+    refute inspect(startup) =~ "google-tenant-private-marker"
+    assert_received {:tenant_credential_resolved, "tenant-inline", "google", "default"}
+  end
+
+  test "Google live STT activation selects 16 kHz PCM and a private credential" do
+    plan =
+      plan(
+        %{provider: "deepgram", model: "flux", options: %{voice: "haley"}},
+        %{provider: "google", model: "gemini-3.5-transcribe-live"}
+      )
+
+    options = options()
+    stt = Keyword.fetch!(options, :speech_to_text)
+    providers = Keyword.fetch!(stt, :providers)
+
+    stt =
+      Keyword.put(
+        stt,
+        :providers,
+        Map.put(providers, GoogleSTTSession,
+          enabled: true,
+          media_ingress: [
+            maximum_frames: 50,
+            maximum_bytes: 262_144,
+            maximum_age_ms: 2_000,
+            maximum_consecutive_overflows: 5
+          ]
+        )
+      )
+
+    assert {:ok, startup} = PlanStartup.new(plan, Keyword.put(options, :speech_to_text, stt))
+    caller = plan.participants["caller"]
+    runtime = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+    assert {GoogleSTTSession, public} = runtime.provider
+    assert public[:encoding] == :linear16
+    assert public[:sample_rate] == 16_000
+
+    assert [config: config, wire_module: Vxpipe.Providers.Google.STTSocket, wire_options: []] =
+             runtime.provider_private
+
+    assert config.api_key == "google-tenant-private-marker"
+    refute inspect(startup) =~ "google-tenant-private-marker"
   end
 
   test "ambient private settings cannot rescue an absent tenant source" do
@@ -326,6 +400,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
            provider: "deepgram",
            model: "flux",
            options: %{voice: "haley"}
+         },
+         stt_selection \\ %{
+           provider: "deepgram",
+           model: "flux-general-en",
+           options: %{encoding: "opus", sample_rate: 48_000}
          }
        ) do
     source = %{
@@ -335,11 +414,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
       wait_sounds: nil,
       defaults: %{
         capabilities: %{
-          speech_to_text: %{
-            provider: "deepgram",
-            model: "flux-general-en",
-            options: %{encoding: "opus", sample_rate: 48_000}
-          },
+          speech_to_text: stt_selection,
           model_inference: %{
             provider: "google",
             model: "gemini-2.5-flash",

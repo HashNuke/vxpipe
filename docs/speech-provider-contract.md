@@ -335,7 +335,7 @@ in the same cutover. Stored Call Specs keep their current schema.
 | Replace STT and TTS together | Rejected: makes attribution, privacy and output regressions hard to isolate. Cut over one direction after both built-in providers implement it. |
 | Introduce a speech umbrella package immediately | Deferred: current consumers and policy adapters are in Call Engine; package extraction is a separate dependency decision after the API is proven. |
 | Add the compared hosted providers to prove generality | Deferred: requires new auth/model/product support. Use request-style, context-cancellation, batch-completion and segmented-transcript test profiles as bounded structural counterexamples. |
-| Treat Gemini Live as standalone STT plus TTS | Rejected for this scope: Live also owns model generation, context and tools; it requires a separate realtime-agent boundary decision. Dedicated Gemini TTS remains a plausible request-based adapter. |
+| Treat general Gemini Live as standalone STT plus TTS | Rejected: it also owns model generation, context and tools. The later [Google speech integration](google-speech-integration.md) instead uses the dedicated TTS endpoint and transcription-specific Live model as separate capabilities. |
 | Add incremental text/manual STT finalization to the baseline | Deferred until there is an authorized consumer. Complete-text synthesis covers current callers; manual STT needs an explicit boundary owner, rather than treating any segment commit as a turn. |
 
 ## Verification and review

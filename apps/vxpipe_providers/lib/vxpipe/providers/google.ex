@@ -9,7 +9,9 @@ defmodule Vxpipe.Providers.Google do
   def capabilities do
     %{
       credential: Vxpipe.Providers.Google.Credential,
-      credential_validation: Vxpipe.Providers.Google.CredentialValidation
+      credential_validation: Vxpipe.Providers.Google.CredentialValidation,
+      stt: Vxpipe.Providers.Google.STTSession,
+      tts: Vxpipe.Providers.Google.TTSSession
     }
   end
 end

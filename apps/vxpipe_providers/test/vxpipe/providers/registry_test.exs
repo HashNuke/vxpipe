@@ -43,7 +43,10 @@ defmodule Vxpipe.Providers.RegistryTest do
     assert {:ok, Vxpipe.Providers.Google.CredentialValidation} =
              Registry.fetch_capability("google", :credential_validation)
 
-    assert {:error, :unsupported_provider_capability} =
+    assert {:ok, Vxpipe.Providers.Google.TTSSession} =
+             Registry.fetch_capability("google", :tts)
+
+    assert {:ok, Vxpipe.Providers.Google.STTSession} =
              Registry.fetch_capability("google", :stt)
 
     assert {:ok, Vxpipe.Providers.Rime} = Registry.fetch("rime")
@@ -107,7 +110,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "catalog contains explicit capability metadata" do
     assert Registry.catalog() == %{
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
-             "google" => [:credential, :credential_validation],
+             "google" => [:credential, :credential_validation, :stt, :tts],
              "rime" => [:credential, :credential_validation, :tts],
              "telnyx" => [:credential, :credential_validation, :telephony],
              "twilio" => [:credential, :credential_validation, :telephony],

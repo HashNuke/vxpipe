@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   alias Vxpipe.CallEngine.Command.ParticipantTransferControl
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Media.Ingress
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket}
   alias Vxpipe.Gateway.Telephony.MediaSession.Readiness
@@ -94,6 +95,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
              ),
            connection_id: Keyword.fetch!(options, :connection_id),
            private_media: nil,
+           speech_normalizer: nil,
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
            transfer_acceptance_ready?: false,
@@ -198,16 +200,25 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         _from,
         %{socket_owner: source, stream_id: stream_id} = state
       ) do
-    result =
-      state.engine
-      |> IncomingAudio.deliver(
-        state.attachment,
-        state.room_audio_ingress,
-        audio_frame(state.binding, event)
-      )
-      |> normalize_delivery()
+    frame = audio_frame(state.binding, event)
 
-    {:reply, result, state}
+    case normalizer(state, frame) do
+      {:ok, speech_normalizer, state} ->
+        result =
+          state.engine
+          |> IncomingAudio.deliver(
+            state.attachment,
+            state.room_audio_ingress,
+            frame,
+            speech_normalizer
+          )
+          |> normalize_delivery()
+
+        {:reply, result, state}
+
+      _failure ->
+        {:reply, {:error, :media_unavailable}, state}
+    end
   end
 
   def handle_call({:event, _source, _event}, _from, state) do
@@ -332,6 +343,25 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   defp normalize_delivery(:ok), do: :ok
   defp normalize_delivery(:drop), do: :ok
   defp normalize_delivery(:unavailable), do: {:error, :media_unavailable}
+
+  defp normalizer(%{attachment: %{media_ingress: nil}} = state, _frame),
+    do: {:ok, nil, %{state | speech_normalizer: nil}}
+
+  defp normalizer(
+         %{
+           attachment: %{media_ingress: ingress},
+           speech_normalizer: %{ingress: ingress, value: value}
+         } = state,
+         _frame
+       ),
+       do: {:ok, value, state}
+
+  defp normalizer(%{attachment: %{media_ingress: ingress}} = state, frame) do
+    with {:ok, target} <- Ingress.media_format(ingress),
+         {:ok, value} <- IncomingAudio.new_normalizer(frame, target) do
+      {:ok, value, %{state | speech_normalizer: %{ingress: ingress, value: value}}}
+    end
+  end
 
   defp transfer_control_command(state, attempt_id, action) do
     ParticipantTransferControl.new(

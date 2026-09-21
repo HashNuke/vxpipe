@@ -3,6 +3,10 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.Providers.Deepgram
+  alias Vxpipe.Providers.Google.TTS, as: GoogleTTS
+  alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
+  alias Vxpipe.Providers.Google.STT, as: GoogleSTT
+  alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
 
@@ -58,11 +62,17 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "deepgram"}),
     do: Registry.resolve_capability("deepgram", :stt)
 
+  def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "google"}),
+    do: Registry.resolve_capability("google", :stt)
+
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "deepgram"}),
     do: Registry.resolve_capability("deepgram", :tts)
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "rime"}),
     do: Registry.resolve_capability("rime", :tts)
+
+  def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "google"}),
+    do: Registry.resolve_capability("google", :tts)
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
@@ -92,13 +102,15 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp speech_adapters(:speech_to_text) do
     {:ok, deepgram} = Registry.fetch_capability("deepgram", :stt)
-    [deepgram, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
+    {:ok, google} = Registry.fetch_capability("google", :stt)
+    [deepgram, google, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
   end
 
   defp speech_adapters(:text_to_speech) do
     {:ok, deepgram} = Registry.fetch_capability("deepgram", :tts)
     {:ok, rime} = Registry.fetch_capability("rime", :tts)
-    [deepgram, rime, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+    {:ok, google} = Registry.fetch_capability("google", :tts)
+    [deepgram, rime, google, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
   end
 
   defp speech_adapters(_kind), do: []
@@ -119,6 +131,15 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     Deepgram.Speech.settings(:speech_to_text, settings)
   end
 
+  defp validate_provider_settings(GoogleSTTSession, :speech_to_text, settings) do
+    Keyword.validate(settings,
+      enabled: false,
+      media_ingress: nil,
+      wire_module: Vxpipe.Providers.Google.STTSocket,
+      wire_options: []
+    )
+  end
+
   defp validate_provider_settings(
          Vxpipe.CallEngine.Provider.MorseCodeSTT.Session,
          :speech_to_text,
@@ -131,6 +152,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   end
 
   defp validate_provider_settings(TTSSession, :text_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
+  defp validate_provider_settings(GoogleTTSSession, :text_to_speech, settings),
     do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
 
   defp validate_provider_settings(
@@ -153,6 +177,19 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   end
 
   def speech_options(%CapabilitySelection{
+        provider: "google",
+        kind: :speech_to_text,
+        model: "gemini-3.5-transcribe-live",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:encoding, :sample_rate]),
+         {:ok, public} <-
+           GoogleSTT.public_options(Keyword.put(options, :model, "gemini-3.5-transcribe-live")) do
+      {:ok, [model: public.model, encoding: public.encoding, sample_rate: public.sample_rate]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
         provider: "rime",
         kind: :text_to_speech,
         model: "coda",
@@ -161,6 +198,19 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     with {:ok, options} <- normalize(input, [:speaker, :sample_rate]),
          {:ok, public} <- TTS.public_options(Keyword.put(options, :model, "coda")) do
       {:ok, [model: public.model, speaker: public.speaker, sample_rate: public.sample_rate]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        provider: "google",
+        kind: :text_to_speech,
+        model: "gemini-3.1-flash-tts-preview",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice]),
+         {:ok, public} <-
+           GoogleTTS.public_options(Keyword.put(options, :model, "gemini-3.1-flash-tts-preview")) do
+      {:ok, [model: public.model, voice: public.voice]}
     end
   end
 
@@ -182,11 +232,17 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp validate_speech(%{provider: "deepgram", kind: :speech_to_text}, options),
     do: Deepgram.Flux.validate_options(options)
 
+  defp validate_speech(%{provider: "google", kind: :speech_to_text}, options),
+    do: validate_provider(GoogleSTTSession, options)
+
   defp validate_speech(%{provider: "deepgram", kind: :text_to_speech}, options),
     do: validate_provider(Deepgram.TTSSession, options)
 
   defp validate_speech(%{provider: "rime", kind: :text_to_speech}, options),
     do: validate_provider(TTSSession, options)
+
+  defp validate_speech(%{provider: "google", kind: :text_to_speech}, options),
+    do: validate_provider(GoogleTTSSession, options)
 
   defp validate_speech(_selection, _options), do: {:error, :unsupported_capability}
 
