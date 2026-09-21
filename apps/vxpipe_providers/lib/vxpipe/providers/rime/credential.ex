@@ -6,6 +6,9 @@ defmodule Vxpipe.Providers.Rime.Credential do
   def auth_kind, do: "api_key"
 
   @impl true
+  def preview_fields, do: [%{field: "api_key", label: "API key", display: :last_four}]
+
+  @impl true
   def validate("api_key", %{"api_key" => key} = payload)
       when map_size(payload) == 1 and is_binary(key) and byte_size(key) <= 8_192 do
     if Regex.match?(~r/\A[\x21-\x7E]+\z/, key),

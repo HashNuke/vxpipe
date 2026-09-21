@@ -1,14 +1,27 @@
 defmodule Vxpipe.Calls.ProviderCredentialHints do
   @moduledoc "Derives bounded, non-secret credential hints for operator inventory views."
 
+  alias Vxpipe.Providers.Registry
+
   @spec from_payload(String.t(), map()) :: %{optional(String.t()) => String.t()}
-  def from_payload("api_key", %{"api_key" => api_key}),
-    do: %{"api_key" => last_four(api_key)}
+  def from_payload(provider, payload) do
+    case Registry.resolve_capability(provider, :credential) do
+      {:ok, schema} ->
+        Enum.reduce(schema.preview_fields(), %{}, fn
+          %{field: field, display: :last_four}, hints ->
+            case Map.get(payload, field) do
+              value when is_binary(value) -> Map.put(hints, field, last_four(value))
+              _missing -> hints
+            end
 
-  def from_payload("account_sid_auth_token", %{"account_sid" => account_sid}),
-    do: %{"account_sid" => last_four(account_sid)}
+          _masked, hints ->
+            hints
+        end)
 
-  def from_payload(_auth_kind, _payload), do: %{}
+      {:error, _reason} ->
+        %{}
+    end
+  end
 
   defp last_four(value) when is_binary(value), do: String.slice(value, -4, 4)
 end

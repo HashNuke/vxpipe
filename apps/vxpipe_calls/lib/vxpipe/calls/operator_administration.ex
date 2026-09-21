@@ -329,7 +329,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
         provider: provider,
         name: name,
         auth_kind: auth_kind,
-        secret_hints: ProviderCredentialHints.from_payload(auth_kind, payload),
+        secret_hints: ProviderCredentialHints.from_payload(provider, payload),
         last_validated_at: last_validated_at
       }
 
@@ -359,7 +359,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
         provider,
         auth_kind,
         payload,
-        ProviderCredentialHints.from_payload(auth_kind, payload),
+        ProviderCredentialHints.from_payload(provider, payload),
         last_validated_at
       ])
       |> validate_updated_credential(tenant_key, credential_id, provider, auth_kind)

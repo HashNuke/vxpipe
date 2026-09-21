@@ -98,4 +98,20 @@ defmodule Vxpipe.Providers.RegistryTest do
     assert {:ok, twilio} = Registry.resolve_capability("twilio", :credential)
     assert twilio.auth_kind() == "account_sid_auth_token"
   end
+
+  test "credential schemas declare ordered, safe inventory previews" do
+    api_key_preview = [%{field: "api_key", label: "API key", display: :last_four}]
+
+    for provider <- ["deepgram", "google", "rime", "telnyx", "zenmux"] do
+      assert {:ok, schema} = Registry.resolve_capability(provider, :credential)
+      assert schema.preview_fields() == api_key_preview
+    end
+
+    assert {:ok, twilio} = Registry.resolve_capability("twilio", :credential)
+
+    assert twilio.preview_fields() == [
+             %{field: "account_sid", label: "Account SID", display: :last_four},
+             %{field: "auth_token", label: "Auth token", display: :masked}
+           ]
+  end
 end

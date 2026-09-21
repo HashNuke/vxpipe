@@ -23,9 +23,15 @@ Responses contain a bounded `credential_preview` made from non-secret hints:
 - credentials created before the hint migration remain fully masked until replaced.
 
 The last-four hints are derived during create/replace and stored separately from encrypted payloads.
-This preserves metadata-only inventory reads and avoids decrypting every credential to render the
-page. Raw credentials remain filtered from request logs and are cleared from browser form state
-after terminal submissions.
+Each provider credential module declares the ordered preview fields and whether each field is
+last-four or fully masked. The Console does not choose preview fields from the auth kind. Unknown
+provider metadata yields no preview. The optional Telnyx public key is omitted from inventory
+previews. Provider-specific Console field components own the visible inputs; providers with identical
+API-key inputs share one component. A common shell retains the existing Test, Save, validation,
+secret clearing, and status behavior. An unrecognized stored provider shows no generic credential
+input and disables Test and Save. This preserves metadata-only inventory reads and avoids
+decrypting every credential to render the page. Raw credentials remain filtered from request logs
+and are cleared from browser form state after terminal submissions.
 
 ## Rejected alternatives
 
@@ -36,8 +42,8 @@ after terminal submissions.
 - Updating by provider/name alone was rejected because old installations can contain multiple
   named bindings; the stable public credential ID identifies the row while tenant/provider checks
   prevent cross-binding replacement.
-- Treating Telnyx webhook public keys as credential secrets was rejected. They remain telephony
-  service metadata and are not edited by the provider-credential form.
+- Rendering raw credential values or configuring an unrestricted preview mode was rejected; only
+  fixed masking and last-four modes are supported.
 
 ## Implications
 

@@ -5,6 +5,14 @@ defmodule Vxpipe.Providers.Twilio.Credential do
   @impl true
   def auth_kind, do: "account_sid_auth_token"
 
+  @impl true
+  def preview_fields do
+    [
+      %{field: "account_sid", label: "Account SID", display: :last_four},
+      %{field: "auth_token", label: "Auth token", display: :masked}
+    ]
+  end
+
   alias Vxpipe.Providers.Twilio.Identifier
 
   @impl true

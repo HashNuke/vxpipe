@@ -20,6 +20,23 @@ test("credential setup offers the installed provider catalog", () => {
   expect(provider).not.toHaveTextContent("Google Vertex AI");
 });
 
+test("an unsupported stored provider does not get a generic credential form", () => {
+  render(
+    <ServiceCredentialForm
+      initialProvider="vertex_ai"
+      onCancel={vi.fn()}
+      onSubmit={vi.fn()}
+      status="idle"
+    />,
+  );
+
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Credential setup is unavailable for this provider",
+  );
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+});
+
 test("shows only the credential fields owned by the selected provider", () => {
   render(
     <ServiceCredentialForm

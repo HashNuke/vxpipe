@@ -1,6 +1,12 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "./Button";
+import {
+  ApiKeyCredentialFields,
+  credentialInputClass,
+} from "./credentials/ApiKeyCredentialFields";
+import { TelnyxCredentialFields } from "./credentials/TelnyxCredentialFields";
+import { TwilioCredentialFields } from "./credentials/TwilioCredentialFields";
 import type {
   CredentialDraft,
   CredentialField,
@@ -15,6 +21,12 @@ const providers = setupProviders.map((provider) => ({
   value: provider.id,
   label: provider.name,
 }));
+const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
+  "deepgram",
+  "google",
+  "rime",
+  "zenmux",
+]);
 
 export function ServiceCredentialForm({
   initialProvider = "google",
@@ -50,7 +62,8 @@ export function ServiceCredentialForm({
   const [provider, setProvider] = useState<ServiceProvider>(initialProvider);
   const [apiKey, setApiKey] = useState("");
   const [publicKey, setPublicKey] = useState("");
-  const inputId = useId();
+  const supportedProvider =
+    apiKeyProviders.has(provider) || provider === "telnyx" || provider === "twilio";
   const includePublicKey = provider === "telnyx" && showTelnyxPublicKey;
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -88,6 +101,7 @@ export function ServiceCredentialForm({
   }
 
   function locallyValidDraft() {
+    if (!supportedProvider) return null;
     const nextDraft = draft();
     const nextValidationMessage = validateCredentialDraft(nextDraft);
     setValidationMessage(nextValidationMessage);
@@ -134,9 +148,6 @@ export function ServiceCredentialForm({
     provider === initialProvider && savedFields.includes(field)
       ? "••••••••"
       : undefined;
-  const fieldClass =
-    "h-10 w-full rounded-sm border border-[var(--admin-line)] bg-[var(--admin-bg)] px-3 text-sm text-[var(--admin-ink)]";
-
   return (
     <form
       aria-label="Credential setup"
@@ -151,7 +162,7 @@ export function ServiceCredentialForm({
         <label className="grid gap-1.5 text-sm font-semibold">
           Provider
           <select
-            className={fieldClass}
+            className={credentialInputClass}
             disabled={pending || providerLocked}
             onChange={(event) => {
               setProvider(event.target.value as ServiceProvider);
@@ -168,87 +179,54 @@ export function ServiceCredentialForm({
           </select>
         </label>
       ) : null}
-      {provider === "twilio" ? (
-        <>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            Account SID
-            <input
-              className={fieldClass}
-              disabled={pending}
-              onChange={(event) => {
-                setAccountSid(event.target.value);
-                clearTestResult();
-              }}
-              placeholder={savedPlaceholder("accountSid")}
-              type="password"
-              value={accountSid}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            Auth token
-            <input
-              className={fieldClass}
-              disabled={pending}
-              onChange={(event) => {
-                setAuthToken(event.target.value);
-                clearTestResult();
-              }}
-              placeholder={savedPlaceholder("authToken")}
-              type="password"
-              value={authToken}
-            />
-          </label>
-        </>
+      {!supportedProvider ? (
+        <p className="text-sm text-[var(--admin-red)]" role="alert">
+          Credential setup is unavailable for this provider.
+        </p>
+      ) : provider === "twilio" ? (
+        <TwilioCredentialFields
+          accountSid={accountSid}
+          onAccountSidChange={(value) => {
+            setAccountSid(value);
+            clearTestResult();
+          }}
+          accountSidPlaceholder={savedPlaceholder("accountSid")}
+          authToken={authToken}
+          onAuthTokenChange={(value) => {
+            setAuthToken(value);
+            clearTestResult();
+          }}
+          authTokenPlaceholder={savedPlaceholder("authToken")}
+          disabled={pending}
+        />
+      ) : provider === "telnyx" ? (
+        <TelnyxCredentialFields
+          value={apiKey}
+          onChange={(value) => {
+            setApiKey(value);
+            clearTestResult();
+          }}
+          disabled={pending}
+          placeholder={savedPlaceholder("apiKey")}
+          showPublicKey={includePublicKey}
+          publicKey={publicKey}
+          onPublicKeyChange={(value) => {
+            setPublicKey(value);
+            clearTestResult();
+          }}
+          publicKeyPlaceholder={savedPlaceholder("publicKey")}
+          publicKeySaved={savedFields.includes("publicKey")}
+        />
       ) : (
-        <>
-          <div className="grid gap-1.5 text-sm">
-            <label className="font-semibold" htmlFor={`${inputId}-api`}>
-              API key
-            </label>
-            <input
-              id={`${inputId}-api`}
-              className={fieldClass}
-              disabled={pending}
-              onChange={(event) => {
-                setApiKey(event.target.value);
-                clearTestResult();
-              }}
-              placeholder={savedPlaceholder("apiKey")}
-              type="password"
-              value={apiKey}
-            />
-          </div>
-          {includePublicKey ? (
-            <div className="grid gap-1.5 text-sm">
-              <label className="font-semibold" htmlFor={`${inputId}-public`}>
-                Public key
-              </label>
-              <input
-                id={`${inputId}-public`}
-                aria-describedby={`${inputId}-public-hint`}
-                className={fieldClass}
-                disabled={pending}
-                onChange={(event) => {
-                  setPublicKey(event.target.value);
-                  clearTestResult();
-                }}
-                placeholder={savedPlaceholder("publicKey")}
-                spellCheck={false}
-                type="text"
-                value={publicKey}
-              />
-              <p
-                id={`${inputId}-public-hint`}
-                className="text-xs text-[var(--admin-muted)]"
-              >
-                Optional; Only required for Telephony services
-                {savedFields.includes("publicKey")
-                  ? ". Leave blank to remove the saved public key; phone calls will require a new key."
-                  : ""}
-              </p>
-            </div>
-          ) : null}
-        </>
+        <ApiKeyCredentialFields
+          value={apiKey}
+          onChange={(value) => {
+            setApiKey(value);
+            clearTestResult();
+          }}
+          disabled={pending}
+          placeholder={savedPlaceholder("apiKey")}
+        />
       )}
       {validationMessage ? (
         <p className="text-sm text-[var(--admin-red)]" role="alert">
@@ -296,14 +274,14 @@ export function ServiceCredentialForm({
           </Button>
         ) : null}
         <Button
-          disabled={pending || !onTest}
+          disabled={pending || !onTest || !supportedProvider}
           onClick={() => void testCredentials()}
           type="button"
           variant="ghost"
         >
           {testing ? "Testing…" : "Test credentials"}
         </Button>
-        <Button disabled={pending} type="submit">
+        <Button disabled={pending || !supportedProvider} type="submit">
           {saving ? submittingLabel : submitLabel}
         </Button>
       </div>

@@ -20,7 +20,7 @@ defmodule Vxpipe.Calls.ProviderCredentials do
         provider: provider,
         name: name,
         auth_kind: auth_kind,
-        secret_hints: ProviderCredentialHints.from_payload(auth_kind, payload)
+        secret_hints: ProviderCredentialHints.from_payload(provider, payload)
       }
 
       Repositories.call(repository, :provision, [credential, payload])
@@ -38,7 +38,7 @@ defmodule Vxpipe.Calls.ProviderCredentials do
         provider,
         auth_kind,
         payload,
-        ProviderCredentialHints.from_payload(auth_kind, payload),
+        ProviderCredentialHints.from_payload(provider, payload),
         nil
       ])
     end

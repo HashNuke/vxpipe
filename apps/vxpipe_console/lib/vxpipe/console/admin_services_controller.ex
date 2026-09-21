@@ -240,12 +240,20 @@ defmodule Vxpipe.Console.AdminServicesController do
     }
   end
 
-  defp credential_preview(%{auth_kind: "api_key", secret_hints: hints}) do
-    [preview("API key", Map.get(hints, "api_key"))]
-  end
+  defp credential_preview(%{provider: provider, secret_hints: hints}) do
+    case Registry.resolve_capability(provider, :credential) do
+      {:ok, schema} ->
+        Enum.map(schema.preview_fields(), fn
+          %{field: field, label: label, display: :last_four} ->
+            preview(label, Map.get(hints, field))
 
-  defp credential_preview(%{auth_kind: "account_sid_auth_token", secret_hints: hints}) do
-    [preview("Account SID", Map.get(hints, "account_sid")), masked("Auth token")]
+          %{label: label, display: :masked} ->
+            masked(label)
+        end)
+
+      {:error, _reason} ->
+        []
+    end
   end
 
   defp preview(label, last_four) when is_binary(last_four) and byte_size(last_four) == 4,

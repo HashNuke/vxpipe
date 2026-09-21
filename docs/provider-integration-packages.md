@@ -38,8 +38,13 @@ For example, Deepgram's manifest declares `:credential` and `:credential_validat
 implementation modules, so they are not additional manifest entries. Telnyx and Twilio declare
 `:telephony` service profiles; their HTTP handlers and media sockets stay private to that capability.
 
-The provider credential contract is small: `auth_kind/0` declares the stored auth kind and
-`validate/2` checks its exact, bounded payload shape. Optional `credential_validation` implements
+The provider credential contract is small: `auth_kind/0` declares the stored auth kind,
+`validate/2` checks its exact, bounded payload shape, and `preview_fields/0` lists safe inventory
+fields in display order. Each preview descriptor has a payload field name, label, and either
+`:last_four` or `:masked` display. Calls stores suffix hints only for declared `:last_four` fields;
+Console renders the provider's descriptors from those hints without decrypting credentials. A
+`:masked` field stores no hint. The optional Telnyx public key is not an inventory preview field.
+Optional `credential_validation` implements
 `request/2`, returning a pure request description or
 `{:error, :provider_validation_unsupported}`. Console owns the bounded HTTP execution and response
 classification; a provider module does not make a network request or store a credential. Unsupported
@@ -94,7 +99,8 @@ outside provider namespaces.
 
 1. Put the provider root, credential schema and optional pure credential-test request builder in
    `apps/vxpipe_providers/lib/vxpipe/providers/<provider>/`. Add the root to the fixed registry.
-   Declare only installed capabilities; an absent entry is the unsupported result.
+   Declare only installed capabilities; an absent entry is the unsupported result. Declare an
+   ordered, safe preview policy in the credential schema.
 2. Put concrete speech sessions and sockets in CallEngine or telephony adapters, profiles, HTTP
    handlers and media sockets in Gateway, under the same `Vxpipe.Providers.<Provider>` namespace.
    Follow the [speech provider contract](speech-provider-contract.md) for STT/TTS semantics. The
@@ -102,8 +108,13 @@ outside provider namespaces.
 3. Use `Registry.resolve_capability/2` at consumers. Keep configuration validation and readiness in
    their owning runtime; a supported manifest entry alone does not imply a usable call. Do not add
    another provider-name dispatch table or a fallback module.
-4. Add provider contract tests for exact capabilities, credential shape, request description and
-   unsupported cases. Run affected Calls/Console/CallEngine/Gateway suites and the umbrella gates.
+4. Add a provider-specific Console credential-field component when the inputs differ. Providers
+   with the same API-key input may share that component; the common form still owns Test, Save,
+   clearing, and status. The frontend lists supported input components explicitly and disables
+   credential actions for an unrecognized stored provider. The backend schema remains the authority
+   for accepted values.
+5. Add provider contract tests for exact capabilities, credential shape, preview policy, request
+   description and unsupported cases. Run affected Calls/Console/CallEngine/Gateway suites and the umbrella gates.
    Keep real network interoperability in the tagged integration lane.
 
 ## Rejected alternatives
