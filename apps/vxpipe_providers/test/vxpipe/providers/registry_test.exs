@@ -88,4 +88,14 @@ defmodule Vxpipe.Providers.RegistryTest do
              "zenmux" => [:credential, :credential_validation]
            }
   end
+
+  test "credential schemas declare the accepted auth kind for consumers" do
+    for provider <- ["deepgram", "google", "rime", "telnyx", "zenmux"] do
+      assert {:ok, schema} = Registry.resolve_capability(provider, :credential)
+      assert schema.auth_kind() == "api_key"
+    end
+
+    assert {:ok, twilio} = Registry.resolve_capability("twilio", :credential)
+    assert twilio.auth_kind() == "account_sid_auth_token"
+  end
 end

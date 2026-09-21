@@ -420,13 +420,12 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   defp valid_credential_metadata?(_credential, _tenant_key), do: false
 
-  defp valid_auth_kind?("twilio", "account_sid_auth_token"), do: true
-
-  defp valid_auth_kind?(provider, "api_key")
-       when provider in ["google", "deepgram", "zenmux", "telnyx", "rime"],
-       do: true
-
-  defp valid_auth_kind?(_provider, _auth_kind), do: false
+  defp valid_auth_kind?(provider, auth_kind) do
+    case Vxpipe.Providers.Registry.resolve_capability(provider, :credential) do
+      {:ok, schema} -> schema.auth_kind() == auth_kind
+      {:error, _unsupported} -> false
+    end
+  end
 
   defp validate_created_credential(
          {:ok,

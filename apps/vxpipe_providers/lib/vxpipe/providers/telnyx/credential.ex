@@ -3,6 +3,9 @@ defmodule Vxpipe.Providers.Telnyx.Credential do
   @behaviour Vxpipe.Providers.Credential
 
   @impl true
+  def auth_kind, do: "api_key"
+
+  @impl true
   def validate("api_key", %{"api_key" => key, "public_key" => public_key} = payload)
       when map_size(payload) == 2 do
     with :ok <- validate("api_key", %{"api_key" => key}),

@@ -107,3 +107,19 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
   probe behaviour are removed. Zenmux inference remains in shared ReqLLM.
 - Provider suite passes 16/16; complete Calls and Console suites pass 117/117 and 186/186 (one
   excluded), all zero failures.
+
+## Final consumer review
+
+- Added `Credential.auth_kind/0` after a failing registry contract test (one failure). Console
+  credential input and Calls credential metadata now derive the auth kind from the provider schema;
+  the six-provider credential list is no longer duplicated in those consumers. Provider tests pass
+  17/17, Calls operator tests 18/18 and the full Console child suite 186/186 (one excluded).
+- Rendered the local operator service connection dialog in Chrome at desktop and 390-pixel mobile
+  widths. Google displayed separate Test credentials and Save actions, and the form remained usable.
+  The static frontend badges describe future provider offerings rather than currently installed
+  runtime capabilities; the separate `docs/issues/setup-catalog-runtime-capabilities.md` records
+  that pre-existing difference. No credential was submitted in the browser pass.
+- Final acceptance: the root default suite passes 1,979 tests, zero failures and 42 excluded. The
+  controlled local speech-socket integration lane passes 13/13. Root format, warnings-as-errors
+  compile, strict Credo and unused-dependency checks pass. Console asset type check, lint and all
+  185 tests pass. Source and compiled-module checks find no obsolete provider namespaces.

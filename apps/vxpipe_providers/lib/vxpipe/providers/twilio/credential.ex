@@ -2,6 +2,9 @@ defmodule Vxpipe.Providers.Twilio.Credential do
   @moduledoc false
   @behaviour Vxpipe.Providers.Credential
 
+  @impl true
+  def auth_kind, do: "account_sid_auth_token"
+
   alias Vxpipe.Providers.Twilio.Identifier
 
   @impl true

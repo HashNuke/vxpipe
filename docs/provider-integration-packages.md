@@ -33,6 +33,18 @@ Each provider root implements `Vxpipe.Providers`:
 returns `{:error, :provider_implementation_unavailable}` instead of calling an absent module.
 Internal modules may live under the provider directory without appearing in the manifest.
 
+For example, Deepgram's manifest declares `:credential` and `:credential_validation` modules in
+`vxpipe_providers`, plus `:stt` and `:tts` session modules in CallEngine. Its sockets are private
+implementation modules, so they are not additional manifest entries. Telnyx and Twilio declare
+`:telephony` service profiles; their HTTP handlers and media sockets stay private to that capability.
+
+The provider credential contract is small: `auth_kind/0` declares the stored auth kind and
+`validate/2` checks its exact, bounded payload shape. Optional `credential_validation` implements
+`request/2`, returning a pure request description or
+`{:error, :provider_validation_unsupported}`. Console owns the bounded HTTP execution and response
+classification; a provider module does not make a network request or store a credential. Unsupported
+provider/capability lookup sends no request. Save uses the schema independently of Test credentials.
+
 Capability presence and runtime readiness are different facts:
 
 - **unsupported** — the manifest has no capability entry;
@@ -43,6 +55,9 @@ Capability presence and runtime readiness are different facts:
 Credential testing is optional and does not determine whether another capability may be configured.
 Model inference remains the shared ReqLLM integration. Provider manifests do not duplicate ReqLLM;
 Google and Zenmux model support continues through the agent-runtime catalog.
+The Console setup catalog currently includes future provider-product labels; see the
+[catalog alignment issue](issues/setup-catalog-runtime-capabilities.md). It is not the authority for
+implemented call capabilities.
 
 ## Existing provider manifests
 
@@ -66,12 +81,29 @@ The accepted concrete names are:
 Vxpipe.Providers.Deepgram.STTSocket
 Vxpipe.Providers.Deepgram.TTSSocket
 Vxpipe.Providers.Telnyx.TelephonyMediaSocket
+Vxpipe.Providers.Twilio.TelephonyMediaSocket
 ```
 
 The socket names describe provider wire implementations. Public speech consumers continue to use
 semantic STT/TTS sessions, and telephony consumers continue to use the provider-neutral telephony
 contracts. Generic room, turn, policy, permission, readiness, media and persistence modules remain
 outside provider namespaces.
+
+## Adding or changing a provider
+
+1. Put the provider root, credential schema and optional pure credential-test request builder in
+   `apps/vxpipe_providers/lib/vxpipe/providers/<provider>/`. Add the root to the fixed registry.
+   Declare only installed capabilities; an absent entry is the unsupported result.
+2. Put concrete speech sessions and sockets in CallEngine or telephony adapters, profiles, HTTP
+   handlers and media sockets in Gateway, under the same `Vxpipe.Providers.<Provider>` namespace.
+   Follow the [speech provider contract](speech-provider-contract.md) for STT/TTS semantics. The
+   manifest names the public session or profile, not every private helper.
+3. Use `Registry.resolve_capability/2` at consumers. Keep configuration validation and readiness in
+   their owning runtime; a supported manifest entry alone does not imply a usable call. Do not add
+   another provider-name dispatch table or a fallback module.
+4. Add provider contract tests for exact capabilities, credential shape, request description and
+   unsupported cases. Run affected Calls/Console/CallEngine/Gateway suites and the umbrella gates.
+   Keep real network interoperability in the tagged integration lane.
 
 ## Rejected alternatives
 

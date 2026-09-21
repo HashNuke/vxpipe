@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   use Phoenix.Controller, formats: [:json]
 
   alias Vxpipe.Calls.InstallationOperator
+  alias Vxpipe.Providers.Registry
   alias Vxpipe.Providers.Telnyx.PublicEndpoint
 
   def platform_index(conn, _params), do: bindings(conn, :platform)
@@ -208,29 +209,14 @@ defmodule Vxpipe.Console.AdminServicesController do
     end
   end
 
-  defp credential_input(%{
-         "provider" => "telnyx",
-         "values" => %{"api_key" => _api_key, "public_key" => _public_key} = values
-       })
-       when map_size(values) == 2,
-       do: {:ok, "telnyx", "api_key", values}
-
-  defp credential_input(%{
-         "provider" => provider,
-         "values" => %{"api_key" => api_key} = values
-       })
-       when provider in ["google", "deepgram", "zenmux", "telnyx", "rime"] and
-              map_size(values) == 1 do
-    {:ok, provider, "api_key", %{"api_key" => api_key}}
-  end
-
-  defp credential_input(%{
-         "provider" => "twilio",
-         "values" => %{"account_sid" => account_sid, "auth_token" => auth_token} = values
-       })
-       when map_size(values) == 2 do
-    {:ok, "twilio", "account_sid_auth_token",
-     %{"account_sid" => account_sid, "auth_token" => auth_token}}
+  defp credential_input(%{"provider" => provider, "values" => values}) when is_map(values) do
+    with {:ok, schema} <- Registry.resolve_capability(provider, :credential),
+         auth_kind <- schema.auth_kind(),
+         :ok <- schema.validate(auth_kind, values) do
+      {:ok, provider, auth_kind, values}
+    else
+      _invalid -> {:error, :invalid_provider_auth}
+    end
   end
 
   defp credential_input(_params), do: {:error, :invalid_provider_auth}

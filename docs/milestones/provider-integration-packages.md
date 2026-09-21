@@ -1,7 +1,7 @@
 # Provider integration packages
 
-Status: All six provider integrations migrated and tested; the shared registry declares them.
-Implementation is **6 of 7 provider/final checkpoints complete**.
+Status: Complete. All six provider integrations and the final acceptance checkpoint passed;
+implementation is **7 of 7 checkpoints complete**.
 Each provider is migrated, tested, fixed and committed as a complete unit before the next provider
 is added to the registry.
 
@@ -38,6 +38,9 @@ admission and credential storage remain behaviorally unchanged.
 - [x] The registry is fixed and has no legacy or fallback lookup.
 - [x] Provider-by-provider migration keeps the shared registry incremental: each commit includes a
   provider's complete declared capabilities, credential schema/test, consumers and focused evidence.
+- [x] Final contract review: a schema declares its auth kind and validates exact payload shape;
+  Console owns transport execution, CallEngine owns STT/TTS readiness and Gateway owns telephony
+  admission. This adds no process or reverse umbrella dependency.
 
 ## Checkpoint A — Deepgram and shared contract
 
@@ -130,13 +133,28 @@ the old Console probe behaviour and provider map are gone. Model inference remai
 
 ## Checkpoint G — Final consumers and acceptance
 
-- [ ] Remove duplicated backend provider capability lists and update provider authoring/credential
+- [x] Remove duplicated backend provider capability lists and update provider authoring/credential
   documentation with the manifest workflow.
-- [ ] Prove manifests report every migrated provider's actual capabilities and explicitly deny absent
+- [x] Prove manifests report every migrated provider's actual capabilities and explicitly deny absent
   capabilities; preserve bounded credential probes and independent Save.
-- [ ] Search compiled source and tests for obsolete provider namespaces; do not retain aliases,
+- [x] Search compiled source and tests for obsolete provider namespaces; do not retain aliases,
   wrappers or fallback modules.
-- [ ] Run the relevant frontend checks, rendered Console inspection if catalog output changes, all
+- [x] Run the relevant frontend checks, rendered Console inspection if catalog output changes, all
   five root gates and bounded existing speech/telephony regression lanes.
-- [ ] Exit: implementation is 7 of 7 complete, the index is synchronized, and each provider is
+- [x] Exit: implementation is 7 of 7 complete, the index is synchronized, and each provider is
   committed as a usable vertical slice.
+
+Final evidence: `Credential.auth_kind/0` is declared by all six schemas after a failing contract
+test, and Console/Calls derive their accepted kind from it. The provider suite passes 17/17. The
+root default suite passes 1,979 tests with zero failures and 42 excluded; the controlled local
+speech socket integration lane passes 13/13. Root format, warnings-as-errors compile, strict Credo
+and unused-dependency checks pass. Console asset type checking, lint and 185 tests pass. The local
+operator credential form was inspected at desktop and 390-pixel mobile widths with distinct Test
+credentials and Save actions. No real provider API was contacted. Source searches and a compiled
+test-build loader check find no old Deepgram, Telnyx, Twilio or Console provider modules. The
+Telnyx full 477-test Gateway run and Twilio's 108-test telephony suite cover the carrier paths.
+
+Final review note: the existing frontend setup catalog labels future provider-product capabilities,
+while `Vxpipe.Providers.Registry` declares Vxpipe-owned implementations. The
+[catalog alignment issue](../issues/setup-catalog-runtime-capabilities.md) records this separate
+presentation concern; it does not add a requirement to the runtime migration.
