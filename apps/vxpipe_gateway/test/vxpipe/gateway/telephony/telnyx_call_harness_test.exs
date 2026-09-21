@@ -19,7 +19,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     MediaSupervisor
   }
 
-  alias Vxpipe.Gateway.Telephony.Telnyx.{ClientState, MediaSocket}
+  alias Vxpipe.Providers.Telnyx.{ClientState, TelephonyMediaSocket}
 
   alias Vxpipe.Gateway.{
     TelnyxCallScenario,
@@ -185,7 +185,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       transport_monitor = Process.monitor(transport)
 
       assert {:ok, _binding, _socket} =
-               TestTelephonySocket.open(transport, MediaSocket, fn ->
+               TestTelephonySocket.open(transport, TelephonyMediaSocket, fn ->
                  TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
                    "call_control_id" => "inbound-call-control",
                    "call_session_id" => "inbound-call-session",
@@ -349,7 +349,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
         start_supervised!({TestTelephonySocket, observer: self()}, id: :outgoing_socket)
 
       assert {:ok, inbound_binding, inbound_socket} =
-               TestTelephonySocket.open(inbound_transport, MediaSocket, fn ->
+               TestTelephonySocket.open(inbound_transport, TelephonyMediaSocket, fn ->
                  TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
                    "call_control_id" => "inbound-call-control",
                    "call_session_id" => "inbound-call-session",
@@ -386,7 +386,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       refute_receive {:test_telephony_dial, _duplicate}
 
       assert {:ok, _outbound_binding, _outbound_socket} =
-               TestTelephonySocket.open(outbound_transport, MediaSocket, fn ->
+               TestTelephonySocket.open(outbound_transport, TelephonyMediaSocket, fn ->
                  TelnyxFixture.open_media(context.endpoint, dial.media_url, %{
                    "call_control_id" => "outbound-call-control",
                    "call_session_id" => "outbound-call-session",

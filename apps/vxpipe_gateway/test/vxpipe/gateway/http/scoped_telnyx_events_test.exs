@@ -162,7 +162,7 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
 
     for {kind, state} <- [
           {:incoming, nil},
-          {:outgoing, Vxpipe.Gateway.Telephony.Telnyx.ClientState.encode(local)}
+          {:outgoing, Vxpipe.Providers.Telnyx.ClientState.encode(local)}
         ] do
       incoming = body("first-app", leg, state)
       assert request(unavailable, :platform, incoming, data.platform_private).status == 200

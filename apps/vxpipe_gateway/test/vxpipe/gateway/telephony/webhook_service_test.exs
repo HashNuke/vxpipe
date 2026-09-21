@@ -132,7 +132,7 @@ defmodule Vxpipe.Gateway.Telephony.WebhookServiceTest do
         "payload" => %{
           "connection_id" => service.identity.provider_connection_id,
           "call_leg_id" => "provider-leg",
-          "client_state" => Vxpipe.Gateway.Telephony.Telnyx.ClientState.encode(local_id)
+          "client_state" => Vxpipe.Providers.Telnyx.ClientState.encode(local_id)
         }
       }
     })

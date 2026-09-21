@@ -1,8 +1,8 @@
 defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceProfile do
   @moduledoc false
 
-  alias Vxpipe.Gateway.Telephony.Telnyx.ServiceProfile, as: TelnyxProfile
   alias Vxpipe.Gateway.Telephony.Twilio.ServiceProfile, as: TwilioProfile
+  alias Vxpipe.Providers.Registry
 
   @derive {Inspect, only: [:provider, :provider_connection_id, :adapter]}
   @enforce_keys [
@@ -25,9 +25,18 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceProfile do
   @spec new(keyword()) :: {:ok, t()} | {:error, :invalid_telephony_service_configuration}
   def new(options) when is_list(options) do
     case Keyword.get(options, :provider) do
-      :telnyx -> TelnyxProfile.new(options)
-      :twilio -> TwilioProfile.new(options)
-      _unsupported -> {:error, :invalid_telephony_service_configuration}
+      :telnyx ->
+        with {:ok, profile} <- Registry.resolve_capability("telnyx", :telephony) do
+          profile.new(options)
+        else
+          {:error, _reason} -> {:error, :invalid_telephony_service_configuration}
+        end
+
+      :twilio ->
+        TwilioProfile.new(options)
+
+      _unsupported ->
+        {:error, :invalid_telephony_service_configuration}
     end
   end
 end

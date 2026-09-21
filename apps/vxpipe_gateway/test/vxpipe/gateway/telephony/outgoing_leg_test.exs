@@ -506,7 +506,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
           "payload" => %{
             "connection_id" => service.identity.provider_connection_id,
             "call_leg_id" => "outbound-call-leg",
-            "client_state" => Vxpipe.Gateway.Telephony.Telnyx.ClientState.encode(context.leg_id)
+            "client_state" => Vxpipe.Providers.Telnyx.ClientState.encode(context.leg_id)
           }
         }
       })

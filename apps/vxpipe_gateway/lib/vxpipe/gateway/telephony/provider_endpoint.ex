@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.ProviderEndpoint do
   @moduledoc false
 
   alias Vxpipe.Gateway.Telephony.ConfiguredService
-  alias Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint, as: TelnyxEndpoint
+  alias Vxpipe.Providers.Telnyx.PublicEndpoint, as: TelnyxEndpoint
   alias Vxpipe.Gateway.Telephony.Twilio.PublicEndpoint, as: TwilioEndpoint
 
   @spec event_url(ConfiguredService.t(), String.t()) :: String.t()

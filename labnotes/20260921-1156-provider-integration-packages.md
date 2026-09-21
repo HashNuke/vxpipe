@@ -45,3 +45,22 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
   Old Deepgram module names are absent from source and tests. In a provider-only test environment,
   `Registry.resolve_capability("deepgram", :stt)` returns
   `{:error, :provider_implementation_unavailable}` rather than calling an absent module.
+
+## Telnyx provider checkpoint
+
+- Telnyx contract and manifest tests first failed on absent schema/probe and registry entries (four
+  failures). Its credential schema preserves the bounded API key and optional 32-byte verification
+  key; the probe preserves the existing read-only call-control-application request.
+- Provider-specific Gateway modules, including HTTP webhook/media handlers, now live under
+  `Vxpipe.Providers.Telnyx`. `TelephonyMediaSocket` replaces the generic Telnyx `MediaSocket` name.
+  Gateway resolves the telephony service profile through the manifest; Calls, Persistence and
+  Console use the provider-owned credential shape and probe. The fixed registry grows only after the
+  complete provider is migrated.
+- The first focused carrier run found stale socket names in fixture/harness code and an accidentally
+  qualified public-key reference in Persistence. Both were corrected; the 72-test focused gateway
+  set passed after the correction, and a 31-test HTTP/carrier set passed after moving HTTP handlers.
+  The Telnyx provider contract suite passes 6/6 and the Calls credential test passes 1/1.
+- Full child acceptance: Gateway 477 tests, zero failures (seven excluded); Calls 117, Console
+  186 (one excluded), Persistence 184 (12 excluded), all zero failures. Root format,
+  warnings-as-errors compile, strict Credo and unused-dependency checks pass. The final umbrella
+  suite remains the milestone's final checkpoint.

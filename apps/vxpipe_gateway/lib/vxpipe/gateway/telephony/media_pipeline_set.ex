@@ -14,10 +14,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaPipelineSet do
   @spec resolve(atom()) :: {:ok, t()} | {:error, :unsupported_media_provider}
   def resolve(:telnyx) do
     pipeline_set(
-      Vxpipe.Gateway.Telephony.Telnyx.AudioOutputPipeline,
+      Vxpipe.Providers.Telnyx.AudioOutputPipeline,
       Vxpipe.Gateway.Media.PlaybackClearer.Noop,
-      Vxpipe.Gateway.Telephony.Telnyx.AudioEgressPipeline,
-      Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline
+      Vxpipe.Providers.Telnyx.AudioEgressPipeline,
+      Vxpipe.Providers.Telnyx.AudioIngressPipeline
     )
   end
 

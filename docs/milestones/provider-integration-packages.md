@@ -1,7 +1,7 @@
 # Provider integration packages
 
-Status: Deepgram integration migrated and tested; the shared registry currently declares Deepgram.
-Implementation is **1 of 7 provider/final checkpoints complete**. Each provider is migrated, tested,
+Status: Deepgram and Telnyx integrations migrated and tested; the shared registry declares both.
+Implementation is **2 of 7 provider/final checkpoints complete**. Each provider is migrated, tested,
 fixed and committed as a complete unit before the next provider is added to the registry.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
@@ -63,13 +63,21 @@ suite and broader consumers remain part of checkpoint G.
 
 ## Checkpoint B — Telnyx package
 
-- [ ] Move Telnyx-specific modules and tests to `Vxpipe.Providers.Telnyx`.
-- [ ] Rename `MediaSocket` to `TelephonyMediaSocket` and update HTTP/media/telephony composition.
-- [ ] Move Telnyx credential schema/test into its manifest and migrate Calls/Console consumers.
-- [ ] Resolve Telnyx telephony support through its manifest without changing signed webhook,
+- [x] Move Telnyx-specific modules and tests to `Vxpipe.Providers.Telnyx`.
+- [x] Rename `MediaSocket` to `TelephonyMediaSocket` and update HTTP/media/telephony composition.
+- [x] Move Telnyx credential schema/test into its manifest and migrate Calls/Console consumers.
+- [x] Resolve Telnyx telephony support through its manifest without changing signed webhook,
   admission, media, transfer, cancellation or cleanup behavior.
-- [ ] Exit: Telnyx unit, HTTP, media, carrier-harness and affected transfer tests pass with no old
+- [x] Exit: Telnyx unit, HTTP, media, carrier-harness and affected transfer tests pass with no old
   Telnyx module loaded.
+
+Telnyx evidence: the new contract tests first failed on absent credential/probe and manifest
+entries (four failures). Provider contract tests pass 6/6; Gateway's full default suite passes
+477/477 (seven excluded), including signed webhook, media, carrier-harness and transfer cases.
+Calls, Console and Persistence full child suites pass 117/117, 186/186 (one excluded) and 184/184
+(12 excluded). Root format, warnings-as-errors compilation, strict Credo and unused-dependency
+checks pass. The old Telnyx production namespaces and socket name are absent from source; the
+final root umbrella suite remains in checkpoint G.
 
 ## Checkpoint C — Google AI Studio package
 

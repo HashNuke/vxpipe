@@ -10,13 +10,12 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     RTVI,
     Rooms,
     TelephonyIngressConfig,
-    TelnyxEvents,
-    TelnyxMedia,
     TwilioEvents,
     TwilioMedia
   }
 
   alias Vxpipe.Gateway.CallAdmission
+  alias Vxpipe.Providers.Telnyx
 
   @impl true
   def init(options) do
@@ -49,7 +48,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       call_admission: CallAdmissions.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
-      telnyx_media: TelnyxMedia.init(media_options),
+      telnyx_media: Telnyx.Media.init(media_options),
       twilio_media: TwilioMedia.init(media_options),
       rtvi: options |> Keyword.get(:webrtc, []) |> RTVI.init()
     }
@@ -99,14 +98,14 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         %Plug.Conn{method: "POST", path_info: ["webhooks", "platform", "telnyx"]} = conn,
         options
       ) do
-    TelnyxEvents.handle(conn, options.telephony, {:scope, :platform})
+    Telnyx.Events.handle(conn, options.telephony, {:scope, :platform})
   end
 
   def call(
         %Plug.Conn{method: "POST", path_info: ["webhooks", "tenants", tenant, "telnyx"]} = conn,
         options
       ) do
-    TelnyxEvents.handle(conn, options.telephony, {:scope, {:tenant, tenant}})
+    Telnyx.Events.handle(conn, options.telephony, {:scope, {:tenant, tenant}})
   end
 
   def call(
@@ -136,7 +135,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         } = conn,
         options
       ) do
-    TelnyxMedia.upgrade(conn, options.telnyx_media, ingress_key, token)
+    Telnyx.Media.upgrade(conn, options.telnyx_media, ingress_key, token)
   end
 
   def call(

@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.WebhookService do
   @moduledoc false
 
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, ServiceRegistry}
-  alias Vxpipe.Gateway.Telephony.Telnyx.ClientState
+  alias Vxpipe.Providers.Telnyx.ClientState
   alias Vxpipe.Gateway.Telephony.Twilio.Form
 
   # Identifiers locate a candidate only. The caller must verify the original body and dispatch

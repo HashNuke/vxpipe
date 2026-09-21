@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Gateway.Telephony.ConfiguredService
-  alias Vxpipe.Gateway.Telephony.Telnyx.Adapter
+  alias Vxpipe.Providers.Telnyx.Adapter
   alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
 
   test "rejects application-scoped carrier credentials" do

@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.TelnyxFixture do
   import Plug.Test
 
   alias Vxpipe.Gateway.HTTP.Endpoint
-  alias Vxpipe.Gateway.Telephony.Telnyx.MediaSocket
+  alias Vxpipe.Providers.Telnyx.TelephonyMediaSocket
 
   @fixture_root Path.expand("../fixtures/telnyx", __DIR__)
 
@@ -44,12 +44,15 @@ defmodule Vxpipe.Gateway.TelnyxFixture do
     with 101 <- upgraded.status,
          [
            {:websocket,
-            {MediaSocket, %{binding: binding},
+            {TelephonyMediaSocket, %{binding: binding},
              [timeout: 30_000, max_frame_size: 131_072, early_validate_upgrade: false]}}
          ] <- sent_upgrades(upgraded),
-         {:ok, socket} <- MediaSocket.init(%{binding: binding}),
+         {:ok, socket} <- TelephonyMediaSocket.init(%{binding: binding}),
          {:ok, socket} <-
-           MediaSocket.handle_in({body("media-start", replacements), opcode: :text}, socket),
+           TelephonyMediaSocket.handle_in(
+             {body("media-start", replacements), opcode: :text},
+             socket
+           ),
          {:ok, socket} <- Vxpipe.Gateway.TestSocketDispatch.await(socket) do
       {:ok, binding, socket}
     else

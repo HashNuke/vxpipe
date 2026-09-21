@@ -3,8 +3,9 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
 
   @behaviour Plug
 
-  alias Vxpipe.Gateway.HTTP.{Cors, Router, TelnyxEvents, TwilioEvents, TwilioMedia}
+  alias Vxpipe.Gateway.HTTP.{Cors, Router, TwilioEvents, TwilioMedia}
   alias Vxpipe.Gateway.Telemetry, as: GatewayTelemetry
+  alias Vxpipe.Providers.Telnyx
 
   @impl true
   def init(options) do
@@ -43,7 +44,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
   end
 
   defp parse_and_route(conn, parser_options, router_options) do
-    if TelnyxEvents.route?(conn) or TwilioEvents.route?(conn) or TwilioMedia.route?(conn) do
+    if Telnyx.Events.route?(conn) or TwilioEvents.route?(conn) or TwilioMedia.route?(conn) do
       Router.call(conn, router_options)
     else
       conn

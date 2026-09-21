@@ -47,8 +47,10 @@ credential version was tested by this contract.
 Provider-specific knowledge lives under a provider directory in the umbrella child that owns the
 integration. The `vxpipe_providers` child owns manifests, credential schemas and pure credential
 test-request descriptions. Deepgram's speech sessions and sockets use the
-`Vxpipe.Providers.Deepgram` namespace while compiling in CallEngine; Console executes the declared
-probe. Other provider integrations retain their existing names until migrated. The
+`Vxpipe.Providers.Deepgram` namespace while compiling in CallEngine. Telnyx's signed webhook,
+media socket, telephony profile and HTTP handlers use `Vxpipe.Providers.Telnyx` while compiling in
+Gateway. Console executes both declared probes. Other provider integrations retain their existing
+names until migrated. The
 [provider-package milestone](milestones/provider-integration-packages.md) tracks that progression.
 
 This is the current lightweight provider-package boundary. Adding a provider means adding its local

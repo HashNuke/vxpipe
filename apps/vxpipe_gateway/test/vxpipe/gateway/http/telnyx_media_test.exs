@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxMediaTest do
 
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.Telephony.{MediaAdmission, MediaBinding}
-  alias Vxpipe.Gateway.Telephony.Telnyx.MediaSocket
+  alias Vxpipe.Providers.Telnyx.TelephonyMediaSocket
 
   setup do
     admission = start_supervised!({MediaAdmission, name: nil})
@@ -31,7 +31,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxMediaTest do
 
     assert [
              {:websocket,
-              {MediaSocket, %{binding: context.binding},
+              {TelephonyMediaSocket, %{binding: context.binding},
                [timeout: 30_000, max_frame_size: 131_072, early_validate_upgrade: false]}}
            ] == sent_upgrades(upgraded)
 

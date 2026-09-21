@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   use Phoenix.Controller, formats: [:json]
 
   alias Vxpipe.Calls.InstallationOperator
-  alias Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint
+  alias Vxpipe.Providers.Telnyx.PublicEndpoint
 
   def platform_index(conn, _params), do: bindings(conn, :platform)
   def tenant_bindings(conn, %{"tenant_key" => key}), do: bindings(conn, key)

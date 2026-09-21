@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
-  alias Vxpipe.Gateway.Telephony.Telnyx.Adapter, as: TelnyxAdapter
+  alias Vxpipe.Providers.Telnyx.Adapter, as: TelnyxAdapter
 
   @moduletag :integration
   @moduletag :telnyx_live

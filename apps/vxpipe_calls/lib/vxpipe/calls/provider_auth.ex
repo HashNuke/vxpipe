@@ -1,24 +1,14 @@
 defmodule Vxpipe.Calls.ProviderAuth do
   @moduledoc "Closed, local validation of supported provider credential payloads."
 
-  @api_key_providers ["google", "zenmux", "telnyx", "rime"]
+  @api_key_providers ["google", "zenmux", "rime"]
   @providers @api_key_providers ++ ["twilio"]
 
   @spec validate(term(), term(), term()) :: :ok | {:error, :invalid_provider_auth}
-  def validate("deepgram", kind, payload) do
-    case Vxpipe.Providers.Registry.resolve_capability("deepgram", :credential) do
+  def validate(provider, kind, payload) when provider in ["deepgram", "telnyx"] do
+    case Vxpipe.Providers.Registry.resolve_capability(provider, :credential) do
       {:ok, schema} -> schema.validate(kind, payload)
       {:error, _reason} -> {:error, :invalid_provider_auth}
-    end
-  end
-
-  def validate("telnyx", "api_key", %{"api_key" => key, "public_key" => public_key} = payload)
-      when map_size(payload) == 2 do
-    with :ok <- validate("telnyx", "api_key", %{"api_key" => key}),
-         true <- telnyx_public_key?(public_key) do
-      :ok
-    else
-      _invalid -> {:error, :invalid_provider_auth}
     end
   end
 
@@ -43,24 +33,14 @@ defmodule Vxpipe.Calls.ProviderAuth do
   def validate(_provider, _kind, _payload), do: {:error, :invalid_provider_auth}
 
   @doc false
-  def telnyx_public_key?(value) when is_binary(value) and byte_size(value) == 44 do
-    case Base.decode64(value) do
-      {:ok, decoded} when byte_size(decoded) == 32 -> true
-      _invalid -> false
-    end
-  end
-
-  def telnyx_public_key?(_value), do: false
-
-  @doc false
   def twilio_account_sid?(value) when is_binary(value),
     do: Regex.match?(~r/\AAC[0-9a-fA-F]{32}\z/, value)
 
   def twilio_account_sid?(_value), do: false
 
   @spec binding(term(), term(), term()) :: :ok | {:error, atom()}
-  def binding(owner, "deepgram", name) do
-    with {:ok, _schema} <- Vxpipe.Providers.Registry.resolve_capability("deepgram", :credential) do
+  def binding(owner, provider, name) when provider in ["deepgram", "telnyx"] do
+    with {:ok, _schema} <- Vxpipe.Providers.Registry.resolve_capability(provider, :credential) do
       provider_binding(owner, name)
     else
       {:error, _reason} -> {:error, :invalid_provider_auth}
@@ -93,6 +73,5 @@ defmodule Vxpipe.Calls.ProviderAuth do
       else: {:error, :invalid_tenant_key}
   end
 
-  defp maximum_key_bytes("telnyx"), do: 4_096
   defp maximum_key_bytes(_provider), do: 8_192
 end

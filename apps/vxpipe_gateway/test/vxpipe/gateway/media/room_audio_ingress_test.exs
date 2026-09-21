@@ -49,7 +49,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
 
   for {transport, pipeline, codec, rate, channels} <- [
         {:webrtc, Vxpipe.Gateway.WebRTC.AudioPipeline, :opus, 48_000, 2},
-        {:telnyx, Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline, :opus, 16_000, 1},
+        {:telnyx, Vxpipe.Providers.Telnyx.AudioIngressPipeline, :opus, 16_000, 1},
         {:twilio, Vxpipe.Gateway.Telephony.Twilio.AudioIngressPipeline, :pcmu, 8_000, 1}
       ] do
     @pipeline pipeline

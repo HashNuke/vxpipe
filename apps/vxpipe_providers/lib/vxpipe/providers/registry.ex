@@ -1,7 +1,10 @@
 defmodule Vxpipe.Providers.Registry do
   @moduledoc "Fixed, exact provider capability catalog."
 
-  @providers %{"deepgram" => Vxpipe.Providers.Deepgram}
+  @providers %{
+    "deepgram" => Vxpipe.Providers.Deepgram,
+    "telnyx" => Vxpipe.Providers.Telnyx
+  }
 
   @spec fetch(term()) :: {:ok, module()} | {:error, :unsupported_provider}
   def fetch(provider) do

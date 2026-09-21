@@ -242,7 +242,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
              service.credential_name
            ),
          true <-
-           Vxpipe.Calls.ProviderAuth.telnyx_public_key?(Map.get(credential.payload, "public_key")) do
+           Vxpipe.Providers.Telnyx.Credential.public_key?(Map.get(credential.payload, "public_key")) do
       {:ok, {owner.id, credential}}
     else
       _unavailable -> {:error, :provider_credential_unavailable}
