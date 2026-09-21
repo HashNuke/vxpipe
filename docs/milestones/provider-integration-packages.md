@@ -14,8 +14,8 @@ Design sources: [provider integration packages](../provider-integration-packages
 ## Runnable outcome
 
 Console, CallEngine and Gateway resolve provider capabilities through one fixed manifest registry.
-Deepgram speech uses `Vxpipe.Provider.Deepgram`, including `STTSocket` and `TTSSocket`. Telnyx
-telephony uses `Vxpipe.Provider.Telnyx`, including `TelephonyMediaSocket`. Credential schemas and
+Deepgram speech uses `Vxpipe.Providers.Deepgram`, including `STTSocket` and `TTSSocket`. Telnyx
+telephony uses `Vxpipe.Providers.Telnyx`, including `TelephonyMediaSocket`. Credential schemas and
 test-request construction belong to their provider namespaces. Missing capabilities fail explicitly;
 there is no compatibility namespace, fallback adapter or dynamic registration path.
 
@@ -36,8 +36,8 @@ admission and credential storage remain behaviorally unchanged.
 
 ## Checkpoint A — Contract and fixed catalog
 
-- [ ] Add the dependency-light provider umbrella child with `Vxpipe.Provider`, capability types and
-  `Vxpipe.Provider.Registry`.
+- [ ] Add the dependency-light `vxpipe_providers` umbrella child with the `Vxpipe.Providers`
+  contract, capability types and `Vxpipe.Providers.Registry`.
 - [ ] Add manifests for every currently configurable provider and focused tests for exact supported,
   unsupported-provider and unsupported-capability results.
 - [ ] Make provider/auth validation resolve provider-owned credential schemas through the registry.
@@ -46,7 +46,7 @@ admission and credential storage remain behaviorally unchanged.
 
 ## Checkpoint B — Provider-owned credential testing
 
-- [ ] Move credential-test contracts and request builders to `Vxpipe.Provider.<Provider>`.
+- [ ] Move credential-test contracts and request builders to `Vxpipe.Providers.<Provider>`.
 - [ ] Make the Console HTTP executor resolve the declared credential-test capability rather than its
   own provider map.
 - [ ] Preserve one bounded request, disabled retries/redirects, secret filtering and independent Save.
@@ -55,7 +55,7 @@ admission and credential storage remain behaviorally unchanged.
 
 ## Checkpoint C — Deepgram package
 
-- [ ] Move Deepgram modules and tests to the `Vxpipe.Provider.Deepgram` namespace.
+- [ ] Move Deepgram modules and tests to the `Vxpipe.Providers.Deepgram` namespace.
 - [ ] Rename the concrete wire modules to `STTSocket` and `TTSSocket`; retain their shared private
   connection machinery and existing semantic session contracts.
 - [ ] Replace CallEngine's Deepgram provider-name/module lists with manifest lookup while keeping
@@ -65,7 +65,7 @@ admission and credential storage remain behaviorally unchanged.
 
 ## Checkpoint D — Telnyx package
 
-- [ ] Move Telnyx-specific modules and tests to `Vxpipe.Provider.Telnyx`.
+- [ ] Move Telnyx-specific modules and tests to `Vxpipe.Providers.Telnyx`.
 - [ ] Rename `MediaSocket` to `TelephonyMediaSocket` and update HTTP/media/telephony composition.
 - [ ] Resolve Telnyx telephony support through its manifest without changing signed webhook,
   admission, media, transfer, cancellation or cleanup behavior.

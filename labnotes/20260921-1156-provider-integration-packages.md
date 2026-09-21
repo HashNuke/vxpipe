@@ -2,12 +2,12 @@
 
 ## Objective
 
-Give each provider one explicit capability manifest and one logical `Vxpipe.Provider.<Provider>`
+Give each provider one explicit capability manifest and one logical `Vxpipe.Providers.<Provider>`
 package while preserving the existing Console, CallEngine and Gateway runtime ownership.
 
 ## Decisions
 
-- Use a dependency-light shared provider contract/catalog application and a fixed registry. Do not
+- Use a dependency-light shared `vxpipe_providers` contract/catalog application and a fixed registry. Do not
   add a registry process, runtime discovery, fallback lookup or compatibility namespace.
 - Keep concrete modules in the umbrella child that owns their runtime dependencies, but use the
   common provider namespace. The initial dependency audit showed that Deepgram implements
@@ -16,9 +16,9 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
 - Provider manifests compose the existing focused credential, STT, TTS and telephony contracts.
   Capability support, scoped configuration and runtime readiness remain separate facts.
 - Keep model inference in the shared ReqLLM adapter. Provider packages do not duplicate it.
-- Accepted concrete names: `Vxpipe.Provider.Deepgram.STTSocket`,
-  `Vxpipe.Provider.Deepgram.TTSSocket`, and
-  `Vxpipe.Provider.Telnyx.TelephonyMediaSocket`.
+- Accepted concrete names: `Vxpipe.Providers.Deepgram.STTSocket`,
+  `Vxpipe.Providers.Deepgram.TTSSocket`, and
+  `Vxpipe.Providers.Telnyx.TelephonyMediaSocket`.
 
 ## Baseline
 

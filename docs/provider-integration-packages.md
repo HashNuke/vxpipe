@@ -2,7 +2,7 @@
 
 ## Decision
 
-Vxpipe groups provider-specific code under `Vxpipe.Provider.<Provider>` and exposes a fixed provider
+Vxpipe groups provider-specific code under `Vxpipe.Providers.<Provider>` and exposes a fixed provider
 manifest. A manifest declares only the capabilities that provider supplies. The initial capability
 set is credential schema, credential testing, speech to text, text to speech and telephony. Missing
 capabilities return an explicit unsupported result; registry lookup never selects another provider.
@@ -20,14 +20,14 @@ their contracts. No provider process, registry process or dynamic module discove
 
 ## Contract
 
-Each provider root implements `Vxpipe.Provider`:
+Each provider root implements `Vxpipe.Providers`:
 
 ```elixir
 @callback id() :: String.t()
 @callback capabilities() :: %{optional(capability()) => module()}
 ```
 
-`Vxpipe.Provider.Registry` is the only provider-name registry. It supports exact lookup and reports
+`Vxpipe.Providers.Registry` is the only provider-name registry. It supports exact lookup and reports
 `{:error, :unsupported_provider}` or `{:error, :unsupported_provider_capability}`. Internal modules
 may live under the provider directory without appearing in the manifest.
 
@@ -61,9 +61,9 @@ this registry.
 The accepted concrete names are:
 
 ```text
-Vxpipe.Provider.Deepgram.STTSocket
-Vxpipe.Provider.Deepgram.TTSSocket
-Vxpipe.Provider.Telnyx.TelephonyMediaSocket
+Vxpipe.Providers.Deepgram.STTSocket
+Vxpipe.Providers.Deepgram.TTSSocket
+Vxpipe.Providers.Telnyx.TelephonyMediaSocket
 ```
 
 The socket names describe provider wire implementations. Public speech consumers continue to use
