@@ -4,6 +4,7 @@ defmodule Vxpipe.Providers.Registry do
   @providers %{
     "deepgram" => Vxpipe.Providers.Deepgram,
     "google" => Vxpipe.Providers.Google,
+    "rime" => Vxpipe.Providers.Rime,
     "telnyx" => Vxpipe.Providers.Telnyx
   }
 

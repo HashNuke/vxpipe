@@ -74,3 +74,12 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
 - Calls operator credential tests pass 18/18. Complete Calls and Console suites pass 117/117 and
   186/186 (one excluded). No network interoperability probe was run; the default lane uses a
   synthetic request adapter.
+
+## Rime provider checkpoint
+
+- The new contract tests failed on absent modules and manifest entry (four failures). Rime now
+  owns its bounded credential shape and existing one-request `POST /oov` probe in
+  `vxpipe_providers`; Calls and Console resolve them through the manifest. The Rime manifest does
+  not declare a speech capability without a concrete speech runtime.
+- Provider suite passes 12/12; complete Calls and Console suites pass 117/117 and 186/186
+  (one excluded), all zero failures.

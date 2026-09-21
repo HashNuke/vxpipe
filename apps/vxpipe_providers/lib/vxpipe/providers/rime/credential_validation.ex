@@ -1,7 +1,7 @@
-defmodule Vxpipe.Console.Provider.Rime.CredentialValidation do
+defmodule Vxpipe.Providers.Rime.CredentialValidation do
   @moduledoc false
 
-  @behaviour Vxpipe.Console.Provider.CredentialValidation
+  @behaviour Vxpipe.Providers.CredentialValidation
 
   @impl true
   def request("api_key", %{"api_key" => api_key} = payload) when map_size(payload) == 1 do

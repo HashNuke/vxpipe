@@ -1,9 +1,9 @@
 # Provider integration packages
 
-Status: Deepgram, Telnyx and Google AI Studio integrations migrated and tested; the shared registry
-declares all three. Implementation is **3 of 7 provider/final checkpoints complete**. Each provider
-is migrated, tested, fixed and committed as a complete unit before the next provider is added to the
-registry.
+Status: Deepgram, Telnyx, Google AI Studio and Rime integrations migrated and tested; the shared
+registry declares all four. Implementation is **4 of 7 provider/final checkpoints complete**. Each
+provider is migrated, tested, fixed and committed as a complete unit before the next provider is
+added to the registry.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Telnyx calls](telnyx-calls.md), and
@@ -93,9 +93,14 @@ in AgentRuntime and no Google speech or telephony capability is declared.
 
 ## Checkpoint D — Rime package
 
-- [ ] Add the provider-owned credential schema and credential-test request to its manifest; migrate
+- [x] Add the provider-owned credential schema and credential-test request to its manifest; migrate
   Calls and Console consumers without inventing an unsupported runtime capability.
-- [ ] Exit: credential shape, test/save and unsupported-capability tests pass.
+- [x] Exit: credential shape, test/save and unsupported-capability tests pass.
+
+Rime evidence: the new contract tests first failed on the absent modules and manifest (four
+failures). The provider suite now passes 12/12; complete Calls and Console suites pass 117/117 and
+186/186 (one excluded). Its manifest declares credential schema and testing only, with no speech
+capability until a concrete Rime speech integration exists.
 
 ## Checkpoint E — Twilio package
 
