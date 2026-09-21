@@ -6,7 +6,8 @@ defmodule Vxpipe.Providers.Registry do
     "google" => Vxpipe.Providers.Google,
     "rime" => Vxpipe.Providers.Rime,
     "telnyx" => Vxpipe.Providers.Telnyx,
-    "twilio" => Vxpipe.Providers.Twilio
+    "twilio" => Vxpipe.Providers.Twilio,
+    "zenmux" => Vxpipe.Providers.Zenmux
   }
 
   @spec fetch(term()) :: {:ok, module()} | {:error, :unsupported_provider}

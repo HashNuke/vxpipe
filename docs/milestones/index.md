@@ -106,8 +106,8 @@ The packaging/retention hold is unchanged.
 The 2026-09-21 [provider integration package](provider-integration-packages.md) milestone follows
 the speech migration. It introduces one fixed capability manifest per provider and moves existing
 Deepgram, Telnyx and credential-test implementations under `Vxpipe.Providers.*` without changing
-runtime topology. Deepgram, Telnyx, Google AI Studio, Rime and Twilio are the first five of seven
-checkpoints complete; each remaining provider is migrated and committed as a complete vertical slice.
+runtime topology. All six provider integrations are committed and tested; the final umbrella
+acceptance checkpoint remains pending.
 
 ## How to use this index
 

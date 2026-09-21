@@ -3,12 +3,6 @@ defmodule Vxpipe.Console.ProviderCredentialValidator do
 
   @behaviour Vxpipe.Calls.ProviderCredentialValidator
 
-  alias Vxpipe.Console.Provider
-
-  @credential_validators %{
-    "zenmux" => Provider.Zenmux.CredentialValidation
-  }
-
   @impl true
   def validate(options, provider, auth_kind, payload) when is_list(options) do
     with {:ok, request} <- request(provider, auth_kind, payload),
@@ -25,19 +19,13 @@ defmodule Vxpipe.Console.ProviderCredentialValidator do
     _kind, _reason -> {:error, :provider_validation_unavailable}
   end
 
-  defp request(provider, auth_kind, payload)
-       when provider in ["deepgram", "google", "rime", "telnyx", "twilio"] do
+  defp request(provider, auth_kind, payload) do
     with {:ok, validator} <-
            Vxpipe.Providers.Registry.resolve_capability(provider, :credential_validation) do
       validator.request(auth_kind, payload)
-    end
-  end
-
-  defp request(provider, auth_kind, payload) do
-    with {:ok, validator} <- Map.fetch(@credential_validators, provider) do
-      validator.request(auth_kind, payload)
     else
-      :error -> {:error, :provider_validation_unsupported}
+      {:error, :provider_implementation_unavailable} -> {:error, :provider_validation_unavailable}
+      {:error, _unsupported} -> {:error, :provider_validation_unsupported}
     end
   end
 

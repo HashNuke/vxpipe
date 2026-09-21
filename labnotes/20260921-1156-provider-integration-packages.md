@@ -98,3 +98,12 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
 - Root format, warnings-as-errors compilation, strict Credo and unused-dependency checks pass.
   A test-build module-loader check confirms old Twilio media/HTTP, Telnyx socket and Deepgram
   speech module identities are unavailable after compilation.
+
+## Zenmux provider checkpoint
+
+- Contract tests failed on missing modules and manifest entry (four failures). Zenmux now owns its
+  bounded API-key shape and read-only model-list probe in `vxpipe_providers`. Calls and Console use
+  the registry for all six provider credential schemas and tests; the old Console provider map and
+  probe behaviour are removed. Zenmux inference remains in shared ReqLLM.
+- Provider suite passes 16/16; complete Calls and Console suites pass 117/117 and 186/186 (one
+  excluded), all zero failures.

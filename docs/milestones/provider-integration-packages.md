@@ -1,7 +1,7 @@
 # Provider integration packages
 
-Status: Deepgram, Telnyx, Google AI Studio, Rime and Twilio integrations migrated and tested; the
-shared registry declares all five. Implementation is **5 of 7 provider/final checkpoints complete**.
+Status: All six provider integrations migrated and tested; the shared registry declares them.
+Implementation is **6 of 7 provider/final checkpoints complete**.
 Each provider is migrated, tested, fixed and committed as a complete unit before the next provider
 is added to the registry.
 
@@ -119,9 +119,14 @@ unavailable.
 
 ## Checkpoint F — Zenmux package
 
-- [ ] Add the credential schema/test to its manifest and migrate Calls/Console; leave model inference
+- [x] Add the credential schema/test to its manifest and migrate Calls/Console; leave model inference
   in shared ReqLLM.
-- [ ] Exit: credential shape, test/save and unsupported-capability tests pass.
+- [x] Exit: credential shape, test/save and unsupported-capability tests pass.
+
+Zenmux evidence: new contract tests failed on missing modules/manifest (four failures), then the
+provider suite passed 16/16. Complete Calls and Console suites pass 117/117 and 186/186 (one
+excluded). Both consumers now resolve every provider's credential schema/probe through the registry;
+the old Console probe behaviour and provider map are gone. Model inference remains in shared ReqLLM.
 
 ## Checkpoint G — Final consumers and acceptance
 

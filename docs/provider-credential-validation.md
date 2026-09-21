@@ -52,9 +52,9 @@ media socket, telephony profile and HTTP handlers use `Vxpipe.Providers.Telnyx` 
 Gateway. Google AI Studio's credential schema and probe use `Vxpipe.Providers.Google`; its model
 inference continues through shared ReqLLM. Rime's credential shape and probe use
 `Vxpipe.Providers.Rime`. Twilio's account credential and telephony modules use
-`Vxpipe.Providers.Twilio`. Console executes these declared probes. Other provider
-integrations retain their existing
-names until migrated. The
+`Vxpipe.Providers.Twilio`. Zenmux's credential shape and probe use
+`Vxpipe.Providers.Zenmux`; model inference remains in shared ReqLLM. Console executes the declared
+probes. The
 [provider-package milestone](milestones/provider-integration-packages.md) tracks that progression.
 
 This is the current lightweight provider-package boundary. Adding a provider means adding its local
