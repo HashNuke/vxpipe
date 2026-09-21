@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
 
 import { serviceFixture } from "./serviceFixtures";
@@ -20,6 +20,9 @@ test("shows safe credential previews and compact update times", () => {
   expect(
     screen.getByRole("img", { name: "Deepgram service logo" }),
   ).toBeVisible();
+  expect(screen.getByText("Deepgram").closest("li")).toHaveTextContent("Speech-to-text");
+  expect(screen.getByText("Deepgram").closest("li")).toHaveTextContent("Text-to-speech");
+  expect(screen.getByText("Telnyx").closest("li")).toHaveTextContent("Telephony");
   expect(
     screen.getByRole("img", { name: "Google AI Studio service logo" }),
   ).toHaveAttribute("data-logo-source", "official");
@@ -80,10 +83,10 @@ test("opens credential editing without revealing the stored secret", () => {
 
 test("opens and closes credential setup while restoring trigger focus", () => {
   render(<TenantServicesPage state={serviceFixture("populated")} />);
-  const trigger = screen.getByRole("button", { name: "Add credential" });
+  const trigger = screen.getByRole("button", { name: "Connect a service" });
 
   fireEvent.click(trigger);
-  expect(screen.getByRole("dialog", { name: "Add credential" })).toBeVisible();
+  expect(screen.getByRole("dialog", { name: "Connect a service" })).toBeVisible();
   expect(screen.getByLabelText("Provider")).toHaveFocus();
   screen.getByRole("button", { name: "Save" }).focus();
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" });
@@ -99,13 +102,13 @@ test("opens and closes credential setup while restoring trigger focus", () => {
 test("keeps empty and unavailable service inventories distinct", () => {
   const view = render(<TenantServicesPage state={serviceFixture("empty")} />);
   expect(screen.getByText("No services yet")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Add credential" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Connect a service" })).toBeEnabled();
 
   view.rerender(<TenantServicesPage state={serviceFixture("unavailable")} />);
   expect(screen.getByRole("alert")).toHaveTextContent(
     "Services could not be loaded",
   );
-  expect(screen.getByRole("button", { name: "Add credential" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Connect a service" })).toBeDisabled();
 });
 
 test("keeps a bounded partial inventory usable and labels it truthfully", () => {
@@ -116,13 +119,14 @@ test("keeps a bounded partial inventory usable and labels it truthfully", () => 
   );
 
   expect(screen.getByText(/partial inventory/i)).toBeVisible();
-  expect(screen.getByRole("button", { name: "Add credential" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Connect a service" })).toBeEnabled();
 });
 
 test("presents duplicate credentials as a conflict without a replace action", () => {
   render(<TenantServicesPage state={serviceFixture("duplicate-conflict")} />);
 
-  expect(screen.getByRole("alert")).toHaveTextContent("already exists");
+  expect(screen.getByRole("alert", { name: "Notification" })).toHaveTextContent("already exists");
+  expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent("already exists");
   expect(
     screen.queryByRole("button", { name: /replace|overwrite/i }),
   ).not.toBeInTheDocument();

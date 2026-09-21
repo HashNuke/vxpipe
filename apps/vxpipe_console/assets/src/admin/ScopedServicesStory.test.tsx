@@ -16,12 +16,7 @@ afterEach(() => {
 });
 
 function manageTelnyx() {
-  fireEvent.click(
-    within(screen.getByRole("region", { name: "Telephony" })).getByRole(
-      "button",
-      { name: "Manage Telnyx" },
-    ),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Manage Telnyx" }));
 }
 function saveKey() {
   fireEvent.change(screen.getByLabelText("API key"), {
@@ -101,7 +96,7 @@ test("inherited services count toward readiness and Telnyx overrides use an inde
     "http://localhost:4000/webhooks/tenants/demo-tenant/telnyx",
   );
   saveKey();
-  const telephony = within(screen.getByRole("region", { name: "Telephony" }));
+  const telephony = within(screen.getByRole("article", { name: "Telnyx" }));
   expect(telephony.getByText("Tenant override")).toBeVisible();
   expect(telephony.getByText("Public key needed")).toBeVisible();
   manageTelnyx();
@@ -134,12 +129,7 @@ test("a failed tenant override never uses platform readiness", () => {
 test("platform saves become available to a newly created tenant", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="platform-services" theme="dark" />);
-  fireEvent.click(
-    within(screen.getByRole("region", { name: "AI providers" })).getAllByRole(
-      "button",
-      { name: "Connect a service" },
-    )[0],
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Service"), {
     target: { value: "deepgram" },
   });

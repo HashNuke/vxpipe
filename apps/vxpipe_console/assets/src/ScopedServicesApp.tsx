@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminShell } from "./admin/AdminShell";
 import { Button } from "./admin/Button";
+import { PageToast } from "./admin/PageToast";
 import {
   ServiceSetupModal,
   type ServiceModalState,
@@ -55,7 +56,7 @@ export function ScopedServicesApp({
   );
   const [modal, setModal] = useState<Modal | null>(null);
   const [retry, setRetry] = useState(0);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [removingProvider, setRemovingProvider] = useState<SetupProviderId | null>(null);
   const saving = useRef<AbortController | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
@@ -104,7 +105,7 @@ export function ScopedServicesApp({
     if (saving.current) return;
     trigger.current = document.activeElement as HTMLElement;
     setModal(next);
-    setNotice("");
+    setNotice(null);
   }
   function close() {
     if (saving.current) return;
@@ -193,7 +194,7 @@ export function ScopedServicesApp({
     );
     if (!selected?.credentialId || (tenantKey && selected.source !== "tenant"))
       return;
-    setNotice("");
+    setNotice(null);
     await mutate(
       `${prefix}/credentials/${encodeURIComponent(selected.credentialId)}`,
       "DELETE",
@@ -260,9 +261,10 @@ export function ScopedServicesApp({
       if (controller.signal.aborted) return;
       setDirectory(next);
       if (activeModal) setModal(null);
-      setNotice(
-        operation === "removal" ? "Credentials removed." : "Service saved.",
-      );
+      setNotice({
+        message: operation === "removal" ? "Credentials removed." : "Service saved.",
+        kind: "success",
+      });
       requestAnimationFrame(() =>
         cardProvider ? main.current?.focus() : trigger.current?.focus(),
       );
@@ -271,19 +273,22 @@ export function ScopedServicesApp({
       if (stored) {
         if (activeModal) setModal(null);
         setPhase("unavailable");
-        setNotice(
-          operation === "removal"
+        setNotice({
+          message: operation === "removal"
             ? "Credentials removed. Retry to load the current state."
             : "Service saved. Retry to load its current state.",
-        );
+          kind: "error",
+        });
       } else {
         const message =
           error instanceof Error
             ? error.message
             : "Credentials could not be saved. Try again.";
-        if (cardProvider) setNotice(message);
-        else if (activeModal)
+        if (cardProvider) setNotice({ message, kind: "error" });
+        else if (activeModal) {
+          setNotice({ message, kind: "error" });
           setModal({ ...activeModal, status: "error", message });
+        }
       }
     } finally {
       if (saving.current === controller) saving.current = null;
@@ -368,11 +373,11 @@ export function ScopedServicesApp({
             onRetry={() => setRetry((value) => value + 1)}
             removingProvider={removingProvider}
             onRemoveCredentials={removeCardCredentials}
-            onConnect={(provider, group) =>
-              open({ provider, group, status: "idle" })
+            onConnect={(provider) =>
+              open({ provider, status: "idle" })
             }
-            onBrowse={(group) =>
-              open({ provider: null, group, status: "idle" })
+            onBrowse={() =>
+              open({ provider: null, status: "idle" })
             }
           />
         )}
@@ -418,7 +423,7 @@ export function ScopedServicesApp({
             fetchImpl={fetchImpl}
             onSessionExpired={onSessionExpired}
             onConnectionDetails={() =>
-              open({ provider: "telnyx", group: "telephony", status: "idle" })
+              open({ provider: "telnyx", status: "idle" })
             }
           />
         ) : null}
@@ -450,8 +455,8 @@ export function ScopedServicesApp({
             </Button>
           </footer>
         ) : null}
-        {notice ? <p role="status">{notice}</p> : null}
       </main>
+      {notice ? <PageToast message={notice.message} kind={notice.kind} onDismiss={() => setNotice(null)} /> : null}
       {modal ? (
         <ServiceSetupModal
           state={modal}

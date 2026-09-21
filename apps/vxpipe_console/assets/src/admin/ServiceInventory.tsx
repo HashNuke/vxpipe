@@ -4,6 +4,7 @@ import type { ServiceInventoryItem } from "./serviceTypes";
 import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
 import { formatAdminLocalTimestamp } from "./formatAdminTimestamp";
 import { ServiceLogo } from "./ServiceLogo";
+import { capabilityLabels, setupProviders } from "./setupCatalog";
 
 export function ServiceInventory({
   onEdit,
@@ -13,11 +14,11 @@ export function ServiceInventory({
   services: ServiceInventoryItem[];
 }) {
   return (
-    <div aria-label="Services" className="overflow-x-auto">
-      <div className="min-w-[680px]">
+    <div aria-label="Services">
+      <div>
         <div
           aria-hidden="true"
-          className="grid grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px] gap-4 border-b border-[var(--admin-line)] px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)]"
+          className="hidden grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px] gap-4 border-b border-[var(--admin-line)] px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)] sm:grid"
         >
           <span>Service</span>
           <span>Credentials</span>
@@ -27,16 +28,23 @@ export function ServiceInventory({
         <ul className="m-0 list-none divide-y divide-[var(--admin-row-line)] p-0">
           {services.map((service) => (
             <li
-              className="grid grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px] items-center gap-4 px-4 py-4"
+              className="grid grid-cols-[minmax(0,1fr)_36px] items-start gap-x-3 gap-y-2 border-b border-[var(--admin-row-line)] px-4 py-4 sm:grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px] sm:items-center sm:gap-4 sm:border-b-0"
               key={service.id}
             >
-              <div className="flex min-w-0 items-center gap-3">
+              <div className="flex min-w-0 items-start gap-3">
                 <ServiceLogo name={service.name} provider={service.provider} />
-                <strong className="min-w-0 truncate text-sm">
-                  {service.name}
-                </strong>
+                <div className="min-w-0">
+                  <strong className="block min-w-0 truncate text-sm">{service.name}</strong>
+                  <div className="mt-1 flex min-w-0 flex-wrap gap-1">
+                    {setupProviders.find((provider) => provider.id === service.provider)?.capabilities.map((capability) => (
+                      <span className="rounded-sm border border-[var(--admin-line)] px-1.5 py-0.5 text-xs text-[var(--admin-muted)]" key={capability}>
+                        {capabilityLabels[capability]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 text-sm">
+              <div className="col-start-1 min-w-0 text-sm sm:col-auto">
                 {service.credentialPreview?.map((preview) => (
                   <div
                     className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-2 font-mono text-xs text-[var(--admin-muted)]"
@@ -57,7 +65,7 @@ export function ServiceInventory({
                 ))}
               </div>
               <time
-                className="text-sm text-[var(--admin-muted)]"
+                className="col-start-1 text-xs text-[var(--admin-muted)] sm:col-auto sm:text-sm"
                 dateTime={service.updatedAt}
                 title={formatAdminLocalTimestamp(service.updatedAt)}
               >
@@ -65,7 +73,7 @@ export function ServiceInventory({
               </time>
               <button
                 aria-label={`Edit ${service.name} credentials`}
-                className="inline-flex size-9 items-center justify-center rounded-sm text-[var(--admin-muted)] hover:bg-[var(--admin-soft)] hover:text-[var(--admin-ink)]"
+                className="col-start-2 row-start-1 inline-flex size-9 items-center justify-center rounded-sm text-[var(--admin-muted)] hover:bg-[var(--admin-soft)] hover:text-[var(--admin-ink)] sm:col-auto sm:row-auto"
                 onClick={() => onEdit?.(service)}
                 type="button"
               >

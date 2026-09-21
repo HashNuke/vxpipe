@@ -150,9 +150,9 @@ test("reaches services through the tenant workspace", () => {
 
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/services");
   expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Add credential" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Connect a service" })).toBeVisible();
 
-  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Provider"), {
     target: { value: "zenmux" },
   });
@@ -162,12 +162,12 @@ test("reaches services through the tenant workspace", () => {
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Credential stored");
+  expect(screen.getByRole("status", { name: "Notification" })).toHaveTextContent("Service saved.");
   expect(
     screen.getByRole("button", { name: "Edit Zenmux credentials" }),
   ).toBeVisible();
 
-  fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   expect(screen.getByLabelText("API key")).toHaveValue("");
   expect(
     within(screen.getByRole("dialog")).queryByText("Credential stored."),

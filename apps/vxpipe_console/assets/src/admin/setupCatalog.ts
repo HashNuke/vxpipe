@@ -64,15 +64,6 @@ export function installedSetupProviders(
     ];
   });
 }
-export type SetupServiceGroup = "ai" | "telephony";
-export function providerInGroup(
-  provider: SetupProvider,
-  group: SetupServiceGroup,
-) {
-  return group === "telephony"
-    ? provider.capabilities.includes("telephony")
-    : !provider.capabilities.includes("telephony");
-}
 export const voiceCapabilities: VoiceCapability[] = ["stt", "llm", "tts"];
 export const capabilityLabels = {
   stt: "Speech-to-text",

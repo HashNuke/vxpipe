@@ -15,25 +15,49 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function serviceTrigger(group = "AI providers") {
-  return within(screen.getByRole("region", { name: group })).getAllByRole(
-    "button",
-    { name: "Connect a service" },
-  )[0];
+function serviceTrigger() {
+  return screen.getByRole("button", { name: "Connect a service" });
 }
 
-function selectService(provider: string, group = "AI providers") {
-  fireEvent.click(serviceTrigger(group));
+function selectService(provider: string) {
+  fireEvent.click(serviceTrigger());
   fireEvent.change(screen.getByRole("combobox", { name: "Service" }), {
     target: { value: provider },
   });
 }
 
-function serviceButtons(group: string) {
-  return within(screen.getByRole("region", { name: group }))
+function serviceButtons() {
+  return within(screen.getByRole("region", { name: "Setup services" }))
     .getAllByRole("button")
     .map((button) => button.getAttribute("aria-label") ?? button.textContent);
 }
+
+test("one service list connects Telnyx and Deepgram from the same picker", () => {
+  vi.useFakeTimers();
+  render(<OnboardingStory scenario="choose-services" theme="dark" />);
+
+  expect(screen.queryByRole("heading", { name: "AI providers" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Telephony" })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Connect a service" })).toHaveLength(1);
+
+  for (const provider of ["telnyx", "deepgram"]) {
+    fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
+    const picker = screen.getByRole("combobox", { name: "Service" });
+    expect(within(picker).getByRole("option", { name: "Telnyx" })).toBeVisible();
+    expect(within(picker).getByRole("option", { name: "Deepgram" })).toBeVisible();
+    fireEvent.change(picker, { target: { value: provider } });
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: `storybook-${provider}-key` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    act(() => vi.advanceTimersByTime(1000));
+  }
+
+  expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
+  expect(screen.getAllByRole("article", { name: "Deepgram" })).toHaveLength(1);
+  expect(within(screen.getByRole("article", { name: "Telnyx" })).getByText("Telephony")).toBeVisible();
+  expect(within(screen.getByRole("article", { name: "Deepgram" })).getByText("Speech-to-text")).toBeVisible();
+});
 
 test("all tenants share service copy and three explicit steps without samples on services", () => {
   const view = render(
@@ -57,7 +81,7 @@ test("all tenants share service copy and three explicit steps without samples on
   expect(screen.getByText("Tenant created: Customer Care")).toBeVisible();
   expect(
     screen.getByText(
-      "Connect AI and Telephony services to get started. You can rename this tenant later.",
+      "Connect services to get started. You can rename this tenant later.",
     ),
   ).toBeVisible();
 });
@@ -109,24 +133,20 @@ test.each(["Create & Join Calls", "Full Access"])(
   },
 );
 
-test("empty groups keep a heading action and an add card that open the service picker", () => {
+test("empty services keep one connect action that opens the service picker", () => {
   render(<OnboardingStory scenario="choose-services" theme="dark" />);
 
   expect(screen.getByText("Tenant created: Demo")).toBeVisible();
   expect(
     screen.getByText(
-      "Connect AI and Telephony services to get started. You can rename this tenant later.",
+      "Connect services to get started. You can rename this tenant later.",
     ),
   ).toBeVisible();
   expect(
     screen.getByRole("heading", { name: "Setup services", level: 1 }),
   ).toBeVisible();
-  expect(
-    screen.getByRole("heading", { name: "AI providers", level: 2 }),
-  ).toBeVisible();
-  expect(
-    screen.getByRole("heading", { name: "Telephony", level: 2 }),
-  ).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "AI providers" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Telephony" })).not.toBeInTheDocument();
   expect(
     screen.queryByRole("heading", { name: "Tenant created: Demo" }),
   ).not.toBeInTheDocument();
@@ -141,14 +161,7 @@ test("empty groups keep a heading action and an add card that open the service p
       "Connect Speech-to-speech, or Speech-to-text + LLM + Text-to-speech.",
     ),
   ).not.toBeInTheDocument();
-  expect(serviceButtons("AI providers")).toEqual([
-    "Connect a service",
-    "Connect a service",
-  ]);
-  expect(serviceButtons("Telephony")).toEqual([
-    "Connect a service",
-    "Connect a service",
-  ]);
+  expect(serviceButtons()).toEqual(["Connect a service"]);
   const trigger = serviceTrigger();
   trigger.focus();
   fireEvent.click(trigger);
@@ -322,7 +335,7 @@ test("creating a tenant asks only for a name and opens its own empty service set
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByText("Tenant created: Customer Care")).toBeVisible();
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-  expect(screen.getByText("Optional · for phone calls")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Connect a service" })).toBeVisible();
 
   selectService("deepgram");
   fireEvent.change(screen.getByLabelText("API key"), {
@@ -353,10 +366,10 @@ test("a blank tenant name cannot create a workspace, and cancel preserves the di
   ).toBeVisible();
 });
 
-test("the AI service picker clears drafts and keeps the add card after connected services", () => {
+test("the service picker clears drafts and keeps one connect action after saving", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="choose-services" theme="light" />);
-  expect(screen.getByRole("heading", { name: "AI providers" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Connect a service" })).toBeVisible();
   expect(
     screen.queryByRole("region", { name: "Voice capabilities" }),
   ).not.toBeInTheDocument();
@@ -377,9 +390,7 @@ test("the AI service picker clears drafts and keeps the add card after connected
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "discard-this-draft" },
   });
-  expect(
-    within(service).queryByRole("option", { name: "Twilio" }),
-  ).not.toBeInTheDocument();
+  expect(within(service).getByRole("option", { name: "Twilio" })).toBeVisible();
   fireEvent.change(service, { target: { value: "google" } });
   expect(screen.getByLabelText("API key")).toHaveValue("");
   fireEvent.change(service, { target: { value: "rime" } });
@@ -390,18 +401,11 @@ test("the AI service picker clears drafts and keeps the add card after connected
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(
-    screen.getByRole("region", { name: "AI providers" }),
-  ).toHaveTextContent("Rime");
-  expect(serviceButtons("AI providers")).toEqual([
+  expect(screen.getByRole("region", { name: "Setup services" })).toHaveTextContent("Rime");
+  expect(serviceButtons()).toEqual([
     "Connect a service",
     "Manage Rime",
     "More actions for Rime",
-    "Connect a service",
-  ]);
-  expect(serviceButtons("Telephony")).toEqual([
-    "Connect a service",
-    "Connect a service",
   ]);
   expect(trigger).toHaveFocus();
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
@@ -410,19 +414,10 @@ test("the AI service picker clears drafts and keeps the add card after connected
 test("telephony remains optional and does not complete voice readiness", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="choose-services" theme="light" />);
-  const telephony = screen.getByRole("region", { name: "Telephony" });
-  expect(serviceButtons("Telephony")).toEqual([
-    "Connect a service",
-    "Connect a service",
-  ]);
-  expect(
-    within(telephony).getByText("Optional · for phone calls"),
-  ).toBeVisible();
-  selectService("telnyx", "Telephony");
+  expect(serviceButtons()).toEqual(["Connect a service"]);
+  selectService("telnyx");
   const service = screen.getByRole("combobox", { name: "Service" });
-  expect(
-    within(service).queryByRole("option", { name: "Deepgram" }),
-  ).not.toBeInTheDocument();
+  expect(within(service).getByRole("option", { name: "Deepgram" })).toBeVisible();
   expect(screen.getByLabelText("Public key")).toBeVisible();
   fireEvent.change(service, { target: { value: "telnyx" } });
   fireEvent.change(screen.getByLabelText("API key"), {
@@ -433,22 +428,17 @@ test("telephony remains optional and does not complete voice readiness", () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
-  expect(serviceButtons("Telephony")).toEqual([
+  expect(serviceButtons()).toEqual([
     "Connect a service",
     "Manage Telnyx",
     "More actions for Telnyx",
-    "Connect a service",
-  ]);
-  expect(serviceButtons("AI providers")).toEqual([
-    "Connect a service",
-    "Connect a service",
   ]);
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 
-test("the add card stays last with multiple connected AI providers", () => {
+test("connected providers share one service list and one connect action", () => {
   render(<OnboardingStory scenario="multiple-providers" theme="light" />);
-  expect(serviceButtons("AI providers")).toEqual([
+  expect(serviceButtons()).toEqual([
     "Connect a service",
     "Manage Deepgram",
     "More actions for Deepgram",
@@ -456,11 +446,6 @@ test("the add card stays last with multiple connected AI providers", () => {
     "More actions for Rime",
     "Manage Google AI Studio",
     "More actions for Google AI Studio",
-    "Connect a service",
-  ]);
-  expect(serviceButtons("Telephony")).toEqual([
-    "Connect a service",
-    "Connect a service",
   ]);
 });
 
@@ -514,7 +499,7 @@ test.each([["google", "Google AI Studio"]])(
   },
 );
 
-test("Rime connects with an API key and belongs to AI services", () => {
+test("Rime connects with an API key in the shared service list", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="choose-services" theme="dark" />);
   selectService("rime");
@@ -531,42 +516,28 @@ test("Rime connects with an API key and belongs to AI services", () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
-  expect(
-    within(screen.getByRole("region", { name: "AI providers" })).getByRole(
-      "button",
-      { name: "Manage Rime" },
-    ),
-  ).toBeVisible();
-  expect(
-    within(screen.getByRole("region", { name: "Telephony" })).queryByText(
-      "Rime",
-    ),
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Manage Rime" })).toBeVisible();
+  expect(screen.queryByText("Credentials only")).not.toBeInTheDocument();
 });
 
-test("Telnyx is one telephony connection", () => {
+test("Telnyx is one service connection", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="choose-services" theme="dark" />);
-  selectService("telnyx", "Telephony");
+  selectService("telnyx");
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-telnyx-key" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
-  expect(within(screen.getByRole("region", { name: "AI providers" })).queryByText("Connected")).not.toBeInTheDocument();
-  expect(
-    within(screen.getByRole("region", { name: "Telephony" })).getByText(
-      "Public key needed",
-    ),
-  ).toBeVisible();
+  expect(within(screen.getByRole("article", { name: "Telnyx" })).getByText("Public key needed")).toBeVisible();
   for (let count = 0; count < 2; count++) {
-    const region = screen.getByRole("region", { name: "Telephony" });
+    const region = screen.getByRole("region", { name: "Setup services" });
     expect(within(region).getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
     fireEvent.click(within(region).getByRole("button", { name: "Manage Telnyx" }));
     expect(screen.getByLabelText("API key")).toHaveValue("");
     expect(screen.getByLabelText("Public key")).toHaveValue("");
     const options = within(screen.getByRole("combobox", { name: "Service" }));
-    expect(options.queryByRole("option", { name: "Rime" })).not.toBeInTheDocument();
+    expect(options.getByRole("option", { name: "Rime" })).toBeVisible();
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "updated-storybook-key" },
     });

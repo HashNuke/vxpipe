@@ -49,14 +49,14 @@ test.each([
 test("credential setup makes the relocated tenant navigation and account actions inert", () => {
   render(<TenantServicesPage headerActions={<button type="button">Sign out</button>} state={serviceFixture("populated")} />);
   const header = screen.getByText("Vxpipe").closest("header")!;
-  const trigger = screen.getByRole("button", { name: "Add credential" });
+  const trigger = screen.getByRole("button", { name: "Connect a service" });
 
   fireEvent.click(trigger);
 
   expect(header).toHaveAttribute("inert");
   expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
-  expect(screen.getByRole("dialog", { name: "Add credential" })).toBeVisible();
+  expect(screen.getByRole("dialog", { name: "Connect a service" })).toBeVisible();
 
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
 

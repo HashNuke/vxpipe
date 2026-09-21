@@ -11,8 +11,13 @@ inventory. The standalone production `setup-services` route was retired on
 inherited platform credentials. This does not claim production integration of the
 full three-step recipe flow below.
 
-Decision: 2026-09-18. The user approved this direction for Storybook review.
-Production integration of the revised flow is a separate checkpoint.
+Decision: 2026-09-18, revised 2026-09-21. The shared service list replaces the
+earlier AI/Telephony sections in the Storybook onboarding and production platform
+services. Tenant inventory uses the same provider catalog and capability labels.
+Provider credentials remain one binding per provider/name/scope; telephony
+applications reference a binding rather than storing another secret. No credential
+migration is needed, so existing tenant and platform credentials remain intact.
+The grouped picker was rejected because a provider can offer both telephony and AI.
 
 ## Flow
 
@@ -24,21 +29,18 @@ second tenant administration page.
    On the tenant directory, **New tenant** asks only for a name. Successful
    creation immediately opens service setup for that tenant; an error keeps the
    name in the dialog for retry. This setup page applies to every tenant.
-2. Use **Setup services** as the primary heading, **AI providers** and **Telephony**
-   as section headings, and a smaller tenant-created success alert with a check icon,
+2. Use **Setup services** as the primary heading and a smaller tenant-created success alert with a check icon,
    tinted background and visible border; put the setup/rename description inside
    that alert. Connected-service cards have a clear Connected status, provider
-   identity and capability tags, plus a separate outlined Manage button. Group them
-   under **AI providers** and always-visible, optional **Telephony**. Each grid ends
-   with a **Connect a service** card, including when empty or all catalog services
-   are connected. Each section also has a Connect a service button beside its
-   heading. On mobile, show that button only once the section has a saved service;
-   its add card remains available in the empty state. Do not show recommendations
-   for unconnected services.
-   The card opens a modal with a **Service** dropdown scoped to its section.
+   identity and capability tags, plus a separate outlined Manage button. One
+   **Connect a service** button beside the heading opens the full installed-provider
+   picker. The same list contains every connected provider, including Telnyx.
+   Do not show recommendations for unconnected services.
+   The button opens a modal with a **Service** dropdown.
    Selecting a service displays its credential fields below the dropdown. Switching
    services clears the previous draft; selection is disabled during testing or saving.
-   Both service groups use three columns on desktop and one on mobile.
+   The cards use three columns on desktop and one on mobile; capability tags wrap
+   within each card. The tenant inventory also wraps its capability tags.
    Keep capability tags on connected cards; omit capability checklist cards and
    the bottom readiness message. Continue enables for supported speech-to-speech
    or the speech-to-text + LLM + text-to-speech combination; connecting telephony
@@ -55,8 +57,8 @@ second tenant administration page.
 5. Show the chosen providers/models before the recipe handoff. Launching a real
    call will remain an explicit action in the existing debug console.
 
-All tenants share “Tenant created: {name}” and “Connect AI and Telephony
-services to get started. You can rename this tenant later.” The breadcrumbs and
+All tenants share “Tenant created: {name}” and “Connect services to get started.
+You can rename this tenant later.” The breadcrumbs and
 step navigation use **Setup services → Create API Keys → Setup Call Specs**.
 Use that navigation to revisit steps; omit redundant Back buttons inside the
 step content. Keep the forward Continue actions.
@@ -111,7 +113,7 @@ Google and Zenmux model inference uses the separate shared ReqLLM runtime.
 Deepgram, Rime, Google AI Studio, Zenmux and Telnyx ask for an API key. Twilio
 asks for an Account SID and auth token. Telnyx additionally accepts a public key
 for webhook validation. When supplied, it must be a base64 Ed25519 public key of
-32 bytes. Telnyx appears only in Telephony, with a Public key needed indicator
+32 bytes. Telnyx appears once in the service list, with a Public key needed indicator
 until the key is configured. Updating its API key without re-entering a saved
 public key preserves that configuration; this form does not revoke keys.
 
@@ -122,8 +124,8 @@ available when credential testing is unsupported. Storybook callbacks simulate t
 operations; the production contract is documented in
 [Provider credential testing and storage](provider-credential-validation.md).
 
-Rime currently supports credential storage and testing only. Setup labels it
-**Credentials only**, without a TTS badge. Google AI Studio offers LLM, while
+Rime currently supports credential storage and testing only. Setup does not show
+an unsupported capability badge. Google AI Studio offers LLM, while
 Deepgram offers STT and TTS. Telnyx and Twilio offer telephony. Provider product
 features do not appear as Vxpipe capabilities until integrated.
 
@@ -181,7 +183,7 @@ setup nudges, multiple tenants, renamed tenant, Twilio credentials, themes and
 narrow layout, plus name-only tenant creation, creation progress/failure and a
 fresh non-demo tenant. API-key stories cover both grants, creation, error, one-time
 reveal and existing-key metadata; Setup Call Specs is also directly discoverable.
-The service modal includes a grouped provider dropdown, inline credential fields,
+The service modal includes one provider dropdown, inline credential fields,
 credential clearing on selection changes and keyboard focus restoration. Dialogs
 use a visible theme border, solid surface, shadow and a darkened backdrop.
 The three recipes are voice conversation, agent handoff and human
@@ -207,6 +209,10 @@ checkpoint are the default Demo name and related copy.
 - [x] Rendered Chrome inspection covers desktop, tablet, mobile, dark/light,
   credential dialogs and keyboard focus, sample cards and error states.
 - [x] Red/green tests cover dropdown selection, provider-specific credential fields, persistent last-position add cards, section-specific connections, optional telephony and recipe-specific audio readiness.
+- [x] The 2026-09-21 replacement has red/green tests for one picker, one Telnyx
+  binding/card, ungrouped provider selection, page-level save feedback, tenant
+  inventory capability tags and mobile tag wrapping. Rendered Chrome inspection
+  covered desktop/mobile onboarding and tenant inventory plus mobile toast.
 - [x] Final frontend/build and umbrella checks recorded in
   [initial checkpoint labnotes](../labnotes/20260918-1812-refine-onboarding-storybook.md)
   and [three-step checkpoint labnotes](../labnotes/20260918-1938-refine-onboarding-key-steps.md).

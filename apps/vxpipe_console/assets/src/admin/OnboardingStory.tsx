@@ -486,11 +486,11 @@ export function OnboardingStory({
             platformConnections={platformConnections}
             creating={scenario === "creating-tenant"}
             providers={providers}
-            onBrowse={(group) =>
-              setModal({ provider: null, group, status: "idle" })
+            onBrowse={() =>
+              setModal({ provider: null, status: "idle" })
             }
-            onConnect={(provider, group) =>
-              setModal({ provider, group, status: "idle" })
+            onConnect={(provider) =>
+              setModal({ provider, status: "idle" })
             }
             onRemoveCredentials={(provider) => {
               const update = platformPage ? setPlatformConnections : setConnections;

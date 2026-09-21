@@ -34,6 +34,30 @@ const providerCapabilities = {
   zenmux: ["credential"],
 };
 
+test("platform displays existing Telnyx and Deepgram once without writing credentials", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) => {
+    if (options?.method && options.method !== "GET") throw new Error("unexpected credential write");
+    return response({
+          tenant: null,
+          bindings: [
+            { ...binding("telnyx"), platform_available: false },
+            { ...binding("deepgram"), platform_available: false },
+          ],
+          provider_capabilities: providerCapabilities,
+        });
+  });
+
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  expect(await screen.findByRole("article", { name: "Telnyx" })).toBeVisible();
+  expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
+  expect(screen.getAllByRole("article", { name: "Deepgram" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "Connect a service" })).toHaveLength(1);
+  expect(screen.queryByRole("heading", { name: "AI providers" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Telephony" })).not.toBeInTheDocument();
+  expect(fetchImpl.mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
+});
+
 test("Setup picker offers installed services with only working capability badges", async () => {
   window.history.replaceState({}, "", "/admin/platform/services");
   const fetchImpl = vi.fn(async () => response({
@@ -56,12 +80,12 @@ test("Setup picker offers installed services with only working capability badges
   expect(dialog).not.toHaveTextContent("Speech-to-speech");
 
   fireEvent.change(picker, { target: { value: "rime" } });
-  expect(screen.getByRole("dialog", { name: "Connect Rime" })).toHaveTextContent("Credentials only");
+  expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Credentials only");
   expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Text-to-speech");
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-  fireEvent.click(screen.getAllByRole("button", { name: "Connect a service" })[2]);
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   expect(screen.getByRole("combobox", { name: "Service" })).toHaveTextContent("Twilio");
-  expect(screen.getByRole("combobox", { name: "Service" })).not.toHaveTextContent("Rime");
+  expect(screen.getByRole("combobox", { name: "Service" })).toHaveTextContent("Rime");
 });
 
 test("Telnyx saves the public key and shows backend URLs and saved-field metadata", async () => {
@@ -96,9 +120,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   );
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
   await screen.findByRole("heading", { name: "Platform services" });
-  fireEvent.click(
-    screen.getAllByRole("button", { name: "Connect a service" })[2],
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Service"), {
     target: { value: "telnyx" },
   });
@@ -116,6 +138,8 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
+  expect(screen.getByRole("status", { name: "Notification" })).toHaveTextContent("Service saved.");
+  expect(screen.getByRole("status", { name: "Notification" })).toHaveClass("fixed");
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/platform/credentials",
     expect.objectContaining({
@@ -258,10 +282,32 @@ test("failed card removal keeps the credentials visible and reports the error", 
   fireEvent.click(within(card).getByRole("button", { name: "More actions for Deepgram" }));
   fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
 
-  expect(
-    await screen.findByText(/credential is used by a telephony service/),
-  ).toHaveAttribute("role", "status");
+  expect(await screen.findByRole("alert", { name: "Notification" })).toHaveTextContent(
+    /credential is used by a telephony service/,
+  );
   expect(screen.getByRole("article", { name: "Deepgram" })).toBeVisible();
+});
+
+test("platform save failure appears in a page notification while the form stays open", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) =>
+    options?.method === "POST"
+      ? response({ error: { code: "unavailable" } }, 503)
+      : response({ tenant: null, bindings: [], provider_capabilities: providerCapabilities }),
+  );
+
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  await screen.findByRole("heading", { name: "Platform services" });
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
+  fireEvent.change(screen.getByLabelText("Service"), { target: { value: "rime" } });
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-rime" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(await screen.findByRole("alert", { name: "Notification" })).toHaveTextContent(
+    "Credentials could not be saved",
+  );
+  expect(screen.getByRole("dialog", { name: "Connect Rime" })).toBeVisible();
+  expect(screen.getByLabelText("API key")).toBeEnabled();
 });
 
 test("keeps Save usable when a platform credential cannot be tested", async () => {

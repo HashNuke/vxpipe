@@ -7,7 +7,6 @@ import { TelnyxWebhookField } from "./TelnyxWebhookField";
 import { telnyxWebhookUrl } from "./setupPublicOrigin";
 import {
   capabilityLabels,
-  providerInGroup,
   setupProvider,
   setupProviders,
   type SetupConnection,
@@ -22,7 +21,6 @@ import type {
 
 export type ServiceModalState = {
   provider: SetupProviderId | null;
-  group?: "ai" | "telephony";
   status: "idle" | "testing" | "submitting" | "error";
   message?: string;
   overriding?: boolean;
@@ -133,11 +131,7 @@ export function ServiceSetupModal({
               }
             >
               <option value="">Select a service</option>
-              {providers
-                .filter(
-                  (item) => !state.group || providerInGroup(item, state.group),
-                )
-                .map((item) => (
+              {providers.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -152,7 +146,6 @@ export function ServiceSetupModal({
           <>
             {bindingName ? <p>Binding: {bindingName}</p> : null}
             <div className="setup-tags setup-modal-capabilities">
-              {provider.capabilities.length === 0 ? <span>Credentials only</span> : null}
               {provider.capabilities.map((capability) => (
                 <span key={capability}>{capabilityLabels[capability]}</span>
               ))}

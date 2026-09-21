@@ -594,6 +594,8 @@
 }
 .setup-service-card-footer .setup-tags {
   margin-top: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 .setup-service-card-actions {
   display: flex;

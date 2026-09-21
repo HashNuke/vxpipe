@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { AdminShell } from "./AdminShell";
 import { Button } from "./Button";
 import { PageNotice } from "./PageNotice";
+import { PageToast } from "./PageToast";
 import { ServiceCredentialForm } from "./ServiceCredentialForm";
 import { ServiceInventory } from "./ServiceInventory";
 import type {
@@ -45,6 +46,13 @@ export function TenantServicesPage({
   const [open, setOpen] = useState(state.setup.open);
   const [freshAttempt, setFreshAttempt] = useState(false);
   const [editingService, setEditingService] = useState<ServiceInventoryItem | null>(null);
+  const [dismissedResult, setDismissedResult] = useState<number | null>(null);
+  const notification =
+    state.setup.status === "success"
+      ? { message: "Service saved.", kind: "success" as const }
+      : state.setup.status === "error" || state.setup.status === "conflict"
+        ? { message: state.setup.message ?? "Service could not be saved.", kind: "error" as const }
+        : null;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -115,7 +123,7 @@ export function TenantServicesPage({
         <TenantWorkspaceNavigation
           active="services"
           actions={
-            <Button disabled={state.status !== "ready"} onClick={() => { setEditingService(null); setFreshAttempt(true); setOpen(true); }} ref={triggerRef} type="button"><Plus aria-hidden="true" className="size-4" />Add credential</Button>
+            <Button disabled={state.status !== "ready"} onClick={() => { setEditingService(null); setFreshAttempt(true); setOpen(true); }} ref={triggerRef} type="button"><Plus aria-hidden="true" className="size-4" />Connect a service</Button>
           }
           destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
@@ -132,13 +140,12 @@ export function TenantServicesPage({
           {state.status === "ready" && state.services.length === 0 ? <PageNotice kind="empty" message="Configured provider services will appear here." title="No services yet" /> : null}
           {state.status === "ready" && state.services.length > 0 ? <ServiceInventory onEdit={(service) => { setEditingService(service); setFreshAttempt(true); setOpen(true); }} services={state.services} /> : null}
         </section>
-        {state.setup.status === "success" && !open ? <p className="mt-4 text-sm text-[var(--admin-green)]" role="status">Credential stored.</p> : null}
         </div>
         {open ? (
           <div aria-labelledby="credential-dialog-title" aria-modal="true" className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-0 sm:place-items-center sm:p-6" onKeyDown={handleDialogKeyDown} ref={dialogRef} role="dialog">
             <section className="max-h-[100dvh] w-full overflow-y-auto border border-[var(--admin-line)] bg-[var(--admin-panel)] p-5 shadow-2xl sm:max-w-lg sm:rounded-sm">
               <header className="mb-5 flex items-center justify-between gap-4">
-                <h2 className="text-lg font-bold" id="credential-dialog-title">{editingService ? "Edit credential" : "Add credential"}</h2>
+                <h2 className="text-lg font-bold" id="credential-dialog-title">{editingService ? "Edit credential" : "Connect a service"}</h2>
                 <Button aria-label="Close credential setup" onClick={closeSetup} type="button" variant="ghost"><X aria-hidden="true" className="size-4" /></Button>
               </header>
               <ServiceCredentialForm initialProvider={editingService?.provider} message={freshAttempt ? undefined : state.setup.message} onCancel={closeSetup} onSubmit={(draft) => { setFreshAttempt(false); if (editingService) { onUpdateCredential?.(editingService, draft); } else { onCreateCredential?.(draft); } }} onTest={onTestCredential} providerLocked={Boolean(editingService)} status={freshAttempt ? "idle" : state.setup.status} submitLabel="Save" />
@@ -146,6 +153,9 @@ export function TenantServicesPage({
           </div>
         ) : null}
       </main>
+      {notification && dismissedResult !== state.setup.resultVersion ? (
+        <PageToast kind={notification.kind} message={notification.message} onDismiss={() => setDismissedResult(state.setup.resultVersion)} />
+      ) : null}
     </AdminShell>
   );
 }

@@ -3,8 +3,6 @@ import { Button } from "./Button";
 import { SetupServiceCard } from "./SetupServiceCard";
 import {
   voiceSetupReady,
-  providerInGroup,
-  type SetupServiceGroup,
   setupProviders,
   type SetupConnection,
   type SetupProvider,
@@ -29,10 +27,10 @@ export function TenantSetupPage({
 }: {
   tenant: SetupTenant;
   connections: SetupConnection[];
-  onConnect: (provider: SetupProviderId, group: SetupServiceGroup) => void;
+  onConnect: (provider: SetupProviderId) => void;
   onRemoveCredentials?: (provider: SetupProviderId) => void;
   removingProvider?: SetupProviderId | null;
-  onBrowse: (group: "ai" | "telephony") => void;
+  onBrowse: () => void;
   providers?: SetupProvider[];
   onApiKeys?: () => void;
   creating?: boolean;
@@ -45,30 +43,7 @@ export function TenantSetupPage({
   const connected = providers.filter((provider) =>
     connections.some((item) => item.provider === provider.id),
   );
-  const ai = connected.filter((provider) => providerInGroup(provider, "ai"));
-  const telephony = connected.filter((provider) =>
-    provider.capabilities.includes("telephony"),
-  );
-  const addCard = (group: "ai" | "telephony") => (
-    <button
-      type="button"
-      className="setup-service-card setup-add-service"
-      onClick={() => onBrowse(group)}
-    >
-      <Plus aria-hidden="true" size={20} />
-      <span>Connect a service</span>
-    </button>
-  );
-  const connectButton = (group: "ai" | "telephony", hasServices: boolean) => (
-    <Button
-      className={`setup-group-connect${hasServices ? "" : " setup-connect-empty"}`}
-      onClick={() => onBrowse(group)}
-    >
-      <Plus aria-hidden="true" size={16} />
-      Connect a service
-    </Button>
-  );
-  const card = (provider: SetupProvider, group: SetupServiceGroup) => {
+  const card = (provider: SetupProvider) => {
     const connection = connections.find((item) => item.provider === provider.id);
     const overridesPlatform =
       !platform && platformConnections.some((item) => item.provider === provider.id);
@@ -82,7 +57,7 @@ export function TenantSetupPage({
         overridesPlatform={overridesPlatform}
         busy={removingProvider !== null}
         removing={removingProvider === provider.id}
-        onSelect={() => onConnect(provider.id, group)}
+        onSelect={() => onConnect(provider.id)}
         onRemoveCredentials={
           onRemoveCredentials &&
           (platform || connection?.source !== "platform") &&
@@ -125,8 +100,7 @@ export function TenantSetupPage({
             <div>
               <span>Tenant created: {tenant.name}</span>
               <p>
-                Connect AI and Telephony services to get started. You can rename
-                this tenant later.
+                Connect services to get started. You can rename this tenant later.
               </p>
             </div>
           </div>
@@ -137,6 +111,10 @@ export function TenantSetupPage({
           <h1 id="setup-services-title">
             {platform ? "Platform services" : "Setup services"}
           </h1>
+          <Button onClick={onBrowse}>
+            <Plus aria-hidden="true" size={16} />
+            Connect a service
+          </Button>
         </div>
         {platform ? (
           <p className="setup-platform-description">
@@ -149,33 +127,9 @@ export function TenantSetupPage({
             to use this tenant’s own credentials.
           </p>
         ) : null}
-        <section aria-label="AI providers" className="setup-service-group">
-          <div className="setup-group-heading">
-            <h2>AI providers</h2>
-            {connectButton("ai", ai.length > 0)}
-          </div>
-          <div className="setup-provider-grid">
-            {ai.map((provider) => card(provider, "ai"))}
-            {addCard("ai")}
-          </div>
-        </section>
-        <section aria-label="Telephony" className="setup-telephony">
-          <div className="setup-group-heading">
-            <div className="setup-telephony-heading">
-              <h2>Telephony</h2>
-              <span>Optional · for phone calls</span>
-            </div>
-            {connectButton("telephony", telephony.length > 0)}
-          </div>
-          <div className="setup-carrier-grid">
-            {telephony.map((provider) => card(provider, "telephony"))}
-            {addCard("telephony")}
-          </div>
-          <p>
-            Browser-based calling does not need telephony. Phone calls need a
-            telephony service.
-          </p>
-        </section>
+        <div aria-label="Services" className="setup-provider-grid">
+          {connected.map(card)}
+        </div>
       </section>
       {!platform && onApiKeys ? (
         <footer className="setup-footer setup-services-footer">
