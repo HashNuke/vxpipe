@@ -17,9 +17,9 @@ Fixed text requires its own inline TTS selection:
   "text": "This call may be recorded.",
   "text_to_speech": {
     "provider": "deepgram",
-    "model": "flux-haley-en",
+    "model": "flux",
     "credential_name": "opening",
-    "options": {"encoding": "linear16", "sample_rate": 48000}
+    "options": {"voice": "haley"}
   }
 }
 ```

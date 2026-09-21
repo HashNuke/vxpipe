@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   @moduledoc false
 
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.TTSSession, as: FluxSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
 
   @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}

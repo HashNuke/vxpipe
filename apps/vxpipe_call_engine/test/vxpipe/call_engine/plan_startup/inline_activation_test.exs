@@ -2,8 +2,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, PlanStartup}
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: TTSFluxSession
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.TTSSession, as: TTSFluxSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTSSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
@@ -36,6 +36,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert stt_config.api_key == "deepgram-tenant-private-marker"
     assert {TTSFluxSession, public_tts_config} = startup.text_to_speech.provider
     assert public_tts_config[:model] == "flux-haley-en"
+    assert public_tts_config[:sample_rate] == 48_000
 
     assert [config: tts_config, wire_module: _, wire_options: []] =
              startup.text_to_speech.provider_private
@@ -323,8 +324,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   defp plan(
          tts_selection \\ %{
            provider: "deepgram",
-           model: "flux-haley-en",
-           options: %{encoding: "linear16", sample_rate: 48_000}
+           model: "flux",
+           options: %{voice: "haley"}
          }
        ) do
     source = %{

@@ -10,7 +10,8 @@ Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 
 Design sources: [speech provider contract](../speech-provider-contract.md),
 [provider comparison](../speech-provider-comparison.md), and
-[provider integration packages](../provider-integration-packages.md).
+[provider integration packages](../provider-integration-packages.md). The Deepgram API refinement
+is recorded in [voice selection](../deepgram-voice-selection.md).
 
 ## Runnable outcome
 
@@ -64,6 +65,18 @@ formats and `done` semantics.
 - [x] Update provider capability tags and setup choices after a working live semantic session.
 - [ ] Exit: focused Rime/provider/call tests, rendered desktop/mobile services, bounded load
   comparison, and root gates pass; commit one provider checkpoint.
+
+## Checkpoint A2 — Deepgram capability APIs and voice selection
+
+- [x] Register provider-level `STTSession` and `TTSSession` while retaining the tested Flux wire
+  decoder privately. Do not add compatibility aliases or a parallel runtime.
+- [x] Accept `model: "flux"` plus `options.voice` for TTS and construct the wire model in the
+  Deepgram provider. Reject a missing or malformed voice. Keep explicit full model selections
+  valid for published, immutable call-spec revisions; do not rewrite stored sources.
+- [x] Exercise selection, connection URL, inline credential activation and demo sample call
+  specs with focused red-green tests.
+- [ ] Run affected provider/engine/console/persistence/gateway checks, root gates and bounded
+  Deepgram call load; document the result and commit the provider checkpoint.
 
 ## Checkpoint B — Google AI Studio TTS
 

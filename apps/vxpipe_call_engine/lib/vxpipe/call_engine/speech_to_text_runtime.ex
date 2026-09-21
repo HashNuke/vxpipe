@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   @moduledoc false
 
   alias Vxpipe.Providers.Deepgram.Flux
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [

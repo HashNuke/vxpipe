@@ -7,7 +7,6 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
   alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
   alias Membrane.Opus.Encoder.Native, as: OpusEncoder
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTurnCall}
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
@@ -512,7 +511,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: observer, ready_on_start: true],
@@ -528,7 +527,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: observer, ready_on_start: true],

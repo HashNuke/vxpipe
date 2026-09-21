@@ -33,7 +33,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
 
     text_to_speech = [
       providers: %{
-        Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: self(), ready_on_start: true],

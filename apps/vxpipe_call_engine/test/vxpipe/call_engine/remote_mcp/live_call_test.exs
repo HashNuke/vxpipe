@@ -18,7 +18,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, ToolCallCompleted, ToolCallStarted}
   alias Vxpipe.CallEngine.Archive.Fact
   alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, IntegrationCatalog}
 
   setup do
@@ -572,7 +571,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
           wire_options: [observer: self(), ready_on_start: true],

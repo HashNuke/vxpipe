@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Speech.StartupIsolationTest do
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Providers.Deepgram.Flux
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor

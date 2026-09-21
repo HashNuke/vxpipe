@@ -10,10 +10,10 @@ defmodule Vxpipe.CallEngine.Telemetry do
 
   alias Vxpipe.Providers.Deepgram.Flux
 
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session,
+  alias Vxpipe.Providers.Deepgram.TTSSession,
     as: DeepgramTextToSpeech
 
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTextToSpeech
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseCodeTTS

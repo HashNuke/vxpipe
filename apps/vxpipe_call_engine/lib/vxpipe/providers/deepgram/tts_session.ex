@@ -1,4 +1,4 @@
-defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session do
+defmodule Vxpipe.Providers.Deepgram.TTSSession do
   @moduledoc false
 
   use GenServer

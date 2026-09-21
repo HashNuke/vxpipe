@@ -36,6 +36,8 @@ defmodule Vxpipe.Console.DemoSamplesTest do
                CallSpec.new(entry.source, resource_id: entry.id, revision: 1)
 
       assert call_spec.default_capabilities.model_inference.provider == "google"
+      assert call_spec.default_capabilities.text_to_speech.model == "flux"
+      assert call_spec.default_capabilities.text_to_speech.options == %{"voice" => "haley"}
     end
 
     assert Enum.all?(DemoSamples.catalog("zenmux"), fn entry ->

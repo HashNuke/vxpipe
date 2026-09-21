@@ -30,7 +30,6 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   setup do
@@ -1104,7 +1103,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: Keyword.merge([observer: self()], transport_options),

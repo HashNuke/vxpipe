@@ -19,7 +19,6 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl, SendText}
   alias Vxpipe.CallEngine.Event.ToolCallCompleted
   alias Vxpipe.CallEngine.Event.ToolCallFailed
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.Telephony.{OutboundLegRequest, OutboundLegRequestResolver}
 
   setup do
@@ -33,7 +32,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: self(), ready_on_start: true],
@@ -487,14 +486,17 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
 
     provider_settings =
       providers
-      |> Map.fetch!(FluxTextToSpeech.Session)
+      |> Map.fetch!(Vxpipe.Providers.Deepgram.TTSSession)
       |> Keyword.put(:wire_options, Keyword.put(wire_options, :observer, self()))
 
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
       text_to_speech
-      |> Keyword.put(:providers, Map.put(providers, FluxTextToSpeech.Session, provider_settings))
+      |> Keyword.put(
+        :providers,
+        Map.put(providers, Vxpipe.Providers.Deepgram.TTSSession, provider_settings)
+      )
       |> then(&Keyword.put(settings, :text_to_speech, &1))
     )
   end

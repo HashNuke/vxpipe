@@ -23,6 +23,17 @@ defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeech do
           sample_rate: pos_integer()
         }
 
+  def model_for_voice(voice) when is_binary(voice) do
+    if byte_size(voice) in 1..64 and Regex.match?(~r/\A[a-z][a-z0-9-]*\z/, voice) and
+         not String.ends_with?(voice, "-") do
+      {:ok, "flux-" <> voice <> "-en"}
+    else
+      {:error, :unsupported_capability}
+    end
+  end
+
+  def model_for_voice(_voice), do: {:error, :unsupported_capability}
+
   def new(options) when is_list(options) do
     api_key = Keyword.get(options, :api_key)
     model = Keyword.get(options, :model, "flux-haley-en")

@@ -46,7 +46,6 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
   alias Vxpipe.CallEngine.Tool.CurrentTime
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
 
   alias Vxpipe.CallEngine.{
@@ -1461,7 +1460,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [],
@@ -1476,7 +1475,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [],
@@ -1489,10 +1488,15 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
       }
     ]
 
-    default_stt = speech_to_text |> Keyword.fetch!(:providers) |> Map.fetch!(Flux.Session)
+    default_stt =
+      speech_to_text
+      |> Keyword.fetch!(:providers)
+      |> Map.fetch!(Vxpipe.Providers.Deepgram.STTSession)
 
     default_tts =
-      text_to_speech |> Keyword.fetch!(:providers) |> Map.fetch!(FluxTextToSpeech.Session)
+      text_to_speech
+      |> Keyword.fetch!(:providers)
+      |> Map.fetch!(Vxpipe.Providers.Deepgram.TTSSession)
 
     assert {:ok, startup} =
              PlanStartup.new(plan,
@@ -2142,7 +2146,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: self(), ready_on_start: true],
@@ -2153,7 +2157,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module:
             Keyword.get(options, :text_to_speech_wire_module, TestTextToSpeechTransport),

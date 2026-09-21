@@ -631,7 +631,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp configure_provider(provider, options, :speech_to_text) do
-    if provider == Vxpipe.Providers.Deepgram.Flux.Session do
+    if provider == Vxpipe.Providers.Deepgram.STTSession do
       Vxpipe.Providers.Deepgram.Flux.new(options)
     else
       case provider.configure(options) do
@@ -642,7 +642,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp configure_provider(
-         Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session,
+         Vxpipe.Providers.Deepgram.TTSSession,
          options,
          :text_to_speech
        ),

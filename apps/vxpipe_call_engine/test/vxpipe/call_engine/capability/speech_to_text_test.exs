@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.Providers.Deepgram.Flux
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport

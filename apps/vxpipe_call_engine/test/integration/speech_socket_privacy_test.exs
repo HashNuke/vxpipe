@@ -8,8 +8,8 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPrivacyTest do
     TTSSocket
   }
 
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxTTSSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.TTSSession, as: FluxTTSSession
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.TestSpeechWireServer
 

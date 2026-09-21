@@ -22,7 +22,6 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl, SendText}
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
@@ -39,7 +38,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: self(), ready_on_start: true],
@@ -55,7 +54,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: self(), ready_on_start: true],

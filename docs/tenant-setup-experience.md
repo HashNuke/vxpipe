@@ -142,6 +142,10 @@ Deepgram defaults:
 - STT: `flux-general-multi`
 - TTS: `flux-hannah-en`
 
+The demo call specs use `model: "flux"` and `options.voice: "haley"`; Deepgram constructs the
+wire model as described in [voice selection](deepgram-voice-selection.md). The listed TTS model is
+the catalog's display default.
+
 Rime defaults to Coda TTS with the `astra` speaker at 24 kHz. Its prepared WebSocket accepts
 complete text and streams mono PCM; `done` ends the serialized synthesis batch. An interrupted
 batch is discarded until that boundary before another request starts.

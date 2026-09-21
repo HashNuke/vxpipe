@@ -25,8 +25,6 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     ToolCallStarted
   }
 
-  alias Vxpipe.Providers.Deepgram.Flux
-
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
@@ -635,7 +633,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: wire_module,
           wire_options: wire_options,

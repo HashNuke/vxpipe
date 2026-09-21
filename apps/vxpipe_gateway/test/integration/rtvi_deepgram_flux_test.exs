@@ -54,7 +54,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],
           media_ingress: [
@@ -69,7 +69,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TTSSocket,
           wire_options: [connect_timeout: 10_000, receive_timeout: 30_000],

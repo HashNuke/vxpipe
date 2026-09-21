@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.DeepgramTTSSessionLatencyBench do
   use ExUnit.Case, async: false
 
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.TTSSession, as: FluxSession
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
 

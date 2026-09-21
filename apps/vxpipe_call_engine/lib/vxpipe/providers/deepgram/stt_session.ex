@@ -1,4 +1,4 @@
-defmodule Vxpipe.Providers.Deepgram.Flux.Session do
+defmodule Vxpipe.Providers.Deepgram.STTSession do
   @moduledoc false
 
   use GenServer

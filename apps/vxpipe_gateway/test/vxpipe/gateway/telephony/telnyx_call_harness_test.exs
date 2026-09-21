@@ -9,7 +9,6 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     TestTextToSpeechTransport
   }
 
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.Gateway.TestTelephonySocket
 
   alias Vxpipe.Gateway.Telephony.{
@@ -46,7 +45,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: self()],
@@ -57,7 +56,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: self()],

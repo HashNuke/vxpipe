@@ -43,7 +43,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [context_compaction: [enabled: true]],
   speech_to_text: [
     providers: %{
-      Vxpipe.Providers.Deepgram.Flux.Session => [
+      Vxpipe.Providers.Deepgram.STTSession => [
         enabled: true,
         media_ingress: [
           maximum_frames: 50,
@@ -65,7 +65,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   ],
   text_to_speech: [
     providers: %{
-      Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session => [
+      Vxpipe.Providers.Deepgram.TTSSession => [
         enabled: true,
         maximum_requests: 4
       ],
@@ -113,8 +113,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               model_inference: %{provider: "google", model: "gemini-3.5-flash-lite"},
               text_to_speech: %{
                 provider: "deepgram",
-                model: "flux-haley-en",
-                options: %{encoding: "linear16", sample_rate: 48_000}
+                model: "flux",
+                options: %{voice: "haley"}
               }
             }
           },

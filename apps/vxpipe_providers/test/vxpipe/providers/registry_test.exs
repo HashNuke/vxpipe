@@ -12,10 +12,10 @@ defmodule Vxpipe.Providers.RegistryTest do
     assert {:ok, Vxpipe.Providers.Deepgram.CredentialValidation} =
              Registry.fetch_capability("deepgram", :credential_validation)
 
-    assert {:ok, Vxpipe.Providers.Deepgram.Flux.Session} =
+    assert {:ok, Vxpipe.Providers.Deepgram.STTSession} =
              Registry.fetch_capability("deepgram", :stt)
 
-    assert {:ok, Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session} =
+    assert {:ok, Vxpipe.Providers.Deepgram.TTSSession} =
              Registry.fetch_capability("deepgram", :tts)
 
     assert {:error, :unsupported_provider_capability} =

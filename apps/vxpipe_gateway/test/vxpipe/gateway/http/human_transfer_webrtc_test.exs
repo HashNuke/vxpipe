@@ -20,7 +20,6 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     TestSpeechToTextTransport
   }
 
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseCodeConfig
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS
@@ -54,7 +53,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: self()],
@@ -70,7 +69,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: self()],
@@ -102,7 +101,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
               media_ingress:
                 speech_to_text
                 |> Keyword.fetch!(:providers)
-                |> Map.fetch!(Flux.Session)
+                |> Map.fetch!(Vxpipe.Providers.Deepgram.STTSession)
                 |> Keyword.fetch!(:media_ingress)
             ]
           }

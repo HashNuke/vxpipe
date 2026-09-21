@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.Speech.ProviderContractTest do
   @moduletag :capture_log
 
   alias Vxpipe.CallEngine.Capability.SpeechToText.State, as: SpeechToTextState
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: DeepgramSTT
+  alias Vxpipe.Providers.Deepgram.STTSession, as: DeepgramSTT
   alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Session, as: DeepgramTTS
+  alias Vxpipe.Providers.Deepgram.TTSSession, as: DeepgramTTS
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTT
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseTTS

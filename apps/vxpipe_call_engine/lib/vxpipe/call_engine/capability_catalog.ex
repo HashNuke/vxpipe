@@ -115,7 +115,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     end)
   end
 
-  defp validate_provider_settings(Deepgram.Flux.Session, :speech_to_text, settings) do
+  defp validate_provider_settings(Deepgram.STTSession, :speech_to_text, settings) do
     Deepgram.Speech.settings(:speech_to_text, settings)
   end
 
@@ -126,7 +126,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
        ),
        do: Keyword.validate(settings, enabled: false, media_ingress: nil)
 
-  defp validate_provider_settings(Deepgram.FluxTextToSpeech.Session, :text_to_speech, settings) do
+  defp validate_provider_settings(Deepgram.TTSSession, :text_to_speech, settings) do
     Deepgram.Speech.settings(:text_to_speech, settings)
   end
 
@@ -143,8 +143,13 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
 
-  def speech_options(%CapabilitySelection{provider: "deepgram", model: model, options: input}) do
-    Deepgram.Speech.selection_options(model, input)
+  def speech_options(%CapabilitySelection{
+        provider: "deepgram",
+        kind: kind,
+        model: model,
+        options: input
+      }) do
+    Deepgram.Speech.selection_options(kind, model, input)
   end
 
   def speech_options(%CapabilitySelection{
@@ -178,7 +183,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: Deepgram.Flux.validate_options(options)
 
   defp validate_speech(%{provider: "deepgram", kind: :text_to_speech}, options),
-    do: validate_provider(Deepgram.FluxTextToSpeech.Session, options)
+    do: validate_provider(Deepgram.TTSSession, options)
 
   defp validate_speech(%{provider: "rime", kind: :text_to_speech}, options),
     do: validate_provider(TTSSession, options)

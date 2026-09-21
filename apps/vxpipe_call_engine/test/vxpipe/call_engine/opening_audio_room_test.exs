@@ -25,7 +25,6 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.OpeningAudio.{AssetCache, Download}
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
 
@@ -1259,7 +1258,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     speech_to_text = [
       providers: %{
-        Flux.Session => [
+        Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
           wire_options: [observer: self(), ready_on_start: true],
@@ -1275,7 +1274,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [

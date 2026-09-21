@@ -6,7 +6,6 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.OpeningAudio.AssetCache
-  alias Vxpipe.Providers.Deepgram.{Flux, FluxTextToSpeech}
 
   alias Vxpipe.CallEngine.{
     RoomAuthority,
@@ -283,7 +282,7 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
       |> Keyword.update!(:opening_audio, &Keyword.put(&1, :cache, cache))
       |> Keyword.put(:speech_to_text,
         providers: %{
-          Flux.Session => [
+          Vxpipe.Providers.Deepgram.STTSession => [
             enabled: true,
             wire_module: TestSpeechToTextTransport,
             wire_options: [observer: self(), ready_on_start: true],
@@ -298,7 +297,7 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
       )
       |> Keyword.put(:text_to_speech,
         providers: %{
-          FluxTextToSpeech.Session => [
+          Vxpipe.Providers.Deepgram.TTSSession => [
             enabled: true,
             wire_module: TestTextToSpeechTransport,
             wire_options: [observer: self(), ready_on_start: true],

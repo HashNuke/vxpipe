@@ -12,7 +12,6 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   }
 
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
-  alias Vxpipe.Providers.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.Telephony.{EndLeg, LegReference}
 
   alias Vxpipe.Gateway.Telephony.{
@@ -34,7 +33,7 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     text_to_speech = [
       providers: %{
-        FluxTextToSpeech.Session => [
+        Vxpipe.Providers.Deepgram.TTSSession => [
           enabled: true,
           wire_module: TestTextToSpeechTransport,
           wire_options: [observer: self()],

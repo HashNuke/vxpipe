@@ -47,7 +47,7 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
              connection_id: "connection",
              speech_scope: CapabilityTree.scope(tree),
              provider:
-               {Flux.Session,
+               {Vxpipe.Providers.Deepgram.STTSession,
                 model: provider.model,
                 encoding: provider.encoding,
                 sample_rate: provider.sample_rate},

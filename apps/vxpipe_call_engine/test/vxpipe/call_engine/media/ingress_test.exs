@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.Providers.Deepgram.Flux
-  alias Vxpipe.Providers.Deepgram.Flux.Session, as: FluxSession
+  alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.CallEngine.Speech.CapabilityTree
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
 

@@ -210,9 +210,9 @@ defmodule Vxpipe.Console.DemoSamples do
       },
       text_to_speech: %{
         provider: "deepgram",
-        model: "flux-haley-en",
+        model: "flux",
         credential_name: "deepgram",
-        options: %{encoding: "linear16", sample_rate: 48_000}
+        options: %{voice: "haley"}
       }
     }
   end
