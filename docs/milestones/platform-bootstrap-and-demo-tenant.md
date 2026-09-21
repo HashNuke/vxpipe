@@ -68,9 +68,9 @@ existing published-call-spec/prepared-call workflow can then run through the deb
 - Keep recoverable provider credentials in the existing encrypted tenant store. First-use input
   supports Google/Deepgram and the existing Zenmux alternative; one Deepgram credential can
   cover STT and TTS. Preserve provider/name binding semantics and safe metadata responses.
-- Validate submitted credentials against a provider-owned, non-billable authentication endpoint
-  before replacing a stored credential. Persist `last_validated_at` only with a successful write,
-  clear prior validation evidence when credential material changes, and never return raw secrets.
+- Offer a separate read-only credential test against a provider-owned, bounded authentication
+  endpoint. Saving performs local schema validation and encrypted persistence without requiring an
+  upstream probe, and remains available when testing is unsupported. Never return raw secrets.
   Default tests use controlled adapters; live-provider checks remain in the tagged integration lane.
 - Add provider setup as React components in the Console admin application. Build small field,
   provider-configuration and error components and complete mocked Storybook states before connecting
@@ -144,10 +144,14 @@ separate operator session. Provider setup is React and must reach a complete moc
 before production integration. The original demo identity and credential-storage contracts remain.
 
 Implementation note, 2026-09-18: `vxpipe_console/Onboarding` now covers automatic Demo
-creation, provider selection, credential entry, validation progress/failure, durable validation
+creation, provider selection, credential entry, credential progress/failure, historical validation
 timestamps, optional three-example installation, completion, unavailability, light theme and narrow
 layout. Google Vertex AI is intentionally absent from the chooser until its project/service-account
 credential shape is implemented; presenting it as an API-key provider would be misleading.
+
+Amendment review, 2026-09-21: **Test credentials** and **Save** are independent actions. Testing is
+ephemeral and saving does not depend on provider availability. This supersedes this milestone's
+earlier coupled validation-before-save and new validation-timestamp contract.
 
 Storybook refinement, 2026-09-18: the [tenant setup decision](../tenant-setup-experience.md)
 adds credential modals, three-capability coverage, a separate recipe screen and resumable

@@ -88,10 +88,60 @@ defmodule Vxpipe.Console.AdminServicesController do
     create_credential(conn, :platform, params, name)
   end
 
+  def validate(conn, %{"tenant_key" => tenant_key} = params) do
+    validate_credential(
+      conn,
+      tenant_key,
+      params,
+      Map.get(params, "name", Map.get(params, "provider"))
+    )
+  end
+
+  def validate_platform(conn, params) do
+    validate_credential(
+      conn,
+      :platform,
+      params,
+      Map.get(params, "name", Map.get(params, "provider"))
+    )
+  end
+
+  defp validate_credential(conn, owner, params, name) do
+    with {:ok, provider, auth_kind, payload} <- credential_input(params),
+         :ok <-
+           Vxpipe.Calls.validate_operator_credential(
+             InstallationOperator.authority(),
+             owner,
+             provider,
+             name,
+             auth_kind,
+             payload
+           ) do
+      json(conn, %{status: "valid"})
+    else
+      {:error, reason}
+      when reason in [:invalid_provider_auth, :invalid_credential_name, :invalid_tenant_key] ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
+
+      {:error, :provider_credential_rejected} ->
+        conn |> put_status(422) |> json(%{error: %{code: "credential_rejected"}})
+
+      {:error, :provider_validation_unsupported} ->
+        conn
+        |> put_status(501)
+        |> json(%{error: %{code: "credential_validation_unsupported"}})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(503)
+        |> json(%{error: %{code: "credential_validation_unavailable"}})
+    end
+  end
+
   defp create_credential(conn, owner, params, name) do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
-           Vxpipe.Calls.create_validated_operator_credential(
+           Vxpipe.Calls.create_operator_credential(
              InstallationOperator.authority(),
              owner,
              provider,
@@ -110,12 +160,6 @@ defmodule Vxpipe.Console.AdminServicesController do
       {:error, reason}
       when reason in [:invalid_provider_auth, :invalid_credential_name, :invalid_tenant_key] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
-
-      {:error, :provider_credential_rejected} ->
-        conn |> put_status(422) |> json(%{error: %{code: "credential_rejected"}})
-
-      {:error, :provider_validation_unavailable} ->
-        conn |> put_status(503) |> json(%{error: %{code: "credential_validation_unavailable"}})
 
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
@@ -136,7 +180,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   defp update_credential(conn, owner, credential_id, params) do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
-           Vxpipe.Calls.update_validated_operator_credential(
+           Vxpipe.Calls.update_operator_credential(
              InstallationOperator.authority(),
              owner,
              credential_id,
@@ -158,12 +202,6 @@ defmodule Vxpipe.Console.AdminServicesController do
              :invalid_provider_credential_id
            ] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
-
-      {:error, :provider_credential_rejected} ->
-        conn |> put_status(422) |> json(%{error: %{code: "credential_rejected"}})
-
-      {:error, :provider_validation_unavailable} ->
-        conn |> put_status(503) |> json(%{error: %{code: "credential_validation_unavailable"}})
 
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})

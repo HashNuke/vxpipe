@@ -7,6 +7,7 @@ import { formatAdminLocalTimestamp } from "./formatAdminTimestamp";
 import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
 import type {
   OnboardingCredentialSubmit,
+  OnboardingCredentialTest,
   OnboardingPageState,
 } from "./onboardingTypes";
 import { ServiceCredentialForm } from "./ServiceCredentialForm";
@@ -57,6 +58,7 @@ export function OnboardingPage({
   onInstallSamples,
   onSelectProviders,
   onSubmitCredential,
+  onTestCredential,
   onManageServices,
   onRetry,
 }: {
@@ -65,6 +67,7 @@ export function OnboardingPage({
   onInstallSamples: () => void;
   onSelectProviders?: (providers: ServiceProvider[]) => void;
   onSubmitCredential?: OnboardingCredentialSubmit;
+  onTestCredential?: OnboardingCredentialTest;
   onManageServices?: () => void;
   onRetry?: () => void;
 }) {
@@ -76,6 +79,9 @@ export function OnboardingPage({
     ? state.samples.status !== "blocked"
     : state.providers.length > 0 &&
       state.providers.every((provider) => provider.status === "valid");
+  const visibleProviders = onManageServices
+    ? state.providers.filter((provider) => provider.source !== "platform")
+    : state.providers;
 
   return (
     <AdminShell breadcrumbs={[{ label: "Getting started" }]} theme={theme}>
@@ -100,7 +106,7 @@ export function OnboardingPage({
           <ProgressStep
             complete={providersValid}
             label="Services"
-            value={providersValid ? "Validated" : tenantReady ? "Next" : "Waiting"}
+            value={providersValid ? "Connected" : tenantReady ? "Next" : "Waiting"}
           />
           <ProgressStep
             complete={state.samples.status === "complete"}
@@ -123,7 +129,7 @@ export function OnboardingPage({
               <div className="mb-5 max-w-[70ch]">
                 <h2 className="text-lg font-bold" id="services-heading">Connect your services</h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--admin-muted)]">
-                  Choose only what you want to configure now. Credentials are tested with the provider before they are marked validated.
+                  Choose only what you want to configure now. Test credentials when the provider supports a safe check, then save separately.
                 </p>
               </div>
 
@@ -132,18 +138,23 @@ export function OnboardingPage({
                   <Button onClick={onManageServices}>Manage services</Button>
                 </div>
               ) : null}
-              {state.providers.length === 0 && onSelectProviders ? (
+              {visibleProviders.length === 0 && onSelectProviders ? (
                 <ProviderSelection
                   onChange={setSelectedProviders}
                   onContinue={() => onSelectProviders(selectedProviders)}
                   selected={selectedProviders}
                 />
+              ) : visibleProviders.length === 0 && onManageServices ? (
+                <p className="border-y border-[var(--admin-line)] py-5 text-sm text-[var(--admin-muted)]">
+                  No tenant credentials configured.
+                </p>
               ) : (
                 <div className="divide-y divide-[var(--admin-row-line)] border-y border-[var(--admin-line)]">
-                  {state.providers.map((provider) => (
+                  {visibleProviders.map((provider) => (
                     <ProviderSetup
                       key={provider.provider}
                       onSubmit={onSubmitCredential}
+                      onTest={onTestCredential}
                       managed={Boolean(onManageServices)}
                       provider={provider}
                     />
@@ -321,10 +332,12 @@ function ProviderSelection({
 function ProviderSetup({
   provider,
   onSubmit,
+  onTest,
   managed = false,
 }: {
   provider: OnboardingPageState["providers"][number];
   onSubmit?: OnboardingCredentialSubmit;
+  onTest?: OnboardingCredentialTest;
   managed?: boolean;
 }) {
   const validatedAt = provider.lastValidatedAt ?? null;
@@ -334,11 +347,6 @@ function ProviderSetup({
         <ServiceLogo name={provider.label} provider={provider.provider} />
         <div>
           <h3 className="text-sm font-semibold">{provider.label}</h3>
-          {provider.source === "platform" ? (
-            <p className="mt-2 text-sm text-[var(--admin-muted)]">
-              Inherited from platform
-            </p>
-          ) : null}
           {managed && provider.status === "invalid" ? (
             <p className="mt-2 text-sm text-[var(--admin-red)]">
               Credentials need attention. Open Manage services to update them.
@@ -351,7 +359,7 @@ function ProviderSetup({
           </p>
           {provider.status === "valid" && validatedAt ? (
             <p className="mt-2 text-sm text-[var(--admin-green)]" title={formatAdminLocalTimestamp(validatedAt)}>
-              Validated {formatAdminRelativeTime(validatedAt)}
+              Last tested {formatAdminRelativeTime(validatedAt)}
             </p>
           ) : null}
           {provider.status === "validating" ? (
@@ -375,10 +383,11 @@ function ProviderSetup({
           message={provider.status === "invalid" ? provider.message : undefined}
           onCancel={() => undefined}
           onSubmit={onSubmit}
+          onTest={onTest}
           providerLocked
           showCancel={false}
           status={provider.status === "invalid" ? "error" : "idle"}
-          submitLabel="Validate and save"
+          submitLabel="Save"
         />
       ) : null}
     </div>
@@ -412,7 +421,7 @@ function SampleSection({
 
       {samples.status === "blocked" ? (
         <p className="mt-4 text-sm text-[var(--admin-muted)]">
-          Sample calls require validated Deepgram and either Google AI Studio or Zenmux credentials.
+          Sample calls require connected Deepgram and either Google AI Studio or Zenmux credentials.
         </p>
       ) : null}
       {samples.status === "error" && samples.message ? (

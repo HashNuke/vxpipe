@@ -4,14 +4,20 @@ The [platform and tenant services follow-up](platform-and-tenant-services.md) re
 the 2026-09-19 scope decision, Storybook changes and backend implementation sequence.
 It supersedes tenant-only credential ownership where explicitly stated. Production
 AI/speech inheritance and scoped Console management are implemented; the new scoped
-Telnyx webhook routes remain planned. The older Demo onboarding entry now reads
-effective services and opens the scoped setup page for credential changes. This does
-not claim production integration of the full three-step recipe flow below.
+Telnyx webhook routes remain planned. The older Demo onboarding entry reads effective
+services for readiness, but **Manage services** opens the tenant-owned credential
+inventory. The standalone production `setup-services` route was retired on
+2026-09-21 and redirects to **Services**; tenant UI does not identify or display
+inherited platform credentials. This does not claim production integration of the
+full three-step recipe flow below.
 
 Decision: 2026-09-18. The user approved this direction for Storybook review.
 Production integration of the revised flow is a separate checkpoint.
 
 ## Flow
+
+The following flow remains the approved onboarding/Storybook design; it is not a
+second tenant administration page.
 
 1. Create or resume a tenant. The default display name is **Demo**, while its
    durable identity remains independent of its name. Existing names are preserved.
@@ -31,7 +37,7 @@ Production integration of the revised flow is a separate checkpoint.
    for unconnected services.
    The card opens a modal with a **Service** dropdown scoped to its section.
    Selecting a service displays its credential fields below the dropdown. Switching
-   services clears the previous draft; selection is disabled during validation.
+   services clears the previous draft; selection is disabled during testing or saving.
    Both service groups use three columns on desktop and one on mobile.
    Keep capability tags on connected cards; omit capability checklist cards and
    the bottom readiness message. Continue enables for supported speech-to-speech
@@ -114,9 +120,11 @@ same connection. Updating an API key without re-entering a previously configured
 public key preserves that configuration; this form does not revoke keys.
 
 The shared credential form exposes the public-key field only when the onboarding
-modal opts into it. Production credential APIs are not changed by this prototype.
-Raw keys are discarded after simulated validation; only connection metadata and
-a public-key-configured flag are retained for the current Storybook session.
+modal opts into it. It presents **Test credentials** and **Save** as separate actions.
+Testing is read-only and retains the draft for correction or saving. Save remains
+available when credential testing is unsupported. Storybook callbacks simulate those
+operations; the production contract is documented in
+[Provider credential testing and storage](provider-credential-validation.md).
 
 Rime exposes TTS ([Rime API-key documentation](https://docs.rime.ai/docs/lovable)).
 Telnyx belongs to AI and telephony groups; its AI labels cover
@@ -183,7 +191,7 @@ provider marks and design tokens. No additional client application is introduced
 ## Storybook implementation
 
 `vxpipe_console/Onboarding` includes service selection, modal entry,
-validation progress/failure, provider outage, partial and complete coverage,
+credential test/save progress and failure, provider outage, partial and complete coverage,
 multiple model providers, blocked/ready/loading/failed/installed recipes, tenant
 setup nudges, multiple tenants, renamed tenant, Twilio credentials, themes and
 narrow layout, plus name-only tenant creation, creation progress/failure and a

@@ -98,6 +98,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through :installation_operator_api
 
     get "/session", Vxpipe.Console.AdminSessionController, :show
+    post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform
     post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform
     get "/platform/services", Vxpipe.Console.AdminServicesController, :platform_index
 
@@ -132,6 +133,10 @@ defmodule Vxpipe.Console.Router do
     get "/tenants/:tenant_key/service-bindings",
         Vxpipe.Console.AdminServicesController,
         :tenant_bindings
+
+    post "/tenants/:tenant_key/credentials/test",
+         Vxpipe.Console.AdminServicesController,
+         :validate
 
     post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create
 

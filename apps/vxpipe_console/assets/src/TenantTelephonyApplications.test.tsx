@@ -7,7 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { App } from "./App";
+import { TenantTelephonyApplications } from "./admin/TenantTelephonyApplications";
+import type { ServiceBinding } from "./admin/serviceBindingsApi";
 
 afterEach(() => {
   cleanup();
@@ -22,34 +23,36 @@ const application = {
   outbound_number: null as string | null,
   published_routes: [] as Array<Record<string, unknown>>,
 };
-const bindings = {
-  tenant,
-  bindings: [
-    {
-      provider: "telnyx",
-      name: "telnyx",
-      source: "platform",
-      status: "connected",
-      credential_id: "synthetic-credential",
-      platform_available: true,
-      saved_fields: ["api_key", "public_key"],
-      last_validated_at: null,
-    },
-  ],
-  webhook_urls: {
-    platform: "https://callbacks.example.test/webhooks/platform/telnyx",
-    tenant: `https://callbacks.example.test/webhooks/tenants/${tenant.key}/telnyx`,
-  },
+const binding: ServiceBinding = {
+  provider: "telnyx",
+  name: "telnyx",
+  source: "platform",
+  status: "connected",
+  credentialId: "synthetic-credential",
+  platformAvailable: true,
+  savedFields: ["apiKey", "publicKey"],
+  telephonyPublicKeyConfigured: true,
+  lastValidatedAt: null,
 };
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
-function mount(fetchImpl: typeof fetch) {
-  window.history.replaceState(
-    {},
-    "",
-    `/admin/tenants/${tenant.key}/setup-services`,
+function mount(
+  fetchImpl: typeof fetch,
+  selectedBinding = binding,
+  onConnectionDetails = vi.fn(),
+) {
+  return render(
+    <TenantTelephonyApplications
+      binding={selectedBinding}
+      credentialsLoaded
+      csrfToken="synthetic-csrf"
+      fetchImpl={fetchImpl}
+      onConnectionDetails={onConnectionDetails}
+      onSessionExpired={vi.fn()}
+      tenantKey={tenant.key}
+      webhookUrl="https://callbacks.example.test/webhooks/platform/telnyx"
+    />,
   );
-  return render(<App csrfToken="synthetic-csrf" fetchImpl={fetchImpl} />);
 }
 function fillApplication() {
   fireEvent.change(screen.getByLabelText("Service name"), {
@@ -63,8 +66,7 @@ function fillApplication() {
 test("operator creates and edits a tenant application then reloads its durable metadata", async () => {
   let applications: (typeof application)[] = [];
   const fetchImpl = vi.fn(
-    async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (String(url).endsWith("service-bindings")) return response(bindings);
+    async (_url: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST" || init?.method === "PATCH") {
         applications = [{ ...application, ...JSON.parse(String(init.body)) }];
         return response(
@@ -137,16 +139,12 @@ test("published progress shows revision, ambiguity and bounded results without c
     participant_ref: "caller",
     ambiguous: true,
   };
-  const fetchImpl = vi.fn(async (url: RequestInfo | URL) =>
-    response(
-      String(url).endsWith("service-bindings")
-        ? bindings
-        : {
-            tenant,
-            applications: [{ ...application, published_routes: [route] }],
-            truncated: true,
-          },
-    ),
+  const fetchImpl = vi.fn(async () =>
+    response({
+      tenant,
+      applications: [{ ...application, published_routes: [route] }],
+      truncated: true,
+    }),
   );
   mount(fetchImpl);
   const section = await screen.findByRole("region", { name: "Phone routing" });
@@ -174,8 +172,7 @@ test("load and save failures preserve the form, and a committed save is never of
   let conflict = true;
   let saved = false;
   const fetchImpl = vi.fn(
-    async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (String(url).endsWith("service-bindings")) return response(bindings);
+    async (_url: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") {
         if (conflict)
           return response(
@@ -232,23 +229,20 @@ test("load and save failures preserve the form, and a committed save is never of
 });
 
 test("an API-only tenant override cannot borrow platform phone readiness", async () => {
-  const fetchImpl = vi.fn(async (url: RequestInfo | URL) =>
-    response(
-      String(url).endsWith("service-bindings")
-        ? {
-            ...bindings,
-            bindings: [
-              {
-                ...bindings.bindings[0],
-                source: "tenant",
-                saved_fields: ["api_key"],
-              },
-            ],
-          }
-        : { tenant, applications: [application], truncated: false },
-    ),
+  const fetchImpl = vi.fn(async () =>
+    response({ tenant, applications: [application], truncated: false }),
   );
-  mount(fetchImpl);
+  const onConnectionDetails = vi.fn();
+  mount(
+    fetchImpl,
+    {
+      ...binding,
+      source: "tenant",
+      savedFields: ["apiKey"],
+      telephonyPublicKeyConfigured: false,
+    },
+    onConnectionDetails,
+  );
   await screen.findByText(
     /Add a public key to this tenant’s Telnyx connection/,
   );
@@ -257,5 +251,5 @@ test("an API-only tenant override cannot borrow platform phone readiness", async
   ).toBeDisabled();
   expect(await screen.findByText("synthetic-application")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Connection details" }));
-  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  expect(onConnectionDetails).toHaveBeenCalledOnce();
 });

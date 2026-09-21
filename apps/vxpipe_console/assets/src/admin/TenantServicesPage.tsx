@@ -8,6 +8,7 @@ import { ServiceCredentialForm } from "./ServiceCredentialForm";
 import { ServiceInventory } from "./ServiceInventory";
 import type {
   CredentialDraft,
+  CredentialTestResult,
   ServiceInventoryItem,
   TenantServicesPageState,
 } from "./serviceTypes";
@@ -24,10 +25,10 @@ export function TenantServicesPage({
   onSelectWorkspace,
   onCreateCredential,
   onUpdateCredential,
+  onTestCredential,
   onDismissCredential,
   headerActions,
   workspaceDestinations,
-  setupHref,
 }: {
   state: TenantServicesPageState;
   theme?: "dark" | "light";
@@ -36,10 +37,10 @@ export function TenantServicesPage({
   onSelectWorkspace?: (destination: TenantDestination) => void;
   onCreateCredential?: (draft: CredentialDraft) => void;
   onUpdateCredential?: (service: ServiceInventoryItem, draft: CredentialDraft) => void;
+  onTestCredential?: (draft: CredentialDraft) => Promise<CredentialTestResult>;
   onDismissCredential?: () => void;
   headerActions?: ReactNode;
   workspaceDestinations?: TenantDestination[];
-  setupHref?: string;
 }) {
   const [open, setOpen] = useState(state.setup.open);
   const [freshAttempt, setFreshAttempt] = useState(false);
@@ -120,7 +121,6 @@ export function TenantServicesPage({
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
-        {setupHref ? <p className="mb-4 text-sm"><a className="underline underline-offset-4" href={setupHref}>Setup services and view platform inheritance</a></p> : null}
         {state.status === "ready" && state.truncated ? (
           <p className="mb-4 text-sm text-[var(--admin-muted)]" role="status">
             Showing a partial inventory. More services are configured for this tenant.
@@ -141,7 +141,7 @@ export function TenantServicesPage({
                 <h2 className="text-lg font-bold" id="credential-dialog-title">{editingService ? "Edit credential" : "Add credential"}</h2>
                 <Button aria-label="Close credential setup" onClick={closeSetup} type="button" variant="ghost"><X aria-hidden="true" className="size-4" /></Button>
               </header>
-              <ServiceCredentialForm initialProvider={editingService?.provider} message={freshAttempt ? undefined : state.setup.message} onCancel={closeSetup} onSubmit={(draft) => { setFreshAttempt(false); if (editingService) { onUpdateCredential?.(editingService, draft); } else { onCreateCredential?.(draft); } }} providerLocked={Boolean(editingService)} status={freshAttempt ? "idle" : state.setup.status} submitLabel={editingService ? "Update credential" : "Save credential"} />
+              <ServiceCredentialForm initialProvider={editingService?.provider} message={freshAttempt ? undefined : state.setup.message} onCancel={closeSetup} onSubmit={(draft) => { setFreshAttempt(false); if (editingService) { onUpdateCredential?.(editingService, draft); } else { onCreateCredential?.(draft); } }} onTest={onTestCredential} providerLocked={Boolean(editingService)} status={freshAttempt ? "idle" : state.setup.status} submitLabel="Save" />
             </section>
           </div>
         ) : null}

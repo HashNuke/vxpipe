@@ -73,7 +73,7 @@ test("opens credential editing without revealing the stored secret", () => {
   expect(screen.queryByLabelText("Credential name")).not.toBeInTheDocument();
   expect(screen.getByLabelText("API key")).toHaveValue("");
   expect(
-    screen.getByRole("button", { name: "Update credential" }),
+    screen.getByRole("button", { name: "Save" }),
   ).toBeVisible();
   expect(screen.queryByDisplayValue("****8c4a")).not.toBeInTheDocument();
 });
@@ -85,7 +85,7 @@ test("opens and closes credential setup while restoring trigger focus", () => {
   fireEvent.click(trigger);
   expect(screen.getByRole("dialog", { name: "Add credential" })).toBeVisible();
   expect(screen.getByLabelText("Provider")).toHaveFocus();
-  screen.getByRole("button", { name: "Save credential" }).focus();
+  screen.getByRole("button", { name: "Save" }).focus();
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" });
   expect(
     screen.getByRole("button", { name: "Close credential setup" }),

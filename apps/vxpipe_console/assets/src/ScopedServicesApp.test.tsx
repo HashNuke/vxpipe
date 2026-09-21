@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./App";
@@ -73,7 +72,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   fireEvent.change(screen.getByLabelText("Public key"), {
     target: { value: publicKey },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
@@ -98,53 +97,14 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   ).toBeInTheDocument();
 });
 
-test("Telnyx overrides switch URL scope without borrowing the inherited public key", async () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
-  );
-  const fetchImpl = vi.fn(() =>
-    response({
-      tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-      bindings: [
-        { ...binding("telnyx"), saved_fields: ["api_key", "public_key"] },
-      ],
-      webhook_urls: {
-        platform: "http://localhost:4567/webhooks/platform/telnyx",
-        tenant:
-          "http://localhost:4567/webhooks/tenants/AAAAAAAAAAAAAAAA/telnyx",
-      },
-    }),
-  );
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
-  fireEvent.click(
-    (await screen.findAllByRole("button", { name: "Manage Telnyx" }))[0],
-  );
-  expect(screen.getByLabelText("Webhook URL")).toHaveValue(
-    "http://localhost:4567/webhooks/platform/telnyx",
-  );
-  expect(screen.queryByLabelText("Public key")).not.toBeInTheDocument();
-  expect(screen.getByText(/Local preview/)).toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Override for this tenant" }),
-  );
-  expect(screen.getByLabelText("Webhook URL")).toHaveValue(
-    "http://localhost:4567/webhooks/tenants/AAAAAAAAAAAAAAAA/telnyx",
-  );
-  expect(screen.getByLabelText("Public key")).not.toHaveAttribute(
-    "placeholder",
-  );
-  expect(
-    screen.getByText(/Update your Telnyx Voice API application/),
-  ).toBeInTheDocument();
-});
-
-test("platform services save, reload and edit the exact persisted binding", async () => {
+test("platform services test and save separately, then edit the exact persisted binding", async () => {
   window.history.replaceState({}, "", "/admin/platform/services");
   let bindings: ReturnType<typeof binding>[] = [];
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(_url).endsWith("/credentials/test")) {
+        return new Response(JSON.stringify({ status: "valid" }));
+      }
       if (options?.method === "POST" || options?.method === "PATCH") {
         bindings = [binding("deepgram")];
         return new Response(
@@ -172,7 +132,21 @@ test("platform services save, reload and edit the exact persisted binding", asyn
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "synthetic-first" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
+  expect(await screen.findByText("Credentials tested successfully.")).toBeVisible();
+  expect(screen.getByRole("dialog")).toBeVisible();
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/platform/credentials/test",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        provider: "deepgram",
+        name: "deepgram",
+        values: { api_key: "synthetic-first" },
+      }),
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
@@ -197,7 +171,7 @@ test("platform services save, reload and edit the exact persisted binding", asyn
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "synthetic-replacement" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(fetchImpl).toHaveBeenCalledWith(
       "/admin/api/platform/credentials/deepgram-id",
@@ -223,222 +197,63 @@ test("platform services save, reload and edit the exact persisted binding", asyn
   );
 });
 
-test("tenant setup uses inherited readiness and keeps platform secrets read-only", async () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
-  );
-  const fetchImpl = vi.fn(() =>
-    response({
-      tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-      bindings: [
-        binding("google", "platform"),
-        binding("deepgram", "platform"),
-        binding("google", "platform", "named-model"),
-      ],
-    }),
-  );
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
-  expect(
-    await screen.findByText("Ready for voice samples"),
-  ).toBeInTheDocument();
-  expect(screen.getAllByText("Inherited from platform")).toHaveLength(2);
-  expect(
-    screen.getByRole("button", { name: /named-model/ }),
-  ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
-  const dialog = screen.getByRole("dialog");
-  expect(within(dialog).queryByLabelText("API key")).not.toBeInTheDocument();
-  expect(
-    within(dialog).getByRole("button", { name: "Manage platform services" }),
-  ).toBeInTheDocument();
-  expect(
-    within(dialog).queryByRole("button", { name: "Override for this tenant" }),
-  ).toBeInTheDocument();
-});
-
-test("tenant credential removal restores inheritance and there is no disable control", async () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
-  );
-  let service = binding("google");
+test("keeps Save usable when a platform credential cannot be tested", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  let saved = false;
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
+      if (String(_url).endsWith("/credentials/test")) {
+        return response(
+          { error: { code: "credential_validation_unsupported" } },
+          501,
+        );
+      }
       if (options?.method === "POST") {
-        service = {
-          ...binding("google", "tenant"),
-          credential_id: "tenant-google",
-        };
-        return new Response("{}", { status: 201 });
+        saved = true;
+        return response({ credential: { id: "rime-id" } }, 201);
       }
-      if (options?.method === "DELETE") {
-        service = binding("google");
-        return new Response(null, { status: 204 });
-      }
-      return new Response(
-        JSON.stringify({
-          tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-          bindings: [service],
-        }),
-      );
+      return response({
+        tenant: null,
+        bindings: saved ? [binding("rime")] : [],
+      });
     },
   );
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Manage Google AI Studio" }),
-  );
-  expect(
-    screen.queryByRole("button", { name: /Disable/ }),
-  ).not.toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Override for this tenant" }),
-  );
-  expect(screen.getByLabelText("API key")).toHaveValue("");
-  expect(screen.getByLabelText("API key")).not.toHaveAttribute(
-    "placeholder",
-    "••••••••",
-  );
-  fireEvent.change(screen.getByLabelText("API key"), {
-    target: { value: "synthetic-tenant" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
-  expect(await screen.findByText("Tenant override")).toBeInTheDocument();
-  expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials",
-    expect.objectContaining({ method: "POST" }),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Manage Google AI Studio" }),
-  );
-  expect(
-    screen.queryByRole("button", { name: /Disable/ }),
-  ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
-  expect(
-    await screen.findByText("Inherited from platform"),
-  ).toBeInTheDocument();
-  expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials/tenant-google",
-    expect.objectContaining({
-      method: "DELETE",
-      headers: expect.objectContaining({ "x-csrf-token": "csrf-example" }),
-    }),
-  );
-});
 
-test("a named inherited service creates a new tenant credential without touching the platform row", async () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
-  );
-  const fetchImpl = vi.fn((_url: RequestInfo | URL, options?: RequestInit) =>
-    response(
-      options?.method
-        ? {}
-        : {
-            tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-            bindings: [binding("google", "platform", "named-model")],
-          },
-    ),
-  );
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
-  fireEvent.click(await screen.findByRole("button", { name: /named-model/ }));
+  await screen.findByRole("heading", { name: "Platform services" });
   fireEvent.click(
-    screen.getByRole("button", { name: "Override for this tenant" }),
+    screen.getAllByRole("button", { name: "Connect a service" })[0],
   );
-  expect(screen.getByLabelText("API key")).not.toHaveAttribute(
-    "placeholder",
-    "••••••••",
-  );
-  fireEvent.change(screen.getByLabelText("API key"), {
-    target: { value: "synthetic-named" },
+  fireEvent.change(screen.getByLabelText("Service"), {
+    target: { value: "rime" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "synthetic-rime" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
+
+  expect(
+    await screen.findByText(
+      "Credential testing is not available for this service. You can still save it.",
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials",
+    "/admin/api/platform/credentials",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
-        provider: "google",
-        name: "named-model",
-        values: { api_key: "synthetic-named" },
+        provider: "rime",
+        name: "rime",
+        values: { api_key: "synthetic-rime" },
       }),
     }),
   );
-});
-
-test("removal failures stay visible and a successful write with failed reload never pretends to be ready", async () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
-  );
-  let attempt = 0;
-  const fetchImpl = vi.fn((_url: RequestInfo | URL, options?: RequestInit) => {
-    if (options?.method === "DELETE")
-      return response({}, ++attempt === 1 ? 503 : 200);
-    return attempt === 2
-      ? response({}, 503)
-      : response({
-          tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-          bindings: [binding("google", "tenant")],
-        });
-  });
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Manage Google AI Studio" }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Service could not be removed",
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
-  expect(
-    await screen.findByRole("button", { name: "Retry setup" }),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByText("Service removed. Retry to load the current state."),
-  ).toBeInTheDocument();
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-});
-
-test("a different platform binding does not turn a tenant-only service into an override", async () => {
-  window.history.replaceState(
-    {},
-    "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
-  );
-  const fetchImpl = vi.fn(() =>
-    response({
-      tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example" },
-      bindings: [
-        {
-          ...binding("google", "tenant"),
-          platform_available: false,
-        },
-        binding("google", "platform", "another-model"),
-      ],
-    }),
-  );
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
-  await screen.findByRole("button", { name: "Manage Google AI Studio" });
-  expect(screen.queryByText("Tenant override")).not.toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Manage Google AI Studio" }),
-  );
-  expect(
-    screen.queryByRole("button", { name: "Use platform service" }),
-  ).not.toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Remove service" }),
-  ).toBeInTheDocument();
 });
 
 test("directory outage is retryable and an expired session never looks like empty setup", async () => {
@@ -455,7 +270,13 @@ test("directory outage is retryable and an expired session never looks like empt
       onSessionExpired={expired}
     />,
   );
-  fireEvent.click(await screen.findByRole("button", { name: "Retry setup" }));
+  expect(
+    await screen.findByRole("heading", { name: "Platform services unavailable" }),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Platform services could not be loaded. Try again."),
+  ).toBeVisible();
+  fireEvent.click(await screen.findByRole("button", { name: "Retry services" }));
   await waitFor(() => expect(expired).toHaveBeenCalledTimes(1));
   expect(
     screen.queryByRole("button", { name: "Connect a service" }),

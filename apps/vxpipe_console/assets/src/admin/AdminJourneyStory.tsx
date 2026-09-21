@@ -37,6 +37,7 @@ function JourneyServicesPage({
       onCreateCredential={(draft) =>
         setState((current) => applyCredentialCreation(current, draft))
       }
+      onTestCredential={async () => ({ status: "valid" })}
       onSelectTenant={() => navigate({ page: "call-specs", tenantKey: tenant.key })}
       onSelectTenants={() => navigate({ page: "tenants" })}
       onSelectWorkspace={(destination) =>

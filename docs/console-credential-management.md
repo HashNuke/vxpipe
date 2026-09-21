@@ -1,7 +1,7 @@
 # Console credential management
 
-Status: implemented for the existing Google, Deepgram, Zenmux, Telnyx and Twilio credential
-contracts. Provider-side validation and onboarding orchestration remain separate planned work.
+Status: implemented for the existing Google, Deepgram, Zenmux, Rime, Telnyx and Twilio credential
+contracts. Optional provider testing is implemented as a separate read-only action.
 
 ## Decision
 
@@ -45,7 +45,7 @@ The database migration adds a non-null `secret_hints` map with an empty default 
 Operators should run migrations before deploying the matching Console build. Replacement increments
 the encrypted credential version, so ciphertext remains bound to the exact current identity.
 
-This checkpoint does not claim that saving proves upstream validity, and it does not set a
-`last_validated_at`. Real provider validation needs provider-owned, bounded test requests and a
-separate UI state contract; it should be implemented with the onboarding milestone rather than
-inferred from local payload validation.
+Saving does not claim upstream validity and does not set `last_validated_at`. The separate
+**Test credentials** action uses provider-owned bounded requests, never persists, and leaves
+**Save** available when a safe provider probe is unsupported. See the
+[credential testing and storage contract](provider-credential-validation.md).

@@ -121,6 +121,28 @@ const serviceDirectory = (tenantKey: string, credentials = true) => ({
   telephony_services: [],
 });
 
+test("retires tenant setup services in favor of the service inventory", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
+  );
+  const fetchImpl = vi.fn(() =>
+    response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
+  );
+
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+
+  expect(await screen.findByText("No services yet")).toBeVisible();
+  expect(window.location.pathname).toBe(
+    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+  );
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/services",
+    expect.any(Object),
+  );
+});
+
 const callDetailsResponse = (state: "running" | "ended" = "running") => ({
   tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
   call_spec: { id: "delivery-rescheduling", name: "Delivery rescheduling" },
@@ -839,7 +861,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "private-value" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -895,7 +917,7 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "replacement-7f2b" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Update credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(await screen.findByText("****7f2b")).toBeVisible();
   expect(screen.queryByText("****8c4a")).not.toBeInTheDocument();
@@ -939,7 +961,7 @@ test("ignores a stale credential submission after leaving the tenant services pa
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "private-value" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   window.history.pushState(
     {},
@@ -982,7 +1004,7 @@ test("ignores a credential response after its dialog is closed and reopened", as
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "first-secret" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   fireEvent.click(
     screen.getByRole("button", { name: "Close credential setup" }),
   );
@@ -1057,7 +1079,7 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "private-value" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
 
   cleanup();

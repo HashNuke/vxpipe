@@ -617,6 +617,7 @@ export function OnboardingStory({
           }
           onClose={() => setModal(null)}
           onSubmit={submitCredential}
+          onTest={async () => ({ status: "valid" })}
           state={modal}
         />
       ) : null}

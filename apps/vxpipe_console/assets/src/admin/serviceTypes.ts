@@ -45,6 +45,10 @@ export type CredentialDraft = {
     | { accountSid: string; authToken: string };
 };
 
+export type CredentialTestResult =
+  | { status: "valid" }
+  | { status: "unsupported" | "error"; message: string };
+
 type ServicesContext = {
   tenant: TenantContext;
   truncated?: boolean;

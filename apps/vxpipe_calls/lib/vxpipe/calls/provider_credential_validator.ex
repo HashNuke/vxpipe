@@ -3,5 +3,8 @@ defmodule Vxpipe.Calls.ProviderCredentialValidator do
 
   @callback validate(term(), String.t(), String.t(), map()) ::
               :ok
-              | {:error, :provider_credential_rejected | :provider_validation_unavailable}
+              | {:error,
+                 :provider_credential_rejected
+                 | :provider_validation_unavailable
+                 | :provider_validation_unsupported}
 end

@@ -21,6 +21,7 @@ export function TenantServicesStory({
       onCreateCredential={(draft) => {
         setState((current) => applyCredentialCreation(current, draft));
       }}
+      onTestCredential={async () => ({ status: "valid" })}
       onSelectTenant={() =>
         window.history.pushState(
           {},

@@ -18,7 +18,14 @@ import {
   type SetupServiceScope,
 } from "./admin/setupCatalog";
 import catalog from "./admin/setupCatalog.json";
-import type { CredentialDraft } from "./admin/serviceTypes";
+import {
+  credentialRequest,
+  testCredentialRequest,
+} from "./admin/credentialApi";
+import type {
+  CredentialDraft,
+  CredentialTestResult,
+} from "./admin/serviceTypes";
 
 type Fetch = (
   input: RequestInfo | URL,
@@ -116,24 +123,49 @@ export function ScopedServicesApp({
         ? existing.credentialId
         : null
       : existing?.credentialId;
-    const values =
-      "apiKey" in draft.values
-        ? {
-            api_key: draft.values.apiKey,
-            ...(draft.provider === "telnyx" && draft.values.publicKey
-              ? { public_key: draft.values.publicKey }
-              : {}),
-          }
-        : {
-            account_sid: draft.values.accountSid,
-            auth_token: draft.values.authToken,
-          };
     await mutate(
       `${prefix}/credentials${credentialId ? `/${encodeURIComponent(credentialId)}` : ""}`,
       credentialId ? "PATCH" : "POST",
-      { provider: draft.provider, name, values },
+      credentialRequest(draft, name),
       "credentials",
     );
+  }
+
+  async function testCredentials(
+    draft: CredentialDraft,
+  ): Promise<CredentialTestResult> {
+    if (!modal || saving.current || !directory) {
+      return {
+        status: "error",
+        message: "Credentials could not be tested. Try again.",
+      };
+    }
+
+    const controller = new AbortController();
+    const name = modal.bindingName ?? draft.provider;
+    saving.current = controller;
+    setModal({ ...modal, status: "testing", message: undefined });
+
+    try {
+      return await testCredentialRequest(
+        `${prefix}/credentials/test`,
+        draft,
+        name,
+        csrfToken,
+        fetchImpl,
+        onSessionExpired,
+        controller.signal,
+      );
+    } finally {
+      if (saving.current === controller) {
+        saving.current = null;
+        setModal((current) =>
+          current?.status === "testing"
+            ? { ...current, status: "idle" }
+            : current,
+        );
+      }
+    }
   }
 
   async function removeCredential() {
@@ -405,6 +437,7 @@ export function ScopedServicesApp({
           bindingName={modal.bindingName}
           onClose={close}
           onSubmit={save}
+          onTest={testCredentials}
           onSelect={(provider) => {
             if (!saving.current)
               setModal({

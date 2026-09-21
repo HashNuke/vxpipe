@@ -43,10 +43,12 @@ requirements. Refresh, partial failure and restart preserve completed work.
   default model provider, with existing Zenmux as an explicit supported alternative. Show
   provider/name metadata and capability coverage, not saved secret values. Failed input remains
   locally recoverable without echoing secrets into errors/logs; clear secret fields after submit.
-- Distinguish “Validated and saved” from “Successfully used in a call”. Validate submitted
-  credentials through provider-owned, non-billable authentication endpoints before saving, retain
-  `last_validated_at`, and link later provider rejection back to the relevant setup step. Validation
-  proves authentication at that time; it does not claim that every model, voice or call path works.
+- Distinguish “Tested”, “Saved” and “Successfully used in a call”. **Test credentials** performs a
+  read-only provider probe and never persists. **Save** performs local schema validation and
+  encrypted persistence without requiring an upstream probe, so providers without a safe test can
+  still be configured. A test result applies only to that draft at that time; it does not claim that
+  every model, voice or call path works. See the
+  [credential testing and storage contract](../provider-credential-validation.md).
 - Catalog entries have stable IDs/version/content digests, purpose, participants, requirement
   metadata and a checked-in inline call spec. Supported selections use the current schema and
   existing provider catalog; no provider keys, route IDs or tenant IDs live in portable templates.
@@ -153,6 +155,11 @@ Amendment review, 2026-09-18: the user explicitly selected upstream credential v
 persisted last-validation timestamp. This supersedes the earlier prohibition on a validation API;
 validation remains provider-specific, non-billable, secret-safe and separately testable from a real
 call. The Storybook onboarding surface demonstrates the resulting progress and failure states.
+
+Amendment review, 2026-09-21: testing and saving are now explicit independent actions. The test is
+read-only and ephemeral; Save does not require provider validation and remains available when no
+safe probe exists. This supersedes the coupled pre-save validation and new `last_validated_at`
+evidence described by the 2026-09-18 amendment.
 
 Storybook amendment review, 2026-09-18: the user selected provider credential modals,
 capability coverage and recipe cards on a second screen, plus resumable per-tenant entry

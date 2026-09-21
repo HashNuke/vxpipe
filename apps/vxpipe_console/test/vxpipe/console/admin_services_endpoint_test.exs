@@ -99,7 +99,9 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert_received {:operator_services_requested, @tenant_key}
   end
 
-  test "creates supported credentials with CSRF and never echoes or logs secret fields" do
+  test "saves supported credentials without requiring an upstream test or claiming validation" do
+    configure_credential_validator({:error, :provider_credential_rejected})
+
     for {provider, values, expected_kind, expected_payload} <- [
           {"rime", %{"api_key" => "rime-private"}, "api_key", %{"api_key" => "rime-private"}},
           {"google", %{"api_key" => "google-private"}, "api_key",
@@ -129,7 +131,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
         provider: provider,
         name: provider,
         auth_kind: expected_kind,
-        last_validated_at: ~U[2026-09-18 04:00:00Z],
+        last_validated_at: nil,
         inserted_at: ~U[2026-09-17 02:00:00Z],
         updated_at: ~U[2026-09-17 02:00:00Z]
       }
@@ -156,7 +158,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
                      "provider" => ^provider,
                      "name" => ^provider,
                      "auth_kind" => ^expected_kind,
-                     "last_validated_at" => "2026-09-18T04:00:00Z",
+                     "last_validated_at" => nil,
                      "status" => "active"
                    }
                  } = json_response(response, 201)
@@ -167,7 +169,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       for secret <- Map.values(values), do: refute(log =~ secret)
       assert_received {:operator_credential_created, created, ^expected_payload}
 
-      assert_received {:operator_credential_validated, ^provider, ^expected_kind,
+      refute_received {:operator_credential_validated, ^provider, ^expected_kind,
                        ^expected_payload}
 
       assert created.tenant_key == @tenant_key
@@ -223,7 +225,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     refute response.resp_body =~ "replacement-private"
 
     assert_received {:operator_credential_replaced, @tenant_key, credential_id, "twilio",
-                     "account_sid_auth_token", _payload, %DateTime{}}
+                     "account_sid_auth_token", _payload, nil}
 
     assert credential_id == returned.id
   end
@@ -324,25 +326,85 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert log =~ ~s("values" => "[FILTERED]")
   end
 
-  test "does not store credentials rejected by the provider" do
+  test "tests credentials without storing them" do
     configure_credential_validator({:error, :provider_credential_rejected})
+    path = "https://localhost/admin/api/tenants/#{@tenant_key}/credentials/test"
+
+    body = %{
+      "provider" => "google",
+      "values" => %{"api_key" => "rejected-private"}
+    }
+
+    anonymous = post(build_conn(), path, body)
+    assert anonymous.status in [401, 403]
+    refute_received {:operator_credential_validated, _, _, _}
+
     authenticated = authenticate()
     csrf = admin_csrf(authenticated)
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      authenticated
+      |> recycle()
+      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+      |> post(path, body)
+    end
+
+    refute_received {:operator_credential_validated, _, _, _}
 
     response =
       authenticated
       |> recycle()
       |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
-        "provider" => "google",
-        "values" => %{"api_key" => "rejected-private"}
-      })
+      |> post(path, body)
 
     assert json_response(response, 422) == %{
              "error" => %{"code" => "credential_rejected"}
            }
 
     refute_received {:operator_credential_created, _, _}
+
+    configure_credential_validator(:ok)
+
+    accepted =
+      authenticated
+      |> recycle()
+      |> put_req_header("x-csrf-token", csrf)
+      |> post(path, %{
+        "provider" => "google",
+        "values" => %{"api_key" => "accepted-private"}
+      })
+
+    assert json_response(accepted, 200) == %{"status" => "valid"}
+
+    assert_received {:operator_credential_validated, "google", "api_key",
+                     %{"api_key" => "accepted-private"}}
+
+    refute_received {:operator_credential_created, _, _}
+  end
+
+  test "reports unsupported and temporarily unavailable credential tests separately" do
+    authenticated = authenticate()
+    csrf = admin_csrf(authenticated)
+
+    for {result, status, code} <- [
+          {{:error, :provider_validation_unsupported}, 501, "credential_validation_unsupported"},
+          {{:error, :provider_validation_unavailable}, 503, "credential_validation_unavailable"}
+        ] do
+      configure_credential_validator(result)
+
+      response =
+        authenticated
+        |> recycle()
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("https://localhost/admin/api/platform/credentials/test", %{
+          "provider" => "google",
+          "name" => "shared-model",
+          "values" => %{"api_key" => "private"}
+        })
+
+      assert json_response(response, status) == %{"error" => %{"code" => code}}
+      refute_received {:operator_credential_created, _, _}
+    end
   end
 
   test "creates a named platform credential through the protected operator endpoint" do

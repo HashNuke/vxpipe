@@ -167,7 +167,10 @@ tenant exception management and older demo onboarding now also pass under the
 presence correction; scoped carrier routing remains. The combined A3
 umbrella run passes 1,754 tests with 40 exclusions; all root static gates pass.
 The latest clarification removes credential policies: existing tenant credentials win;
-otherwise platform credentials are inherited. Scoped deletion and UI simplification
+otherwise platform credentials are inherited. A 2026-09-21 UI correction retires the
+standalone tenant `setup-services` route in favor of the **Services** tab and keeps
+platform-inherited credentials out of tenant-facing administration and onboarding labels.
+Scoped deletion and UI simplification
 pass browser/migration/restart checks and the final umbrella run: 1,763 tests, no
 failures, 40 excluded.
 C1 adds effective Telnyx application bindings and preserves legacy carrier identities.

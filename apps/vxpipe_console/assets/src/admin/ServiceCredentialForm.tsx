@@ -5,6 +5,7 @@ import type {
   CredentialDraft,
   CredentialField,
   CredentialSetupStatus,
+  CredentialTestResult,
   ServiceProvider,
 } from "./serviceTypes";
 import { validateCredentialDraft } from "./validateCredentialDraft";
@@ -25,11 +26,12 @@ export function ServiceCredentialForm({
   showProvider = true,
   showTelnyxPublicKey = false,
   status,
-  submitLabel = "Save credential",
+  submitLabel = "Save",
   submittingLabel = "Saving…",
   message,
   onCancel,
   onSubmit,
+  onTest,
   beforeActions,
   savedFields = [],
 }: {
@@ -44,6 +46,7 @@ export function ServiceCredentialForm({
   message?: string;
   onCancel: () => void;
   onSubmit: (draft: CredentialDraft) => void;
+  onTest?: (draft: CredentialDraft) => Promise<CredentialTestResult>;
   beforeActions?: ReactNode;
   savedFields?: CredentialField[];
 }) {
@@ -57,6 +60,9 @@ export function ServiceCredentialForm({
   const [validationMessage, setValidationMessage] = useState<string | null>(
     null,
   );
+  const [testResult, setTestResult] = useState<
+    CredentialTestResult | { status: "testing" } | null
+  >(null);
 
   function clearSecrets() {
     setApiKey("");
@@ -65,9 +71,51 @@ export function ServiceCredentialForm({
     setAuthToken("");
   }
 
+  function clearTestResult() {
+    setTestResult(null);
+  }
+
+  function draft(): CredentialDraft {
+    return {
+      provider,
+      values:
+        provider === "twilio"
+          ? { accountSid, authToken }
+          : {
+              apiKey,
+              ...(includePublicKey && publicKey.trim()
+                ? { publicKey: publicKey.trim() }
+                : {}),
+            },
+    };
+  }
+
+  function locallyValidDraft() {
+    const nextDraft = draft();
+    const nextValidationMessage = validateCredentialDraft(nextDraft);
+    setValidationMessage(nextValidationMessage);
+    return nextValidationMessage ? null : nextDraft;
+  }
+
+  async function testCredentials() {
+    const nextDraft = locallyValidDraft();
+    if (!nextDraft || !onTest) return;
+
+    setTestResult({ status: "testing" });
+    try {
+      setTestResult(await onTest(nextDraft));
+    } catch {
+      setTestResult({
+        status: "error",
+        message: "Credentials could not be tested. Check the connection and try again.",
+      });
+    }
+  }
+
   useEffect(() => {
     setProvider(initialProvider);
     clearSecrets();
+    clearTestResult();
   }, [initialProvider]);
 
   useEffect(() => {
@@ -78,10 +126,13 @@ export function ServiceCredentialForm({
       status === "error"
     ) {
       clearSecrets();
+      clearTestResult();
     }
   }, [status]);
 
-  const pending = status === "submitting";
+  const saving = status === "submitting";
+  const testing = testResult?.status === "testing";
+  const pending = saving || testing;
   const savedPlaceholder = (field: CredentialField) =>
     provider === initialProvider && savedFields.includes(field)
       ? "••••••••"
@@ -95,21 +146,8 @@ export function ServiceCredentialForm({
       className="grid gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        const draft: CredentialDraft = {
-          provider,
-          values:
-            provider === "twilio"
-              ? { accountSid, authToken }
-              : {
-                  apiKey,
-                  ...(includePublicKey && publicKey.trim()
-                    ? { publicKey: publicKey.trim() }
-                    : {}),
-                },
-        };
-        const nextValidationMessage = validateCredentialDraft(draft);
-        setValidationMessage(nextValidationMessage);
-        if (!nextValidationMessage) onSubmit(draft);
+        const nextDraft = locallyValidDraft();
+        if (nextDraft) onSubmit(nextDraft);
       }}
     >
       {showProvider ? (
@@ -121,6 +159,7 @@ export function ServiceCredentialForm({
             onChange={(event) => {
               setProvider(event.target.value as ServiceProvider);
               clearSecrets();
+              clearTestResult();
             }}
             value={provider}
           >
@@ -139,7 +178,10 @@ export function ServiceCredentialForm({
             <input
               className={fieldClass}
               disabled={pending}
-              onChange={(event) => setAccountSid(event.target.value)}
+              onChange={(event) => {
+                setAccountSid(event.target.value);
+                clearTestResult();
+              }}
               placeholder={savedPlaceholder("accountSid")}
               type="password"
               value={accountSid}
@@ -150,7 +192,10 @@ export function ServiceCredentialForm({
             <input
               className={fieldClass}
               disabled={pending}
-              onChange={(event) => setAuthToken(event.target.value)}
+              onChange={(event) => {
+                setAuthToken(event.target.value);
+                clearTestResult();
+              }}
               placeholder={savedPlaceholder("authToken")}
               type="password"
               value={authToken}
@@ -167,7 +212,10 @@ export function ServiceCredentialForm({
               id={`${inputId}-api`}
               className={fieldClass}
               disabled={pending}
-              onChange={(event) => setApiKey(event.target.value)}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                clearTestResult();
+              }}
               placeholder={savedPlaceholder("apiKey")}
               type="password"
               value={apiKey}
@@ -183,7 +231,10 @@ export function ServiceCredentialForm({
                 aria-describedby={`${inputId}-public-hint`}
                 className={fieldClass}
                 disabled={pending}
-                onChange={(event) => setPublicKey(event.target.value)}
+                onChange={(event) => {
+                  setPublicKey(event.target.value);
+                  clearTestResult();
+                }}
                 placeholder={savedPlaceholder("publicKey")}
                 spellCheck={false}
                 type="text"
@@ -212,13 +263,28 @@ export function ServiceCredentialForm({
           {message}
         </p>
       ) : null}
+      {testResult?.status === "valid" ? (
+        <p className="text-sm text-[var(--admin-green)]" role="status">
+          Credentials tested successfully.
+        </p>
+      ) : null}
+      {testResult?.status === "unsupported" ? (
+        <p className="text-sm text-[var(--admin-muted)]" role="status">
+          {testResult.message}
+        </p>
+      ) : null}
+      {testResult?.status === "error" ? (
+        <p className="text-sm text-[var(--admin-red)]" role="alert">
+          {testResult.message}
+        </p>
+      ) : null}
       {status === "success" ? (
         <p className="text-sm text-[var(--admin-green)]" role="status">
           Credential stored.
         </p>
       ) : null}
       {beforeActions}
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         {showCancel ? (
           <Button
             disabled={pending}
@@ -232,8 +298,16 @@ export function ServiceCredentialForm({
             Cancel
           </Button>
         ) : null}
+        <Button
+          disabled={pending || !onTest}
+          onClick={() => void testCredentials()}
+          type="button"
+          variant="ghost"
+        >
+          {testing ? "Testing…" : "Test credentials"}
+        </Button>
         <Button disabled={pending} type="submit">
-          {pending ? submittingLabel : submitLabel}
+          {saving ? submittingLabel : submitLabel}
         </Button>
       </div>
     </form>

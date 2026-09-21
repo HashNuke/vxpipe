@@ -402,63 +402,38 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     end
   end
 
-  test "validates a credential upstream before persisting validation evidence" do
-    tenant_key = "AAAAAAAAAAAAAAAA"
-    validated_at = ~U[2026-09-18 05:00:00Z]
-
-    returned = %ProviderCredential{
-      id: "11111111-1111-4111-8111-111111111111",
-      tenant_key: tenant_key,
-      provider: "google",
-      name: "google",
-      auth_kind: "api_key",
-      last_validated_at: validated_at
-    }
-
-    repository = TestOperatorCredentialRepository.repository(self(), {:ok, returned})
+  test "tests an operator credential without persisting it" do
     validator = TestOperatorCredentialValidator.validator(self(), :ok)
 
-    assert {:ok, ^returned} =
-             Vxpipe.Calls.create_validated_operator_credential(
+    assert :ok =
+             Vxpipe.Calls.validate_operator_credential(
                InstallationOperator.authority(),
-               tenant_key,
-               "google",
-               "google",
+               "AAAAAAAAAAAAAAAA",
+               "deepgram",
+               "deepgram",
                "api_key",
                %{"api_key" => "private"},
-               provider_credential_repository: repository,
-               provider_credential_validator: validator,
-               clock: fn -> validated_at end,
-               uuid_generator: fn -> returned.id end
+               provider_credential_validator: validator
              )
 
-    assert_received {:operator_credential_validated, "google", "api_key",
+    assert_received {:operator_credential_validated, "deepgram", "api_key",
                      %{"api_key" => "private"}}
 
-    assert_received {:operator_credential_provisioned,
-                     %ProviderCredential{last_validated_at: ^validated_at},
-                     %{"api_key" => "private"}}
+    refute_received {:operator_credential_provisioned, _, _}
   end
 
-  test "does not persist credentials rejected by the provider" do
+  test "returns provider rejection without persisting the tested credential" do
     validator =
       TestOperatorCredentialValidator.validator(self(), {:error, :provider_credential_rejected})
 
-    repository =
-      TestOperatorCredentialRepository.repository(
-        self(),
-        {:error, :repository_must_not_be_called}
-      )
-
     assert {:error, :provider_credential_rejected} =
-             Vxpipe.Calls.create_validated_operator_credential(
+             Vxpipe.Calls.validate_operator_credential(
                InstallationOperator.authority(),
                "AAAAAAAAAAAAAAAA",
                "deepgram",
                "deepgram",
                "api_key",
                %{"api_key" => "rejected"},
-               provider_credential_repository: repository,
                provider_credential_validator: validator
              )
 
@@ -468,19 +443,8 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     refute_received {:operator_credential_provisioned, _, _}
   end
 
-  test "only installation operators can provision a validated platform-owned credential" do
-    returned = %ProviderCredential{
-      id: "11111111-1111-4111-8111-111111111111",
-      owner: :platform,
-      tenant_key: nil,
-      provider: "google",
-      name: "shared-model",
-      auth_kind: "api_key"
-    }
-
+  test "only installation operators can test a platform-owned credential" do
     options = [
-      provider_credential_repository:
-        TestOperatorCredentialRepository.repository(self(), {:ok, returned}),
       provider_credential_validator: TestOperatorCredentialValidator.validator(self(), :ok)
     ]
 
@@ -491,7 +455,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     }
 
     assert {:error, :installation_operator_required} =
-             Vxpipe.Calls.create_validated_operator_credential(
+             Vxpipe.Calls.validate_operator_credential(
                tenant_principal,
                :platform,
                "google",
@@ -503,8 +467,8 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
 
     refute_received {:operator_credential_validated, _, _, _}
 
-    assert {:ok, ^returned} =
-             Vxpipe.Calls.create_validated_operator_credential(
+    assert :ok =
+             Vxpipe.Calls.validate_operator_credential(
                InstallationOperator.authority(),
                :platform,
                "google",
@@ -514,9 +478,10 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                options
              )
 
-    assert_received {:operator_credential_provisioned,
-                     %ProviderCredential{owner: :platform, tenant_key: nil, name: "shared-model"},
-                     _payload}
+    assert_received {:operator_credential_validated, "google", "api_key",
+                     %{"api_key" => "example-key"}}
+
+    refute_received {:operator_credential_provisioned, _, _}
   end
 
   test "ordinary provisioning cannot claim upstream validation evidence" do

@@ -52,7 +52,7 @@ test("an unavailable optional service does not block sample readiness or progres
   ).toBeEnabled();
   expect(
     within(screen.getByRole("list", { name: "Setup progress" })).getByText(
-      "Validated",
+      "Connected",
     ),
   ).toBeVisible();
 });
@@ -77,10 +77,10 @@ test("retries a failed effective directory read without treating it as empty set
   expect(
     await screen.findByRole("button", { name: "Load sample call specs" }),
   ).toBeEnabled();
-  expect(screen.getAllByText("Inherited from platform")).toHaveLength(2);
+  expect(screen.queryByText("Inherited from platform")).not.toBeInTheDocument();
 });
 
-test("onboarding counts inherited services and opens scoped management without asking for platform secrets", async () => {
+test("onboarding counts inherited services and opens the tenant service inventory", async () => {
   window.history.replaceState({}, "", "/admin/onboarding");
   const fetchImpl = vi.fn((url: RequestInfo | URL) => {
     if (url === "/admin/api/onboarding/demo-tenant")
@@ -90,20 +90,32 @@ test("onboarding counts inherited services and opens scoped management without a
         tenant,
         bindings: [binding("google"), binding("deepgram")],
       });
+    if (String(url).endsWith("/services"))
+      return response({
+        tenant: { key: tenant.key, name: tenant.name },
+        credentials: [],
+        telephony_services: [],
+        truncated: false,
+      });
     return response({}, 404);
   });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   expect(
     await screen.findByRole("button", { name: "Load sample call specs" }),
   ).toBeEnabled();
-  expect(screen.getAllByText("Inherited from platform")).toHaveLength(2);
+  expect(screen.queryByText("Inherited from platform")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "Google AI Studio" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "Deepgram" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("No tenant credentials configured.")).toBeVisible();
   expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Manage services" }));
-  expect(
-    await screen.findByRole("heading", { name: "Setup services" }),
-  ).toBeVisible();
+  expect(await screen.findByText("No services yet")).toBeVisible();
   expect(window.location.pathname).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
+    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
   );
 });
 

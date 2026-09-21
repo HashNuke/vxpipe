@@ -53,6 +53,10 @@ import type {
   ServiceInventoryItem,
   TenantServicesPageState,
 } from "./admin/serviceTypes";
+import {
+  credentialRequest,
+  testCredentialRequest,
+} from "./admin/credentialApi";
 import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
 import { ScopedServicesApp } from "./ScopedServicesApp";
@@ -83,7 +87,7 @@ export function App(props: AppProps) {
     <BrowserRouter>
       <Routes>
         <Route path="/admin/platform/services" element={<ScopedServicesRoute {...props} platform />} />
-        <Route path="/admin/tenants/:tenantKey/setup-services" element={<ScopedServicesRoute {...props} />} />
+        <Route path="/admin/tenants/:tenantKey/setup-services" element={<RetiredSetupServicesRedirect />} />
         <Route path="/admin/onboarding" element={<RoutedApp {...props} route={{ kind: "onboarding" }} />} />
         <Route path="/admin" element={<TenantDirectoryRoute {...props} />} />
         <Route path="/admin/tenants/:tenantKey" element={<TenantWorkspaceRedirect />} />
@@ -107,6 +111,16 @@ function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platfo
       scope={platform ? { kind: "platform" } : { kind: "tenant", tenantKey, tenantName: "Tenant" }}
       onNavigate={navigate}
       headerActions={<SignOut csrfToken={props.csrfToken} />}
+    />
+  );
+}
+
+function RetiredSetupServicesRedirect() {
+  const { tenantKey = "" } = useParams();
+  return (
+    <Navigate
+      replace
+      to={`/admin/tenants/${encodeURIComponent(tenantKey)}/services`}
     />
   );
 }
@@ -465,7 +479,7 @@ function RoutedApp({
             ? () => {
                 if (onboarding.tenant.status === "ready")
                   routerNavigate(
-                    `/admin/tenants/${encodeURIComponent(onboarding.tenant.key)}/setup-services`,
+                    `/admin/tenants/${encodeURIComponent(onboarding.tenant.key)}/services`,
                   );
               }
             : undefined
@@ -538,7 +552,6 @@ function RoutedApp({
     return (
       <TenantServicesPage
         headerActions={headerActions}
-        setupHref={`/admin/tenants/${encodeURIComponent(route.tenantKey)}/setup-services`}
         onCreateCredential={(draft) =>
           saveCredential(
             route.tenantKey,
@@ -565,6 +578,16 @@ function RoutedApp({
             routeRef,
             submissionRef,
             submissionSequenceRef,
+          )
+        }
+        onTestCredential={(draft) =>
+          testCredentialRequest(
+            `/admin/api/tenants/${encodeURIComponent(route.tenantKey)}/credentials/test`,
+            draft,
+            undefined,
+            csrfToken,
+            fetchImpl,
+            onSessionExpired,
           )
         }
         onDismissCredential={() => {
@@ -1178,23 +1201,6 @@ function compareServices(
     left.name.localeCompare(right.name) ||
     left.id.localeCompare(right.id)
   );
-}
-
-function credentialRequest(draft: CredentialDraft) {
-  if ("apiKey" in draft.values) {
-    return {
-      provider: draft.provider,
-      values: { api_key: draft.values.apiKey },
-    };
-  }
-
-  return {
-    provider: draft.provider,
-    values: {
-      account_sid: draft.values.accountSid,
-      auth_token: draft.values.authToken,
-    },
-  };
 }
 
 function currentSubmission(

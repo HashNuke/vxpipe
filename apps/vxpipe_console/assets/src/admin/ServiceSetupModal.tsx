@@ -15,12 +15,15 @@ import {
   type SetupProviderId,
   type SetupServiceScope,
 } from "./setupCatalog";
-import type { CredentialDraft } from "./serviceTypes";
+import type {
+  CredentialDraft,
+  CredentialTestResult,
+} from "./serviceTypes";
 
 export type ServiceModalState = {
   provider: SetupProviderId | null;
   group?: "ai" | "telephony";
-  status: "idle" | "submitting" | "error";
+  status: "idle" | "testing" | "submitting" | "error";
   message?: string;
   overriding?: boolean;
   operation?: "credentials" | "removal";
@@ -30,6 +33,7 @@ export function ServiceSetupModal({
   state,
   onClose,
   onSubmit,
+  onTest,
   onSelect,
   connections = [],
   providers = setupProviders,
@@ -47,6 +51,7 @@ export function ServiceSetupModal({
   state: ServiceModalState;
   onClose: () => void;
   onSubmit: (draft: CredentialDraft) => void;
+  onTest?: (draft: CredentialDraft) => Promise<CredentialTestResult>;
   onSelect: (provider: SetupProviderId | null) => void;
   connections?: SetupConnection[];
   providers?: SetupProvider[];
@@ -105,7 +110,7 @@ export function ServiceSetupModal({
   return (
     <SetupDialog
       anchorTop
-      busy={state.status === "submitting"}
+      busy={state.status === "submitting" || state.status === "testing"}
       onClose={onClose}
       title={
         provider
@@ -117,7 +122,9 @@ export function ServiceSetupModal({
           <div className="setup-service-heading">
             <select
               aria-label="Service"
-              disabled={state.status === "submitting"}
+              disabled={
+                state.status === "submitting" || state.status === "testing"
+              }
               value={state.provider ?? ""}
               onChange={(event) =>
                 onSelect(
@@ -151,16 +158,18 @@ export function ServiceSetupModal({
                 <span key={capability}>{capabilityLabels[capability]}</span>
               ))}
             </div>
-            {state.status === "submitting" ? (
+            {state.status === "submitting" || state.status === "testing" ? (
               <p className="setup-validation" role="status">
                 <LoaderCircle
                   aria-hidden="true"
                   className="animate-spin motion-reduce:animate-none"
                   size={16}
                 />
-                {state.operation === "removal"
+                {state.status === "testing"
+                  ? `Testing credentials with ${provider.name}…`
+                  : state.operation === "removal"
                   ? "Removing service…"
-                  : `Validating credentials with ${provider.name}…`}
+                  : "Saving credentials…"}
               </p>
             ) : null}
             {inherited ? (
@@ -211,13 +220,14 @@ export function ServiceSetupModal({
                 message={state.message}
                 onCancel={onClose}
                 onSubmit={onSubmit}
+                onTest={onTest}
                 showTelnyxPublicKey={telephonySetup}
                 providerLocked
                 showProvider={false}
-                status={state.status}
-                submitLabel="Validate and save"
+                status={state.status === "testing" ? "idle" : state.status}
+                submitLabel="Save"
                 submittingLabel={
-                  state.operation === "removal" ? "Updating…" : "Validating…"
+                  state.operation === "removal" ? "Updating…" : "Saving…"
                 }
                 beforeActions={webhook}
               />

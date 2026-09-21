@@ -80,11 +80,15 @@ export function TenantSetupPage({
   if (unavailable)
     return (
       <div className="setup-unavailable" role="alert">
-        <h1>Setup is temporarily unavailable</h1>
+        <h1>
+          {platform ? "Platform services unavailable" : "Setup is temporarily unavailable"}
+        </h1>
         <p>
-          Your saved progress is safe. Try again to load this tenant’s services.
+          {platform
+            ? "Platform services could not be loaded. Try again."
+            : "Your saved progress is safe. Try again to load this tenant’s services."}
         </p>
-        <Button onClick={onRetry}>Retry setup</Button>
+        <Button onClick={onRetry}>{platform ? "Retry services" : "Retry setup"}</Button>
       </div>
     );
   if (creating)

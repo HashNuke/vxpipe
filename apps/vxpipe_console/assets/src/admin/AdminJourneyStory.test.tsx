@@ -159,7 +159,7 @@ test("reaches services through the tenant workspace", () => {
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "valid-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save credential" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Credential stored");

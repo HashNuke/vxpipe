@@ -158,7 +158,7 @@ test("empty groups keep a heading action and an add card that open the service p
   fireEvent.change(service, { target: { value: "deepgram" } });
   expect(within(dialog).getByLabelText("API key")).toHaveFocus();
   expect(
-    screen.getByRole("button", { name: "Validate and save" }),
+    screen.getByRole("button", { name: "Save" }),
   ).toBeEnabled();
   fireEvent.keyDown(dialog, { key: "Escape" });
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -173,9 +173,9 @@ test("one speech provider covers two capabilities and a model provider unlocks s
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(screen.getByRole("dialog")).toHaveTextContent(
-    "Validating credentials",
+    "Saving credentials",
   );
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -185,7 +185,7 @@ test("one speech provider covers two capabilities and a model provider unlocks s
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -270,7 +270,7 @@ test("returning through the tenant directory preserves completed service setup",
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
   fireEvent.click(screen.getByRole("button", { name: "Continue setup" }));
@@ -284,7 +284,7 @@ test("updating a speech service preserves the sample model provider", () => {
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(
@@ -328,7 +328,7 @@ test("creating a tenant asks only for a name and opens its own empty service set
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
   fireEvent.click(screen.getByRole("button", { name: "Set up Customer Care" }));
@@ -387,7 +387,7 @@ test("the AI service picker clears drafts and keeps the add card after connected
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(
@@ -414,7 +414,7 @@ test("speech-to-speech preview completes service setup but only unlocks compatib
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-example-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -462,7 +462,7 @@ test("telephony remains optional and does not complete voice readiness", () => {
   fireEvent.change(screen.getByLabelText("Public key"), {
     target: { value: btoa("p".repeat(32)) },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(serviceButtons("Telephony")).toEqual([
     "Connect a service",
@@ -517,7 +517,7 @@ test.each([["google", "Google AI Studio"]])(
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "storybook-example-key" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     act(() => vi.advanceTimersByTime(1000));
     const card = screen.getByRole("article", { name });
     for (const capability of ["Speech-to-text", "LLM", "Text-to-speech"]) {
@@ -542,7 +542,7 @@ test("Rime connects with an API key and belongs to AI services", () => {
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-rime-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(
     within(screen.getByRole("region", { name: "AI providers" })).getByRole(
@@ -564,7 +564,7 @@ test("Telnyx is one connection managed from either service group", () => {
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-telnyx-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   expect(
     within(screen.getByRole("region", { name: "AI providers" })).getByText(
@@ -601,7 +601,7 @@ test("Telnyx is one connection managed from either service group", () => {
         target: { value: btoa("q".repeat(32)) },
       });
     }
-    fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     act(() => vi.advanceTimersByTime(1000));
   }
   expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(2);

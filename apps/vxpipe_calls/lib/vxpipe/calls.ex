@@ -72,9 +72,9 @@ defmodule Vxpipe.Calls do
           options
         )
 
-  def create_validated_operator_credential(
+  def validate_operator_credential(
         authority,
-        tenant_key,
+        owner,
         provider,
         name,
         auth_kind,
@@ -82,9 +82,9 @@ defmodule Vxpipe.Calls do
         options \\ []
       ),
       do:
-        OperatorAdministration.create_validated_credential(
+        OperatorAdministration.validate_credential(
           authority,
-          tenant_key,
+          owner,
           provider,
           name,
           auth_kind,
@@ -103,26 +103,6 @@ defmodule Vxpipe.Calls do
       ),
       do:
         OperatorAdministration.update_credential(
-          authority,
-          tenant_key,
-          credential_id,
-          provider,
-          auth_kind,
-          payload,
-          options
-        )
-
-  def update_validated_operator_credential(
-        authority,
-        tenant_key,
-        credential_id,
-        provider,
-        auth_kind,
-        payload,
-        options \\ []
-      ),
-      do:
-        OperatorAdministration.update_validated_credential(
           authority,
           tenant_key,
           credential_id,

@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ServiceCredentialForm } from "./ServiceCredentialForm";
@@ -50,6 +56,62 @@ test("submits provider credentials without rendering them as stored metadata", (
     values: { apiKey: "secret-value" },
   });
   expect(screen.queryByText("secret-value")).not.toBeInTheDocument();
+});
+
+test("tests credentials without saving, then saves with a separate action", async () => {
+  const testCredentials = vi.fn(async () => ({ status: "valid" as const }));
+  const submit = vi.fn();
+  render(
+    <ServiceCredentialForm
+      onCancel={vi.fn()}
+      onSubmit={submit}
+      onTest={testCredentials}
+      status="idle"
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "secret-value" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
+
+  await waitFor(() => expect(testCredentials).toHaveBeenCalledOnce());
+  expect(submit).not.toHaveBeenCalled();
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Credentials tested successfully",
+  );
+  expect(screen.getByLabelText("API key")).toHaveValue("secret-value");
+
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(submit).toHaveBeenCalledWith({
+    provider: "google",
+    values: { apiKey: "secret-value" },
+  });
+});
+
+test("keeps Save available when credential testing is unsupported", async () => {
+  const submit = vi.fn();
+  render(
+    <ServiceCredentialForm
+      onCancel={vi.fn()}
+      onSubmit={submit}
+      onTest={async () => ({
+        status: "unsupported",
+        message: "Credential testing is not available for this service.",
+      })}
+      status="idle"
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText("API key"), {
+    target: { value: "secret-value" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
+
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Credential testing is not available",
+  );
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 });
 
 test("does not submit incomplete credentials", () => {

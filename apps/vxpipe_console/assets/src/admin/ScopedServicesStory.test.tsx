@@ -27,7 +27,7 @@ function saveKey() {
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-dummy-key" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Validate and save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
 }
 

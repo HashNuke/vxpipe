@@ -49,7 +49,7 @@ test("shows automatic Demo creation as the first resumable step", () => {
   expect(screen.queryByRole("button", { name: "Load sample call specs" })).not.toBeInTheDocument();
 });
 
-test("shows which services each validated provider covers and when it was checked", () => {
+test("shows which services each connected provider covers and when it was tested", () => {
   render(
     <OnboardingPage
       onInstallSamples={vi.fn()}
@@ -63,7 +63,7 @@ test("shows which services each validated provider covers and when it was checke
   expect(screen.getByText("Speech to text")).toBeVisible();
   expect(screen.getByText("Text to speech")).toBeVisible();
   expect(screen.getByText("Language model")).toBeVisible();
-  expect(screen.getAllByText(/Validated /)).toHaveLength(2);
+  expect(screen.getAllByText(/Last tested /)).toHaveLength(2);
   expect(screen.getByRole("button", { name: "Load sample call specs" })).toBeEnabled();
 });
 
@@ -98,7 +98,7 @@ test("submits provider selection and offers sample installation after validation
   expect(installSamples).toHaveBeenCalledOnce();
 });
 
-test("keeps a failed provider actionable without claiming it was validated", () => {
+test("keeps a failed provider actionable without claiming it was tested", () => {
   render(
     <OnboardingPage
       onInstallSamples={vi.fn()}
@@ -122,6 +122,6 @@ test("keeps a failed provider actionable without claiming it was validated", () 
   );
 
   expect(screen.getByRole("alert")).toHaveTextContent("Google rejected this API key");
-  expect(screen.queryByText(/Validated /)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Last tested /)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Load sample call specs" })).not.toBeInTheDocument();
 });

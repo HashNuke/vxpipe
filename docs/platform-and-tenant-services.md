@@ -34,20 +34,28 @@ It does not restore environment-based provider credentials or implicit failure f
   at both scopes is unavailable. Existing invalid or unreadable tenant credentials
   fail closed. They never trigger fallback to platform. An override replaces the
   whole credential set; named bindings never silently substitute `default`.
-- Tenant cards show **Inherited from platform** or **Tenant override** where applicable.
-  Ordinary tenant/platform cards omit redundant scope labels. Inherited capabilities
-  count toward onboarding readiness, including newly created tenants.
+- **Tenant UI visibility correction (2026-09-21):** the tenant **Services** tab
+  lists and edits tenant-owned credentials only. Platform credentials can still
+  satisfy runtime and onboarding readiness through the resolution rules above, but
+  tenant pages do not display them, label them as inherited, or offer platform
+  credential actions.
 - **Use platform service** deletes the tenant credential. **Remove service** deletes
   the credential at its own scope. There are no dormant tenant credentials: adding
   a credential again creates a new identity, requiring fresh preparation for readers
   pinned to the deleted identity. Existing legacy telephony references prevent deletion
   until their application binding is removed. API-key revocation is a separate concern.
-- An inherited service opens a read-only explanation with **Override for this tenant**
-  and **Manage platform services**. Platform credentials are edited at platform scope.
-  The operator UI has installation-wide authority; tenant API keys do not gain that
-  authority through inheritance or UI actions.
+- Platform credentials are edited only at `/admin/platform/services`. The operator
+  UI has installation-wide authority; tenant API keys do not gain that authority
+  through runtime inheritance or UI actions. The retired
+  `/admin/tenants/:tenant_key/setup-services` URL redirects to the tenant
+  **Services** tab for existing bookmarks.
 - The first UI supports Deepgram, Rime, Google AI Studio and Telnyx, as already selected
   by the user. Provider labels and defaults do not establish live runtime support.
+- **Credential actions (2026-09-21):** **Test credentials** performs an optional read-only
+  provider probe. **Save** performs local schema validation and encrypted persistence separately.
+  Saving remains available when a provider has no supported test, and does not create new
+  `last_validated_at` evidence. See the
+  [credential testing and storage contract](provider-credential-validation.md).
 
 ## Telnyx credentials, verification and routing
 
@@ -262,11 +270,12 @@ new authorization boundary through real operator/tenant API-key HTTP writes.
 The persisted positive cases cover AI/speech services and, in C1, a platform-backed
 Telnyx caller. Tenant edits and publication require tenant credentials in both cases.
 
-Checkpoint B1 implementation and browser evidence:
+Checkpoint B1 implementation and browser evidence (historical UI, superseded by
+the 2026-09-21 tenant visibility correction above):
 
-- `/admin/platform/services` saves and edits platform credentials;
-  `/admin/tenants/:tenant_key/setup-services` displays effective source, readiness and
-  exact named bindings. The older tenant service inventory remains available.
+- `/admin/platform/services` saves and edits platform credentials. The former
+  `/admin/tenants/:tenant_key/setup-services` effective-binding surface has since
+  been retired in favor of the tenant-owned credential inventory.
 - Operator-session directory endpoints are `GET /admin/api/platform/services` and
   `GET /admin/api/tenants/:tenant_key/service-bindings`. Platform replacement uses
   `PATCH /admin/api/platform/credentials/:credential_id` with real CSRF enforcement.
@@ -274,7 +283,7 @@ Checkpoint B1 implementation and browser evidence:
 - Inherited details link to platform management. Tenant override/restore
   actions follow in B2. Telnyx public-key and webhook configuration follow in C;
   the production form does not display fields that cannot yet be persisted.
-- Rime credentials can be stored and validated with its authenticated dictionary
+- Rime credentials can be stored and tested with its authenticated dictionary
   coverage endpoint. This does not implement a Rime runtime adapter. Voice-sample
   readiness still uses supported runtime capabilities, not the marketed capability list.
 - Chrome verified desktop/mobile save/edit, rejected-key recovery, two inheriting
@@ -488,8 +497,8 @@ remote application provisioning, credential persistence, verification or routing
 - [x] Migrate existing credentials and references as tenant-owned without changing IDs
   or effective behavior. Version authenticated encryption context where needed;
   test existing decrypt, replacement, re-encryption, interruption and rollback behavior.
-- [x] Add explicit platform operator CRUD/validation endpoints using the current session
-  and CSRF protections. Tenant keys cannot write/read platform secrets; effective-list
+- [x] Add explicit platform operator CRUD and read-only test endpoints using the current
+  session and CSRF protections. Tenant keys cannot write/read platform secrets; effective-list
   responses contain safe source/readiness metadata and URLs only.
 - [x] Implement one shared presence resolver used by save/publish/preparation and every
   fresh model/STT/TTS reader. Preserve current named binding semantics, final transaction
@@ -527,8 +536,9 @@ remote application provisioning, credential persistence, verification or routing
 
 ### 4. Complete Console integration and migration acceptance
 
-- [x] Wire platform/tenant service pages and onboarding to effective-service metadata.
-  Show source and unavailable/invalid states and explicit restore/override actions.
+- [x] Wire platform service management and onboarding to effective-service metadata.
+  Runtime resolution retains effective-source behavior; tenant administration now
+  exposes tenant-owned credentials only.
 - [x] Make service scope changes deliberate and display the resulting webhook URL change.
   Keep secrets write-only and isolate operator/platform authority from tenant administration.
 - [x] Derive progress from durable resources after reload, including telephony application

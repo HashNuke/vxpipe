@@ -1,4 +1,8 @@
-import type { CredentialDraft, ServiceProvider } from "./serviceTypes";
+import type {
+  CredentialDraft,
+  CredentialTestResult,
+  ServiceProvider,
+} from "./serviceTypes";
 
 export type OnboardingProviderStatus =
   | "needs_credentials"
@@ -37,3 +41,6 @@ export type OnboardingPageState = {
 };
 
 export type OnboardingCredentialSubmit = (draft: CredentialDraft) => void;
+export type OnboardingCredentialTest = (
+  draft: CredentialDraft,
+) => Promise<CredentialTestResult>;
