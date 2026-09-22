@@ -1036,7 +1036,7 @@ zero failures, 42 excluded, seed 0. See
   production selection and its service badge only after that gate passes;
   without authorization, record the gate as pending and leave the milestone
   incomplete.
-- [ ] Run a bounded local synthetic load (at most about half the machine's
+- [x] Run a bounded local synthetic load (at most about half the machine's
   resources) comparing current LLM + TTS calls with Morse STS and STS + STT.
   Measure admission/startup, input acceptance, speech onset, first audio,
   playback acknowledgement, turn completion, interruption and failure
@@ -1057,7 +1057,7 @@ zero failures, 42 excluded, seed 0. See
       notifications must not be reported as a measured zero.
   - [x] Smoke-test the lane under contention; record defects before any runtime
     repair. Dedicated harness scope excludes STS/provider runtime changes.
-  - [ ] Run the integrated ten-call comparison only in a parent-scheduled quiet
+  - [x] Run the integrated ten-call comparison only in a parent-scheduled quiet
     window; retain p50/p95/p99 reports and review isolation/cleanup evidence before
     completing load acceptance. Contended smoke output is not performance evidence.
   - [x] Repair harness timing attribution before integration: record input origin
@@ -1066,8 +1066,8 @@ zero failures, 42 excluded, seed 0. See
     unknown/duplicate correlation. Add a deterministic sink-before-public-onset
     regression and uniquely named test supervisors; rerun focused/smoke checks.
     Evidence: `labnotes/20260922-1636-fence-load-attribution.md`; seven focused
-    contracts and all three two-call smoke modes pass. Quiet ten-call acceptance
-    remains pending.
+    contracts and all three two-call smoke modes pass. The subsequent quiet
+    ten-call measurement is recorded below.
   - [x] Make the harness sink stale-finish regression deterministic: replace
     scheduler-sensitive interrupt/clear timing assertions with controlled clock
     and captured timer tokens, explicit stale-token injection and acknowledgement
@@ -1082,12 +1082,17 @@ zero failures, 42 excluded, seed 0. See
   Harness evidence: [method and commands](../sts-comparative-call-load.md) and
   `labnotes/20260922-1610-comparative-call-load.md`. Three two-call smoke modes
   pass; each observes five complete turns, two interruptions and one healthy
-  post-fault call. The ten-call lane is implemented but has not been run in a
-  quiet window. These implementation/smoke checkboxes do not complete load acceptance.
+  post-fault call. The subsequent coordinated ten-call run at `5792d797` passes
+  all three modes in 25.3 seconds, with no rejected/dropped input. Each mode
+  completes 29 turns, ten interruptions, nine healthy post-fault survivors and
+  cleanup of all ten calls. Full measured distributions and sample counts are
+  in the linked methodology/results; coordination and environment evidence are
+  in `labnotes/20260922-1657-sts-ten-call-measurement.md`. This closes the bounded
+  local load checkpoint, not hosted/native/UI/lifecycle acceptance. Repeat after
+  remaining material runtime changes in the final coordinated acceptance pass.
   Parent integration at `9908a1a1` also passes all seven harness contract tests
   and all three two-call modes against the latest tool, recognizer and egress
-  fixes. Root static gates pass; full umbrella and quiet ten-call measurement
-  remain pending. Review/integration evidence:
+  fixes. Root static gates pass; full umbrella remains pending. Review/integration evidence:
   `labnotes/20260922-1650-sts-load-integration.md`.
 - [ ] Run focused child suites and root format, warnings-as-errors compile,
   strict Credo, full tests and unused-lock gates. Verify no real-key fixtures,

@@ -117,10 +117,65 @@ Design review: session-allocation conformance was rejected because it bypasses
 room policy, readiness, transcripts and playback. Immediate fabricated completion
 was rejected because it would hide playback occupancy and interruption costs.
 The embedded sink avoids adding native codec/browser workload to this comparison;
-those remain separately owned acceptance lanes. Final ten-call measurements and
-milestone acceptance remain pending the parent's quiet integrated run.
+those remain separately owned acceptance lanes. A measured ten-call baseline is
+recorded below; final milestone acceptance still requires remaining lifecycle
+repairs and a coordinated recheck after material runtime changes.
 
 There is no warmup phase. The fixed mode order can include cold module/cache
 costs in the first mode's startup; do not attribute that difference solely to
 the speech architecture. With ten calls, p99 admission/startup is the maximum
 sample, not an estimate of a production tail distribution.
+
+## Measured local baseline — 2026-09-22
+
+`bin/sts-call-load measured` at `5792d797bf0439a81dbb8dfc4f960376cdb3659c`
+passed all three modes: three tests, zero failures, exit 0, 25.3 seconds. Each
+mode held ten concurrent ready calls before input. The parent and parallel
+agents had finished their compile/test commands before this run; background
+development services remained running. No native or hosted load ran concurrently.
+
+Host: x86-64 AMD EPYC-Genoa, four logical CPUs, 7,750 MiB RAM. Runtime: OTP 28,
+Elixir 1.19.5, two ordinary schedulers, one dirty CPU and one dirty I/O scheduler,
+two async threads. This is the script's half-machine scheduler profile.
+
+Every mode observed 29 completed turns, ten interruptions, nine healthy
+post-fault survivors and ten cleaned calls, with zero reported errors. Each
+accepted 2,106 input frames with zero rejected/dropped input and zero rejected
+or cleared sink chunks. Intended interrupted chunks were counted separately.
+
+All latency cells below are **p50 / p95 / p99**, in milliseconds, rounded to
+three decimals. Counts apply independently to each mode. Definitions and limits
+are in the workload section above.
+
+| Metric | Samples | Fixture LLM + TTS | STS provider text | STS + output STT |
+| --- | ---: | ---: | ---: | ---: |
+| Admission | 10 | 168.500 / 193.118 / 193.118 | 27.101 / 40.306 / 40.306 | 39.896 / 56.873 / 56.873 |
+| Startup | 10 | 348.301 / 348.444 / 348.444 | 44.104 / 48.451 / 48.451 | 48.285 / 66.261 / 66.261 |
+| Input acceptance | 2106 | 0.115 / 0.310 / 0.423 | 0.163 / 0.320 / 0.450 | 0.141 / 0.372 / 0.556 |
+| Caller speech onset | 39 | 5.680 / 21.096 / 21.125 | 4.330 / 9.841 / 14.128 | 3.365 / 12.436 / 12.842 |
+| Agent speech onset | 39 | 606.127 / 642.149 / 642.223 | 603.860 / 610.086 / 614.093 | 603.126 / 614.383 / 614.610 |
+| First audio | 39 | 594.000 / 634.650 / 634.652 | 588.567 / 594.785 / 594.794 | 585.292 / 588.407 / 589.277 |
+| Playback acknowledgement | 29 | 2592.682 / 2638.611 / 2638.625 | 2489.567 / 2495.785 / 2495.794 | 2487.241 / 2489.407 / 2490.277 |
+| Turn completion | 29 | 2595.924 / 2650.209 / 2650.220 | 2493.912 / 2504.339 / 2504.430 | 2488.304 / 2493.115 / 2493.220 |
+| Interruption | 10 | 5.896 / 12.251 / 12.251 | 5.621 / 16.628 / 16.628 | 9.056 / 14.687 / 14.687 |
+| Failure isolation | 9 | 2599.643 / 2602.742 / 2602.742 | 2495.733 / 2499.569 / 2499.569 | 2493.393 / 2495.512 / 2495.512 |
+| Cleanup | 10 | 3.835 / 4.608 / 4.608 | 2.094 / 4.013 / 4.013 | 0.929 / 2.333 / 2.333 |
+
+| Bounded observation | Fixture LLM + TTS | STS provider text | STS + output STT |
+| --- | ---: | ---: | ---: |
+| Mode elapsed, ms | 8863.053 | 8166.404 | 8157.837 |
+| Largest sampled per-call mailbox / growth | 5 / 5 | 6 / 6 | 9 / 9 |
+| Largest sampled per-call process memory, bytes | 1788024 | 1316488 | 1571040 |
+| Descendants monitored through cleanup | 470 | 290 | 390 |
+| Intentionally interrupted chunks | 8 | 377 | 299 |
+
+The fixed mode order has no warmup, so startup differences include cold
+module/cache effects. First PCM arrival and public speech onset use different
+observation paths; their relative order is not a causality claim. Morse PCM
+duration dominates completion time. These results do not establish hosted-model
+latency, carrier/browser transport capacity, physical hearing, billing accuracy
+or safety of the still-open lifecycle cases. Repeat this lane after material
+runtime changes during final milestone acceptance. The complete machine-readable
+`CALL_LOAD_JSON` output is in temporary log `vxpipe-sts-load-measured.log`;
+[checkpoint labnotes](../labnotes/20260922-1657-sts-ten-call-measurement.md)
+record coordination and scope.
