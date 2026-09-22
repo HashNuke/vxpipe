@@ -51,5 +51,16 @@
   found PlanStartup's new size violation. Recorded and repaired it separately as
   `f9db3319`, preserving behavior; 54 focused checks remain green.
 - All four static gates pass at `f9db3319`: root format, warnings-as-errors
-  compile, strict Credo and unused-lock verification. Full umbrella test evidence
-  is pending; no new runtime edits will overlap that run's baseline.
+  compile, strict Credo and unused-lock verification.
+- The full root `PGHOST=/var/run/postgresql mix test --seed 0` run, with
+  `ERL_FLAGS='+S 2:2'`, is terminal: **2,344 tests, one failure, 45 excluded**.
+  Call Engine passes 1,184 tests; Gateway has the sole failure in
+  `HumanTransferWebRTCTest`, five-participant handoff, awaiting `transfer.active`
+  at line 698. This reproduces the tracked late-attachment timeout; it is not
+  repaired by the private policy continuity checkpoint. All other child suites
+  pass. No runtime/build edits overlapped the run.
+- After the Call Engine lane completed, new Google controller tests ran in a
+  separate non-Mix VM against the unchanged compiled baseline: eight tests,
+  eight expected failures. They are not included in the root totals above.
+  Native investigation now has a quiet slot for the controlled bind-order case;
+  no unmodified acceptance retry is being counted as a fix.
