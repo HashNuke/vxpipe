@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+default_model="opencode-go/muse-spark-1.3-contributor"
+model="$default_model"
+
+usage() {
+  cat <<USAGE
+Usage:
+  bin/teammate [--model MODEL] MESSAGE...
+  printf '%s' MESSAGE | bin/teammate [--model MODEL]
+
+Runs a non-interactive OpenCode task using the default free OpenCode Go model.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --model requires a value." >&2
+        usage >&2
+        exit 1
+      fi
+      model="$2"
+      shift 2
+      ;;
+    --model=*)
+      model="${1#*=}"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -* )
+      echo "Error: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ $# -gt 0 ]]; then
+  message="$*"
+elif [[ ! -t 0 ]]; then
+  message="$(cat)"
+else
+  echo "Error: provide a task as arguments or through stdin." >&2
+  usage >&2
+  exit 1
+fi
+
+if [[ -z "$message" ]]; then
+  echo "Error: task input cannot be empty." >&2
+  exit 1
+fi
+
+exec opencode run --auto --model "$model" "$message"

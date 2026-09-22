@@ -27,6 +27,19 @@ For substantial research or architecture changes, add a focused document under
 verification evidence. Do not create decision documents for simple status checks
 or routine mechanical edits.
 
+### Teammate runner
+
+- Use `bin/teammate` for non-interactive OpenCode work. It accepts a task as
+  arguments or through standard input and defaults to the free
+  `opencode-go/muse-spark-1.3-contributor` model; pass `--model MODEL` to
+  override it.
+- Run `bin/teammate` from a tmux session named `vxpag`, creating that session if
+  it does not exist, with the repository root as its working directory.
+- Whenever `bin/teammate` performs work, verify its result with subagents. If
+  review agents identify issues, start another `bin/teammate` command in the
+  same `vxpag` session to address them, then repeat the review-and-fix loop as
+  needed.
+
 ### Labnotes
 
 - For research and implementation tasks, create a labnotes file with
