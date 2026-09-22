@@ -1533,6 +1533,49 @@ Submitted invocation outcomes must still survive privately for later reasoning.
         end. Complete independently credited subsequent response audio/text for
         the same interaction; do not hide the missing response association behind
         a resumption guard. This depends on the full response-owner work above.
+        - [ ] Reproduce the second response after first playback and before first
+          playback settles through the real capability/fake wire, with distinct
+          PCM/text and no additional caller onset, end or input replay.
+        - [ ] Review and implement explicit provider-response admission evidence,
+          separate from caller end, with closed descriptor/event validation and
+          bounded monotonic response retirement. Keep room-owned public IDs.
+        - [ ] Separate upstream response assembly from the credited playback slot;
+          preserve global PCM/text limits across pending responses and retire only
+          the matching generation/model/playback obligations.
+          - [ ] Red/green a cohesive provider response-state owner for independent
+            wire/playback records, exact grants/credits/settlement, global
+            16-chunk/65,536-byte/16-record budgets, non-speaking retirement and
+            owner-wide quiescence. Then adopt it in the actual Google controller;
+            a pure helper pass alone cannot close response delivery.
+            - [x] Add independent-review proof for A's final credit/settlement
+              while B is still generating, admitted discard with outstanding
+              credit, capacity recovery including one credit plus 16 pending
+              chunks, and exhaustion of the bounded ordinal without reuse.
+              The pure owner passes 16 focused cases and the 68-test Google
+              regression group; independent xhigh source review has no findings.
+              Actual controller adoption and the parent response-delivery item
+              remain incomplete. Evidence is in the response-ownership labnote.
+        - [ ] Prove pending response policy/epoch/source authorization across hold,
+          revoke/regrant and replacement; first, typed/external, tool-only and
+          interrupted response handling must retain their separate contracts.
+        - [ ] Repair independent design-review prerequisites before runtime:
+          establish authorization origin before input acceptance, one immutable
+          source/epoch/bidirectional-policy queue, external-caller dequeue gate,
+          response-specific discard and acknowledged-start-only channel grants.
+          Rejected starts still advance bounded ordinal retirement; index gaps
+          are valid, conflicting duplicate evidence cannot reopen old work.
+          - [ ] Implement the reviewed context-bearing ordered input overloads
+            and opt-in provider callback, with staged/accepted/rejected context
+            handling; coordinate bounded origin retention with response/tools.
+            Do not guess cross-origin cutover from unlabelled Google output.
+          - [ ] Complete exact response/tool origin holds and engine-authorized
+            root retirement before final acceptance. The input-only interim
+            16-lifetime-origin bound is not this proof; exercise more than 16
+            sequential fully retired rotations without evicting live obligations.
+        - [ ] Correct first-response reds to deliver content before expecting
+          admission; caller end and transcription alone must not admit output,
+          and first response identity must differ from caller identity. Check
+          every retained response obligation before allowing resumption.
       - [ ] Prove cross-direction handle coverage of accepted client messages:
         audit the pinned SDK's transparent consumed-message index, numbering and
         supported wire profile; reproduce delayed old idle and a handle that
@@ -1549,6 +1592,15 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       profile. Fresh setup with no conversational work remains eligible for the
       existing private-handle path. Actual subsequent response ownership remains
       required and open; see [the controller decision](../google-sts-controller.md).
+
+      Response-ownership design review (2026-09-22, proposal): current caller-end
+      initiation and one mutable buffer cannot represent multiple model responses
+      while earlier playback remains pending. The proposed
+      [independent response owner](../google-sts-response-ownership.md) requires a
+      reviewed shared event/admission boundary before runtime edits. Initial reds
+      exercise the existing actual controller; design approval and implementation
+      remain separate from those reproductions. Do not count a resumption guard
+      as successful continued-response delivery.
 
       Local interaction-profile evidence: exact realtime-text input, closed status
       decoding, stale-idle invalidation before provider onset and unowned model
