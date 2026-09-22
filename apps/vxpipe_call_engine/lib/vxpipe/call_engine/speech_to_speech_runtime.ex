@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
     :activation_id,
     :usage_provider
   ]
-  defstruct @enforce_keys ++ [output_speech_to_text: nil]
+  defstruct @enforce_keys ++ [output_speech_to_text: nil, output_speech_to_text_private: []]
 
   @type t :: %__MODULE__{
           provider: {module(), keyword()},
@@ -23,7 +23,8 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
           participant_id: String.t(),
           activation_id: String.t() | nil,
           usage_provider: ProviderContext.t(),
-          output_speech_to_text: nil | {module(), keyword()}
+          output_speech_to_text: nil | {module(), keyword()},
+          output_speech_to_text_private: keyword()
         }
 
   def configure(STSSession, options) do

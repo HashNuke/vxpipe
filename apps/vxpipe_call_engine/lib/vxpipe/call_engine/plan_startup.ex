@@ -540,7 +540,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
                  provider_module,
                  runtime_options
                ),
-             {:ok, output_speech_to_text} <-
+             {:ok, output_speech_to_text, output_speech_to_text_private} <-
                output_speech_to_text_runtime(plan, participant, options) do
           {:ok,
            %SpeechToSpeechRuntime{
@@ -550,7 +550,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              provider: runtime_provider,
              provider_private: provider_private,
              usage_provider: usage_provider,
-             output_speech_to_text: output_speech_to_text
+             output_speech_to_text: output_speech_to_text,
+             output_speech_to_text_private: output_speech_to_text_private
            }}
         else
           _invalid_runtime -> unsupported_speech_configuration(participant, :speech_to_speech)
@@ -578,7 +579,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          %ResolvedCallPlan.Participant{capabilities: %{output_speech_to_text: nil}},
          _options
        ),
-       do: {:ok, nil}
+       do: {:ok, nil, []}
 
   defp output_speech_to_text_runtime(plan, participant, options) do
     selection = participant.capabilities.output_speech_to_text
@@ -589,11 +590,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
            credential_options(plan, options),
            :speech_to_text
          ) do
-      {:ok, {provider_module, provider_config} = provider, settings} ->
+      {:ok, provider, settings} ->
         case SpeechToTextRuntime.provider(provider, settings) do
-          {:ok, {runtime_module, runtime_options}, _private} ->
-            _ = {provider_module, provider_config}
-            {:ok, {runtime_module, runtime_options}}
+          {:ok, runtime_provider, private} ->
+            {:ok, runtime_provider, private}
 
           _invalid ->
             unsupported_speech_configuration(participant, :output_speech_to_text)

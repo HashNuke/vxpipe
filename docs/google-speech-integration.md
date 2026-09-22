@@ -82,6 +82,30 @@ Sources: [Google speech generation](https://ai.google.dev/gemini-api/docs/speech
 [Live transcription](https://ai.google.dev/gemini-api/docs/live-api/live-transcribe), and
 [Live API reference](https://ai.google.dev/api/live).
 
+## Google as agent-output recognizer
+
+The `output_speech_to_text` slot reuses ordinary STT adapter resolution, public
+option validation, host enablement and tenant credential lookup. It does not add
+a provider manifest capability or a separate credential/settings namespace.
+`SpeechToSpeechRuntime.output_speech_to_text` remains the public provider tuple;
+`output_speech_to_text_private` separately retains the existing STT runtime's
+config and transport options. Runtime inspection excludes that private field.
+Room allocation forwards it through the existing sidecar PrivateInit handoff.
+The generator's private configuration remains separate and unchanged.
+
+A synthetic-credential fake-wire test starts the selected Google recognizer under
+the agent tree with matching 16 kHz Morse-generator/Google-recognizer fixtures.
+It verifies the setup model, private credential delivery, status redaction and
+cleanup. Missing/disabled hosts, missing or wrong-tenant credentials and invalid
+public selections remain rejected. Dropping private options or copying them into
+public descriptors is not an acceptable fallback.
+
+This is startup/configuration evidence only: PCM negotiation/conversion, mismatch
+rejection and per-reply recognizer finalization remain separate acceptance work.
+No generated audio is submitted by this probe; no hosted call or Google STS
+manifest enablement is claimed. See
+`labnotes/20260922-1721-output-stt-private-config.md` for red-green methods.
+
 ## Private STS activation configuration
 
 Local implementation checkpoint, 2026-09-22; Google STS remains unadvertised and

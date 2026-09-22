@@ -24,6 +24,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     :window_duration_ms
   ]
 
+  def validate(%CapabilitySelection{kind: :output_speech_to_text} = selection),
+    do: validate(%{selection | kind: :speech_to_text})
+
   def validate(%CapabilitySelection{kind: :model_inference, provider: provider} = selection)
       when provider in ["google", "zenmux"] do
     case Vxpipe.AgentRuntime.ProviderSelection.translate(
@@ -89,8 +92,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "morse"}),
     do: Registry.resolve_capability("morse", :sts)
 
-  def adapter(%CapabilitySelection{kind: :output_speech_to_text, provider: "morse"}),
-    do: Registry.resolve_capability("morse", :stt)
+  def adapter(%CapabilitySelection{kind: :output_speech_to_text} = selection),
+    do: adapter(%{selection | kind: :speech_to_text})
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "morse"}),
     do: Registry.resolve_capability("morse", :tts)
@@ -98,6 +101,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(_selection), do: {:error, :unsupported_capability}
 
   @doc false
+  def provider_settings(settings, provider, :output_speech_to_text),
+    do: provider_settings(settings, provider, :speech_to_text)
+
   def provider_settings(settings, provider, kind) when is_list(settings) do
     with {:ok, settings} <- Keyword.validate(settings, providers: %{}),
          providers when is_map(providers) <- Keyword.fetch!(settings, :providers),
@@ -134,11 +140,6 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp speech_adapters(:speech_to_speech) do
     {:ok, morse} = Registry.fetch_capability("morse", :sts)
     [morse]
-  end
-
-  defp speech_adapters(:output_speech_to_text) do
-    {:ok, morse} = Registry.fetch_capability("morse", :stt)
-    [morse, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
   end
 
   defp speech_adapters(_kind), do: []
@@ -215,6 +216,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
+
+  def speech_options(%CapabilitySelection{kind: :output_speech_to_text} = selection),
+    do: speech_options(%{selection | kind: :speech_to_text})
 
   def speech_options(%CapabilitySelection{
         provider: "deepgram",

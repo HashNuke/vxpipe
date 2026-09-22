@@ -829,8 +829,8 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
   Real-call admission and both caller-transcript variants now pass in
   `sts_transcript_modes_test.exs`; output-STT enablement uses the STT registry,
   not a separate provider-settings namespace.
-  The Morse evidence stands; general registry reuse remains incomplete because
-  hosted output-STT adapter selection and private configuration are not wired.
+  Google output-STT registry/private startup wiring now passes synthetic-credential
+  fake-wire checks. PCM negotiation and hosted output-route acceptance remain open.
 - [x] Credited STS output feeds an agent-scoped STT allocation in the same
   agent-owned tree (separate scope, caller microphone never connected), with
   `STTProvider.finish_input/1` finalization at the STS generation boundary,
@@ -896,6 +896,29 @@ No new provider advertisement or billable call is authorized by these tasks.
   formats or use an explicit supported conversion. Prove synthetic-credential,
   fake-wire hosted-adapter startup and differing Morse STS/STT sample rates;
   reject unsupported combinations explicitly before allocating a live call.
+  - [x] Reproduce Google STT rejection in the output-recognition slot; delegate
+    adapter/options validation and host enablement to the existing STT catalog.
+  - [x] Preserve recognizer-private credential/config/transport options separately
+    from the STS generator in startup, then forward them through the existing
+    room allocation PrivateInit handoff into the sidecar.
+  - [x] Prove actual selected Google STT startup with synthetic credentials and
+    a fake wire, matching 16 kHz fixture formats, and inspect/status redaction.
+    Keep unavailable credentials, disabled hosts and invalid selections rejected.
+  - [ ] Separately implement PCM negotiation/conversion or explicit mismatch
+    rejection, including differing Morse STS/STT rates. Registry/private-config
+    evidence alone does not complete this overall item or output-route acceptance.
+
+  Registry/private-config design review (2026-09-22): output recognition is an
+  existing STT capability used in a different slot, not a new provider manifest
+  capability or credential namespace. Keep public provider tuples unchanged and
+  retain private sidecar options in a dedicated redacted runtime field. The room
+  allocation already has a separate PrivateInit handoff for the sidecar; reuse it
+  without modifying capability/Output/Usage or shared speech internals. Format
+  negotiation and finalization/turn acceptance remain separate follow-ups.
+  Verification: five new focused checks and the 95-test startup/selection,
+  unchanged room-transcript and Google adapter/session group pass (seed 0,
+  two schedulers). Exact red-green methods are recorded in
+  `labnotes/20260922-1721-output-stt-private-config.md`.
 - [x] Separate output-STT usage identity, accepted-audio duration and terminal
   outcome from the STS generator. Reproduce a timed-out 16 kHz `stalling_stt`
   recognizer reporting `morse_code`, success, and 4,200 ms for 6,300 ms of

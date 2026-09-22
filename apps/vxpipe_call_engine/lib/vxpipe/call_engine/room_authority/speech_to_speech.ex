@@ -639,7 +639,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   defp output_stt_options(%{output_speech_to_text: nil}), do: []
 
-  defp output_stt_options(%{output_speech_to_text: {module, options}}) do
-    [output_stt: {module, options}, output_stt_private: []]
+  defp output_stt_options(%{output_speech_to_text: {module, options}} = runtime) do
+    [
+      output_stt: {module, options},
+      output_stt_private: Map.get(runtime, :output_speech_to_text_private, [])
+    ]
   end
 end
