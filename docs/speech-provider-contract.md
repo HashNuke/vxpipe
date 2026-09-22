@@ -339,6 +339,9 @@ selected rate and channel count, not a universal 24 kHz divisor; unsupported
 encodings provide no invented duration. Timeout, rejected finalization, provider
 failure or incomplete input yield failed recognition usage. Interruption cancels
 unfinished recognition, while completed recognition keeps its own outcome.
+Once generation and an acknowledged final are complete, later idle recognizer
+loss cannot revoke that reply's text or successful usage while playback drains.
+The failed recognizer still retires and replacement readiness gates the next reply.
 These are local processing facts, not provider token counts or billing estimates.
 
 Both `speech_to_speech` and `output_speech_to_text` persist through the ordinary

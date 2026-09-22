@@ -295,6 +295,47 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert stt.outcome == :failed
   end
 
+  test "recognizer loss after completed generation and final preserves successful usage" do
+    {_tree, capability, sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        usage_context: sts_usage_context(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [observer: self()]
+      )
+
+    assert_receive {:output_stt_started, recognizer}
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:test_audio_output_finish, ^sink, _}, 5_000
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [text: "RECEIVED ONE", turn_ref: make_ref(), endpointing: :provider_gap]}
+             )
+
+    before_loss = :sys.get_state(capability)
+    assert before_loss.active_output.generation_done?
+    assert before_loss.active_output.stt_outcome == :succeeded
+    monitor = Process.monitor(recognizer)
+    Process.exit(recognizer, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^recognizer, :killed}
+    assert_receive {:output_stt_started, replacement}, 5_000
+    refute replacement == recognizer
+    _ = :sys.get_state(capability)
+
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+    :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}, 5_000
+    stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
+    assert stt.measurement.quantity == 6_300
+    assert stt.outcome == :succeeded
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED ONE", _, 20, _}
+    refute_received {:vxpipe_usage_observations, ^capability, _}
+  end
+
   test "output STT finalization errors are explicit instead of silent" do
     {_tree, capability, _sink} =
       start_output_stt_capability(

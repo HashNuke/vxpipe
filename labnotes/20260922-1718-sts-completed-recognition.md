@@ -27,3 +27,23 @@ Application.put_all_env(Config.Reader.read!("config/config.exs", env: :test, tar
 ExUnit.start(exclude: [:integration], seed: 0)
 Code.require_file("apps/vxpipe_call_engine/test/vxpipe/call_engine/capability/speech_to_speech_output_stt_test.exs")'
 ```
+
+## Repair and verification
+
+The prior root command completed successfully: all five gates, 2,282 tests,
+zero failures, 45 excluded (seed 0). Only then changed runtime. The failure
+handler now retains a binary acknowledged final and successful recognition
+outcome when generation has already completed. Unfinished recognition, failed
+input and explicit finalization-error markers still take the original failure
+path. Retirement/restart is unchanged, so later replies await a new ready
+recognizer instead of consuming old evidence.
+
+The same six-file capability/room command listed in the preceding usage labnote
+passes **119 tests, zero failures**, seed 0, two schedulers. The new regression
+checks 6,300 ms, successful usage, retained transcript and no duplicate usage
+after old-provider `DOWN` and replacement startup. Independent native Astra
+xhigh re-review found the P2 resolved and no new scoped issue. Multi-segment
+aggregation and success-boundary turn correlation remain explicitly open.
+
+Commit this focused repair before running its broader checks. The prior full
+root result belongs to `4f5d2fb1`, not this subsequent implementation.

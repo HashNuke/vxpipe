@@ -586,6 +586,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     state |> fail_output_stt_turn() |> restart_output_stt() |> maybe_finish_turn()
   end
 
+  defp fail_output_stt_turn(
+         %{
+           active_output: %{generation_done?: true, stt_outcome: :succeeded, stt_text: text}
+         } = state
+       )
+       when is_binary(text) do
+    # A later idle-session failure does not invalidate the acknowledged final
+    # for already completed generation. Its evidence belongs to this reply.
+    state |> cancel_text_deadline() |> drop_stt_buffer()
+  end
+
   defp fail_output_stt_turn(state) do
     state = state |> cancel_text_deadline() |> drop_stt_buffer()
 

@@ -896,7 +896,7 @@ No new provider advertisement or billable call is authorized by these tasks.
   formats or use an explicit supported conversion. Prove synthetic-credential,
   fake-wire hosted-adapter startup and differing Morse STS/STT sample rates;
   reject unsupported combinations explicitly before allocating a live call.
-- [ ] Separate output-STT usage identity, accepted-audio duration and terminal
+- [x] Separate output-STT usage identity, accepted-audio duration and terminal
   outcome from the STS generator. Reproduce a timed-out 16 kHz `stalling_stt`
   recognizer reporting `morse_code`, success, and 4,200 ms for 6,300 ms of
   accepted audio. Verify correct provider/rate attribution and failed outcome
@@ -919,7 +919,7 @@ No new provider advertisement or billable call is authorized by these tasks.
       real retry reproduction stores a millisecond timestamp then rejects the
       identical fact because stored precision differs; preserve exact immutable
       fact comparison rather than changing generic archive deduplication here.
-  - [ ] Preserve completed recognition usage across a later idle recognizer loss
+  - [x] Preserve completed recognition usage across a later idle recognizer loss
     while playback is pending. Independent review of `4f5d2fb1` identified that
     the failure handler retroactively overwrites an acknowledged successful final.
     Reproduce with the controlled stalling fixture, explicit final acknowledgement,
@@ -937,8 +937,10 @@ No new provider advertisement or billable call is authorized by these tasks.
   6,300 ms alongside successful STS playback, including identical-write retries.
   See `labnotes/20260922-1704-sts-recognizer-usage.md`. All five post-commit root
   gates at `4f5d2fb1` pass (2,282 tests, zero failures, 45 excluded, seed 0).
-  Independent review reopened the later-idle-loss case above; multi-segment and
-  hosted/lifecycle accounting are not established by this checkpoint.
+  Independent review reopened the later-idle-loss case above; its subsequent
+  controlled red/green repair passes 119 focused STS tests and native Astra xhigh
+  source re-review. See `labnotes/20260922-1718-sts-completed-recognition.md`.
+  Multi-segment and hosted/lifecycle accounting remain separate acceptance work.
 
 The audit also reproduced tool admission/result delivery under denied policy.
 That reproduction is covered by the already-planned ordered-tool-envelope task
