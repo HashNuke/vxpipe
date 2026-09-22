@@ -149,6 +149,8 @@ parent shell.
 ## PostgreSQL storage
 
 Development defaults to `postgres://localhost/vxpipe_dev` in `config/runtime.exs`.
+`config/dev.exs` supplies the local `postgres` username and password. Set a complete
+`VXPIPE_DB_URL` when your local PostgreSQL account uses different credentials.
 `VXPIPE_DB_URL` or its lower-priority alias `DATABASE_URL` overrides the database.
 `VXPIPE_DB_POOL_SIZE` or `DB_POOL_SIZE` overrides the default pool of 10. Blank values are
 absent; invalid selected values fail. These aliases never replace the dedicated test database.
