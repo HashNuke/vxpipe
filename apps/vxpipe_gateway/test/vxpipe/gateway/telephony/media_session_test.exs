@@ -245,7 +245,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       application,
       Keyword.put(
         original,
-        :speech_to_speech, providers: %{Vxpipe.Providers.MorseCode.STSSession => [enabled: true]})
+        :speech_to_speech,
+        providers: %{Vxpipe.Providers.MorseCode.STSSession => [enabled: true]}
+      )
     )
 
     on_exit(fn -> Application.put_env(:vxpipe_call_engine, application, original) end)

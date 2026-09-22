@@ -495,6 +495,11 @@ implementation paused to record this breakdown per the discovery-first rule.
 - [ ] Record focused red/green evidence and review the diff; commit this native
   checkpoint before running root gates. Record any gate repair as a separate
   task here before implementing and committing it.
+- [x] Gate repair after `a6615d91`: normalize the multiline provider keyword
+  argument in `telephony/media_session_test.exs`; root format checking found
+  the expression still unformatted. Verify that exact file and its focused
+  tests, then commit the formatting-only repair before restarting root gates.
+  Exact-file format check and all three phone-session tests pass (seed 0).
 
 Design/dependency review: retain the Call Engine's connection-bound handle,
 credited ingress and policy owner; Gateway owns transport conversion only.

@@ -75,3 +75,14 @@ candidate preparation must fail explicitly until the milestone's handoff work.
 Limitations: native input/readiness checks are not full multi-mode conversations,
 carrier interoperability, rendered-browser verification, a ten-call load or
 complete room transfer/hold/recording/usage acceptance. Milestone remains open.
+
+## Post-commit gates
+
+- Committed native checkpoint as `a6615d91` after the 43 focused tests; tree
+  clean. Sent push notification and then started the five umbrella gates.
+- First gate stopped on formatting of a multiline `Keyword.put/3` expression
+  in the phone-session test. No compile/Credo/root-test result from that run.
+  Recorded a milestone task before repair; retain the checkpoint commit and
+  commit the formatting repair separately.
+- Exact-file formatting check and three phone-session tests pass after the
+  formatting-only repair (seed 0); no runtime logic changed.
