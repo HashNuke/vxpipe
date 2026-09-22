@@ -39,5 +39,14 @@
   isolated in its own worktree. Full milestone acceptance stays open.
 - Committed as `ebf11332`. All four post-commit static gates pass: root format,
   warnings-as-errors compile, strict Credo (1,082 files) and unused-lock check.
-  The coordinated root suite now runs on that fixed committed runtime; its result
-  is pending and no runtime/build edits may overlap the run.
+  The coordinated root suite ran on that fixed committed runtime without any
+  runtime/build edits. Handle `40056` completed exit 0: **2,363 tests, zero
+  failures, 45 excluded**, seed 0, two schedulers, local PostgreSQL socket. This
+  includes 1,203 Call Engine and 492 Gateway tests, including the strengthened
+  controlled handoff scenario. All five post-commit root gates pass at
+  `ebf11332`. This does not prove that all previously observed native timeouts
+  shared the controlled binding-change cause or close full STS acceptance.
+- While the root runner was in Gateway, caller-input regressions were added
+  after its Call Engine lane had completed and run in an independent non-Mix VM
+  against unchanged BEAMs. Those seven expected red tests are separate evidence
+  in `labnotes/20260922-1903-google-sts-input.md`, not part of this root baseline.
