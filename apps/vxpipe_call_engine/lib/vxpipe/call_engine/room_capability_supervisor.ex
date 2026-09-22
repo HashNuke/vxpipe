@@ -126,11 +126,13 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         ] ++
           Keyword.take(options, [
             :human_id,
+            :input_required?,
             :sink,
             :policy,
             :policy_revision,
             :caller_source,
             :frame_identity,
+            :usage_context,
             :output_generation,
             :output_stt
           ])

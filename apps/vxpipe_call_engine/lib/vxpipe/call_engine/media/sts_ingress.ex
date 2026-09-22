@@ -17,7 +17,8 @@ defmodule Vxpipe.CallEngine.Media.STSIngress do
 
   @call_timeout 1_000
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options),
+    do: GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
 
   def child_spec(options) do
     %{
@@ -30,7 +31,8 @@ defmodule Vxpipe.CallEngine.Media.STSIngress do
   def push(ingress, %AudioFrame{} = frame), do: call(ingress, {:push, frame})
   def prepare_track(ingress, track), do: call(ingress, {:prepare_track, track})
   def media_format(ingress), do: call(ingress, :media_format)
-  def open(ingress), do: call(ingress, :open)
+  def input_contract(ingress), do: call(ingress, :input_contract)
+  def open(ingress, epoch \\ nil), do: call(ingress, {:open, epoch})
   def hold(ingress), do: call(ingress, :hold)
   def stats(ingress), do: call(ingress, :stats)
 
@@ -53,6 +55,12 @@ defmodule Vxpipe.CallEngine.Media.STSIngress do
 
   @impl true
   def handle_call(:media_format, _from, state), do: {:reply, {:ok, state.format}, state}
+
+  def handle_call(:input_contract, _from, state) do
+    contract = %{track: state.prepared_track, maximum_age_ms: state.maximum_age_ms}
+    result = if prepared?(state), do: {:ok, contract}, else: {:error, :not_prepared}
+    {:reply, result, state}
+  end
 
   def handle_call(:readiness, _from, state) do
     resource = %{
@@ -88,9 +96,9 @@ defmodule Vxpipe.CallEngine.Media.STSIngress do
     end
   end
 
-  def handle_call(:open, _from, state) do
+  def handle_call({:open, epoch}, _from, state) do
     if prepared?(state),
-      do: {:reply, :ok, dispatch(%{state | open?: true})},
+      do: {:reply, :ok, dispatch(%{state | open?: true, epoch: epoch})},
       else: {:reply, {:error, :not_prepared}, state}
   end
 
@@ -174,6 +182,7 @@ defmodule Vxpipe.CallEngine.Media.STSIngress do
       prepared_track: nil,
       policy: nil,
       open?: false,
+      epoch: nil,
       queue: :queue.new(),
       in_flight: nil,
       total_bytes: 0,
@@ -242,7 +251,12 @@ defmodule Vxpipe.CallEngine.Media.STSIngress do
     if permitted?(state) and not stale?(frame, state) do
       reference = make_ref()
       timer = Process.send_after(self(), {:input_timeout, reference}, state.delivery_timeout_ms)
-      send(state.capability, {:vxpipe_sts_input, self(), reference, frame, state.policy.revision})
+      delivery = {:vxpipe_sts_input, self(), reference, frame, state.policy.revision}
+
+      send(
+        state.capability,
+        if(state.epoch, do: Tuple.insert_at(delivery, 5, state.epoch), else: delivery)
+      )
 
       %{
         state

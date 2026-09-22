@@ -19,7 +19,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     turns =
       for text <- ["ONE", "TWO", "THREE"] do
         assert :ok = SpeechToSpeech.push_text(capability, text)
-        assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, ^text, turn, true}
+
+        assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, ^text, turn, true,
+                        _interval}
+
         turn
       end
 
@@ -40,7 +43,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
 
     for _ <- 1..17 do
       assert :ok = SpeechToSpeech.push_text(capability, "HI")
-      assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true}
+
+      assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true,
+                      _interval}
     end
 
     assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_turn_overflow}, 1_000
@@ -62,15 +67,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
 
     push_morse(capability, "HI")
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, _final}
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, _final,
+                    _interval}
+
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, _frame}
     complete_playback(20)
 
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _turn, 20}
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _turn, 20,
+                    _interval}
+
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _}
-    refute_received {:vxpipe_sts_input_transcript, ^capability, @agent, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
+    refute_received {:vxpipe_sts_input_transcript, ^capability, @agent, _, _, _, _interval}
   end
 
   test "denied transcript policy settles the turn without agent text" do
@@ -80,7 +89,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     complete_playback(20)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
   end
 
@@ -95,7 +104,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, _frame}
     complete_playback(20)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
   end
 
@@ -126,7 +135,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert turn2 != turn
     complete_playback(20)
 
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn2, 20},
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn2, 20,
+                    _interval},
                    5_000
 
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn2}
@@ -181,7 +191,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     complete_playback(20)
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 2_000
     assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, :timeout}, 2_000
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
   end
 
   test "output-STT audio arriving before recognition readiness is buffered, not dropped" do
@@ -220,7 +230,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, _frame}
     complete_playback(20)
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "SLOW RESULT", _, _}
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "SLOW RESULT", _, _,
+                    _interval}
+
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
 
     drops = :sys.get_state(capability) |> Map.fetch!(:output_stt) |> Map.fetch!(:dropped_chunks)

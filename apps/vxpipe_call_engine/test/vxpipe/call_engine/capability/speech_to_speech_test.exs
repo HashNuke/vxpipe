@@ -15,13 +15,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     push_morse(capability, "HI")
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true}
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true,
+                    _interval}
+
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, frame}
     assert frame.payload == reply_pcm_prefix("RECEIVED HI", byte_size(frame.payload))
 
     complete_playback(20)
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _turn, 20}
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _turn, 20,
+                    _interval}
+
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
     refute_received {:vxpipe_send_text, _, _, _}
   end
@@ -55,8 +60,37 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     {:ok, pcm} = encode("HI")
     <<first::binary-size(320), _::binary>> = pcm
     assert {:error, :policy_denied} = SpeechToSpeech.push_audio(capability, @human, first)
-    refute_received {:vxpipe_sts_input_transcript, _, _, _, _, _}
+    refute_received {:vxpipe_sts_input_transcript, _, _, _, _, _, _interval}
     refute_received {:test_audio_output, _, _}
+  end
+
+  test "a settled transcript retains its admission interval across transcript revoke and regrant" do
+    {_tree, capability, _sink} = start_capability(policy: unrestricted())
+
+    snapshot = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: unrestricted()
+    }
+
+    assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, snapshot})
+    push_morse(capability, "HI")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+
+    assert :ok =
+             GenServer.call(
+               capability,
+               {:vxpipe_apply_media_policy,
+                %{snapshot | revision: 1, effective: deny_transcript(@agent, @human)}}
+             )
+
+    assert :ok =
+             GenServer.call(capability, {:vxpipe_apply_media_policy, %{snapshot | revision: 2}})
+
+    complete_playback(20)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20,
+                    0}
   end
 
   test "source mismatch fails closed" do
@@ -85,7 +119,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, _frame}
     complete_playback(20)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
   end
 
@@ -96,8 +130,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     complete_playback(20)
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _, _}
-    refute_received {:vxpipe_sts_input_transcript, _, _, _, _, _}
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _, _,
+                    _interval}
+
+    refute_received {:vxpipe_sts_input_transcript, _, _, _, _, _, _interval}
     refute_received {:vxpipe_send_text, _, _, _}
   end
 
@@ -166,7 +203,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, reply_turn}
     assert tool_turn != reply_turn
     complete_playback(20)
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _, _}
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _, _,
+                    _interval}
   end
 
   test "interrupting a tool turn forwards cancellation and keeps old speech fenced" do
@@ -205,7 +244,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first_turn}
     assert_receive {:test_audio_output, _sink, _frame}
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^first_turn, true}
+
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^first_turn, true,
+                    _interval}
 
     {:ok, pcm} = encode("BY")
 
@@ -216,7 +257,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_speech_started, ^capability, @agent, _onset_turn}
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^first_turn, _played, _prefix}
     assert :sys.get_state(capability).active_output == nil
-    refute_received {:vxpipe_sts_agent_transcript, ^capability, @agent, _, ^first_turn, _}
+
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, @agent, _, ^first_turn, _,
+                     _interval}
   end
 
   test "unsolicited provider interruption fences active playback instead of reviving stale speech" do
@@ -224,7 +267,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
     assert_receive {:test_audio_output, _sink, _frame}
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^turn, true}
+
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^turn, true,
+                    _interval}
 
     session = :sys.get_state(capability).session
     provider = Vxpipe.CallEngine.Speech.Session.provider(session)
@@ -232,7 +277,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _played, _prefix}
     assert :sys.get_state(capability).active_output == nil
-    refute_received {:vxpipe_sts_agent_transcript, ^capability, @agent, _, ^turn, _}
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, @agent, _, ^turn, _, _interval}
     refute_received {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}
   end
 
@@ -253,7 +298,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
     complete_playback(20)
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20}
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20,
+                    _interval}
+
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}
     assert_receive {:vxpipe_usage_observations, ^capability, [observation]}
     assert observation.capability == :speech_to_speech
@@ -282,18 +330,22 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first_turn}
     assert_receive {:test_audio_output, _sink, _frame}
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^first_turn, true}
+
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^first_turn, true,
+                    _interval}
 
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^first_turn, _played, _prefix}
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", second_turn, true}
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", second_turn, true,
+                    _interval}
+
     assert second_turn != first_turn
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^second_turn}
     complete_playback_for_turn(capability, sink)
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI",
-                    ^second_turn, 20}
+                    ^second_turn, 20, _interval}
   end
 
   test "zero-playback interruption publishes no spoken prefix" do
@@ -302,7 +354,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
     assert {:ok, 0} = SpeechToSpeech.interrupt(capability)
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, 0, :no_prefix}
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
     refute_received {:vxpipe_sts_turn_completed, _, _, _}
   end
 
@@ -388,7 +440,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
   defp collect_transcripts(capability, turn, acc) do
     receive do
-      {:vxpipe_sts_input_transcript, ^capability, @human, text, ^turn, final?} ->
+      {:vxpipe_sts_input_transcript, ^capability, @human, text, ^turn, final?, _interval} ->
         collect_transcripts(capability, turn, [{text, final?} | acc])
     after
       0 -> Enum.reverse(acc)

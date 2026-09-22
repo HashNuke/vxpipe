@@ -200,7 +200,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
        )
        when not is_nil(speech_to_speech) do
     _ = startup
-    {:ok, %{state | text_capability: nil, text_capability_required?: false}}
+    state = %{state | text_capability: nil, text_capability_required?: false}
+
+    state =
+      Enum.reduce(state.connections, state, fn {_id, connection}, state ->
+        Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.maybe_start(state, connection)
+      end)
+
+    {:ok, state}
   end
 
   defp bind_entry_receiver(startup, state) do

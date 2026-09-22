@@ -41,7 +41,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     OpeningAudio,
     ParticipantLifecycle,
     ReadinessBinding,
-    SpeechToSpeech,
     State,
     Startup,
     StartupReadiness,
@@ -580,80 +579,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, InputTurns.speech_to_text(capability, identity, signal, state)}
   end
 
-  def handle_info({:vxpipe_sts_ready, capability}, state) do
-    if SpeechToSpeech.current?(state, capability) do
-      state = SpeechToSpeech.handle_ready(state, capability)
-      StartupReadiness.reply(StartupReadiness.ready(state), state)
-    else
-      {:noreply, state}
-    end
-  end
-
-  def handle_info({:vxpipe_sts_speech_started, capability, agent_id, turn}, state) do
-    {:noreply, SpeechToSpeech.handle_speech_started(state, capability, agent_id, turn)}
-  end
-
-  def handle_info({:vxpipe_sts_input_transcript, capability, human_id, text, turn, final?}, state)
-      when is_boolean(final?) do
-    {:noreply,
-     SpeechToSpeech.handle_input_transcript(state, capability, human_id, text, turn, final?)}
-  end
-
-  def handle_info({:vxpipe_sts_input_transcript, capability, human_id, text, turn}, state) do
-    {:noreply, SpeechToSpeech.handle_input_transcript(state, capability, human_id, text, turn)}
-  end
-
-  def handle_info({:vxpipe_sts_turn_started, capability, agent_id, turn}, state) do
-    {:noreply, SpeechToSpeech.handle_turn_started(state, capability, agent_id, turn)}
-  end
-
-  def handle_info({:vxpipe_sts_agent_transcript, capability, agent_id, text, turn, played}, state) do
-    {:noreply,
-     SpeechToSpeech.handle_agent_transcript(state, capability, agent_id, text, turn, played)}
-  end
-
-  def handle_info({:vxpipe_sts_turn_completed, capability, agent_id, turn}, state) do
-    {:noreply,
-     CallerIdle.reconcile(SpeechToSpeech.handle_turn_completed(state, capability, agent_id, turn))}
-  end
-
-  def handle_info({:vxpipe_sts_interrupted, capability, agent_id, turn, played, prefix}, state) do
-    {:noreply,
-     CallerIdle.reconcile(
-       SpeechToSpeech.handle_interrupted(state, capability, agent_id, turn, played, prefix)
-     )}
-  end
-
-  def handle_info(
-        {:vxpipe_sts_tool_call, capability, agent_id, call_ref, turn, name, args},
-        state
-      ) do
-    {:noreply,
-     SpeechToSpeech.handle_tool_call(state, capability, agent_id, call_ref, turn, name, args)}
-  end
-
-  def handle_info({:vxpipe_sts_tool_cancelled, capability, agent_id, call_ref}, state) do
-    {:noreply, SpeechToSpeech.handle_tool_cancelled(state, capability, agent_id, call_ref)}
-  end
-
-  def handle_info({:vxpipe_sts_tool_executed, capability, call_ref, outcome}, state) do
-    {:noreply, SpeechToSpeech.handle_tool_executed(state, capability, call_ref, outcome)}
-  end
-
-  def handle_info({:vxpipe_sts_tool_timeout, capability, call_ref}, state) do
-    {:noreply, SpeechToSpeech.handle_tool_timeout(state, capability, call_ref)}
-  end
-
-  # Output-STT recognition problems are observability only at the room
-  # boundary: the turn outcome (completed/interrupted with or without text)
-  # already settles through the dedicated turn messages above.
-  def handle_info({:vxpipe_sts_output_stt_unavailable, _capability, _reason}, state) do
-    {:noreply, state}
-  end
-
-  def handle_info({:vxpipe_sts_unavailable, capability, reason}, state) do
-    state = SpeechToSpeech.handle_unavailable(state, capability, reason)
-    {:noreply, CallerIdle.reconcile(state)}
+  def handle_info(message, state)
+      when elem(message, 0) in [
+             :vxpipe_sts_ready,
+             :vxpipe_sts_speech_started,
+             :vxpipe_sts_input_transcript,
+             :vxpipe_sts_turn_started,
+             :vxpipe_sts_agent_transcript,
+             :vxpipe_sts_turn_completed,
+             :vxpipe_sts_interrupted,
+             :vxpipe_sts_tool_call,
+             :vxpipe_sts_tool_cancelled,
+             :vxpipe_sts_tool_executed,
+             :vxpipe_sts_tool_timeout,
+             :vxpipe_sts_output_stt_unavailable,
+             :vxpipe_sts_unavailable
+           ] do
+    Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events.handle(message, state)
   end
 
   def handle_info({:vxpipe_stt_unavailable, capability, identity, _reason}, state) do

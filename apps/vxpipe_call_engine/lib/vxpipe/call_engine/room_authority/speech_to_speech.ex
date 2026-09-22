@@ -11,6 +11,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   """
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
+  alias Vxpipe.CallEngine.STSInputHandle
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechStarted,
@@ -63,9 +65,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   @spec handle_ready(State.t(), pid()) :: State.t()
   def handle_ready(%State{} = state, capability) do
-    if current?(state, capability) do
-      monitor = Process.monitor(capability)
-      %{state | speech_to_speech_monitor: monitor, speech_to_speech_ready?: true}
+    if current?(state, capability) and not state.speech_to_speech_ready? and
+         Map.has_key?(state.speech_to_speech_capability, :input_handle) do
+      prepare_input(state, capability)
     else
       state
     end
@@ -81,7 +83,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         human_id,
         text,
         provider_turn,
-        final? \\ true
+        final? \\ true,
+        interval \\ 0
       )
       when is_binary(human_id) and is_binary(text) and
              (is_binary(provider_turn) or is_reference(provider_turn)) and is_boolean(final?) do
@@ -108,7 +111,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
           {state, _policy} =
             EventPublisher.publish_transcript(state, connection.pid, event,
-              media_policy_revision: state.speech_to_speech_policy_revision
+              media_policy_revision: interval
             )
 
           state = %{state | next_sequence: state.next_sequence + 1}
@@ -179,7 +182,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         agent_id,
         text,
         provider_turn,
-        played_ms
+        played_ms,
+        interval \\ 0
       )
       when is_binary(agent_id) and is_binary(text) and
              (is_binary(provider_turn) or is_reference(provider_turn)) and
@@ -208,7 +212,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
           {state, _policy} =
             EventPublisher.publish_transcript(state, connection.pid, event,
-              media_policy_revision: state.speech_to_speech_policy_revision
+              media_policy_revision: interval
             )
 
           %{state | next_sequence: state.next_sequence + 1}
@@ -412,8 +416,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   def source_disconnected(%State{} = state, _connection_id), do: state
 
-  def authorize_connection(%State{speech_to_speech_runtime: nil}, _participant_id), do: :ok
-
   def authorize_connection(%State{} = state, participant_id) do
     source? = Map.get(state.participant_roles, participant_id) == :human
 
@@ -422,7 +424,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         connection.role == :human and connection.admission == :main
       end)
 
-    if source? and already_attached? do
+    if selected?(state) and source? and already_attached? do
       {:error,
        Error.new(:sts_source_already_attached, "Speech-to-speech permits one source connection.")}
     else
@@ -453,7 +455,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
       when is_pid(pid), do: state
 
   def maybe_start(%State{} = state, connection) when is_map(connection) do
-    with %{output_sink: sink} when is_pid(sink) <- connection,
+    with true <- source_connection?(state, connection),
+         %{output_sink: sink} when is_pid(sink) <- connection,
          %{speech_to_speech_runtime: runtime} when not is_nil(runtime) <- state,
          {:ok, {policy, revision}} <- allocation_policy(state),
          {:ok, started} <- start_allocation(state, connection, runtime, {policy, revision}) do
@@ -462,15 +465,38 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
       |> Map.update!(:speech_to_speech_capability, fn binding ->
         Map.merge(binding, %{
           connection_id: connection.attach_command.connection_id,
-          connection: connection.pid
+          connection: connection.pid,
+          input_handle: STSInputHandle.new(connection.attach_command, connection.pid)
         })
       end)
       |> Map.put(:speech_to_speech_policy_revision, revision)
-      |> register_sts_enforcer(started)
     else
       _unavailable -> state
     end
   end
+
+  defp selected?(%{participant_transfer_runtime: %{plan: plan}}) do
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    receiver.capabilities.speech_to_speech != nil
+  end
+
+  defp selected?(_state), do: false
+
+  defp source_connection?(
+         state,
+         %{role: :human, admission: :main, attach_command: command} = connection
+       ) do
+    plan = state.participant_transfer_runtime.plan
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    connection.participant_id == caller.participant_id and
+      command.participant_id == caller.participant_id and
+      command.tenant_id == state.snapshot.tenant_id and command.room_id == state.snapshot.room_id and
+      command.incarnation_id == state.snapshot.incarnation_id and
+      Map.get(state.connections, command.connection_id) == connection
+  end
+
+  defp source_connection?(_state, _connection), do: false
 
   @doc """
   Returns a validated current policy and revision. Missing or unavailable
@@ -495,27 +521,39 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     :exit, _reason -> {:error, :media_policy_unavailable}
   end
 
-  defp register_sts_enforcer(%State{} = state, capability) do
-    result =
-      try do
-        Authority.register_connection_enforcer(
-          state.media_policy_authority,
-          capability,
-          state.speech_to_speech_capability.connection
-        )
-      catch
-        :exit, _reason -> {:error, :unavailable}
-      end
+  defp prepare_input(state, capability) do
+    binding = state.speech_to_speech_capability
+    handle = binding.input_handle
 
-    case result do
-      {:ok, %Snapshot{} = snapshot} ->
-        if Snapshot.valid?(snapshot),
-          do: %{state | speech_to_speech_policy_revision: snapshot.revision},
-          else: stop(state)
-
-      _rejected ->
-        stop(state)
+    with {:ok, format} <- Capability.input_format(capability),
+         {:ok, ingress} <-
+           Tree.start_input(capability,
+             name: STSInputHandle.address(handle),
+             source_connection: binding.connection,
+             identity: handle.identity,
+             agent_id: binding.participant_id,
+             format: format
+           ),
+         :ok <- Capability.bind_input(capability, ingress),
+         {:ok, %Snapshot{} = snapshot} <-
+           Authority.register_connection_enforcers(
+             state.media_policy_authority,
+             [capability, ingress],
+             binding.connection
+           ),
+         true <- Snapshot.valid?(snapshot) do
+      %{
+        state
+        | speech_to_speech_monitor: Process.monitor(capability),
+          speech_to_speech_ready?: true,
+          speech_to_speech_policy_revision: snapshot.revision,
+          speech_to_speech_capability: Map.put(binding, :ingress, ingress)
+      }
+    else
+      _rejected -> stop(state)
     end
+  catch
+    :exit, _reason -> stop(state)
   end
 
   defp retire_sts_enforcer(%State{
@@ -546,6 +584,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         owner: self(),
         agent_id: runtime.participant_id,
         human_id: human_id,
+        input_required?: true,
         provider: runtime.provider,
         provider_private: runtime.provider_private,
         sink: connection.output_sink,
@@ -553,7 +592,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           tenant_id: state.snapshot.tenant_id,
           room_id: state.snapshot.room_id,
           incarnation_id: state.snapshot.incarnation_id,
-          connection_id: connection.attach_command.connection_id
+          connection_id: connection.attach_command.connection_id,
+          participant_id: human_id
         },
         caller_source: caller_source,
         policy: effective,

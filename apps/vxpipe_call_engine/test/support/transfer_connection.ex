@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   @behaviour Vxpipe.CallEngine.Media.ConnectionReadiness
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.Media.{Ingress, OutputSink}
+  alias Vxpipe.CallEngine.Media.{Ingress, OutputSink, STSIngress}
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.MediaPolicy.Enforcer
 
@@ -50,12 +50,24 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
     await_output_preparation(binding, demand)
 
     track =
-      if demand.audio_input? or demand.speech_to_text?,
-        do: Map.get(binding, :input_track, input_track())
+      if demand.audio_input? or demand.speech_to_text? or
+           Map.get(demand, :speech_to_speech?, false),
+         do: Map.get(binding, :input_track, input_track())
 
-    with {:ok, speech} <- prepare_speech(binding, track, demand.speech_to_text?) do
-      {:ok, [binding.resource | speech], track}
+    with {:ok, speech} <- prepare_speech(binding, track, demand.speech_to_text?),
+         {:ok, sts} <- prepare_sts(binding, track, Map.get(demand, :speech_to_speech?, false)) do
+      {:ok, [binding.resource | speech ++ sts], track}
     end
+  end
+
+  defp prepare_sts(_binding, _track, false), do: {:ok, []}
+
+  defp prepare_sts(binding, track, true) do
+    with {:ok, %{ingress: ingress}} <-
+           CallEngine.speech_to_speech_input_configuration(binding.attachment),
+         :ok <- STSIngress.prepare_track(ingress, track),
+         {:ok, resource, :ready} <- STSIngress.readiness(ingress),
+         do: {:ok, [resource]}
   end
 
   defp prepare_speech(_binding, _track, false), do: {:ok, []}

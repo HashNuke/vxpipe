@@ -41,6 +41,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
     output_stt? = Keyword.has_key?(options, :output_stt)
 
     children = [
+      {DynamicSupervisor, name: address(self(), :input_scope), strategy: :one_for_one},
       Supervisor.child_spec(
         {CapabilityTree, owner: Keyword.fetch!(options, :owner), name: scope_name},
         id: CapabilityTree,
@@ -97,6 +98,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
            ) do
       {:ok, capability}
     end
+  end
+
+  def start_input(capability, options) do
+    DynamicSupervisor.start_child(
+      address(parent(capability), :input_scope),
+      {Vxpipe.CallEngine.Media.STSIngress, Keyword.put(options, :capability, capability)}
+    )
   end
 
   defp claim_output_private(options) do

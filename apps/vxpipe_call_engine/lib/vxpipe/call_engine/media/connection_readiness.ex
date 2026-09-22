@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
   alias Vxpipe.CallEngine.Readiness.Resource
 
   @task_supervisor Vxpipe.CallEngine.ReadinessTaskSupervisor
-  @demand_keys [:audio_input?, :room_output?, :speech_to_text?]
+  @demand_keys [:audio_input?, :room_output?, :speech_to_text?, :speech_to_speech?]
 
   @callback prepare_binding(map(), Snapshot.t(), map()) ::
               {:ok, [Resource.t()], PreparedConnection.input_track() | nil} | {:error, atom()}
@@ -114,6 +114,7 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
   defp validate_result(graph, binding, policy, demand, preparation) do
     with :ok <- validate_input_track(graph.input_track, demand),
          :ok <- validate_resources(graph.resources, graph.instance, graph.identity),
+         :ok <- validate_sts(graph, binding, demand),
          {:ok, current} <- read_binding(graph.instance),
          true <- current == binding,
          :ok <- validate_candidate(policy, graph.identity, preparation) do
@@ -125,6 +126,21 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
   catch
     :exit, _reason -> {:error, :unavailable}
   end
+
+  defp validate_sts(_graph, _binding, %{speech_to_speech?: false}), do: :ok
+
+  defp validate_sts(graph, %{attachment: attachment}, %{speech_to_speech?: true}) do
+    with {:ok, %{ingress: ingress}} <-
+           Vxpipe.CallEngine.speech_to_speech_input_configuration(attachment),
+         {:ok, resource, :ready} <- Vxpipe.CallEngine.Media.STSIngress.readiness(ingress),
+         true <- resource in graph.resources and resource.binding == graph.identity.connection_id do
+      :ok
+    else
+      _missing -> {:error, :speech_to_speech_unavailable}
+    end
+  end
+
+  defp validate_sts(_graph, _binding, _demand), do: {:error, :speech_to_speech_unavailable}
 
   defp read_binding(connection),
     do: GenServer.call(connection, :vxpipe_connection_readiness, 1_000)
@@ -164,7 +180,12 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
 
   defp validate_resources(_resources, _connection, _identity), do: {:error, :invalid_resources}
 
-  defp validate_input_track(nil, %{audio_input?: false, speech_to_text?: false}), do: :ok
+  defp validate_input_track(nil, %{
+         audio_input?: false,
+         speech_to_text?: false,
+         speech_to_speech?: false
+       }),
+       do: :ok
 
   defp validate_input_track(
          %{track_id: track, codec: codec, sample_rate: rate, channels: channels} = input,
@@ -173,7 +194,7 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
        when is_binary(track) and byte_size(track) > 0 and is_atom(codec) and
               not is_nil(codec) and is_integer(rate) and rate > 0 and channels in [1, 2] and
               map_size(input) == 4 do
-    if demand.audio_input? or demand.speech_to_text?,
+    if demand.audio_input? or demand.speech_to_text? or demand.speech_to_speech?,
       do: :ok,
       else: {:error, :invalid_input_track}
   end

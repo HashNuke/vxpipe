@@ -81,7 +81,8 @@ defmodule Vxpipe.CallEngine.Speech.STSConcurrencyTest do
       assert_receive {:vxpipe_sts_ready, ^capability}, 5_000
       push_morse(capability, human, word)
 
-      assert_receive {:vxpipe_sts_input_transcript, ^capability, ^human, ^word, _turn, _final},
+      assert_receive {:vxpipe_sts_input_transcript, ^capability, ^human, ^word, _turn, _final,
+                      _interval},
                      5_000
 
       assert_receive {:vxpipe_sts_turn_started, ^capability, ^agent, _turn}, 5_000
@@ -89,7 +90,8 @@ defmodule Vxpipe.CallEngine.Speech.STSConcurrencyTest do
       TestAudioOutputSink.playback_progress(sink, 20, 1_020)
       TestAudioOutputSink.playback_completed(sink)
 
-      assert_receive {:vxpipe_sts_agent_transcript, ^capability, ^agent, agent_text, _turn, 20},
+      assert_receive {:vxpipe_sts_agent_transcript, ^capability, ^agent, agent_text, _turn, 20,
+                      _interval},
                      5_000
 
       assert_receive {:vxpipe_sts_turn_completed, ^capability, ^agent, _turn}, 5_000

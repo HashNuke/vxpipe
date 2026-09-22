@@ -408,8 +408,11 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   is the sole caller transcript. Proven at the agent-owned
   `Capability.SpeechToSpeech` boundary with the real media-policy predicates
   and the real output-sink protocol so far; that is partial evidence, not a
-  room-test equivalent. Integrated RoomAuthority publication and live audio
-  ingress remain implementation work before final acceptance (see F).
+  room-test equivalent. A compiled real room now accepts framed Morse PCM
+  without human STT, decodes its reply as RECEIVED HI, and publishes the agent
+  transcript only after sink playback settlement. Independent human-STT fanout,
+  native transport conversion and the remaining room lifecycle cases are still
+  required before final acceptance (see F).
   Evidence: `capability/speech_to_speech_test.exs` (12 tests: reply,
   attribution, denial, echo, mismatch, revocation, transcript denial,
   human-STT suppression, hold, teardown isolation, redaction, tool
@@ -430,8 +433,13 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   (STS runtime resolution without a text model); old LLM + TTS suites green.
 - [ ] Slice exit: integrated room tests prove Morse reply, attributed
   transcripts, redaction, no cross-room state and unchanged LLM + TTS
-  behavior. Startup/readiness/source cleanup now pass in `sts_call_test.exs`;
-  the actual audio round trip and publication path are not yet proven.
+  behavior. `sts_call_test.exs` now covers the embedded PCM round trip and real
+  publication path, startup/readiness/source cleanup, source allocation guards,
+  framed receiver checks, hold epochs and entry-install binding for an earlier
+  attachment. `ConnectionReadiness` rejects selected STS without exact ingress
+  evidence. WebRTC/telephony conversion, all three transcript modes and the
+  remaining lifecycle cases are still open. See `docs/sts-input-routing.md` and
+  `labnotes/20260922-1309-sts-room-input.md` for the checkpoint evidence/limits.
 
 ### C — Interruption, tools, and transfer lifecycle
 

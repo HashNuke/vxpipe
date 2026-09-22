@@ -249,7 +249,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       open_connection_input(connection)
     end)
 
-    state
+    SpeechToSpeech.release(state)
   end
 
   defp authorize_attachment(command, caller, subscriber, state) do

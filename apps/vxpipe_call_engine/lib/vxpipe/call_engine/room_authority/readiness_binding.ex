@@ -54,7 +54,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
        plan: plan,
        connections:
          Map.new(state.connections, fn {id, connection} ->
-           {id, connection_binding(connection)}
+           {id, connection_binding(id, connection, state)}
          end),
        room: room_bindings(state),
        participants: participant_bindings(plan, state),
@@ -63,10 +63,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
      }}
   end
 
-  defp connection_binding(connection) do
+  defp connection_binding(id, connection, state) do
     connection
     |> Map.take([:participant_id, :pid, :role, :admission, :transfer_attempt_id, :output_sink])
     |> Map.put(:speech_to_text, speech_binding(connection.speech_to_text))
+    |> Map.put(
+      :speech_to_speech,
+      case state.speech_to_speech_capability do
+        %{connection_id: ^id} = binding -> Map.take(binding, [:pid, :ingress])
+        _other -> nil
+      end
+    )
   end
 
   defp speech_binding(nil), do: nil

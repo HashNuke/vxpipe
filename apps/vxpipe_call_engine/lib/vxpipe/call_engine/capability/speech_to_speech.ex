@@ -42,6 +42,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     ]
 
   alias Vxpipe.CallEngine.Telemetry
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Input
 
   @call_timeout 5_000
   @default_output_stt_timeout_ms 5_000
@@ -72,6 +73,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   catch
     :exit, _reason -> {:error, :unavailable}
   end
+
+  def input_format(capability), do: GenServer.call(capability, :input_format, @call_timeout)
+
+  def bind_input(capability, ingress),
+    do: GenServer.call(capability, {:bind_input, ingress}, @call_timeout)
 
   @spec push_text(pid(), String.t()) :: :ok | {:error, term()}
   def push_text(capability, text) when is_pid(capability) and is_binary(text) do
@@ -166,7 +172,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
               __MODULE__,
               {Keyword.fetch!(options, :provider), Keyword.get(options, :output_stt)}
             ),
-          held?: false,
+          held?: Keyword.get(options, :input_required?, false),
+          input_required?: Keyword.get(options, :input_required?, false),
+          input: nil,
+          input_monitor: nil,
+          input_epoch: nil,
+          input_policy: nil,
+          input_contract: nil,
+          input_sequence: nil,
           input_turn: nil,
           pending_turns: [],
           tool_turns: MapSet.new(),
@@ -199,6 +212,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   @impl true
+  def handle_call(:input_format, _from, state), do: {:reply, Input.format(state), state}
+
+  def handle_call({:bind_input, ingress}, {owner, _tag}, state) when is_pid(ingress),
+    do: Input.bind(state, ingress, owner)
+
   def handle_call(:readiness, _from, state) do
     status =
       if state.output_stt != nil and not state.output_stt.ready?,
@@ -224,6 +242,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   def handle_call({:push_audio, _source, _pcm}, _from, %{held?: true} = state) do
     {:reply, {:error, :held}, state}
   end
+
+  def handle_call({:push_audio, _source, _pcm}, _from, %{input_required?: true} = state),
+    do: {:reply, {:error, :framed_input_required}, state}
 
   def handle_call({:push_audio, source, pcm}, _from, state) do
     cond do
@@ -267,15 +288,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   def handle_call(:hold, _from, state) do
-    state = %{state | held?: true}
+    state = Input.hold(state)
     {_played, state} = fence_output(state)
     {:reply, :ok, state}
   end
 
   def handle_call(:release, _from, state) do
-    state = %{state | held?: false}
-    {:noreply, state} = admit_next_pending(state)
-    {:reply, :ok, state}
+    case Input.release(state) do
+      {:ok, state} ->
+        {:noreply, state} = admit_next_pending(state)
+        {:reply, :ok, state}
+
+      {:error, _reason} = error ->
+        {:reply, error, state}
+    end
   end
 
   def handle_call({:apply_policy, policy}, _from, state) do
@@ -290,13 +316,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
-    state = %{state | policy: snapshot.effective, policy_revision: snapshot.revision}
+    case Input.apply_policy(state, snapshot) do
+      {:ok, state} ->
+        {_played, state} =
+          if audio_route_permitted?(state, state.human_id, state.agent_id),
+            do: {0, state},
+            else: fence_output(state)
 
-    if audio_route_permitted?(state, state.human_id, state.agent_id) do
-      {:reply, :ok, state}
-    else
-      {_played, state} = fence_output(state)
-      {:reply, :ok, state}
+        {:reply, :ok, state}
+
+      {:error, _reason} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -361,25 +391,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {:noreply, state}
   end
 
-  def handle_info({:vxpipe_ingress_sts_audio, source_id, pcm}, state)
-      when is_binary(source_id) and is_binary(pcm) do
-    cond do
-      state.held? ->
-        {:noreply, count_ingress_drop(state)}
+  def handle_info({:vxpipe_sts_input, ingress, reference, frame, revision, epoch}, state),
+    do: Input.deliver(state, ingress, reference, frame, revision, epoch)
 
-      source_id != state.human_id ->
-        {:noreply, count_ingress_drop(state)}
-
-      not audio_route_permitted?(state, state.human_id, state.agent_id) ->
-        {:noreply, count_ingress_drop(state)}
-
-      true ->
-        case Session.push_audio(state.session, pcm) do
-          :ok -> {:noreply, state}
-          {:error, _reason} -> {:noreply, count_ingress_drop(state)}
-        end
-    end
-  end
+  def handle_info({:DOWN, monitor, :process, _input, _reason}, %{input_monitor: monitor} = state),
+    do: stop_unavailable(:input_unavailable, state)
 
   def handle_info({:vxpipe_speech_closed, session, _reason}, %{session: session} = state) do
     stop_unavailable(:provider_failed, state)
@@ -490,7 +506,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         send(
           state.owner,
           {:vxpipe_sts_input_transcript, self(), state.human_id, event.text, event.turn_ref,
-           final?}
+           final?, Input.transcript_interval(state, state.human_id)}
         )
       end
 
@@ -658,7 +674,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       true ->
         send(
           state.owner,
-          {:vxpipe_sts_input_transcript, self(), state.human_id, text, turn, true}
+          {:vxpipe_sts_input_transcript, self(), state.human_id, text, turn, true,
+           Input.transcript_interval(state, state.human_id)}
         )
 
         %{state | finalized_input_turns: MapSet.put(state.finalized_input_turns, turn)}
@@ -724,8 +741,4 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   defp normalize_usage_context(_context, _identity), do: nil
-
-  defp count_ingress_drop(state) do
-    %{state | dropped_ingress_chunks: (state.dropped_ingress_chunks || 0) + 1}
-  end
 end

@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.TestSTSRejectingPolicyAuthority do
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
-  def handle_call({:register_enforcer, capability, _connection}, _from, state) do
+  def handle_call({:register_enforcer_group, [capability, _ingress], _connection}, _from, state) do
     send(state.observer, {:sts_policy_registration_rejected, capability, Tree.parent(capability)})
     {:reply, {:error, :enforcement_failed}, state}
   end

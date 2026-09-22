@@ -1,15 +1,16 @@
 # STS microphone routing
 
-Status: directional formats and the independent ingress primitive have focused
-implementation evidence. Room/transport wiring and end-to-end acceptance remain
-unfinished. This preserves the existing
+Status: directional formats, bounded ingress and the embedded real-room PCM
+round trip have focused implementation evidence. Native WebRTC/telephony wiring
+and the remaining milestone acceptance checks are unfinished. This preserves the existing
 [STS milestone](milestones/agent-speech-to-speech.md) requirements.
 
 ## Evidence and decision
 
-The real-room startup probe now reaches readiness and verifies source-disconnect
-cleanup. It does not deliver microphone audio. `ConnectionAttachment.media_ingress`
-currently refers only to human STT, and `CallEngine.push_audio/2` rejects an
+Initial inspection found that the real-room startup probe reached readiness and
+verified source-disconnect cleanup without delivering microphone audio.
+`ConnectionAttachment.media_ingress` refers only to human STT, and
+`CallEngine.push_audio/2` rejects an
 attachment without it. WebRTC and telephony both derive their speech conversion
 from that one handle. `Ingress.set_sts_target/2` has no production caller, and
 its uncredited send runs only when the STT queue dispatches a frame.
@@ -68,14 +69,38 @@ and keeps input closed until explicit release. Neither grants an additional
 credit while the earlier delivery remains outstanding. Source or capability
 loss retires the temporary ingress. Process status redacts buffered audio.
 
-This primitive does not yet have a production caller. The room integration
-must supervise it beneath the allocation, register both input and capability
-as one policy-enforcement group, and prepare transport conversion before
-opening admission. The capability must revalidate exact ingress/source,
-current policy revision and held/adoption state before consuming a delivered
-frame; a sender-side check cannot retract a message already sent. The room's
-readiness inventory must cover both the ingress and provider allocation.
-Do not present these local queue tests as independent live STT/STS fanout proof.
+## Implemented room binding
+
+`ConnectionAttachment.speech_to_speech_input` is a private identity-and-owner
+lookup, independent of the human STT PID. It can be created before asynchronous
+entry preparation finishes. Only the pinned caller's admitted human connection
+can create the registered input. Startup installation revisits earlier attached
+connections. The transport resolves `speech_to_speech_input_configuration/1`
+during preparation and offers PCM using `push_speech_to_speech_audio/2` from its
+owning process. Per-frame delivery performs no room or policy authority call.
+
+After provider readiness, the room starts ingress beneath the agent tree and
+registers ingress plus capability as one connection-bound policy group. The
+candidate controller starts held. The readiness graph requires the selected
+STS ingress as well as the provider allocation; a microphone track alone is
+insufficient. Native adapters that omit STS preparation fail closed.
+
+Release opens prepared input with a new epoch. The receiver independently checks
+that epoch, exact ingress and source identity, policy revision, prepared PCM
+track/format, sequence and age before consuming bytes. Hold closes ingress and
+invalidates its epoch, including messages already in transit. Production room
+allocations reject raw, unframed capability input. Source, ingress or capability
+loss tears down the temporary allocation tree.
+
+The embedded real-room test encodes HI, sends PCM through the attachment API,
+decodes sink output as RECEIVED HI, and observes caller and agent transcripts
+through the real room publisher/router. Agent text is withheld until playback
+settlement. This also exposed and fixed the distinction between global policy
+revision and source-specific transcript interval; transcript evidence carries
+the latter to the room. Agent output retains its admission interval across
+transcript revoke/regrant so settlement cannot relabel old speech as new.
+Local queue and embedded PCM tests are not native
+transport conversion or independent live STT/STS fanout proof.
 
 ## Rejected shortcuts
 
@@ -100,5 +125,6 @@ No new hosted or billable calls are authorized by this decision.
 
 Inspection evidence is recorded in
 `labnotes/20260922-1209-sts-room-integration.md`. The primitive/format evidence
-is in `labnotes/20260922-1233-sts-microphone-routing.md`; integrated input-routing
-acceptance checks have not passed yet.
+is in `labnotes/20260922-1233-sts-microphone-routing.md`. Room binding and the
+embedded PCM round trip are recorded in `labnotes/20260922-1309-sts-room-input.md`.
+Native transport, all transcript modes and complete lifecycle acceptance remain open.

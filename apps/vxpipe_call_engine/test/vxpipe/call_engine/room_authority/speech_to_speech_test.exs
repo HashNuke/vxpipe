@@ -246,7 +246,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
       assert :ok = SpeechToSpeech.offer_audio(state, @human_connection, tail)
     end
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true}
+    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true,
+                    _interval}
   end
 
   test "partial caller transcripts publish without settling history" do
@@ -375,7 +376,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert SpeechToSpeech.current?(state, capability) == true
 
     state = SpeechToSpeech.handle_ready(state, capability)
-    assert SpeechToSpeech.ready?(state) == true
+    assert SpeechToSpeech.ready?(state) == false
 
     assert {:ok, _state} = SpeechToSpeech.interrupt(%{state | speech_to_speech_capability: nil})
     assert %_{} = SpeechToSpeech.hold(%{state | speech_to_speech_capability: nil})

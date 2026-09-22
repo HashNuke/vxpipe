@@ -92,6 +92,12 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
       demand = [
         audio_input?: microphone? and audio_source?(participant.participant_id, policy, recorded),
         room_output?: audio_recipient?(participant.participant_id, policy),
+        speech_to_speech?:
+          microphone? and
+            Enum.any?(participants, fn {id, candidate} ->
+              candidate.kind == :agent and candidate.capabilities.speech_to_speech != nil and
+                Effective.audio_route_permitted?(policy.effective, participant.participant_id, id)
+            end),
         speech_to_text?:
           microphone? and participant.capabilities.speech_to_text != nil and
             SpeechToTextDemand.required?(policy, participant.participant_id)

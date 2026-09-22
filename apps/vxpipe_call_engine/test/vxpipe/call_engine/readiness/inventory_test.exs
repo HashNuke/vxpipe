@@ -50,10 +50,20 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
     assert inventory.room == MapSet.new([:room_mixer, :transcript_router, :call_variables])
 
     assert inventory.connections["one"].demand ==
-             [audio_input?: true, room_output?: true, speech_to_text?: true]
+             [
+               audio_input?: true,
+               room_output?: true,
+               speech_to_speech?: false,
+               speech_to_text?: true
+             ]
 
     assert inventory.connections["four"].demand ==
-             [audio_input?: false, room_output?: true, speech_to_text?: false]
+             [
+               audio_input?: false,
+               room_output?: true,
+               speech_to_speech?: false,
+               speech_to_text?: false
+             ]
 
     assert inventory.connections["joining"].admission == :transfer_preparation
     assert inventory.participant_ids == context.policy.present_participant_ids
@@ -82,7 +92,12 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
     assert {:ok, inventory} = build(denied, attempt_id: "attempt")
 
     assert Enum.all?(inventory.connections, fn {_id, request} ->
-             request.demand == [audio_input?: false, room_output?: false, speech_to_text?: false]
+             request.demand == [
+               audio_input?: false,
+               room_output?: false,
+               speech_to_speech?: false,
+               speech_to_text?: false
+             ]
            end)
 
     plan = context.plan

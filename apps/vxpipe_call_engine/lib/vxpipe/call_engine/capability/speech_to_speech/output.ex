@@ -32,6 +32,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
             output = %{
               output: handle,
               provider_turn: turn_ref,
+              transcript_interval:
+                Vxpipe.CallEngine.Capability.SpeechToSpeech.Input.transcript_interval(
+                  state,
+                  state.agent_id
+                ),
               sink_turn: sink_turn,
               pending_text: nil,
               stt_text: nil,
@@ -235,7 +240,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         send(
           state.owner,
           {:vxpipe_sts_agent_transcript, self(), state.agent_id, text, output.provider_turn,
-           played_ms}
+           played_ms, output.transcript_interval}
         )
 
         state

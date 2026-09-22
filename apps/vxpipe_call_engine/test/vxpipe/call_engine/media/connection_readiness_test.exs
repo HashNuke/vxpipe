@@ -39,7 +39,13 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadinessTest do
     assert_receive {:connection_preparation_started, worker, policy, demand}
     assert worker != connection
     assert policy == context.policy
-    assert demand == %{audio_input?: false, room_output?: false, speech_to_text?: false}
+
+    assert demand == %{
+             audio_input?: false,
+             room_output?: false,
+             speech_to_text?: false,
+             speech_to_speech?: false
+           }
 
     assert {:ok, [^resource]} =
              ConnectionReadiness.prepare(connection, context.identity, policy, [])
@@ -63,6 +69,18 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadinessTest do
              )
 
     refute_receive {:connection_preparation_started, _, _, _}
+  end
+
+  test "STS demand cannot be satisfied by a microphone track without its owned ingress",
+       context do
+    track = %{track_id: "microphone", codec: :linear16, sample_rate: 16_000, channels: 1}
+    connection = connection(context, input_track: track)
+
+    assert {:error, :speech_to_speech_unavailable} =
+             ConnectionReadiness.prepare(connection, context.identity, context.policy,
+               audio_input?: true,
+               speech_to_speech?: true
+             )
   end
 
   test "returns the prepared connection identity and optional input track with its resources",

@@ -137,6 +137,7 @@ defmodule Vxpipe.CallEngine do
                %ConnectionAttachment{
                  admission: admission,
                  connection: self(),
+                 speech_to_speech_input: Vxpipe.CallEngine.STSInputHandle.new(command, self()),
                  room_monitor: room_monitor,
                  media_ingress: media_ingress,
                  room_audio: room_audio,
@@ -220,6 +221,26 @@ defmodule Vxpipe.CallEngine do
   def push_audio(%ConnectionAttachment{media_ingress: media_ingress}, %AudioFrame{} = frame) do
     Ingress.push(media_ingress, frame)
   end
+
+  @doc "Resolves the caller's independently prepared STS microphone input."
+  def speech_to_speech_input_configuration(%ConnectionAttachment{speech_to_speech_input: nil}),
+    do: {:error, :speech_to_speech_unavailable}
+
+  def speech_to_speech_input_configuration(%ConnectionAttachment{speech_to_speech_input: handle}),
+    do: Vxpipe.CallEngine.STSInputHandle.configuration(handle)
+
+  @doc "Offers a source PCM frame to STS independently of human STT admission."
+  def push_speech_to_speech_audio(
+        %ConnectionAttachment{speech_to_speech_input: nil},
+        %AudioFrame{}
+      ),
+      do: {:error, :speech_to_speech_unavailable}
+
+  def push_speech_to_speech_audio(
+        %ConnectionAttachment{speech_to_speech_input: handle},
+        %AudioFrame{} = frame
+      ),
+      do: Vxpipe.CallEngine.STSInputHandle.push(handle, frame)
 
   @spec room_audio_configuration(ConnectionAttachment.t()) :: {:ok, map()} | :disabled
   def room_audio_configuration(%ConnectionAttachment{room_audio_input_mode: :disabled}),
