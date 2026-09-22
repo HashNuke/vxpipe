@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   alias Vxpipe.CallEngine.Command.AttachConnection
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechStarted,
     AgentTurnCompleted,
     AgentTurnInterrupted,
     ParticipantTranscription,
@@ -201,6 +202,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert {:ok, decoder} = Decoder.new(context.config)
     assert {:ok, _decoder, events} = Decoder.push(decoder, output)
     assert {:final, "RECEIVED HI"} in events
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{} = started}, 1_000
+    assert String.starts_with?(started.correlation_id, "turn_")
+    assert String.starts_with?(started.command_id, "cmd_")
+    assert started.connection_id == context.command.connection_id
     refute_received {:vxpipe_event, %TextOutput{}}
     played = div(byte_size(output) * 1_000, 16_000 * 2)
     assert :ok = TestAudioOutputSink.playback_progress(context.sink, played, played)
@@ -213,10 +218,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
                       source_participant_id: ^agent,
                       text: "RECEIVED HI",
                       will_be_spoken: true
-                    }},
+                    } = text},
                    1_000
 
-    assert_receive {:vxpipe_event, %AgentTurnCompleted{participant_id: ^agent}}, 1_000
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{participant_id: ^agent} = completed}, 1_000
+    assert text.correlation_id == started.correlation_id
+    assert completed.correlation_id == started.correlation_id
+    assert text.command_id == started.command_id
+    assert completed.command_id == started.command_id
     _ = :sys.get_state(context.capability)
     _ = :sys.get_state(context.authority)
     _ = TestTransferConnection.run(context.command, fn -> :ok end)

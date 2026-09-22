@@ -361,9 +361,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
   defp start_capability(options) do
     alias Vxpipe.CallEngine.Speech.PrivateInit
 
+    startup_timeout_ms = 5_000
     owner = Keyword.get(options, :owner, self())
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
-    {:ok, private_init} = PrivateInit.open([], 5_000)
+    {:ok, private_init} = PrivateInit.open([], startup_timeout_ms)
 
     tree =
       start_supervised!(
@@ -389,7 +390,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert is_pid(capability)
 
     if owner == self() do
-      assert_receive {:vxpipe_sts_ready, ^capability}
+      assert_receive {:vxpipe_sts_ready, ^capability}, startup_timeout_ms
     end
 
     {tree, capability, sink}

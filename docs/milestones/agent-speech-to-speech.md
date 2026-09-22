@@ -36,8 +36,12 @@ five root gates: 2,185 tests, zero failures, 42 excluded (seed 0).
 The room-transcript follow-up now covers all four caller/agent transcript-source
 combinations with real embedded PCM and playback-fenced publication. It repaired
 agent-output-STT admission through the shared STT provider settings; 93 focused
-tests pass. Public caller turns, private/public ID separation and the broader
-lifecycle/final acceptance remain open; root gates for this follow-up are pending.
+tests pass. Its root run completed with two Gateway handoff failures (2,191 tests,
+42 excluded, seed 0); investigation is tracked below. The next identity checkpoint
+gives agent output room-owned public IDs and exact-source attribution, with 101
+focused checks passing. Caller/tool identity, public caller turns and the broader
+lifecycle/final acceptance remain open; root gates for the identity checkpoint
+are pending.
 [The input-routing decision](../sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
@@ -568,9 +572,43 @@ the existing audio round trip. Record discoveries here before implementing.
   IDs and correlate caller transcript/turn and agent playback/terminal events
   using exact allocation/source identity. Cover duplicates, delayed evidence,
   terminal cleanup and cross-source rejection; bound pending associations.
+  - [x] First harden agent-output publication: mint room-owned command/turn IDs
+    at output start, preserve them through transcript and terminal events, and
+    make repeated starts for an active output idempotent. Resolve the exact
+    connection/owner pinned in the allocation; reject wrong agents, missing or
+    replaced source connections, and late transcript/terminal evidence. Prove
+    this at the room publication boundary and in the embedded room round trip.
+    Ignore repeated final text for an active output and clear its associations
+    when the capability is replaced; a missing source must not crash settlement.
+    Evidence: eight publication-boundary tests failed before the repair; all
+    eight and the five real-room transcript tests now pass. The broader focused
+    startup/selection/room/capability group passes 101 tests (seed 0).
+  - [ ] Add caller-turn/transcript identity associations and bounded, generation-
+    qualified retirement so delayed starts cannot recreate completed public
+    turns. Preserve privacy for both reference and binary provider identifiers.
+  - [ ] Apply the same public identity boundary to tools: inspection also found
+    `inspect(call_ref)` in public tool-call IDs and provider-turn fallback IDs
+    when no audio turn exists. Give tool-only turns and tool calls room-owned
+    IDs, retain matching completion/cancellation associations, and test stale,
+    duplicate, wrong-agent and wrong-source evidence with bounded pending work.
 - [ ] Record focused evidence, remaining native/lifecycle limitations and
   design decisions, then commit before broader umbrella gates. Add any newly
   exposed repair as a task before implementation; retain separate repair commits.
+- [ ] Investigate root-gate failures after `f213bfb5` before final acceptance:
+  `HumanTransferWebRTCTest` failed its five-participant wait-cursor/handoff case
+  and its `silent_all` release-loss case (492 Gateway tests, two failures).
+  Reproduce the exact cases, identify whether the release-loss injection raced
+  successful completion, and prove any synchronization/lifecycle repair with
+  controlled evidence. Do not widen deadlines without a measured contract reason.
+  Keep any repair in a separate checkpoint; rerun all five root gates afterward.
+- [x] Align the STS capability test fixture's asynchronous readiness wait with
+  its explicit provider-start deadline. A focused run alongside native WebRTC
+  reproduction failed its implicit 100 ms `assert_receive` despite the fixture
+  granting startup 5,000 ms. Verify the actual startup contract, use a bounded
+  matching readiness assertion, and rerun the relevant suite. Do not change any
+  runtime timeout or audio/turn latency assertion for this fixture repair.
+  The assertion and `PrivateInit.open/2` now share the same 5,000 ms fixture
+  deadline; the complete 101-test focused group passes during native reproduction.
 
 Local design/dependency review: transcript-source choice remains pinned at
 compile/admission. The room owns public identities and routing; the capability

@@ -121,7 +121,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "STS tool calls outside the agent allowlist fail closed without execution" do
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = state() |> with_plan(%{}) |> SpeechToSpeech.bind_capability(stub, @agent)
+    state = state() |> with_plan(%{}) |> bind_capability(stub, @agent)
     capability = stub
     call_ref = make_ref()
 
@@ -161,7 +161,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     state = state() |> with_plan(tools)
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = SpeechToSpeech.bind_capability(state, stub, @agent)
+    state = bind_capability(state, stub, @agent)
     capability = stub
     call_ref = make_ref()
 
@@ -201,7 +201,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
       |> with_plan(%{"echo" => %{name: "echo", type: :mcp, conversation_mode: :non_blocking}})
 
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = SpeechToSpeech.bind_capability(state, stub, @agent)
+    state = bind_capability(state, stub, @agent)
     capability = stub
     call_ref = make_ref()
 
@@ -232,7 +232,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "live microphone audio offered through the room reaches the real STS allocation" do
     {_tree, capability} = start_real_capability()
-    state = state() |> SpeechToSpeech.bind_capability(capability, @agent)
+    state = state() |> bind_capability(capability, @agent)
     {:ok, pcm} = morse_pcm("HI")
 
     for <<chunk::binary-size(320) <- pcm>> do
@@ -270,7 +270,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "STS usage source resolves with activation for observation attribution" do
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = state() |> SpeechToSpeech.bind_capability(stub, @agent, "activation-sts")
+    state = state() |> bind_capability(stub, @agent, "activation-sts")
 
     assert {:ok, %{participant_id: @agent, activation_id: "activation-sts"}} =
              Vxpipe.CallEngine.RoomAuthority.UsageSource.resolve(state, stub)
@@ -281,7 +281,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     alias Vxpipe.CallEngine.RoomAuthority.UsageObservations
 
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = state() |> SpeechToSpeech.bind_capability(stub, @agent, "activation-sts")
+    state = state() |> bind_capability(stub, @agent, "activation-sts")
 
     context = %{
       tenant_id: @tenant,
@@ -322,7 +322,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "provider speech onset through the room never publishes twice" do
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = state() |> SpeechToSpeech.bind_capability(stub, @agent)
+    state = state() |> bind_capability(stub, @agent)
     turn = make_ref()
 
     assert SpeechToSpeech.handle_speech_started(state, stub, @agent, turn) == state
@@ -334,7 +334,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "a delayed room speech-onset notification cannot cancel the reply it triggered" do
     {_tree, capability} = start_real_capability()
-    state = state() |> SpeechToSpeech.bind_capability(capability, @agent)
+    state = state() |> bind_capability(capability, @agent)
     {:ok, pcm} = morse_pcm("HI")
 
     for chunk <- pcm_chunks(pcm) do
@@ -356,7 +356,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "STS transfer hold and release work without any text capability" do
     stub = start_supervised!({Agent, fn -> :ok end})
-    state = state() |> SpeechToSpeech.bind_capability(stub, @agent)
+    state = state() |> bind_capability(stub, @agent)
     assert state.text_capability == nil
 
     held = SpeechToSpeech.hold(state)
@@ -375,8 +375,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert SpeechToSpeech.ready?(state) == false
     assert SpeechToSpeech.current?(state, capability) == true
 
-    state = SpeechToSpeech.handle_ready(state, capability)
-    assert SpeechToSpeech.ready?(state) == false
+    unbound = %{
+      state
+      | speech_to_speech_capability: Map.delete(state.speech_to_speech_capability, :input_handle)
+    }
+
+    assert SpeechToSpeech.handle_ready(unbound, capability) == unbound
+    assert SpeechToSpeech.ready?(unbound) == false
 
     assert {:ok, _state} = SpeechToSpeech.interrupt(%{state | speech_to_speech_capability: nil})
     assert %_{} = SpeechToSpeech.hold(%{state | speech_to_speech_capability: nil})
@@ -400,12 +405,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     base = State.new(recorder, snapshot, %{})
 
+    {:ok, command} =
+      Vxpipe.CallEngine.Command.AttachConnection.new(
+        tenant_id: @tenant,
+        actor_id: "actor-sts",
+        room_id: @room,
+        incarnation_id: @incarnation,
+        participant_id: @human,
+        connection_id: @human_connection,
+        deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+      )
+
     connections = %{
-      @human_connection => %{participant_id: @human, pid: self()}
+      @human_connection => %{
+        participant_id: @human,
+        pid: self(),
+        role: :human,
+        admission: :main,
+        attach_command: command
+      }
     }
 
     %{base | connections: connections, transcript_router: nil}
-    |> SpeechToSpeech.bind_capability(self(), @agent)
+    |> bind_capability(self(), @agent)
+  end
+
+  defp bind_capability(state, capability, agent_id, activation_id \\ nil) do
+    state = SpeechToSpeech.bind_capability(state, capability, agent_id, activation_id)
+    source = Map.fetch!(state.connections, @human_connection)
+
+    binding =
+      Map.merge(state.speech_to_speech_capability, %{
+        connection_id: @human_connection,
+        connection: source.pid,
+        input_handle: Vxpipe.CallEngine.STSInputHandle.new(source.attach_command, source.pid)
+      })
+
+    %{state | speech_to_speech_capability: binding}
   end
 
   defp start_real_capability do

@@ -66,3 +66,15 @@ by this test. The room's missing provider caller-turn events remain separate.
 - Updated milestone tasks, index and provider guide with the shared settings
   contract and bounded scope of the room evidence. Broader B/C/F tasks remain
   unchecked. Review/commit next, then all five root gates; no hosted calls.
+
+## Committed checkpoint and root-gate result
+
+Committed as `f213bfb5` before the broader gates. Root formatting,
+warnings-as-errors compilation and strict Credo pass. The full test run completed
+with 2,191 tests, two failures and 42 excluded (seed 0); both failures are in
+Gateway's `HumanTransferWebRTCTest` (five-participant wait-cursor handoff and
+`silent_all` release loss). Call Engine passes all 1,032 tests. The chained
+unused-lock check was not reached because `mix test` exited with status 2.
+The next milestone task records investigation and a separate repair checkpoint;
+this run is not a successful umbrella gate. The test session was observed to
+completion, not restarted on an observation timeout.

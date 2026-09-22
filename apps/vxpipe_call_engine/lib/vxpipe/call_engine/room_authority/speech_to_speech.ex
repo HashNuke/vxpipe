@@ -53,7 +53,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           monitor: nil
         },
         speech_to_speech_monitor: nil,
-        speech_to_speech_ready?: false
+        speech_to_speech_ready?: false,
+        sts_turns: %{}
     }
   end
 
@@ -140,7 +141,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   @spec handle_turn_started(State.t(), pid(), String.t(), turn_ref()) :: State.t()
   def handle_turn_started(%State{} = state, capability, agent_id, provider_turn)
       when is_binary(agent_id) and (is_binary(provider_turn) or is_reference(provider_turn)) do
-    if current?(state, capability) do
+    if Evidence.current_agent?(state, capability, agent_id) and
+         not Map.has_key?(state.sts_turns, turn_key(provider_turn)) do
       case agent_connection(state) do
         {connection_id, connection} ->
           turn_key = turn_key(provider_turn)
@@ -149,8 +151,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
             agent_id: agent_id,
             provider_turn: turn_key,
             connection_id: connection_id,
+            connection: connection.pid,
             command_id: Id.generate(:command),
-            correlation_id: turn_key
+            correlation_id: Id.generate(:turn),
+            text_published?: false
           }
 
           state = %{state | sts_turns: Map.put(state.sts_turns, turn_key, turn)}
@@ -188,56 +192,55 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
       when is_binary(agent_id) and is_binary(text) and
              (is_binary(provider_turn) or is_reference(provider_turn)) and
              is_integer(played_ms) do
-    if current?(state, capability) do
-      case Map.fetch(state.sts_turns, turn_key(provider_turn)) do
-        {:ok, turn} ->
-          connection = Map.fetch!(state.connections, turn.connection_id)
+    with true <- Evidence.current_agent?(state, capability, agent_id),
+         {:ok, %{agent_id: ^agent_id, text_published?: false} = turn} <-
+           Map.fetch(state.sts_turns, turn_key(provider_turn)),
+         {connection_id, connection} <- agent_connection(state),
+         true <- connection_id == turn.connection_id and connection.pid == turn.connection do
+      event = %TextOutput{
+        id: Id.generate(:event),
+        sequence: state.next_sequence,
+        tenant_id: state.snapshot.tenant_id,
+        room_id: state.snapshot.room_id,
+        incarnation_id: state.snapshot.incarnation_id,
+        participant_id: agent_id,
+        source_participant_id: agent_id,
+        connection_id: turn.connection_id,
+        command_id: turn.command_id,
+        correlation_id: turn.correlation_id,
+        text: text,
+        aggregated_by: :sentence,
+        will_be_spoken: true,
+        occurred_at: DateTime.utc_now(:millisecond)
+      }
 
-          event = %TextOutput{
-            id: Id.generate(:event),
-            sequence: state.next_sequence,
-            tenant_id: state.snapshot.tenant_id,
-            room_id: state.snapshot.room_id,
-            incarnation_id: state.snapshot.incarnation_id,
-            participant_id: agent_id,
-            source_participant_id: agent_id,
-            connection_id: turn.connection_id,
-            command_id: turn.command_id,
-            correlation_id: turn.correlation_id,
-            text: text,
-            aggregated_by: :sentence,
-            will_be_spoken: true,
-            occurred_at: DateTime.utc_now(:millisecond)
-          }
+      {state, _policy} =
+        EventPublisher.publish_transcript(state, connection.pid, event,
+          media_policy_revision: interval
+        )
 
-          {state, _policy} =
-            EventPublisher.publish_transcript(state, connection.pid, event,
-              media_policy_revision: interval
-            )
-
-          %{state | next_sequence: state.next_sequence + 1}
-
-        :error ->
-          state
-      end
+      %{
+        state
+        | next_sequence: state.next_sequence + 1,
+          sts_turns:
+            Map.put(state.sts_turns, turn_key(provider_turn), %{turn | text_published?: true})
+      }
     else
-      state
+      _stale -> state
     end
   end
 
   @spec handle_turn_completed(State.t(), pid(), String.t(), turn_ref()) :: State.t()
   def handle_turn_completed(%State{} = state, capability, agent_id, provider_turn)
       when is_binary(agent_id) and (is_binary(provider_turn) or is_reference(provider_turn)) do
-    if current?(state, capability) do
+    if Evidence.current_agent?(state, capability, agent_id) do
       case Map.pop(state.sts_turns, turn_key(provider_turn)) do
         {nil, _turns} ->
           state
 
         {turn, turns} ->
-          connection = Map.fetch!(state.connections, turn.connection_id)
-          event = struct!(AgentTurnCompleted, agent_fields(state, connection, turn))
-          state = EventPublisher.publish(state, connection.pid, event)
-          %{state | next_sequence: state.next_sequence + 1, sts_turns: turns}
+          state = publish_terminal(state, turn, AgentTurnCompleted, %{})
+          %{state | sts_turns: turns}
       end
     else
       state
@@ -256,32 +259,38 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
       )
       when is_binary(agent_id) and (is_binary(provider_turn) or is_reference(provider_turn)) and
              is_integer(played_ms) do
-    if current?(state, capability) do
+    if Evidence.current_agent?(state, capability, agent_id) do
       case Map.pop(state.sts_turns, turn_key(provider_turn)) do
         {nil, _turns} ->
           state
 
         {turn, turns} ->
-          connection = Map.fetch!(state.connections, turn.connection_id)
+          state =
+            publish_terminal(state, turn, AgentTurnInterrupted, %{
+              interrupted_by_participant_id: turn.agent_id,
+              interrupted_by_connection_id: turn.connection_id,
+              interruption_command_id: turn.command_id,
+              interruption_correlation_id: turn.correlation_id,
+              played_ms: played_ms
+            })
 
-          event =
-            struct!(
-              AgentTurnInterrupted,
-              Map.merge(agent_fields(state, connection, turn), %{
-                interrupted_by_participant_id: turn.agent_id,
-                interrupted_by_connection_id: turn.connection_id,
-                interruption_command_id: turn.command_id,
-                interruption_correlation_id: turn.correlation_id,
-                played_ms: played_ms
-              })
-            )
-
-          _ = agent_id
-          state = EventPublisher.publish(state, connection.pid, event)
-          %{state | next_sequence: state.next_sequence + 1, sts_turns: turns}
+          %{state | sts_turns: turns}
       end
     else
       state
+    end
+  end
+
+  defp publish_terminal(state, turn, module, attributes) do
+    case agent_connection(state) do
+      {connection_id, connection}
+      when connection_id == turn.connection_id and connection.pid == turn.connection ->
+        event = struct!(module, Map.merge(agent_fields(state, connection, turn), attributes))
+        state = EventPublisher.publish(state, connection.pid, event)
+        %{state | next_sequence: state.next_sequence + 1}
+
+      _missing ->
+        state
     end
   end
 
