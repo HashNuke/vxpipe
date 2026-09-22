@@ -33,3 +33,13 @@
   ambiguity marker survives to genuine caller end, the latch is monotonic, and
   both arrival orders have controller regressions. The reviewer did not rerun
   the tests. General response overlap and hosted acceptance remain open.
+- Post-commit umbrella evidence: runtime `6104eda1`, documentation `c091a3ac`.
+  The four static gates passed (handle `19019`, exit 0). Full root handle
+  `57918` then exited 0: **2,393 tests, zero failures, 45 excluded**, seed 0,
+  two schedulers. Log: `vxpipe-sts-caller-recognition-umbrella.log`. Per-app
+  counts are MCP 37, AgentRuntime 95, Providers 19, CallEngine 1,233, Calls 120,
+  Gateway 492, Artifacts 20, Persistence 186 and Console 191. Main runtime and
+  compiled artifacts stayed fixed throughout. New interaction-profile test
+  sources were added only after CallEngine's lane finished and run in separate
+  non-Mix VMs; their expected reds are not part of this passing baseline.
+  This closes checkpoint gates, not the remaining milestone acceptance.

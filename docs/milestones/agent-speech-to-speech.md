@@ -1352,6 +1352,31 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       `turnComplete` must not imply a globally idle interaction while further
       generation/tool work remains. Do not introduce history replay or placeholder
       requests from upstream examples.
+      - [ ] Encode genuinely new typed input using the pinned Gemini 3.x
+        `realtimeInput.text` path. Prove exact fake-wire payload and one real
+        controller reply without history content, placeholder or caller-audio
+        transcript reassignment.
+      - [ ] Decode bounded, validated interaction status with model completion;
+        only explicit idle evidence may authorize renewal after conversational
+        work. Missing/unspecified status or `IN_PROGRESS` cannot reuse an earlier
+        idle state. Preserve caller, tool, playback and ambiguity fences.
+        Reproduce an idle model end with a pending tool, then an accepted tool
+        result: a newer handle alone cannot preserve the old idle evidence while
+        that result can trigger new model work.
+      - [ ] Reproduce continued model generation after an `IN_PROGRESS` model
+        end. Complete independently credited subsequent response audio/text for
+        the same interaction; do not hide the missing response association behind
+        a resumption guard. This depends on the full response-owner work above.
+
+      Interaction-profile design review (2026-09-22): the pinned ADK distinguishes
+      new realtime text from appended history and exposes interaction state for
+      multi-model-turn prompts. Track model-end and explicit interaction-idle
+      evidence separately; both are necessary, neither replaces caller/playback/
+      tool settlement. Accepted tool results invalidate prior idle evidence.
+      Missing or deprecated status is not an implicit idle in this conservative
+      profile. Fresh setup with no conversational work remains eligible for the
+      existing private-handle path. Actual subsequent response ownership remains
+      required and open; see [the controller decision](../google-sts-controller.md).
   - [ ] Make Google turn-control claims match its wire profile. Provider control
     uses server activity; external controls require disabled automatic detection.
     Verify or reject unsupported hybrid combinations before startup rather than
@@ -1661,6 +1686,13 @@ zero failures, 42 excluded, seed 0. See
   `labnotes/20260922-1908-handoff-binding-integration.md`. This is checkpoint
   evidence, not acceptance of subsequent caller/recognizer changes or the still
   open full-milestone gates.
+
+  Subsequent caller/recognition integration runtime `6104eda1` passes all five
+  root gates: 2,393 tests, zero failures, 45 excluded (seed 0, two schedulers),
+  including 1,233 Call Engine and 492 Gateway tests. Root handle `57918` exited
+  0 with main runtime/build unchanged. See
+  `labnotes/20260922-1941-google-caller-renewal.md`. Newly recorded interaction-
+  profile regressions are the next checkpoint, not evidence covered by this run.
 
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 
