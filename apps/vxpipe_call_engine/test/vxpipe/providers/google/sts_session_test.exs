@@ -6,6 +6,35 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
+  test "a tampered trailing-newline tool name fails before socket connection" do
+    scope = start_supervised!({CapabilityTree, owner: self()})
+
+    tool = %{
+      "name" => "lookup",
+      "description" => "synthetic",
+      "parametersJsonSchema" => %{"type" => "object"}
+    }
+
+    assert {:ok, config} = STS.new(api_key: "synthetic", tools: [tool])
+    config = %{config | tools: [Map.put(tool, "name", "lookup\n")]}
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(scope),
+               provider: STSSession,
+               options: [],
+               owner: self(),
+               private: [
+                 config: config,
+                 wire_module: TestGoogleSTSTransport,
+                 wire_options: [observer: self()]
+               ]
+             )
+
+    assert_receive {:vxpipe_speech_closed, ^session, :initialization_failed}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+    refute_received {:test_google_sts_control, _, _}
+  end
+
   test "tampered private setup fails before connecting a socket" do
     scope = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = STS.new(api_key: "synthetic")

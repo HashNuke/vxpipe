@@ -3,6 +3,8 @@ defmodule Vxpipe.Providers.Google.STSAgentConfig do
 
   alias Vxpipe.AgentRuntime.ToolDescriptor
 
+  @name_pattern ~r/\A[A-Za-z0-9_-]+\z/
+
   def validate(prompt, tools) do
     with true <- is_binary(prompt) and byte_size(prompt) <= 65_536 and String.valid?(prompt),
          true <- is_list(tools) and length(tools) <= 64,
@@ -28,7 +30,8 @@ defmodule Vxpipe.Providers.Google.STSAgentConfig do
          } = tool
        )
        when map_size(tool) == 3 do
-    with true <- JSON.decode!(JSON.encode!(schema)) == schema,
+    with true <- is_binary(name) and Regex.match?(@name_pattern, name),
+         true <- JSON.decode!(JSON.encode!(schema)) == schema,
          {:ok, _descriptor} <-
            ToolDescriptor.new(
              name: name,

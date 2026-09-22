@@ -3,6 +3,34 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
   alias Vxpipe.Providers.Google.STS
 
+  test "tool names match the complete accepted alphabet without sanitization" do
+    tool = %{
+      "name" => "lookup",
+      "description" => "synthetic",
+      "parametersJsonSchema" => %{"type" => "object"}
+    }
+
+    assert {:ok, config} = STS.new(api_key: "synthetic", tools: [tool])
+
+    for name <- [
+          "lookup\n",
+          "lookup\r\n",
+          "lookup\nnext",
+          " lookup",
+          "lookup ",
+          "",
+          "lookup.name"
+        ] do
+      malformed = Map.put(tool, "name", name)
+      assert {:error, :invalid_configuration} = STS.new(api_key: "synthetic", tools: [malformed])
+      assert {:error, :invalid_configuration} = STS.validate(%{config | tools: [malformed]})
+    end
+
+    accepted = Map.put(tool, "name", "0_lookup-ABC")
+    assert {:ok, valid} = STS.new(api_key: "synthetic", tools: [accepted])
+    assert STS.setup(valid)["setup"]["tools"] == [%{"functionDeclarations" => [accepted]}]
+  end
+
   test "private prompt and exact JSON tool schema reach setup without inspect disclosure" do
     tool = %{
       "name" => "lookup",

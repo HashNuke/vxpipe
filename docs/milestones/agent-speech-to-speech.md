@@ -982,6 +982,17 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   - [x] Prove exact initial and handle-resumed fake-wire setup, empty tools, bounds,
     and inspect/status/log redaction with focused Call Engine red-green tests.
   - [x] Document local evidence and remaining gated selection/hosted acceptance.
+  - [x] Repair adapter-local full-string tool-name validation after independent
+    review of `dd501d39`: reject trailing newlines at construction and after
+    private-config tampering, before fake-socket connection. Preserve the shared
+    accepted name alphabet without sanitization or shared descriptor changes.
+
+  Name-validation review: the shared descriptor's line-oriented anchors accept a
+  final newline. Ordinary Call Spec validation rejects it, so the demonstrated
+  defect is at the Google private-config boundary, not a permission bypass.
+  Evidence: 36 Google codec/session checks first had two failures (constructor
+  acceptance and malformed setup reaching a fake socket), then passed after an
+  adapter-local full-string check. See `labnotes/20260922-1723-google-tool-name-validation.md`.
 
   Configuration design review (2026-09-22): reuse the private provider-init path
   and retained resumption config, without changing capability/room ownership or
