@@ -53,8 +53,21 @@ defmodule Vxpipe.CallEngine.TestSpeechUpgradeServer do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_call({:send, frames}, _from, socket) do
+    :ok = :gen_tcp.send(socket, Enum.map(frames, &frame/1))
+    {:reply, :ok, socket}
+  end
+
+  def handle_call(:disconnect, _from, socket) do
+    :ok = :gen_tcp.close(socket)
+    {:stop, :normal, :ok, socket}
+  end
+
   defp frame({:text, text}), do: frame(0x81, text)
   defp frame({:binary, data}), do: frame(0x82, data)
+  defp frame(:close), do: frame(0x88, <<>>)
+  defp frame({:close, code, reason}), do: frame(0x88, <<code::16, reason::binary>>)
 
   defp frame(opcode, payload) when byte_size(payload) <= 125,
     do: [<<opcode, byte_size(payload)>>, payload]

@@ -5,8 +5,18 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   alias Vxpipe.CallEngine.Speech.SocketConnection
 
+  @typedoc """
+  Observed peer-close metadata, not proof of successful application draining.
+
+  Mint normalizes empty close payloads to 1000, so that decoded code represents
+  either a normal status or no status. Other decoded codes are preserved.
+  """
+  @type peer_close_status :: :normal_or_no_status | non_neg_integer()
+
   @callback handle_frame(tuple(), map()) :: {:ok, map()} | {:await, reference(), map()}
   @callback handle_disconnect(term(), map()) :: {:ok, map()}
+  @callback handle_peer_close(peer_close_status(), map()) :: {:ok, map()}
+  @optional_callbacks handle_peer_close: 2
 
   @send_timeout 5_000
   @output_timeout 15_000
@@ -197,9 +207,9 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   defp handle_frames([{:pong, _payload} | rest], state), do: handle_frames(rest, state)
 
-  defp handle_frames([{:close, _code, _reason} | _rest], state) do
+  defp handle_frames([{:close, code, _reason} | _rest], state) do
     _ = SocketConnection.send_frame(state.connection, {:close, 1_000, ""})
-    {:stop, :normal, disconnect(state)}
+    {:stop, :normal, peer_close(state, code)}
   end
 
   defp handle_frames([frame | rest], state) do
@@ -225,6 +235,16 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
       state.callback.handle_disconnect(:connection_lost, state.callback_state)
 
     %{state | callback_state: callback_state}
+  end
+
+  defp peer_close(state, code) do
+    if function_exported?(state.callback, :handle_peer_close, 2) do
+      status = if code == 1_000, do: :normal_or_no_status, else: code
+      {:ok, callback_state} = state.callback.handle_peer_close(status, state.callback_state)
+      %{state | callback_state: callback_state}
+    else
+      disconnect(state)
+    end
   end
 
   defp schedule_keepalive(nil), do: :ok

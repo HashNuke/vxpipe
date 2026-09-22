@@ -1084,6 +1084,37 @@ No new provider advertisement or billable call is authorized by these tasks.
     - [ ] Implement and verify hosted recognizer finite-input terminal proof
       before restoring hosted output-STT route admission/acceptance. Morse proof
       and preserved Google private configuration do not complete this requirement.
+      - [x] Audit official Flux CloseStream/ForceEndTurn documentation, pinned
+        SDK receive/teardown code and recorded fixtures against ordered finite
+        completion. Record alternative existing Google STT evidence separately.
+      - [ ] Resolve Flux's exact successful drain terminal: documented decoding
+        before close is promising, but the reviewed sources do not establish
+        whether its status-less closure is a peer close frame distinguishable
+        from transport loss. Do not promote a generic disconnect to success.
+      - [x] Coordinate the shared transport seam before implementation: preserve
+        ordered peer-close evidence separately from loss, without changing
+        ordinary human STT or interpreting SDK teardown success as completion.
+        Final reviewed internal `handle_peer_close/2` reports
+        `:normal_or_no_status` for decoded 1000 and other decoded codes numerically;
+        no production adapter opts in and no completion semantics are attached.
+      - [x] Prove the transport primitive with tagged real-loopback WebSocket
+        regressions before implementation: empty/coded close versus EOF, frame
+        and acknowledgement ordering, one callback/no generic double callback,
+        retained code when replying fails, reason redaction and legacy behavior.
+      - [x] Resolve the decoder assumption before changing expectations/runtime:
+        pinned Mint 1.0.6 normalizes empty close to 1000. After Goodall xhigh design
+        review, parent approved `:normal_or_no_status`, not raw status fidelity.
+        Preserve original red history and separate empty/explicit-1000 wire tests;
+        no fork or second parser. This is a design decision, not a green test claim.
+      - [x] Reproduce the revised normalized-class expectations red before
+        implementation, then pass the 11-test transport and 27-test focused
+        privacy/adapter groups. Preserve ordering, rejected ack, reply failure,
+        redaction, one callback and existing EOF/error/local/legacy behavior.
+      - [ ] After the proof/profile is approved, reproduce and implement finite
+        final-tail flush followed by one terminal marker, with missing/abnormal
+        close, multiple segments, duplicate finish, bounded retention/deadline,
+        private status and provider/channel lifetime tests. Run red then green
+        from the owning child; do not advertise support before this passes.
     - [x] Repair Goodall P2 at `b0b7d411`: a queued `input_finished` processed
       after the recognition deadline must fail, even if it precedes the timeout
       notification in the mailbox. Reproduce with timeout 500 ms: finish
@@ -1117,6 +1148,39 @@ No new provider advertisement or billable call is authorized by these tasks.
   spent awaiting playback. Timer mailbox order is not expiry authority. Reuse
   the existing output absolute-expiry field without changing provider-transcript
   timing or the parent-owned capability timeout handler.
+  Hosted-proof design review, 2026-09-22: Flux CloseStream promises decoding then
+  updates then closure, but supplies neither a final turn nor summary metadata;
+  ForceEndTurn explicitly does not perform another decode pass. The pinned SDK's
+  timeout-tolerant teardown and text-only parity fixture do not settle the raw
+  close distinction. At that research baseline, shared Socket also erased peer
+  close versus loss. Hosted implementation and finite admission remain open;
+  the [protocol decision/seam](../deepgram-finite-input-proof.md) records the later
+  transport-only prerequisite without claiming hosted proof.
+  This research does not remove hosted support from acceptance or change human
+  STT, the finite event contract, PCM validation or the previous green checkpoint.
+  Peer-close design review, before tests/code: the parent approved the internal
+  callback and local loopback proof as an independent prerequisite, not a hosted
+  completion profile. Reuse the existing frame queue/ack boundary and default
+  disconnect callback. Report only observed close status, never raw reason or
+  successful recognition. Dependency inspection discovered empty-close status
+  loss in Mint's decoder; reproduce at the project boundary and coordinate any
+  required decoder/connection scope instead of inventing status or editing deps.
+  Historical local probe: 11 tests / 6 expected red failures before Socket dispatch;
+  after the scoped callback, 11 tests / 1 failure, and 27 combined privacy/adapter
+  tests / 1 failure. The remaining empty-close test observes decoded code 1000
+  before dispatch. Those historical runs were not green; exact methods
+  and completed handles are in `labnotes/20260922-1950-speech-peer-close.md`.
+  Corrected design review, before revised tests/runtime: Goodall xhigh and parent
+  approved honest normalization, not a decoder repair: decoded 1000 means
+  `:normal_or_no_status`, other codes remain numeric. Separate actual empty and
+  explicit-1000 tests must establish this class versus EOF/error/local teardown.
+  This never proves successful drain; future hosted adoption must establish the
+  normalized class is sufficient after finite finish. If raw status fidelity is
+  required later, the seam cannot supply it. No provider opt-in or finite flag.
+  Revised red: 11 tests / 3 failures show numeric 1000 instead of the approved
+  normalized class. After the mapping, 11 transport tests and the combined 27
+  privacy/adapter tests pass (seed 0, isolated child, two schedulers). This closes
+  only the local transport primitive; hosted finite proof and selection stay open.
 - [ ] Complete output-STT adapter resolution through the existing registry,
   retain provider-private startup configuration, and negotiate matching PCM
   formats or use an explicit supported conversion. Prove synthetic-credential,
