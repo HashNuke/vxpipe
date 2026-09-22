@@ -66,3 +66,17 @@ Changed-file formatting and `git diff --check` pass. Independent Astra review
 is running; commit this focused checkpoint before root gates. Remaining
 multi-segment recognition, hosted configuration/PCM conversion and broader
 lifecycle/usage acceptance stay open in the milestone.
+
+## Post-commit root verification
+
+At `4f5d2fb1`, all five root gates pass: format, warnings-as-errors compile,
+strict Credo, unused-lock check and **2,282 tests, zero failures, 45 excluded**,
+seed 0. Full test log: temporary `vxpipe-sts-usage-umbrella.log`. The native
+Gateway lane passes all 492 tests; its separately reproduced private policy-gap
+task is not closed by this passing run. No runtime or compiled artifact changed
+during the root command. A new test-only review regression was independently run
+after the Call Engine lane finished; it was not part of this root baseline.
+
+Independent Astra xhigh review confirmed scoped identity, duration, replacement
+retention and persistence but identified one later-idle-loss edge. Its red/green
+repair is the next checkpoint in `20260922-1718-sts-completed-recognition.md`.

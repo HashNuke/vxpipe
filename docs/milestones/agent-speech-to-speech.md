@@ -896,7 +896,7 @@ No new provider advertisement or billable call is authorized by these tasks.
   formats or use an explicit supported conversion. Prove synthetic-credential,
   fake-wire hosted-adapter startup and differing Morse STS/STT sample rates;
   reject unsupported combinations explicitly before allocating a live call.
-- [x] Separate output-STT usage identity, accepted-audio duration and terminal
+- [ ] Separate output-STT usage identity, accepted-audio duration and terminal
   outcome from the STS generator. Reproduce a timed-out 16 kHz `stalling_stt`
   recognizer reporting `morse_code`, success, and 4,200 ms for 6,300 ms of
   accepted audio. Verify correct provider/rate attribution and failed outcome
@@ -919,6 +919,13 @@ No new provider advertisement or billable call is authorized by these tasks.
       real retry reproduction stores a millisecond timestamp then rejects the
       identical fact because stored precision differs; preserve exact immutable
       fact comparison rather than changing generic archive deduplication here.
+  - [ ] Preserve completed recognition usage across a later idle recognizer loss
+    while playback is pending. Independent review of `4f5d2fb1` identified that
+    the failure handler retroactively overwrites an acknowledged successful final.
+    Reproduce with the controlled stalling fixture, explicit final acknowledgement,
+    provider `DOWN`/replacement readiness and delayed playback completion. Cover
+    unfinished recognition failure separately; do not infer full multi-segment
+    settlement from this completed-generation case.
 
   Usage checkpoint design review: descriptor identity and PCM rate belong to the
   selected recognizer; playback success does not prove recognition success. Reuse
@@ -928,9 +935,10 @@ No new provider advertisement or billable call is authorized by these tasks.
   Focused evidence: 118 capability/room STS tests and four database usage tests
   pass (seed 0). Real timed-out recognition persists `stalling_stt`, failed and
   6,300 ms alongside successful STS playback, including identical-write retries.
-  See `labnotes/20260922-1704-sts-recognizer-usage.md`. Independent review and
-  post-commit umbrella gates remain pending; multi-segment and hosted/lifecycle
-  accounting are not established by this checkpoint.
+  See `labnotes/20260922-1704-sts-recognizer-usage.md`. All five post-commit root
+  gates at `4f5d2fb1` pass (2,282 tests, zero failures, 45 excluded, seed 0).
+  Independent review reopened the later-idle-loss case above; multi-segment and
+  hosted/lifecycle accounting are not established by this checkpoint.
 
 The audit also reproduced tool admission/result delivery under denied policy.
 That reproduction is covered by the already-planned ordered-tool-envelope task
@@ -947,6 +955,15 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   before the end of the response. Extend past 16 chunks with normal sink credit
   to distinguish correct streaming admission from unbounded buffering. Existing
   session tests manually arrange admission and do not prove this ordering.
+  - [ ] Verify documented Google wire onset/end signals before reusing the existing
+    fixtures. The decoder currently expects boolean `serverContent.activityStart`
+    and `activityEnd`, while the official SDK exposes top-level `voiceActivity`.
+    Prove the actual supported provider-control signal with a decoder/session/
+    controller regression; neither a transcript nor model `turnComplete` may
+    masquerade as caller speech onset/end. Record protocol availability limits
+    explicitly and keep hosted selection gated. Both documented activity enum
+    values currently decode to `{:ok, []}`; sources and exact read-only probe are
+    in `labnotes/20260922-1721-sts-google-wire-audit.md`.
 - [ ] Implement explicit output-transcript final settlement consistently with
   the descriptor: `Event.build(:output_transcript, ..., final: true)` currently
   rejects the event despite accepting `output_settlement: :transcript_end`.
