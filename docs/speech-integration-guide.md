@@ -413,7 +413,10 @@ consumer queues, directional formats and transport readiness work still needed.
 
 When the selected STS descriptor lacks output transcription, the agent must
 select explicit `output_speech_to_text`, resolved through the existing `:stt`
-provider manifest. The agent-owned tree feeds credited STS output audio only
+provider manifest. Host enablement uses the existing `speech_to_text.providers`
+settings; `output_speech_to_text` is an agent role, not a separate runtime
+provider-settings section. Missing or disabled STT providers fail admission
+at the selected agent-output role. The agent-owned tree feeds credited STS output audio only
 (never caller microphone audio) into that second allocation, with bounded
 fanout: a slow STT consumer drops chunks with a counter and can never block
 sink audio. At the STS generation boundary the tree calls the optional
@@ -424,9 +427,13 @@ transcript role after the same egress fence as provider transcripts; on
 interruption the tree restarts the output STT so late text cannot leak into
 the next turn, and an output STT failure settles the turn honestly without
 agent text. Morse STT implements `finish_input/1` via decoder flush
-(`stt_finish_input_test.exs`); the full mode is proven in
+(`stt_finish_input_test.exs`); the capability boundary is proven in
 `speech_to_speech_output_stt_test.exs`, including denied policy, failure and
-slow-consumer settlement.
+slow-consumer settlement. `room_authority/sts_transcript_modes_test.exs` drives
+compiled embedded PCM calls across all four caller/agent transcript-source
+combinations, decodes the Morse reply and checks single, correctly attributed
+final transcripts after playback settlement. Native conversations and complete
+room lifecycle acceptance remain separate milestone gates.
 
 The capability keeps at most 16 pending reply turns while output playback or
 recognizer readiness prevents admission. Readiness releases them in FIFO order;

@@ -98,9 +98,15 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         :ok
 
       %CapabilitySelection{} = selection ->
+        provider_kind = if kind == :output_speech_to_text, do: :speech_to_text, else: kind
+
         with {:ok, provider} <- CapabilityCatalog.adapter(selection),
              {:ok, settings} <-
-               CapabilityCatalog.provider_settings(Keyword.get(options, kind), provider, kind),
+               CapabilityCatalog.provider_settings(
+                 Keyword.get(options, provider_kind),
+                 provider,
+                 provider_kind
+               ),
              true <- Keyword.get(settings, :enabled) == true do
           :ok
         else

@@ -33,6 +33,11 @@ callback delivery and phone-room readiness now have focused evidence (43 tests,
 seed 0); full native multi-mode calls and lifecycle acceptance remain incomplete.
 Native checkpoint `a6615d91` and formatting-only repair `447b3045` pass all
 five root gates: 2,185 tests, zero failures, 42 excluded (seed 0).
+The room-transcript follow-up now covers all four caller/agent transcript-source
+combinations with real embedded PCM and playback-fenced publication. It repaired
+agent-output-STT admission through the shared STT provider settings; 93 focused
+tests pass. Public caller turns, private/public ID separation and the broader
+lifecycle/final acceptance remain open; root gates for this follow-up are pending.
 [The input-routing decision](../sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
@@ -425,7 +430,8 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   room-test equivalent. A compiled real room now accepts framed Morse PCM
   without human STT, decodes its reply as RECEIVED HI, and publishes the agent
   transcript only after sink playback settlement. Independent STT/STS backpressure
-  and native conversion now have focused tests; full multi-mode native calls
+  and native conversion now have focused tests. All four caller/agent transcript
+  combinations pass embedded PCM room round trips below; full multi-mode native calls
   and the remaining room lifecycle cases are still
   required before final acceptance (see F).
   Evidence: `capability/speech_to_speech_test.exs` (12 tests: reply,
@@ -453,7 +459,8 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   framed receiver checks, hold epochs and entry-install binding for an earlier
   attachment. `ConnectionReadiness` rejects selected STS without exact ingress
   evidence. Native conversion is now covered below; integrated calls in all
-  three transcript modes and the remaining lifecycle cases are still open.
+  three transcript modes now have embedded PCM proof below; native conversations,
+  public turn projection and the remaining lifecycle cases are still open.
   See `docs/sts-input-routing.md` and
   `labnotes/20260922-1309-sts-room-input.md` for the checkpoint evidence/limits.
 
@@ -518,6 +525,64 @@ are local; this is not carrier interoperability, rendered WebRTC acceptance,
 or the final ten-call load. Umbrella gates for this checkpoint pass; B/C/F's
 remaining acceptance tasks and the milestone index remain unchecked.
 
+#### Room transcript follow-up tasks (2026-09-22)
+
+Inspection after the native checkpoint found that provider-driven speech-start
+notifications are intentionally no-ops in the room (to avoid a second
+interruption), but no separate caller turn publication replaces them. STS
+transcripts also use provider turn references as public correlation IDs.
+These are remaining B/C publication contracts, not proof of completion from
+the existing audio round trip. Record discoveries here before implementing.
+
+- [x] Exercise compiled room calls for provider input/output transcripts,
+  human STT plus provider output transcript, STS plus agent-output STT, and
+  human STT plus agent-output STT. Feed real Morse PCM through the independent
+  input handles, decode the agent reply, and require exactly one caller final
+  transcript and one agent final transcript after playback settlement.
+  Evidence: four real-room tests in `sts_transcript_modes_test.exs`, real Morse
+  HI → RECEIVED HI audio, exact caller/agent source and no duplicate final text.
+- [x] Repair real-call admission for agent-output STT: startup validation reads
+  a nonexistent `:output_speech_to_text` provider-settings section while runtime
+  resolution correctly uses `:speech_to_text`. Reuse the configured STT provider
+  registry without changing the agent-only role or error path. First prove
+  `PlanStartup.validate/2` fails with the valid output-STT selection, then require
+  validation and both output-STT room round trips to pass. Initial room matrix:
+  five tests, two failures at call admission; the other combinations and delayed
+  human-recognition ordering test pass.
+  The focused validator reproduces the failure, then passes with the repair;
+  missing/disabled STT providers remain rejected at the output-STT role path.
+- [x] Prove selected human STT cannot dispatch a second text-model response or
+  interrupt a newer STS reply when its recognition onset is handled late.
+  Keep response-triggering turn control independent of transcript selection;
+  add a controlled event-order regression before changing that boundary.
+  Existing behavior passes: suspend the room while STT/STS process real input
+  and STS delivers the reply to its sink, then resume and settle playback.
+  No recognition/interruption behavior change was necessary. Other turn-control
+  modes and duplicate public turn handling remain covered by the open task below.
+- [ ] Publish one caller `ParticipantTurnStarted`/`ParticipantTurnCompleted`
+  pair from the authorized STS turn-control evidence, separately from barge-in.
+  Reject stale capability/connection/policy/hold evidence; do not synthesize
+  conversational boundaries merely from a transcript delta. Cover human-STT
+  coexistence without duplicate public turns or a second interruption.
+- [ ] Keep provider references private: assign room-owned public command/turn
+  IDs and correlate caller transcript/turn and agent playback/terminal events
+  using exact allocation/source identity. Cover duplicates, delayed evidence,
+  terminal cleanup and cross-source rejection; bound pending associations.
+- [ ] Record focused evidence, remaining native/lifecycle limitations and
+  design decisions, then commit before broader umbrella gates. Add any newly
+  exposed repair as a task before implementation; retain separate repair commits.
+
+Local design/dependency review: transcript-source choice remains pinned at
+compile/admission. The room owns public identities and routing; the capability
+owns provider evidence and immediate playback fencing. Do not reintroduce
+`SendText` responses for recognized microphone text. Integrated transcript
+proof precedes public turn/identity repairs and the final concurrent-call load.
+This review is separate from implementation evidence. Progress and reproduction
+methods: `labnotes/20260922-1420-sts-room-transcripts.md`.
+Focused checkpoint: 93 startup, selection, room, input-policy and STS capability
+tests pass (seed 0). These calls use an embedded PCM connection, not live carrier
+or rendered WebRTC transport, and are not the final ten-concurrent-call load.
+
 ### C — Interruption, tools, and transfer lifecycle
 
 - [x] Morse session/capability tests for human speech onset handling,
@@ -556,6 +621,9 @@ remaining acceptance tasks and the milestone index remain unchecked.
 - [x] A Morse variant declaring no output transcription fails selection
   without `output_speech_to_text` and yields exactly one agent transcript
   with it (selection rules proven in checkpoint A and unchanged).
+  Real-call admission and both caller-transcript variants now pass in
+  `sts_transcript_modes_test.exs`; output-STT enablement uses the STT registry,
+  not a separate provider-settings namespace.
 - [x] Credited STS output feeds an agent-scoped STT allocation in the same
   agent-owned tree (separate scope, caller microphone never connected), with
   `STTProvider.finish_input/1` finalization at the STS generation boundary,

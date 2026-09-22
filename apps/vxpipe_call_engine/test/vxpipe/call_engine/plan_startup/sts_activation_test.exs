@@ -30,10 +30,36 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
         output_speech_to_text: %{provider: "morse", model: "morse", options: %{}}
       })
 
+    assert :ok = PlanStartup.validate(plan, options())
     assert {:ok, startup} = PlanStartup.new(plan, options())
     assert startup.agent_activation == nil
     assert {STSSession, _public} = startup.speech_to_speech.provider
     assert {STTSession, _stt_public} = startup.speech_to_speech.output_speech_to_text
+  end
+
+  test "agent-output recognition still requires its STT provider to be enabled" do
+    plan =
+      compile_plan(%{
+        speech_to_speech: %{
+          provider: "morse",
+          model: "morse",
+          options: %{output_transcript: false}
+        },
+        output_speech_to_text: %{provider: "morse", model: "morse", options: %{}}
+      })
+
+    for registry <- [%{}, %{STTSession => [enabled: false]}] do
+      settings = Keyword.put(options(), :speech_to_text, providers: registry)
+      assert {:error, error} = PlanStartup.validate(plan, settings)
+      assert error.code == :unsupported_call_plan
+
+      assert error.details["path"] == [
+               "participants",
+               "assistant",
+               "capabilities",
+               "output_speech_to_text"
+             ]
+    end
   end
 
   defp compile_plan(agent_caps) do
