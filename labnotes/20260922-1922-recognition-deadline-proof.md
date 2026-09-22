@@ -26,14 +26,16 @@
 `mix test test/vxpipe/call_engine/capability/speech_to_speech_output_stt_test.exs --only recognition_deadline_race --seed 0`
 completed in handle `46544`, exit 2: **1 test, 1 expected failure (28 excluded)**.
 The actual recognition usage outcome was `:succeeded` instead of `:failed` after
-absolute expiry. Output captured in `/tmp/vxpipe-recognition-deadline-red.log`
+absolute expiry. Output captured in `vxpipe-recognition-deadline-red.log`
 using `set -o pipefail` and `tee`; this is behavioral red, not a build failure.
+Log names below are portable basenames; the original temporary directory is
+omitted from the committed reproduction commands.
 
 ## Focused green
 
 The same command after the scoped Output repair completed in handle `47874`,
 exit 0: **1 test, 0 failures (28 excluded)**. Log:
-`/tmp/vxpipe-recognition-deadline-green.log`. The expired terminal now follows the
+`vxpipe-recognition-deadline-green.log`. The expired terminal now follows the
 existing failure/retirement path; its later timeout notification is inert, with
 one completed turn and one usage batch. Added assertions to the existing successful
 pre-playback-final test that the recognition timer/absolute expiry remain unarmed
@@ -50,7 +52,7 @@ deadline remains independent and unchanged. Exact command from the owning child:
 export ERL_FLAGS='+S 2:2'
 export MIX_BUILD_PATH="$PWD/../../_build"
 set -o pipefail
-mix test test/vxpipe/call_engine/speech/descriptor_test.exs test/vxpipe/call_engine/speech/event_contract_test.exs test/vxpipe/call_engine/speech/stt_finish_input_test.exs test/vxpipe/call_engine/speech/provider_contract_test.exs test/vxpipe/call_engine/capability/speech_to_speech_test.exs test/vxpipe/call_engine/capability/speech_to_speech_output_stt_test.exs test/vxpipe/call_engine/capability/output_recognition_test.exs test/vxpipe/call_engine/capability/sts_transcript_settlement_test.exs test/vxpipe/call_engine/room_authority/sts_transcript_modes_test.exs test/vxpipe/call_engine/plan_startup --seed 0 | tee /tmp/vxpipe-recognition-deadline-regression.log
+mix test test/vxpipe/call_engine/speech/descriptor_test.exs test/vxpipe/call_engine/speech/event_contract_test.exs test/vxpipe/call_engine/speech/stt_finish_input_test.exs test/vxpipe/call_engine/speech/provider_contract_test.exs test/vxpipe/call_engine/capability/speech_to_speech_test.exs test/vxpipe/call_engine/capability/speech_to_speech_output_stt_test.exs test/vxpipe/call_engine/capability/output_recognition_test.exs test/vxpipe/call_engine/capability/sts_transcript_settlement_test.exs test/vxpipe/call_engine/room_authority/sts_transcript_modes_test.exs test/vxpipe/call_engine/plan_startup --seed 0 | tee vxpipe-recognition-deadline-regression.log
 ```
 
 The selected red/green commands above used the same environment and `pipefail`,

@@ -31,3 +31,10 @@
   ends can create false idle renewal. That separate Google checkpoint will record
   and reproduce the reversed ordering before repair; it is not a recognizer
   integration defect and is not claimed fixed by these 228 checks.
+- Recognition integration committed as `8b5d116f`; the subsequent Google ordering
+  repair is `6104eda1`. Their combined group passes 229 tests and independent
+  follow-up source review clears the bounded Google repair. All four post-commit
+  static gates pass at `6104eda1` (handle `19019`, exit 0; strict Credo 1,085 files).
+  A new serial root test run verifies that fixed runtime next; no overlapping
+  runtime/build edits or native/load worker may alter its attribution. Hosted
+  protocol research remains isolated in the agent worktree.
