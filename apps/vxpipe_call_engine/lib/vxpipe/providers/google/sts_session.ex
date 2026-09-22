@@ -65,6 +65,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
     model_turn_complete?: true,
     interaction_status: :idle,
     resumption_ambiguous?: false,
+    response_start?: false,
+    interaction_context: nil,
     output: nil,
     output_text: nil,
     audio_buffer: [],
@@ -73,10 +75,15 @@ defmodule Vxpipe.Providers.Google.STSSession do
   ]
 
   @impl true
-  def configure(options) do
-    with {:ok, public} <- STS.public_options(options) do
+  def configure(options) when is_list(options) do
+    with true <- Keyword.keyword?(options),
+         true <- length(options) == length(Enum.uniq(Keyword.keys(options))),
+         {response_start?, public_options} <- Keyword.pop(options, :response_start?, false),
+         true <- is_boolean(response_start?),
+         {:ok, public} <- STS.public_options(public_options) do
       Descriptor.new(
         kind: :sts,
+        response_start?: response_start?,
         settings: public,
         input_format: %{
           encoding: :linear16,
@@ -106,8 +113,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
         output_settlement: :generation_boundary,
         history_reconciliation?: false
       )
+    else
+      _invalid -> {:error, :invalid_configuration}
     end
   end
+
+  def configure(_options), do: {:error, :invalid_configuration}
 
   @impl true
   def start_link(options), do: STSProvider.start_link(__MODULE__, options)
@@ -122,6 +133,10 @@ defmodule Vxpipe.Providers.Google.STSSession do
   @impl true
   def input_activity(pid, boundary) when boundary in [:started, :ended],
     do: GenServer.call(pid, {:input_activity, boundary}, 5_000)
+
+  @impl true
+  def submit_input(pid, context, operation) when is_reference(context),
+    do: GenServer.call(pid, {:submit_input, context, operation}, 5_000)
 
   @impl true
   def interrupt(pid, turn_ref) when is_reference(turn_ref),
@@ -154,7 +169,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
     with :ok <- STS.validate(config),
          {:ok, expected} <-
-           configure(model: config.model, voice: config.voice, turn_control: config.turn_control),
+           configure(
+             model: config.model,
+             voice: config.voice,
+             turn_control: config.turn_control,
+             response_start?: descriptor.response_start?
+           ),
          true <- descriptor == expected,
          true <- is_atom(wire_module) and is_list(wire_options) and Keyword.keyword?(wire_options),
          true <- STSResumption.valid_deadlines?(renew_after, expire_after, resume_timeout),
@@ -166,6 +186,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
          config: config,
          wire_module: wire_module,
          wire_options: wire_options,
+         response_start?: descriptor.response_start?,
          renew_after: renew_after,
          expire_after: expire_after,
          resumption_timeout_ms: resume_timeout
@@ -187,93 +208,37 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   @impl true
-  def handle_call(command, _from, %{renew_requested?: true, input_turn: nil, output: nil} = state)
-      when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] and
-             command != {:input_activity, :ended} do
-    {:reply, {:error, :busy}, state}
-  end
+  def handle_call(
+        {:submit_input, context, operation},
+        _from,
+        %{response_start?: true} = state
+      ) do
+    with {:ok, command} <- context_command(operation),
+         {:ok, bound} <- STSInput.bind_context(state, context, operation) do
+      case input_call(command, bound) do
+        {:reply, :ok, next} ->
+          {:reply, :ok, next}
 
-  def handle_call({:push_audio, audio}, _from, %{ready?: true} = state) do
-    with {:ok, _encoded} <- STS.encode_audio(audio),
-         :ok <- state.wire_module.send_audio(state.wire, audio) do
-      {:reply, :ok, STSResumption.invalidate_idle(state)}
+        {:reply, {:error, _reason} = error, next} ->
+          {:reply, error, %{next | interaction_context: state.interaction_context}}
+
+        terminal ->
+          terminal
+      end
     else
-      {:error, :invalid_audio} -> {:reply, {:error, :session_failed}, state}
-      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+      {:error, _reason} = error -> {:reply, error, state}
     end
   end
 
-  def handle_call({:push_audio, _audio}, _from, state),
-    do: {:reply, {:error, :session_failed}, state}
+  def handle_call({:submit_input, _context, _operation}, _from, state),
+    do: {:reply, {:error, :unsupported_operation}, state}
 
-  def handle_call({:push_text, reference, text}, _from, %{ready?: true} = state) do
-    turn = make_ref()
-
-    with {:ok, _encoded} <- STS.encode_text(text),
-         :ok <- state.wire_module.send_text(state.wire, text),
-         :ok <-
-           Event.emit(state.channel, :input_submitted,
-             request_ref: reference,
-             provenance: :provider_reported
-           ),
-         {:ok, state} <-
-           open_text_turn(
-             STSResumption.begin_turn(%{
-               state
-               | input_turn: turn,
-                 input_text: text
-             })
-           ) do
-      {:reply, :ok, state}
-    else
-      {:error, :invalid_text} -> {:reply, {:error, :invalid_text}, state}
-      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
-    end
+  def handle_call(command, _from, state)
+      when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] do
+    if state.response_start?,
+      do: {:reply, {:error, :unsupported_operation}, state},
+      else: input_call(command, state)
   end
-
-  def handle_call({:push_text, _reference, _text}, _from, state),
-    do: {:reply, {:error, :session_failed}, state}
-
-  def handle_call(
-        {:input_activity, _boundary},
-        _from,
-        %{config: %{turn_control: "provider"}} = state
-      ),
-      do: {:reply, {:error, :unsupported_operation}, state}
-
-  def handle_call(
-        {:input_activity, :started},
-        _from,
-        %{ready?: true, caller: %{ended?: false}} = state
-      ),
-      do: {:reply, :ok, state}
-
-  def handle_call({:input_activity, :started}, _from, %{ready?: true, caller: caller} = state)
-      when not is_nil(caller),
-      do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
-
-  def handle_call({:input_activity, :ended}, _from, %{ready?: true, caller: nil} = state),
-    do: {:reply, :ok, state}
-
-  def handle_call(
-        {:input_activity, :ended},
-        _from,
-        %{ready?: true, caller: %{ended?: true}} = state
-      ),
-      do: {:reply, :ok, state}
-
-  def handle_call({:input_activity, boundary}, _from, %{ready?: true} = state)
-      when boundary in [:started, :ended] do
-    with :ok <- state.wire_module.send_activity(state.wire, boundary),
-         {:ok, state} <- activity_boundary(boundary, STSResumption.invalidate(state)) do
-      {:reply, :ok, state}
-    else
-      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
-    end
-  end
-
-  def handle_call({:input_activity, _boundary}, _from, state),
-    do: {:reply, {:error, :session_failed}, state}
 
   def handle_call({:interrupt, turn_ref}, _from, state) when is_reference(turn_ref) do
     if state.wire, do: state.wire_module.send_interrupt(state.wire)
@@ -305,6 +270,91 @@ defmodule Vxpipe.Providers.Google.STSSession do
     if state.wire, do: state.wire_module.close(state.wire)
     {:stop, :normal, :ok, state}
   end
+
+  defp input_call(command, %{renew_requested?: true, input_turn: nil, output: nil} = state)
+       when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] and
+              command != {:input_activity, :ended} do
+    {:reply, {:error, :busy}, state}
+  end
+
+  defp input_call({:push_audio, audio}, %{ready?: true} = state) do
+    with {:ok, _encoded} <- STS.encode_audio(audio),
+         :ok <- state.wire_module.send_audio(state.wire, audio) do
+      {:reply, :ok, STSResumption.invalidate_idle(state)}
+    else
+      {:error, :invalid_audio} -> {:reply, {:error, :session_failed}, state}
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  defp input_call({:push_audio, _audio}, state),
+    do: {:reply, {:error, :session_failed}, state}
+
+  defp input_call({:push_text, reference, text}, %{ready?: true} = state) do
+    turn = make_ref()
+
+    with {:ok, _encoded} <- STS.encode_text(text),
+         :ok <- state.wire_module.send_text(state.wire, text),
+         :ok <-
+           Event.emit(state.channel, :input_submitted,
+             request_ref: reference,
+             provenance: :provider_reported
+           ),
+         {:ok, state} <-
+           open_text_turn(
+             STSResumption.begin_turn(%{
+               state
+               | input_turn: turn,
+                 input_text: text
+             })
+           ) do
+      {:reply, :ok, state}
+    else
+      {:error, :invalid_text} -> {:reply, {:error, :invalid_text}, state}
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  defp input_call({:push_text, _reference, _text}, state),
+    do: {:reply, {:error, :session_failed}, state}
+
+  defp input_call(
+         {:input_activity, _boundary},
+         %{config: %{turn_control: "provider"}} = state
+       ),
+       do: {:reply, {:error, :unsupported_operation}, state}
+
+  defp input_call(
+         {:input_activity, :started},
+         %{ready?: true, caller: %{ended?: false}} = state
+       ),
+       do: {:reply, :ok, state}
+
+  defp input_call({:input_activity, :started}, %{ready?: true, caller: caller} = state)
+       when not is_nil(caller),
+       do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+
+  defp input_call({:input_activity, :ended}, %{ready?: true, caller: nil} = state),
+    do: {:reply, :ok, state}
+
+  defp input_call(
+         {:input_activity, :ended},
+         %{ready?: true, caller: %{ended?: true}} = state
+       ),
+       do: {:reply, :ok, state}
+
+  defp input_call({:input_activity, boundary}, %{ready?: true} = state)
+       when boundary in [:started, :ended] do
+    with :ok <- state.wire_module.send_activity(state.wire, boundary),
+         {:ok, state} <- activity_boundary(boundary, STSResumption.invalidate(state)) do
+      {:reply, :ok, state}
+    else
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  defp input_call({:input_activity, _boundary}, state),
+    do: {:reply, {:error, :session_failed}, state}
 
   @impl true
   def handle_info({:vxpipe_sts_transport, wire, {:message, payload}}, %{wire: wire} = state) do
@@ -601,6 +651,17 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
   defp apply_wire_event({:usage, metadata}, state) when is_map(metadata),
     do: {:ok, %{state | usage: metadata}}
+
+  defp context_command({:audio, pcm}) when is_binary(pcm), do: {:ok, {:push_audio, pcm}}
+
+  defp context_command({:text, reference, text})
+       when is_reference(reference) and is_binary(text),
+       do: {:ok, {:push_text, reference, text}}
+
+  defp context_command({:activity, boundary}) when boundary in [:started, :ended],
+    do: {:ok, {:input_activity, boundary}}
+
+  defp context_command(_operation), do: {:error, :unsupported_operation}
 
   defp open_text_turn(state) do
     case Event.emit(state.channel, :turn_ended,

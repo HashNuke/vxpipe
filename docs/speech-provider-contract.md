@@ -141,6 +141,13 @@ its release epoch through the same path. Both audio directions must be
 permitted at input acceptance.
 This is pre-input origin binding, not a grant-time policy queue or Google
 interaction association; those remain open.
+The unadvertised Google fixture profile can opt into this callback for local
+association tests. It binds the first accepted context before wire input and
+continues it across `IN_PROGRESS`; a different context is rejected before
+wire send while cutover is unproven. This is not Google response-start emission,
+policy-qualified output, or hosted interoperability approval.
+Direct legacy input callbacks are rejected for that opted-in allocation; only
+the context-bearing ordered callback can send input to its wire.
 
 The descriptor contains validated provider-specific public settings, media format, safe usage
 identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged`), and TTS cache

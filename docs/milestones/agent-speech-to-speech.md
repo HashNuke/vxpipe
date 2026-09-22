@@ -1718,6 +1718,30 @@ Submitted invocation outcomes must still survive privately for later reasoning.
             cutover without relabeling delayed content. Add focused fake-wire
             evidence for rejected input, typed/external input and same-origin
             multi-response continuation.
+            - [x] Add a locally opt-in Google descriptor/callback profile for
+              context-bearing input without advertising Google STS. Prove the
+              channel stages context and Google receives it atomically for
+              audio, typed text and external activity, while the legacy
+              non-opted profile remains unchanged.
+              - [x] Deny direct legacy provider input callbacks for an
+                opted-in Google allocation, so an in-process caller cannot
+                bypass context association. Cover audio, text and activity.
+            - [x] Bind the first successful Google input context to its wire
+              interaction before sending input, retain it across
+              `IN_PROGRESS`, reject a different context before any wire send,
+              and avoid committing a context when a callback rejects input.
+              This conservative cross-origin backpressure does not close the
+              later successful cutover/lifecycle acceptance task.
+            Provider input evidence: 28 focused Google session tests and the
+            297-test Google-provider/shared-speech group pass (three
+            integration exclusions). The local profile binds context before
+            wire input, preserves it across `IN_PROGRESS`, rejects a new
+            context before wire send, and rolls back a retryable first-use
+            rejection. Duplicate opt-in keys and direct legacy callback
+            bypasses were reproduced red and fixed. Independent Astra xhigh
+            source review found no remaining actionable issue. The parent
+            remains open because actual multi-response owner/emission,
+            policy queue and safe cross-origin cutover are not complete.
           - [ ] Admit acknowledged response starts through one capability-owned
             origin/policy queue: recheck immutable source/epoch and both audio
             intervals, block while external caller activity is unresolved,

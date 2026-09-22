@@ -196,6 +196,36 @@ Astra xhigh review found an output-interval recipient error and a held-direct-
 activity bypass; both were reproduced red, corrected and cleared in source
 follow-up. This is only the capability-to-channel pre-input context boundary.
 
+### Google interaction-origin checkpoint design review
+
+The Google Live model stream does not label each response with an input-origin
+reference. For a locally opted-in test profile, `submit_input/3` must receive
+the shared channel's staged context in the same ordered callback as PCM, text
+or external activity. The provider binds the first accepted context before
+sending its input to the wire; subsequent input with that exact context may
+continue the same interaction even after a model `IN_PROGRESS` end. A new
+context is rejected `:busy` before wire send while the old interaction has no
+provable cross-origin cutover. Rejected invalid input cannot commit a new
+origin. This leaves successful post-hold/new-origin cutover as an explicit later
+acceptance requirement, not a claim that permanent backpressure is sufficient.
+
+The descriptor opt-in remains local/unadvertised until actual response-start
+emission, capability queue/policy authorization and provider response-owner
+adoption work. The ordinary non-opted Google fixture path stays unchanged.
+Direct legacy provider input callbacks are rejected for opted-in allocations;
+they cannot bypass the context association. The local descriptor choice is a
+closed boolean with duplicate keys rejected.
+Rejected alternatives are assigning the latest capability context to any
+delayed model frame, switching origin at `IN_PROGRESS`, or treating a fresh
+caller end as proof that the old wire response has stopped. None supplies a
+wire label or a covered resumption watermark.
+
+Local verification: 28 focused Google session cases and the 297-test
+Google-provider/shared-speech group pass, excluding three integration tests.
+Independent Astra xhigh source review found no remaining actionable issue
+after duplicate-key and direct-callback-bypass red/green fixes. This does not
+clear actual controller response delivery or hosted interoperability.
+
 ## Rejected alternatives
 
 - Reusing the old caller end conflates caller publication and agent generation.

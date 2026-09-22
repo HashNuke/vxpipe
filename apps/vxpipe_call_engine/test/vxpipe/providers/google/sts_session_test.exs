@@ -6,6 +6,82 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
+  test "local response-start opt-in is a closed boolean descriptor choice" do
+    assert {:ok, %{response_start?: false}} = STSSession.configure([])
+    assert {:ok, %{response_start?: true}} = STSSession.configure(response_start?: true)
+
+    for options <- [
+          [response_start?: "true"],
+          [response_start?: true, response_start?: false],
+          [response_start?: true, unknown: true]
+        ] do
+      assert {:error, :invalid_configuration} = STSSession.configure(options)
+    end
+  end
+
+  test "locally opted-in Google audio binds one accepted origin across IN_PROGRESS and blocks another" do
+    {session, wire} = start_session(response_start?: true)
+    first = make_ref()
+    second = make_ref()
+    pcm = <<1, 0>>
+
+    assert :ok = Session.push_audio(session, pcm, response_context: first)
+    assert_receive {:test_google_sts_audio, ^wire, ^pcm}
+    provider = Session.provider(session)
+    assert :sys.get_state(provider).interaction_context == first
+
+    deliver_sync(session, wire, %{
+      "serverContent" => %{"turnComplete" => true, "interactionStatus" => "IN_PROGRESS"}
+    })
+
+    assert :ok = Session.push_audio(session, pcm, response_context: first)
+    assert_receive {:test_google_sts_audio, ^wire, ^pcm}
+    assert {:error, :busy} = Session.push_audio(session, pcm, response_context: second)
+    refute_received {:test_google_sts_audio, ^wire, _}
+    assert :sys.get_state(provider).interaction_context == first
+  end
+
+  test "locally opted-in typed and external input carry context in the ordered callback" do
+    context = make_ref()
+    {typed, typed_wire} = start_session(response_start?: true)
+    assert :ok = Session.push_text(typed, "hello", response_context: context)
+    assert_receive {:test_google_sts_control, ^typed_wire, _text_control}
+    assert_receive {:vxpipe_speech, %Event{session: ^typed, kind: :input_submitted} = submitted}
+    assert :ok = Session.ack(typed, submitted)
+    assert :sys.get_state(Session.provider(typed)).interaction_context == context
+
+    {external, external_wire} = start_session(response_start?: true, turn_control: "external")
+    assert :ok = Session.input_activity(external, :started, response_context: context)
+    assert_receive {:test_google_sts_control, ^external_wire, _start_control}
+    assert :ok = Session.input_activity(external, :ended, response_context: context)
+    assert_receive {:test_google_sts_control, ^external_wire, _end_control}
+    assert :sys.get_state(Session.provider(external)).interaction_context == context
+  end
+
+  test "provider-rejected first use does not bind a Google interaction origin" do
+    {session, wire} = start_session(response_start?: true)
+    rejected = make_ref()
+    deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+
+    assert {:error, :busy} = Session.push_audio(session, <<1, 0>>, response_context: rejected)
+
+    assert :sys.get_state(Session.provider(session)).interaction_context == nil
+    refute_received {:test_google_sts_audio, ^wire, _rejected_audio}
+  end
+
+  test "opted-in Google input cannot bypass context through legacy provider callbacks" do
+    {session, wire} = start_session(response_start?: true, turn_control: "external")
+    assert_receive {:test_google_sts_control, ^wire, _setup}
+    provider = Session.provider(session)
+
+    assert {:error, :unsupported_operation} = STSSession.push_audio(provider, <<1, 0>>)
+    assert {:error, :unsupported_operation} = STSSession.push_text(provider, make_ref(), "text")
+    assert {:error, :unsupported_operation} = STSSession.input_activity(provider, :started)
+    refute_received {:test_google_sts_audio, ^wire, _}
+    refute_received {:test_google_sts_control, ^wire, _}
+    assert :sys.get_state(provider).interaction_context == nil
+  end
+
   test "tampered private hybrid control fails before connecting a socket" do
     scope = start_supervised!({CapabilityTree, owner: self()})
     assert {:ok, config} = STS.new(api_key: "synthetic")
@@ -585,7 +661,9 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     {:ok, session, :starting} =
       Session.start(CapabilityTree.scope(scope),
         provider: STSSession,
-        options: [model: "gemini-3.8-live", voice: "Kore", turn_control: turn_control],
+        options:
+          [model: "gemini-3.8-live", voice: "Kore", turn_control: turn_control] ++
+            Keyword.take(opts, [:response_start?]),
         private: private,
         owner: self()
       )

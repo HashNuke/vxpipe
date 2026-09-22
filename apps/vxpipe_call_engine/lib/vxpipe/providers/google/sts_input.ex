@@ -4,6 +4,20 @@ defmodule Vxpipe.Providers.Google.STSInput do
   alias Vxpipe.CallEngine.Speech.Event
   alias Vxpipe.Providers.Google.STSResumption
 
+  def bind_context(%{interaction_context: nil}, context, {:activity, :ended})
+      when is_reference(context),
+      do: {:error, :busy}
+
+  def bind_context(%{interaction_context: nil} = state, context, _operation)
+      when is_reference(context),
+      do: {:ok, %{state | interaction_context: context}}
+
+  def bind_context(%{interaction_context: context} = state, context, _operation)
+      when is_reference(context),
+      do: {:ok, state}
+
+  def bind_context(_state, _context, _operation), do: {:error, :busy}
+
   # The pinned profile has one final per audio caller, but no correlation ID.
   # Never turn several unfinished callers into an assumed FIFO association.
   def start(%{caller: %{ended?: false}} = state), do: {:ok, state}
