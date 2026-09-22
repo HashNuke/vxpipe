@@ -207,8 +207,8 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     deliver(wire, %{"serverContent" => %{"outputTranscription" => %{"text" => "early text"}}})
 
     deliver(wire, %{
+      "voiceActivity" => %{"type" => "ACTIVITY_START"},
       "serverContent" => %{
-        "activityStart" => true,
         "modelTurn" => %{
           "parts" => [
             %{
@@ -252,7 +252,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   test "interruption before first audio fences the turn without output" do
     {session, wire} = start_session()
 
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
 
@@ -269,7 +269,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   test "external turn control ignores wire activity and uses explicit boundaries" do
     {session, wire} = start_session(turn_control: "external")
 
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
 
     assert :ok = Session.input_activity(session, :started)
@@ -282,7 +282,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   test "tool calls map provider ids to bounded results and cancellations" do
     {session, wire} = start_session()
 
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
 
@@ -313,7 +313,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   test "sent-ahead audio during the fence window is dropped before the next turn" do
     {session, wire} = start_session()
 
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
 
@@ -340,7 +340,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
     assert :ok = Session.ack(session, interrupted)
 
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = next}
     assert :ok = Session.ack(session, next)
     assert next.turn_ref != started.turn_ref
@@ -567,7 +567,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
 
   defp start_output do
     {session, wire} = start_session()
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
     deliver(wire, %{"serverContent" => %{"turnComplete" => true}})
@@ -612,7 +612,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   end
 
   defp finish_generation(session, wire) do
-    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
     deliver(wire, %{"serverContent" => %{"turnComplete" => true}})

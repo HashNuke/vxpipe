@@ -178,40 +178,71 @@ defmodule Vxpipe.Providers.Google.STS do
   def decode(_payload), do: {:error, :invalid_message}
 
   defp decode_message(message) do
-    with {:ok, content} <- server_content(message),
+    with {:ok, activity} <- voice_activity(message),
+         {:ok, content} <- server_content(message),
          {:ok, tools} <- tool_calls(message),
          {:ok, cancellations} <- tool_cancellations(message),
          {:ok, control} <- control_events(message) do
       ready = if Map.has_key?(message, "setupComplete"), do: [:ready], else: []
-      {:ok, ready ++ content ++ tools ++ cancellations ++ control}
+      {:ok, ready ++ activity ++ content ++ tools ++ cancellations ++ control}
     end
   end
 
   defp server_content(%{"serverContent" => content}) when is_map(content) do
-    with {:ok, activity} <- activity(content),
-         {:ok, transcripts} <- transcripts(content),
+    with {:ok, transcripts} <- transcripts(content),
          {:ok, audio} <- output_audio(content),
          {:ok, boundaries} <- boundaries(content) do
-      {:ok, activity ++ transcripts ++ audio ++ boundaries}
+      {:ok, transcripts ++ audio ++ boundaries}
     end
   end
 
   defp server_content(%{"serverContent" => _content}), do: {:error, :invalid_message}
   defp server_content(_message), do: {:ok, []}
 
-  defp activity(%{"activityStart" => true} = content) do
-    if map_size(Map.delete(content, "activityStart")) >= 0, do: {:ok, [:activity_start]}
+  defp voice_activity(%{"voiceActivity" => activity}) when is_map(activity) do
+    with false <-
+           Enum.any?(
+             ["voiceActivityType", "voice_activity_type", "audio_offset"],
+             &Map.has_key?(activity, &1)
+           ),
+         :ok <- activity_offset(activity) do
+      # Raw Gemini JSON uses `type`; the Python MLDev converter renames it for
+      # SDK consumers. SDK property names are not alternate wire versions.
+      case Map.fetch(activity, "type") do
+        {:ok, "ACTIVITY_START"} -> {:ok, [:activity_start]}
+        {:ok, "ACTIVITY_END"} -> {:ok, [:activity_end]}
+        {:ok, "TYPE_UNSPECIFIED"} -> {:ok, []}
+        :error -> {:ok, []}
+        _invalid -> {:error, :invalid_message}
+      end
+    else
+      _invalid -> {:error, :invalid_message}
+    end
   end
 
-  defp activity(%{"activityStart" => _invalid}), do: {:error, :invalid_message}
-  defp activity(_content), do: {:ok, []}
+  defp voice_activity(%{"voiceActivity" => _invalid}), do: {:error, :invalid_message}
+  defp voice_activity(_message), do: {:ok, []}
+
+  # The SDK exposes an optional string. It is not a playback clock or controller
+  # boundary timestamp; validate its wire type without inventing timing semantics.
+  defp activity_offset(activity) do
+    case Map.fetch(activity, "audioOffset") do
+      :error ->
+        :ok
+
+      {:ok, offset} when is_binary(offset) and byte_size(offset) <= @maximum_text_bytes ->
+        if String.valid?(offset), do: :ok, else: {:error, :invalid_message}
+
+      _invalid ->
+        {:error, :invalid_message}
+    end
+  end
 
   defp transcripts(content) do
-    with {:ok, activity_end} <- flag(content, "activityEnd", :activity_end),
-         {:ok, input} <- transcript_text(content, "inputTranscription", :input_transcript),
+    with {:ok, input} <- transcript_text(content, "inputTranscription", :input_transcript),
          {:ok, output} <- transcript_text(content, "outputTranscription", :output_transcript),
          {:ok, turn_text} <- turn_texts(content) do
-      {:ok, activity_end ++ input ++ output ++ turn_text}
+      {:ok, input ++ output ++ turn_text}
     end
   end
 

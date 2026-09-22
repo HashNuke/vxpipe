@@ -247,13 +247,78 @@ defmodule Vxpipe.Providers.Google.STSTest do
     assert decoded == chunk
   end
 
+  test "raw v1beta voiceActivity.type decodes start and end independently" do
+    for {type, event} <- [{"ACTIVITY_START", :activity_start}, {"ACTIVITY_END", :activity_end}],
+        offset <- [nil, "0s", "1.250s"] do
+      activity = %{"type" => type}
+      activity = if offset, do: Map.put(activity, "audioOffset", offset), else: activity
+      assert {:ok, [^event]} = STS.decode(JSON.encode!(%{"voiceActivity" => activity}))
+    end
+
+    for activity <- [%{}, %{"type" => "TYPE_UNSPECIFIED"}] do
+      assert {:ok, []} = STS.decode(JSON.encode!(%{"voiceActivity" => activity}))
+    end
+  end
+
+  test "SDK-only activity keys are rejected even beside a valid raw type" do
+    for activity <- [
+          %{"voiceActivityType" => "ACTIVITY_START"},
+          %{"voice_activity_type" => "ACTIVITY_END"},
+          %{"type" => "ACTIVITY_START", "voiceActivityType" => "ACTIVITY_END"},
+          %{"type" => "ACTIVITY_START", "voiceActivityType" => "ACTIVITY_START"},
+          %{"type" => "ACTIVITY_END", "audio_offset" => "1s"}
+        ] do
+      assert {:error, :invalid_message} = STS.decode(JSON.encode!(%{"voiceActivity" => activity}))
+    end
+  end
+
+  test "malformed known voice activity fields fail without emitting partial events" do
+    for activity <- [
+          nil,
+          true,
+          [],
+          "ACTIVITY_START",
+          %{"type" => nil},
+          %{"type" => 1},
+          %{"type" => %{}},
+          %{"type" => "UNKNOWN"},
+          %{"type" => "ACTIVITY_START\n"},
+          %{"type" => "ACTIVITY_START", "audioOffset" => 1},
+          %{"type" => "ACTIVITY_END", "audioOffset" => nil},
+          %{"type" => "ACTIVITY_START", "audioOffset" => String.duplicate("x", 65_537)},
+          %{"audioOffset" => %{}}
+        ] do
+      assert {:error, :invalid_message} =
+               STS.decode(
+                 JSON.encode!(%{
+                   "voiceActivity" => activity,
+                   "serverContent" => %{"turnComplete" => true}
+                 })
+               )
+    end
+  end
+
+  test "client activity fields and allowlisted detection signal are not server boundaries" do
+    assert {:ok, []} =
+             STS.decode(
+               JSON.encode!(%{
+                 "serverContent" => %{
+                   "activityStart" => true,
+                   "activityEnd" => true,
+                   "speechState" => "SPEECH_START"
+                 },
+                 "voiceActivityDetectionSignal" => %{"vadSignalType" => "VAD_SIGNAL_TYPE_SOS"}
+               })
+             )
+  end
+
   test "one message decodes every part: transcripts, audio, completion and interruption" do
     audio = :binary.copy(<<3, 0>>, 200)
 
     payload =
       JSON.encode!(%{
+        "voiceActivity" => %{"type" => "ACTIVITY_START"},
         "serverContent" => %{
-          "activityStart" => true,
           "inputTranscription" => %{"text" => "hello"},
           "modelTurn" => %{
             "parts" => [

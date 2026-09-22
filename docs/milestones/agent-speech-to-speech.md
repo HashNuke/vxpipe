@@ -980,26 +980,34 @@ Submitted invocation outcomes must still survive privately for later reasoning.
 
 - [ ] Complete documented Google activity-wire/controller integration (codec
   evidence alone does not establish controller or streaming acceptance).
-  - [ ] Verify official SDK server `voiceActivity` mapping for the selected
+  - [x] Verify official SDK server `voiceActivity` mapping for the selected
     Gemini v1beta transport, distinct from allowlisted detection signals and
     client `activityStart`/`activityEnd` fields.
-  - [ ] Reproduce actual-payload decoding failures; validate activity enum and
+  - [x] Reproduce actual-payload decoding failures; validate activity enum and
     optional offset, and remove invented server-content activity fallbacks.
-  - [ ] Migrate Google codec/session fixtures and verify focused tests without
+  - [x] Migrate Google codec/session fixtures and verify focused tests without
     changing session/controller semantics or claiming hosted acceptance.
 
   Codec design review: decode top-level server activity into the existing private
   adapter events only. Unspecified activity creates no boundary; malformed known
   fields fail explicitly. Parent owns activity-end semantics and capability
   streaming admission. No controller, shared event or manifest changes belong here.
-  Source-verification blocker: JS SDK 2.24.0 exposes `voiceActivityType`, but its
+  Initial source-verification blocker: JS SDK 2.24.0 exposes `voiceActivityType`, but its
   generated converter reads raw `type` while the Gemini receive path bypasses
   that converter. Do not treat SDK-shaped fixture success as raw v1beta proof.
   Evidence/proposal: `labnotes/20260922-1736-google-voice-activity.md`.
   Follow-up: pinned Python SDK's actual Gemini receive path invokes the MLDev
   converter reading raw `voiceActivity.type`; recommend that single raw profile,
-  not SDK-facing `voiceActivityType`. Implementation remains pending parent
-  decision and fresh raw-key red-green tests; provisional fixtures are not proof.
+  not SDK-facing `voiceActivityType`. Parent approved that single raw profile;
+  fresh raw-key tests, not the provisional fixtures, establish codec behavior.
+  Approved follow-up: use only raw `voiceActivity.type` based on the pinned
+  Python receive/converter chain. First fail actual raw-key tests against the
+  provisional SDK-key decoder, then reject malformed known fields and SDK-only
+  keys, migrate fixtures, and verify the codec without controller changes.
+  Evidence: new raw-key run failed 18 tests / 4 expected failures against the
+  provisional decoder; the raw codec/session/output group passes 43 tests.
+  Earlier SDK-shaped 42-test green was not raw-wire acceptance. Overall controller
+  integration and hosted acceptance remain unchecked.
 
 - [ ] Drive the fake Google socket through the real STS capability/controller:
   send output transcript/audio/generation completion before server
@@ -1008,13 +1016,13 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   to distinguish correct streaming admission from unbounded buffering. Existing
   session tests manually arrange admission and do not prove this ordering.
   - [ ] Verify documented Google wire onset/end signals before reusing the existing
-    fixtures. The decoder currently expects boolean `serverContent.activityStart`
-    and `activityEnd`, while the official SDK exposes top-level `voiceActivity`.
+    fixtures. The audit found invented boolean `serverContent.activityStart`
+    and `activityEnd`; the codec follow-up above now handles raw `voiceActivity`.
     Prove the actual supported provider-control signal with a decoder/session/
     controller regression; neither a transcript nor model `turnComplete` may
     masquerade as caller speech onset/end. Record protocol availability limits
-    explicitly and keep hosted selection gated. Both documented activity enum
-    values currently decode to `{:ok, []}`; sources and exact read-only probe are
+    explicitly and keep hosted selection gated. Both activity enum values decoded
+    to `{:ok, []}` in the original audit; sources and exact read-only probe are
     in `labnotes/20260922-1721-sts-google-wire-audit.md`.
 - [ ] Implement explicit output-transcript final settlement consistently with
   the descriptor: `Event.build(:output_transcript, ..., final: true)` currently

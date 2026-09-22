@@ -106,6 +106,26 @@ No generated audio is submitted by this probe; no hosted call or Google STS
 manifest enablement is claimed. See
 `labnotes/20260922-1721-output-stt-private-config.md` for red-green methods.
 
+## Raw STS server voice activity
+
+The codec accepts top-level `voiceActivity` with raw `type` values
+`ACTIVITY_START`, `ACTIVITY_END`, or `TYPE_UNSPECIFIED`. The first two produce
+the existing private adapter activity events; omitted/unspecified type produces
+none. Optional `audioOffset` must be a UTF-8 string within the existing 65,536-byte
+text bound. It is validated but is not interpreted as playback or settlement time.
+Malformed known fields and SDK-only aliases (`voiceActivityType`,
+`voice_activity_type`, `audio_offset`) fail with `:invalid_message`, including
+when supplied alongside valid raw fields. No partial events escape a failed decode.
+
+The pinned Python SDK's [actual receive path](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/live.py#L549)
+invokes the MLDev [raw `type` converter](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/_live_converters.py#L2026).
+SDK-facing `voiceActivityType` is not a second accepted wire spelling. Invented
+`serverContent.activityStart`/`activityEnd` fields are no longer interpreted;
+client encoders remain unchanged. The allowlisted detection signal and deprecated
+speechState are not fallback boundaries. This checkpoint proves codec behavior
+and migrated fake-wire fixtures only, not controller activity-end semantics,
+streaming admission, explicit transcript settlement or hosted acceptance.
+
 ## Private STS activation configuration
 
 Local implementation checkpoint, 2026-09-22; Google STS remains unadvertised and

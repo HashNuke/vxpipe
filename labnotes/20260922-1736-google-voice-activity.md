@@ -105,3 +105,28 @@ Provisional local code and fixture changes remain untouched and unstaged; the
 prior 42-test green uses the wrong proposed SDK-shaped key and is not acceptance
 of the recommended raw profile. Implementation needs a newly authorized red
 probe using `type`, including rejection of SDK-only fields and malformed values.
+
+## Approved raw codec checkpoint
+
+Parent approved the single raw `voiceActivity.type` profile. Before changing the
+provisional decoder, add raw start/end and SDK-only-key rejection tests and run
+them red. Then migrate the existing Google fixtures to raw `type`, preserve
+strict enum/optional string validation, and remove invented server-content
+activity interpretation. No STSSession runtime/controller changes. The earlier
+42-test SDK-shaped green remains explicitly non-acceptance evidence.
+
+- New raw-key red: `mix test test/vxpipe/providers/google/sts_test.exs --seed 0`
+  completed exit 2, 18 tests / 4 failures before modifying the provisional
+  decoder. Raw start ignored, SDK-only key accepted, malformed raw type ignored,
+  and raw activity absent from mixed-content events were the expected failures.
+- Implemented raw `type` mapping and explicit SDK-alias rejection (including
+  aliases coexisting with valid raw fields). Optional raw audioOffset is a bounded
+  UTF-8 string, not parsed as a controller timestamp. Unknown unrelated fields
+  retain existing decoder tolerance; invented server activity fields no longer
+  synthesize events. Client activity encoders are untouched.
+- Migrated Google codec/session fixtures to raw `type`. The focused three-file
+  command recorded above passes 43 tests / 0 failures (seed 0). Regression
+  matrices cover missing/default type, both boundaries, optional offset,
+  malformed enum/container/offset, oversized offset, SDK-only aliases and no
+  deprecated speechState or allowlisted-signal fallback. No STSSession runtime,
+  controller or shared event changes; no hosted or broad gates executed.
