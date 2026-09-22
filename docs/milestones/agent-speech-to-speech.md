@@ -1696,6 +1696,33 @@ Submitted invocation outcomes must still survive privately for later reasoning.
           response-specific discard and acknowledged-start-only channel grants.
           Rejected starts still advance bounded ordinal retirement; index gaps
           are valid, conflicting duplicate evidence cannot reopen old work.
+          - [x] Make the capability mint and reuse an opaque context only for
+            unchanged allocation, source, input epoch and bidirectional policy
+            intervals; pass it atomically through every opted-in audio, text and
+            activity operation before accepting that input. Rejected first use
+            must not become an authorized origin. Keep legacy STS unchanged.
+            - [x] Correct the output interval to the receiving human (whose
+              incoming route is agent-to-human), and block held direct activity
+              starts; prove output-only revoke/regrant and held activity with
+              focused reds before finalizing this checkpoint.
+            Capability-origin evidence: 8 focused cases pass, including
+            accepted/rejected first use, typed/activity/framed input,
+            source epoch rotation, direct and snapshot policy paths and the
+            interim cap. The capability/speech group passes 257/0 with three
+            integration tests excluded. Independent Astra xhigh review found
+            and then cleared two focused red/green fixes. Google association,
+            grant policy and exact origin retirement remain unchecked.
+          - [ ] Associate Google's accepted context with its current interaction
+            before sending each wire input; retain that origin across
+            `IN_PROGRESS` continuations and reject unproven cross-origin wire
+            cutover without relabeling delayed content. Add focused fake-wire
+            evidence for rejected input, typed/external input and same-origin
+            multi-response continuation.
+          - [ ] Admit acknowledged response starts through one capability-owned
+            origin/policy queue: recheck immutable source/epoch and both audio
+            intervals, block while external caller activity is unresolved,
+            and discard only the denied response. Prove hold, revoke/regrant,
+            replacement and busy-slot behavior before Google advertises STS.
           - [ ] Implement the reviewed context-bearing ordered input overloads
             and opt-in provider callback, with staged/accepted/rejected context
             handling; coordinate bounded origin retention with response/tools.

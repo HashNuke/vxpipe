@@ -159,6 +159,43 @@ engine-authorized last-root retirement operation; prove more than 16 sequential
 fully retired origin rotations without evicting live evidence or accumulating
 tombstones. Provider-issued references cannot create authorization contexts.
 
+### Capability origin checkpoint design review
+
+Before an opted-in input command reaches the channel, the capability proposes
+an opaque context against one immutable fingerprint: allocation generation,
+human/caller source, input epoch, and both input and output audio-policy
+intervals. The input interval belongs to the sending human; the output
+interval belongs to the receiving human, whose incoming route includes the
+agent's speech. A proposal does not authorize anything. On successful input
+acceptance, the capability retains that context and reuses it only while the
+fingerprint is unchanged. A failed first use retains no origin. The input slot
+already stages and accepts the exact context around the provider callback.
+Legacy descriptors continue to use their existing no-context calls.
+
+Direct (non-framed) capability input begins with the allocation generation as
+its epoch; framed input begins only after an explicit `release` supplies its
+epoch. Opted-in input requires both directions' current audio routes to be
+permitted, including typed text and external activity. A changed epoch/source
+or either interval must never silently inherit the previous context. At most
+16 distinct interim contexts may be retained, matching the channel's current
+input-only bound. Exact response/tool holds and root retirement remain separate
+requirements; the interim cap must not be represented as final lifecycle
+completion. A later checkpoint must prevent sending another context to an
+unlabelled Google wire until old interaction cutover is proven.
+Held direct activity is denied even though a direct allocation can otherwise
+use its generation as an initial epoch; it cannot create a new accepted origin
+after `hold` has cleared the active input epoch.
+
+Rejected alternative: assigning context only when `response_started` arrives.
+That would relabel a delayed A response with B's current authority after a
+hold/regrant, which no downstream policy recheck could repair.
+
+Checkpoint evidence: eight real-capability focused tests and the 257-test
+capability/speech group pass (three integration tests excluded). Independent
+Astra xhigh review found an output-interval recipient error and a held-direct-
+activity bypass; both were reproduced red, corrected and cleared in source
+follow-up. This is only the capability-to-channel pre-input context boundary.
+
 ## Rejected alternatives
 
 - Reusing the old caller end conflates caller publication and agent generation.

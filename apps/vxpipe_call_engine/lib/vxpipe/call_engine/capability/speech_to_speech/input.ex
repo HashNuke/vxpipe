@@ -3,8 +3,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, STSIngress}
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.CallEngine.Speech.Session
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins
 
   def format(%{descriptor: %{input_format: format}}) do
     {:ok, %{codec: format.encoding, sample_rate: format.sample_rate, channels: format.channels}}
@@ -59,9 +59,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   end
 
   def deliver(state, ingress, reference, frame, revision, epoch) do
-    result =
-      with :ok <- validate(state, ingress, frame, revision, epoch),
-           do: Session.push_audio(state.session, frame.payload)
+    {result, state} =
+      case validate(state, ingress, frame, revision, epoch) do
+        :ok -> ResponseOrigins.submit(state, {:audio, frame.payload})
+        error -> {error, state}
+      end
 
     if ingress == state.input,
       do: send(ingress, {:vxpipe_sts_input_result, self(), reference, result})

@@ -130,6 +130,17 @@ bound to a different, previously accepted context survives that rejection and
 is delivered in order. Input acceptance and event validity are not output
 authorization. Accepted origins currently have an interim 16-context allocation
 bound; exact response/tool holds and authorized origin retirement remain open.
+The STS capability proposes one opaque context before opted-in audio, typed
+text or activity input. It commits the context only after that input accepts
+and reuses it only while allocation, source, input epoch and both directional
+audio-policy intervals remain unchanged: input is the sending human's outgoing
+interval, output is the receiving human's incoming interval. Direct policy
+revocations also advance a separate origin policy revision, so a later regrant
+cannot inherit an older snapshot's context. Framed microphone input carries
+its release epoch through the same path. Both audio directions must be
+permitted at input acceptance.
+This is pre-input origin binding, not a grant-time policy queue or Google
+interaction association; those remain open.
 
 The descriptor contains validated provider-specific public settings, media format, safe usage
 identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged`), and TTS cache

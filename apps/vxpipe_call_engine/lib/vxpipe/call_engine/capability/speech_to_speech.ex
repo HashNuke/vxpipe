@@ -45,6 +45,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     CallerEvents,
     Input,
     OutputTranscript,
+    ResponseOrigins,
     ToolEvents
   }
 
@@ -190,9 +191,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           input_monitor: nil,
           input_epoch: nil,
           input_policy: nil,
+          origin_policy_revision: 0,
           input_contract: nil,
           input_sequence: nil,
           input_turn: nil,
+          response_origins: ResponseOrigins.new(),
           pending_turns: [],
           tool_turns: MapSet.new(),
           tool_calls: %{},
@@ -268,10 +271,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         {:reply, {:error, :policy_denied}, state}
 
       true ->
-        case Session.push_audio(state.session, pcm) do
-          :ok -> {:reply, :ok, state}
-          {:error, _reason} = error -> {:reply, error, state}
-        end
+        {result, state} = ResponseOrigins.submit(state, {:audio, pcm})
+        {:reply, result, state}
     end
   end
 
@@ -280,7 +281,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   def handle_call({:push_text, text}, _from, state) do
-    case Session.push_text(state.session, text) do
+    {result, state} = ResponseOrigins.submit(state, {:text, text})
+
+    case result do
       {:ok, _handle} -> {:reply, :ok, state}
       :ok -> {:reply, :ok, state}
       {:error, _reason} = error -> {:reply, error, state}
@@ -288,7 +291,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   def handle_call({:input_activity, boundary}, _from, state) do
-    case Session.input_activity(state.session, boundary) do
+    {result, state} = ResponseOrigins.submit(state, {:activity, boundary})
+
+    case result do
       :ok -> {:reply, :ok, state}
       {:error, _reason} = error -> {:reply, error, state}
     end
@@ -319,7 +324,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   def handle_call({:apply_policy, policy}, _from, state) do
-    state = %{state | policy: policy, policy_revision: state.policy_revision + 1}
+    state = %{
+      state
+      | policy: policy,
+        policy_revision: state.policy_revision + 1,
+        origin_policy_revision: state.origin_policy_revision + 1
+    }
 
     if audio_route_permitted?(state, state.human_id, state.agent_id) and
          audio_route_permitted?(state, state.agent_id, state.human_id) do
