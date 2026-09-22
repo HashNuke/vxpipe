@@ -31,7 +31,7 @@ or routine mechanical edits.
 
 - Use `bin/teammate` for non-interactive OpenCode work. It accepts a task as
   arguments or through standard input and defaults to the free
-  `opencode-go/muse-spark-1.3-contributor` model; pass `--model MODEL` to
+  `opencode-go/muse-spark-1.3-contributor#high` model; pass `--model MODEL` to
   override it.
 - Run `bin/teammate` from a tmux session named `vxpag`, creating that session if
   it does not exist, with the repository root as its working directory.

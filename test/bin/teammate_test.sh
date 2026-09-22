@@ -32,7 +32,7 @@ PATH="$fake_bin:$PATH" \
 assert_line "$default_args" "run"
 assert_line "$default_args" "--auto"
 assert_line "$default_args" "--model"
-assert_line "$default_args" "opencode-go/muse-spark-1.3-contributor"
+assert_line "$default_args" "opencode-go/muse-spark-1.3-contributor#high"
 assert_line "$default_args" "Fix the failing test"
 
 override_args="$test_tmp/override-args"

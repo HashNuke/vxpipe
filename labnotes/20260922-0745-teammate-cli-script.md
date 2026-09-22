@@ -3,7 +3,7 @@
 ## Checkpoint
 
 - Added `bin/teammate` as a non-interactive wrapper around `opencode run`.
-- The default model is `opencode-go/muse-spark-1.3-contributor`.
+- The default model is `opencode-go/muse-spark-1.3-contributor#high`.
 - Task input is accepted as positional arguments or from standard input.
 - `--model MODEL` and `--model=MODEL` override the default.
 - Documented the `vxpag` tmux session convention in `AGENTS.md`.
@@ -17,3 +17,5 @@
   executable to verify delegated arguments and model selection.
 - The exact model identifier was previously verified with the installed
   OpenCode CLI in tmux and completed a non-interactive request successfully.
+- Updated the default identifier to include the `#high` variant after the
+  focused test caught the previous medium-effort default.
