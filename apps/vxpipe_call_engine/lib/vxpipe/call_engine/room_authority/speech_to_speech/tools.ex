@@ -17,16 +17,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   import Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence,
     only: [
       current?: 2,
+      current_agent?: 3,
       agent_connection: 1,
-      connection_id: 2,
       turn_key: 1,
-      agent_participant: 1,
       agent_fields: 3
     ]
 
   @type turn_ref :: String.t() | reference()
 
   @max_tool_result_bytes 65_536
+  @maximum_pending 16
   @sts_tool_timeout_ms 5_000
 
   @spec handle_tool_call(State.t(), pid(), String.t(), reference(), turn_ref(), String.t(), map()) ::
@@ -43,29 +43,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       when is_pid(capability) and is_binary(agent_id) and is_reference(call_ref) and
              (is_binary(provider_turn) or is_reference(provider_turn)) and is_binary(name) and
              is_map(arguments) do
-    if current?(state, capability) do
-      case agent_connection(state) do
-        {_connection_id, connection} ->
-          turn_key = turn_key(provider_turn)
+    if current_agent?(state, capability, agent_id) and
+         not Map.has_key?(state.sts_tool_calls, call_ref) do
+      case permitted_connection(state) do
+        {connection_id, connection} ->
+          turn = tool_turn(state, agent_id, provider_turn, connection_id, connection)
+          tool_call_id = Id.generate(:tool_attempt)
 
-          turn =
-            Map.get(state.sts_turns, turn_key, %{
-              agent_id: agent_id,
-              provider_turn: turn_key,
-              connection_id: connection_id(connection, state),
-              command_id: Id.generate(:command),
-              correlation_id: turn_key
-            })
-
-          case agent_tool_binding(state, agent_id, name) do
+          case admit_binding(state, agent_id, name) do
             {:ok, binding} ->
               pending = %{
                 agent_id: agent_id,
                 turn: turn,
-                connection_id: connection_id(connection, state),
+                source: state.speech_to_speech_capability,
+                tool_call_id: tool_call_id,
                 name: name,
-                binding: binding,
-                timed_out?: false
+                binding: binding
               }
 
               state = %{state | sts_tool_calls: Map.put(state.sts_tool_calls, call_ref, pending)}
@@ -74,7 +67,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
                 struct!(
                   ToolCallStarted,
                   Map.merge(agent_fields(state, connection, turn), %{
-                    tool_call_id: inspect(call_ref),
+                    tool_call_id: tool_call_id,
                     name: name,
                     arguments: arguments
                   })
@@ -82,10 +75,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
               state = EventPublisher.publish(state, connection.pid, event)
               state = %{state | next_sequence: state.next_sequence + 1}
-              maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, turn)
+              maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending)
 
-            :error ->
-              fail_sts_tool(state, capability, connection, turn, call_ref, name, :unauthorized)
+            {:error, reason} ->
+              fail_sts_tool(
+                state,
+                capability,
+                connection,
+                turn,
+                {call_ref, tool_call_id},
+                name,
+                reason
+              )
           end
 
         nil ->
@@ -93,6 +94,45 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       end
     else
       state
+    end
+  end
+
+  defp tool_turn(state, agent_id, provider_turn, connection_id, connection) do
+    active =
+      case Map.get(state.sts_turns, turn_key(provider_turn)) do
+        %{agent_id: ^agent_id, connection_id: ^connection_id, connection: owner} = turn
+        when owner == connection.pid ->
+          turn
+
+        _stale ->
+          nil
+      end
+
+    pending_turn =
+      Enum.find_value(state.sts_tool_calls, fn {_call, pending} ->
+        if pending.turn.provider_turn == provider_turn and
+             pending.source == state.speech_to_speech_capability,
+           do: pending.turn
+      end)
+
+    active || pending_turn ||
+      %{
+        agent_id: agent_id,
+        provider_turn: provider_turn,
+        connection_id: connection_id,
+        command_id: Id.generate(:command),
+        correlation_id: Id.generate(:turn)
+      }
+  end
+
+  defp admit_binding(state, agent_id, name) do
+    if map_size(state.sts_tool_calls) >= @maximum_pending do
+      {:error, :busy}
+    else
+      case agent_tool_binding(state, agent_id, name) do
+        {:ok, binding} -> {:ok, binding}
+        :error -> {:error, :unauthorized}
+      end
     end
   end
 
@@ -119,9 +159,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
     if current?(state, capability) do
       case Map.pop(state.sts_tool_calls, call_ref) do
         {nil, _pending} ->
-          state
-
-        {%{timed_out?: true}, _pending} ->
           state
 
         {pending, sts_tool_calls} ->
@@ -205,10 +242,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   defp participant_activation(_state, _agent_id), do: nil
 
-  defp maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, turn) do
+  defp maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending) do
     if executable_host_tool?(binding) do
       room = self()
-      context = tool_context(state, turn, call_ref)
+      context = tool_context(state, pending.turn, pending.tool_call_id)
       action = Map.get(binding, :action)
       timeout = @sts_tool_timeout_ms
       _timer = Process.send_after(room, {:vxpipe_sts_tool_timeout, capability, call_ref}, timeout)
@@ -246,7 +283,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   defp executable_host_tool?(_binding), do: false
 
-  defp tool_context(state, turn, call_ref) do
+  defp tool_context(state, turn, tool_call_id) do
     %ToolContext{
       tenant_id: state.snapshot.tenant_id,
       room_id: state.snapshot.room_id,
@@ -256,7 +293,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       connection_id: turn.connection_id,
       command_id: turn.command_id,
       correlation_id: turn.correlation_id,
-      tool_call_id: inspect(call_ref)
+      tool_call_id: tool_call_id
     }
   end
 
@@ -266,8 +303,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   defp normalize_outcome({:error, _reason}), do: {:error, :failed}
 
   defp settle_executed_tool(state, capability, pending, call_ref, outcome) do
-    case agent_connection(state) do
-      {_connection_id, connection} ->
+    case pending_connection(state, pending) do
+      {:ok, connection} ->
         {event, provider_result} =
           case bound_tool_result(outcome) do
             {:ok, result} ->
@@ -275,7 +312,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
                 struct!(
                   ToolCallCompleted,
                   Map.merge(agent_fields(state, connection, pending.turn), %{
-                    tool_call_id: inspect(call_ref),
+                    tool_call_id: pending.tool_call_id,
                     name: pending.name,
                     result: result
                   })
@@ -288,7 +325,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
                 struct!(
                   ToolCallFailed,
                   Map.merge(agent_fields(state, connection, pending.turn), %{
-                    tool_call_id: inspect(call_ref),
+                    tool_call_id: pending.tool_call_id,
                     name: pending.name,
                     reason: reason
                   })
@@ -301,8 +338,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
         state = EventPublisher.publish(state, connection.pid, event)
         %{state | next_sequence: state.next_sequence + 1}
 
-      nil ->
-        _ = deliver_provider_tool_result(capability, call_ref, outcome_to_result(outcome))
+      :error ->
         state
     end
   end
@@ -323,9 +359,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   defp bound_tool_result({:error, reason}) when is_atom(reason), do: {:error, reason}
   defp bound_tool_result({:error, _reason}), do: {:error, :failed}
 
-  defp outcome_to_result({:ok, result}), do: {:ok, result}
-  defp outcome_to_result({:error, reason}), do: {:error, reason}
-
   defp deliver_provider_tool_result(capability, call_ref, {:ok, result}) do
     try do
       Capability.send_tool_result(capability, call_ref, result)
@@ -342,12 +375,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
     end
   end
 
-  defp fail_sts_tool(state, capability, connection, turn, call_ref, name, reason) do
+  defp fail_sts_tool(state, capability, connection, turn, {call_ref, tool_call_id}, name, reason) do
     event =
       struct!(
         ToolCallFailed,
         Map.merge(agent_fields(state, connection, turn), %{
-          tool_call_id: inspect(call_ref),
+          tool_call_id: tool_call_id,
           name: name,
           reason: reason
         })
@@ -359,49 +392,57 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   end
 
   @spec handle_tool_cancelled(State.t(), pid(), String.t(), reference()) :: State.t()
-  def handle_tool_cancelled(%State{} = state, capability, _agent_id, call_ref)
+  def handle_tool_cancelled(%State{} = state, capability, agent_id, call_ref)
       when is_reference(call_ref) do
-    if current?(state, capability) do
-      case agent_connection(state) do
-        {_connection_id, connection} ->
-          {pending, state} =
-            case Map.pop(state.sts_tool_calls, call_ref) do
-              {nil, _} -> {nil, state}
-              {pending, rest} -> {pending, %{state | sts_tool_calls: rest}}
-            end
-
-          name = if pending != nil, do: pending.name, else: "sts_tool"
-
-          turn =
-            if pending != nil do
-              pending.turn
-            else
-              %{
-                agent_id: agent_participant(state),
-                provider_turn: inspect(call_ref),
-                connection_id: connection_id(connection, state),
-                command_id: Id.generate(:command),
-                correlation_id: inspect(call_ref)
-              }
-            end
-
-          event =
-            struct!(
-              ToolCallCancelled,
-              Map.merge(agent_fields(state, connection, turn), %{
-                tool_call_id: inspect(call_ref),
-                name: name
-              })
-            )
-
-          state = EventPublisher.publish(state, connection.pid, event)
-          %{state | next_sequence: state.next_sequence + 1}
-
-        nil ->
+    if current_agent?(state, capability, agent_id) do
+      case Map.pop(state.sts_tool_calls, call_ref) do
+        {nil, _} ->
           state
+
+        {pending, rest} ->
+          publish_cancelled(%{state | sts_tool_calls: rest}, pending)
       end
     else
       state
+    end
+  end
+
+  defp publish_cancelled(state, pending) do
+    case pending_connection(state, pending) do
+      {:ok, connection} ->
+        event =
+          struct!(
+            ToolCallCancelled,
+            Map.merge(agent_fields(state, connection, pending.turn), %{
+              tool_call_id: pending.tool_call_id,
+              name: pending.name
+            })
+          )
+
+        state = EventPublisher.publish(state, connection.pid, event)
+        %{state | next_sequence: state.next_sequence + 1}
+
+      :error ->
+        state
+    end
+  end
+
+  defp pending_connection(state, pending) do
+    with true <- pending.source == state.speech_to_speech_capability,
+         {_, connection} <- permitted_connection(state) do
+      {:ok, connection}
+    else
+      _stale -> :error
+    end
+  end
+
+  defp permitted_connection(state) do
+    with %{input_epoch: epoch} when is_reference(epoch) <- state.speech_to_speech_capability,
+         {_, connection} = source <- agent_connection(state),
+         false <- MapSet.member?(state.held_participant_ids, connection.participant_id) do
+      source
+    else
+      _denied -> nil
     end
   end
 end

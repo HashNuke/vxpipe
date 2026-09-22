@@ -331,8 +331,9 @@ Public caller, agent and tool IDs must be room-owned, with bounded associations 
 provider references qualified by allocation generation and exact source identity. Private
 references, including their stringified forms, must not become public correlation IDs. Old,
 duplicate or retired-generation evidence cannot create a new public turn. The milestone still
-tracks incomplete tool identity, agent-output retirement and complete lifecycle handling;
-the implemented caller and agent-output paths do not prove this entire requirement.
+tracks ordered tool retirement, supervised execution, agent-output retirement and
+complete lifecycle handling; the implemented publication paths do not prove this
+entire requirement.
 
 The provider-controlled embedded caller path now publishes one room-owned
 `ParticipantTurnStarted`/`ParticipantTurnCompleted` pair, with partial/final caller text using
@@ -351,6 +352,24 @@ idempotent. These checks fence forwarded owner evidence, not all late upstream p
 events first observed after release. Complete external/hybrid room control and provider-level
 hold/transfer isolation remain milestone work. See the
 [caller-publication decision](sts-caller-publication.md) for evidence and limits.
+
+Tool publication now creates a room-owned invocation ID and command/turn IDs,
+including tool-only turns. Concurrent pending tools in the same private turn
+share its public turn IDs; an existing exact-source audio turn supplies those
+IDs when available. Raw private key types remain distinct: a binary spelling
+of a reference cannot acquire that reference's association. Execution context,
+completion, failure and cancellation use the started public IDs. Active duplicate
+calls and unknown/wrong-agent cancellations do not create additional work/events.
+
+The room bounds pending tool associations to 16 and rejects excess calls without
+evicting admitted work. Admission requires the current agent, exact source and
+open input epoch. Source loss, replacement, hold or epoch retirement suppresses
+late provider-result delivery and public settlement; capability replacement clears
+the associations. This is not yet a complete execution-lifetime guarantee:
+ordered owner-envelope retirement, capability-side bounds, worker/timer cleanup,
+schema checks and full tool-binding adoption remain explicit milestone tasks.
+In particular, removing a pending association alone does not stop a host action
+or prove retention of its submitted result for future reasoning.
 
 #### Output permission, credit and settlement
 
@@ -416,7 +435,9 @@ invalidation and local test evidence.
 All four caller/agent transcript-source combinations have embedded PCM room-call evidence.
 Caller turns and agent output have room-owned public IDs and exact bound-source attribution
 in the embedded provider-controlled path. Native input conversion/delivery and readiness
-have focused evidence. Tool identity, complete turn-controller/lifecycle coverage, full
+have focused evidence. Public tool identity has room-boundary and live Morse
+tool-only-call evidence; ordered retirement and execution ownership remain open.
+Complete turn-controller/lifecycle coverage, full
 native conversations, usage/load and final UI acceptance remain open
 in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above
 do not check those tasks off. Google declares `history_reconciliation?: false`. Its manifest
@@ -530,3 +551,6 @@ record focused checks and their limits. The
 [contract synchronization review](../labnotes/20260922-1500-provider-contract-sync.md)
 checks this document against those contracts and implementation sources. Documentation
 synchronization is not acceptance of the remaining STS milestone tasks or hosted Google support.
+The [tool-boundary checkpoint](../labnotes/20260922-1545-sts-tool-boundary.md)
+records private/public identity, exact-source settlement and pending-map limits,
+separately from the remaining execution and retirement requirements.

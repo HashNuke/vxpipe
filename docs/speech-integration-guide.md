@@ -347,6 +347,14 @@ process identifiers and other non-JSON values are rejected. Names are valid
 UTF-8 strings of 1–256 bytes. Arguments are excluded from event inspection.
 The room still owns tool allowlisting, schema validation, active-turn checks
 and execution; accepting an event does not authorize a tool.
+Provider references stay private: the room creates public tool/turn IDs and uses
+them consistently in execution context and start/terminal events. The room's
+16-pending-call association limit rejects excess calls without evicting existing
+work. Active duplicates, unknown cancellations and stale-source results cannot
+create new public events. Ordered tool-envelope retirement, capability-side
+bounds, supervised execution cleanup and complete schema/binding authorization
+remain milestone requirements, not guarantees established by this map limit.
+See the [normative STS contract](speech-provider-contract.md#sts).
 
 ### Authorizing and settling STS output
 

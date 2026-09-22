@@ -12,7 +12,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
-    TextOutput
+    TextOutput,
+    ToolCallStarted,
+    ToolCallCompleted
   }
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, STSIngress}
@@ -94,8 +96,41 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert :sys.get_state(context.capability).input_epoch == epoch
   end
 
-  defp room(human_stt?, output_stt?) do
-    plan = compile_plan(human_stt?, output_stt?)
+  test "a live Morse STS room tool uses public IDs throughout execution and settlement" do
+    context = room(false, false, %{"echo_context" => %{type: "host", tool: "echo_context"}})
+
+    assert :ok =
+             CallEngine.Capability.SpeechToSpeech.push_text(
+               context.capability,
+               "TOOL echo_context {}"
+             )
+
+    assert_receive {:vxpipe_event, %ToolCallStarted{} = started}, 1_000
+    assert_receive {:vxpipe_event, %ToolCallCompleted{} = completed}, 1_000
+    assert String.starts_with?(started.tool_call_id, "tlatt_")
+    assert String.starts_with?(started.command_id, "cmd_")
+    assert String.starts_with?(started.correlation_id, "turn_")
+    assert completed.tool_call_id == started.tool_call_id
+    assert completed.command_id == started.command_id
+    assert completed.correlation_id == started.correlation_id
+
+    assert completed.result == %{
+             "tool_call_id" => started.tool_call_id,
+             "command_id" => started.command_id,
+             "correlation_id" => started.correlation_id,
+             "connection_id" => context.command.connection_id,
+             "agent_id" => context.agent
+           }
+
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
+    assert :sys.get_state(context.capability).tool_calls == %{}
+    refute_received {:vxpipe_event, %AgentSpeechStarted{}}
+    refute_received {:vxpipe_event, %ToolCallStarted{}}
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+  end
+
+  defp room(human_stt?, output_stt?, tools \\ %{}) do
+    plan = compile_plan(human_stt?, output_stt?, tools)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     agent = Map.fetch!(plan.participants, plan.entry_receiver)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -268,7 +303,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     refute_received {:vxpipe_event, %AgentTurnInterrupted{}}
   end
 
-  defp compile_plan(human_stt?, output_stt?) do
+  defp compile_plan(human_stt?, output_stt?, tools) do
     speech = %{provider: "morse", model: "morse", options: Map.new(@morse)}
     agent = %{speech_to_speech: put_in(speech.options[:output_transcript], not output_stt?)}
     agent = if output_stt?, do: Map.put(agent, :output_speech_to_text, speech), else: agent
@@ -288,7 +323,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
         "assistant" => %{
           type: "agent",
           prompt: "Reply in Morse.",
-          tools: %{},
+          tools: tools,
           transfers: [],
           first_message: %{mode: "wait_for_input"},
           capabilities: agent
@@ -305,7 +340,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
                actor_id: "actor-sts-modes"
              )
 
-    assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
+    assert {:ok, plan} =
+             CallSpecCompiler.compile(spec, invocation, %{
+               host_tools: %{"echo_context" => CallEngine.STSContextTool}
+             })
+
     plan
   end
 end

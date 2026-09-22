@@ -46,7 +46,11 @@ The next caller-publication checkpoint gives provider-controlled embedded calls
 one correlated caller start/text/end pair with room-owned IDs, bounded pending
 associations and source/policy/epoch checks. All four transcript modes preserve
 one caller pair, including selected human STT; 146 focused tests pass (seed 0).
-Its post-commit root gates remain pending. Tool identity, agent-output retirement,
+All five post-commit root gates for `c171a7c8` pass (2,221 tests, zero failures,
+42 excluded, seed 0). The next tool checkpoint adds room-owned public invocation
+and tool-only-turn IDs, exact-source/epoch settlement and a 16-pending-room-call
+limit. Ordered tool retirement and supervised execution are still open; a map
+limit does not bound running workers. Agent-output retirement,
 complete external/hybrid room control and broader lifecycle/final acceptance
 remain open. Google output-buffer/tail checkpoint `3b1fa264` has 43
 focused passing checks and all five post-commit root gates pass (2,205 tests,
@@ -644,6 +648,42 @@ the existing audio round trip. Record discoveries here before implementing.
     when no audio turn exists. Give tool-only turns and tool calls room-owned
     IDs, retain matching completion/cancellation associations, and test stale,
     duplicate, wrong-agent and wrong-source evidence with bounded pending work.
+    - [x] Mint private-to-public tool associations before publication, including
+      tool-only turns; use the same room-owned IDs in execution context, results,
+      failures and cancellation. Unknown cancellation is not a new public turn.
+      Keep raw private key types distinct: a binary spelling of a reference
+      cannot acquire that reference's public audio/tool association. Concurrent
+      tools in one private turn share the same room-owned turn IDs.
+      Tool evidence cannot acquire a replaced source's audio-turn IDs or begin
+      work with a held/closed input epoch. Replace the older crashing Agent
+      result-receiver fixtures with an acknowledged receiver so successful
+      publication tests also verify actual provider-result delivery.
+      Exercise a live Morse STS room tool call through public start/completion
+      events and require the action context to use those same public IDs.
+    - [ ] Preserve acknowledged channel order in the owner envelope and retire
+      settled envelopes with a scalar watermark. Reject active duplicate calls,
+      wrong agents, replaced sources and retired input epochs; clear associations
+      on capability replacement. Bound both capability and room pending maps.
+      Public-boundary checks now cover active duplicates, wrong agents, exact
+      source/epoch retirement, unknown cancellation, replacement cleanup and the
+      16-pending-room-call limit. Capability bounds and ordered post-terminal
+      owner-envelope retirement remain unimplemented in this checkpoint.
+    - [ ] Replace unowned `Task.start` execution with the existing supervised
+      invocation machinery under the STS allocation. Cancellation, timeout,
+      source loss and owner death must retire workers and timers, not just map
+      entries. Retain the existing five-second execution budget unless measured
+      evidence requires a different contract; test worker `DOWN` explicitly.
+    - [ ] Complete runtime schema/permission checks and supported host, variable,
+      platform and MCP binding adoption. Unsupported bindings must fail explicitly,
+      not wait indefinitely for a result no executor will produce. Preserve
+      submitted invocation results for later reasoning without reviving cancelled
+      provider speech. The public-ID checkpoint alone does not prove this gate.
+
+    Evidence: the first identity suite failed all 16 cases; three follow-up
+    source/hold tests also failed before repair. Public start/completion/failure/
+    cancellation and execution-context identity now pass, including a live Morse
+    STS room tool-only call. Reproduction commands and remaining limitations are
+    in `labnotes/20260922-1545-sts-tool-boundary.md`.
 - [ ] Record focused evidence, remaining native/lifecycle limitations and
   design decisions, then commit before broader umbrella gates. Add any newly
   exposed repair as a task before implementation; retain separate repair commits.

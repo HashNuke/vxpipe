@@ -55,8 +55,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence do
     end)
   end
 
-  def turn_key(turn) when is_binary(turn), do: turn
-  def turn_key(turn) when is_reference(turn), do: inspect(turn)
+  def turn_key(turn) when is_binary(turn) or is_reference(turn), do: turn
 
   def agent_participant(state) do
     case state.speech_to_speech_capability do

@@ -120,7 +120,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   end
 
   test "STS tool calls outside the agent allowlist fail closed without execution" do
-    stub = start_supervised!({Agent, fn -> :ok end})
+    stub = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
     state = state() |> with_plan(%{}) |> bind_capability(stub, @agent)
     capability = stub
     call_ref = make_ref()
@@ -147,6 +147,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallStarted{}}
     assert state.sts_tool_calls == %{}
+    assert_receive {:provider_tool_result, ^call_ref, %{"error" => "tool_failed"}}
   end
 
   test "STS blocking host tools execute within bounds and complete through the room" do
@@ -160,7 +161,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     }
 
     state = state() |> with_plan(tools)
-    stub = start_supervised!({Agent, fn -> :ok end})
+    stub = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
     state = bind_capability(state, stub, @agent)
     capability = stub
     call_ref = make_ref()
@@ -193,6 +194,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
                     }}
 
     assert state.sts_tool_calls == %{}
+    assert_receive {:provider_tool_result, ^call_ref, ^result}
   end
 
   test "STS tool cancellation settles pending calls and late results are ignored" do

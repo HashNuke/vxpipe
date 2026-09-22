@@ -94,3 +94,10 @@ contract, author guide, caller decision, milestone and checkpoint labnotes.
 `git diff --check` passes; exact staged runtime, test and documentation diffs
 were reviewed before committing. No hosted call, manifest enablement or secret
 configuration change was performed.
+
+Post-commit verification for `c171a7c8` completed: all five umbrella gates pass,
+**2,221 tests, zero failures, 42 excluded**, seed 0. The original process was
+polled to its successful exit; it was not restarted after empty observations.
+Both earlier intermittent Gateway handoff cases passed in this run, which does
+not establish their cause or repair them. This evidence belongs to the caller
+checkpoint, not the subsequent tool-boundary changes.

@@ -55,7 +55,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         speech_to_speech_ready?: false,
         sts_turns: %{},
         sts_caller_turns: %{},
-        sts_caller_sequence: 0
+        sts_caller_sequence: 0,
+        sts_tool_calls: %{}
     }
   end
 
