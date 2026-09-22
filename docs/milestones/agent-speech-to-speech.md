@@ -669,15 +669,27 @@ the existing audio round trip. Record discoveries here before implementing.
       16-pending-room-call limit. Capability bounds and ordered post-terminal
       owner-envelope retirement remain unimplemented in this checkpoint.
     - [ ] Replace unowned `Task.start` execution with the existing supervised
-      invocation machinery under the STS allocation. Cancellation, timeout,
-      source loss and owner death must retire workers and timers, not just map
-      entries. Retain the existing five-second execution budget unless measured
-      evidence requires a different contract; test worker `DOWN` explicitly.
+      invocation machinery under the agent-owned STS lifecycle. Distinguish
+      provider association cancellation from submitted invocation lifetime:
+      ordinary speech interruption fences unsent work and old provider speech,
+      while already-submitted work finishes within its existing deadline and
+      retains its result for subsequent reasoning. Timeout, transfer/activation
+      loss and room shutdown retire local workers/timers; local termination is
+      not remote rollback. Retain the existing five-second execution budget
+      unless measured evidence requires a different contract. Test worker
+      survival across ordinary interruption and `DOWN` on actual owner loss.
     - [ ] Complete runtime schema/permission checks and supported host, variable,
       platform and MCP binding adoption. Unsupported bindings must fail explicitly,
       not wait indefinitely for a result no executor will produce. Preserve
       submitted invocation results for later reasoning without reviving cancelled
-      provider speech. The public-ID checkpoint alone does not prove this gate.
+      provider speech. Reuse bounded invocation records/completion leases,
+      correlated running acknowledgements, separate private completion updates
+      and blocking/non-blocking conversation admission from the approved
+      [tool execution model](../tool-execution-model.md). Verify STS provider
+      encodings independently; do not send a second ordinary result to a retired
+      provider call or publish a fake caller turn. Submitted timeout without a
+      definitive outcome is unknown, not confirmed failure. The public-ID
+      checkpoint alone does not prove this gate.
 
     Evidence: the first identity suite failed all 16 cases; three follow-up
     source/hold tests also failed before repair. Public start/completion/failure/

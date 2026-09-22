@@ -370,6 +370,13 @@ ordered owner-envelope retirement, capability-side bounds, worker/timer cleanup,
 schema checks and full tool-binding adoption remain explicit milestone tasks.
 In particular, removing a pending association alone does not stop a host action
 or prove retention of its submitted result for future reasoning.
+Provider cancellation retires the provider call/speech association; ordinary
+speech interruption does not authorize cancellation of an already-submitted
+engine invocation. The approved [tool execution model](tool-execution-model.md)
+requires bounded supervised execution and retained private completion, with
+local workers ended on activation/room loss and uncertain submitted timeouts
+reported as unknown. STS adoption of that complete execution/continuation
+protocol remains open; a provider cancellation is not proof of remote rollback.
 
 #### Output permission, credit and settlement
 

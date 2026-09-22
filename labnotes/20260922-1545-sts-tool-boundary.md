@@ -99,3 +99,28 @@ provider contract, author guide and unchecked milestone/index record the limits.
 Pre-commit review: `git diff --check` passes, and 165 local Markdown links/anchors
 resolve across the changed documentation. Reviewed exact staged paths and diffs;
 no unrelated worktree changes were present.
+
+## Post-commit execution-contract review
+
+Runtime checkpoint `3c3456c6` is committed; its umbrella run has passed format,
+warnings-as-errors compile and strict Credo and is still running tests. No
+runtime files are being changed while that run verifies the checkpoint.
+
+Reading the shared invocation registry and the approved background-tool/G4
+contracts caught an ambiguity in the newly added follow-up task: cancellation
+must not indiscriminately stop already-submitted workers. Ordinary speech or
+provider-association cancellation fences old speech and unsent work, while
+submitted work remains supervised until completion/deadline within the live
+agent. Transfer/activation loss and room shutdown stop local workers, not remote
+effects. Corrected that task before any worker-lifecycle implementation.
+
+`Tool.InvocationRegistry` already bounds active/completed records and consumed
+IDs, reconciles admission, qualifies completion by worker identity, and leases
+private results. `InvocationSupervisor` bounds children; `Invocation` owns the
+task and deadline. `AgentActivation.RuntimeGraph` demonstrates their wiring,
+including separate remote MCP ownership, usage and lifecycle publication. STS
+must adopt these cohesive pieces without starting a second text-model Session.
+The remaining task now explicitly includes one running acknowledgement, separate
+private completion, blocking/non-blocking admission and unknown submitted
+timeouts. Provider continuation encoding must be tested, not assumed from the
+text-model path. This is contract clarification, not completed implementation.
