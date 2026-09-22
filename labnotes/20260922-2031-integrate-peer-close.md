@@ -20,3 +20,8 @@
   15.9 seconds, seed 0; log `vxpipe-peer-close-parent-integration.log`. This
   independently reruns the ordered peer-close, privacy and selected existing
   adapter regressions on the main worktree. Commit precedes broader root gates.
+- Committed as `0187f1b4`; pushnotify checkpoint delivery succeeded. Post-commit
+  handle `50383` exited 0: root format check, warnings-as-errors compile, strict
+  Credo (1,085 source files) and unused-lock check passed. A fresh full root suite
+  waits for the separate Google response-ownership reds to become green; do not
+  call the current deliberately red worktree a fully green final acceptance.
