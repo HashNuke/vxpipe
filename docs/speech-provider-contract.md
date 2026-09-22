@@ -113,6 +113,24 @@ Standard GenServer callbacks are an implementation choice; a macro DSL or callba
 tree is not required. Reusable process/network helpers should arise from demonstrated
 provider needs.
 
+An STS descriptor may opt into `response_start?: true`. That mode adds the optional
+`submit_input(pid, response_context, operation)` callback and makes it mandatory
+for that allocation's input; there is no fallback to the legacy callbacks. The
+operation is exactly `{:audio, pcm}`, `{:text, text_ref, text}` or
+`{:activity, :started | :ended}`. The engine supplies an opaque reference with
+each ordered `Session.push_audio/3`, `push_text/3` or `input_activity/3` using the
+closed `response_context: ref` option. Missing/malformed contexts are rejected
+before delivery. The channel stages first use before calling the provider,
+accepts it only after the exact callback succeeds within its deadline, and rolls
+back rejected first use. A provider can emit an early event without blocking its
+callback, but the channel withholds consumer delivery until input acceptance;
+if that input is rejected after emitting its own or unattributable semantics,
+the allocation fails closed without publishing them. A response start explicitly
+bound to a different, previously accepted context survives that rejection and
+is delivered in order. Input acceptance and event validity are not output
+authorization. Accepted origins currently have an interim 16-context allocation
+bound; exact response/tool holds and authorized origin retirement remain open.
+
 The descriptor contains validated provider-specific public settings, media format, safe usage
 identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged`), and TTS cache
 identity. STT declares endpointing provenance (provider semantic detection, provider silence/gap
@@ -404,8 +422,8 @@ the room still checks allowlisting, argument schema, active turn and current per
 The optional `response_started` STS event has a private model-response reference,
 a positive bounded allocation ordinal and an opaque input authorization-origin
 reference. A descriptor must opt into this event; caller `turn_ended` then only
-settles caller evidence. The semantic event shape is implemented, but channel
-binding/acknowledgment, policy-qualified output grants, Google emission and
+settles caller evidence. Its shape and early-input delivery gate are implemented,
+but response-to-context binding/acknowledgment, policy-qualified output grants, Google emission and
 bounded origin retirement are still required. Event validity alone does not
 grant a playback slot or authorize reuse after hold/regrant. The provider must
 not announce a public speech turn for thought-only, tool-only or text-only work.

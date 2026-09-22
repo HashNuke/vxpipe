@@ -68,15 +68,14 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
     refute_received {:context_input, _, _, _}
   end
 
-  test "failed first use rolls back even with early semantics; failed reuse preserves acceptance" do
+  test "failed first use rolls back and failed reuse preserves acceptance" do
     session = session()
     provider = Session.provider(session)
     context = make_ref()
     :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, false})
-    assert {:error, :busy} = Session.push_text(session, "hello", response_context: context)
-    assert_receive {:context_input, ^context, {:text, _, _}, staged}
+    assert {:error, :busy} = Session.push_audio(session, <<0, 0>>, response_context: context)
+    assert_receive {:context_input, ^context, {:audio, _}, staged}
     assert ResponseContexts.status(staged, context) == :staged
-    assert_receive {:early_semantics, :ok}
     assert status(session, context) == :unknown
     :ok = GenServer.call(provider, {:configure_result, :ok, false})
     assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
@@ -86,6 +85,177 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
              Session.push_audio(session, <<0, 0>>, response_context: context)
 
     assert status(session, context) == :accepted
+  end
+
+  test "rejected early text submission fails closed before consumer delivery" do
+    session = session()
+    provider = Session.provider(session)
+    channel = GenServer.whereis(Channel.address(session))
+    monitor = Process.monitor(channel)
+    :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, false})
+
+    assert {:error, :session_failed} =
+             Session.push_text(session, "hello", response_context: make_ref())
+
+    assert_receive {:early_semantics, :ok}
+    assert_receive {:DOWN, ^monitor, :process, ^channel, _}, 1_000
+    refute_received {:vxpipe_speech, %{kind: :input_submitted}}
+  end
+
+  test "an accepted input releases early response evidence only after context acceptance" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    turn = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, :ok, true})
+    :ok = GenServer.call(provider, {:configure_early_response, turn, 1})
+    request = submit_async(session, context)
+    assert_receive {:early_response, :ok}
+    assert status(session, context) == :staged
+    refute_received {:vxpipe_speech, %{kind: :response_started}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, :ok} = :gen.wait_response(request, 1_000)
+    assert status(session, context) == :accepted
+
+    assert_receive {:vxpipe_speech,
+                    %{kind: :response_started, turn_ref: ^turn, response_context: ^context} =
+                      event},
+                   1_000
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "rejected first use never delivers its early response evidence" do
+    session = session()
+    provider = Session.provider(session)
+    channel = GenServer.whereis(Channel.address(session))
+    monitor = Process.monitor(channel)
+    context = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, true})
+    :ok = GenServer.call(provider, {:configure_early_response, make_ref(), 1})
+    request = submit_async(session, context)
+    assert_receive {:early_response, :ok}
+    refute_received {:vxpipe_speech, %{kind: :response_started}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, {:error, :session_failed}} = :gen.wait_response(request, 1_000)
+    assert_receive {:DOWN, ^monitor, :process, ^channel, _}, 1_000
+    refute_received {:vxpipe_speech, %{kind: :response_started}}
+  end
+
+  test "late response start after rejected first use cannot publish unknown context" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, false})
+    assert {:error, :busy} = Session.push_audio(session, <<0, 0>>, response_context: context)
+    assert status(session, context) == :unknown
+
+    assert {:error, :stale_response} =
+             GenServer.call(provider, {:emit_response, context, make_ref(), 1})
+
+    refute_received {:vxpipe_speech, %{kind: :response_started}}
+  end
+
+  test "a previously accepted context can announce a later response" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    turn = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+    assert status(session, context) == :accepted
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 2})
+
+    assert_receive {:vxpipe_speech,
+                    %{kind: :response_started, turn_ref: ^turn, response_context: ^context} =
+                      event},
+                   1_000
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "a response start cannot borrow a different staged input context" do
+    session = session()
+    provider = Session.provider(session)
+    accepted_context = make_ref()
+    forged_context = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, :ok, true})
+
+    :ok =
+      GenServer.call(
+        provider,
+        {:configure_early_response, make_ref(), 1, forged_context}
+      )
+
+    request = submit_async(session, accepted_context)
+    assert_receive {:early_response, {:error, :stale_response}}
+    assert status(session, accepted_context) == :staged
+    assert status(session, forged_context) == :unknown
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, :ok} = :gen.wait_response(request, 1_000)
+    refute_received {:vxpipe_speech, %{kind: :response_started}}
+  end
+
+  test "rejected staged B preserves an earlier accepted A response start" do
+    session = session()
+    provider = Session.provider(session)
+    accepted_context = make_ref()
+    rejected_context = make_ref()
+    turn = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: accepted_context)
+    :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, true})
+    :ok = GenServer.call(provider, {:configure_early_response, turn, 1, accepted_context})
+    request = submit_async(session, rejected_context)
+    assert_receive {:early_response, :ok}
+    assert status(session, rejected_context) == :staged
+    refute_received {:vxpipe_speech, %{kind: :response_started}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, {:error, :busy}} = :gen.wait_response(request, 1_000)
+    assert status(session, rejected_context) == :unknown
+
+    assert_receive {:vxpipe_speech,
+                    %{
+                      kind: :response_started,
+                      turn_ref: ^turn,
+                      response_context: ^accepted_context
+                    } = event},
+                   1_000
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "early text submission is withheld until the callback accepts" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, :ok, true})
+
+    reference = make_ref()
+
+    command = %{
+      ref: make_ref(),
+      token: :atomics.new(1, []),
+      response_context: context,
+      operation: {:push_text, reference, "hello"},
+      deadline: System.monotonic_time(:millisecond) + 1_000
+    }
+
+    request =
+      :gen.send_request(
+        Channel.address(session),
+        :"$gen_call",
+        {:input, session, command, "hello"}
+      )
+
+    assert_receive {:early_semantics, :ok}
+    assert status(session, context) == :staged
+    refute_received {:vxpipe_speech, %{kind: :input_submitted}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, :ok} = :gen.wait_response(request, 1_000)
+
+    assert_receive {:vxpipe_speech, %{kind: :input_submitted, request_ref: ^reference} = event},
+                   1_000
+
+    assert :ok = Session.ack(session, event)
   end
 
   test "16 retained contexts allow reuse but reject a seventeenth without dispatch" do

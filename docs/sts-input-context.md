@@ -102,6 +102,7 @@ parent integration requirement, not a claim that staging alone admits responses.
 The focused group passes 74 tests, including 15 new owner/boundary checks. Actual
 early `input_submitted` emission followed by rejection leaves first use unknown.
 This is not a `response_started` delivery/grant proof: the parent owns that work.
+
 The existing Channel activates input on readiness, not on the consumer's ready
 acknowledgement; the unready test explicitly withholds provider readiness instead
 of changing that legacy contract.
@@ -111,10 +112,28 @@ Channel's exact-worker result handler calls `STSInput.finish_context/3` only aft
 checking the original deadline and allocation validity. Event emission must return
 after bounded local staging, without waiting for consumer acknowledgement, so a
 synchronous provider callback can return its acceptance result. Parent-owned
-EventQueue gating must withhold staged response delivery/ack/grant and discard or
-fail it on rejected first use; this checkpoint deliberately does not add that gate.
+EventQueue gating was still required at this input-only checkpoint; it was not
+included in the original 74-test implementation.
 
 Only focused Call Engine child tests with two BEAM schedulers and this worktree's
 independent build/dependency copies are permitted. No root, native, hosted,
 load or billable runs. Record exact red/green terminal results in
 `labnotes/20260922-2045-sts-input-context.md` before a runtime checkpoint commit.
+
+## Early-event delivery follow-up
+
+Consumer delivery of opted-in semantic events is now deferred while an input
+callback is pending, without blocking the provider's `Event.emit`. Only an exact
+accepted callback releases queued evidence. A rejected callback with
+input-attributable or otherwise ambiguous early evidence fails the allocation
+before publication; an explicitly separate response from a previously accepted
+context remains queued in FIFO and survives that rejection. A late
+`response_started` for an unknown/rolled-back context, or one borrowing a
+different staged context, is rejected at the Channel boundary. This is event
+correlation and delivery safety, **not** acknowledged-start output grant,
+policy-origin verification, bounded origin retirement or Google adoption.
+
+The follow-up's focused test file passes 21/0 and the owning-child speech group
+passes 204/0 (3 excluded), seed 0, two schedulers. Red/green chronology and
+independent review findings are in
+`labnotes/20260922-2103-early-sts-events.md`.

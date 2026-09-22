@@ -39,12 +39,30 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
        observer: Keyword.fetch!(private, :observer),
        result: :ok,
        held: nil,
-       hold?: false
+       hold?: false,
+       early_response: nil
      }}
   end
 
   def handle_call({:configure_result, result, hold?}, _, state),
     do: {:reply, :ok, %{state | result: result, hold?: hold?}}
+
+  def handle_call({:configure_early_response, turn, index}, _, state),
+    do: {:reply, :ok, %{state | early_response: {turn, index}}}
+
+  def handle_call({:configure_early_response, turn, index, context}, _, state),
+    do: {:reply, :ok, %{state | early_response: {turn, index, context}}}
+
+  def handle_call({:emit_response, context, turn, index}, _, state) do
+    result =
+      Event.emit(state.channel, :response_started,
+        turn_ref: turn,
+        response_index: index,
+        response_context: context
+      )
+
+    {:reply, result, state}
+  end
 
   def handle_call(:release, _, state) do
     GenServer.reply(state.held, state.result)
@@ -63,6 +81,23 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
   def handle_call({:context_input, context, operation}, from, state) do
     snapshot = :sys.get_state(state.channel)
     send(state.observer, {:context_input, context, operation, snapshot.response_contexts})
+
+    if state.early_response do
+      {turn, index, response_context} =
+        case state.early_response do
+          {turn, index} -> {turn, index, context}
+          {turn, index, override} -> {turn, index, override}
+        end
+
+      result =
+        Event.emit(state.channel, :response_started,
+          turn_ref: turn,
+          response_index: index,
+          response_context: response_context
+        )
+
+      send(state.observer, {:early_response, result})
+    end
 
     case operation do
       {:text, ref, _} ->

@@ -1083,6 +1083,29 @@ tool continuation, or Google cross-origin handoff.
 - [ ] Parent integration: bind early response events without treating staging as
   accepted authority; retain input/response/tool origins through their obligations.
   Response grant/retirement and successful cross-origin Google handoff remain open.
+  - [x] Reproduce and gate provider events emitted synchronously from an opted-in
+    input callback: delivery and acknowledgement cannot precede the exact input
+    acceptance, and a rejected first use cannot publish staged response evidence.
+    Preserve prompt `Event.emit` return, FIFO and bounded queue behavior; resolve
+    rejected callbacks with already-emitted semantics fail-closed if event origin
+    cannot be safely separated. Cover accepted and rejected text/response-start
+    paths before enabling any output grant.
+    - [x] Russell xhigh follow-up: after a clean rejected first-use input, a
+      delayed `response_started` carrying that now-unknown context must also be
+      rejected before queue/delivery/ack. Require an exact staged reservation
+      or previously accepted context on every opted-in response-start event;
+      cover mismatched staged context and a late event after rollback.
+    - [x] Russell xhigh second follow-up: a response start for accepted context A
+      may arrive while distinct input context B is staged. If B is rejected,
+      do not misclassify A's explicitly attributable event as B's emitted
+      semantics; preserve A in FIFO and B's recoverable rejection. Still fail
+      closed for B's own or unattributable early events.
+    Evidence: 16/3 initial early-delivery red, 18/1 unknown-context red and
+    21/1 A/B-origin red; then 21 focused and 204 owning-child speech tests pass
+    (seed 0, two schedulers, 3 excluded in broader group). Independent Russell
+    xhigh source review cleared the scoped gate after two issue/fix loops.
+    `labnotes/20260922-2103-early-sts-events.md` records the reproductions.
+    Acknowledged-start grant and Google adoption remain open.
 
 - [x] Morse session/capability tests for human speech onset handling,
   queued playback, zero-playback interruption (`:no_prefix`), late
