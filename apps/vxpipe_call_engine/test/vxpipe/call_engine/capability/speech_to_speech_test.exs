@@ -114,6 +114,142 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert {:error, :policy_denied} = SpeechToSpeech.push_audio(capability, @human, first)
   end
 
+  for api <- [:direct, :authority], phase <- [:generating, :draining] do
+    test "#{api} outgoing-only revocation fences #{phase} output once" do
+      {_tree, capability, sink} = start_contract_capability()
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      turn = make_ref()
+
+      assert :ok =
+               GenServer.call(
+                 provider,
+                 {:emit, :turn_ended, [turn_ref: turn, text: "HI", endpointing: :provider_gap]}
+               )
+
+      assert_receive {:sts_output_permitted, ^provider, _channel, ^turn, output}
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^turn}
+      assert {:ok, _audio_ref} = GenServer.call(provider, {:output, output})
+      assert_receive {:test_audio_output, ^sink, frame}
+      assert_receive {:vxpipe_speech_credit, _, ^output, _, _}
+
+      if unquote(phase) == :draining do
+        assert :ok =
+                 GenServer.call(
+                   provider,
+                   {:emit, :output_completed, [turn_ref: turn, request_ref: output]}
+                 )
+
+        assert_receive {:test_audio_output_finish, ^sink, _}
+      end
+
+      assert :ok = apply_directional_policy(capability, unquote(api), deny_egress())
+      assert_receive {:test_audio_output_interrupt, ^sink, _, 0}
+      assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, 0, :no_prefix}
+      assert :sys.get_state(capability).active_output == nil
+      assert :ok = SpeechToSpeech.push_audio(capability, @human, <<0, 0>>)
+
+      if unquote(phase) == :generating do
+        assert {:ok, _audio_ref} = GenServer.call(provider, {:output, output})
+        assert_receive {:vxpipe_speech_credit, _, ^output, _, _}
+
+        assert :ok =
+                 GenServer.call(
+                   provider,
+                   {:emit, :output_completed, [turn_ref: turn, request_ref: output]}
+                 )
+      end
+
+      assert_receive {:vxpipe_speech_output_settled, _, ^turn, ^output, 0}
+      send(capability, {:vxpipe_audio_playback, sink, frame.correlation_id, {:completed, 100}})
+      _ = :sys.get_state(capability)
+      refute_received {:test_audio_output, ^sink, _}
+      refute_received {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}
+      refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _}
+
+      assert :ok = apply_directional_policy(capability, unquote(api), unrestricted(), 1)
+      next = make_ref()
+
+      assert :ok =
+               GenServer.call(
+                 provider,
+                 {:emit, :turn_ended, [turn_ref: next, text: "NEXT", endpointing: :provider_gap]}
+               )
+
+      assert_receive {:sts_output_permitted, ^provider, _, ^next, replacement}
+      refute replacement == output
+    end
+  end
+
+  test "a denied credited chunk is discarded without stranding its output slot" do
+    alias Vxpipe.CallEngine.SpeechProviderContract, as: Contract
+    alias Vxpipe.CallEngine.SpeechSTSContractProvider, as: Provider
+    alias Vxpipe.CallEngine.Speech.Session
+    alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
+
+    session = Contract.start_profile!(Provider, private: [observer: self()])
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    state = %{
+      session: session,
+      owner: self(),
+      provider: Provider,
+      sink: sink,
+      agent_id: @agent,
+      human_id: @human,
+      output_stt: nil,
+      active_output: nil,
+      pending_turns: [],
+      policy: unrestricted(),
+      input_policy: nil,
+      policy_revision: 0,
+      fenced_turns: MapSet.new(),
+      usage_context: nil
+    }
+
+    turn = make_ref()
+    assert {:noreply, state} = Output.admit_reply(turn, state)
+    provider = Session.provider(session)
+    assert_receive {:sts_output_permitted, ^provider, _, ^turn, output}
+    assert {:ok, credit} = GenServer.call(provider, {:output, output})
+    audio = Contract.next_audio!(session, output, :binary.copy(<<0, 0>>, 320))
+    assert {:noreply, state} = Output.handle_audio(audio, %{state | policy: deny_egress()})
+    assert_receive {:vxpipe_speech_credit, _, ^output, ^credit, :ok}
+    assert_receive {:vxpipe_sts_interrupted, _, @agent, ^turn, 0, :no_prefix}
+    refute_received {:test_audio_output, ^sink, _}
+    assert state.active_output == nil
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :output_completed, [turn_ref: turn, request_ref: output]}
+             )
+
+    completed = Contract.ack_event!(session, :output_completed)
+    assert :ok = Output.settle_fenced_output(state, completed)
+    assert {:ok, _replacement} = Session.admit_output(session, make_ref())
+  end
+
+  defp deny_egress,
+    do: %{
+      unrestricted()
+      | audio_routes: %{@human => MapSet.new([@agent]), @agent => MapSet.new()}
+    }
+
+  defp apply_directional_policy(capability, api, policy, revision \\ 0)
+
+  defp apply_directional_policy(capability, :direct, policy, _revision),
+    do: SpeechToSpeech.apply_policy(capability, policy)
+
+  defp apply_directional_policy(capability, :authority, policy, revision) do
+    snapshot = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: revision,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: policy
+    }
+
+    GenServer.call(capability, {:vxpipe_apply_media_policy, snapshot})
+  end
+
   test "transcript-route denial suppresses transcripts without substituting audio" do
     {_tree, capability, _sink} =
       start_capability(policy: deny_transcript(@agent, @human))

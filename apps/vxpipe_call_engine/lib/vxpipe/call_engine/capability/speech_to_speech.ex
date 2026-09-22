@@ -307,7 +307,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   def handle_call({:apply_policy, policy}, _from, state) do
     state = %{state | policy: policy, policy_revision: state.policy_revision + 1}
 
-    if audio_route_permitted?(%{state | policy: policy}, state.human_id, state.agent_id) do
+    if audio_route_permitted?(state, state.human_id, state.agent_id) and
+         audio_route_permitted?(state, state.agent_id, state.human_id) do
       {:reply, :ok, state}
     else
       {_played, state} = fence_output(state)
@@ -319,9 +320,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     case Input.apply_policy(state, snapshot) do
       {:ok, state} ->
         {_played, state} =
-          if audio_route_permitted?(state, state.human_id, state.agent_id),
-            do: {0, state},
-            else: fence_output(state)
+          if audio_route_permitted?(state, state.human_id, state.agent_id) and
+               audio_route_permitted?(state, state.agent_id, state.human_id),
+             do: {0, state},
+             else: fence_output(state)
 
         {:reply, :ok, state}
 

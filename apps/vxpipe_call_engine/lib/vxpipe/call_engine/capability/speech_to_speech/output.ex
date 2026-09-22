@@ -84,13 +84,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
              :ok <- Session.ack_audio(state.session, audio) do
           {:noreply, feed_output_stt(audio, state)}
         else
-          false -> {:noreply, %{state | active_output: nil}}
+          false -> discard_denied_audio(audio, state)
           _failure -> stop_unavailable(:audio_output_failed, state)
         end
 
       _other ->
         _ = Session.ack_audio(state.session, audio)
         {:noreply, state}
+    end
+  end
+
+  defp discard_denied_audio(audio, state) do
+    case Session.ack_audio(state.session, audio) do
+      :ok ->
+        {_played, state} = fence_output(state)
+        {:noreply, state}
+
+      _failure ->
+        stop_unavailable(:audio_output_failed, state)
     end
   end
 

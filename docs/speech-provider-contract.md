@@ -406,6 +406,16 @@ protocol remains open; a provider cancellation is not proof of remote rollback.
 
 #### Output permission, credit and settlement
 
+For an already-admitted output, revoking either audio direction fences the sink
+and provider output. Revoking only agent-to-human audio does not revoke still-
+permitted human input. A credited chunk denied at the output boundary is
+acknowledged and discarded with terminal cleanup, not left holding provider
+credit. Delayed generation completion releases the old slot with zero additional
+egress, and delayed playback completion cannot publish another terminal outcome.
+The direct-policy and authority-snapshot paths have generation/drain regression
+coverage. Authorization and bounded retirement of not-yet-admitted/queued replies
+across revoke/regrant remain separate milestone gates.
+
 After policy checks, the consumer calls `Session.admit_output/2` with the private provider turn
 reference. A fresh engine output reference authorizes `Channel.submit/3`; accepted input alone
 does not authorize output. Readiness must be acknowledged and only one output turn may be
@@ -598,3 +608,5 @@ The [ordered tool-evidence checkpoint](../labnotes/20260922-1602-sts-tool-retire
 records replay retirement, current-policy settlement, hold and capability bounds.
 The [recognizer isolation checkpoint](../labnotes/20260922-1627-sts-recognizer-isolation.md)
 records timeout/finalization generation retirement and bounded recovery exhaustion.
+The [egress revocation checkpoint](../labnotes/20260922-1638-sts-egress-revocation.md)
+records directional admitted-output fencing, denied credit and slot-reuse evidence.

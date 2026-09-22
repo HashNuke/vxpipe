@@ -57,3 +57,9 @@ Parallel load implementation `962c98d4` returned for review. Parent read its
 methodology and all support modules, identified cross-sender timing attribution
 at the barge transition, and asked the same agent for a separate red-green fix
 before integration/measurement. No ten-call performance result is claimed.
+
+After commit `d47513b7`, all four non-test root gates pass. The complete Call
+Engine child suite also passes: **1,102 tests, zero failures, 14 excluded**, seed
+0, two schedulers, 104.8 seconds. It was started before the next egress test
+edits and verifies the committed recognizer/tool source, not those new tests.
+The full umbrella/Gateway run remains pending handoff integration.

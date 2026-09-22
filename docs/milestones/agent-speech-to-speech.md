@@ -834,6 +834,15 @@ No new provider advertisement or billable call is authorized by these tasks.
   interruption during both generation and drain. Fence queued output, return
   held provider credit, and settle exactly one terminal outcome; denied audio
   must not merely clear `active_output` and strand credit or turn state.
+  - [x] Prove both policy-update entry points fence an admitted output when only
+    agent-to-human audio is revoked, during generation and after generation
+    while sink playback is queued. Keep permitted human input available.
+  - [x] A denied credited chunk must be acknowledged/discarded and retire its
+    admitted output; delayed generation completion and playback acknowledgement
+    must not produce a second terminal event. Verify provider slot reuse.
+  - [ ] Complete authorization of not-yet-admitted and queued provider replies
+    across egress revoke/regrant, with bounded retirement and no later replay.
+    Active-output fencing alone does not establish this separate admission gate.
 - [ ] Reproduce recognizer cross-turn contamination with the stalling output-STT
   fixture: time out ONE, begin TWO, then deliver ONE's delayed final. Retire or
   correlate recognizer generations after timeout and finalization failure so
