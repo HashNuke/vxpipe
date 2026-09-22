@@ -457,13 +457,22 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     {late_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
     pause_wait_at(late_player, 100)
     assert await_paused_cursor(late_player, 3_000) == 192_000
-    remove_native_listener(authority, room, late, late_client, late_player)
+
+    audience_phase = :sys.get_state(authority).pending_participant_transfer.task.pid
+    assert :erlang.suspend_process(audience_phase)
+
+    late_client =
+      try do
+        remove_native_listener(authority, room, late, late_client, late_player)
+        join_native_listener(plan, room, "late-monitor", :monitor)
+      after
+        :erlang.resume_process(audience_phase)
+      end
 
     for {participant, {player, _}} <- original_players do
       assert {^player, _} = Map.fetch!(wait_players(room.incarnation_id), participant)
     end
 
-    late_client = join_native_listener(plan, room, "late-monitor", :monitor)
     await_tone(late_client, 250, 2_000)
     {reentered_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
     refute reentered_player == late_player
@@ -1471,6 +1480,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       end
 
     @tag wait_mode: wait_mode, last_ready: last_ready, loss_at: loss_at
+    @tag gateway_release_loss: last_ready == :destination and loss_at == :release
     test "human handoff gates #{last_ready} and #{outcome} with #{wait_mode} waits",
          %{
            wait_mode: mode,
@@ -1759,9 +1769,37 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           case last_ready do
             kind when kind in [:destination, :participant] ->
               transport = if kind == :destination, do: joining_stt, else: remaining_stt
-              monitor = Process.monitor(transport)
-              TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
-              assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+
+              connection_id =
+                if kind == :destination,
+                  do: support_client.connection_id,
+                  else: observer_client.connection_id
+
+              if loss_at == :preparation do
+                monitor = Process.monitor(transport)
+                TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
+                assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+              else
+                capability =
+                  :sys.get_state(room_authority).connections
+                  |> Map.fetch!(connection_id)
+                  |> Map.fetch!(:speech_to_text)
+                  |> Map.fetch!(:capability)
+
+                receipt = observe_stt_loss(room_authority, capability)
+                assert :ok = :sys.suspend(capability)
+                monitor = Process.monitor(transport)
+
+                try do
+                  TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
+                  assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+                  refute_receive {:room_stt_loss_received, ^receipt}, 0
+                after
+                  :sys.resume(capability)
+                end
+
+                assert_receive {:room_stt_loss_received, ^receipt}, 1_000
+              end
 
             :recording ->
               :atomics.put(writer_readiness, 1, 1)
@@ -1862,6 +1900,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 2_000
         end
       else
+        adoption_pause =
+          if mode == :silent_all and last_ready == :destination,
+            do: pause_native_gate(connection, :adopt)
+
         retained_recording_stream =
           if recording_change do
             support_id = support.participant_id
@@ -1913,6 +1955,30 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
             nil
           end
 
+        adopted_listener =
+          if adoption_pause do
+            assert_receive {:native_gate_waiting, ^adoption_pause}, 2_000
+
+            phase = :sys.get_state(room_authority).pending_participant_transfer.task.pid
+
+            assert {:ok, %{worker: %Task{pid: worker}}} =
+                     CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(phase)
+
+            # Let adoption acknowledge within its existing deadline, but hold the
+            # worker before it can certify the inventory. Negotiate the new output
+            # fully so this case isolates membership from transport startup.
+            assert :erlang.suspend_process(worker)
+            send(connection, {:continue_native_gate, adoption_pause})
+
+            try do
+              plan
+              |> issue_session(room, caller.participant_id)
+              |> then(&connect(&1.session_id, "chat", false))
+            after
+              :erlang.resume_process(worker)
+            end
+          end
+
         for phase <- ["cue", "releasing"] do
           assert %{"data" => %{"attempt_id" => ^attempt_id, "blockers" => []}} =
                    await_sideband(support_client, "transfer.progress", 5_000, phase)
@@ -1958,6 +2024,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
         send_tone(support_client, 1_500, 11)
         assert_handoff_audio_order(caller_client, 1_500, wait_frequency)
+
+        if adopted_listener,
+          do: assert_handoff_audio_order(adopted_listener, 1_500, wait_frequency)
+
         assert_receive {:test_stt_audio, ^joining_stt, _conversation_audio}, 2_000
         refute_receive {:test_stt_audio, ^remaining_stt, _held_audio}, 100
         send_tone(observer_client, 1_750, 11)
@@ -3623,6 +3693,32 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     token
   end
 
+  defp observe_stt_loss(authority, capability) do
+    token = make_ref()
+    observer = self()
+
+    assert :ok =
+             :sys.install(
+               authority,
+               {token,
+                fn
+                  :done, _event, _process ->
+                    :done
+
+                  _state,
+                  {:in, {:vxpipe_stt_unavailable, ^capability, _identity, _reason}},
+                  _process ->
+                    send(observer, {:room_stt_loss_received, token})
+                    :done
+
+                  state, _event, _process ->
+                    state
+                end, nil}
+             )
+
+    token
+  end
+
   defp clear_during_recovery_readiness(connection, output, gate) do
     alias Vxpipe.CallEngine.Media.OutputSink
     alias Vxpipe.CallEngine.Readiness.Collector
@@ -4180,6 +4276,27 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     plan
     |> issue_session(room, participant.participant_id)
     |> then(&connect(&1.session_id, "chat", false, direction))
+  end
+
+  defp audio_evidence(peer) do
+    with [{connection, _}] <-
+           Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, peer.connection_id}),
+         {:ok, media} <- GenServer.call(connection, :vxpipe_connection_readiness, 100) do
+      output = :sys.get_state(media.output, 100)
+      native = :sys.get_state(output.native, 100)
+
+      inspect(%{
+        connection: peer.connection_id,
+        participant: media.identity.participant_id,
+        generation: output.generation,
+        held?: output.held?,
+        rtp_sequence: native.rtp_sequence
+      })
+    else
+      _unavailable -> "connection=#{peer.connection_id}, output unavailable"
+    end
+  catch
+    :exit, _reason -> "connection=#{peer.connection_id}, output unavailable"
   end
 
   defp pause_wait_at(player, frame_count) do
@@ -4744,7 +4861,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     after
       max(deadline - System.monotonic_time(:millisecond), 0) ->
         assert phase == :conversation,
-               "missing ordered cue/conversation audio: last phase #{phase}, expected #{conversation_frequency} Hz"
+               "missing ordered cue/conversation audio: last phase #{phase}, expected #{conversation_frequency} Hz; #{audio_evidence(connection)}"
     end
   end
 
@@ -4757,7 +4874,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         {:ex_webrtc, ^client, {:rtp, ^track, _rid, %Packet{} = packet}} -> packet
       after
         max(deadline - System.monotonic_time(:millisecond), 0) ->
-          flunk("timed out waiting for #{frequency} Hz audio on #{connection.connection_id}")
+          flunk("timed out waiting for #{frequency} Hz audio; #{audio_evidence(connection)}")
       end
 
     pcm = Decoder.Native.decode_packet(decoder, packet.payload)
@@ -4766,7 +4883,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       :ok
     else
       assert System.monotonic_time(:millisecond) < deadline,
-             "missing #{frequency} Hz conversational audio"
+             "missing #{frequency} Hz conversational audio; #{audio_evidence(connection)}"
 
       receive_tone(connection, decoder, frequency, deadline)
     end

@@ -719,7 +719,7 @@ the existing audio round trip. Record discoveries here before implementing.
   Keep any repair in a separate checkpoint; rerun all five root gates afterward.
   Isolated rerun of the exact two cases passes (two tests, seed 0, 158.9 s),
   which does not explain or repair the failures. Follow-up tasks:
-  - [ ] For STT release-loss injection, establish that RoomAuthority has received
+  - [x] For STT release-loss injection, establish that RoomAuthority has received
     the actual capability-unavailable evidence before releasing the native gate.
     Current code waits for the mock transport's `DOWN`, which is a different
     process/boundary. Reproduce the delayed-owner ordering and test an explicit
@@ -734,6 +734,37 @@ the existing audio round trip. Record discoveries here before implementing.
     587). All 2,243 tests ran with one failure, 42 excluded, seed 0; Call Engine
     passes 1,084 tests and the other four root gates pass. The isolated Gateway
     agent owns investigation of both observed failure stages.
+    - [x] Capture per-connection native output generation, accepted PCM and RTP
+      egress/receipt for the original final-audio failure and the subsequent
+      returned-listener wait-tone failure; use bounded native reproductions.
+    - [x] Exercise delayed STT capability delivery while the native gate is
+      paused, then acknowledge actual RoomAuthority receipt before gate release.
+      Preserve existing runtime deadlines and verify destination/participant loss.
+    - [x] Add a deterministic regression for any identified listener/output
+      ordering defect before repair, and record focused red/green evidence.
+      Hold the audience phase across a participant's departure and rejoin before
+      private media exists: participant-ID-only reconciliation calls the dead
+      player (`:noproc`) and produces recovery audio instead of waiting audio.
+      Replace only departed playback ownership; preserve surviving sink cursors.
+    - [x] Reproduce attachment during adoption without a policy membership
+      change. Instrumented final-audio failure found a connected output still
+      held at provisional generation 1, with no accepted/submitted audio or RTP
+      egress. Check that adopted-release validation compares the captured
+      inventory with the prepared/cued connection set before releasing media.
+    - [ ] Resolve private policy refresh when departure/rejoin skips revisions
+      between worker observations. Controlled native reproduction returns
+      `:private_media_changed` before wait-player reconciliation: private revision
+      8 to room revision 10 rejects `:unexpected_policy_revision`. Private refresh
+      applies the speech capability first. Shared STT/policy changes require parent
+      coordination, not a timeout increase or invented intermediate policies.
+  Gateway checkpoint evidence: nine bounded native cases pass (seed 0), covering
+  coalesced departure/rejoin, attachment during adoption, and destination/participant
+  preparation/adoption/release loss. Controlled reds distinguish dead wait-player
+  ownership, omitted provisional output, and transport DOWN versus room receipt.
+  Details and the still-open private-policy reproduction are in
+  `labnotes/20260922-1610-gateway-handoff-ordering.md`. The outer investigation and
+  final serial root acceptance remain open; passing retries do not close the
+  separately reproduced private-policy revision gap.
 - [x] Align the STS capability test fixture's asynchronous readiness wait with
   its explicit provider-start deadline. A focused run alongside native WebRTC
   reproduction failed its implicit 100 ms `assert_receive` despite the fixture

@@ -98,7 +98,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          :ok <- hold(Map.drop(connections, Map.keys(audience.connections)), audience.scope),
          {:ok, waits} <-
            reconcile_waits(
-             audience.waits,
+             audience,
              connections,
              binding,
              audience.scope,
@@ -166,6 +166,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
              ),
            {:ok, inventory} <-
              RoomInventory.capture(phase.authority, candidate, remaining(ready.scope)),
+           :ok <- validate_release_connections(ready, inventory),
            :ok <- Collector.refresh(collector),
            :ok <- await_ready(collector, ready.scope, [], nil, {phase.authority, inventory}),
            :ok <- validate_inventory({phase.authority, inventory}, ready.scope) do
@@ -188,6 +189,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       other ->
         other
     end
+  end
+
+  defp validate_release_connections(ready, inventory) do
+    prepared = Map.new(ready.connections, fn {id, binding} -> {id, binding.instance} end)
+
+    current =
+      Map.new(inventory.inventory.connections, fn {id, binding} -> {id, binding.instance} end)
+
+    # A fresh inventory cannot certify outputs that never joined preparation and
+    # cue playback. Refresh while every conversational gate is still closed.
+    if prepared == current, do: :ok, else: {:error, :room_changed}
   end
 
   defp prepare_participant(%{participant: participant}, _incarnation), do: {:ok, participant}
@@ -364,7 +376,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          {:ok, connections} <- capture_connections(binding, policy.present_participant_ids),
          added = Map.drop(connections, Map.keys(prepared.connections)),
          :ok <- hold(added, scope),
-         {:ok, waits} <- reconcile_waits(prepared.waits, connections, binding, scope, request) do
+         {:ok, waits} <- reconcile_waits(prepared, connections, binding, scope, request) do
       prepared = %{
         prepared
         | binding: binding,
@@ -402,7 +414,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          added = Map.drop(media.connections, Map.keys(prepared.connections)),
          :ok <- hold(added, scope),
          {:ok, waits} <-
-           reconcile_waits(prepared.waits, media.connections, media.binding, scope, request) do
+           reconcile_waits(prepared, media.connections, media.binding, scope, request) do
       prepared = prepared |> Map.merge(media) |> Map.put(:waits, waits)
 
       case Preparation.prepare_candidate(phase.authority, media.candidate, Map.to_list(scope)) do
@@ -602,12 +614,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     end)
   end
 
-  defp reconcile_waits(players, connections, binding, scope, request, owner \\ self()) do
+  defp reconcile_waits(previous, connections, binding, scope, request, owner \\ self()) do
     outputs =
       Enum.group_by(connections, fn {_id, connection} -> connection.identity.participant_id end)
 
-    retained = Map.take(players, Map.keys(outputs))
-    removed = Map.drop(players, Map.keys(outputs))
+    # A participant may leave and rejoin between captures. Its former player
+    # belongs to the departed outputs, even when the participant ID is unchanged.
+    # Keep a cursor only when at least one of its previous outputs survives.
+    retained =
+      Map.filter(previous.waits, fn {participant, _player} ->
+        Enum.any?(Map.get(outputs, participant, []), fn {id, connection} ->
+          case Map.get(previous.connections, id) do
+            %{output: output} -> output == connection.output
+            nil -> false
+          end
+        end)
+      end)
+
+    removed = Map.drop(previous.waits, Map.keys(retained))
 
     with :ok <- retire_waits(removed, scope),
          :ok <-
