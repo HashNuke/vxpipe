@@ -28,4 +28,7 @@ The complete Google controller file passes 58 tests; the eight-file local STS
 group passes 210 tests, zero failures. Independent read-only re-review ran the
 three new focused cases (3/0), found no new reproducible regression and checked
 the session at 759 lines against the 800-line limit. No hosted calls.
-Post-commit root static checks and full umbrella acceptance are still pending.
+Post-commit root format, warnings-as-errors compile, strict Credo (1,094 source
+files, no issues) and unused-lock checks pass at `49875cd0`. The full
+call-engine child suite passes 1,391 tests, zero failures, 30 excluded. Full
+umbrella acceptance remains blocked at the local PostgreSQL test connection.

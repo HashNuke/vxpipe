@@ -29,6 +29,13 @@ Persistence suite in this environment: PostgreSQL SCRAM requires a password,
 but the local test connection has none configured. This is an environment
 acceptance blocker, not a passing umbrella gate; no hosted service was used.
 
+Follow-up `49875cd0` passes 210 focused STS tests, the full call-engine child
+suite (1,391 tests, zero failures, 30 excluded) and all four post-commit root
+static gates (strict Credo: 1,094 source files, no issues). Independent re-review
+reproduced two additional tool/interruption failures before the repair and
+reran the three focused regressions green. The PostgreSQL-backed umbrella gate
+remains open.
+
 Real-room follow-up (`labnotes/20260922-1209-sts-room-integration.md`) repaired
 STS runtime selection, allocation policy capture, readiness reconciliation and
 source-disconnect cleanup. STS is now a required readiness resource; missing
