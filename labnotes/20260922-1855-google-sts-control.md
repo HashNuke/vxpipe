@@ -47,3 +47,7 @@
   its distinct wire/history repair remains open and explicitly recorded before
   implementation. This checkpoint does not make that path valid or close full
   profile/room acceptance. Provider contracts and integration docs are updated.
+- Committed as `6021bc22` before broad gates. Root format, warnings-as-errors
+  compilation, strict Credo (1,082 files) and unused-lock verification all pass.
+  Coordinated root tests remain pending the native handoff checkpoint; no prior
+  umbrella result is attributed to this new runtime.
