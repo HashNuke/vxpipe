@@ -150,6 +150,54 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     end
   end
 
+  test "mismatched output PCM fails admission before credential lookup or wire startup" do
+    for recognizer <- [
+          google(),
+          %{provider: "morse", model: "morse", options: %{sample_rate: 16_000}}
+        ] do
+      plan = plan(24_000, recognizer)
+
+      for result <- [PlanStartup.validate(plan, options()), PlanStartup.new(plan, options())] do
+        assert {:error, error} = result
+        assert error.code == :unsupported_call_plan
+
+        assert error.details["path"] ==
+                 ["participants", "assistant", "capabilities", "output_speech_to_text"]
+
+        refute inspect(error) =~ "synthetic-output-stt-private"
+        refute inspect(error) =~ "Reply privately."
+      end
+
+      assert {:error, error} =
+               Vxpipe.CallEngine.start_call(plan, Keyword.take(options(), [:credential_source]))
+
+      assert error.details["path"] ==
+               ["participants", "assistant", "capabilities", "output_speech_to_text"]
+
+      assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) == []
+      refute_received {:tenant_credential_resolved, _, _, _}
+      refute_received {:test_google_stt_started, _, _}
+    end
+  end
+
+  test "independent human STT format does not constrain compatible agent output" do
+    human = %{
+      speech_to_text: %{provider: "morse", model: "morse", options: %{sample_rate: 8_000}}
+    }
+
+    assert {:ok, startup} = PlanStartup.new(plan(16_000, google(), human), options())
+
+    assert {Vxpipe.Providers.MorseCode.STTSession, human_options} =
+             startup.speech_to_text_runtimes[startup.caller.participant_id].provider
+
+    assert human_options[:sample_rate] == 8_000
+    assert {STTSession, recognizer_options} = startup.speech_to_speech.output_speech_to_text
+    assert recognizer_options[:sample_rate] == 16_000
+
+    assert startup.speech_to_speech.output_speech_to_text_private[:config].api_key ==
+             "synthetic-output-stt-private"
+  end
+
   test "output slot rejects invalid public selections without enabling Google STS" do
     for selection <- [
           %{google() | provider: "unknown"},
@@ -173,7 +221,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     }
   end
 
-  defp plan do
+  defp plan(rate \\ 16_000, recognizer \\ google(), human_capabilities \\ %{}) do
     source = %{
       schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
@@ -184,7 +232,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
         "caller" => %{
           type: "human",
           connection: %{service: "web", mode: "receive", admission: "start_call"},
-          capabilities: %{}
+          capabilities: human_capabilities
         },
         "assistant" => %{
           type: "agent",
@@ -196,9 +244,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
             speech_to_speech: %{
               provider: "morse",
               model: "morse",
-              options: %{sample_rate: 16_000, output_transcript: false}
+              options: %{sample_rate: rate, output_transcript: false}
             },
-            output_speech_to_text: google()
+            output_speech_to_text: recognizer
           }
         }
       }
@@ -231,6 +279,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
       text_to_speech: [providers: %{}],
       speech_to_text: [
         providers: %{
+          Vxpipe.Providers.MorseCode.STTSession => [enabled: true, media_ingress: []],
           STTSession => [
             enabled: true,
             wire_module: Vxpipe.CallEngine.TestGoogleSTTTransport,

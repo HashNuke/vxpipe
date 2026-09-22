@@ -929,7 +929,8 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
   `sts_transcript_modes_test.exs`; output-STT enablement uses the STT registry,
   not a separate provider-settings namespace.
   Google output-STT registry/private startup wiring now passes synthetic-credential
-  fake-wire checks. PCM negotiation and hosted output-route acceptance remain open.
+  fake-wire checks. Startup now explicitly rejects mismatched PCM without
+  conversion; hosted output-route acceptance remains open.
 - [x] Credited STS output feeds an agent-scoped STT allocation in the same
   agent-owned tree (separate scope, caller microphone never connected), with
   `STTProvider.finish_input/1` finalization at the STS generation boundary,
@@ -1003,9 +1004,31 @@ No new provider advertisement or billable call is authorized by these tasks.
   - [x] Prove actual selected Google STT startup with synthetic credentials and
     a fake wire, matching 16 kHz fixture formats, and inspect/status redaction.
     Keep unavailable credentials, disabled hosts and invalid selections rejected.
-  - [ ] Separately implement PCM negotiation/conversion or explicit mismatch
+  - [x] Separately implement PCM negotiation/conversion or explicit mismatch
     rejection, including differing Morse STS/STT rates. Registry/private-config
     evidence alone does not complete this overall item or output-route acceptance.
+    - [x] Reproduce accepted mismatched Morse rates and Morse-to-Google input
+      rates at PlanStartup validation/construction before credential lookup or
+      recognizer allocation; retain the compatible private-config path.
+    - [x] Add a pure output-recognition format helper using existing catalog
+      resolution and Descriptor validation. Compare STS generated `format`, not
+      microphone `input_format`, against STT `format` in full.
+    - [x] Cover encoding/container/channel/order/signedness and rate rejection,
+      independent human STT, sanitized errors and unchanged private options.
+
+  PCM admission design review (2026-09-22): the shared Descriptor owns supported
+  raw mono format validation; no shared converter exists on the output sidecar
+  path. Choose explicit rejection, not conversion or option rewriting. Run the
+  pure check from PlanStartup validation and before startup resolves credentials.
+  Exact validated format equality prevents rate-only checks overlooking encoding
+  details. No capability/Output or room allocation changes are needed; callers
+  bypassing PlanStartup are outside this bounded activation checkpoint.
+  Evidence: 9 focused tests first had 3 failures (accepted mismatch and absent
+  comparison helper), then passed. The 54-test startup/selection and unchanged
+  room-transcript group passes; incompatible CallEngine.start_call admission
+  leaves no room and resolves no credentials. Compatible Google fake-wire startup
+  and independent human STT remain green. No conversion or full output-route
+  acceptance is claimed. See `labnotes/20260922-1815-output-stt-format-admission.md`.
 
   Registry/private-config design review (2026-09-22): output recognition is an
   existing STT capability used in a different slot, not a new provider manifest

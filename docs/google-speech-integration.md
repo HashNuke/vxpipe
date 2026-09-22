@@ -100,11 +100,24 @@ cleanup. Missing/disabled hosts, missing or wrong-tenant credentials and invalid
 public selections remain rejected. Dropping private options or copying them into
 public descriptors is not an acceptable fallback.
 
-This is startup/configuration evidence only: PCM negotiation/conversion, mismatch
-rejection and per-reply recognizer finalization remain separate acceptance work.
+PlanStartup now rejects incompatible generated-output/recognizer-input formats
+before room or recognizer allocation and before resolving private credentials.
+The pure output-STT helper obtains both public descriptors from the existing
+catalog/configure boundary, reuses shared Descriptor validation, and requires
+exact format equality (encoding, container, rate, channels, byte order and
+signedness). It compares STS output `format`, never microphone `input_format`.
+Human STT is independent. No conversion or silent selection rewriting occurs.
+For example, Google STS declares 24 kHz output and Google STT requires 16 kHz;
+those descriptors are incompatible even though their microphone-input rates
+coincide. This does not enable Google STS selection.
+
+This is startup/configuration evidence only; per-reply recognizer finalization
+and overall output-route acceptance remain separate work. Direct low-level
+allocations bypassing PlanStartup are outside this admission checkpoint.
 No generated audio is submitted by this probe; no hosted call or Google STS
 manifest enablement is claimed. See
-`labnotes/20260922-1721-output-stt-private-config.md` for red-green methods.
+`labnotes/20260922-1721-output-stt-private-config.md` and
+`labnotes/20260922-1815-output-stt-format-admission.md` for red-green methods.
 
 ## Raw STS server voice activity
 

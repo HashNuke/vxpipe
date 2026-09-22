@@ -30,3 +30,17 @@
   ordering remains separate and unresolved.
 - Broad gates will run on the committed integrated runtime; no previous umbrella
   result is attributed to these new changes.
+
+## Output recognition format admission
+
+- Integrated `2d549c09` after parent and independent xhigh source review. No
+  actionable source finding; the reviewer did not rerun tests. Startup compares
+  validated generated-output and recognizer-input formats before allocating a
+  room or resolving credentials. Incompatible formats fail explicitly; no
+  conversion, microphone-rate substitution or human-STT coupling is introduced.
+- Main compatibility run passes **54 tests, zero failures**, seed 0: the
+  `plan_startup` directory, `call_spec/sts_selection_test.exs`, and unchanged
+  `room_authority/sts_transcript_modes_test.exs`, from Call Engine with two
+  schedulers. The provider contract is synchronized with this admission rule.
+- Direct low-level allocations and generated-audio/hosted acceptance remain
+  outside this startup checkpoint. Google STS is still unadvertised.

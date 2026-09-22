@@ -326,8 +326,17 @@ from the generator in `SpeechToSpeechRuntime.output_speech_to_text_private`,
 then pass them through the existing recognizer PrivateInit handoff. Public
 provider tuples and inspection must not expose that field. The local Google
 recognizer startup has synthetic-credential, fake-wire room-allocation evidence,
-including owner cleanup; it does not prove PCM compatibility, generated-audio
-recognition or hosted interoperability. Those remain distinct acceptance gates.
+including owner cleanup; it does not prove generated-audio recognition or hosted
+interoperability. Those remain distinct acceptance gates.
+
+Before room allocation or credential resolution, PlanStartup compares complete,
+validated public descriptors for STS generated output `format` and recognizer
+STT input `format`. They must match exactly; a mismatch fails admission at the
+agent's `output_speech_to_text` path. The microphone's separate `input_format`
+and any independently selected human STT do not participate in that comparison.
+No output-side conversion or silent option rewriting is implemented. Compatible
+selections retain their private configuration unchanged. Direct low-level
+allocations bypassing PlanStartup are outside this startup validation boundary.
 
 An agent-output recognizer timeout, rejected finite-input finalization or provider
 loss retires that recognition generation before the next reply is admitted.
@@ -336,8 +345,8 @@ readiness gates further output, and retired-session events cannot supply next-tu
 text. At most ten consecutive restart attempts are allowed; only acknowledged
 readiness resets that budget. Exhaustion ends the owning STS allocation explicitly
 instead of silently switching to provider transcripts. Focused tests cover these
-failure boundaries; multi-segment and successful-boundary recognition settlement,
-hosted configuration and PCM compatibility remain separate milestone gates.
+failure boundaries; multi-segment and successful-boundary recognition settlement
+and full hosted output-route acceptance remain separate milestone gates.
 
 Locally measured agent-output recognition is a separate usage observation. Its
 provider/model and PCM rate come from that reply's ready recognizer descriptor,
