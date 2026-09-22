@@ -1019,6 +1019,10 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   requirements are synchronized in `docs/speech-provider-contract.md`.
   Post-commit umbrella verification is recorded separately; neither this group
   nor the earlier umbrella run substitutes for the open Google controller tests.
+  All five post-commit root gates at `9ffe2ab4` pass: 2,299 tests, zero failures,
+  45 excluded, seed 0 (including 1,139 Call Engine and 492 Gateway tests).
+  See `labnotes/20260922-1733-sts-google-integration.md`. Later private-policy and
+  sidecar changes require their own integration evidence; final gates stay open.
 - [ ] Add the tagged hosted controller/interruption/resumption acceptance check
   before requesting billable execution. Keep it excluded by default and Google
   unadvertised until the separately authorized acceptance gate passes.

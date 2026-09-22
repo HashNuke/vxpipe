@@ -31,3 +31,19 @@ ERL_FLAGS='+S 2:2' mix test \
 - No hosted requests, production Google manifest/badge enablement, history/audio
   replay, or new tool execution authority. Private-policy continuity and output-STT
   private startup configuration continue in separate agent worktrees.
+
+## Post-commit umbrella result
+
+All five root gates passed on clean committed `9ffe2ab4`: format, warnings-as-errors
+compile, strict Credo, unused-lock check and the full test suite. Tests: **2,299,
+zero failures, 45 excluded**, seed 0. Call Engine contributed 1,139 tests and
+Gateway 492, both with zero failures. The run completed with exit 0; output is in
+`vxpipe-sts-google-integration-umbrella.log`. No main source/build changes occurred
+while the run was active. Commands used `ERL_FLAGS='+S 2:2'`, with
+`PGHOST=/var/run/postgresql` for tests.
+
+This result covers the preceding completed-recognition repair plus integrated
+Google configuration. It does not cover later sidecar/private-policy worktree
+commits or close the separately reproduced native handoff and Google controller
+gaps. Independent Astra xhigh review of sidecar commit `afd721c1` found no scoped
+defect; its integration follows this recorded baseline.
