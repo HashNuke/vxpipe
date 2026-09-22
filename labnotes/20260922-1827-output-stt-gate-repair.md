@@ -15,3 +15,6 @@
   transcript group passes **54 tests, zero failures**, seed 0, with two schedulers.
   Exact source formatting and diff inspection pass. Commit this refactor before
   restarting the four static gates and full umbrella suite.
+- Committed as `f9db3319`; all four post-commit root static gates pass: format,
+  warnings-as-errors compile, strict Credo (1,082 source files, no issues) and
+  unused-lock check. Full umbrella tests remain the following integration gate.

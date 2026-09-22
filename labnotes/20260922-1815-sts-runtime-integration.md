@@ -44,3 +44,12 @@
   schedulers. The provider contract is synchronized with this admission rule.
 - Direct low-level allocations and generated-audio/hosted acceptance remain
   outside this startup checkpoint. Google STS is still unadvertised.
+
+## Post-commit gates
+
+- Format and warnings-as-errors compile passed at `9bf245a5`, but strict Credo
+  found PlanStartup's new size violation. Recorded and repaired it separately as
+  `f9db3319`, preserving behavior; 54 focused checks remain green.
+- All four static gates pass at `f9db3319`: root format, warnings-as-errors
+  compile, strict Credo and unused-lock verification. Full umbrella test evidence
+  is pending; no new runtime edits will overlap that run's baseline.
