@@ -236,7 +236,109 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              MediaSupervisor.snapshot(binding.client_state_leg_id)
   end
 
-  defp compile_plan do
+  test "prepares the exact native STS input and opens a room without human STT" do
+    application = Vxpipe.CallEngine.Application
+    original = Application.fetch_env!(:vxpipe_call_engine, application)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      application,
+      Keyword.put(
+        original,
+        :speech_to_speech, providers: %{Vxpipe.Providers.MorseCode.STSSession => [enabled: true]})
+    )
+
+    on_exit(fn -> Application.put_env(:vxpipe_call_engine, application, original) end)
+
+    plan = compile_plan(sts?: true)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+    leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end}, id: :sts_leg)
+    binding = binding(plan, room.incarnation_id, caller.participant_id, leg)
+    socket = socket(self(), binding)
+    claim = claim(plan, room.incarnation_id, caller.participant_id)
+    root = start_supervised!({MediaSupervisor, name: nil})
+
+    assert :ok =
+             CallAdmission.handle_live_event(
+               [telephony_media_supervisor: root],
+               claim,
+               activation(binding),
+               socket,
+               media_started_event(binding, "stream-1")
+             )
+
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+    assert {:ok, snapshot} = MediaSupervisor.snapshot(binding.client_state_leg_id)
+    assert snapshot.attachment.media_ingress == nil
+
+    identity = %{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      participant_id: caller.participant_id,
+      connection_id: binding.client_state_leg_id
+    }
+
+    authority = Vxpipe.CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
+    policy = Vxpipe.CallEngine.MediaPolicy.Authority.snapshot(authority)
+
+    assert {:ok, connection_resource, :ready} =
+             Vxpipe.Gateway.Telephony.MediaSession.readiness(binding.client_state_leg_id)
+
+    connection = connection_resource.instance
+    # STS alone must demand an input track even without room input or human STT.
+    assert {:ok, graph} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare_graph(
+               connection,
+               identity,
+               policy,
+               speech_to_speech?: true
+             )
+
+    assert graph.input_track == %{
+             track_id: "stream-1",
+             codec: :opus,
+             sample_rate: 16_000,
+             channels: 1
+           }
+
+    assert {:ok, %{ingress: ingress}} =
+             CallEngine.speech_to_speech_input_configuration(snapshot.attachment)
+
+    assert {:ok, resource, :ready} = Vxpipe.CallEngine.Media.STSIngress.readiness(ingress)
+    assert resource in graph.resources
+    assert resource.policy_interval == policy.revision
+    Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+
+    assert {:ok, native_binding} = GenServer.call(connection, :vxpipe_connection_readiness)
+
+    demand = %{
+      audio_input?: false,
+      room_output?: false,
+      speech_to_text?: false,
+      speech_to_speech?: true
+    }
+
+    assert {:error, :speech_to_speech_unavailable} =
+             Vxpipe.Gateway.Media.ConnectionReadiness.prepare_binding(
+               %{
+                 native_binding
+                 | attachment: %{native_binding.attachment | speech_to_speech_input: nil}
+               },
+               policy,
+               demand
+             )
+
+    assert {:error, :policy_not_prepared} =
+             Vxpipe.Gateway.Media.ConnectionReadiness.prepare_binding(
+               native_binding,
+               %{policy | revision: policy.revision + 1},
+               demand
+             )
+  end
+
+  defp compile_plan(options \\ []) do
     call_spec_input = %{
       schema_version: CallSpec.schema_version(),
       wait_sounds: %{call_setup: nil},
@@ -266,6 +368,18 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       },
       limits: %{max_duration_ms: 60_000}
     }
+
+    call_spec_input =
+      if Keyword.get(options, :sts?, false) do
+        call_spec_input
+        |> put_in([:defaults, :capabilities], %{})
+        |> put_in(
+          [:participants, "assistant", :capabilities],
+          %{speech_to_speech: %{provider: "morse", model: "morse", options: %{}}}
+        )
+      else
+        call_spec_input
+      end
 
     assert {:ok, call_spec} =
              CallSpec.new(call_spec_input,

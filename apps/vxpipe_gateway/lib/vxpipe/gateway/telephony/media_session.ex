@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   alias Vxpipe.CallEngine.Media.Ingress
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket}
+  alias Vxpipe.Gateway.Media.STSInput
   alias Vxpipe.Gateway.Telephony.MediaSession.Readiness
 
   alias Vxpipe.Gateway.Telephony.{
@@ -57,6 +58,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
   def input_readiness(session), do: Readiness.readiness(session, :input)
   def input_track(session), do: Readiness.input_track(session)
+
+  def speech_to_speech_track(session, track),
+    do: safe_call(session, {:speech_to_speech_track, track})
+
   def readiness_resources(session, options \\ []), do: Readiness.resources(session, options)
 
   @impl true
@@ -96,6 +101,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
            connection_id: Keyword.fetch!(options, :connection_id),
            private_media: nil,
            speech_normalizer: nil,
+           sts_input: nil,
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
            transfer_acceptance_ready?: false,
@@ -109,6 +115,13 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   @impl true
+  def handle_call({:speech_to_speech_track, track}, _from, state) do
+    case STSInput.prepare(state.attachment, track, state.sts_input, :telephony) do
+      {:ok, output, input} -> {:reply, {:ok, output}, %{state | sts_input: input}}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
   def handle_call({:vxpipe_prepare_transfer_media, attempt_id}, _from, state) do
     options = [
       engine: state.engine,
@@ -204,17 +217,17 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
     case normalizer(state, frame) do
       {:ok, speech_normalizer, state} ->
-        result =
+        {result, input} =
           state.engine
           |> IncomingAudio.deliver(
             state.attachment,
             state.room_audio_ingress,
             frame,
-            speech_normalizer
+            speech_normalizer,
+            state.sts_input
           )
-          |> normalize_delivery()
 
-        {:reply, result, state}
+        {:reply, normalize_delivery(result), %{state | sts_input: input}}
 
       _failure ->
         {:reply, {:error, :media_unavailable}, state}

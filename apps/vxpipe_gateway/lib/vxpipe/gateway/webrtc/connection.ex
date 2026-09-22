@@ -12,6 +12,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.Gateway.Media.STSInput
   alias Vxpipe.Gateway.WebRTC.Connection.Readiness
 
   alias Vxpipe.CallEngine.Event.{
@@ -35,7 +36,6 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.Gateway.WebRTC.{
     ConnectionPeerSupervisor,
     IncomingAudio,
-    OpusInput,
     SmallWebRTCSignalling,
     SpeechInput,
     TransferSideband
@@ -93,6 +93,12 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def readiness_resources(connection, options \\ []), do: Readiness.resources(connection, options)
+
+  def speech_to_speech_track(connection, track) do
+    GenServer.call(connection, {:speech_to_speech_track, track}, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
 
   @impl true
   def init(options) do
@@ -154,6 +160,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          audio_egress: audio_egress,
          audio_tracks: %{},
          speech_input: nil,
+         sts_input: nil,
          audio_jitter_latency_ms: Keyword.fetch!(options, :audio_jitter_latency_ms),
          connection_id: connection_id,
          media_readiness_resource:
@@ -189,6 +196,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   @impl true
+  def handle_call({:speech_to_speech_track, track}, _from, state) do
+    case STSInput.prepare(state.attachment, track, state.sts_input, :webrtc) do
+      {:ok, output, input} -> {:reply, {:ok, output}, %{state | sts_input: input}}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
   def handle_call({:speech_track, track}, _from, state) do
     case SpeechInput.prepare(state.attachment, track, state.speech_input) do
       {:ok, output, input} -> {:reply, {:ok, output}, %{state | speech_input: input}}
@@ -295,7 +309,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     state = ensure_track_codecs(track_id, state)
     codec = state.audio_tracks |> Map.get(track_id, %{}) |> Map.get(packet.payload_type)
 
-    case forward_audio(codec, track_id, packet, state) do
+    case IncomingAudio.forward_connection(codec, track_id, packet, state) do
       {result, state} when result in [:ok, :drop] -> {:noreply, state}
       {:unavailable, state} -> {:stop, :shutdown, state}
     end
@@ -622,49 +636,6 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
       nil -> %{}
       transceiver -> Map.new(transceiver.codecs, &{&1.payload_type, &1})
     end
-  end
-
-  defp forward_audio(nil, _track_id, _packet, state), do: {:drop, state}
-
-  defp forward_audio(codec, track_id, packet, state) do
-    if IncomingAudio.receive_only?(state.attachment) do
-      {:drop, state}
-    else
-      prepare_and_deliver_audio(codec, track_id, packet, state)
-    end
-  end
-
-  defp prepare_and_deliver_audio(codec, track_id, packet, state) do
-    with {:ok, channels} <- OpusInput.track_channels(codec) do
-      track = %{
-        track_id: to_string(track_id),
-        codec: :opus,
-        sample_rate: codec.clock_rate,
-        channels: channels
-      }
-
-      case SpeechInput.prepare(state.attachment, track, state.speech_input) do
-        {:ok, _output, input} ->
-          state = %{state | speech_input: input}
-          {deliver_audio(codec, track_id, packet, state), state}
-
-        {:error, _reason} ->
-          {:unavailable, state}
-      end
-    else
-      {:error, :unsupported_codec} -> {:drop, state}
-    end
-  end
-
-  defp deliver_audio(codec, track_id, packet, state) do
-    IncomingAudio.forward(codec, track_id, packet,
-      session: state.session,
-      connection_id: state.connection_id,
-      attachment: state.attachment,
-      room_audio_ingress: state.room_audio_ingress,
-      speech_input: state.speech_input,
-      received_at: System.monotonic_time(:millisecond)
-    )
   end
 
   defp call(connection_id, message) do

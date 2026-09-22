@@ -175,12 +175,13 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressPolicyTest do
       room_audio_input_mode: :enabled
     }
 
-    assert :ok =
+    assert {:ok, nil} =
              Vxpipe.Gateway.Telephony.IncomingAudio.deliver(
                Vxpipe.Gateway.TestRoomAudioEngine,
                attachment,
                context.ingress,
                audio_frame(context, 2),
+               nil,
                nil
              )
 

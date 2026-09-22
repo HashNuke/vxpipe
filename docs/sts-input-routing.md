@@ -1,8 +1,9 @@
 # STS microphone routing
 
 Status: directional formats, bounded ingress and the embedded real-room PCM
-round trip have focused implementation evidence. Native WebRTC/telephony wiring
-and the remaining milestone acceptance checks are unfinished. This preserves the existing
+round trip have focused implementation evidence. Native WebRTC/telephony input
+conversion, delivery and phone-room readiness now pass focused tests; complete
+multi-mode native calls and milestone acceptance remain unfinished. This preserves the existing
 [STS milestone](milestones/agent-speech-to-speech.md) requirements.
 
 ## Evidence and decision
@@ -102,6 +103,30 @@ transcript revoke/regrant so settlement cannot relabel old speech as new.
 Local queue and embedded PCM tests are not native
 transport conversion or independent live STT/STS fanout proof.
 
+## Native input adoption
+
+Gateway's `Media.STSInput` prepares the selected input format using the exact
+connection-bound allocation. WebRTC and telephony retain separate native
+conversion state for STS and human STT. Initial readiness requires a source
+track and the STS ingress resource with the current policy revision, even when
+human STT and room input are not demanded. Unsupported conversions and missing
+allocations fail preparation. STS transfer-candidate preparation is explicitly
+unsupported pending the milestone's source-handoff contract.
+
+Each microphone frame is offered to the independent STS, human-STT and room
+inputs before aggregating their results. Full queues drop independently;
+temporary STS policy denial drops a frame without terminating the transport.
+The STS ingress owns credit, bounds and permission checks. WebRTC extends its
+16-bit RTP sequence at this boundary and rejects late/duplicate packets before
+updating native decoder history; telephony retains its own sequence semantics.
+
+Focused tests exercise stereo WebRTC Opus48k, Telnyx Opus16k and Twilio PCMU8k
+conversion to monoPCM16k, both transport callbacks, both directions of STT/STS
+backpressure, policy deny/regrant and one supervised Telnyx room reaching ready
+without human STT. These are local codec/socket checks, not live carrier or
+rendered browser interoperability. Full native conversation acceptance remains
+separate from the embedded PCM round trip.
+
 ## Rejected shortcuts
 
 - Wiring the existing STT-dispatch hook: couples STS progress to STT demand and
@@ -127,4 +152,6 @@ Inspection evidence is recorded in
 `labnotes/20260922-1209-sts-room-integration.md`. The primitive/format evidence
 is in `labnotes/20260922-1233-sts-microphone-routing.md`. Room binding and the
 embedded PCM round trip are recorded in `labnotes/20260922-1309-sts-room-input.md`.
-Native transport, all transcript modes and complete lifecycle acceptance remain open.
+Native adoption evidence is in `labnotes/20260922-1344-sts-native-input.md`.
+Integrated native conversations, all transcript modes and complete lifecycle
+acceptance remain open.

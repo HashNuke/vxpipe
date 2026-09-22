@@ -44,6 +44,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionAudioTest do
       audio_tracks: %{"track-input" => %{111 => codec()}},
       attachment: attachment,
       speech_input: nil,
+      sts_input: nil,
       room_audio_ingress: nil,
       session: session(),
       connection_id: "conn-demo"

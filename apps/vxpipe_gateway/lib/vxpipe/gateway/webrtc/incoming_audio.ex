@@ -5,8 +5,18 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   alias ExWebRTC.RTPCodecParameters
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.ConnectionAttachment
-  alias Vxpipe.Gateway.Media.RoomAudioIngress
-  alias Vxpipe.Gateway.WebRTC.{AudioFrame, SpeechInput}
+  alias Vxpipe.Gateway.Media.{RoomAudioIngress, STSInput}
+  alias Vxpipe.Gateway.WebRTC.{AudioFrame, OpusInput, SpeechInput}
+
+  def forward_connection(nil, _track_id, _packet, state), do: {:drop, state}
+
+  def forward_connection(codec, track_id, packet, state) do
+    if receive_only?(state.attachment) do
+      {:drop, state}
+    else
+      prepare_and_deliver_audio(codec, track_id, packet, state)
+    end
+  end
 
   @spec forward(
           RTPCodecParameters.t() | nil,
@@ -14,15 +24,16 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
           Packet.t(),
           keyword()
         ) ::
-          :ok | :drop | :unavailable
-  def forward(nil, _track_id, %Packet{}, _options), do: :drop
+          {:ok | :drop | :unavailable, map() | nil}
+  def forward(nil, _track_id, %Packet{}, options), do: {:drop, Keyword.get(options, :sts_input)}
 
   def forward(%RTPCodecParameters{} = codec, track_id, %Packet{} = packet, options) do
     attachment = Keyword.fetch!(options, :attachment)
+    input = Keyword.get(options, :sts_input)
 
-    result =
+    {result, input} =
       if receive_only?(attachment) do
-        :drop
+        {:drop, input}
       else
         with {:ok, frame} <-
                AudioFrame.from_rtp(
@@ -34,10 +45,12 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
                  Keyword.fetch!(options, :received_at)
                ) do
           deliver(frame, options)
+        else
+          error -> {error, input}
         end
       end
 
-    classify(result)
+    {classify(result), input}
   end
 
   @doc false
@@ -49,6 +62,43 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
 
   def receive_only?(%ConnectionAttachment{}), do: false
 
+  defp prepare_and_deliver_audio(codec, track_id, packet, state) do
+    with {:ok, channels} <- OpusInput.track_channels(codec) do
+      track = %{
+        track_id: to_string(track_id),
+        codec: :opus,
+        sample_rate: codec.clock_rate,
+        channels: channels
+      }
+
+      case SpeechInput.prepare(state.attachment, track, state.speech_input) do
+        {:ok, _output, input} ->
+          state = %{state | speech_input: input}
+          deliver_audio(codec, track_id, packet, state)
+
+        {:error, _reason} ->
+          {:unavailable, state}
+      end
+    else
+      {:error, :unsupported_codec} -> {:drop, state}
+    end
+  end
+
+  defp deliver_audio(codec, track_id, packet, state) do
+    {result, input} =
+      forward(codec, track_id, packet,
+        session: state.session,
+        connection_id: state.connection_id,
+        attachment: state.attachment,
+        room_audio_ingress: state.room_audio_ingress,
+        speech_input: state.speech_input,
+        sts_input: state.sts_input,
+        received_at: System.monotonic_time(:millisecond)
+      )
+
+    {result, %{state | sts_input: input}}
+  end
+
   defp deliver(frame, options) do
     attachment = Keyword.fetch!(options, :attachment)
 
@@ -56,17 +106,23 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   end
 
   defp deliver_to_inputs(attachment, frame, options) do
+    {sts_result, input} = STSInput.push(attachment, frame, Keyword.get(options, :sts_input))
+
     results = [
+      sts_result,
       deliver_speech_audio(attachment, frame, Keyword.get(options, :speech_input)),
       RoomAudioIngress.push(Keyword.get(options, :room_audio_ingress), frame)
     ]
 
-    cond do
-      Enum.any?(results, &fatal_audio_result?/1) -> :unavailable
-      Enum.any?(results, &(&1 == :ok)) -> :ok
-      Enum.any?(results, &drop_audio_result?/1) -> :drop
-      true -> :unavailable
-    end
+    result =
+      cond do
+        Enum.any?(results, &fatal_audio_result?/1) -> :unavailable
+        Enum.any?(results, &(&1 == :ok)) -> :ok
+        Enum.any?(results, &drop_audio_result?/1) -> :drop
+        true -> :unavailable
+      end
+
+    {result, input}
   end
 
   defp deliver_speech_audio(%ConnectionAttachment{media_ingress: nil}, _frame, _input),
@@ -94,6 +150,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
       :duplicate_frame,
       :invalid_packet,
       :media_overloaded,
+      :policy_denied,
       :queue_full,
       :stale_frame,
       :stale_policy_interval,

@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
 
   @behaviour Vxpipe.CallEngine.Media.ConnectionReadiness
 
-  alias Vxpipe.CallEngine.Media.{Ingress, PreparedConnection}
+  alias Vxpipe.CallEngine.Media.{Ingress, PreparedConnection, STSIngress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot, SpeechToTextDemand}
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.Gateway.Media.{OutputArbiter, RoomAudioEgress, RoomAudioIngress}
@@ -84,6 +84,9 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
   end
 
   @impl true
+  def prepare_candidate(_binding, _candidate, %{speech_to_speech?: true}, _options),
+    do: {:error, :unsupported_sts_handoff}
+
   def prepare_candidate(binding, candidate, demand, options) do
     with :ok <- validate_candidate_admission(binding, candidate, demand, options),
          :ok <- OutputArbiter.confirm_hold(binding.output, Keyword.fetch!(options, :generation)),
@@ -196,16 +199,24 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
   end
 
   defp input_track(binding, demand) do
-    if demand.audio_input? or demand.speech_to_text?,
+    if input_required?(demand),
       do: binding.transport.input_track(binding.instance),
       else: {:ok, nil}
   end
 
   defp prepare_input(binding, track, demand) do
     with :ok <- prepare_track(RoomAudioIngress, binding.room_input, track, demand.audio_input?),
-         :ok <- prepare_speech_track(binding, track, demand.speech_to_text?) do
+         :ok <- prepare_speech_track(binding, track, demand.speech_to_text?),
+         :ok <- prepare_sts_track(binding, track, Map.get(demand, :speech_to_speech?, false)) do
       :ok
     end
+  end
+
+  defp prepare_sts_track(_binding, _track, false), do: :ok
+
+  defp prepare_sts_track(binding, track, true) do
+    with {:ok, _output} <- binding.transport.speech_to_speech_track(binding.instance, track),
+         do: :ok
   end
 
   defp prepare_speech_track(_binding, _track, false), do: :ok
@@ -234,18 +245,32 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
          {:ok, room_output} <-
            resources(RoomAudioEgress, binding.room_output, demand.room_output?),
          {:ok, speech_input} <-
-           resources(Ingress, binding.attachment.media_ingress, demand.speech_to_text?) do
-      {:ok, base ++ room_input ++ room_output ++ speech_input}
+           resources(Ingress, binding.attachment.media_ingress, demand.speech_to_text?),
+         {:ok, sts_input} <- sts_resources(binding, Map.get(demand, :speech_to_speech?, false)) do
+      {:ok, base ++ room_input ++ room_output ++ speech_input ++ sts_input}
     end
   end
 
   defp base_resources(binding, demand) do
     with {:ok, transport} <-
            binding.transport.readiness_resources(binding.instance,
-             input?: demand.audio_input? or demand.speech_to_text?
+             input?: input_required?(demand)
            ),
          {:ok, output} <- resources(OutputArbiter, binding.output, true),
          do: {:ok, transport ++ output}
+  end
+
+  defp input_required?(demand),
+    do:
+      demand.audio_input? or demand.speech_to_text? or Map.get(demand, :speech_to_speech?, false)
+
+  defp sts_resources(_binding, false), do: {:ok, []}
+
+  defp sts_resources(binding, true) do
+    with {:ok, %{ingress: ingress}} <-
+           Vxpipe.CallEngine.speech_to_speech_input_configuration(binding.attachment),
+         {:ok, resource, _status} <- STSIngress.readiness(ingress),
+         do: {:ok, [resource]}
   end
 
   defp resources(_adapter, _instance, false), do: {:ok, []}
@@ -261,6 +286,13 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
       else: {:error, :policy_not_prepared}
   end
 
+  defp current_interval?(
+         %Resource{kind: :speech_to_speech_ingress} = resource,
+         policy,
+         _participant
+       ),
+       do: resource.policy_interval == policy.revision
+
   defp current_interval?(%Resource{} = resource, policy, participant) do
     case Map.fetch(@intervals, resource.kind) do
       {:ok, scope} -> resource.policy_interval == Snapshot.interval(policy, scope, participant)
@@ -274,7 +306,7 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
     attachment = binding.attachment
 
     cond do
-      (demand.audio_input? or demand.speech_to_text?) and
+      input_required?(demand) and
           attachment.room_audio_input_mode != :enabled ->
         {:error, :input_not_admitted}
 

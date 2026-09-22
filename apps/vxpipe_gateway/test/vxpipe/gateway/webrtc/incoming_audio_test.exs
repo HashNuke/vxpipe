@@ -17,7 +17,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudioTest do
       room_audio_output_mode: :full_mix
     }
 
-    assert :drop =
+    assert {:drop, nil} =
              IncomingAudio.forward(codec(), "monitor-track", packet(stereo_opus_packet()),
                session: session(),
                connection_id: "conn-monitor",
@@ -35,7 +35,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudioTest do
       room_audio_output_mode: :full_mix
     }
 
-    assert :drop =
+    assert {:drop, nil} =
              IncomingAudio.forward(codec(), "input-track", packet(<<>>),
                session: session(),
                connection_id: "conn-input",

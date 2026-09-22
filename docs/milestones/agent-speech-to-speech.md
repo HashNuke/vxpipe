@@ -19,7 +19,7 @@ final acceptance gates. Google handle-based reconnection is now covered by
 local protocol tests (`labnotes/20260922-1142-google-sts-resumption.md`), without
 historical audio replay. Fresh-session context reconstruction is only a
 [feasibility proposal](../sts-context-restoration.md), not implemented recovery.
-The latest direct-work checkpoint passes all root format, compile, strict Credo,
+The earlier runtime checkpoint passed all root format, compile, strict Credo,
 unused-lock and test checks (2,166 tests, zero failures, 42 excluded; seed 0).
 This does not close the remaining implementation or acceptance work below.
 
@@ -27,12 +27,15 @@ Real-room follow-up (`labnotes/20260922-1209-sts-room-integration.md`) repaired
 STS runtime selection, allocation policy capture, readiness reconciliation and
 source-disconnect cleanup. STS is now a required readiness resource; missing
 policy authority and rejected enforcer registration cannot grant an allocation,
-and a second source connection is rejected. Actual microphone routing into STS
-is still missing. [The input-routing decision](../sts-input-routing.md) now
+and a second source connection is rejected. The committed embedded PCM room path
+now routes microphone input into STS. Native WebRTC/telephony conversion,
+callback delivery and phone-room readiness now have focused evidence (43 tests,
+seed 0); full native multi-mode calls and lifecycle acceptance remain incomplete.
+[The input-routing decision](../sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
 format, age/sequence, bounds, policy/hold, timeout, cleanup and status redaction;
-the transport/room adoption path remains unwired. Capability tests
+native transport adoption is covered by the follow-up task breakdown below. Capability tests
 are not substitutes for that room-level proof;
 the B room-proof and B/C lifecycle exit items below remain unchecked.
 The input checkpoint also repaired a root-suite STT startup race: the attached
@@ -350,6 +353,15 @@ review after every checkpoint. If a focused test proves new call/app
 instability, investigate it immediately rather than deferring a known failure.
 Commit only when implementation commits are requested.
 
+Discovery-first workflow (user clarification, 2026-09-22): before implementing
+any newly identified fix or addition, record it in this milestone and break it
+into concrete tasks with verification expectations. Review ownership, contracts
+and dependency order before starting its red test. Keep findings and unfinished
+tasks visible; do not silently expand implementation scope. For authorized
+checkpoints, run focused verification, commit the coherent implementation/tests/
+documentation, and only then run broader umbrella gates. Gate repairs belong in
+separate commits, never an amendment of the checkpoint under test.
+
 After the implementation tasks in A–F are in place, run one coordinated final
 acceptance pass: integrated call scenarios, rendered UI inspection, bounded
 local synthetic load, implementation reviews and all root verification gates.
@@ -410,8 +422,9 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   and the real output-sink protocol so far; that is partial evidence, not a
   room-test equivalent. A compiled real room now accepts framed Morse PCM
   without human STT, decodes its reply as RECEIVED HI, and publishes the agent
-  transcript only after sink playback settlement. Independent human-STT fanout,
-  native transport conversion and the remaining room lifecycle cases are still
+  transcript only after sink playback settlement. Independent STT/STS backpressure
+  and native conversion now have focused tests; full multi-mode native calls
+  and the remaining room lifecycle cases are still
   required before final acceptance (see F).
   Evidence: `capability/speech_to_speech_test.exs` (12 tests: reply,
   attribution, denial, echo, mismatch, revocation, transcript denial,
@@ -437,9 +450,63 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   publication path, startup/readiness/source cleanup, source allocation guards,
   framed receiver checks, hold epochs and entry-install binding for an earlier
   attachment. `ConnectionReadiness` rejects selected STS without exact ingress
-  evidence. WebRTC/telephony conversion, all three transcript modes and the
-  remaining lifecycle cases are still open. See `docs/sts-input-routing.md` and
+  evidence. Native conversion is now covered below; integrated calls in all
+  three transcript modes and the remaining lifecycle cases are still open.
+  See `docs/sts-input-routing.md` and
   `labnotes/20260922-1309-sts-room-input.md` for the checkpoint evidence/limits.
+
+#### Native microphone follow-up tasks (2026-09-22)
+
+These tasks refine B's existing native-input and independent-fanout requirements;
+they do not close B's room/transcript acceptance or C's transfer requirement.
+At the time this list was added, the converter helper and four focused tests
+were already implemented locally; transport callback tests were red. Further
+implementation paused to record this breakdown per the discovery-first rule.
+
+- [x] Add an STS-only conversion adapter using the exact connection's selected
+  input descriptor and ingress, independent of human STT. Prepare and reuse
+  dedicated WebRTC Opus and telephony Opus/PCMU conversion state. Prove mono
+  PCM format, byte count, timestamp conversion and explicit unsupported/missing
+  allocation failures. Included in the 43-test focused native regression group.
+- [x] Extend WebRTC's 16-bit RTP sequence at the STS boundary so wraparound
+  does not permanently reject input. Reject duplicates/reordered packets before
+  touching decoder history. The same focused group proves 65535 → 0 continuity
+  and rejection of the late pre-wrap packet; not a whole-call longevity test.
+- [x] Prepare and retain STS conversion in the owning WebRTC connection and
+  telephony media session. Deliver microphone frames to STS when human STT is
+  absent; preserve updated sequence state across callbacks. Prove both actual
+  transport callback paths with their existing source checks.
+- [x] Extend native connection readiness to demand a microphone track for STS,
+  prepare its converter in the owner process, collect the exact STS ingress
+  resource, and check its policy revision. Prove a supervised native room call
+  reaches ready without human STT and selected-but-unavailable STS fails closed.
+- [x] Keep human-STT, STS and room-input delivery independent under bounded
+  admission/backpressure. Prove one consumer's full queue cannot suppress the
+  other; treat STS policy denial as a dropped frame rather than transport loss,
+  with a subsequent permitted frame accepted after a new policy revision.
+- [x] Reject STS transfer-candidate preparation explicitly until C's source
+  handoff contract is implemented and proven. Add a focused rejection test;
+  do not claim transfer support from ordinary initial readiness.
+- [x] Keep the WebRTC connection within the existing module-size/SRP boundary:
+  adding its STS callback takes it beyond 800 lines. After the callback tests
+  are green, move its input preparation/delivery helpers into the existing
+  incoming-audio module; rerun connection and malformed-packet regressions.
+  Refactored after green callbacks; connection is now 769 lines.
+- [ ] Record focused red/green evidence and review the diff; commit this native
+  checkpoint before running root gates. Record any gate repair as a separate
+  task here before implementing and committing it.
+
+Design/dependency review: retain the Call Engine's connection-bound handle,
+credited ingress and policy owner; Gateway owns transport conversion only.
+Prepare converters before readiness can release input. RTP extension is private
+to WebRTC STS, not a change to telephony sequence semantics. Initial native
+readiness precedes broader transcript-mode and transfer acceptance; no provider,
+hosted authorization or Google advertisement changes are required. This is a
+local design review, separate from implementation/acceptance evidence.
+Evidence: `labnotes/20260922-1344-sts-native-input.md`.
+Focused verification: 43 Gateway tests pass, seed 0. Native socket/codec tests
+are local; this is not carrier interoperability, rendered WebRTC acceptance,
+or the final ten-call load. Umbrella gates for this checkpoint are pending.
 
 ### C — Interruption, tools, and transfer lifecycle
 

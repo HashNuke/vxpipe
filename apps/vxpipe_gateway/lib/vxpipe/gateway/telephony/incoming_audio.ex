@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
 
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.Gateway.Media.RoomAudioIngress
+  alias Vxpipe.Gateway.Media.{RoomAudioIngress, STSInput}
   alias Vxpipe.Gateway.WebRTC.OpusDecoder
   alias Vxpipe.Providers.Twilio.PCMU.Codec
 
@@ -27,7 +27,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
 
   def speech_track(_track, _target), do: {:error, :unsupported_audio}
 
-  def new_normalizer(%AudioFrame{} = frame, target) do
+  def new_normalizer(frame, target) do
     with {:ok, _track} <- speech_track(frame, target) do
       case {frame.codec, frame.sample_rate, target.codec, target.sample_rate} do
         {:opus, 16_000, :linear16, 16_000} ->
@@ -75,20 +75,33 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
 
   def speech_frame(_frame, _normalizer), do: {:error, :unsupported_audio}
 
-  @spec deliver(module(), ConnectionAttachment.t(), pid() | nil, struct(), term()) ::
-          :ok | :drop | :unavailable
-  def deliver(engine, %ConnectionAttachment{} = attachment, room_audio_ingress, frame, normalizer) do
+  @spec deliver(module(), ConnectionAttachment.t(), pid() | nil, struct(), term(), map() | nil) ::
+          {:ok | :drop | :unavailable, map() | nil}
+  def deliver(
+        engine,
+        %ConnectionAttachment{} = attachment,
+        room_audio_ingress,
+        frame,
+        normalizer,
+        sts_input
+      ) do
+    {sts_result, sts_input} = STSInput.push(attachment, frame, sts_input)
+
     results = [
+      sts_result,
       deliver_speech_audio(engine, attachment, frame, normalizer),
       RoomAudioIngress.push(room_audio_ingress, frame)
     ]
 
-    cond do
-      Enum.any?(results, &fatal_audio_result?/1) -> :unavailable
-      Enum.any?(results, &(&1 == :ok)) -> :ok
-      Enum.any?(results, &drop_audio_result?/1) -> :drop
-      true -> :unavailable
-    end
+    result =
+      cond do
+        Enum.any?(results, &fatal_audio_result?/1) -> :unavailable
+        Enum.any?(results, &(&1 == :ok)) -> :ok
+        Enum.any?(results, &drop_audio_result?/1) -> :drop
+        true -> :unavailable
+      end
+
+    {result, sts_input}
   end
 
   defp deliver_speech_audio(
@@ -135,6 +148,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
       :buffer_full,
       :duplicate_frame,
       :media_overloaded,
+      :policy_denied,
       :queue_full,
       :stale_frame,
       :stale_policy_interval,
