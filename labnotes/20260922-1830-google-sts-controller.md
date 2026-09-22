@@ -127,3 +127,7 @@ acceptance. The new controller work is not part of the running umbrella baseline
 - The checkpoint will be committed before broad root gates. The preceding
   umbrella failure remains independently tracked in the native handoff work;
   it cannot be reported as a clean root pass for this Google change.
+- Committed as `d7c3af73`. All four post-commit static gates pass: root format,
+  warnings-as-errors compilation, strict Credo (1,082 source files) and unused-lock
+  verification. Coordinated umbrella rerun is pending the native causal repair;
+  no previous root test total is attributed to this checkpoint.
