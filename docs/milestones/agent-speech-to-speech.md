@@ -1775,6 +1775,9 @@ Submitted invocation outcomes must still survive privately for later reasoning.
               and hold/policy/source changes retire denied entries without
               bypassing the one credited playback slot. Prove repeated
               queue/drain and bounded capacity recovery.
+            - [ ] Extract cohesive response admission/queue ownership from
+              `Output` after the root strict-Credo module-size gate; preserve
+              the focused behavior and rerun the post-commit static gates.
             Capability queue evidence: focused real-capability reds reproduced
             missing start handling, stale origin replay after hold with a reused
             supplied epoch, unresolved provider-detected speech, unbounded

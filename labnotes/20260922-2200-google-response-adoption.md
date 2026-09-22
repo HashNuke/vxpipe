@@ -72,3 +72,10 @@ in the capability diff. The relevant capability group passed 99/0. The
 milestone keeps its first queue child/parent open because source-replacement
 integration and Google response-owner delivery remain unproven; the two
 implementation/lifecycle queue children are checked with this evidence.
+
+Post-commit static checks after `3b3bdd76`: format and warnings-as-errors
+compile pass; strict Credo reports `Output` at 872 lines versus the 800-line
+limit. This is an architectural hygiene gate, not a response-behavior failure.
+Added a milestone refactor task before code changes. Extract cohesive response
+admission/queue ownership, keep the focused capability group green, and rerun
+the static gates after a follow-up commit.
