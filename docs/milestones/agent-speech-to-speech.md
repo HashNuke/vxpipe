@@ -982,6 +982,9 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   - [x] Prove exact initial and handle-resumed fake-wire setup, empty tools, bounds,
     and inspect/status/log redaction with focused Call Engine red-green tests.
   - [x] Document local evidence and remaining gated selection/hosted acceptance.
+  - [x] Integrate the reviewed private setup checkpoint with current STS runtime
+    fixes, synchronize the normative provider contract and rerun focused tests
+    before recording broader post-commit umbrella evidence.
   - [x] Repair adapter-local full-string tool-name validation after independent
     review of `dd501d39`: reject trailing newlines at construction and after
     private-config tampering, before fake-socket connection. Preserve the shared
@@ -1010,6 +1013,12 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   configuration. See [Google configuration decision](../google-speech-integration.md#private-sts-activation-configuration)
   and `labnotes/20260922-1650-google-activation-config.md`. Public Google selection,
   hosted interoperability and overall milestone acceptance remain incomplete.
+  Parent integration: `e5cb0993` and `13969fdc` preserve both reviewed checkpoints
+  alongside the recognition-usage repairs. The integrated startup/Google/shared
+  STS group passes 90 tests, zero failures, seed 0. Normative private-configuration
+  requirements are synchronized in `docs/speech-provider-contract.md`.
+  Post-commit umbrella verification is recorded separately; neither this group
+  nor the earlier umbrella run substitutes for the open Google controller tests.
 - [ ] Add the tagged hosted controller/interruption/resumption acceptance check
   before requesting billable execution. Keep it excluded by default and Google
   unadvertised until the separately authorized acceptance gate passes.

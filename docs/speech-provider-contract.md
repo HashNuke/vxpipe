@@ -476,6 +476,31 @@ credit. Opening output does not reset that allowance. Local queue, withheld-cred
 PCM-tail regressions prove these limits and FIFO preservation, not hosted capacity. Other
 providers must declare and test their own bounded strategy; 16 is not a universal queue count.
 
+#### Private STS activation configuration
+
+Resolve the pinned agent instruction and authorized tool descriptors before
+provider startup. Retain only model-visible tool names, descriptions and input
+schemas; invocation bindings, executable handlers and Call Variables values must
+not enter provider configuration. Unavailable variable bindings or an absent
+owning MCP runtime fail explicitly. Advertising a declaration does not authorize
+execution or complete the shared tool-lifetime contract above.
+
+Keep this configuration in the existing private-init path, not in public provider
+options, descriptors or inspection. The local Google adapter accepts at most
+65,536 UTF-8 instruction bytes, 64 declarations and 131,072 combined bytes as both
+an external term and JSON. Existing descriptor/schema limits also apply. Reject
+duplicate options/names, unsupported fields, invalid schemas and malformed names
+without sanitizing authorized identities. Revalidate private config before socket
+startup; config/status inspection and error logs must redact its contents.
+
+Google setup sends the instruction in `systemInstruction.parts[].text` and exact
+authorized JSON schemas in `tools[].functionDeclarations[].parametersJsonSchema`.
+Activity detection belongs under `realtimeInputConfig`. Initial setup and
+handle-resumed setup retain the same validated private configuration; only the
+resumption handle changes. Fake-wire and startup tests cover this boundary.
+This does not enable Google production selection, add an MCP owner, or establish
+hosted compatibility. See [the configuration decision](google-speech-integration.md#private-sts-activation-configuration).
+
 #### Private Google resumption
 
 Google same-allocation renewal and idle connection-loss recovery use only the latest valid,
