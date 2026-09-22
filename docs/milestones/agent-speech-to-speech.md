@@ -996,6 +996,10 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   generated converter reads raw `type` while the Gemini receive path bypasses
   that converter. Do not treat SDK-shaped fixture success as raw v1beta proof.
   Evidence/proposal: `labnotes/20260922-1736-google-voice-activity.md`.
+  Follow-up: pinned Python SDK's actual Gemini receive path invokes the MLDev
+  converter reading raw `voiceActivity.type`; recommend that single raw profile,
+  not SDK-facing `voiceActivityType`. Implementation remains pending parent
+  decision and fresh raw-key red-green tests; provisional fixtures are not proof.
 
 - [ ] Drive the fake Google socket through the real STS capability/controller:
   send output transcript/audio/generation completion before server

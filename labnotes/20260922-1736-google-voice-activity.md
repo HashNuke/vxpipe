@@ -57,3 +57,51 @@ Proposal: obtain an authoritative raw v1beta schema/example or upstream SDK
 clarification before selecting `type` versus `voiceActivityType`. No hosted call
 is authorized. All milestone wire/controller subtasks remain unchecked. Parent
 review fixes take priority; no commands remain live.
+
+## Follow-up: actual Python receive path resolves recommended raw profile
+
+Read-only follow-up pinned Python SDK to
+`938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab`. Unlike the JS bypass, its actual
+Gemini receive path calls the generated MLDev converter:
+
+1. [`live.py` lines 549–580](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/live.py#L549)
+   receives raw WebSocket bytes, parses JSON, and calls
+   `_LiveServerMessage_from_mldev(response)` for non-Vertex sessions.
+2. [`_live_converters.py` lines 1355–1362](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/_live_converters.py#L1355)
+   maps top-level `voiceActivity` through `_VoiceActivity_from_mldev`.
+3. [Lines 2026–2037](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/_live_converters.py#L2026)
+   read raw `type` into SDK `voice_activity_type`; `audioOffset` maps to
+   `audio_offset`. There is no raw `voiceActivityType` alternative in this path.
+4. [`_api_client.py` line 840](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/_api_client.py#L840)
+   selects Gemini v1beta by default; [`live.py` lines 970–996](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/live.py#L970)
+   uses that version in the same GenerativeService.BidiGenerateContent endpoint.
+
+This establishes a concrete official raw-transport mapping, not merely an unused
+converter. Recommendation: choose only `{"voiceActivity":{"type":"ACTIVITY_START"}}`
+and corresponding `ACTIVITY_END`/`TYPE_UNSPECIFIED`, with optional string
+`audioOffset`. SDK-facing `voiceActivityType` is not evidence of a second wire
+version. No documentation found in this bounded pass supports accepting both.
+Treat the JS receive/converter inconsistency as an SDK issue/inference, not a
+reason for a dual-key fallback or a claim about hosted observations.
+
+The [official v1beta Live reference](https://ai.google.dev/api/live?hl=en#BidiGenerateContentServerContent)
+deprecates `serverContent.speechState` in favor of VoiceActivity. It documents
+`activityStart`/`activityEnd` as client realtime-input messages, not server-content
+booleans. Do not add either deprecated or invented server fallback. Optional
+offset remains metadata, not evidence of playback or turn settlement semantics.
+
+Bounded fixture audit: pinned Python `tests/live/test_live_response.py`,
+`tests/live/test_live.py`, `tests/live_api/test_live_session.py`, JS
+`test/unit/live_test.ts`, and the JS recorded
+`live_ML_Dev_handle_activity_start_and_end.websocket.log` were searched. Found
+Python mocked receive coverage for the distinct allowlisted detection signal;
+the JS recording contains client activityStart/End, not raw voiceActivity proof.
+No matching raw voiceActivity fixture was found in that inspected set. The
+recommendation rests on the actual Python receive/converter chain, not a claim
+of captured wire or exhaustive upstream test coverage.
+
+No compile/tests, hosted calls or upstream messages ran in this research pass.
+Provisional local code and fixture changes remain untouched and unstaged; the
+prior 42-test green uses the wrong proposed SDK-shaped key and is not acceptance
+of the recommended raw profile. Implementation needs a newly authorized red
+probe using `type`, including rejection of SDK-only fields and malformed values.
