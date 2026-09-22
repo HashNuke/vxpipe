@@ -27,3 +27,8 @@
   ownership/deadline/privacy guarantees and explicit still-open conversation
   semantics, after recording that integration task in the milestone. Reproduction
   methods remain committed with the regressions for later development cycles.
+- Committed as `176be9d2` before broader gates; pushnotify succeeded. Static
+  root handle `40110` exited 0: format, warnings-as-errors compile, strict Credo
+  (1,086 source files) and unused-lock checks pass. Full root acceptance remains
+  pending the separate Google response-ownership behavior work; its five red
+  controller cases are intentionally not included in this committed checkpoint.
