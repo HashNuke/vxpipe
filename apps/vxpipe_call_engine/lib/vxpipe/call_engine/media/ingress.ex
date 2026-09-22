@@ -26,6 +26,24 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   def media_format(ingress), do: Readiness.media_format(ingress)
 
+  @doc """
+  Sets an optional STS fanout target for live microphone audio.
+
+  When set, each dispatched frame payload is also forwarded to the STS
+  capability as `{:vxpipe_ingress_sts_audio, participant_id, payload}` via a
+  non-blocking send. STS admission stays bounded inside the capability and
+  never affects the STT dispatch path.
+  """
+  @spec set_sts_target(pid(), pid() | nil) :: :ok | {:error, :unavailable}
+  def set_sts_target(ingress, target)
+      when is_pid(ingress) and (is_pid(target) or is_nil(target)) do
+    try do
+      GenServer.call(ingress, {:set_sts_target, target}, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
   @impl true
   def readiness_binding(resource), do: Readiness.readiness_binding(resource)
 
@@ -112,7 +130,8 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
          ),
        queue: :queue.new(),
        track_id: nil,
-       total_bytes: 0
+       total_bytes: 0,
+       sts_target: Keyword.get(options, :sts_target)
      }}
   end
 
@@ -133,6 +152,11 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   def handle_call(:open, _from, state) do
     {:reply, :ok, %{state | opening_input_admission: :open}}
+  end
+
+  def handle_call({:set_sts_target, target}, _from, state)
+      when is_pid(target) or is_nil(target) do
+    {:reply, :ok, %{state | sts_target: target}}
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
@@ -212,6 +236,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
         else
           reference = make_ref()
           :ok = SpeechToText.deliver_audio(state.capability, self(), reference, frame)
+          forward_sts_audio(state, frame)
 
           in_flight = %{
             bytes: byte_size(frame.payload),
@@ -352,4 +377,12 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   defp notify_owner(_owner, _message), do: :ok
+
+  defp forward_sts_audio(%{sts_target: nil}, _frame), do: :ok
+
+  defp forward_sts_audio(%{sts_target: target} = state, frame)
+       when is_pid(target) do
+    send(target, {:vxpipe_ingress_sts_audio, state.identity.participant_id, frame.payload})
+    :ok
+  end
 end

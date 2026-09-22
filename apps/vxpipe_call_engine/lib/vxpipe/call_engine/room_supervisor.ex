@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   alias Vxpipe.CallEngine.Archive.Handoff
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
   alias Vxpipe.CallEngine.Usage.Observation
 
   alias Vxpipe.CallEngine.{
@@ -222,7 +223,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          :human,
          %SpeechToTextRuntime{} = runtime
        ) do
-    with {:ok, capability, ingress} <-
+    with {:ok, policy} <- initial_speech_policy(command.incarnation_id),
+         {:ok, capability, ingress} <-
            RoomCapabilitySupervisor.start_speech_to_text(
              command.incarnation_id,
              room_authority,
@@ -230,7 +232,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
              runtime.provider,
              Keyword.put(runtime.media_ingress, :input_admission, :closed),
              speech_to_text_usage(runtime),
-             provider_private: runtime.provider_private
+             provider_private: runtime.provider_private,
+             initial_policy: policy
            ) do
       bind_connection_speech_to_text(
         room_authority,
@@ -277,6 +280,18 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          _selected_runtime
        ) do
     {:ok, nil}
+  end
+
+  defp initial_speech_policy(incarnation_id) do
+    with authority when is_pid(authority) <- Authority.whereis(incarnation_id),
+         %Snapshot{} = snapshot <- Authority.snapshot(authority, 1_000),
+         true <- Snapshot.valid?(snapshot) do
+      {:ok, snapshot}
+    else
+      _unavailable -> {:error, :media_policy_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :media_policy_unavailable}
   end
 
   defp speech_to_text_usage(%SpeechToTextRuntime{} = runtime) do
@@ -456,6 +471,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
+      speech_to_speech: Keyword.get(settings, :speech_to_speech, providers: %{}),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
   end

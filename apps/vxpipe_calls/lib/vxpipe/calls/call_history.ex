@@ -56,5 +56,8 @@ defmodule Vxpipe.Calls.CallHistory do
   defp transcript_fact?(%{kind: :agent_output_generated, payload: %{"text" => text}}),
     do: is_binary(text)
 
+  defp transcript_fact?(%{kind: :participant_transcription_final, payload: %{"text" => text}}),
+    do: is_binary(text)
+
   defp transcript_fact?(_fact), do: false
 end

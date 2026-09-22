@@ -79,6 +79,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
 
   def start(%{startup_ready?: false} = state), do: {:ok, state}
 
+  def start(%{text_capability: nil, speech_to_speech_runtime: runtime} = state)
+      when not is_nil(runtime) do
+    case state.first_message.mode do
+      :wait_for_input ->
+        {:ok, state}
+
+      :fixed ->
+        with %{pid: capability} when is_pid(capability) <- state.speech_to_speech_capability,
+             :ok <-
+               Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(
+                 capability,
+                 state.first_message.text
+               ) do
+          first_message = %{state.first_message | status: :started}
+          {:ok, %{state | first_message: first_message}}
+        else
+          _unavailable -> {:error, unavailable()}
+        end
+
+      :generated ->
+        {:error, unavailable()}
+    end
+  end
+
   def start(state) do
     with :open <- OpeningAudio.admission(state.opening_audio),
          {:ok, connection_id, connection} <- target_connection(state),

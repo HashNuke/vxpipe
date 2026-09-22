@@ -44,8 +44,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
   }
 
   alias Vxpipe.CallEngine.Tool.CurrentTime
-  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
-  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.Providers.MorseCode.STTSession, as: MorseSTTSession
+  alias Vxpipe.Providers.MorseCode.TTSSession, as: MorseCodeTTS
   alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
 
   alias Vxpipe.CallEngine.{
@@ -1481,7 +1481,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
           wire_options: [],
           maximum_requests: 2
         ],
-        MorseCodeTTS.Session => [
+        MorseCodeTTS => [
           enabled: true,
           maximum_requests: 2
         ]
@@ -1527,7 +1527,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                plan.tenant_id
              )
 
-    assert {MorseCodeTTS.Session, options} = startup.text_to_speech.provider
+    assert {MorseCodeTTS, options} = startup.text_to_speech.provider
     assert options[:sample_rate] == 16_000
     assert options[:unit_duration_ms] == 20
     assert startup.text_to_speech.provider_private == []

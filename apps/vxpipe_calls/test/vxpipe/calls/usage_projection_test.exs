@@ -31,6 +31,14 @@ defmodule Vxpipe.Calls.UsageProjectionTest do
     assert observation.capability == :speech_to_speech
   end
 
+  test "restores an agent-output speech-to-text usage observation from its archive fact" do
+    fact = usage_fact()
+    payload = put_in(fact.payload, ["capability"], "output_speech_to_text")
+
+    assert {:ok, observation} = UsageObservationProjection.project(%{fact | payload: payload})
+    assert observation.capability == :output_speech_to_text
+  end
+
   test "rejects an archive payload whose attribution disagrees with the fact envelope" do
     fact = usage_fact()
     payload = put_in(fact.payload, ["attribution", "participant_id"], "participant-other")

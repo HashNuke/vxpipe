@@ -1,5 +1,8 @@
 import { expect, test } from "vitest";
-import { installedSetupProviders } from "./setupCatalog";
+import {
+  installedSetupProviders,
+  providersFor,
+} from "./setupCatalog";
 
 const capabilities = {
   deepgram: ["credential", "credential_validation", "stt", "tts"],
@@ -46,4 +49,22 @@ test("Setup hides missing providers and removes undeclared speech capabilities",
   });
   expect(providers.map((provider) => provider.id)).toEqual(["deepgram", "google"]);
   expect(providers[0]?.capabilities).toEqual(["stt"]);
+});
+
+test("Speech-to-speech stays gated until hosted acceptance passes", () => {
+  const providers = installedSetupProviders(capabilities);
+  for (const provider of providers) {
+    expect(provider.capabilities).not.toContain("s2s");
+    expect(provider.sampleCapabilities).not.toContain("s2s");
+  }
+  const connected = [
+    { provider: "google", status: "connected" },
+    { provider: "deepgram", status: "connected" },
+  ] as const;
+  expect(
+    providersFor(
+      "s2s",
+      connected.map((connection) => ({ ...connection })),
+    ),
+  ).toEqual([]);
 });

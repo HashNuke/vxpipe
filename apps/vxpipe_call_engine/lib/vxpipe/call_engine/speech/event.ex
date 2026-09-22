@@ -30,7 +30,8 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :reason,
     :call_ref,
     :tool_name,
-    :arguments
+    :arguments,
+    :final
   ]
 
   @type t :: %__MODULE__{}
@@ -113,7 +114,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   defp allowed_fields(:speech_started), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:turn_resumed), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:transcript), do: [:turn_ref, :text, :provider_request_id]
-  defp allowed_fields(:input_transcript), do: [:turn_ref, :text, :provider_request_id]
+  defp allowed_fields(:input_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
   defp allowed_fields(:output_transcript), do: [:turn_ref, :text, :provider_request_id]
 
   defp allowed_fields(:tool_call),
@@ -174,10 +175,17 @@ defmodule Vxpipe.CallEngine.Speech.Event do
        when kind in [:transcript, :turn_ended, :eager_turn_ended],
        do:
          is_reference(reference) and is_binary(text) and
-           (kind == :transcript or event.endpointing in [:provider_semantic, :provider_gap])
+           (kind == :transcript or
+              event.endpointing in [:provider_semantic, :provider_gap, :external])
+
+  defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text} = event)
+       when kind in [:input_transcript],
+       do:
+         is_reference(reference) and is_binary(text) and
+           (is_nil(event.final) or is_boolean(event.final))
 
   defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text})
-       when kind in [:input_transcript, :output_transcript],
+       when kind in [:output_transcript],
        do: is_reference(reference) and is_binary(text)
 
   defp valid_kind?(%__MODULE__{

@@ -74,6 +74,11 @@ defmodule Vxpipe.CallEngine.SpeechSTSContractProvider do
     do: {:reply, Channel.submit(state.channel, reference, :binary.copy(<<0, 0>>, 320)), state}
 
   @impl true
+  def handle_info({:vxpipe_speech_output_settled, _, _, _, _} = settled, state) do
+    send(state.observer, settled)
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_speech_output, channel, turn, reference}, state) do
     send(state.observer, {:sts_output_permitted, self(), channel, turn, reference})
     {:noreply, state}

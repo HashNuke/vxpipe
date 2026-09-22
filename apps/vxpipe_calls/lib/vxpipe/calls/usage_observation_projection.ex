@@ -104,6 +104,7 @@ defmodule Vxpipe.Calls.UsageObservationProjection do
   defp capability("speech_to_text"), do: {:ok, :speech_to_text}
   defp capability("text_to_speech"), do: {:ok, :text_to_speech}
   defp capability("speech_to_speech"), do: {:ok, :speech_to_speech}
+  defp capability("output_speech_to_text"), do: {:ok, :output_speech_to_text}
   defp capability("tool"), do: {:ok, :tool}
   defp capability("telephony"), do: {:ok, :telephony}
   defp capability(_capability), do: {:error, :invalid_capability}

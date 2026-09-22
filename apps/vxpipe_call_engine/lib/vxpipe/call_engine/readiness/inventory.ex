@@ -127,6 +127,7 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
 
       capabilities = [
         model_inference: selected.model_inference != nil,
+        speech_to_speech: selected.speech_to_speech != nil,
         text_to_speech: selected.text_to_speech != nil and audio_source?(id, policy, recorded)
       ]
 

@@ -134,6 +134,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
       cond do
         map_size(state.connections) == 0 -> [:media]
         pending_speech?(state) -> [:speech_to_text]
+        pending_speech_to_speech?(state) -> [:speech_to_speech]
         true -> []
       end
 
@@ -342,7 +343,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
   defp start_room_probe(%{startup: %{readiness: nil, resources_ready?: false}} = state)
        when map_size(state.connections) > 0 do
-    if pending_speech?(state) do
+    if pending_speech?(state) or pending_speech_to_speech?(state) do
       state
     else
       room = self()
@@ -367,6 +368,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
         connection.speech_to_text == nil and
         Map.get(state.speech_to_text_runtime, connection.participant_id) != nil
     end)
+  end
+
+  defp pending_speech_to_speech?(%{speech_to_speech_runtime: nil}), do: false
+
+  defp pending_speech_to_speech?(state) do
+    state.speech_to_speech_capability == nil or not state.speech_to_speech_ready?
   end
 
   defp reconcile(%{startup_ready?: true} = state), do: FirstMessage.start(state)

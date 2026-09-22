@@ -1,0 +1,35 @@
+{
+  "schema_version": "20260915.01",
+  "name": "Morse speech-to-speech example (local only)",
+  "entry_caller": "caller",
+  "entry_receiver": "assistant",
+  "defaults": {
+    "capabilities": {}
+  },
+  "participants": {
+    "caller": {
+      "type": "human",
+      "connection": {
+        "service": "web",
+        "mode": "receive",
+        "admission": "start_call"
+      }
+    },
+    "assistant": {
+      "type": "agent",
+      "prompt": "Answer briefly with Morse speech.",
+      "first_message": {
+        "mode": "wait_for_input"
+      },
+      "tools": {},
+      "transfers": [],
+      "capabilities": {
+        "speech_to_speech": {
+          "provider": "morse",
+          "model": "morse",
+          "options": {}
+        }
+      }
+    }
+  }
+}

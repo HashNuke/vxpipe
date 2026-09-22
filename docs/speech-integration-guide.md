@@ -317,8 +317,12 @@ evidence (`history_reconciliation?`). Provider and hybrid modes require
 `endpointing: :provider_gap` or `:provider_semantic` plus speech-start evidence.
 External mode requires `endpointing: :external`; its activity boundaries come
 from the consumer. The supported-mode list contains only distinct members of
-those three modes. STS uses the raw, mono, signed little-endian linear16 PCM
-format required by the shared credited output path.
+those three modes. STS must declare both `input_format` for microphone input
+and `format` for generated output. Both use raw, mono, signed little-endian
+linear16 PCM; their sample rates need not match. Google declares 16 kHz input
+and 24 kHz output. Morse declares the selected rate in both directions.
+An absent or invalid input format fails descriptor validation. Existing STT/TTS
+descriptors keep `input_format: nil` and their original `format` meaning.
 Transcript deltas alone
 never open or close a turn. Source identity is stamped by the scoped channel,
 so callbacks take no `source_ref`: one permitted input stream exists per STS
@@ -379,14 +383,89 @@ previous output reference returns `:stale_request`, including when the provider
 turn reference is reused. This path creates no TTS usage facts; STS usage
 emission remains future work.
 
+An interruption may also terminate generation: the provider fences its
+encoder and emits `:output_completed` for the fenced turn once its credit
+state allows (immediately when idle, otherwise when the outstanding credit
+returns). That fence-terminal marker carries no success claim; the consumer
+settles it with zero egress, publishes no spoken prefix for it, and releases
+the slot so the next turn can be admitted. It never revives fenced audio.
+
 The runnable provider example is
 [`SpeechSTSContractProvider`](../apps/vxpipe_call_engine/test/support/speech_sts_contract_provider.ex),
 with channel-level conformance in `sts_conformance_test.exs` and
 `sts_output_test.exs`. The [output admission decision](sts-output-admission.md)
-records the shared lifecycle. Room playback/transcript wiring, Morse reply
-generation, interruption and tool execution remain milestone B/C work.
-Generation completion alone never finishes the public agent turn; playback
-and the selected transcript source must both settle.
+records the shared lifecycle. Morse reply generation lives in
+`Vxpipe.CallEngine.Provider.MorseCodeSTS.Session`, published under the
+credential-free `Vxpipe.Providers.MorseCode` namespace (`STTSession`,
+`TTSSession`, `STSSession`) and exercised end-to-end at the agent-owned
+`Capability.SpeechToSpeech` boundary (`speech_to_speech_test.exs`,
+`morse_sts_conversation_test.exs`). Generation completion alone never finishes
+the public agent turn; playback and the selected transcript source must both
+settle.
+
+Room integration remains incomplete: startup/readiness/source cleanup now have
+real-call tests, but the transport microphone path is not yet connected to STS.
+The capability examples above are not proof of a complete callable STS route.
+The [input-routing decision](sts-input-routing.md) records the independent
+consumer queues, directional formats and transport readiness work still needed.
+
+### Agent-output STT
+
+When the selected STS descriptor lacks output transcription, the agent must
+select explicit `output_speech_to_text`, resolved through the existing `:stt`
+provider manifest. The agent-owned tree feeds credited STS output audio only
+(never caller microphone audio) into that second allocation, with bounded
+fanout: a slow STT consumer drops chunks with a counter and can never block
+sink audio. At the STS generation boundary the tree calls the optional
+`STTProvider.finish_input/1` when the selected adapter exports it; adapters
+without finite fed input omit it, and human conversational onset/turn-end
+requirements are unchanged. The resulting text takes the single agent
+transcript role after the same egress fence as provider transcripts; on
+interruption the tree restarts the output STT so late text cannot leak into
+the next turn, and an output STT failure settles the turn honestly without
+agent text. Morse STT implements `finish_input/1` via decoder flush
+(`stt_finish_input_test.exs`); the full mode is proven in
+`speech_to_speech_output_stt_test.exs`, including denied policy, failure and
+slow-consumer settlement.
+
+The capability keeps at most 16 pending reply turns while output playback or
+recognizer readiness prevents admission. Readiness releases them in FIFO order;
+it does not discard the remainder after admitting one turn. Exceeding that
+budget fails the capability with `:pending_turn_overflow` and retires its owned
+sessions. This is a turn-count limit, separate from PCM credit and the bounded
+recognition-audio buffer.
+
+Successful `Session.settle_output/3` also sends the provider
+`{:vxpipe_speech_output_settled, channel, turn_ref, output_ref, played_ms}`.
+Use the matching references to retire generation state. This local playback
+evidence does not establish remote hearing.
+
+### Google Gemini 3.8 Live adapter
+
+Google connection renewal and idle connection-loss recovery use the latest
+private resumption handle within the same allocation. Initial setup requests
+updates; revocation or new accepted input invalidates the old checkpoint.
+Handoff waits for local playback settlement and gates new input until setup is
+acknowledged. It never sends old audio/history or regenerates past replies.
+The default attempt budget is 5 seconds, with explicit failure and no fresh
+conversation fallback. See [context restoration](sts-context-restoration.md)
+for the boundary, tests and remaining hosted gate.
+
+`Vxpipe.Providers.Google.STS` is the pure codec (model `gemini-3.8-live`,
+16 kHz input / 24 kHz output PCM, provider-owned voice, both transcriptions,
+configurable turn control) and `Vxpipe.Providers.Google.STSSession` is the
+`STSProvider` with a private `STSSocket` under the allocation's provider
+supervisor. Credentials resolve privately like the existing Google speech
+sessions and never reach logs, status or tests. Fixture tests
+(`providers/google/sts_test.exs`, `sts_session_test.exs`) drive a fake socket
+through setup, PCM conversion, multi-part/out-of-order evidence, generation
+versus playback completion, pre-audio interruption, turn-control enforcement,
+tool cancellation, `goAway`/resumption/expiry and the fence-window mute for
+sent-ahead bytes. The fixture wire shapes are documented in the codec module;
+hosted byte compatibility is not claimed. History reconciliation is declared
+false and the manifest keeps no Google `:sts` entry, so hosted selection and
+its service badge stay gated until the authorized interoperability check
+passes within its fixed budget.
 
 Register an STS provider through the same closed paths as STT/TTS, plus the
 provider manifest `:sts` entry in `Vxpipe.Providers` (declared only after the
@@ -427,7 +506,11 @@ ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/provider_contract_tes
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/stt_session_test.exs test/vxpipe/call_engine/speech/tts_session_test.exs
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/sts_session_test.exs test/vxpipe/call_engine/speech/sts_provider_contract_test.exs --seed 0
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/sts_conformance_test.exs test/vxpipe/call_engine/speech/sts_output_test.exs --seed 0
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/morse_sts_conversation_test.exs test/vxpipe/call_engine/speech/sts_tool_test.exs test/vxpipe/call_engine/speech/sts_turn_control_test.exs test/vxpipe/call_engine/speech/stt_finish_input_test.exs --seed 0
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/capability/speech_to_speech_test.exs test/vxpipe/call_engine/capability/speech_to_speech_output_stt_test.exs --seed 0
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/call_spec/sts_selection_test.exs --seed 0
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/plan_startup/sts_activation_test.exs --seed 0
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/providers/google/sts_test.exs test/vxpipe/providers/google/sts_session_test.exs --seed 0
 ```
 
 Then run provider-specific unit and tagged integration tests. Before committing a production

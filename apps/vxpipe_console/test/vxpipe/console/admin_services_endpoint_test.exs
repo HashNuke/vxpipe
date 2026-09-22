@@ -506,11 +506,18 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert json_response(conn, 200)["provider_capabilities"] == %{
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
              "google" => ["credential", "credential_validation", "stt", "tts"],
+             "morse" => ["sts", "stt", "tts"],
              "rime" => ["credential", "credential_validation", "tts"],
              "telnyx" => ["credential", "credential_validation", "telephony"],
              "twilio" => ["credential", "credential_validation", "telephony"],
              "zenmux" => ["credential", "credential_validation"]
            }
+
+    # The hosted speech-to-speech badge stays gated: Google advertises no `:sts`
+    # until its interoperability check passes, and credential-free Morse never
+    # enters the credential-backed setup catalog.
+    refute "sts" in json_response(conn, 200)["provider_capabilities"]["google"]
+    refute "credential" in json_response(conn, 200)["provider_capabilities"]["morse"]
 
     refute conn.resp_body =~ "payload"
 

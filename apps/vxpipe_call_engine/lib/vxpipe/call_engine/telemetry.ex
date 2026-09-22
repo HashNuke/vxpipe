@@ -159,8 +159,9 @@ defmodule Vxpipe.CallEngine.Telemetry do
   end
 
   @doc "Emits one safe provider failure category."
-  @spec provider_failure(:model | :stt | :tts, term(), term()) :: :ok
-  def provider_failure(capability, provider, reason) when capability in [:model, :stt, :tts] do
+  @spec provider_failure(:model | :stt | :tts | :sts, term(), term()) :: :ok
+  def provider_failure(capability, provider, reason)
+      when capability in [:model, :stt, :tts, :sts] do
     :telemetry.execute(
       @provider_failure_event,
       %{count: 1},

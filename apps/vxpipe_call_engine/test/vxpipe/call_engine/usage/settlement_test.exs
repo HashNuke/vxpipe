@@ -11,6 +11,28 @@ defmodule Vxpipe.CallEngine.Usage.SettlementTest do
 
   @observed_at ~U[2026-09-11 21:45:00Z]
 
+  test "accepts agent-output speech-to-text as a distinct usage capability" do
+    assert {:ok, provider} =
+             ProviderContext.new(name: "provider-fixture", integration_id: "output-stt")
+
+    assert {:ok, attribution} = Attribution.new(participant_id: "participant-agent")
+
+    assert {:ok, observation} =
+             Observation.new(
+               id: "usage-output-stt-1",
+               tenant_id: "tenant-usage",
+               call_id: "call-usage",
+               attempt_id: "output-stt-attempt-1",
+               capability: :output_speech_to_text,
+               provider: provider,
+               attribution: attribution,
+               outcome: :succeeded,
+               observed_at: @observed_at
+             )
+
+    assert observation.capability == :output_speech_to_text
+  end
+
   test "keeps provider identity and honest call, participant, and turn attribution typed" do
     assert {:ok, attribution} =
              Attribution.new(

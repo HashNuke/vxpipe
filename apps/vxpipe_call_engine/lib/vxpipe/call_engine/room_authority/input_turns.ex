@@ -268,7 +268,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       end
 
     case result do
-      {:ok, command} when state.text_capability != nil ->
+      {:ok, command}
+      when state.text_capability != nil and state.speech_to_speech_runtime == nil and
+             state.speech_to_speech_capability == nil ->
         case AgentOutput.interrupt(command, state) do
           {:ok, state} ->
             case TextCapability.respond(state.text_capability, command) do

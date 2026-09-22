@@ -17,10 +17,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
     if state.snapshot.tenant_id == request.tenant_id and
          state.snapshot.room_id == request.room_id and
          state.snapshot.incarnation_id == request.incarnation_id and
-         state.text_capability != nil and
-         state.text_capability.participant_id == request.source_participant_id and
-         state.text_capability.activation_id == request.source_activation_id and
-         GenServer.whereis(state.text_capability.pid) == request.source_capability and
+         source_voice_authorized?(state, request) and
          source != nil and source.kind == :agent and
          source.participant_id == request.source_participant_id and
          request.destination_call_spec_key in source.transfers and
@@ -35,6 +32,36 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
   end
 
   def authorize(%Request{}, %State{}), do: {:error, :rejected}
+
+  defp source_voice_authorized?(state, request) do
+    text_voice_authorized?(state, request) or sts_voice_authorized?(state, request)
+  end
+
+  defp text_voice_authorized?(state, request) do
+    state.text_capability != nil and
+      state.text_capability.participant_id == request.source_participant_id and
+      state.text_capability.activation_id == request.source_activation_id and
+      GenServer.whereis(state.text_capability.pid) == request.source_capability
+  end
+
+  defp sts_voice_authorized?(
+         %State{
+           speech_to_speech_capability: %{pid: pid, participant_id: participant_id},
+           speech_to_speech_runtime: %{
+             participant_id: runtime_participant_id,
+             activation_id: activation_id
+           }
+         },
+         request
+       ) do
+    participant_id == request.source_participant_id and
+      runtime_participant_id == request.source_participant_id and
+      activation_id == request.source_activation_id and
+      pid == request.source_capability and
+      is_pid(pid)
+  end
+
+  defp sts_voice_authorized?(_state, _request), do: false
 
   defp transferable_destination?(%{kind: :agent}), do: true
 

@@ -31,11 +31,39 @@ defmodule Vxpipe.CallEngine.Speech.STSProviderContractTest do
     assert is_boolean(descriptor.history_reconciliation?)
   end
 
+  test "STS input PCM is declared independently from generated output PCM" do
+    assert {:ok, morse} = MorseSTS.configure(sample_rate: 16_000)
+    assert morse.input_format == morse.format
+
+    assert {:ok, google} = Vxpipe.Providers.Google.STSSession.configure([])
+    assert google.input_format.sample_rate == 16_000
+    assert google.format.sample_rate == 24_000
+
+    assert {:error, :invalid_descriptor} = Descriptor.validate(%{google | input_format: nil})
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(%{google | input_format: %{google.input_format | channels: 2}})
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(%{
+               google
+               | input_format: %{google.input_format | sample_rate: 0}
+             })
+  end
+
   test "STS descriptors reject missing transcript and turn-control facts" do
     base = [
       kind: :sts,
       settings: %{},
       format: %{
+        encoding: :linear16,
+        container: :raw,
+        sample_rate: 16_000,
+        channels: 1,
+        byte_order: :little,
+        signed?: true
+      },
+      input_format: %{
         encoding: :linear16,
         container: :raw,
         sample_rate: 16_000,

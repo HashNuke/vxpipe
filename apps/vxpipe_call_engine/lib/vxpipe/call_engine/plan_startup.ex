@@ -16,12 +16,15 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.{
     Error,
     CapabilityCatalog,
-    CredentialSource,
     Id,
     ResolvedCallPlan,
+    SpeechToSpeechRuntime,
     SpeechToTextRuntime,
     TextToSpeechRuntime
   }
+
+  import Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution,
+    only: [resolve_provider: 4, unsupported_speech_configuration_reason: 1]
 
   @participant_command_timeout_ms 5_000
   @error_code :unsupported_call_plan
@@ -34,7 +37,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     :receiver_command,
     :agent_activation,
     :speech_to_text_runtimes,
-    :text_to_speech
+    :text_to_speech,
+    :speech_to_speech
   ]
   defstruct @enforce_keys
 
@@ -47,7 +51,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           speech_to_text_runtimes: %{
             required(String.t()) => nil | SpeechToTextRuntime.t()
           },
-          text_to_speech: nil | TextToSpeechRuntime.t()
+          text_to_speech: nil | TextToSpeechRuntime.t(),
+          speech_to_speech: nil | SpeechToSpeechRuntime.t()
         }
 
   @spec validate(ResolvedCallPlan.t(), keyword()) ::
@@ -129,7 +134,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
            speech_to_text_runtimes(plan, [caller, receiver], plan.opening_audio, options),
-         {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options) do
+         {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options),
+         {:ok, speech_to_speech} <- speech_to_speech_runtime(plan, receiver, options) do
       {:ok,
        %__MODULE__{
          caller: caller,
@@ -138,7 +144,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          receiver_command: entries.receiver_command,
          agent_activation: activation_options,
          speech_to_text_runtimes: speech_to_text_runtimes,
-         text_to_speech: text_to_speech
+         text_to_speech: text_to_speech,
+         speech_to_speech: speech_to_speech
        }}
     end
   end
@@ -420,6 +427,17 @@ defmodule Vxpipe.CallEngine.PlanStartup do
        when is_list(options),
        do: {:ok, nil}
 
+  defp agent_activation_options(
+         %ResolvedCallPlan{},
+         %ResolvedCallPlan.Participant{
+           kind: :agent,
+           capabilities: %{model_inference: nil, speech_to_speech: %CapabilitySelection{}}
+         },
+         options
+       )
+       when is_list(options),
+       do: {:ok, nil}
+
   defp agent_activation_options(plan, receiver, options) do
     AgentActivationOptions.new(plan, receiver, credential_options(plan, options))
   end
@@ -483,6 +501,97 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       |> ProviderContext.new()
     else
       _invalid -> {:error, :invalid_usage_identity}
+    end
+  end
+
+  defp speech_to_speech_runtime(
+         %ResolvedCallPlan{},
+         %ResolvedCallPlan.Participant{kind: :human},
+         _options
+       ),
+       do: {:ok, nil}
+
+  defp speech_to_speech_runtime(plan, participant, options) do
+    case resolve_provider(
+           participant.capabilities.speech_to_speech,
+           plan.tenant_id,
+           credential_options(plan, options),
+           :speech_to_speech
+         ) do
+      {:ok, nil} ->
+        {:ok, nil}
+
+      {:ok, {provider_module, provider_config} = provider, settings} ->
+        with {:ok, runtime_provider, provider_private} <-
+               SpeechToSpeechRuntime.provider(provider, settings),
+             {:ok, usage_provider} <-
+               speech_to_speech_usage_provider(
+                 plan,
+                 participant,
+                 provider_module,
+                 provider_config
+               ),
+             {:ok, output_speech_to_text} <-
+               output_speech_to_text_runtime(plan, participant, options) do
+          {:ok,
+           %SpeechToSpeechRuntime{
+             call_id: plan.call_id,
+             participant_id: participant.participant_id,
+             activation_id: participant.activation_id,
+             provider: runtime_provider,
+             provider_private: provider_private,
+             usage_provider: usage_provider,
+             output_speech_to_text: output_speech_to_text
+           }}
+        else
+          _invalid_runtime -> unsupported_speech_configuration(participant, :speech_to_speech)
+        end
+
+      {:error, _reason} ->
+        unsupported_speech_configuration(participant, :speech_to_speech)
+    end
+  end
+
+  defp speech_to_speech_usage_provider(plan, participant, provider_module, provider_config) do
+    selection = participant.capabilities.speech_to_speech
+
+    with {:ok, identity} <- SpeechToSpeechRuntime.usage_identity(provider_module, provider_config) do
+      identity
+      |> Keyword.put(:integration_id, CapabilitySelection.identity(selection, plan.tenant_id))
+      |> ProviderContext.new()
+    else
+      _invalid -> {:error, :invalid_usage_identity}
+    end
+  end
+
+  defp output_speech_to_text_runtime(
+         _plan,
+         %ResolvedCallPlan.Participant{capabilities: %{output_speech_to_text: nil}},
+         _options
+       ),
+       do: {:ok, nil}
+
+  defp output_speech_to_text_runtime(plan, participant, options) do
+    selection = participant.capabilities.output_speech_to_text
+
+    case resolve_provider(
+           selection,
+           plan.tenant_id,
+           credential_options(plan, options),
+           :speech_to_text
+         ) do
+      {:ok, {provider_module, provider_config} = provider, settings} ->
+        case SpeechToTextRuntime.provider(provider, settings) do
+          {:ok, {runtime_module, runtime_options}, _private} ->
+            _ = {provider_module, provider_config}
+            {:ok, {runtime_module, runtime_options}}
+
+          _invalid ->
+            unsupported_speech_configuration(participant, :output_speech_to_text)
+        end
+
+      {:error, _reason} ->
+        unsupported_speech_configuration(participant, :output_speech_to_text)
     end
   end
 
@@ -595,102 +704,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp credential_options(plan, options),
     do: Keyword.put(options, :credential_bindings, plan.credential_bindings)
 
-  defp resolve_provider(nil, _tenant_id, _options, _kind), do: {:ok, nil}
-
-  defp resolve_provider(
-         %CapabilitySelection{} = selection,
-         tenant_id,
-         options,
-         kind
-       ) do
-    with {:ok, provider} <- CapabilityCatalog.adapter(selection),
-         {:ok, settings} <-
-           CapabilityCatalog.provider_settings(Keyword.get(options, kind), provider, kind),
-         true <- Keyword.get(settings, :enabled) == true,
-         {:ok, credential} <- CredentialSource.resolve(tenant_id, selection, options),
-         {:ok, selected_options} <- CapabilityCatalog.speech_options(selection),
-         {:ok, selected_options} <- authenticate_speech(selected_options, credential),
-         true <- Code.ensure_loaded?(provider),
-         {:ok, provider_config} <- configure_provider(provider, selected_options, kind) do
-      settings =
-        if credential do
-          identity =
-            credential
-            |> Vxpipe.CallEngine.ProviderCredential.binding_identity()
-            |> Map.put("version", credential.version)
-
-          Keyword.put(settings, :credential_identity, identity)
-        else
-          settings
-        end
-
-      {:ok, {provider, provider_config}, settings}
-    else
-      _unsupported -> {:error, unsupported_speech_configuration_reason(kind)}
-    end
-  rescue
-    _exception -> {:error, unsupported_speech_configuration_reason(kind)}
-  end
-
-  defp configure_provider(provider, options, :speech_to_text) do
-    case provider do
-      Vxpipe.Providers.Deepgram.STTSession ->
-        Vxpipe.Providers.Deepgram.Flux.new(options)
-
-      Vxpipe.Providers.Google.STTSession ->
-        Vxpipe.Providers.Google.STT.new(options)
-
-      _other ->
-        case provider.configure(options) do
-          {:ok, _descriptor} -> {:ok, options}
-          {:error, _reason} = error -> error
-        end
-    end
-  end
-
-  defp configure_provider(
-         Vxpipe.Providers.Deepgram.TTSSession,
-         options,
-         :text_to_speech
-       ),
-       do: Vxpipe.Providers.Deepgram.FluxTextToSpeech.new(options)
-
-  defp configure_provider(Vxpipe.Providers.Rime.TTSSession, options, :text_to_speech),
-    do: Vxpipe.Providers.Rime.TTS.new(options)
-
-  defp configure_provider(Vxpipe.Providers.Google.TTSSession, options, :text_to_speech),
-    do: Vxpipe.Providers.Google.TTS.new(options)
-
-  defp configure_provider(provider, options, :text_to_speech) do
-    case provider.configure(options) do
-      {:ok, _descriptor} -> {:ok, options}
-      {:error, _reason} = error -> error
-    end
-  end
-
-  defp configure_provider(provider, options, _kind),
-    do: configure_provider_struct(provider, options)
-
-  defp configure_provider_struct(provider, options) do
-    if function_exported?(provider, :new, 1),
-      do: provider.new(options),
-      else: {:error, :invalid_configuration}
-  end
-
   defp put_credential_cache_identity(identity, nil), do: identity
 
   defp put_credential_cache_identity(identity, credential),
     do: Map.put(identity, "credential", credential)
-
-  defp authenticate_speech(options, nil), do: {:ok, options}
-
-  defp authenticate_speech(options, %Vxpipe.CallEngine.ProviderCredential{
-         auth_kind: "api_key",
-         payload: %{"api_key" => api_key}
-       }),
-       do: {:ok, Keyword.put(options, :api_key, api_key)}
-
-  defp authenticate_speech(_options, _credential), do: {:error, :unsupported_provider_auth}
 
   defp current_plan(plan) do
     if plan.schema_version == Vxpipe.CallEngine.CallSpec.schema_version() do
@@ -745,18 +762,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp valid_planned_selection(_selection, _kind, path),
     do: unsupported(path, "must contain a valid inline selection")
-
-  defp unsupported_speech_configuration_reason(:speech_to_text),
-    do: :unsupported_speech_to_text_configuration
-
-  defp unsupported_speech_configuration_reason(:speech_to_speech),
-    do: :unsupported_speech_to_speech_configuration
-
-  defp unsupported_speech_configuration_reason(:output_speech_to_text),
-    do: :unsupported_speech_to_text_configuration
-
-  defp unsupported_speech_configuration_reason(:text_to_speech),
-    do: :unsupported_text_to_speech_configuration
 
   defp unsupported_speech_configuration(participant, kind) do
     unsupported(

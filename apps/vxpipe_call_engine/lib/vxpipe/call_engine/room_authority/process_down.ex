@@ -53,6 +53,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
               Map.has_key?(state.speech_to_text_monitors, monitor) ->
                 ConnectionLifecycle.remove_unavailable_speech_to_text(monitor, state)
 
+              state.speech_to_speech_monitor != nil and state.speech_to_speech_monitor == monitor ->
+                ConnectionLifecycle.notify(state.connections, :agent_unavailable)
+
+                %{
+                  state
+                  | speech_to_speech_capability: nil,
+                    speech_to_speech_ready?: false,
+                    sts_turns: %{},
+                    speech_to_speech_monitor: nil
+                }
+
               state.text_capability != nil and state.text_capability.monitor != nil and
                   state.text_capability.monitor == monitor ->
                 ConnectionLifecycle.notify(state.connections, :agent_unavailable)

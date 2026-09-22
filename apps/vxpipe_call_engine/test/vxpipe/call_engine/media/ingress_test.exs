@@ -308,6 +308,27 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 4}}
   end
 
+  test "forwards live microphone audio to the STS target without affecting STT delivery" do
+    {capability, transport} = start_capability()
+    ingress = start_ingress(capability, sts_target: self())
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<7, 7>>))
+    assert_receive {:test_stt_audio, ^transport, <<7, 7>>}
+    assert_receive {:vxpipe_ingress_sts_audio, "part-human", <<7, 7>>}
+  end
+
+  test "a dead STS target never blocks STT delivery" do
+    {capability, transport} = start_capability()
+    dead = spawn(fn -> :ok end)
+    ingress = start_ingress(capability, sts_target: dead)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<9>>))
+    assert_receive {:test_stt_audio, ^transport, <<9>>}
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 1}}
+  end
+
   defp start_ingress(capability, options \\ []) do
     start_supervised!(
       {Ingress,

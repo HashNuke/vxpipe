@@ -107,8 +107,14 @@ The descriptor contains validated provider-specific public settings, media forma
 identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged`), and TTS cache
 identity. STT declares endpointing provenance (provider semantic detection, provider silence/gap
 detection, external boundary required, or none), speech-start evidence and supported optional
-eager/resume events. This is a small validated capability description, not arbitrary feature
+eager/resume events. STT providers that support finite fed input for the agent-output STS mode
+may additionally export the optional `finish_input/1` operation; human conversational onset
+and turn-end requirements are unchanged by it. This is a small validated capability description, not arbitrary feature
 flags. Identity values exclude credentials, URLs, headers and raw provider responses.
+STS additionally requires separate validated `input_format` and output `format`
+PCM declarations; deriving microphone format from generated output is not safe.
+The STT/TTS descriptor's `input_format` stays `nil`. See the
+[STS authoring contract](speech-integration-guide.md#speech-to-speech-providers).
 `Descriptor.new/1` validates this closed metadata shape, and the engine repeats
 validation before starting a provider. Provider-specific settings remain the provider's
 pure-validation responsibility. Readiness, endpointing and optional events must agree with
@@ -167,7 +173,9 @@ Existing TTS capability -> TTS session.speak(request_ref, text)
 Morse STT calls its incremental decoder and publishes typed turn events directly. Morse TTS
 advances its encoder and delivers bounded PCM chunks directly. Neither requires JSON, a fake
 connection, a `Flush` command or a fake hosted provider ID. Deepgram sessions translate the
-same operations to their actual protocol internally.
+same operations to their actual protocol internally. Morse speech sessions are published
+under the credential-free `Vxpipe.Providers.MorseCode` namespace (`STTSession`, `TTSSession`,
+`STSSession`); the manifest declares all three without credential entries.
 
 ## Event and lifecycle contract
 

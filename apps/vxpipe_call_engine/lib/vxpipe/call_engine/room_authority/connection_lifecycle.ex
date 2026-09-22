@@ -5,7 +5,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   alias Vxpipe.CallEngine.Media.{Ingress, OutputSink}
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomMixer}
-  alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, StartupReadiness, State, TextCapability}
+
+  alias Vxpipe.CallEngine.RoomAuthority.{
+    OpeningAudio,
+    SpeechToSpeech,
+    StartupReadiness,
+    State,
+    TextCapability
+  }
+
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   @spec attach(struct(), pid(), pid(), pid() | nil, reference(), State.t()) ::
@@ -262,7 +270,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         {:error, already_attached(command.connection_id)}
 
       true ->
-        :ok
+        SpeechToSpeech.authorize_connection(state, command.participant_id)
     end
   end
 
@@ -270,6 +278,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     do: true
 
   defp attachment_ready?(%State{text_capability_required?: false}), do: true
+
+  defp attachment_ready?(%State{speech_to_speech_runtime: runtime}) when not is_nil(runtime),
+    do: true
+
   defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
   defp put(command, subscriber, output_sink, room_monitor, state) do
@@ -305,6 +317,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     archive_recorder = ArchiveRecorder.connection_attached(state.archive_recorder, command, role)
     state = %{state | archive_recorder: archive_recorder}
     state = hold_new_connection(state, connection)
+    state = SpeechToSpeech.maybe_start(state, Map.put(connection, :attach_command, command))
     if state.startup_ready?, do: send(subscriber, {:vxpipe_call_ready, room_monitor})
     runtime = selected_speech_to_text_runtime(command.participant_id, state)
 
@@ -507,6 +520,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   defp remove_by_id(connection_id, state, attributes) do
     connection = Map.get(state.connections, connection_id)
+    state = SpeechToSpeech.source_disconnected(state, connection_id)
     state = clear_speech_to_text(connection_id, false, state)
     {monitor, connection_monitors} = pop_monitor(connection_id, state)
 

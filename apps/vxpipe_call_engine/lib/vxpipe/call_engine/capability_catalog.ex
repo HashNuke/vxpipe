@@ -75,7 +75,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: Registry.resolve_capability("google", :tts)
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
-    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
+    do: Registry.resolve_capability("morse", :stt)
 
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "deepgram"}),
     do: Registry.resolve_capability("deepgram", :sts)
@@ -87,13 +87,13 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: Registry.resolve_capability("rime", :sts)
 
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "morse"}),
-    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTS.Session}
+    do: Registry.resolve_capability("morse", :sts)
 
   def adapter(%CapabilitySelection{kind: :output_speech_to_text, provider: "morse"}),
-    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
+    do: Registry.resolve_capability("morse", :stt)
 
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "morse"}),
-    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session}
+    do: Registry.resolve_capability("morse", :tts)
 
   def adapter(_selection), do: {:error, :unsupported_capability}
 
@@ -118,14 +118,27 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp speech_adapters(:speech_to_text) do
     {:ok, deepgram} = Registry.fetch_capability("deepgram", :stt)
     {:ok, google} = Registry.fetch_capability("google", :stt)
-    [deepgram, google, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
+    {:ok, morse} = Registry.fetch_capability("morse", :stt)
+    [deepgram, google, morse, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
   end
 
   defp speech_adapters(:text_to_speech) do
     {:ok, deepgram} = Registry.fetch_capability("deepgram", :tts)
     {:ok, rime} = Registry.fetch_capability("rime", :tts)
     {:ok, google} = Registry.fetch_capability("google", :tts)
-    [deepgram, rime, google, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+    {:ok, morse} = Registry.fetch_capability("morse", :tts)
+
+    [deepgram, rime, google, morse, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+  end
+
+  defp speech_adapters(:speech_to_speech) do
+    {:ok, morse} = Registry.fetch_capability("morse", :sts)
+    [morse]
+  end
+
+  defp speech_adapters(:output_speech_to_text) do
+    {:ok, morse} = Registry.fetch_capability("morse", :stt)
+    [morse, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session]
   end
 
   defp speech_adapters(_kind), do: []
@@ -162,6 +175,13 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
        ),
        do: Keyword.validate(settings, enabled: false, media_ingress: nil)
 
+  defp validate_provider_settings(
+         Vxpipe.Providers.MorseCode.STTSession,
+         :speech_to_text,
+         settings
+       ),
+       do: Keyword.validate(settings, enabled: false, media_ingress: nil)
+
   defp validate_provider_settings(Deepgram.TTSSession, :text_to_speech, settings) do
     Deepgram.Speech.settings(:text_to_speech, settings)
   end
@@ -178,6 +198,20 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
          settings
        ),
        do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
+  defp validate_provider_settings(
+         Vxpipe.Providers.MorseCode.TTSSession,
+         :text_to_speech,
+         settings
+       ),
+       do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
+  defp validate_provider_settings(
+         Vxpipe.Providers.MorseCode.STSSession,
+         :speech_to_speech,
+         settings
+       ),
+       do: Keyword.validate(settings, enabled: false)
 
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
@@ -270,18 +304,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "morse", credential_name: nil, kind: kind}, options)
        when kind in [:speech_to_text, :output_speech_to_text] do
-    validate_provider(Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, options)
+    validate_provider(Vxpipe.Providers.MorseCode.STTSession, options)
   end
 
   defp validate_speech(
          %{provider: "morse", credential_name: nil, kind: :speech_to_speech},
          options
        ) do
-    validate_provider(Vxpipe.CallEngine.Provider.MorseCodeSTS.Session, options)
+    validate_provider(Vxpipe.Providers.MorseCode.STSSession, options)
   end
 
   defp validate_speech(%{provider: "morse", credential_name: nil, kind: :text_to_speech}, options) do
-    validate_provider(Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, options)
+    validate_provider(Vxpipe.Providers.MorseCode.TTSSession, options)
   end
 
   defp validate_speech(%{provider: "deepgram", kind: :speech_to_text}, options),

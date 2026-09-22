@@ -74,8 +74,12 @@ defmodule Vxpipe.CallEngine.Speech.STSOutput do
                played,
                state.descriptor.format
              ) do
-          {:ok, output} -> {:reply, :ok, %{state | output: output}}
-          error -> {:reply, error, state}
+          {:ok, output} ->
+            send(state.producer, {:vxpipe_speech_output_settled, self(), turn, reference, played})
+            {:reply, :ok, %{state | output: output}}
+
+          error ->
+            {:reply, error, state}
         end
     end
   end

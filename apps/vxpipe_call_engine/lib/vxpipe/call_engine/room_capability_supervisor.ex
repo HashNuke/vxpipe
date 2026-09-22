@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree, as: SpeechToSpeechTree
   alias Vxpipe.CallEngine.Capability.TextToSpeech.Tree, as: TextToSpeechTree
   alias Vxpipe.CallEngine.Speech.PrivateInit
 
@@ -104,6 +105,60 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   def whereis_text_to_speech(incarnation_id, participant_id),
     do: GenServer.whereis(text_to_speech_ref(incarnation_id, participant_id))
+
+  def start_speech_to_speech(incarnation_id, options) when is_list(options) do
+    owner = Keyword.fetch!(options, :owner)
+    agent_id = Keyword.fetch!(options, :agent_id)
+    provider = Keyword.fetch!(options, :provider)
+    provider_private = Keyword.get(options, :provider_private, [])
+    output_private = Keyword.get(options, :output_stt_private, [])
+
+    with {:ok, private_init} <- PrivateInit.open(provider_private, 5_000),
+         {:ok, output_init} <- PrivateInit.open(output_private, 5_000) do
+      tree_options =
+        [
+          owner: owner,
+          agent_id: agent_id,
+          provider: provider,
+          provider_private: private_init,
+          output_stt_private: output_init,
+          name: speech_to_speech_ref(incarnation_id, agent_id)
+        ] ++
+          Keyword.take(options, [
+            :human_id,
+            :sink,
+            :policy,
+            :policy_revision,
+            :caller_source,
+            :frame_identity,
+            :output_generation,
+            :output_stt
+          ])
+
+      result =
+        try do
+          DynamicSupervisor.start_child(via(incarnation_id), {SpeechToSpeechTree, tree_options})
+        after
+          PrivateInit.close(private_init)
+          PrivateInit.close(output_init)
+        end
+
+      case result do
+        {:ok, tree} -> {:ok, SpeechToSpeechTree.capability(tree)}
+        {:error, _reason} = error -> error
+      end
+    end
+  end
+
+  def whereis_speech_to_speech(incarnation_id, agent_id),
+    do: GenServer.whereis(speech_to_speech_ref(incarnation_id, agent_id))
+
+  def stop_speech_to_speech(incarnation_id, agent_id) do
+    case GenServer.whereis(speech_to_speech_ref(incarnation_id, agent_id)) do
+      capability when is_pid(capability) -> stop_capability(incarnation_id, capability)
+      nil -> :ok
+    end
+  end
 
   def start_speech_to_text(
         incarnation_id,
@@ -210,7 +265,9 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   end
 
   def stop_capability(incarnation_id, capability) do
-    child = TextToSpeechTree.parent(capability) || capability
+    child =
+      TextToSpeechTree.parent(capability) || SpeechToSpeechTree.parent(capability) || capability
+
     DynamicSupervisor.terminate_child(via(incarnation_id), child)
   end
 
@@ -242,5 +299,10 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   defp text_to_speech_ref(incarnation_id, participant_id) do
     {:via, Registry,
      {Vxpipe.CallEngine.RoomRegistry, {:text_to_speech, incarnation_id, participant_id}}}
+  end
+
+  defp speech_to_speech_ref(incarnation_id, agent_id) do
+    {:via, Registry,
+     {Vxpipe.CallEngine.RoomRegistry, {:speech_to_speech, incarnation_id, agent_id}}}
   end
 end

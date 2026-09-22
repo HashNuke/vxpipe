@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, SpeechToSpeech, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
@@ -110,8 +110,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         held =
           MapSet.new(state.connections, fn {_id, connection} -> connection.participant_id end)
 
+        state =
+          SpeechToSpeech.hold(%{
+            state
+            | pending_participant_transfer: pending,
+              held_participant_ids: held
+          })
+
         Progress.publish(pending, :preparing, [], state)
-        {:noreply, %{state | pending_participant_transfer: pending, held_participant_ids: held}}
+        {:noreply, state}
 
       {:error, :unavailable} ->
         state = History.failed(state, request, :preparation_supervisor_unavailable)
@@ -276,6 +283,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   @spec teardown_source(State.t(), pid(), Context.t()) :: State.t()
   def teardown_source(%State{} = state, capability, %Context{} = context)
       when is_pid(capability) do
+    state =
+      if state.speech_to_speech_capability != nil and
+           state.speech_to_speech_capability.pid == capability do
+        SpeechToSpeech.stop(state)
+      else
+        state
+      end
+
     case Map.pop(state.pending_agent_teardowns, capability) do
       {%{participant_id: participant_id, participant_supervisor: supervisor}, pending}
       when participant_id == context.agent_participant_id ->

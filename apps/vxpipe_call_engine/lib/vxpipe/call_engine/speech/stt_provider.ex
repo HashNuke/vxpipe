@@ -28,4 +28,18 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
   """
   @callback push_audio(pid(), binary()) :: :ok | {:error, :busy | :session_failed}
   @callback close(pid()) :: :ok | {:error, atom()}
+
+  @doc """
+  Bounded finite-input finalization for agent-output STT.
+
+  Called once at the STS generation boundary after the last output chunk was
+  admitted. The provider flushes recognition for the finite fed input and emits
+  its turn evidence; it must not invent conversational onset or turn-end rules
+  beyond its declared descriptor. Human conversational onset and turn-end
+  requirements are unchanged. Optional: providers without finite fed input
+  simply omit it.
+  """
+  @callback finish_input(pid()) :: :ok | {:error, atom()}
+
+  @optional_callbacks finish_input: 1
 end

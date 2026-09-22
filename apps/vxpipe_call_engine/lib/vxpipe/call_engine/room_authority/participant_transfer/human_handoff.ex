@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl}
   alias Vxpipe.CallEngine.{Error, Telemetry, TextToSpeechRequest}
 
-  alias Vxpipe.CallEngine.RoomAuthority.{ConnectionLifecycle, Startup, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{ConnectionLifecycle, SpeechToSpeech, Startup, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
@@ -350,7 +350,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           GenServer.reply(pending.from, {:error, :unavailable})
 
           {:noreply,
-           %{state | pending_participant_transfer: nil, held_participant_ids: MapSet.new()}}
+           SpeechToSpeech.release(%{
+             state
+             | pending_participant_transfer: nil,
+               held_participant_ids: MapSet.new()
+           })}
         else
           _failure -> recovery_failed(pending, state)
         end

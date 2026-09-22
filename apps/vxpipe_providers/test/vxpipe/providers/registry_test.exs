@@ -111,6 +111,7 @@ defmodule Vxpipe.Providers.RegistryTest do
     assert Registry.catalog() == %{
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
              "google" => [:credential, :credential_validation, :stt, :tts],
+             "morse" => [:sts, :stt, :tts],
              "rime" => [:credential, :credential_validation, :tts],
              "telnyx" => [:credential, :credential_validation, :telephony],
              "twilio" => [:credential, :credential_validation, :telephony],

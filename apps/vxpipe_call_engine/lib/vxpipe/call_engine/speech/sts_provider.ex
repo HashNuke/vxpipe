@@ -15,6 +15,12 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   `:output_completed` with both references after the last credit. Completion
   ends generation; only the consumer can settle local playout and release the
   output slot. Audio/text input admission never authorizes output on its own.
+
+  Successful consumer settlement sends the producer
+  `{:vxpipe_speech_output_settled, channel, turn_ref, output_ref, played_ms}`
+  exactly once for that output. This is the engine's local playback fence,
+  not proof of remote hearing. A provider may use it to retire generation
+  state before a safe session-resumption handoff.
   """
 
   alias Vxpipe.CallEngine.Speech.Descriptor

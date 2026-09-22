@@ -50,6 +50,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
 
   @impl true
+  def finish_input(pid), do: GenServer.call(pid, :finish_input, 5_000)
+
+  @impl true
   def close(pid) do
     GenServer.call(pid, :close, 5_000)
   catch
@@ -82,6 +85,19 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
   end
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
+
+  def handle_call(:finish_input, _from, state) do
+    case Decoder.flush(state.decoder) do
+      {:ok, decoder, events} ->
+        case publish(events, %{state | decoder: decoder}) do
+          {:ok, state} -> {:reply, :ok, state}
+          {:error, _reason} -> {:reply, {:error, :session_failed}, state}
+        end
+
+      {:error, _reason} ->
+        {:reply, {:error, :session_failed}, state}
+    end
+  end
 
   @impl true
   def format_status(status) do

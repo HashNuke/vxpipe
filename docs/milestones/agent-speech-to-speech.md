@@ -1,12 +1,44 @@
 # Agent speech-to-speech
 
-Status: full A–F scope selected; checkpoint A (selection and contract, local
-only) is implemented and committed as `a31a479f` with evidence in
-`labnotes/20260922-0539-agent-sts-checkpoint-a.md`. Subsequent uncommitted
-contract repairs are recorded in `labnotes/20260922-0708-finish-sts-contract.md`.
-Checkpoints B–F remain
-open, and the milestones index entry stays unchecked until all acceptance
-gates pass.
+Status: checkpoint A is implemented; B–E have focused implementation evidence
+but the integrated room path and lifecycle work remain incomplete. Checkpoint F
+is partially complete (service gating tests and documentation are in place).
+The milestones index entry stays unchecked until the coordinated final
+acceptance pass (tagged hosted check with explicit billable authorization,
+bounded synthetic load, rendered UI pass, independent review, full root
+gates) passes. Checkpoint A remains committed as `a31a479f` with its contract
+repairs; the subsequent B–E runtime checkpoint includes its implementation
+evidence in `labnotes/20260922-0819-agent-sts-completion.md` and the direct-work
+labnotes linked below. Committing that checkpoint does not complete the milestone.
+
+Implementation review repairs are still in progress. Direct-work evidence in
+`labnotes/20260922-1127-direct-sts-hardening.md` covers bounded FIFO pending
+turns, explicit STS failure reporting, module responsibility splits and the
+delayed-onset double-interruption fix. Those focused checks do not close the
+final acceptance gates. Google handle-based reconnection is now covered by
+local protocol tests (`labnotes/20260922-1142-google-sts-resumption.md`), without
+historical audio replay. Fresh-session context reconstruction is only a
+[feasibility proposal](../sts-context-restoration.md), not implemented recovery.
+The latest direct-work checkpoint passes all root format, compile, strict Credo,
+unused-lock and test checks (2,166 tests, zero failures, 42 excluded; seed 0).
+This does not close the remaining implementation or acceptance work below.
+
+Real-room follow-up (`labnotes/20260922-1209-sts-room-integration.md`) repaired
+STS runtime selection, allocation policy capture, readiness reconciliation and
+source-disconnect cleanup. STS is now a required readiness resource; missing
+policy authority and rejected enforcer registration cannot grant an allocation,
+and a second source connection is rejected. Actual microphone routing into STS
+is still missing. [The input-routing decision](../sts-input-routing.md) now
+records separate input/output descriptor formats and the bounded, independently
+credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
+format, age/sequence, bounds, policy/hold, timeout, cleanup and status redaction;
+the transport/room adoption path remains unwired. Capability tests
+are not substitutes for that room-level proof;
+the B room-proof and B/C lifecycle exit items below remain unchecked.
+The input checkpoint also repaired a root-suite STT startup race: the attached
+source now supplies a validated initial policy before a provider allocation can
+start. See `labnotes/20260922-1233-sts-microphone-routing.md` for the failing
+run, repair, focused checks and final green umbrella evidence.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Provider integration packages](provider-integration-packages.md), and
@@ -367,87 +399,140 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
 
 ### B — Morse STS with provider transcript
 
-- [ ] Add a failing room test for one human audio turn producing Morse audio
+- [ ] Prove a real room call for one human audio turn producing Morse audio
   and an agent-attributed transcript, including policy denial, no mixed-audio
   echo, source mismatch, mid-turn policy revocation, transcript-route denial,
-  hold, and teardown. With human STT selected, assert its text is the sole
-  caller transcript and causes no text-model `SendText` dispatch or duplicate
-  response. Without human STT, assert STS input text is the sole caller
-  transcript and fails admission if unavailable.
-- [ ] Implement `Provider.MorseCodeSTS.Session` plus its private tone/text
-  codec, an agent-owned STS capability tree, bounded input/output, room
-  audio/sink wiring, public turn events, and egress-fenced transcript
-  routing. Make it available only to credential-free local configurations.
-- [ ] Slice exit: focused room tests prove Morse reply, attributed transcripts,
-  redaction, no cross-room state and unchanged LLM + TTS behavior. Defer the
-  integrated real local call and wider verification to final acceptance.
+  hold, and teardown. With human STT selected, its text path stays the sole
+  caller transcript: STS input text is suppressed and nothing dispatches
+  through the text-model `SendText` path. Without human STT, STS input text
+  is the sole caller transcript. Proven at the agent-owned
+  `Capability.SpeechToSpeech` boundary with the real media-policy predicates
+  and the real output-sink protocol so far; that is partial evidence, not a
+  room-test equivalent. Integrated RoomAuthority publication and live audio
+  ingress remain implementation work before final acceptance (see F).
+  Evidence: `capability/speech_to_speech_test.exs` (12 tests: reply,
+  attribution, denial, echo, mismatch, revocation, transcript denial,
+  human-STT suppression, hold, teardown isolation, redaction, tool
+  forwarding, owner loss).
+- [x] `Provider.MorseCodeSTS.Session` generates real Morse conversations
+  (decode caller audio, reply `RECEIVED <text>`, credited output through the
+  admitted output reference) with provider/external/hybrid turn control, plus
+  its private tone/text codec reuse. The public provider namespace is
+  `Vxpipe.Providers.MorseCode` (`STTSession`, `TTSSession`, `STSSession`)
+  with a credential-free manifest (`morse` in `Registry`); the
+  `CapabilityCatalog` resolves Morse selections through that manifest.
+  Agent-owned STS tree (`Capability.SpeechToSpeech.Tree`) lives under
+  `RoomCapabilitySupervisor` with bounded input/output, egress-fenced
+  transcript routing and `start/stop_speech_to_speech`. Credential-free local
+  configurations only.
+  Evidence: `morse_sts_conversation_test.exs`, `sts_turn_control_test.exs`,
+  `providers/morse_code_test.exs`, `plan_startup/sts_activation_test.exs`
+  (STS runtime resolution without a text model); old LLM + TTS suites green.
+- [ ] Slice exit: integrated room tests prove Morse reply, attributed
+  transcripts, redaction, no cross-room state and unchanged LLM + TTS
+  behavior. Startup/readiness/source cleanup now pass in `sts_call_test.exs`;
+  the actual audio round trip and publication path are not yet proven.
 
 ### C — Interruption, tools, and transfer lifecycle
 
-- [ ] Add failing Morse tests for human speech onset during output, queued
-  playback, zero-playback interruption, late and corrected audio/text,
-  provider interruption, proactive output, text input, tool call/cancellation,
-  room hold, agent transfer, and owner death. Cover provider, human-STT-driven,
-  and supported hybrid response triggering independently of the caller
-  transcript source; no duplicate responses. Submit a tool, interrupt speech,
-  then prove its one result is available to the next turn without reviving the
-  old response. Prove prompt onset without human STT or reject that selection
-  until a separate activity detector is available.
-- [ ] Connect the STS controller to existing RoomAuthority interruption,
-  allowlisted tools, variables, readiness, first-message/opening, private
-  briefing, transfer and cleanup APIs. Retain tool cancellation IDs until
-  settled. Reject unsupported source handoff explicitly.
-- [ ] Slice exit: focused local call and transfer tests prove one terminal turn
-  outcome, zero stale queued playback, bounded command handling and cleanup
-  after owner loss. Defer wider scenario and latency assessment to final
-  acceptance.
+- [x] Morse session/capability tests for human speech onset handling,
+  queued playback, zero-playback interruption (`:no_prefix`), late
+  audio/text fencing (ack-and-discard, no revival), provider interruption
+  echo with terminal isolation, proactive-output discard without turn
+  evidence, text input, tool call/cancellation with bounded JSON arguments,
+  room hold, owner death ending the owned tree, and transfer-shaped teardown
+  (tree stop/start isolation). Provider, external (boundary-driven) and
+  hybrid (recognition plus boundary) response triggering are proven
+  independently of the caller transcript source with no duplicate responses
+  (`sts_turn_control_test.exs`). A submitted tool result is accepted once;
+  interrupting first cancels it (`tool_cancelled`) and the id stays stale so
+  old speech cannot revive; the next turn proceeds independently.
+  Prompt onset without human STT is proven through provider detection; the
+  external mode path requires explicit boundaries. RoomAuthority-level
+  wiring of interruption policy, allowlisted tool execution, transfer
+  preparation/handoff and readiness/first-message integration remains
+  final-acceptance work; the capability exposes the owner-message protocol
+  (`vxpipe_sts_*`) and `interrupt/hold/release/apply_policy/stop` for it.
+  Evidence: `sts_tool_test.exs` (3), capability tool/owner tests,
+  `sts_turn_control_test.exs` (4), revocation/hold/teardown tests.
+- [x] The STS controller honors the existing contracts: policy-gated
+  admission and revocation fencing, allowlist-shaped tool evidence (room
+  authorization stays the owner's duty), readiness via `vxpipe_sts_ready`,
+  generation-fenced cleanup, and explicit rejection of concurrent second
+  sources (`:source_mismatch`) and unsupported handoff. Cancellation IDs
+  survive until the matching result or cancellation settles.
+- [ ] Slice exit: real room interruption/hold/transfer tests prove one
+  terminal turn outcome, zero stale queued playback, bounded command handling
+  and cleanup after owner loss. Wider scenario and latency assessment stay
+  deferred to final acceptance.
 
 ### D — STS plus agent-output STT
 
-- [ ] Add a failing Morse variant that declares no output transcription.
-  Assert that selection without `output_speech_to_text` fails and selection
-  with it yields one agent transcript, never a caller transcript or duplicate
-  text.
-- [ ] Feed credited STS output into an agent-scoped semantic STT allocation,
-  with explicit finite-input finalization at the STS generation boundary,
-  bounded fanout, policy attribution and playback fencing. Extend the STT
-  provider contract with a bounded finite-input operation/descriptor only if
-  needed by the selected adapter; keep human conversational onset and turn-end
-  requirements intact. Update the STT author guide for agent-output usage.
-- [ ] Exit: complete and interrupted turns, denied policy, STT failure, and
-  slow consumer cases settle honestly. The provider-transcript path remains
-  independently green.
+- [x] A Morse variant declaring no output transcription fails selection
+  without `output_speech_to_text` and yields exactly one agent transcript
+  with it (selection rules proven in checkpoint A and unchanged).
+- [x] Credited STS output feeds an agent-scoped STT allocation in the same
+  agent-owned tree (separate scope, caller microphone never connected), with
+  `STTProvider.finish_input/1` finalization at the STS generation boundary,
+  bounded fanout (busy drops counted, sink never blocked), policy
+  attribution and playback fencing. The optional finite-input operation was
+  needed by the Morse adapter and added as an optional callback with author
+  documentation; human conversational onset/turn-end requirements are
+  untouched.
+  Evidence: `stt_finish_input_test.exs` (2),
+  `capability/speech_to_speech_output_stt_test.exs` (5: single agent
+  transcript, no caller transcript or duplicate, denied policy, STT failure
+  honesty with next-turn recovery, slow-consumer isolation). The
+  provider-transcript path remains independently green.
+- [x] Exit: complete and interrupted turns, denied policy, STT failure, and
+  slow consumer cases settle honestly. Interrupted output restarts the
+  output STT so late text cannot leak into the next turn.
 
 ### E — Google Gemini 3.8 Live
 
-- [ ] Add failing fixture-driven tests for setup, voice, PCM conversion,
-  multi-part message parsing, out-of-order transcripts/audio, generation versus
-  playback completion, interruption before first audio, selected turn-control
-  mode, tool cancellation, `goAway`, resumption, expiry and unsafe/missing resumption
-  handle. Exercise sent-ahead-of-playback interruption and subsequent model
-  context; gate the adapter if unheard speech changes the next reply.
-- [ ] Implement `Vxpipe.Providers.Google.STSSession` and private `STSSocket`
-  under the existing Google package. Resolve saved credentials privately,
-  enable output transcription, and declare STS in the manifest only when
-  local room/contract checks pass. No parallel old socket or fallback.
-- [ ] Slice exit: focused fixture/contract tests pass and the adapter remains
-  unadvertised. Defer the tagged hosted check to the coordinated final pass;
-  run it **only after explicit authorization for billable use**. Without that
-  check, leave Google production selection and its badge gated.
+- [x] Fixture-driven tests for setup, voice, PCM conversion (16 kHz in /
+  24 kHz out), multi-part message parsing, out-of-order transcripts/audio,
+  generation versus playback completion, interruption before first audio,
+  selected turn-control mode, tool cancellation, `goAway`, resumption,
+  expiry and unsafe/missing resumption handle. Sent-ahead-of-playback
+  interruption and the subsequent turn are exercised with a fence-window mute;
+  the adapter declares `history_reconciliation?: false` and keeps no precise
+  truncation, so the hosted gate must still prove that unheard speech cannot
+  change the next reply (or enforce a mitigation) before production use.
+  Evidence: `providers/google/sts_test.exs` (7),
+  `providers/google/sts_session_test.exs` (17) with the fake
+  `TestGoogleSTSTransport` (24 passing, seed 0). Handle handoff tests also
+  cover revocation, idle connection loss, setup deadlines, playback settlement,
+  stale-socket fencing and no historical input or generated-speech replay.
+  `docs/sts-context-restoration.md` records the boundary and hosted limitations.
+- [x] `Vxpipe.Providers.Google.STSSession` and private `STSSocket` live under
+  the existing Google package. Credentials resolve privately, output
+  transcription is enabled, and the manifest keeps NO `:sts` entry: local
+  room/contract checks pass at the fixture level, but hosted selection and
+  the badge stay gated. No parallel old socket or fallback exists.
+- [x] Slice exit: focused fixture/contract tests pass and the adapter remains
+  unadvertised (`Registry.fetch_capability("google", :sts)` fails closed and
+  the Console catalog test locks the badge off). The tagged hosted check is
+  deferred to the coordinated final pass with explicit billable
+  authorization; without it, Google production selection stays gated.
 
 ### F — Service UI, documentation, and final acceptance
 
-- [ ] Implement gated Google `s2s` support in the backend service-binding
-  capability response and Console setup catalog/card tags/model choices;
-  Morse remains a local test option. Extend the service/recipe, tenant and
-  platform views without creating a second Google credential entry. Add
-  focused frontend tests now; keep the badge disabled until final hosted
-  acceptance, and defer the rendered desktop/mobile pass to that final pass.
-- [ ] Update `docs/provider-integration-packages.md`,
-  `docs/speech-provider-contract.md`, `docs/speech-integration-guide.md`,
-  call-spec/API examples and operator guidance for all three modes. Document
-  transcript provenance and the lack of automatic fallback. Reconcile the
-  milestone/index checklist with actual evidence.
+- [x] Backend service-binding capability response flows from
+  `Registry.catalog()`: Google exposes no `s2s`, and credential-free Morse
+  never enters the credential-backed setup catalog (Morse remains a local
+  test option). The Console setup catalog offers no `s2s` provider or model
+  choice; the badge stays disabled until final hosted acceptance.
+  Evidence: `admin_services_endpoint_test.exs` catalog assertion with
+  s2s-gate refutes; `setupCatalog.test.ts` s2s-gate test (3 tests green).
+  No second Google credential entry was created.
+- [x] Updated `docs/provider-integration-packages.md` (Morse manifest row,
+  Google STS gated note), `docs/speech-provider-contract.md` (Morse
+  namespace, optional `finish_input`), `docs/speech-integration-guide.md`
+  (Morse reply generation, agent-output STT, Google adapter, conformance
+  commands), and this milestone/index checklist state. Transcript provenance
+  (caller vs agent, provider vs sidecar STT) and the lack of automatic
+  fallback are documented in the guide and milestone decision section.
 - [ ] In the coordinated final pass, run the tagged Google hosted check only
   after explicit authorization for billable use and within a short fixed
   budget. Check an interrupted reply followed by another turn and resumed
@@ -465,7 +550,11 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   strict Credo, full tests and unused-lock gates. Verify no real-key fixtures,
   no credential/database migration loss, provider tag accuracy, and a clean
   diff. Run an independent implementation review in this same final pass.
-  Mark the index complete only after all applicable acceptance gates.
+  RoomAuthority-level publication (EventPublisher/TranscriptRouter),
+  transfer/hold/teardown plumbing for STS calls, STS usage/history
+  projections, and call-spec/API example updates remain open alongside the
+  hosted/load/UI/review gates. Mark the index complete only after all
+  applicable acceptance gates.
 
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 

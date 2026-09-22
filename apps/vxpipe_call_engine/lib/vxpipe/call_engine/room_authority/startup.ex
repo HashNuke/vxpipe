@@ -72,6 +72,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       remote_mcp_connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
       remote_mcp_protocol_client: Keyword.get(options, :remote_mcp_protocol_client),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
+      speech_to_speech: Keyword.get(settings, :speech_to_speech, providers: %{}),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
 
@@ -176,6 +177,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         | speech_to_text_runtime: startup.speech_to_text_runtimes,
           text_to_speech_capability: activate_text_to_speech(prepared.voice),
           text_to_speech_runtime: startup.text_to_speech,
+          speech_to_speech_runtime: startup.speech_to_speech,
           startup: %{state.startup | task: nil, status: :prepared}
       }
 
@@ -191,6 +193,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   end
 
   defp bind_entry_receiver(%{receiver: %{kind: :human}}, state), do: {:ok, state}
+
+  defp bind_entry_receiver(
+         %{agent_activation: nil, speech_to_speech: speech_to_speech} = startup,
+         state
+       )
+       when not is_nil(speech_to_speech) do
+    _ = startup
+    {:ok, %{state | text_capability: nil, text_capability_required?: false}}
+  end
 
   defp bind_entry_receiver(startup, state) do
     receiver = startup.receiver

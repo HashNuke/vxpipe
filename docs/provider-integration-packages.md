@@ -71,12 +71,19 @@ shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtim
 | --- | --- | --- | --- | --- | --- |
 | Deepgram | yes | yes | yes | yes | no |
 | Google AI Studio | yes | yes | yes | yes | no |
+| MorseCode (local proof only) | no | no | yes | yes | no |
 | Telnyx | yes | yes | no | no | yes |
 | Rime | yes | yes | no | yes | no |
 | Twilio | yes | yes | no | no | yes |
 | Zenmux | yes | yes | no | no | no |
 
-The table describes Vxpipe-owned provider capabilities. ReqLLM model support is deliberately outside
+MorseCode declares `:stt`, `:tts` and `:sts` without credential entries; it is
+available only to credential-free local configurations and never enters the
+credential-backed setup catalog. Google's Gemini 3.8 Live STS adapter
+(`Vxpipe.Providers.Google.STSSession`) exists behind its credential boundary
+with fixture/fake-socket tests, but its `:sts` manifest entry stays absent:
+no production selection or service badge until the authorized hosted check
+passes. The table describes Vxpipe-owned provider capabilities. ReqLLM model support is deliberately outside
 this registry.
 
 ## Names and ownership

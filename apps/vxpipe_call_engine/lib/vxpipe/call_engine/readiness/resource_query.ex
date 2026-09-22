@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.Readiness.ResourceQuery do
     archive: Vxpipe.CallEngine.Archive.Subscriber,
     recording: Vxpipe.CallEngine.RoomRecording,
     model_inference: Vxpipe.CallEngine.AgentRuntime.Coordinator,
+    speech_to_speech: Vxpipe.CallEngine.Capability.SpeechToSpeech,
     text_to_speech: Vxpipe.CallEngine.Capability.TextToSpeech
   }
 

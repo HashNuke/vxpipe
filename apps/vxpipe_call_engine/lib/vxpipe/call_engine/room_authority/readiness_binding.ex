@@ -105,10 +105,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
            RoomCapabilitySupervisor.whereis_text_to_speech(
              state.snapshot.incarnation_id,
              participant.participant_id
-           )
+           ),
+         speech_to_speech: sts_binding(state, participant.participant_id)
        }}
     end)
   end
+
+  defp sts_binding(
+         %{speech_to_speech_capability: %{pid: capability, participant_id: agent_id}},
+         agent_id
+       )
+       when is_pid(capability),
+       do: capability
+
+  defp sts_binding(_state, _participant_id), do: nil
 
   defp activation_id(participant, state) do
     id = participant.participant_id

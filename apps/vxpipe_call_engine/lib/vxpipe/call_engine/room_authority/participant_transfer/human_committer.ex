@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
     ConnectionLifecycle,
     FirstMessage,
     ParticipantLifecycle,
+    SpeechToSpeech,
     Startup
   }
 
@@ -68,6 +69,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
     preparation = pending.preparation
     source_tts = state.text_to_speech_capability
     supervisor = Map.fetch!(state.participant_supervisors, request.source_participant_id)
+
+    state = SpeechToSpeech.release(state)
 
     state = %{
       state

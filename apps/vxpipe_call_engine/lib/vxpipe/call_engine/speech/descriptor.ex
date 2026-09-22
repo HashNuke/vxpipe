@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
            only: [:kind, :format, :readiness, :endpointing, :speech_start?, :eager_end?, :resume?]}
   defstruct @enforce_keys ++
               [
+                input_format: nil,
                 speech_start?: false,
                 eager_end?: false,
                 resume?: false,
@@ -20,6 +21,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
 
   @fields @enforce_keys ++
             [
+              :input_format,
               :speech_start?,
               :eager_end?,
               :resume?,
@@ -37,6 +39,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           kind: :stt | :tts | :sts,
           settings: map(),
           format: map(),
+          input_format: map() | nil,
           usage_identity: map(),
           readiness: :initialized | :provider_acknowledged,
           endpointing: :provider_semantic | :provider_gap | :external | :none,
@@ -99,11 +102,13 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
 
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
 
-  defp valid_kind?(%{kind: :stt, cache_identity: nil}), do: true
+  defp valid_kind?(%{kind: :stt, cache_identity: nil, input_format: nil}), do: true
 
   defp valid_kind?(%{kind: :sts, cache_identity: nil} = descriptor),
     do:
       descriptor.turn_control in ["provider", "external", "hybrid"] and
+        valid_format?(descriptor.input_format) and
+        descriptor.input_format.encoding == :linear16 and
         descriptor.format.encoding == :linear16 and
         is_list(descriptor.turn_control_supported) and
         Enum.all?(descriptor.turn_control_supported, &(&1 in ["provider", "external", "hybrid"])) and
@@ -114,7 +119,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
         descriptor.output_settlement in [:transcript_end, :generation_boundary] and
         is_boolean(descriptor.history_reconciliation?) and valid_sts_controller?(descriptor)
 
-  defp valid_kind?(%{kind: :tts, cache_identity: identity} = descriptor),
+  defp valid_kind?(%{kind: :tts, cache_identity: identity, input_format: nil} = descriptor),
     do:
       is_binary(identity) and byte_size(identity) == 32 and
         descriptor.format.encoding == :linear16 and descriptor.endpointing == :none and

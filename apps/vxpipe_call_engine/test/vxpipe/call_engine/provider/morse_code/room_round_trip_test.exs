@@ -25,10 +25,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
   }
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, AudioOutputFrame}
-  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.Providers.MorseCode.TTSSession, as: MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.MorseCode.Config
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
-  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
+  alias Vxpipe.Providers.MorseCode.STTSession, as: MorseCodeSTTSession
   alias Vxpipe.CallEngine.TestAudioOutputSink
 
   setup do
@@ -56,7 +56,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
 
     text_to_speech = [
       providers: %{
-        MorseCodeTTS.Session => [
+        MorseCodeTTS => [
           enabled: true,
           maximum_requests: 2
         ]

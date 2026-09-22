@@ -56,6 +56,21 @@ defmodule Vxpipe.CallEngine.Speech.STSOutputTest do
     assert {:ok, _output} = Session.admit_output(session, make_ref())
   end
 
+  test "the provider receives matching playback settlement once, only after consumer acceptance" do
+    session = start_session()
+    assert {:ok, output} = Session.admit_output(session, make_ref())
+    assert :ok = complete(session, output)
+    assert {:error, :output_pending} = Session.settle_output(session, output, 0)
+    refute_received {:vxpipe_speech_output_settled, _, _, _, _}
+    Contract.ack_event!(session, :output_completed)
+    assert :ok = Session.settle_output(session, output, 0)
+    turn = output.turn_ref
+    ref = output.ref
+    assert_receive {:vxpipe_speech_output_settled, _channel, ^turn, ^ref, 0}
+    assert {:error, :stale_request} = Session.settle_output(session, output, 0)
+    refute_received {:vxpipe_speech_output_settled, _, _, _, _}
+  end
+
   test "completion is bound to the output reference and turn, and cannot release replacement output" do
     session = start_session()
     provider = Session.provider(session)

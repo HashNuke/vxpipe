@@ -43,7 +43,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 speech_to_text_monitors: %{},
                 text_capability: nil,
                 text_to_speech_capability: nil,
-                text_to_speech_runtime: nil
+                text_to_speech_runtime: nil,
+                speech_to_speech_capability: nil,
+                speech_to_speech_monitor: nil,
+                speech_to_speech_runtime: nil,
+                speech_to_speech_ready?: false,
+                speech_to_speech_policy_revision: 0,
+                sts_turns: %{},
+                sts_tool_calls: %{}
               ]
 
   @type t :: %__MODULE__{
@@ -82,7 +89,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           speech_to_text_monitors: %{optional(reference()) => String.t()},
           text_capability: nil | map(),
           text_to_speech_capability: nil | map(),
-          text_to_speech_runtime: nil | Vxpipe.CallEngine.TextToSpeechRuntime.t()
+          text_to_speech_runtime: nil | Vxpipe.CallEngine.TextToSpeechRuntime.t(),
+          speech_to_speech_capability: nil | map(),
+          speech_to_speech_monitor: nil | reference(),
+          speech_to_speech_runtime: nil | Vxpipe.CallEngine.SpeechToSpeechRuntime.t(),
+          speech_to_speech_ready?: boolean(),
+          speech_to_speech_policy_revision: non_neg_integer(),
+          sts_turns: map(),
+          sts_tool_calls: map()
         }
 
   @spec new(

@@ -21,8 +21,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   }
 
   alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseCodeConfig
-  alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseCodeSTTSession
-  alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+  alias Vxpipe.Providers.MorseCode.STTSession, as: MorseCodeSTTSession
+  alias Vxpipe.Providers.MorseCode.TTSSession, as: MorseCodeTTS
   alias Vxpipe.CallEngine.Provider.MorseCode.Decoder, as: MorseDecoder
   alias Vxpipe.CallEngine.Provider.MorseCode.Encoder, as: MorseEncoder
   alias Vxpipe.Gateway.HTTP.Endpoint
@@ -108,7 +108,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         )
         |> Keyword.put(:text_to_speech,
           providers: %{
-            MorseCodeTTS.Session => [
+            MorseCodeTTS => [
               enabled: true,
               maximum_requests: 2
             ]

@@ -41,12 +41,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     OpeningAudio,
     ParticipantLifecycle,
     ReadinessBinding,
+    SpeechToSpeech,
     State,
     Startup,
     StartupReadiness,
     ToolCalls,
     UsageObservations
   }
+
+  import Vxpipe.CallEngine.RoomAuthority.Playback,
+    only: [handle_text_to_speech_playback: 4, handle_asset_opening_audio_playback: 4]
 
   @call_timeout 5_000
   @transfer_timeout 122_000
@@ -576,6 +580,82 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, InputTurns.speech_to_text(capability, identity, signal, state)}
   end
 
+  def handle_info({:vxpipe_sts_ready, capability}, state) do
+    if SpeechToSpeech.current?(state, capability) do
+      state = SpeechToSpeech.handle_ready(state, capability)
+      StartupReadiness.reply(StartupReadiness.ready(state), state)
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info({:vxpipe_sts_speech_started, capability, agent_id, turn}, state) do
+    {:noreply, SpeechToSpeech.handle_speech_started(state, capability, agent_id, turn)}
+  end
+
+  def handle_info({:vxpipe_sts_input_transcript, capability, human_id, text, turn, final?}, state)
+      when is_boolean(final?) do
+    {:noreply,
+     SpeechToSpeech.handle_input_transcript(state, capability, human_id, text, turn, final?)}
+  end
+
+  def handle_info({:vxpipe_sts_input_transcript, capability, human_id, text, turn}, state) do
+    {:noreply, SpeechToSpeech.handle_input_transcript(state, capability, human_id, text, turn)}
+  end
+
+  def handle_info({:vxpipe_sts_turn_started, capability, agent_id, turn}, state) do
+    {:noreply, SpeechToSpeech.handle_turn_started(state, capability, agent_id, turn)}
+  end
+
+  def handle_info({:vxpipe_sts_agent_transcript, capability, agent_id, text, turn, played}, state) do
+    {:noreply,
+     SpeechToSpeech.handle_agent_transcript(state, capability, agent_id, text, turn, played)}
+  end
+
+  def handle_info({:vxpipe_sts_turn_completed, capability, agent_id, turn}, state) do
+    {:noreply,
+     CallerIdle.reconcile(SpeechToSpeech.handle_turn_completed(state, capability, agent_id, turn))}
+  end
+
+  def handle_info({:vxpipe_sts_interrupted, capability, agent_id, turn, played, prefix}, state) do
+    {:noreply,
+     CallerIdle.reconcile(
+       SpeechToSpeech.handle_interrupted(state, capability, agent_id, turn, played, prefix)
+     )}
+  end
+
+  def handle_info(
+        {:vxpipe_sts_tool_call, capability, agent_id, call_ref, turn, name, args},
+        state
+      ) do
+    {:noreply,
+     SpeechToSpeech.handle_tool_call(state, capability, agent_id, call_ref, turn, name, args)}
+  end
+
+  def handle_info({:vxpipe_sts_tool_cancelled, capability, agent_id, call_ref}, state) do
+    {:noreply, SpeechToSpeech.handle_tool_cancelled(state, capability, agent_id, call_ref)}
+  end
+
+  def handle_info({:vxpipe_sts_tool_executed, capability, call_ref, outcome}, state) do
+    {:noreply, SpeechToSpeech.handle_tool_executed(state, capability, call_ref, outcome)}
+  end
+
+  def handle_info({:vxpipe_sts_tool_timeout, capability, call_ref}, state) do
+    {:noreply, SpeechToSpeech.handle_tool_timeout(state, capability, call_ref)}
+  end
+
+  # Output-STT recognition problems are observability only at the room
+  # boundary: the turn outcome (completed/interrupted with or without text)
+  # already settles through the dedicated turn messages above.
+  def handle_info({:vxpipe_sts_output_stt_unavailable, _capability, _reason}, state) do
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_sts_unavailable, capability, reason}, state) do
+    state = SpeechToSpeech.handle_unavailable(state, capability, reason)
+    {:noreply, CallerIdle.reconcile(state)}
+  end
+
   def handle_info({:vxpipe_stt_unavailable, capability, identity, _reason}, state) do
     case ParticipantTransfer.speech_to_text_unavailable(capability, identity, state) do
       {:handled, reply} ->
@@ -652,63 +732,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
       nil ->
         {:error, :room_mixer_unavailable}
-    end
-  end
-
-  defp handle_text_to_speech_playback(capability, request, status, state) do
-    case ParticipantTransfer.playback(capability, request, status, state) do
-      {:handled, reply} ->
-        reply
-
-      :unhandled ->
-        opening_result =
-          if OpeningAudio.capability?(state.opening_audio, capability) do
-            OpeningAudio.playback(state.opening_audio, request, status)
-          else
-            :unrelated
-          end
-
-        case opening_result do
-          {:handled, opening_audio} ->
-            continue_after_opening_audio(opening_audio, state)
-
-          :unrelated ->
-            state = AgentOutput.playback(capability, request, status, state)
-
-            if status == :completed do
-              {:noreply, CallerIdle.reconcile(state)}
-            else
-              {:noreply, state}
-            end
-        end
-    end
-  end
-
-  defp handle_asset_opening_audio_playback(worker, request, status, state) do
-    case OpeningAudio.asset_playback(state.opening_audio, worker, request, status) do
-      {:handled, opening_audio} -> continue_after_opening_audio(opening_audio, state)
-      :unrelated -> {:noreply, state}
-    end
-  end
-
-  defp continue_after_opening_audio(opening_audio, state) do
-    state = %{state | opening_audio: opening_audio}
-
-    state =
-      if OpeningAudio.admission(opening_audio) == :open and
-           (state.startup == nil or state.startup_ready?) do
-        if state.room_mixer != nil do
-          :ok = RoomMixer.complete_opening(state.room_mixer)
-        end
-
-        ConnectionLifecycle.open_inputs(state)
-      else
-        state
-      end
-
-    case StartupReadiness.opening_changed(state) do
-      {:ok, state} -> {:noreply, CallerIdle.reconcile(state)}
-      {:error, %Error{code: code}} -> {:stop, code, state}
     end
   end
 

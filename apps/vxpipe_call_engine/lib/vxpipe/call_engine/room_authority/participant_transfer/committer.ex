@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     FirstMessage,
+    SpeechToSpeech,
     Startup,
     State
   }
@@ -21,7 +22,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
     {:ok, result, state} =
       commit_available(pending.request, preparation, preparation.participant.snapshot, state)
 
-    Completion.finish(pending, result, %{state | held_participant_ids: MapSet.new()})
+    state = SpeechToSpeech.release(%{state | held_participant_ids: MapSet.new()})
+    Completion.finish(pending, result, state)
   end
 
   defp commit_available(request, preparation, destination_snapshot, state) do

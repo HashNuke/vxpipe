@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   alias Vxpipe.CallEngine.RoomAuthority.{
     ConnectionLifecycle,
     EventPublisher,
+    SpeechToSpeech,
     SpokenHistory,
     State,
     TextCapability,
@@ -204,7 +205,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     turn_ids = Enum.map(turns, &TurnState.key(&1.command))
 
     with {:ok, speech_requests} <- interrupt_text_to_speech(state),
-         {:ok, _commands} <- interrupt_text_generation(state, turn_ids) do
+         {:ok, _commands} <- interrupt_text_generation(state, turn_ids),
+         {:ok, state} <- interrupt_speech_to_speech(state) do
       played_by_turn =
         Map.new(speech_requests, fn {request, played_ms} ->
           {TurnState.key(request), played_ms}
@@ -338,6 +340,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   defp interrupt_text_to_speech(state) do
     TextToSpeech.interrupt(state.text_to_speech_capability.pid)
+  end
+
+  defp interrupt_speech_to_speech(%{speech_to_speech_capability: nil} = state), do: {:ok, state}
+
+  defp interrupt_speech_to_speech(state) do
+    case SpeechToSpeech.interrupt(state) do
+      {:ok, state} -> {:ok, state}
+      {:error, _reason} -> {:ok, state}
+    end
   end
 
   defp interrupt_text_generation(%{text_capability: %{module: ModelInference}} = state, ids) do

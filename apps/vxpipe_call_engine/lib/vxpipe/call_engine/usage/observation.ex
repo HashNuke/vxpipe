@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
     :speech_to_text,
     :text_to_speech,
     :speech_to_speech,
+    :output_speech_to_text,
     :tool,
     :telephony
   ]
@@ -32,6 +33,7 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
           | :speech_to_text
           | :text_to_speech
           | :speech_to_speech
+          | :output_speech_to_text
           | :tool
           | :telephony
 

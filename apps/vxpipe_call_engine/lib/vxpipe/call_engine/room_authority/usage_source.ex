@@ -46,7 +46,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
 
   defp connection_speech_source(state, capability) do
     Enum.find_value(state.connections, :error, fn {_connection_id, connection} ->
-      case connection.speech_to_text do
+      case Map.get(connection, :speech_to_text) do
         %{capability: ^capability} ->
           activation_id =
             Recorder.participant_activation(state.archive_recorder, connection.participant_id)
@@ -63,10 +63,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
     end)
   end
 
-  defp active_speech_source(%{text_to_speech_capability: nil}, _capability), do: :error
+  defp active_speech_source(%{text_to_speech_capability: nil} = state, capability) do
+    active_sts_source(state, capability)
+  end
 
   defp active_speech_source(state, capability) do
-    speech_source(state.text_to_speech_capability, capability)
+    case speech_source(state.text_to_speech_capability, capability) do
+      {:ok, _source} = ok -> ok
+      :error -> active_sts_source(state, capability)
+    end
+  end
+
+  defp active_sts_source(%{speech_to_speech_capability: nil}, _capability), do: :error
+
+  defp active_sts_source(state, capability) do
+    speech_source(state.speech_to_speech_capability, capability)
   end
 
   defp pending_speech_source(
@@ -96,7 +107,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
   defp source(capability) do
     {:ok,
      %{
-       activation_id: capability.activation_id,
+       activation_id: Map.get(capability, :activation_id),
        participant_id: capability.participant_id
      }}
   end
