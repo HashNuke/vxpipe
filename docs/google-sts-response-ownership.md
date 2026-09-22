@@ -279,6 +279,31 @@ assembly/emission and safe cross-origin cutover. The queue cannot infer a
 response's origin from unlabelled wire output and does not close the Google
 controller reds or exact origin-retirement work.
 
+### Opted-in controller adoption design review
+
+At the adoption baseline, the five intentionally red real-controller cases
+started Google's legacy descriptor, so caller end admitted output before model PCM. First
+move only those cases to the local `response_start?: true` profile and verify
+they fail at the missing model response start. Keep all legacy fixture tests
+unchanged. For that opt-in profile, make `STSResponses` the session's actual
+wire/playback owner: the interaction context is bound before wire input; first
+PCM creates/announces a distinct response; text alone remains private; and
+`IN_PROGRESS` permits another same-context response after the model boundary,
+even while the previous response uses playback credit. Output grants and
+discards reference exact response records, not the caller or current wire.
+The existing pure owner already bounds global chunks, text and records; its
+state must replace the adapter's independent opt-in buffers rather than run in
+parallel with them. Resumption must inspect owner-wide quiescence.
+
+Rejected alternatives: enabling opt-in for every legacy test in one step,
+announcing on caller end or transcript, moving the wire origin at
+`IN_PROGRESS`, and allowing the legacy single-output fields to shadow the new
+owner. Each would either erase the compatibility proof, publish a false turn,
+relabel uncorrelated content or mix A/B obligations. Dependency order is
+corrected opt-in controller reds, actual response assembly, exact credit and
+discard, then model/renewal lifecycle and broader verification. This review
+records the implementation plan; the controller gate is tracked separately.
+
 ## Rejected alternatives
 
 - Reusing the old caller end conflates caller publication and agent generation.

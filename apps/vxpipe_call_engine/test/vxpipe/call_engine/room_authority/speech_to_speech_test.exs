@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools, as: STSTools
 
   @tenant "tenant-sts-room"
   @room "room-sts-room"
@@ -161,9 +162,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     }
 
     state = state() |> with_plan(tools)
-    stub = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
-    state = bind_capability(state, stub, @agent)
-    capability = stub
+    {_tree, capability} = start_real_capability()
+    state = bind_capability(state, capability, @agent)
     call_ref = make_ref()
 
     state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
@@ -182,10 +182,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert_receive {:vxpipe_event,
                     %Vxpipe.CallEngine.Event.ToolCallStarted{name: "get_current_time"}}
 
-    assert_receive {:vxpipe_sts_tool_executed, ^capability, ^call_ref, {:ok, result}}, 1_000
+    assert_receive {:vxpipe_sts_tool_completion, bridge, lease}, 1_000
+    assert {:ok, result} = lease.completion.outcome
     assert result["timezone"] == "UTC"
 
-    state = SpeechToSpeech.handle_tool_executed(state, capability, call_ref, {:ok, result})
+    state = STSTools.handle_completion(state, bridge, lease)
 
     assert_receive {:vxpipe_event,
                     %Vxpipe.CallEngine.Event.ToolCallCompleted{
@@ -194,7 +195,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
                     }}
 
     assert state.sts_tool_calls == %{}
-    assert_receive {:provider_tool_result, ^call_ref, ^result}
   end
 
   test "STS tool cancellation settles pending calls and late results are ignored" do

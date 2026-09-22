@@ -4,6 +4,35 @@ defmodule Vxpipe.Providers.Google.STSInput do
   alias Vxpipe.CallEngine.Speech.Event
   alias Vxpipe.Providers.Google.STSResumption
 
+  def context_command({:audio, pcm}) when is_binary(pcm), do: {:ok, {:push_audio, pcm}}
+
+  def context_command({:text, reference, text})
+      when is_reference(reference) and is_binary(text),
+      do: {:ok, {:push_text, reference, text}}
+
+  def context_command({:activity, boundary}) when boundary in [:started, :ended],
+    do: {:ok, {:input_activity, boundary}}
+
+  def context_command(_operation), do: {:error, :unsupported_operation}
+
+  def open_text_turn(state) do
+    case Event.emit(state.channel, :turn_ended,
+           turn_ref: state.input_turn,
+           text: state.input_text,
+           endpointing: input_endpointing(state)
+         ) do
+      :ok -> {:ok, %{state | input_ended?: true}}
+      :discarded -> {:ok, %{state | input_ended?: true}}
+      _failure -> {:error, :session_failed}
+    end
+  end
+
+  def activity_boundary(:started, state), do: start(state)
+  def activity_boundary(:ended, state), do: finish(state)
+
+  defp input_endpointing(%{config: %{turn_control: "external"}}), do: :external
+  defp input_endpointing(_state), do: :provider_semantic
+
   def bind_context(%{interaction_context: nil}, context, {:activity, :ended})
       when is_reference(context),
       do: {:error, :busy}

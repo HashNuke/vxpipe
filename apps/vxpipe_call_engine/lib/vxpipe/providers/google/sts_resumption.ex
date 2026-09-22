@@ -6,7 +6,7 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   replayed, and a failed attempt never falls back to a fresh conversation.
   """
 
-  alias Vxpipe.Providers.Google.STS
+  alias Vxpipe.Providers.Google.{STS, STSResponses}
 
   def valid_deadlines?(renew, expire, resume) do
     is_integer(renew) and is_integer(expire) and is_integer(resume) and
@@ -153,9 +153,14 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   defp idle?(state) do
     not state.resumption_ambiguous? and state.model_turn_complete? and
-      state.interaction_status == :idle and is_nil(state.input_turn) and is_nil(state.caller) and
-      is_nil(state.output) and state.audio_buffer == [] and map_size(state.pending_tools) == 0
+      state.interaction_status == :idle and is_nil(state.caller) and
+      map_size(state.pending_tools) == 0 and output_idle?(state)
   end
+
+  defp output_idle?(%{response_start?: true} = state), do: STSResponses.idle?(state.responses)
+
+  defp output_idle?(state),
+    do: is_nil(state.input_turn) and is_nil(state.output) and state.audio_buffer == []
 
   defp arm_deadline(state, deadline) do
     if state.resume_timer, do: Process.cancel_timer(state.resume_timer)

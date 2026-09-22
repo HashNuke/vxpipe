@@ -1149,6 +1149,11 @@ tool continuation, or Google cross-origin handoff.
   terminal turn outcome, zero stale queued playback, bounded command handling
   and cleanup after owner loss. Wider scenario and latency assessment stay
   deferred to final acceptance.
+  - [x] Repair the reproducible room host-tool acceptance test: its synthetic
+    capability has no invocation registry, so the execution returns
+    `:unavailable` instead of completing. Exercise the supervised real
+    capability/registry and completion lease, then retain a focused green
+    room test before counting the broader STS group as passing.
 
 ### D — STS plus agent-output STT
 
@@ -1679,6 +1684,37 @@ Submitted invocation outcomes must still survive privately for later reasoning.
             16-chunk/65,536-byte/16-record budgets, non-speaking retirement and
             owner-wide quiescence. Then adopt it in the actual Google controller;
             a pure helper pass alone cannot close response delivery.
+            - [x] Correct the five real-controller first/continued-response
+              reds to allocate only the local opted-in Google profile, leaving
+              legacy fixture tests on their existing path. Confirm focused
+              failure moves from caller-end admission to absent PCM-start grant.
+            - [ ] Adopt `STSResponses` as the opted-in controller's actual
+              independent wire/playback owner. Bind each wire response to the
+              accepted interaction context, announce only on its first PCM,
+              and keep text/PCM/limits per response across `IN_PROGRESS`.
+            - [ ] Route exact output grants, credits, completions, settlement
+              and response-specific discards through that owner; preserve A's
+              playback while B generates, and never interrupt a newer wire
+              generation when only an older response is denied.
+              - [x] Reproduce the post-credit PCM stall with a real
+                opted-in controller: credit the first frame, send another before
+                generation end, and require immediate credited delivery without
+                consuming pending-chunk capacity indefinitely. Focused red and
+                green proven in the controller suite.
+              - [x] Reproduce the interruption leak with an opted-in
+                response and no legacy `input_turn`; require old text/audio to
+                stay fenced across a standalone provider interruption and the
+                next response. The focused red also proved local interrupt
+                reached newer B's wire; both cases now pass after exact-owner
+                routing.
+            - [ ] Gate model boundaries, non-speaking retirement and handle
+              renewal on every retained response/tool obligation. Verify the
+              five controller cases and the relevant Google/provider/shared
+              speech group without hosted calls, then seek independent review.
+            - [ ] Keep the Google session below the strict-Credo module-size
+              gate by moving input command normalization and caller-turn
+              publication into `STSInput`; retain legacy and opted-in behavior.
+              Session is 794 physical lines; root strict Credo remains pending.
             - [x] Add independent-review proof for A's final credit/settlement
               while B is still generating, admitted discard with outstanding
               credit, capacity recovery including one credit plus 16 pending
