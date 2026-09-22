@@ -75,3 +75,24 @@ Russell Astra xhigh's final read-only source review cleared the scoped gate
 after both late-unknown and A/B-origin repairs. It did not independently rerun
 tests. Output admission, provider response indexing and Google integration are
 not part of this checkpoint.
+
+## Post-commit static finding
+
+At committed `def93139`, root format, warnings-as-errors compile and unused
+dependency checks pass. `mix credo --strict` fails: `Speech.Channel` is 861 lines
+against the 800-line rule, and its input-result branch nests to depth 5. These
+are project-owned consequences of the gate edit. Recorded a separate milestone
+task before refactoring: extract cohesive event delivery/context logic and
+flatten settlement, with focused regression and four static gates. No full
+umbrella test rerun while the five known Google controller reds remain open.
+
+The refactor moved gated dispatch, terminal pre-delivery, exact context checks
+and prior-origin classification into cohesive `Speech.EventDelivery`, leaving
+Channel at 791 lines. The input-result continuation is a small flat helper.
+Owning-child `speech/` regression stays green at 204/0 (3 excluded), seed 0,
+two schedulers. Post-repair root static checks are pending; no full umbrella
+test was started for this red/green cycle.
+
+Russell Astra xhigh cleared the extraction by read-only source review: moved
+FIFO/early classification remains equivalent and the settlement helper keeps
+deadline, reply and dispatch order. It did not rerun tests or static gates.

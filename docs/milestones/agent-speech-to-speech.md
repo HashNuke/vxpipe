@@ -1106,6 +1106,11 @@ tool continuation, or Google cross-origin handoff.
     xhigh source review cleared the scoped gate after two issue/fix loops.
     `labnotes/20260922-2103-early-sts-events.md` records the reproductions.
     Acknowledged-start grant and Google adoption remain open.
+  - [ ] Post-checkpoint static repair: strict Credo found Channel at 861 lines
+    (800 maximum) and one newly nested input-result branch at depth 5. Extract
+    the cohesive event-delivery/context gate into its own module, flatten the
+    result settlement, preserve FIFO/fail-closed behavior, rerun the owning-child
+    speech group and the four root static gates after committing the repair.
 
 - [x] Morse session/capability tests for human speech onset handling,
   queued playback, zero-playback interruption (`:no_prefix`), late

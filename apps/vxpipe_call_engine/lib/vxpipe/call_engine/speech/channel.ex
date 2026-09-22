@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     Cancellation,
     ChannelFailure,
     Event,
+    EventDelivery,
     EventQueue,
     Input,
     OutputState,
@@ -410,9 +411,14 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
       true ->
         case accept_event(event, state) do
-          {:ok, event, state} -> publish_event(event, producer, note_early_event(event, state))
-          :failed -> ChannelFailure.fail(state, :session_failed)
-          error -> {:reply, error, state}
+          {:ok, event, state} ->
+            publish_event(event, producer, EventDelivery.note_early_event(event, state))
+
+          :failed ->
+            ChannelFailure.fail(state, :session_failed)
+
+          error ->
+            {:reply, error, state}
         end
     end
   end
@@ -442,7 +448,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   defp enqueue_event(state, event, producer) do
-    delivered? = not staged_context_input?(state) and pre_deliver_terminal?(state.events, event)
+    delivered? =
+      not EventDelivery.staged_context_input?(state) and
+        EventDelivery.pre_deliver_terminal?(state.events, event)
 
     {event, events} =
       EventQueue.enqueue(state.events, event, state.allocation, producer, delivered?)
@@ -472,19 +480,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
           true ->
             case finished_input(command, result, state) do
               {:ok, state, reply} ->
-                if remaining(command) > 0 and Allocation.valid?(state.allocation) do
-                  if rejected_with_early_events?(state, input, result) do
-                    ChannelFailure.input_failed(state)
-                  else
-                    Process.cancel_timer(input.timer)
-                    contexts = STSInput.finish_context(state.response_contexts, command, result)
-                    state = %{state | response_contexts: contexts, input: nil}
-                    ChannelFailure.reply_input(input, reply)
-                    TTSFlow.continue_after_input(command, result, dispatch(state))
-                  end
-                else
-                  ChannelFailure.input_failed(state)
-                end
+                settle_input_result(state, input, command, result, reply)
 
               :failed ->
                 ChannelFailure.input_failed(state)
@@ -637,66 +633,20 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp activate(state), do: dispatch(state)
 
-  defp dispatch(%{active?: true} = state) do
-    if Allocation.valid?(state.allocation) do
-      case if(staged_context_input?(state), do: :empty, else: EventQueue.take(state.events)) do
-        {:ok, event, false, events} ->
-          send(state.consumer, {:vxpipe_speech, event})
-          %{state | events: events}
+  defp dispatch(state), do: EventDelivery.dispatch(state)
 
-        {:ok, _event, true, events} ->
-          %{state | events: events}
-
-        :empty ->
-          state
-      end
+  defp settle_input_result(state, input, command, result, reply) do
+    if remaining(command) > 0 and Allocation.valid?(state.allocation) and
+         not EventDelivery.rejected_with_early_events?(state, input, result) do
+      Process.cancel_timer(input.timer)
+      contexts = STSInput.finish_context(state.response_contexts, command, result)
+      state = %{state | response_contexts: contexts, input: nil}
+      ChannelFailure.reply_input(input, reply)
+      TTSFlow.continue_after_input(command, result, dispatch(state))
     else
-      state
+      ChannelFailure.input_failed(state)
     end
   end
-
-  defp dispatch(state), do: state
-
-  defp pre_deliver_terminal?(
-         %EventQueue{
-           awaiting: %Event{kind: :input_submitted, request_ref: reference}
-         },
-         %Event{kind: kind, request_ref: reference}
-       )
-       when kind in [:completed, :cancelled],
-       do: true
-
-  defp pre_deliver_terminal?(_events, _event), do: false
-
-  defp staged_context_input?(%{
-         descriptor: %{response_start?: true},
-         input: %{command: %{response_context: context}}
-       })
-       when is_reference(context),
-       do: true
-
-  defp staged_context_input?(_state), do: false
-
-  defp rejected_with_early_events?(state, input, result),
-    do: result != :ok and staged_context_input?(state) and input.unsafe_events?
-
-  defp note_early_event(event, state) do
-    if staged_context_input?(state) and not accepted_prior_response?(event, state) do
-      %{state | input: Map.put(state.input, :unsafe_events?, true)}
-    else
-      state
-    end
-  end
-
-  defp accepted_prior_response?(
-         %Event{kind: :response_started, response_context: context},
-         state
-       ) do
-    context != state.input.command.response_context and
-      ResponseContexts.status(state.response_contexts, context) == :accepted
-  end
-
-  defp accepted_prior_response?(_event, _state), do: false
 
   defp accept_event(
          %Event{kind: :cancelled, request_ref: reference} = event,
@@ -730,27 +680,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   defp accept_event(%Event{kind: :input_submitted} = event, %{descriptor: %{kind: :sts}} = state),
     do: STSInput.accept_submission(event, state)
 
-  defp accept_event(%Event{kind: :response_started, response_context: context} = event, state) do
-    case ResponseContexts.status(state.response_contexts, context) do
-      :accepted ->
-        {:ok, event, state}
-
-      :staged ->
-        pending = state.response_contexts.pending
-
-        case state.input do
-          %{command: %{ref: reference, response_context: ^context}}
-          when pending == {reference, context} ->
-            {:ok, event, state}
-
-          _other ->
-            {:error, :stale_response}
-        end
-
-      :unknown ->
-        {:error, :stale_response}
-    end
-  end
+  defp accept_event(%Event{kind: :response_started} = event, state),
+    do: EventDelivery.accept_response_start(event, state)
 
   defp accept_event(%Event{kind: :output_completed} = event, state),
     do: STSOutput.complete(event, state)
