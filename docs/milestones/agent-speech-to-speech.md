@@ -1017,6 +1017,38 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   rejects the event despite accepting `output_settlement: :transcript_end`.
   Test final/late/missing text and history reconciliation without fabricating
   played content or claiming the hosted history gate passed.
+  - [x] Admit bounded output transcript snapshots with a boolean final marker;
+    make Morse emit the explicit final its descriptor promises. Test the actual
+    channel and capability boundary, not just struct construction.
+  - [x] Require the selected descriptor's settlement evidence plus acknowledged
+    generation completion and matching playback before publication. Exercise final
+    text before/after playback, immutable final snapshots, and stale-turn rejection.
+  - [x] Bound missing explicit finals with one validated, non-renewing deadline
+    after generation completion; fail explicitly without publishing partial text.
+    For generation-boundary providers, reject missing text at that boundary and
+    prevent post-boundary replacement. Preserve independent output-STT settlement.
+    - [x] Start that budget immediately at generation acknowledgement, before
+      bounded sink finalization, and enforce absolute expiry when a queued final
+      is handled. Reproduce deferred sink finish outlasting the budget followed
+      by a late final; sink delay must not create a fresh transcript budget.
+  - [ ] Separately prove interrupted provider-history reconciliation or explicit
+    session failure; transcript settlement alone does not close that requirement.
+
+  Settlement design review: output transcript events carry bounded cumulative
+  snapshots, not engine-concatenated deltas. An explicit final freezes that
+  snapshot; a declared generation boundary freezes the last prior snapshot.
+  Playback remains a separate required fact. The explicit-final deadline starts
+  once at acknowledged generation completion, never restarts on partial updates,
+  defaults to five seconds and admits only positive bounded internal overrides.
+  Timeout closes the uncertain allocation; it does not fabricate final text,
+  switch transcript source, replay history or claim remote hearing.
+  Focused evidence: initial ten event/controller tests had nine expected failures,
+  plus the real Morse conversation failed its missing-final assertion. After
+  implementation and the deferred-sink deadline repair, 133 focused STS
+  event/capability/room tests pass, seed 0, including timer cancellation,
+  different-turn/timeout isolation after hold and absolute deadline enforcement.
+  See `labnotes/20260922-1751-sts-transcript-settlement.md`. Interrupted-history
+  reconciliation and the overall Google controller gate remain unchecked.
 - [x] Carry bounded private agent prompt and authorized tool schemas through
   STS activation configuration into initial and resumed Google setup. Reject
   unsupported configuration explicitly. Verify fake-wire setup contents; an

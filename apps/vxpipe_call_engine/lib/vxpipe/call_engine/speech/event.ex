@@ -115,7 +115,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   defp allowed_fields(:turn_resumed), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:transcript), do: [:turn_ref, :text, :provider_request_id]
   defp allowed_fields(:input_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
-  defp allowed_fields(:output_transcript), do: [:turn_ref, :text, :provider_request_id]
+  defp allowed_fields(:output_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
 
   defp allowed_fields(:tool_call),
     do: [:call_ref, :turn_ref, :tool_name, :arguments, :provider_request_id]
@@ -184,9 +184,11 @@ defmodule Vxpipe.CallEngine.Speech.Event do
          is_reference(reference) and is_binary(text) and
            (is_nil(event.final) or is_boolean(event.final))
 
-  defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text})
+  defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text} = event)
        when kind in [:output_transcript],
-       do: is_reference(reference) and is_binary(text)
+       do:
+         is_reference(reference) and is_binary(text) and
+           (is_nil(event.final) or is_boolean(event.final))
 
   defp valid_kind?(%__MODULE__{
          kind: :tool_call,

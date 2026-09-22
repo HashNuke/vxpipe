@@ -436,6 +436,32 @@ protocol remains open; a provider cancellation is not proof of remote rollback.
 
 #### Output permission, credit and settlement
 
+Output transcript events are bounded cumulative snapshots, not deltas for the
+engine to concatenate. For `output_settlement: :transcript_end`, the provider
+must emit `output_transcript` with `final: true`; omitted/false finality does not
+settle text. The first acknowledged final freezes the matching output's text.
+For `:generation_boundary`, acknowledged generation completion freezes the last
+prior snapshot; missing text at that boundary fails explicitly. Later snapshots
+cannot replace either settled form, and a different turn reference cannot settle
+the current output. Upstream reference retirement remains a separate requirement.
+Morse now emits the explicit final its descriptor declares.
+
+In provider-transcript mode, public completion requires settled selected text,
+acknowledged generation completion and matching sink playback. A late explicit final can finish an
+already-drained output, but partial text alone cannot. Missing explicit finals
+use one deadline starting at generation acknowledgement: five seconds by default,
+with internal `output_transcript_timeout_ms` restricted to integer 1–30,000 ms.
+Sink finalization consumes that same budget; absolute expiry is checked before
+accepting a queued final. Partial updates never renew it. Final receipt, normal
+settlement or interruption cancels it; the fresh engine output reference rejects a stale timeout. Expiry
+closes the allocation with `output_transcript_timeout`, without partial speech
+publication or transcript-source fallback. This bounds final-text acceptance,
+not the instant of shutdown: an in-flight sink call may delay failure handling
+within its existing 15-second call bound. Output-STT has its separate existing
+recognition settlement/deadline, including explicit recognition failure followed
+by completion without text. These local rules do not establish interrupted
+provider-history reconciliation or remote hearing.
+
 For an already-admitted output, revoking either audio direction fences the sink
 and provider output. Revoking only agent-to-human audio does not revoke still-
 permitted human input. A credited chunk denied at the output boundary is

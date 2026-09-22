@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.Speech.MorseSTSConversationTest do
                     %Event{session: ^session, kind: :output_transcript, text: reply} = output_text}
 
     assert reply == "RECEIVED HI"
+    assert output_text.final == true
     assert :ok = Session.ack(session, output_text)
 
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}

@@ -559,7 +559,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
     do: :ok
 
   defp maybe_emit_output_transcript(state, turn_ref, reply) do
-    Event.emit(state.channel, :output_transcript, turn_ref: turn_ref, text: reply)
+    Event.emit(state.channel, :output_transcript, turn_ref: turn_ref, text: reply, final: true)
   end
 
   defp submit_next_chunk(%{output: %{encoder: nil}} = state), do: {:noreply, state}

@@ -55,6 +55,39 @@ reconciliation, tool execution, STS usage and transport-qualified public turn
 projection remain the later milestone's responsibilities. This contract does
 not claim those workflows are complete.
 
+## Selected transcript settlement
+
+The 2026-09-22 repair enforces the already-declared transcript settlement mode.
+Provider events carry bounded cumulative snapshots. An explicit final freezes
+the snapshot for `:transcript_end`; acknowledged output generation completion
+freezes the last preceding snapshot for `:generation_boundary`. The engine never
+turns a partial snapshot into a final merely because playback drained. In
+provider-transcript mode, both text and generation must settle before the matching
+playback can complete publication.
+
+An explicit final may arrive after generation or playback. One non-renewing
+deadline begins at generation acknowledgement, defaults to five seconds and
+accepts positive internal overrides no larger than thirty seconds. It is scoped
+to the fresh engine output reference and cancelled on final/settlement/fencing.
+Bounded sink finalization consumes the same budget; absolute expiry prevents a
+queued final from being accepted after it expires.
+Missing final text closes the uncertain allocation; generation-boundary profiles
+with no snapshot fail at that boundary. No source switch or history replay occurs.
+The separately selected output-STT path retains its recognizer-owned finalization.
+
+Rejected alternatives: treating any snapshot as final publishes partial text;
+waiting without a bound retains the output slot indefinitely; restarting the
+budget on each update lets a provider postpone settlement indefinitely; allowing
+post-final replacement contradicts the provider's settled evidence. A final
+transcript still does not prove a remotely heard prefix or reconciled model
+history. Those interruption guarantees remain open in the milestone.
+
+Focused verification exercises the shared event/channel boundary, real Morse
+finality, delayed playback/final ordering, immutable text, deadline validation,
+timeout failure, different-turn rejection and fresh-output-reference timeout
+isolation. Upstream reference retirement remains separately open. See
+`labnotes/20260922-1751-sts-transcript-settlement.md` for red-green evidence.
+
 ## Verification
 
 `STSConformanceTest` exercises audio- and text-driven admission, credited PCM,

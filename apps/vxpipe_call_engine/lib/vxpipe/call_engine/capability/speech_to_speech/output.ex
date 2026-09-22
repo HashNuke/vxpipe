@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   lifecycle, independently of caller input and tool-event handling.
   """
 
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{OutputTranscript, Usage}
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Speech.{Audio, Event, OutputTurn, Session}
@@ -41,11 +41,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
                 ),
               sink_turn: sink_turn,
               pending_text: nil,
+              text_final?: false,
               stt_text: nil,
               stt_bytes: 0,
               stt_descriptor: if(state.output_stt, do: state.output_stt.descriptor),
               stt_outcome: :in_progress,
               text_deadline: nil,
+              text_expires_at: nil,
               generation_done?: false,
               playback_done?: false,
               played_ms: 0
@@ -228,7 +230,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  defp output_text_ready?(_output, %{output_stt: nil}), do: true
+  defp output_text_ready?(output, %{output_stt: nil}), do: OutputTranscript.ready?(output)
   defp output_text_ready?(%{stt_text: :failed}, _state), do: true
   defp output_text_ready?(%{stt_text: text}, _state), do: not is_nil(text)
 

@@ -40,7 +40,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     ]
 
   alias Vxpipe.CallEngine.Telemetry
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{CallerEvents, Input, ToolEvents}
+
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{
+    CallerEvents,
+    Input,
+    OutputTranscript,
+    ToolEvents
+  }
 
   @call_timeout 5_000
   @default_output_stt_timeout_ms 5_000
@@ -130,6 +136,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   @impl true
   def init(options) do
+    case OutputTranscript.timeout_ms(options) do
+      {:ok, timeout} -> init_session(Keyword.put(options, :output_transcript_timeout_ms, timeout))
+      {:error, reason} -> {:stop, reason}
+    end
+  end
+
+  defp init_session(options) do
     owner = Keyword.fetch!(options, :owner)
     {provider, provider_options} = Keyword.fetch!(options, :provider)
     scope = Keyword.fetch!(options, :speech_scope)
@@ -196,7 +209,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
             Keyword.get(options, :output_stt_private, [])
           },
           output_stt_timeout_ms:
-            Keyword.get(options, :output_stt_timeout_ms, @default_output_stt_timeout_ms)
+            Keyword.get(options, :output_stt_timeout_ms, @default_output_stt_timeout_ms),
+          output_transcript_timeout_ms: Keyword.fetch!(options, :output_transcript_timeout_ms)
         }
 
         case start_output_stt(state) do
@@ -436,6 +450,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     end
   end
 
+  def handle_info({:vxpipe_output_transcript_timeout, output_ref}, state),
+    do: OutputTranscript.expire(output_ref, state)
+
   def handle_info(:vxpipe_retry_output_stt_start, %{output_stt: nil} = state) do
     {:noreply, state}
   end
@@ -534,16 +551,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   defp handle_event(%Event{kind: :output_transcript} = event, state) do
     with :ok <- Session.ack(state.session, event) do
-      state =
-        case state.active_output do
-          %{provider_turn: turn} = output when turn == event.turn_ref ->
-            %{state | active_output: %{output | pending_text: event.text}}
-
-          _other ->
-            state
-        end
-
-      {:noreply, state}
+      OutputTranscript.accept(event, state)
     else
       _failure -> stop_unavailable(:provider_failed, state)
     end
@@ -552,12 +560,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   defp handle_event(%Event{kind: :output_completed} = event, state) do
     with :ok <- Session.ack(state.session, event) do
       case state.active_output do
-        %{output: %{ref: ref}} = output when ref == event.request_ref ->
+        %{output: %{ref: ref}} when ref == event.request_ref ->
+          state = OutputTranscript.acknowledge_generation(state)
+          output = state.active_output
+
           case finish_output_stt_input(state) do
             :ok ->
               case OutputSink.finish(state.sink, output.sink_turn, self()) do
-                :ok -> {:noreply, %{state | active_output: %{output | generation_done?: true}}}
-                {:error, _reason} -> stop_unavailable(:audio_output_failed, state)
+                :ok ->
+                  OutputTranscript.generated(state)
+
+                {:error, _reason} ->
+                  stop_unavailable(:audio_output_failed, state)
               end
 
             {:error, reason} ->

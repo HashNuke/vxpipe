@@ -340,6 +340,18 @@ call/cancellation (`:tool_call`/`:tool_cancelled`). The generic `:transcript`
 event belongs to STT and is rejected for STS. Every semantic event is
 acknowledged with `Speech.Session.ack/2` before room handling.
 
+Emit output text as cumulative snapshots. When declaring `:transcript_end`, send
+`Event.emit(channel, :output_transcript, turn_ref: turn, text: complete_text, final: true)`
+to settle it explicitly. Earlier snapshots may omit `final` or set it to `false`;
+non-boolean values are invalid. The first acknowledged final is immutable.
+For `:generation_boundary`, emit the last snapshot before `:output_completed`;
+that boundary freezes it, and missing text fails explicitly. The engine waits
+for matching playback before publication in both modes. Explicit-final providers
+have one five-second default budget after generation completion for missing text;
+sink finalization and partial updates do not extend it. Timeout closes the
+allocation, and interruption retires the timer and text association. Do not claim this as provider-history
+reconciliation after interruption.
+
 A `:tool_call` carries `call_ref`, `turn_ref`, `tool_name` and `arguments`.
 Arguments are a JSON object with string keys, JSON values, at most 16 nesting
 levels below the root and at most 65,536 encoded bytes. Invalid UTF-8, structs,
