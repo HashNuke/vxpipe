@@ -374,6 +374,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
   @tag changing_listeners: true
   test "five-participant handoff retains wait cursors through monitor addition and reconnection" do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+
     {wait_sounds, options} = custom_wait_configuration(480_000)
 
     plan =
@@ -591,8 +593,34 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       Enum.map(audience, fn peer -> if peer == observer_client, do: replacement, else: peer end)
 
     {departing_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
-    remove_native_listener(authority, room, late, late_client, departing_player)
-    returned_listener = join_native_listener(plan, room, "late-monitor", :monitor)
+
+    assert {:ok, %{worker: %Task{pid: refresh_worker}}} =
+             CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(phase)
+
+    policy_authority = Authority.whereis(room.incarnation_id)
+    before_refresh = Authority.snapshot(policy_authority)
+    assert :erlang.suspend_process(refresh_worker)
+
+    returned_listener =
+      try do
+        remove_native_listener(authority, room, late, late_client, departing_player)
+        peer = join_native_listener(plan, room, "late-monitor", :monitor)
+        current = Authority.snapshot(policy_authority)
+        assert current.revision == before_refresh.revision + 2
+
+        [{support_connection, _}] =
+          Registry.lookup(
+            Vxpipe.Gateway.WebRTC.Registry,
+            {:connection, support_client.connection_id}
+          )
+
+        actors = :sys.get_state(support_connection).private_media.enforcers
+        for actor <- actors, do: assert(:sys.get_state(actor).policy == current)
+        peer
+      after
+        :erlang.resume_process(refresh_worker)
+      end
+
     await_tone(returned_listener, 250, 2_000)
     {returned_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
     refute returned_player == departing_player

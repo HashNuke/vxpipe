@@ -21,7 +21,12 @@
 - Raw decoding does not repair caller activity-end/controller admission. Existing
   fixtures that manually admit output remain narrow protocol evidence. Google
   remains unadvertised; no hosted call, history replay or billable check ran.
-- Private handoff continuity and its two review repairs are awaiting independent
-  rereview before integration. Native late attachment ordering remains separate.
+- Integrated private handoff continuity and the review repairs from `7715d4e7`,
+  `e543d969`, `e9a32226` and `39f16427`, preserving later main milestone tasks.
+  Main's 117 focused tests passed. Independent rereview found a further queued
+  readiness plus connection-loss race; the parent added that exact red and fixed
+  scoped pre-barrier classification. The integrated group now passes 118 tests.
+  See `labnotes/20260922-1820-private-connection-review.md`. Native late attachment
+  ordering remains separate and unresolved.
 - Broad gates will run on the committed integrated runtime; no previous umbrella
   result is attributed to these new changes.

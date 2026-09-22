@@ -799,8 +799,60 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
   end
 
-  defp prepare_private_speech(context, scoped_options \\ nil) do
-    private = start_private_speech(context, scoped_options)
+  for {change, restriction} <- [
+        unrelated: %{record_audio: false},
+        relevant: %{save_transcripts: false}
+      ] do
+    @tag :private_continuity
+    test "continuous private policy preserves #{change} interval safety across two revisions" do
+      context = preparation_room(restriction: unquote(Macro.escape(restriction)))
+      options = preparation_options()
+      private = prepare_private_speech(context, options, :continuous)
+      transport = private.transport
+      monitor = Process.monitor(transport)
+      TestSpeechToTextTransport.deliver(transport, connected_message())
+      collector = collect([private.resource], context.room.incarnation_id)
+      assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+      restrictor = Map.fetch!(context.plan.participants, "restrictor")
+      assert {:ok, _restricted} = Authority.admit(context.authority, restrictor.participant_id)
+      assert {:ok, base} = Authority.leave(context.authority, restrictor.participant_id)
+      assert base.revision == private.base.revision + 2
+
+      for actor <- [private.capability, private.ingress],
+          do: assert(:sys.get_state(actor).policy == base)
+
+      assert {:error, :unavailable} = SpeechToText.readiness_binding(private.resource)
+      assert :sys.get_state(private.ingress).opening_input_admission == :closed
+
+      assert {:ok, candidate} =
+               Authority.preview_presence(
+                 context.authority,
+                 MapSet.put(base.present_participant_ids, private.observer.participant_id)
+               )
+
+      assert {:ok, prepared} = SpeechToText.prepare_policy(private.capability, candidate, options)
+      assert [resource] = prepared.resources
+
+      assert :sys.get_state(private.capability).private_allocation.deadline_ms ==
+               Keyword.fetch!(options, :deadline_ms)
+
+      if unquote(change) == :unrelated do
+        assert prepared.token == private.prepared.token
+        assert resource.generation == private.resource.generation
+        assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
+        refute_receive {:DOWN, ^monitor, :process, ^transport, _}, 0
+      else
+        assert_receive {:DOWN, ^monitor, :process, ^transport, _}, 1_000
+        refute prepared.token == private.prepared.token
+        refute resource.generation == private.resource.generation
+        refute resource.policy_interval == private.resource.policy_interval
+        assert {:error, :unavailable} = SpeechToText.readiness_binding(private.resource)
+      end
+    end
+  end
+
+  defp prepare_private_speech(context, scoped_options \\ nil, registration \\ :local) do
+    private = start_private_speech(context, scoped_options, registration)
 
     assert {:ok, candidate} =
              Authority.preview_presence(
@@ -822,7 +874,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     })
   end
 
-  defp start_private_speech(context, options) do
+  defp start_private_speech(context, options, registration \\ :local) do
     observer = Map.fetch!(context.plan.participants, "observer")
     base = Authority.snapshot(context.authority)
     connection_id = unique_id("private-speech")
@@ -878,8 +930,21 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
                  ]
              )
 
-    assert :ok = Enforcer.apply(ingress, base, 1_000)
-    assert :ok = Enforcer.apply(capability, base, 1_000)
+    if registration == :continuous do
+      scope = options |> Map.new() |> Map.put(:participant_id, observer.participant_id)
+
+      assert {:ok, ^base} =
+               Authority.register_private_enforcers(
+                 context.authority,
+                 [ingress, capability],
+                 self(),
+                 scope
+               )
+    else
+      assert :ok = Enforcer.apply(ingress, base, 1_000)
+      assert :ok = Enforcer.apply(capability, base, 1_000)
+    end
+
     refute_receive {:test_stt_transport_started, _, _}
 
     %{

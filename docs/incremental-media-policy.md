@@ -99,7 +99,14 @@ An enforcer's lifetime follows the resource it protects. Mixer, transcript route
 enforcers remain critical for the room lifetime. Connection speech and media enforcers remain
 critical only while their exact transport connection exists. The authorized attachment records
 that PID; registering through a temporary helper does not change the owner. Private destination
-enforcers acquire the same connection lifetime when the candidate is committed.
+enforcers receive every authoritative revision through attempt-scoped noncritical
+registration before commit, under the parent-reviewed 2026-09-22 ownership correction.
+The existing enforcer map/barrier owns this delivery; no history or skipped revision
+is permitted. Validated candidate adoption promotes exactly selected actors to
+critical connection-owned semantics before candidate application. Private cancellation
+remains local and cannot alter caller permissions; uncertain enforcement after adoption
+remains fail-closed. The original phase deadline and unaffected providers are retained.
+See [private policy continuity](private-policy-continuity.md).
 
 Policy Authority monitors connection owners and retires their registrations on departure. If an
 enforcer's DOWN arrives first, it checks the exact owner's lifetime before deciding whether the

@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Media.PrivateMedia do
 
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
-  alias Vxpipe.CallEngine.MediaPolicy.Enforcer
+  alias Vxpipe.CallEngine.MediaPolicy.Authority
   alias Vxpipe.Gateway.Media.{RoomAudioEgress, RoomAudioIngress, SharedOutputPipeline}
 
   def prepare(
@@ -92,8 +92,7 @@ defmodule Vxpipe.Gateway.Media.PrivateMedia do
     with true <-
            Map.take(private, [:owner, :attempt_id, :deadline_ms]) ==
              Map.take(context, [:owner, :attempt_id, :deadline_ms]),
-         {:ok, state} <- reconcile_speech(state, context),
-         :ok <- refresh(state.private_media, context) do
+         {:ok, state} <- reconcile_speech(state, context) do
       private = %{state.private_media | policy: context.policy}
       {:ok, receipt(private), %{state | private_media: private}}
     else
@@ -148,7 +147,7 @@ defmodule Vxpipe.Gateway.Media.PrivateMedia do
   defp start_actors(actors, connection_id, context, supervisor) do
     Enum.reduce_while(actors, {:ok, %{}}, fn {kind, spec}, {:ok, started} ->
       with {:ok, actor} <- supervisor.start_child(connection_id, spec),
-           :ok <- apply_base(actor, context) do
+           {:ok, _snapshot} <- register_private(actor, context) do
         {:cont, {:ok, Map.put(started, kind, actor)}}
       else
         {:error, reason} -> {:halt, {:error, reason}}
@@ -156,21 +155,19 @@ defmodule Vxpipe.Gateway.Media.PrivateMedia do
     end)
   end
 
-  defp refresh(%{policy: policy}, %{policy: policy}), do: :ok
-
-  defp refresh(private, context) do
-    Enum.reduce_while(private.enforcers, :ok, fn actor, :ok ->
-      case apply_base(actor, context) do
-        :ok -> {:cont, :ok}
-        error -> {:halt, error}
-      end
-    end)
-  end
-
-  defp apply_base(actor, context) do
+  defp register_private(actor, context) do
     case remaining(context) do
-      0 -> {:error, :deadline_elapsed}
-      timeout -> Enforcer.apply(actor, context.policy, timeout)
+      0 ->
+        {:error, :deadline_elapsed}
+
+      timeout ->
+        Authority.register_private_enforcers(
+          context.policy_authority,
+          [actor],
+          self(),
+          Map.take(context, [:owner, :attempt_id, :deadline_ms, :participant_id]),
+          timeout
+        )
     end
   end
 

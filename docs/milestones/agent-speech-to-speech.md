@@ -751,12 +751,110 @@ the existing audio round trip. Record discoveries here before implementing.
       held at provisional generation 1, with no accepted/submitted audio or RTP
       egress. Check that adopted-release validation compares the captured
       inventory with the prepared/cued connection set before releasing media.
-    - [ ] Resolve private policy refresh when departure/rejoin skips revisions
+    - [x] Resolve private policy refresh when departure/rejoin skips revisions
       between worker observations. Controlled native reproduction returns
       `:private_media_changed` before wait-player reconciliation: private revision
       8 to room revision 10 rejects `:unexpected_policy_revision`. Private refresh
       applies the speech capability first. Shared STT/policy changes require parent
       coordination, not a timeout increase or invented intermediate policies.
+      - [x] Review continuous registration and safe replacement against the
+        approved private lifetime, incremental resource and failure contracts.
+        The contract requires local-only base application until commit; ordinary
+        registration changes cancellation semantics, while existing grouped
+        registration does not promote to critical enforcement at adoption.
+      - [x] Approve the narrowly scoped private-registration decision in
+        `docs/private-policy-continuity.md` before changing runtime/tests. Keep
+        strict sequential snapshots and distinguish private cancellation from
+        authoritative commit failure; this is a normative lifecycle amendment.
+        Parent technical review approved it on 2026-09-22 before tests/code;
+        readiness and incremental-policy contracts now record the correction.
+      - [x] Add focused authority/private-allocation reds for consecutive policy
+        delivery across a paused handoff, private cancellation and exact adoption;
+        add the controlled native revision-8-to-10 regression.
+      - [x] Implement approved continuity under the original phase deadline,
+        preserving unaffected generations and independently retiring removed STT
+        demand. Cover permission revoke/regrant and stale buffered evidence.
+      - [x] Verify bounded owning-child/native cases, cleanup and isolation;
+        commit separately and leave final serial root gates with the parent.
+        Align the owning Call Engine transfer-connection fixture with authoritative
+        private delivery: its old refresh manually reapplies an already installed
+        snapshot and now correctly rejects it. Preserve strict actor checks and
+        remove only the obsolete fixture-owned application.
+        Verify candidate adoption cannot admit a private participant while omitting
+        its registered actors; include retained dormant media ownership in the
+        exact receipt selection so phase completion cannot retire live connections.
+        Bound initial registration acknowledgement by the original lease as well
+        as the authority enforcement budget; expired registration cannot succeed.
+      - [x] Complete independent xhigh private-continuity review repairs:
+        - [x] Reproduce stale private receipt adoption after phase-owner death and
+          after explicit live-actor retirement; reject both before any candidate
+          barrier, leaving authority/base policy alive and attempt cleanup local.
+          Reviewer method: register monotonic actor with owner and self connection,
+          preview joining, kill owner, await actor DOWN, assert base snapshot, then
+          commit the same candidate/scope/actor tuple. Expected invalid private
+          selection; the original path treated missing registration as ordinary.
+          Distinguish scoped private receipts from both unregistered actors and
+          ordinary registrations; keep legacy ordinary `commit_candidate/4`
+          behavior separate, without storing retired-actor history.
+        - [x] Reproduce ordinary admit bypass: register a private joining actor,
+          admit joining without selection, kill owner, observe actor retirement
+          despite participant presence. Prevent membership additions from omitting
+          private actors; cover staged participant loss then ordinary same-ID rejoin.
+        - [x] Cover queued ready/private loss at the room boundary and an unrelated
+          policy barrier crossing private lease expiry. Preserve original deadlines,
+          strict policy transitions and fail-closed post-promotion semantics.
+          First focused room reds confirm both paths: retired actor selection
+          closes the policy authority; staged same-ID rejoin succeeds. With the
+          authority guards alone, pre-barrier rejection still closes RoomAuthority,
+          and staged participant liveness is checked only after policy commit.
+          Validate exact staged supervisor before entering the barrier and route
+          only proven pre-barrier private rejection through attempt-local recovery;
+          retain fatal treatment of uncertain or post-promotion failure.
+        - [x] Verify focused owning-engine reds/greens and commit review repairs
+          separately. Parent released bounded native reproduction after its
+          Gateway lane finished, but these owned-child review checks take priority.
+          Authority/transfer-room/speech-policy verification passes 117 tests
+          (seed 0, two schedulers). Controlled reds and exact reviewer methods are
+          recorded in `labnotes/20260922-1751-private-adoption-review.md`.
+        - [x] Reproduce queued genuine readiness followed by both private actor
+          and exact destination-connection loss while RoomAuthority is suspended.
+          The original connection validation returns ordinary `invalid_enforcers`
+          before scoped selection validation and closes the healthy source room.
+        - [x] Classify dead scoped-receipt connections as proven pre-barrier
+          private rejection, including loss after room validation but before
+          Authority handles the candidate. Preserve fatal enforcement uncertainty
+          and post-promotion failure; require recovery and retained source identity.
+          Parent red: three room review cases, one expected `handoff_commit_failed`.
+          Integrated authority/transfer-room/speech-policy green: 118 tests, seed 0.
+          Independent xhigh source rereview clears this pre-barrier repair.
+          See `labnotes/20260922-1820-private-connection-review.md`.
+      - [ ] Investigate the separately observed late-attachment acceptance timeout.
+        Final native verification passed continuous-policy assertions but timed
+        out at `transfer.active` after a later listener attachment. Capture the
+        authoritative handoff stage/result before attributing this to continuity
+        or changing readiness ordering; a passing retry is not repair evidence.
+        A subsequent instrumented five-participant run passes with no handoff
+        error. This does not explain that late timeout or close the outer gate.
+        - [ ] Capture the exact release worker result and authoritative connection,
+          output generation and collector state at the late attachment boundary;
+          distinguish failure from pending readiness and lost sideband evidence.
+          The existing failing run reaches the final `transfer.active` wait after
+          private continuity and returned-listener audio assertions pass.
+        - [ ] Design one controlled ordering reproduction for attachment visible
+          before transport readiness, using an owned acknowledgement/barrier.
+          Inspect capture/hold/preparation and fixture message consumption before
+          changing runtime; run no native overlap with the parent's Gateway gate.
+        - [ ] If reproduced, add the smallest owning-child red, repair the proven
+          ordering defect without deadline extension or gate weakening, then run
+          only bounded focused checks and retain contrary evidence. Prioritize
+          independent continuity review findings in a separate checkpoint.
+      Continuity evidence: 96 authority/STT/transfer-room checks and 27 speech
+      policy checks pass; the final authority recheck passes 40 tests. The native
+      five-participant regression proves every private actor receives both policy
+      revisions while its preparation worker remains suspended, then completes
+      ordered cues/conversation. Both phone private-media preparation cases pass.
+      See `labnotes/20260922-1657-private-policy-continuity.md` for all red/green
+      commands, intermediate failures and the distinct unresolved late timeout.
   Gateway checkpoint evidence: nine bounded native cases pass (seed 0), covering
   coalesced departure/rejoin, attachment during adoption, and destination/participant
   preparation/adoption/release loss. Controlled reds distinguish dead wait-player
@@ -764,7 +862,8 @@ the existing audio round trip. Record discoveries here before implementing.
   Details and the still-open private-policy reproduction are in
   `labnotes/20260922-1610-gateway-handoff-ordering.md`. The outer investigation and
   final serial root acceptance remain open; passing retries do not close the
-  separately reproduced private-policy revision gap.
+  separately observed late-attachment timeout. The private-policy revision gap
+  itself now has the controlled continuity evidence above.
 - [x] Align the STS capability test fixture's asynchronous readiness wait with
   its explicit provider-start deadline. A focused run alongside native WebRTC
   reproduction failed its implicit 100 ms `assert_receive` despite the fixture

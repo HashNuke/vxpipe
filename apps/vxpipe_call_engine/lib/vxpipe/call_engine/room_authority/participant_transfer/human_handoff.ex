@@ -384,6 +384,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           {:error, :stale_candidate} ->
             retry_preparation(pending, ready, state)
 
+          {:error, reason}
+          when reason in [:invalid_private_enforcers, :private_participant_unavailable] ->
+            # These exact failures are established before candidate application.
+            # No destination policy has committed; retain the caller and recover.
+            {:noreply, fail(pending, :destination_commit_unavailable, state)}
+
           _commit_failed ->
             Progress.publish(pending, :failed, [], state, :destination_commit_unavailable)
 

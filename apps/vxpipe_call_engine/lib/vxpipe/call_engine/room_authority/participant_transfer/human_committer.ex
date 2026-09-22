@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.Authority
+  alias Vxpipe.CallEngine.ParticipantSupervisor
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Completion
 
   alias Vxpipe.CallEngine.RoomAuthority.{
@@ -13,32 +14,56 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
   }
 
   def commit_ready(pending, ready, state) do
-    required = MapSet.new(ready.graph.resources, & &1.instance)
-
     enforcers =
       ready.receipts
       |> Enum.flat_map(fn {connection_id, receipt} ->
         connection = Map.fetch!(state.connections, connection_id).pid
         Enum.map(receipt.enforcers, &{&1, connection})
       end)
-      |> Enum.filter(fn {enforcer, _connection} -> MapSet.member?(required, enforcer) end)
       |> Enum.uniq()
 
-    with {:ok, snapshot} <-
+    with :ok <- validate_private_participant(ready.participant),
+         {:ok, snapshot} <-
            Authority.commit_candidate(
              state.media_policy_authority,
              ready.candidate,
              pending.deadline_ms,
-             enforcers
+             enforcers,
+             %{
+               owner: pending.task.pid,
+               attempt_id: pending.attempt_id,
+               deadline_ms: pending.deadline_ms,
+               participant_id: pending.request.destination_participant_id
+             }
            ) do
       commit_participant(snapshot, pending, ready, state)
     else
       # Authority rejects a stale candidate before any enforcer can adopt it.
-      {:error, :stale_candidate} = stale -> stale
-      _failed -> {:error, :destination_commit_unavailable}
+      {:error, :stale_candidate} = stale ->
+        stale
+
+      {:error, reason} = private
+      when reason in [:invalid_private_enforcers, :private_participant_unavailable] ->
+        private
+
+      _failed ->
+        {:error, :destination_commit_unavailable}
     end
   catch
     :exit, _reason -> {:error, :destination_commit_unavailable}
+  end
+
+  defp validate_private_participant(preparation) do
+    participant = preparation.snapshot
+
+    if ParticipantSupervisor.registered?(
+         participant.tenant_id,
+         participant.room_id,
+         participant.participant_id,
+         preparation.participant_supervisor
+       ),
+       do: :ok,
+       else: {:error, :private_participant_unavailable}
   end
 
   defp commit_participant(snapshot, pending, ready, state) do

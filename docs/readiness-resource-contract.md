@@ -139,13 +139,41 @@ from the base membership, so their adoption supplies that transition. Ordinary i
 continues to install current policy through its existing API; no synthetic policy revision or
 relaxation of enforcers' stale-revision checks is introduced.
 
-A newly staged actor must not use ordinary `register_enforcer/3` during private preparation:
-that would make its cancellation a critical room failure. Its owner instead installs the base
-policy locally and prepares the candidate under closed delivery gates. The owner remains
+A newly staged actor must not use ordinary critical `register_enforcer/3` during private preparation:
+that would make its cancellation a critical room failure. Under the parent-reviewed
+2026-09-22 ownership amendment, it instead registers with an explicit private attempt
+scope in the authority's existing enforcer map. The authoritative barrier installs
+its initial base and every subsequent revision, even while handoff work is paused.
+Private cancellation remains local; validated candidate adoption atomically promotes
+the selected actors to existing critical connection-owned semantics before applying
+the candidate. There is no second registry, snapshot replay or relaxed transition.
+See [private policy continuity](private-policy-continuity.md). The owner remains
 responsible for authorization, actual actor identity, phase/deadline ownership, cancellation and
 complete inventory selection; this optional internal list grants none of those permissions.
 No second pending-enforcer registry is needed in the policy authority. Existing live enforcers
 remain registered throughout preparation and retain their ordinary failure contract.
+
+Private adoption uses `commit_candidate/5` with the exact original owner, attempt,
+participant and deadline. It rejects foreign scope, partial private groups, or
+destination admission that omits registered private actors. The private receipt
+includes retained dormant media even when no readiness descriptor is required;
+removed speech demand is retired separately before selection. Unregistered
+ordinary actors retain the existing `commit_candidate/4` path. Private initial
+registration is bounded by the original lease; failure cleanup does not extend
+preparation or authorize success after expiry.
+
+A scoped private receipt is not ordinary registration authority: every selected
+actor must still have its matching private registration. Retired identities and
+ordinary registrations cannot substitute for it; no retired-actor history is
+needed. Ordinary participant admission also rejects a participant with staged
+private registrations instead of bypassing selection/promotion. Before candidate
+application, the room validates the exact staged participant supervisor. Proven
+pre-barrier private selection or participant loss uses attempt-local recovery;
+uncertain enforcement and any post-promotion loss retain fail-closed semantics.
+This includes a scoped receipt's connection dying before Authority validates it,
+even if RoomAuthority has a ready result queued ahead of the connection's `DOWN`.
+Authority classifies that rejection before entering any candidate barrier;
+ordinary unscoped registration keeps its existing validation error.
 
 Private STT initialization accepts an internal `initial_policy` snapshot through
 `RoomCapabilitySupervisor.start_speech_to_text/8`. When that policy requires no speech session,
@@ -198,8 +226,8 @@ and attempt deadlines. Source transfer authority is revalidated. Callers cannot 
 phase owner or actor PID: allocation uses the resolved destination and the real pending task.
 
 The operation creates a dormant capability/ingress pair under the existing capability supervisor,
-with locally applied base policy, closed input and the original private allocation lease. It does
-not connect a provider or register critical enforcers. A repeated valid request returns the same
+with authoritative private registration, closed input and the original private allocation lease. It does
+not connect a provider or register critical enforcers before adoption. A repeated valid request returns the same
 pair; an unconfigured destination returns `nil` even when application STT is enabled. The actual
 connection binding makes this pair visible to authoritative readiness inventory. Provider warming
 and candidate preparation remain outside room authority under the persistent phase.
@@ -228,11 +256,11 @@ Room media preparation is tracked even when the destination has no STT profile, 
 cannot allow ordinary acceptance/briefing completion to bypass prepared adoption.
 
 Gateway creates dormant `RoomAudioIngress` and `RoomAudioEgress` under its existing connection
-supervisor. Their base policy is applied locally without critical registration, pipeline startup,
+supervisor. Their base and subsequent policies are applied through private registration without critical registration, pipeline startup,
 or live mixer subscription. The connection retains its native output, private admission and disabled
 room modes. Only its closed speech ingress is attached, when selected. The future mix-minus
 subscription descriptor is available to candidate collection without granting room output.
-Repeated requests reuse actors and refresh their base policy. A missing, undemanded input decoder
+Repeated requests reuse actors and validate current policy evidence without replaying a base snapshot. A missing, undemanded input decoder
 stays absent when an unrelated policy revision changes its default interval.
 
 The connection monitors its private actors. Actor loss ends that private connection and the engine's

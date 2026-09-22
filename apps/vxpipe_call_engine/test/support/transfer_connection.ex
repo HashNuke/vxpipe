@@ -7,7 +7,6 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Media.{Ingress, OutputSink, STSIngress}
   alias Vxpipe.CallEngine.Readiness.Resource
-  alias Vxpipe.CallEngine.MediaPolicy.Enforcer
 
   def start_link(options) do
     GenServer.start_link(__MODULE__, options, name: name(Keyword.fetch!(options, :command)))
@@ -211,28 +210,8 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
       ingress = if speech, do: speech.ingress
       attachment = %{state.binding.attachment | media_ingress: ingress}
 
-      refresh =
-        if state.private_policy != nil and state.private_policy != media.policy and
-             state.binding.attachment.media_ingress == ingress,
-           do: enforcers,
-           else: []
-
-      applied =
-        Enum.reduce_while(refresh, :ok, fn actor, :ok ->
-          case Enforcer.apply(actor, media.policy, 1_000) do
-            :ok -> {:cont, :ok}
-            error -> {:halt, error}
-          end
-        end)
-
-      case applied do
-        :ok ->
-          {:reply, {:ok, Map.put(media, :enforcers, enforcers)},
-           put_in(%{state | private_policy: media.policy}.binding.attachment, attachment)}
-
-        error ->
-          {:reply, error, state}
-      end
+      {:reply, {:ok, Map.put(media, :enforcers, enforcers)},
+       put_in(%{state | private_policy: media.policy}.binding.attachment, attachment)}
     else
       error -> {:reply, error, state}
     end

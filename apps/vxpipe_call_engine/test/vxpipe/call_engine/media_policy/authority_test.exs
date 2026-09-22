@@ -703,6 +703,354 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     assert Authority.snapshot(server) == snapshot
   end
 
+  @tag :private_continuity
+  test "private actors receive consecutive revisions and cancellation stays local" do
+    server =
+      start_authority(
+        plan(%{"joining" => MediaPolicy.inherit(), "monitor" => MediaPolicy.inherit()})
+      )
+
+    owner = start_enforcer()
+    first = start_enforcer(mode: :monotonic)
+    second = start_enforcer(mode: :monotonic)
+    scope = private_scope(owner)
+
+    assert {:ok, base} =
+             Authority.register_private_enforcers(server, [first, second], self(), scope)
+
+    assert_receive {:media_policy_applied, ^first, ^base}
+    assert_receive {:media_policy_applied, ^second, ^base}
+    assert {:ok, admitted} = Authority.admit(server, "monitor")
+    assert {:ok, departed} = Authority.leave(server, "monitor")
+
+    for actor <- [first, second] do
+      assert_receive {:media_policy_applied, ^actor, ^admitted}
+      assert_receive {:media_policy_applied, ^actor, ^departed}
+    end
+
+    monitors = Enum.map([first, second], &{&1, Process.monitor(&1)})
+    Process.exit(owner, :kill)
+
+    for {actor, monitor} <- monitors,
+        do: assert_receive({:DOWN, ^monitor, :process, ^actor, :killed})
+
+    assert Authority.snapshot(server) == departed
+  end
+
+  @tag :private_continuity
+  test "private adoption rejects foreign scope then promotes before applying the candidate" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    actor = start_enforcer(mode: :monotonic)
+    scope = private_scope(self())
+    assert {:ok, _} = Authority.register_private_enforcers(server, [actor], self(), scope)
+    assert_receive {:media_policy_applied, ^actor, _}
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+    assert {:error, :invalid_private_enforcers} =
+             Authority.commit_candidate(
+               server,
+               candidate,
+               scope.deadline_ms,
+               [{actor, self()}],
+               %{scope | attempt_id: "foreign"}
+             )
+
+    assert Authority.snapshot(server).revision == 0
+    :sys.replace_state(actor, &Map.put(&1, :mode, :manual))
+    monitor = Process.monitor(server)
+
+    commit =
+      Task.async(fn ->
+        Authority.commit_candidate(
+          server,
+          candidate,
+          scope.deadline_ms,
+          [{actor, scope.owner}],
+          scope
+        )
+      end)
+
+    assert_receive {:media_policy_applied, ^actor, _}
+    Process.exit(actor, :kill)
+    assert {:error, :enforcement_failed} = Task.await(commit)
+    assert_receive {:DOWN, ^monitor, :process, ^server, :media_policy_enforcement_failed}
+  end
+
+  @tag :private_continuity
+  test "private expiry retires actors without applying another snapshot" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    actor = start_enforcer()
+    scope = %{private_scope(self()) | deadline_ms: System.monotonic_time(:millisecond) + 200}
+    monitor = Process.monitor(actor)
+    assert {:ok, base} = Authority.register_private_enforcers(server, [actor], self(), scope)
+    assert_receive {:media_policy_applied, ^actor, ^base}
+    assert_receive {:DOWN, ^monitor, :process, ^actor, :killed}, 1_000
+    assert Authority.snapshot(server) == base
+  end
+
+  @tag :private_continuity
+  test "private rejection retires only staged actors and never replays a survivor revision" do
+    server =
+      start_authority(
+        plan(%{"joining" => MediaPolicy.inherit(), "monitor" => MediaPolicy.inherit()})
+      )
+
+    staged = start_enforcer(mode: :monotonic)
+    survivor = start_enforcer(mode: :monotonic)
+
+    assert {:ok, _} =
+             Authority.register_private_enforcers(server, [staged], self(), private_scope(self()))
+
+    assert {:ok, _} = Authority.register_connection_enforcer(server, survivor, self())
+    assert_receive {:media_policy_applied, ^staged, _}
+    assert_receive {:media_policy_applied, ^survivor, _}
+    :sys.replace_state(staged, &Map.put(&1, :mode, {:error, :policy_not_ready}))
+    monitor = Process.monitor(staged)
+
+    assert {:ok, snapshot} = Authority.admit(server, "monitor")
+    assert_receive {:DOWN, ^monitor, :process, ^staged, :killed}
+    assert_receive {:media_policy_applied, ^survivor, ^snapshot}
+    refute_receive {:media_policy_applied, ^survivor, ^snapshot}, 0
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  @tag :private_continuity
+  test "successful private promotion drops the phase lease but retains critical connection ownership" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    owner = start_enforcer()
+    actor = start_enforcer(mode: :monotonic)
+    scope = private_scope(owner)
+    assert {:ok, _} = Authority.register_private_enforcers(server, [actor], self(), scope)
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+    assert {:ok, snapshot} =
+             Authority.commit_candidate(
+               server,
+               candidate,
+               scope.deadline_ms,
+               [{actor, self()}],
+               scope
+             )
+
+    owner_monitor = Process.monitor(owner)
+    Process.exit(owner, :kill)
+    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :killed}
+    assert Authority.snapshot(server) == snapshot
+    assert {:ok, _} = Authority.leave(server, "joining")
+    monitor = Process.monitor(server)
+    Process.exit(actor, :kill)
+
+    assert_receive {:DOWN, ^monitor, :process, ^server,
+                    {:media_policy_enforcer_unavailable, ^actor, :killed}}
+  end
+
+  @tag :private_continuity
+  test "private registration rejects present participants and incomplete group adoption" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    first = start_enforcer()
+    second = start_enforcer()
+    scope = private_scope(self())
+
+    assert {:error, :invalid_private_scope} =
+             Authority.register_private_enforcers(server, [first], self(), %{
+               scope
+               | deadline_ms: System.monotonic_time(:millisecond) - 1
+             })
+
+    assert {:ok, _} = Authority.register_private_enforcers(server, [first, second], self(), scope)
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+    assert {:error, :invalid_private_enforcers} =
+             Authority.commit_candidate(
+               server,
+               candidate,
+               scope.deadline_ms,
+               [{first, self()}],
+               scope
+             )
+
+    assert Authority.snapshot(server).revision == 0
+    assert :ok = Authority.retire_connection_enforcers(server, self(), [first])
+    assert {:ok, _} = Authority.admit(server, "joining")
+    fresh = start_enforcer()
+
+    assert {:error, :invalid_private_scope} =
+             Authority.register_private_enforcers(server, [fresh], self(), scope)
+
+    refute_receive {:media_policy_applied, ^fresh, _}, 0
+  end
+
+  @tag :private_continuity
+  test "private actors cannot be omitted from destination adoption" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    actor = start_enforcer()
+    scope = private_scope(self())
+    assert {:ok, _} = Authority.register_private_enforcers(server, [actor], self(), scope)
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+    assert {:error, :invalid_private_enforcers} =
+             Authority.commit_candidate(server, candidate, scope.deadline_ms, [], scope)
+
+    assert Authority.snapshot(server).revision == 0
+  end
+
+  @tag :private_continuity
+  test "private registration cannot acknowledge after its original deadline" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    actor = start_enforcer(mode: :manual)
+    scope = %{private_scope(self()) | deadline_ms: System.monotonic_time(:millisecond) + 100}
+    monitor = Process.monitor(actor)
+
+    registration =
+      Task.async(fn ->
+        Authority.register_private_enforcers(server, [actor], scope.owner, scope)
+      end)
+
+    assert_receive {:media_policy_applied, ^actor, _}
+    assert_receive {:DOWN, ^monitor, :process, ^actor, :killed}, 500
+    assert {:error, _} = Task.await(registration)
+    assert Authority.snapshot(server).revision == 0
+  end
+
+  @tag :private_continuity
+  test "retiring private speech leaves separately owned private media subscribed" do
+    server =
+      start_authority(
+        plan(%{"joining" => MediaPolicy.inherit(), "monitor" => MediaPolicy.inherit()})
+      )
+
+    speech = start_enforcer(mode: :monotonic)
+    ingress = start_enforcer(mode: :monotonic)
+    media = start_enforcer(mode: :monotonic)
+    scope = private_scope(self())
+
+    assert {:ok, _} =
+             Authority.register_private_enforcers(server, [speech, ingress], self(), scope)
+
+    assert {:ok, _} = Authority.register_private_enforcers(server, [media], self(), scope)
+    for actor <- [speech, ingress, media], do: assert_receive({:media_policy_applied, ^actor, _})
+    assert :ok = Authority.retire_connection_enforcers(server, self(), [speech])
+    Process.exit(speech, :kill)
+    Process.exit(ingress, :kill)
+    assert {:ok, snapshot} = Authority.admit(server, "monitor")
+    assert_receive {:media_policy_applied, ^media, ^snapshot}
+    refute_receive {:media_policy_applied, ^speech, ^snapshot}, 0
+    refute_receive {:media_policy_applied, ^ingress, ^snapshot}, 0
+  end
+
+  for retirement <- [:owner_loss, :explicit] do
+    @tag :private_review
+    test "private receipt rejects #{retirement} retirement before the barrier" do
+      server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+      owner = start_enforcer()
+      actor = start_enforcer(mode: :monotonic)
+      scope = private_scope(owner)
+      assert {:ok, base} = Authority.register_private_enforcers(server, [actor], self(), scope)
+      assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+      if unquote(retirement) == :owner_loss do
+        monitor = Process.monitor(actor)
+        Process.exit(owner, :kill)
+        assert_receive {:DOWN, ^monitor, :process, ^actor, :killed}
+      else
+        assert :ok = Authority.retire_connection_enforcers(server, self(), [actor])
+      end
+
+      assert Authority.snapshot(server) == base
+
+      assert {:error, :invalid_private_enforcers} =
+               Authority.commit_candidate(
+                 server,
+                 candidate,
+                 scope.deadline_ms,
+                 [{actor, self()}],
+                 scope
+               )
+
+      assert Authority.snapshot(server) == base
+    end
+  end
+
+  @tag :private_review
+  test "ordinary registration is not a private adoption receipt" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    actor = start_enforcer(mode: :monotonic)
+    scope = private_scope(self())
+    assert {:ok, base} = Authority.register_connection_enforcer(server, actor, self())
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+
+    assert {:error, :invalid_private_enforcers} =
+             Authority.commit_candidate(
+               server,
+               candidate,
+               scope.deadline_ms,
+               [{actor, self()}],
+               scope
+             )
+
+    assert Authority.snapshot(server) == base
+
+    assert {:ok, _} =
+             Authority.commit_candidate(server, candidate, scope.deadline_ms, [{actor, self()}])
+  end
+
+  @tag :private_review
+  test "ordinary admission cannot omit staged private actors" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    owner = start_enforcer()
+    actor = start_enforcer(mode: :monotonic)
+    scope = private_scope(owner)
+    assert {:ok, base} = Authority.register_private_enforcers(server, [actor], self(), scope)
+    assert {:error, :invalid_private_enforcers} = Authority.admit(server, "joining")
+    assert Authority.snapshot(server) == base
+    monitor = Process.monitor(actor)
+    Process.exit(owner, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^actor, :killed}
+    assert Authority.snapshot(server) == base
+  end
+
+  @tag :private_review
+  test "unrelated barrier crossing private expiry retires staged actors locally" do
+    server =
+      start_authority(
+        plan(%{"joining" => MediaPolicy.inherit(), "monitor" => MediaPolicy.inherit()})
+      )
+
+    staged = start_enforcer(mode: :monotonic)
+    survivor = start_enforcer(mode: :monotonic)
+    scope = %{private_scope(self()) | deadline_ms: System.monotonic_time(:millisecond) + 200}
+    assert {:ok, _} = Authority.register_private_enforcers(server, [staged], self(), scope)
+    assert {:ok, _} = Authority.register_connection_enforcer(server, survivor, self())
+    assert_receive {:media_policy_applied, ^staged, _}
+    assert_receive {:media_policy_applied, ^survivor, _}
+    :sys.replace_state(survivor, &%{&1 | mode: :manual})
+    monitor = Process.monitor(staged)
+    update = Task.async(fn -> Authority.admit(server, "monitor") end)
+    assert_receive {:media_policy_applied, ^survivor, _}
+    token = make_ref()
+
+    Process.send_after(
+      self(),
+      token,
+      max(scope.deadline_ms - System.monotonic_time(:millisecond), 0)
+    )
+
+    assert_receive ^token, 1_000
+    TestMediaPolicyEnforcer.acknowledge(survivor, :ok)
+    assert {:ok, snapshot} = Task.await(update)
+    assert_receive {:DOWN, ^monitor, :process, ^staged, :killed}, 1_000
+    assert snapshot.present_participant_ids == MapSet.new(["monitor"])
+    assert Authority.snapshot(server) == snapshot
+  end
+
+  defp private_scope(owner),
+    do: %{
+      owner: owner,
+      attempt_id: "private-attempt",
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000,
+      participant_id: "joining"
+    }
+
   defp start_authority(plan, overrides \\ []) do
     options = [
       plan: plan,

@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, SpeechToTextRuntime}
-  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer, SpeechToTextDemand}
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, SpeechToTextDemand}
   alias Vxpipe.CallEngine.RoomAuthority.{ConnectionLifecycle, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
@@ -155,9 +155,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
     :exit, _reason -> {:reply, {:error, unavailable()}, state}
   end
 
-  defp bind_pair(command, pending, base, capability, ingress, state) do
-    with :ok <- apply_base(ingress, base, pending),
-         :ok <- apply_base(capability, base, pending),
+  defp bind_pair(command, pending, _base, capability, ingress, state) do
+    scope = %{
+      owner: pending.task.pid,
+      attempt_id: pending.attempt_id,
+      deadline_ms: pending.deadline_ms,
+      participant_id: command.participant_id
+    }
+
+    connection = Map.fetch!(state.connections, command.connection_id).pid
+
+    with {:ok, _snapshot} <-
+           Authority.register_private_enforcers(
+             state.media_policy_authority,
+             [ingress, capability],
+             connection,
+             scope,
+             remaining_ms(pending)
+           ),
          {:reply, :ok, state} <-
            ConnectionLifecycle.bind_private_speech_to_text(command, capability, ingress, state) do
       {:reply, {:ok, %{capability: capability, ingress: ingress}}, state}
@@ -171,13 +186,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
           )
 
         {:reply, {:error, unavailable()}, state}
-    end
-  end
-
-  defp apply_base(actor, base, pending) do
-    case remaining_ms(pending) do
-      0 -> {:error, :deadline_elapsed}
-      timeout -> Enforcer.apply(actor, base, timeout)
     end
   end
 

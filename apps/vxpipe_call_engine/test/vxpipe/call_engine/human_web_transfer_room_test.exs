@@ -1219,6 +1219,150 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     end
   end
 
+  for loss <- [:queued_private_actor, :queued_private_connection, :staged_participant] do
+    @tag :private_review
+    @tag capture_log: true
+    test "private #{loss} loss cannot admit stale handoff ownership" do
+      plan = compile_plan(support_stt: true)
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+      authority = room_authority(plan)
+      policy = PolicyAuthority.whereis(room.incarnation_id)
+      source_capability = :sys.get_state(authority).text_to_speech_capability.pid
+      assert_receive {:test_tts_transport_started, source, _}, 2_000
+      source_monitor = Process.monitor(source)
+
+      TestTextToSpeechTransport.deliver_control(
+        source,
+        ~s({"type":"Connected","request_id":"review-source"})
+      )
+
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self(), defer_drain: true},
+          id: :review_caller
+        )
+
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :review_support)
+
+      assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
+      begin_transfer(plan, room, caller, "private-review-transfer")
+      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+      assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt}} =
+               attach_ready(plan, room, support, "support-connection", support_sink)
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :media_ready)
+               )
+
+      finish_private_briefing(briefing, support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt}, 2_000
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :accept)
+               )
+
+      assert_receive {:test_stt_transport_started, transport, _}, 1_000
+
+      TestSpeechToTextTransport.deliver(
+        transport,
+        ~s({"type":"Connected","request_id":"review-ready","sequence_id":0})
+      )
+
+      assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
+      pending = :sys.get_state(authority).pending_participant_transfer
+      assert {:ok, scope} = Phase.scope(pending.task.pid)
+      base = PolicyAuthority.snapshot(policy)
+
+      if unquote(loss) in [:queued_private_actor, :queued_private_connection] do
+        worker = scope.worker.pid
+        worker_monitor = Process.monitor(worker)
+        token = pause_handoff_result(worker)
+        assert :ok = GenServer.call(caller_sink, :complete_drain)
+        assert_receive {:handoff_result_ready, ^token}, 1_000
+        state = :sys.get_state(authority)
+        speech = Map.fetch!(state.connections, "support-connection").speech_to_text
+        actor = speech.capability
+        monitor = Process.monitor(actor)
+        assert :ok = :sys.suspend(authority)
+
+        try do
+          send(worker, {:continue_handoff, token})
+          assert_receive {:DOWN, ^worker_monitor, :process, ^worker, :normal}, 1_000
+          assert {:ok, settled} = Phase.scope(pending.task.pid)
+          refute Map.has_key?(settled, :worker)
+          Process.exit(actor, :kill)
+          assert_receive {:DOWN, ^monitor, :process, ^actor, :killed}, 1_000
+          assert PolicyAuthority.snapshot(policy) == base
+
+          if unquote(loss) == :queued_private_connection do
+            connection = Map.fetch!(state.connections, "support-connection").pid
+            connection_monitor = Process.monitor(connection)
+            stop_supervised!({TestTransferConnection, "support-connection"})
+            assert_receive {:DOWN, ^connection_monitor, :process, ^connection, _}, 1_000
+            assert PolicyAuthority.snapshot(policy) == base
+          end
+        after
+          :sys.resume(authority)
+        end
+      else
+        worker = scope.worker.pid
+        assert :erlang.suspend_process(worker)
+
+        try do
+          participant = participant_supervisor(plan, support.participant_id)
+          monitor = Process.monitor(participant)
+          Process.exit(participant, :kill)
+          assert_receive {:DOWN, ^monitor, :process, ^participant, :killed}, 1_000
+
+          assert {:ok, command} =
+                   CallEngine.Command.JoinParticipant.new(
+                     tenant_id: plan.tenant_id,
+                     actor_id: plan.actor_id,
+                     room_id: plan.room_id,
+                     participant_id: support.participant_id,
+                     role: :human,
+                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                   )
+
+          assert {:error, %Vxpipe.CallEngine.Error{code: :room_start_failed}} =
+                   CallEngine.join_participant(command)
+
+          assert PolicyAuthority.snapshot(policy) == base
+        after
+          :erlang.resume_process(worker)
+        end
+
+        assert :ok = GenServer.call(caller_sink, :complete_drain)
+      end
+
+      assert_receive {:vxpipe_transfer_progress, ^attempt, %{phase: :recovering}}, 1_000
+      assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
+      assert :ok = GenServer.call(caller_sink, :complete_drain)
+      assert_receive {:vxpipe_transfer_progress, ^attempt, %{phase: :recovered}}, 1_000
+
+      assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "private-review-transfer"}},
+                     1_000
+
+      recovered = :sys.get_state(authority)
+      assert recovered.pending_participant_transfer == nil
+      assert recovered.text_to_speech_capability.pid == source_capability
+      refute Map.has_key?(recovered.connections, "support-connection")
+      refute MapSet.member?(recovered.participant_ids, support.participant_id)
+      refute_receive {:vxpipe_transfer_active, ^attempt}, 0
+
+      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "private-review-transfer"}},
+                     0
+
+      assert PolicyAuthority.snapshot(policy) == base
+      refute_receive {:DOWN, ^source_monitor, :process, ^source, _}, 0
+    end
+  end
+
   test "activates a destination's configured STT only after acceptance and reuses it" do
     plan = compile_plan(support_stt: true)
     caller = Map.fetch!(plan.participants, "caller")

@@ -3,7 +3,15 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.MediaPolicy.{Barrier, Candidate, Effective, Enforcer, Snapshot}
+  alias Vxpipe.CallEngine.MediaPolicy.{
+    Barrier,
+    Candidate,
+    Effective,
+    Enforcer,
+    PrivateRegistration,
+    Snapshot
+  }
+
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
 
@@ -53,6 +61,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
              | :deadline_elapsed
              | :invalid_candidate
              | :invalid_enforcers
+             | :invalid_private_enforcers
              | :stale_candidate
              | :unchanged_candidate
              | :enforcement_failed}
@@ -63,6 +72,20 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
         {:commit_candidate, candidate, deadline_ms, new_enforcers},
         @call_timeout
       )
+
+  @doc "Promotes exact private attempt ownership before entering the candidate barrier."
+  def commit_candidate(server, candidate, deadline_ms, enforcers, private_scope),
+    do:
+      GenServer.call(
+        server,
+        {:commit_private_candidate, candidate, deadline_ms, enforcers, private_scope},
+        @call_timeout
+      )
+
+  @doc "Subscribes an authorized private allocation without making cancellation room-critical."
+  def register_private_enforcers(server, enforcers, connection, scope, timeout \\ @call_timeout),
+    do:
+      GenServer.call(server, {:register_private_enforcers, enforcers, connection, scope}, timeout)
 
   @spec register_enforcer(GenServer.server(), pid(), timeout()) ::
           {:ok, Snapshot.t()} | {:error, :already_registered | :enforcement_failed}
@@ -102,7 +125,11 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   @spec admit(GenServer.server(), String.t(), timeout()) ::
           {:ok, Snapshot.t()}
           | {:error,
-             :already_present | :enforcement_failed | :invalid_policy | :unknown_participant}
+             :already_present
+             | :enforcement_failed
+             | :invalid_policy
+             | :invalid_private_enforcers
+             | :unknown_participant}
   def admit(server, participant_id, timeout \\ @call_timeout) when is_binary(participant_id) do
     GenServer.call(server, {:admit, participant_id}, timeout)
   end
@@ -159,12 +186,21 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
       do: {:reply, {:error, :invalid_deadline}, state}
 
   def handle_call({:commit_candidate, candidate, deadline, enforcers}, _from, state) do
-    with :ok <- Candidate.validate(candidate, self(), state),
-         :ok <- validate_enforcers(enforcers) do
-      install_candidate(candidate.snapshot, deadline, enforcers, state)
-    else
-      {:error, _reason} = error -> {:reply, error, state}
-    end
+    commit_selected(candidate, deadline, enforcers, nil, state)
+  end
+
+  def handle_call(
+        {:commit_private_candidate, candidate, deadline, enforcers, scope},
+        _from,
+        state
+      ) do
+    commit_selected(candidate, deadline, enforcers, scope, state)
+  end
+
+  def handle_call({:register_private_enforcers, enforcers, connection, scope}, _from, state) do
+    if PrivateRegistration.valid_scope?(scope, state.snapshot, state.participant_policies),
+      do: register_group(enforcers, connection, scope, state),
+      else: {:reply, {:error, :invalid_private_scope}, state}
   end
 
   def handle_call({:register_enforcer, enforcer, connection}, _from, state) do
@@ -187,40 +223,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   def handle_call({:register_enforcer_group, enforcers, connection}, _from, state) do
-    group = MapSet.new(enforcers)
-
-    cond do
-      not valid_enforcer_group?(group) ->
-        {:reply, {:error, :invalid_enforcers}, state}
-
-      MapSet.size(group) != length(enforcers) ->
-        {:reply, {:error, :already_registered}, state}
-
-      Enum.any?(group, &Map.has_key?(state.enforcers, &1)) ->
-        {:reply, {:error, :already_registered}, state}
-
-      not Process.alive?(connection) ->
-        {:reply, {:error, :connection_unavailable}, state}
-
-      true ->
-        state = Enum.reduce(group, state, &monitor_enforcer(&1, connection, &2, group))
-        registered = Map.take(state.enforcers, MapSet.to_list(group))
-        deadline = System.monotonic_time(:millisecond) + state.enforcement_timeout_ms
-
-        case Barrier.apply(registered, state.snapshot, remaining(deadline)) do
-          :ok ->
-            {:reply, {:ok, state.snapshot}, state}
-
-          {:error, :enforcement_failed, _failed, _applied} ->
-            case retire_enforcer_group(group, nil, connection, state, deadline) do
-              {:ok, state} ->
-                {:reply, {:error, :enforcement_failed}, state}
-
-              {:error, state} ->
-                {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
-            end
-        end
-    end
+    register_group(enforcers, connection, nil, state)
   end
 
   def handle_call({:retire_connection_enforcers, connection, enforcers}, _from, state) do
@@ -231,6 +234,9 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     cond do
       Map.has_key?(state.contributions, participant_id) ->
         {:reply, {:error, :already_present}, state}
+
+      not PrivateRegistration.admission_available?(state.enforcers, participant_id) ->
+        {:reply, {:error, :invalid_private_enforcers}, state}
 
       true ->
         case Map.fetch(state.participant_policies, participant_id) do
@@ -248,28 +254,141 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     end
   end
 
+  defp commit_selected(_candidate, deadline, _enforcers, _scope, state)
+       when not is_integer(deadline),
+       do: {:reply, {:error, :invalid_deadline}, state}
+
+  defp commit_selected(candidate, deadline, enforcers, scope, state) do
+    with :ok <- Candidate.validate(candidate, self(), state),
+         :ok <- validate_enforcers(enforcers),
+         :ok <-
+           PrivateRegistration.validate_selection(
+             state.enforcers,
+             enforcers,
+             scope,
+             deadline,
+             candidate
+           ) do
+      install_candidate(candidate.snapshot, deadline, enforcers, state)
+    else
+      {:error, :invalid_enforcers} when is_map(scope) ->
+        # A scoped receipt whose connection died has not entered the barrier.
+        # Keep this private preparation rejection distinct from uncertain apply.
+        {:reply, {:error, :invalid_private_enforcers}, state}
+
+      {:error, _reason} = error ->
+        {:reply, error, state}
+    end
+  end
+
+  defp register_group(enforcers, connection, scope, state)
+       when is_list(enforcers) and is_pid(connection) do
+    group = MapSet.new(enforcers)
+
+    cond do
+      not valid_enforcer_group?(group) ->
+        {:reply, {:error, :invalid_enforcers}, state}
+
+      MapSet.size(group) != length(enforcers) ->
+        {:reply, {:error, :already_registered}, state}
+
+      Enum.any?(group, &Map.has_key?(state.enforcers, &1)) ->
+        {:reply, {:error, :already_registered}, state}
+
+      not Process.alive?(connection) ->
+        {:reply, {:error, :connection_unavailable}, state}
+
+      true ->
+        lease = PrivateRegistration.start(scope)
+        state = Enum.reduce(group, state, &monitor_enforcer(&1, connection, &2, group, lease))
+        registered = Map.take(state.enforcers, MapSet.to_list(group))
+        deadline = System.monotonic_time(:millisecond) + state.enforcement_timeout_ms
+        deadline = if scope, do: min(deadline, scope.deadline_ms), else: deadline
+
+        result =
+          with :ok <- Barrier.apply(registered, state.snapshot, remaining(deadline)),
+               true <-
+                 lease == nil or
+                   (PrivateRegistration.active?(lease) and
+                      System.monotonic_time(:millisecond) < deadline),
+               do: :ok
+
+        case result do
+          :ok ->
+            {:reply, {:ok, state.snapshot}, state}
+
+          _failed_or_expired ->
+            # Expiry cannot succeed or extend the preparation lease. Teardown
+            # alone gets a bounded cleanup budget after that failed registration.
+            cleanup_deadline =
+              if scope,
+                do: System.monotonic_time(:millisecond) + state.enforcement_timeout_ms,
+                else: deadline
+
+            case retire_enforcer_group(group, nil, connection, state, cleanup_deadline) do
+              {:ok, state} ->
+                {:reply, {:error, :enforcement_failed}, state}
+
+              {:error, state} ->
+                {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
+            end
+        end
+    end
+  end
+
+  defp register_group(_enforcers, _connection, _scope, state),
+    do: {:reply, {:error, :invalid_enforcers}, state}
+
   @impl true
   def handle_info({:DOWN, monitor, :process, process, reason}, state) do
-    if Map.get(state.connection_monitors, process) == monitor do
-      {:noreply, retire_connection(process, state)}
-    else
-      case Map.get(state.enforcers, process) do
-        %{monitor: ^monitor, connection: connection, group: %MapSet{} = group} ->
-          deadline = System.monotonic_time(:millisecond) + state.enforcement_timeout_ms
+    private =
+      Enum.find(state.enforcers, fn {_actor, registration} ->
+        match?(%{private: %{monitor: ^monitor}}, registration)
+      end)
 
-          case retire_enforcer_group(group, process, connection, state, deadline) do
-            {:ok, state} -> {:noreply, state}
-            {:error, state} -> {:stop, :media_policy_enforcement_failed, state}
-          end
+    cond do
+      private != nil ->
+        retire_private(private, state)
 
-        %{monitor: ^monitor, connection: connection} ->
-          if connection != nil and not Process.alive?(connection),
-            do: {:noreply, retire_connection(connection, state)},
-            else: {:stop, {:media_policy_enforcer_unavailable, process, reason}, state}
+      Map.get(state.connection_monitors, process) == monitor ->
+        {:noreply, retire_connection(process, state)}
 
-        _unknown ->
-          {:noreply, state}
-      end
+      true ->
+        case Map.get(state.enforcers, process) do
+          %{monitor: ^monitor, connection: connection, group: %MapSet{} = group} ->
+            deadline = System.monotonic_time(:millisecond) + state.enforcement_timeout_ms
+
+            case retire_enforcer_group(group, process, connection, state, deadline) do
+              {:ok, state} -> {:noreply, state}
+              {:error, state} -> {:stop, :media_policy_enforcement_failed, state}
+            end
+
+          %{monitor: ^monitor, connection: connection} ->
+            if connection != nil and not Process.alive?(connection),
+              do: {:noreply, retire_connection(connection, state)},
+              else: {:stop, {:media_policy_enforcer_unavailable, process, reason}, state}
+
+          _unknown ->
+            {:noreply, state}
+        end
+    end
+  end
+
+  def handle_info({:private_enforcers_expired, token}, state) do
+    case Enum.find(state.enforcers, fn {_actor, registration} ->
+           match?(%{private: %{token: ^token}}, registration)
+         end) do
+      nil -> {:noreply, state}
+      private -> retire_private(private, state)
+    end
+  end
+
+  defp retire_private({_actor, %{group: group, connection: connection}}, state) do
+    deadline = System.monotonic_time(:millisecond) + state.enforcement_timeout_ms
+
+    case retire_enforcer_group(group, nil, connection, state, deadline) do
+      {:ok, state} -> {:noreply, state}
+      {:error, state} -> {:stop, :media_policy_enforcement_failed, state}
     end
   end
 
@@ -277,7 +396,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     monitor_enforcer(enforcer, connection, state, nil)
   end
 
-  defp monitor_enforcer(enforcer, connection, state, group) do
+  defp monitor_enforcer(enforcer, connection, state, group, private \\ nil) do
     if Map.has_key?(state.enforcers, enforcer) do
       state
     else
@@ -289,7 +408,12 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
               Process.monitor(connection)
             end)
 
-      registration = %{monitor: Process.monitor(enforcer), connection: connection, group: group}
+      registration = %{
+        monitor: Process.monitor(enforcer),
+        connection: connection,
+        group: group,
+        private: private
+      }
 
       %{
         state
@@ -307,6 +431,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
       Map.reject(state.enforcers, fn {_enforcer, registration} ->
         if registration.connection == connection do
           Process.demonitor(registration.monitor, [:flush])
+          PrivateRegistration.release(Map.get(registration, :private))
           true
         else
           false
@@ -323,6 +448,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
       Map.reject(state.enforcers, fn {enforcer, registration} ->
         if registration.connection == connection and MapSet.member?(retiring, enforcer) do
           Process.demonitor(registration.monitor, [:flush])
+          PrivateRegistration.release(Map.get(registration, :private))
           true
         else
           false
@@ -411,6 +537,8 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   defp enforce_candidate(snapshot, deadline, remaining, new_enforcers, state) do
+    state = %{state | enforcers: PrivateRegistration.promote(state.enforcers, new_enforcers)}
+
     state =
       Enum.reduce(new_enforcers, state, fn registration, state ->
         {enforcer, connection} = enforcer_connection(registration)
@@ -521,11 +649,16 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     Enum.reduce_while(state.enforcers, {:ok, state}, fn {enforcer, _registration}, {:ok, state} ->
       case Map.get(state.enforcers, enforcer) do
         %{group: %MapSet{} = group, connection: connection} ->
-          case Enum.find(group, &(not Process.alive?(&1))) do
-            nil ->
+          failed = Enum.find(group, &(not Process.alive?(&1)))
+
+          active? =
+            PrivateRegistration.active?(Map.get(Map.fetch!(state.enforcers, enforcer), :private))
+
+          case {failed, active?} do
+            {nil, true} ->
               {:cont, {:ok, state}}
 
-            failed ->
+            {failed, _active?} ->
               case retire_enforcer_group(group, failed, connection, state, deadline) do
                 {:ok, state} -> {:cont, {:ok, state}}
                 {:error, state} -> {:halt, {:error, state}}
@@ -540,6 +673,9 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
 
   defp failed_enforcer_group(state, failed) do
     case Map.get(state.enforcers, failed) do
+      %{group: %MapSet{} = group, connection: connection, private: private} when private != nil ->
+        {:ok, group, Enum.find(group, &(not Process.alive?(&1))), connection}
+
       %{group: %MapSet{} = group, connection: connection} ->
         case Enum.find(group, &(not Process.alive?(&1))) do
           nil -> :error

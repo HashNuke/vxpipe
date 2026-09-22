@@ -50,6 +50,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateMedia do
          attempt_id: pending.attempt_id,
          deadline_ms: pending.deadline_ms,
          policy: policy,
+         policy_authority: state.media_policy_authority,
+         participant_id: command.participant_id,
          configuration: handle.configuration,
          output_mode: :mix_minus,
          speech_to_text: speech
