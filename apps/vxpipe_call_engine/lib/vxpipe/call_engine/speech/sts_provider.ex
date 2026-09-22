@@ -4,8 +4,17 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   and public; startup receives the descriptor, an opaque event channel and
   trusted private options. The provider owns its bidirectional model session,
   wire protocol, turn identifiers and model context. It never publishes to the
-  room directly; all results flow through `Speech.Event.emit/3` for room
+  room directly; semantic results flow through `Speech.Event.emit/3` for room
   attribution, policy and playback decisions.
+
+  The consumer authorizes output with `Speech.Session.admit_output/2` after
+  its policy checks. The provider receives
+  `{:vxpipe_speech_output, channel, turn_ref, output_ref}` and uses that fresh
+  reference with `Speech.Channel.submit/3`. Keep at most one PCM chunk in
+  flight, wait for its matching `:vxpipe_speech_credit`, then emit
+  `:output_completed` with both references after the last credit. Completion
+  ends generation; only the consumer can settle local playout and release the
+  output slot. Audio/text input admission never authorizes output on its own.
   """
 
   alias Vxpipe.CallEngine.Speech.Descriptor
@@ -15,7 +24,8 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback push_audio(pid(), binary()) :: :ok | {:error, :busy | :session_failed}
-  @callback push_text(pid(), String.t()) :: :ok | {:error, atom()}
+  @callback push_text(pid(), reference(), String.t()) :: :ok | {:error, atom()}
+  @callback input_activity(pid(), :started | :ended) :: :ok | {:error, atom()}
   @callback interrupt(pid(), reference()) :: :ok | {:error, atom()}
   @callback send_tool_result(pid(), reference(), term()) :: :ok | {:error, atom()}
   @callback close(pid()) :: :ok | {:error, atom()}

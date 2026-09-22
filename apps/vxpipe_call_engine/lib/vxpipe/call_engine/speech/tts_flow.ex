@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Speech.TTSFlow do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Speech.{Allocation, Cancellation, Input, OutputState}
+  alias Vxpipe.CallEngine.Speech.{Allocation, Cancellation, ChannelFailure, Input, OutputState}
 
   def fence(state, command, reference) do
     ticket = %Cancellation{
@@ -92,6 +92,9 @@ defmodule Vxpipe.CallEngine.Speech.TTSFlow do
       not Allocation.valid?(state.allocation) ->
         {:reply, {:error, :closed}, state}
 
+      state.descriptor.kind != :tts ->
+        {:reply, {:error, :unsupported_operation}, state}
+
       not is_nil(state.cancellation) ->
         {:reply, {:error, :stale_request}, state}
 
@@ -145,6 +148,39 @@ defmodule Vxpipe.CallEngine.Speech.TTSFlow do
   end
 
   def reject(_command, _result, state), do: {:ok, state}
+
+  def continue_after_input(
+        %{operation: {:speak, _reference}},
+        :ok,
+        %{cancellation: %{pending: pending}} = state
+      )
+      when not is_nil(pending) do
+    case resume_pending(state, pending) do
+      :failed -> ChannelFailure.input_failed(state)
+      result -> result
+    end
+  end
+
+  def continue_after_input(
+        %{operation: {:speak, _reference}},
+        {:error, _reason},
+        %{
+          output: %OutputState{request: %{rejected?: true}},
+          cancellation: %{pending: pending}
+        } = state
+      )
+      when not is_nil(pending) do
+    case settle_rejected_pending(state, pending) do
+      {:ok, state, reply, pending} ->
+        ChannelFailure.reply_input(pending, reply)
+        {:noreply, state}
+
+      :failed ->
+        ChannelFailure.input_failed(state)
+    end
+  end
+
+  def continue_after_input(_command, _result, state), do: {:noreply, state}
 
   defp route_cancel(%{output: %OutputState{request: %{rejected?: true}}} = state, _command, _from) do
     cancellation = %{state.cancellation | accepted?: true}

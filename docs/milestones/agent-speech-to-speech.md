@@ -2,7 +2,9 @@
 
 Status: full A–F scope selected; checkpoint A (selection and contract, local
 only) is implemented and committed as `a31a479f` with evidence in
-`labnotes/20260922-0539-agent-sts-checkpoint-a.md`. Checkpoints B–F remain
+`labnotes/20260922-0539-agent-sts-checkpoint-a.md`. Subsequent uncommitted
+contract repairs are recorded in `labnotes/20260922-0708-finish-sts-contract.md`.
+Checkpoints B–F remain
 open, and the milestones index entry stays unchecked until all acceptance
 gates pass.
 
@@ -82,6 +84,24 @@ not inside, `STTProvider`/`TTSProvider`. Suggested required operations:
 | `interrupt(pid, turn_ref, playback)` | Promptly fence stale output, notify the model as its API permits, and keep the cancellation identifier until terminal isolation. |
 | `send_tool_result(pid, call_ref, result)` | Deliver a bounded, authorized result to a valid provider call association. A cancelled association cannot revive old speech; the engine retains an already-submitted invocation result for later reasoning. |
 | `close(pid)` | Idempotent explicit shutdown; ordinary supervision guarantees cleanup. |
+
+Source attribution travels on the scoped channel, which stamps every event
+with source/agent identity plus a generation or turn reference, so the
+implemented callbacks carry no separate `source_ref` argument: one permitted
+input stream exists per STS allocation. `push_text` carries an engine-issued
+text reference instead, and the provider publishes `:input_submitted` with it;
+unadmitted references settle as stale. `input_activity` is rejected by the
+channel in provider-controlled turn mode before provider admission.
+
+The checkpoint-A output contract uses consumer-authorized
+`Session.admit_output/2`, a fresh engine output reference, the shared single-chunk
+PCM credit path, and `:output_completed` correlated to both output and provider
+turn references. Only acknowledged completion plus bounded local playback
+settlement releases the slot. Input admission does not authorize output. See
+[STS output admission](../sts-output-admission.md) for the decision and
+[the author guide](../speech-integration-guide.md#authorizing-and-settling-sts-output)
+for the exact protocol. Tool-call events carry bounded JSON arguments and the
+provider turn association; room authorization and execution remain checkpoint C.
 
 The closed event vocabulary needs readiness, input speech activity, optional
 input transcript, output audio, output transcript, generation/turn completion,
@@ -317,6 +337,17 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   Evidence: `labnotes/20260922-0539-agent-sts-checkpoint-a.md`; STS selection
   (5 tests), usage projection (+1), inspection presenter (+1); old
   LLM + TTS path unchanged.
+  Repairs (uncommitted): independent review
+  (`labnotes/20260922-0558-review-sts-contract.md`) found a stored-plan
+  inspection regression plus contract gaps. The first repair added durable
+  decode normalization, ordered `push_text`/`input_activity` commands and
+  descriptor/source-selection facts. Re-review
+  (`labnotes/20260922-0650-verify-sts-repairs.md`) confirmed the persistence and
+  activity fixes but found five remaining issues. Their red-green repair is
+  recorded in `labnotes/20260922-0708-finish-sts-contract.md`: explicit output
+  admission/credit/settlement, submission deduplication, directional transcript
+  coverage, bounded tool arguments with turn association, and mode-consistent
+  endpointing validation. Morse conversation generation and room wiring remain B.
 - [x] Add a failing independent-provider conformance test, then implement
   `STSProvider`, descriptor/event/channel rules, bounded commands, identity
   fencing, activity/text-settlement/history capabilities, and provider
@@ -326,6 +357,11 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   Channel/Session machinery; Morse STS lifecycle; `docs/speech-integration-guide.md`
   STS section. Hosted output-STT resolution and turn-event drain stay deferred
   to D/B (fail closed now); no manifest entry until E.
+  Follow-up evidence: independent `STSConformanceTest` and `STSOutputTest`
+  exercise output, timeout, ownership, stale-reference and failure boundaries,
+  including ten concurrent allocations completing 100 credited output turns.
+  This is a local contract probe, not ten integrated calls or the final
+  milestone acceptance load test.
 - [x] Exit: local contract/compile tests prove unsupported providers fail
   closed and old LLM + TTS selection still runs. No STS service badge yet.
 

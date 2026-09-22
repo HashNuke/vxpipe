@@ -13,6 +13,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     OutputState,
     ProviderName,
     ScopeControl,
+    STSInput,
+    STSOutput,
     TTSFlow,
     TTSUsage
   }
@@ -212,7 +214,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not state.active? ->
         {:reply, {:error, :not_ready}, state}
 
-      state.descriptor.kind not in [:stt, :sts] ->
+      not STSInput.supported?(state.descriptor, command) ->
         {:reply, {:error, :unsupported_operation}, state}
 
       command.deadline <= System.monotonic_time(:millisecond) ->
@@ -335,6 +337,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     TTSFlow.settle_completed(state, caller, reference, played_ms)
   end
 
+  def handle_call({:admit_output, command, turn}, {caller, _tag}, state),
+    do: STSOutput.admit(state, caller, command, turn)
+
+  def handle_call({:settle_sts_output, handle, played}, {caller, _tag}, state),
+    do: STSOutput.settle(state, caller, handle, played)
+
   def handle_call({:cancel, command, ticket, played_ms}, {caller, _tag} = from, state) do
     if Allocation.valid?(state.allocation) do
       case Cancellation.evaluate(
@@ -446,7 +454,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
                 if remaining(command) > 0 and Allocation.valid?(state.allocation) do
                   Process.cancel_timer(input.timer)
                   ChannelFailure.reply_input(input, reply)
-                  continue_after_input(command, result, %{state | input: nil})
+                  TTSFlow.continue_after_input(command, result, %{state | input: nil})
                 else
                   ChannelFailure.input_failed(state)
                 end
@@ -460,39 +468,6 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
         {:noreply, state}
     end
   end
-
-  defp continue_after_input(
-         %{operation: {:speak, _reference}},
-         :ok,
-         %{cancellation: %{pending: pending}} = state
-       )
-       when not is_nil(pending) do
-    case TTSFlow.resume_pending(state, pending) do
-      :failed -> ChannelFailure.input_failed(state)
-      result -> result
-    end
-  end
-
-  defp continue_after_input(
-         %{operation: {:speak, _reference}},
-         {:error, _reason},
-         %{
-           output: %OutputState{request: %{rejected?: true}},
-           cancellation: %{pending: pending}
-         } = state
-       )
-       when not is_nil(pending) do
-    case TTSFlow.settle_rejected_pending(state, pending) do
-      {:ok, state, reply, pending} ->
-        ChannelFailure.reply_input(pending, reply)
-        {:noreply, state}
-
-      :failed ->
-        ChannelFailure.input_failed(state)
-    end
-  end
-
-  defp continue_after_input(_command, _result, state), do: {:noreply, state}
 
   @impl true
   def handle_info({:input_expired, reference}, %{input: %{command: %{ref: reference}}} = state) do
@@ -695,6 +670,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
+  defp accept_event(%Event{kind: :input_submitted} = event, %{descriptor: %{kind: :sts}} = state),
+    do: STSInput.accept_submission(event, state)
+
+  defp accept_event(%Event{kind: :output_completed} = event, state),
+    do: STSOutput.complete(event, state)
+
   defp accept_event(
          %Event{kind: kind, request_ref: reference} = event,
          %{output: %OutputState{request: %{ref: reference, terminal?: false}}} = state
@@ -722,6 +703,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   defp accept_event(event, state), do: {:ok, event, state}
 
   defp acknowledged(%Event{kind: :ready}, state), do: %{state | ready_acked?: true}
+
+  defp acknowledged(%Event{kind: :output_completed, request_ref: reference}, state),
+    do: STSOutput.acknowledge(state, reference)
 
   defp acknowledged(
          %Event{kind: :input_submitted, request_ref: reference},

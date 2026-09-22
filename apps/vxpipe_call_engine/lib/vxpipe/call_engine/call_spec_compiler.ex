@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
   alias Vxpipe.CallEngine.{
     CallInvocation,
     CallSpecValidation,
+    CapabilityCatalog,
     DurationLimit,
     Id,
     ResolvedCallPlan
@@ -434,7 +435,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
         )
 
       sts? ->
-        {:ok, capabilities}
+        validate_sts_transcript_source(participant, capabilities)
 
       llm? ->
         {:ok, capabilities}
@@ -443,6 +444,36 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
         invalid(
           ["participants", participant.call_spec_key, "capabilities", "model_inference"],
           "is required for an agent participant without speech-to-speech"
+        )
+    end
+  end
+
+  defp validate_sts_transcript_source(participant, capabilities) do
+    path = ["participants", participant.call_spec_key, "capabilities", "output_speech_to_text"]
+    sts_selection = capabilities.speech_to_speech
+    output_stt? = not is_nil(capabilities.output_speech_to_text)
+
+    with {:ok, options} <- CapabilityCatalog.speech_options(sts_selection),
+         {:ok, module} <- CapabilityCatalog.adapter(sts_selection),
+         {:ok, descriptor} <- module.configure(options) do
+      cond do
+        descriptor.output_transcript? and output_stt? ->
+          invalid(
+            path,
+            "must not duplicate the provider output transcription; omit output_speech_to_text"
+          )
+
+        not descriptor.output_transcript? and not output_stt? ->
+          invalid(path, "is required when the STS provider declares no output transcription")
+
+        true ->
+          {:ok, capabilities}
+      end
+    else
+      _unsupported ->
+        invalid(
+          ["participants", participant.call_spec_key, "capabilities", "speech_to_speech"],
+          "must select a supported provider, model and options"
         )
     end
   end

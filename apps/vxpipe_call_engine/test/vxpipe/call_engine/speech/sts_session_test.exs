@@ -20,6 +20,46 @@ defmodule Vxpipe.CallEngine.Speech.STSSessionTest do
     assert_receive {:DOWN, ^monitor, :process, ^tree, _reason}
   end
 
+  test "STS text input is admitted with its own submission evidence" do
+    session = start_session(provider: MorseSTS, owner: self())
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
+    assert :ok = Session.ack(session, ready)
+
+    assert :ok = Session.push_text(session, "hello")
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_submitted} = submitted}
+    assert :ok = Session.ack(session, submitted)
+
+    assert {:error, :invalid_text} = Session.push_text(session, "")
+    assert {:error, :invalid_text} = Session.push_text(session, :bad)
+  end
+
+  test "external turn boundaries are ordered commands unavailable in provider mode" do
+    hybrid = start_session(provider: MorseSTS, owner: self(), options: [turn_control: "hybrid"])
+    assert_receive {:vxpipe_speech, %Event{session: ^hybrid, kind: :ready} = ready}
+    assert :ok = Session.ack(hybrid, ready)
+    assert :ok = Session.input_activity(hybrid, :started)
+    assert :ok = Session.input_activity(hybrid, :ended)
+    assert {:error, :invalid_activity} = Session.input_activity(hybrid, :paused)
+
+    provider_mode = start_session(provider: MorseSTS, owner: self())
+    assert_receive {:vxpipe_speech, %Event{session: ^provider_mode, kind: :ready} = ready}
+    assert :ok = Session.ack(provider_mode, ready)
+
+    assert {:error, :unsupported_operation} =
+             Session.input_activity(provider_mode, :started)
+  end
+
+  test "text and activity commands are rejected on STT allocations" do
+    alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: STTSession
+
+    session = start_session(provider: STTSession, owner: self())
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
+    assert :ok = Session.ack(session, ready)
+
+    assert {:error, :unsupported_operation} = Session.push_text(session, "hello")
+    assert {:error, :unsupported_operation} = Session.input_activity(session, :started)
+  end
+
   test "STS descriptor carries turn-control selection and transcript capabilities" do
     assert {:ok, descriptor} = MorseSTS.configure(turn_control: "hybrid")
     assert descriptor.kind == :sts

@@ -169,13 +169,85 @@ defmodule Vxpipe.CallEngine.AudioTurnTest do
     Process.demonitor(room_monitor, [:flush])
   end
 
-  defp speech_to_text_settings(observer) do
+  test "call readiness is delivered only after its audio ingress opens" do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(settings, :speech_to_text, speech_to_text_settings(self(), false))
+    )
+
+    room_id = unique_id("room")
+    {_plan, room, participant} = TestTurnCall.start(room_id, speech_to_text: true)
+
+    assert {:ok, command} =
+             AttachConnection.new(
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo",
+               room_id: room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: participant.participant_id,
+               connection_id: "conn-audio",
+               deadline: future_deadline()
+             )
+
+    assert {:ok, attachment} = TestTransferConnection.attach(command, nil)
+    assert_receive {:test_stt_transport_started, transport, _connection}
+    ingress = attachment.media_ingress
+    observer = self()
+
+    :ok =
+      :sys.install(
+        ingress,
+        {fn debug, event, _extra ->
+           case event do
+             {:in, {:"$gen_call", _from, :open}} ->
+               send(observer, :ingress_open_waiting)
+
+               receive do
+                 :release_ingress_open -> debug
+               after
+                 2_000 -> exit(:test_open_timeout)
+               end
+
+             _ ->
+               debug
+           end
+         end, nil}
+      )
+
+    TestSpeechToTextTransport.deliver(
+      transport,
+      ~s({"type":"Connected","request_id":"fixture-ready","sequence_id":0})
+    )
+
+    assert_receive :ingress_open_waiting
+
+    try do
+      refute_receive {:test_call_ready, ^room_id}, 50
+    after
+      send(ingress, :release_ingress_open)
+    end
+
+    TestCallStartup.await_ready(room_id)
+    frame = audio_frame(room, participant, 1, <<1, 2, 3>>)
+
+    assert :ok =
+             TestTransferConnection.run(command, fn ->
+               CallEngine.push_audio(attachment, frame)
+             end)
+
+    assert_receive {:test_stt_audio, ^transport, <<1, 2, 3>>}
+  end
+
+  defp speech_to_text_settings(observer, ready_on_start \\ true) do
     [
       providers: %{
         Vxpipe.Providers.Deepgram.STTSession => [
           enabled: true,
           wire_module: TestSpeechToTextTransport,
-          wire_options: [observer: observer, ready_on_start: true],
+          wire_options: [observer: observer, ready_on_start: ready_on_start],
           media_ingress: [
             maximum_frames: 50,
             maximum_bytes: 262_144,

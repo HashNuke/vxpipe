@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     Allocation,
     Cancellation,
     Channel,
+    OutputTurn,
     ProviderName,
     Request,
     Scope,
@@ -102,12 +103,40 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def ack(allocation, event), do: call(allocation, {:ack, event})
 
-  @doc "Release a completed TTS request after the consumer confirms local playout."
+  @doc "Release completed TTS or STS output after the consumer confirms local playout."
   def settle_output(allocation, %Request{session: allocation, ref: reference}, played_ms)
       when is_integer(played_ms) and played_ms >= 0,
       do: call(allocation, {:settle_output, reference, played_ms})
 
+  def settle_output(allocation, %OutputTurn{session: allocation} = handle, played_ms)
+      when is_integer(played_ms) and played_ms >= 0,
+      do: call(allocation, {:settle_sts_output, handle, played_ms})
+
   def settle_output(_allocation, _request, _played_ms), do: {:error, :stale_request}
+
+  @doc """
+  Authorize one STS output generation after the consumer's policy checks.
+  The provider receives `{:vxpipe_speech_output, channel, turn_ref, output_ref}`
+  and submits credited audio using that fresh output reference. The slot remains
+  occupied until `:output_completed` is acknowledged and `settle_output/3`
+  confirms bounded local egress; provider completion alone does not release it.
+  """
+  def admit_output(allocation, turn_ref) when is_reference(turn_ref) do
+    command = command(allocation)
+
+    try do
+      result = request(allocation, {:admit_output, command, turn_ref}, command.deadline)
+
+      if match?({:ok, %OutputTurn{}}, result) and remaining(command.deadline) == 0,
+        do: input_timeout(allocation, command),
+        else: result
+    catch
+      :exit, {:timeout, _call} -> input_timeout(allocation, command)
+      :exit, _reason -> {:error, :closed}
+    end
+  end
+
+  def admit_output(_allocation, _turn_ref), do: {:error, :invalid_turn}
 
   @doc """
   Admit bounded text and return a request handle before provider acceptance.
@@ -226,13 +255,44 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   """
   def push_audio(allocation, audio)
       when is_binary(audio) and byte_size(audio) in 1..@maximum_audio_bytes do
-    command = command(allocation)
+    submit_input(allocation, command(allocation), audio)
+  end
 
+  def push_audio(_allocation, audio) when is_binary(audio), do: {:error, :invalid_audio_size}
+  def push_audio(_allocation, _audio), do: {:error, :invalid_audio}
+
+  @doc """
+  Admit bounded explicit text for an STS allocation through the same ordered
+  input slot as audio. `:ok` means bounded provider acceptance; the provider
+  publishes `:input_submitted` with the returned text reference. STT and TTS
+  allocations reject text with `:unsupported_operation`.
+  """
+  def push_text(allocation, text) when is_binary(text) and byte_size(text) in 1..4_096 do
+    reference = make_ref()
+    command = Map.put(command(allocation), :operation, {:push_text, reference, text})
+    submit_input(allocation, command, text)
+  end
+
+  def push_text(_allocation, _text), do: {:error, :invalid_text}
+
+  @doc """
+  Deliver an ordered external turn-control boundary to an STS allocation
+  through the same input slot as audio and text. Unavailable in
+  provider-controlled turn mode (`:unsupported_operation`).
+  """
+  def input_activity(allocation, boundary) when boundary in [:started, :ended] do
+    command = Map.put(command(allocation), :operation, {:input_activity, boundary})
+    submit_input(allocation, command, <<>>)
+  end
+
+  def input_activity(_allocation, _boundary), do: {:error, :invalid_activity}
+
+  defp submit_input(allocation, command, payload) do
     try do
       if Allocation.valid?(allocation) do
         GenServer.call(
           Channel.address(allocation),
-          {:input, allocation, command, audio},
+          {:input, allocation, command, payload},
           remaining(command.deadline)
         )
       else
@@ -246,9 +306,6 @@ defmodule Vxpipe.CallEngine.Speech.Session do
         if(Allocation.valid?(allocation), do: {:error, :session_failed}, else: {:error, :closed})
     end
   end
-
-  def push_audio(_allocation, audio) when is_binary(audio), do: {:error, :invalid_audio_size}
-  def push_audio(_allocation, _audio), do: {:error, :invalid_audio}
 
   def close(allocation) do
     deadline = System.monotonic_time(:millisecond) + allocation.call_timeout

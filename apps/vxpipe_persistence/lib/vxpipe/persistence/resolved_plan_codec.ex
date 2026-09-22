@@ -110,6 +110,16 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
   defp normalize_reference_defaults(value, Vxpipe.CallEngine.Telephony.ServiceReference),
     do: value |> Map.put_new(:credential_owner, nil) |> Map.put_new(:credential_name, nil)
 
+  defp normalize_reference_defaults(
+         value,
+         Vxpipe.CallEngine.ResolvedCallPlan.Capabilities
+       ),
+       do:
+         value |> Map.put_new(:speech_to_speech, nil) |> Map.put_new(:output_speech_to_text, nil)
+
+  defp normalize_reference_defaults(value, Vxpipe.CallEngine.CallSpec.Capabilities),
+    do: value |> Map.put_new(:speech_to_speech, nil) |> Map.put_new(:output_speech_to_text, nil)
+
   defp normalize_reference_defaults(value, _module), do: value
 
   defp normalize_struct_field(

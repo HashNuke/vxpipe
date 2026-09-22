@@ -40,6 +40,46 @@ defmodule Vxpipe.CallEngine.Speech.OutputState do
   def admit(%__MODULE__{}, _allocation, _consumer, _descriptor, _reference, _text),
     do: {:error, :busy}
 
+  def admit_sts(%__MODULE__{request: nil} = output, handle) do
+    request = %{
+      kind: :sts,
+      ref: handle.ref,
+      turn_ref: handle.turn_ref,
+      provider_request_id: nil,
+      submitted?: true,
+      submitted_acked?: true,
+      terminal?: false,
+      terminal_acked?: false,
+      terminal_result: nil,
+      fenced?: false,
+      awaiting: nil,
+      generated_bytes: 0,
+      accepted_bytes: 0,
+      uncredited_bytes: 0,
+      played_ms: 0
+    }
+
+    %{output | request: request, pending_audio: nil}
+  end
+
+  def settle_sts(output, reference, turn, played_ms, format) do
+    case output.request do
+      %{kind: :sts, ref: ^reference, turn_ref: ^turn, terminal?: true, terminal_acked?: true} =
+          request ->
+        if played_ms <= playback_maximum(request, format) do
+          settle_completed(output, reference, played_ms, format)
+        else
+          {:error, :invalid_playback}
+        end
+
+      %{kind: :sts, ref: ^reference, turn_ref: ^turn} ->
+        {:error, :output_pending}
+
+      _request ->
+        {:error, :stale_request}
+    end
+  end
+
   def prepare_audio(%__MODULE__{} = output, allocation, producer, reference, audio) do
     cond do
       not valid_audio?(audio) ->

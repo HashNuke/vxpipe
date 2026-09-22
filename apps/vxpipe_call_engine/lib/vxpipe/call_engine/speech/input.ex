@@ -53,6 +53,32 @@ defmodule Vxpipe.CallEngine.Speech.Input do
   defp accepted({:error, :busy}), do: {:error, :busy}
   defp accepted(_failure), do: {:error, :session_failed}
 
+  defp execute_provider(module, provider, %{operation: {:push_text, reference, text}}, _payload) do
+    case module.push_text(provider, reference, text) do
+      :ok ->
+        :ok
+
+      {:error, reason} when reason in [:busy, :unsupported_operation] ->
+        {:error, reason}
+
+      _failure ->
+        {:error, :session_failed}
+    end
+  end
+
+  defp execute_provider(module, provider, %{operation: {:input_activity, boundary}}, _payload) do
+    case module.input_activity(provider, boundary) do
+      :ok ->
+        :ok
+
+      {:error, reason} when reason in [:busy, :unsupported_operation] ->
+        {:error, reason}
+
+      _failure ->
+        {:error, :session_failed}
+    end
+  end
+
   defp execute_provider(module, provider, %{operation: {:speak, reference}}, text) do
     case module.speak(provider, reference, text) do
       :ok ->

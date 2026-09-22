@@ -17,13 +17,34 @@ defmodule Vxpipe.CallEngine.CallSpec.STSSelectionTest do
 
     assert {:ok, plan} =
              compile_with_agent_caps(%{
-               speech_to_speech: %{provider: "morse", model: "morse", options: %{}},
+               speech_to_speech: %{
+                 provider: "morse",
+                 model: "morse",
+                 options: %{output_transcript: false}
+               },
                output_speech_to_text: %{provider: "morse", model: "morse", options: %{}}
              })
 
     caps = plan.participants["assistant"].capabilities
     assert caps.speech_to_speech.provider == "morse"
     assert caps.output_speech_to_text.provider == "morse"
+  end
+
+  test "agent output STT is required exactly when STS lacks output transcription" do
+    assert {:error, _} =
+             compile_with_agent_caps(%{
+               speech_to_speech: %{
+                 provider: "morse",
+                 model: "morse",
+                 options: %{output_transcript: false}
+               }
+             })
+
+    assert {:error, _} =
+             compile_with_agent_caps(%{
+               speech_to_speech: %{provider: "morse", model: "morse", options: %{}},
+               output_speech_to_text: %{provider: "morse", model: "morse", options: %{}}
+             })
   end
 
   test "rejects STS combined with text model path and output STT without STS" do

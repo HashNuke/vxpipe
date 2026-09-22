@@ -14,6 +14,11 @@ Implementation is tracked in
 The [revised ownership proposal](speech-session-ownership.md) supersedes the prototype's
 global execution model. Its scoped admission/lifecycle contracts apply throughout this design.
 
+The later conversational STS capability has a separate
+[consumer-authorized output contract](sts-output-admission.md) and an exact
+[provider author guide](speech-integration-guide.md#speech-to-speech-providers).
+It shares scoped lifetime and PCM credit without a complete-text TTS request.
+
 ## Problem and decision
 
 An integration author should implement speech operations and publish speech results. Today,

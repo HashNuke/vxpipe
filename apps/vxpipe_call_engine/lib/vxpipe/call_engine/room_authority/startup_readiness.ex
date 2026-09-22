@@ -540,11 +540,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     if Enum.all?(state.startup.waits, fn {_id, wait} -> wait.status == :stopped end) do
       with :ok <- CallLifecycle.ready(state.call_lifecycle),
            :ok <- RoomMixer.complete_opening(state.room_mixer) do
+        state = ConnectionLifecycle.open_inputs(%{state | startup_ready?: true})
+
         Enum.each(state.connections, fn {_id, connection} ->
           send(connection.pid, {:vxpipe_call_ready, connection.room_monitor})
         end)
 
-        state = ConnectionLifecycle.open_inputs(%{state | startup_ready?: true})
         FirstMessage.start(state)
       else
         _failed -> {:error, startup_unavailable()}

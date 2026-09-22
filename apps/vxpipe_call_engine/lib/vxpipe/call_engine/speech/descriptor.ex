@@ -5,9 +5,32 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   @derive {Inspect,
            only: [:kind, :format, :readiness, :endpointing, :speech_start?, :eager_end?, :resume?]}
   defstruct @enforce_keys ++
-              [speech_start?: false, eager_end?: false, resume?: false, cache_identity: nil]
+              [
+                speech_start?: false,
+                eager_end?: false,
+                resume?: false,
+                cache_identity: nil,
+                turn_control: nil,
+                turn_control_supported: [],
+                input_transcript?: false,
+                output_transcript?: false,
+                output_settlement: nil,
+                history_reconciliation?: false
+              ]
 
-  @fields @enforce_keys ++ [:speech_start?, :eager_end?, :resume?, :cache_identity]
+  @fields @enforce_keys ++
+            [
+              :speech_start?,
+              :eager_end?,
+              :resume?,
+              :cache_identity,
+              :turn_control,
+              :turn_control_supported,
+              :input_transcript?,
+              :output_transcript?,
+              :output_settlement,
+              :history_reconciliation?
+            ]
   @identity_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/
 
   @type t :: %__MODULE__{
@@ -20,7 +43,13 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           speech_start?: boolean(),
           eager_end?: boolean(),
           resume?: boolean(),
-          cache_identity: binary() | nil
+          cache_identity: binary() | nil,
+          turn_control: binary() | nil,
+          turn_control_supported: [binary()],
+          input_transcript?: boolean(),
+          output_transcript?: boolean(),
+          output_settlement: nil | :transcript_end | :generation_boundary,
+          history_reconciliation?: boolean()
         }
 
   @doc "Build public metadata. Provider-specific settings remain the provider's validation responsibility."
@@ -72,7 +101,18 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
 
   defp valid_kind?(%{kind: :stt, cache_identity: nil}), do: true
 
-  defp valid_kind?(%{kind: :sts, cache_identity: nil}), do: true
+  defp valid_kind?(%{kind: :sts, cache_identity: nil} = descriptor),
+    do:
+      descriptor.turn_control in ["provider", "external", "hybrid"] and
+        descriptor.format.encoding == :linear16 and
+        is_list(descriptor.turn_control_supported) and
+        Enum.all?(descriptor.turn_control_supported, &(&1 in ["provider", "external", "hybrid"])) and
+        length(descriptor.turn_control_supported) ==
+          length(Enum.uniq(descriptor.turn_control_supported)) and
+        descriptor.turn_control in descriptor.turn_control_supported and
+        is_boolean(descriptor.input_transcript?) and is_boolean(descriptor.output_transcript?) and
+        descriptor.output_settlement in [:transcript_end, :generation_boundary] and
+        is_boolean(descriptor.history_reconciliation?) and valid_sts_controller?(descriptor)
 
   defp valid_kind?(%{kind: :tts, cache_identity: identity} = descriptor),
     do:
@@ -81,6 +121,14 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
         not descriptor.speech_start? and not descriptor.eager_end? and not descriptor.resume?
 
   defp valid_kind?(_descriptor), do: false
+
+  defp valid_sts_controller?(%{turn_control: "external", endpointing: :external}), do: true
+
+  defp valid_sts_controller?(%{turn_control: mode, endpointing: evidence, speech_start?: true})
+       when mode in ["provider", "hybrid"] and evidence in [:provider_gap, :provider_semantic],
+       do: true
+
+  defp valid_sts_controller?(_descriptor), do: false
 
   defp valid_format?(
          %{

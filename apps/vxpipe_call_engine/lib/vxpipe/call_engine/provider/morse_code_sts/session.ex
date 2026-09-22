@@ -10,13 +10,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
 
   @impl true
   def configure(options) do
-    allowed = (Map.keys(Config.__struct__()) -- [:__struct__]) ++ [:turn_control]
+    allowed =
+      (Map.keys(Config.__struct__()) -- [:__struct__]) ++ [:turn_control, :output_transcript]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
          true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
          {turn_control, rest} = Keyword.pop(options, :turn_control, "provider"),
          true <- turn_control in @turn_controls,
+         {output_transcript, rest} = Keyword.pop(rest, :output_transcript, true),
+         true <- is_boolean(output_transcript),
          {:ok, config} <- Config.new(rest) do
       Descriptor.new(
         kind: :sts,
@@ -35,8 +38,14 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
           provenance: :locally_measured
         },
         readiness: :initialized,
-        endpointing: :provider_gap,
-        speech_start?: true
+        endpointing: if(turn_control == "external", do: :external, else: :provider_gap),
+        speech_start?: turn_control != "external",
+        turn_control: turn_control,
+        turn_control_supported: @turn_controls,
+        input_transcript?: true,
+        output_transcript?: output_transcript,
+        output_settlement: :transcript_end,
+        history_reconciliation?: false
       )
     else
       _invalid -> {:error, :invalid_configuration}
@@ -51,8 +60,12 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
 
   @impl true
-  def push_text(pid, text) when is_binary(text),
-    do: GenServer.call(pid, {:push_text, text}, 5_000)
+  def push_text(pid, reference, text) when is_reference(reference) and is_binary(text),
+    do: GenServer.call(pid, {:push_text, reference, text}, 5_000)
+
+  @impl true
+  def input_activity(pid, boundary) when boundary in [:started, :ended],
+    do: GenServer.call(pid, {:input_activity, boundary}, 5_000)
 
   @impl true
   def interrupt(pid, turn_ref) when is_reference(turn_ref),
@@ -77,7 +90,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
 
     with :ok <- Channel.bind(channel),
          :ok <- Event.emit(channel, :ready, readiness: descriptor.readiness) do
-      {:ok, %{channel: channel, descriptor: descriptor}}
+      {:ok, %{channel: channel, descriptor: descriptor, last_activity: nil}}
     else
       _error -> {:stop, :initialization_failed}
     end
@@ -88,8 +101,20 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
     {:reply, :ok, state}
   end
 
-  def handle_call({:push_text, _text}, _from, state) do
-    {:reply, {:error, :unsupported_operation}, state}
+  def handle_call({:push_text, reference, text}, _from, state)
+      when is_reference(reference) and is_binary(text) do
+    case Event.emit(state.channel, :input_submitted,
+           request_ref: reference,
+           provenance: :locally_measured
+         ) do
+      :ok -> {:reply, :ok, state}
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  def handle_call({:input_activity, boundary}, _from, state)
+      when boundary in [:started, :ended] do
+    {:reply, :ok, %{state | last_activity: boundary}}
   end
 
   def handle_call({:interrupt, _turn_ref}, _from, state) do

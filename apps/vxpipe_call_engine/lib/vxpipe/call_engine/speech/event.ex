@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   and provider identifiers are excluded from inspection.
   """
 
-  alias Vxpipe.CallEngine.Speech.Channel
+  alias Vxpipe.CallEngine.Speech.{Channel, ToolArguments}
 
   @maximum_text_bytes 65_536
 
@@ -27,7 +27,10 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :usage,
     :readiness,
     :endpointing,
-    :reason
+    :reason,
+    :call_ref,
+    :tool_name,
+    :arguments
   ]
 
   @type t :: %__MODULE__{}
@@ -75,13 +78,24 @@ defmodule Vxpipe.CallEngine.Speech.Event do
       when kind in [:stt, :sts],
       do: descriptor.endpointing == evidence
 
-  def supported?(%__MODULE__{kind: :transcript}, %{kind: kind}) when kind in [:stt, :sts],
+  def supported?(%__MODULE__{kind: :transcript}, %{kind: :stt}),
     do: true
+
+  def supported?(%__MODULE__{kind: :input_transcript}, %{kind: :sts} = descriptor),
+    do: descriptor.input_transcript?
+
+  def supported?(%__MODULE__{kind: :output_transcript}, %{kind: :sts} = descriptor),
+    do: descriptor.output_transcript?
+
+  def supported?(%__MODULE__{kind: kind}, %{kind: :sts})
+      when kind in [:tool_call, :tool_cancelled, :interrupted, :output_completed],
+      do: true
 
   def supported?(
         %__MODULE__{kind: :input_submitted, provenance: provenance},
-        %{kind: :tts} = descriptor
-      ),
+        %{kind: kind} = descriptor
+      )
+      when kind in [:tts, :sts],
       do: provenance == descriptor.usage_identity.provenance
 
   def supported?(%__MODULE__{kind: kind}, %{kind: :tts}) when kind in [:completed, :cancelled],
@@ -99,6 +113,15 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   defp allowed_fields(:speech_started), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:turn_resumed), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:transcript), do: [:turn_ref, :text, :provider_request_id]
+  defp allowed_fields(:input_transcript), do: [:turn_ref, :text, :provider_request_id]
+  defp allowed_fields(:output_transcript), do: [:turn_ref, :text, :provider_request_id]
+
+  defp allowed_fields(:tool_call),
+    do: [:call_ref, :turn_ref, :tool_name, :arguments, :provider_request_id]
+
+  defp allowed_fields(:tool_cancelled), do: [:call_ref, :provider_request_id]
+  defp allowed_fields(:interrupted), do: [:turn_ref, :provider_request_id]
+  defp allowed_fields(:output_completed), do: [:turn_ref, :request_ref, :provider_request_id]
 
   defp allowed_fields(kind) when kind in [:turn_ended, :eager_turn_ended],
     do: [:turn_ref, :text, :provider_request_id, :endpointing, :audio_duration_ms]
@@ -152,6 +175,30 @@ defmodule Vxpipe.CallEngine.Speech.Event do
        do:
          is_reference(reference) and is_binary(text) and
            (kind == :transcript or event.endpointing in [:provider_semantic, :provider_gap])
+
+  defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text})
+       when kind in [:input_transcript, :output_transcript],
+       do: is_reference(reference) and is_binary(text)
+
+  defp valid_kind?(%__MODULE__{
+         kind: :tool_call,
+         call_ref: reference,
+         turn_ref: turn,
+         tool_name: name,
+         arguments: arguments
+       }),
+       do:
+         is_reference(reference) and is_reference(turn) and is_binary(name) and
+           byte_size(name) in 1..256 and String.valid?(name) and ToolArguments.valid?(arguments)
+
+  defp valid_kind?(%__MODULE__{kind: :tool_cancelled, call_ref: reference}),
+    do: is_reference(reference)
+
+  defp valid_kind?(%__MODULE__{kind: :interrupted, turn_ref: reference}),
+    do: is_reference(reference)
+
+  defp valid_kind?(%__MODULE__{kind: :output_completed, request_ref: reference, turn_ref: turn}),
+    do: is_reference(reference) and is_reference(turn)
 
   defp valid_kind?(_event), do: false
 end

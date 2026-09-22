@@ -235,8 +235,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
         model: "morse",
         options: input
       }) do
-    with {:ok, options} <- normalize(input, @morse_keys ++ [:turn_control]),
-         :ok <- validate_turn_control(options) do
+    with {:ok, options} <- normalize(input, @morse_keys ++ [:turn_control, :output_transcript]),
+         :ok <- validate_turn_control(options),
+         :ok <- validate_output_transcript(options) do
       {:ok, options}
     end
   end
@@ -250,6 +251,14 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   end
 
   def speech_options(_selection), do: {:error, :unsupported_capability}
+
+  defp validate_output_transcript(options) do
+    case Keyword.fetch(options, :output_transcript) do
+      {:ok, value} when is_boolean(value) -> :ok
+      {:ok, _value} -> {:error, :unsupported_capability}
+      :error -> :ok
+    end
+  end
 
   defp validate_turn_control(options) do
     case Keyword.fetch(options, :turn_control) do

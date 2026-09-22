@@ -29,6 +29,8 @@ defmodule Vxpipe.CallEngine.Speech.TTSUsage do
   @type t :: %__MODULE__{}
 
   @doc false
+  def snapshot(_allocation, %{kind: :sts}), do: nil
+
   def snapshot(allocation, %{submitted?: true} = request) do
     %__MODULE__{
       session: allocation,

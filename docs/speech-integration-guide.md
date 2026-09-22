@@ -301,28 +301,92 @@ Required callbacks:
 | `configure(public_options)` | Pure validation of model, voice, PCM formats, transcript coverage, and turn-control support. Returns `{:ok, descriptor}` with `kind: :sts` or `{:error, :invalid_configuration}`. No credentials or I/O. |
 | `start_link(private_init)` | Bounded local startup under the agent capability tree via `STSProvider.start_link/2`; remote readiness is asynchronous and arrives as `:ready`. |
 | `push_audio(pid, audio)` | Bounded admission of one permitted input chunk. `:ok` proves acceptance; `{:error, :busy}` means the chunk was not accepted and existing work remains valid. |
-| `push_text(pid, text)` | Bounded explicit text input for typed-chat/continuation workflows. |
+| `push_text(pid, ref, text)` | Bounded explicit text input carrying an engine-issued text reference. Before returning, the provider publishes one `:input_submitted` with that reference on protocol acceptance. Shares the single ordered input slot with audio and activity. |
+| `input_activity(pid, :started \| :ended)` | Bounded, ordered external turn-control boundary through the same input slot. Unavailable in provider-controlled turn mode; the channel rejects it before provider admission. The provider must stay responsive and never call back into the channel from this callback. |
 | `interrupt(pid, turn_ref)` | Promptly fence stale output for the given turn; keep the cancellation identifier until terminal isolation. |
 | `send_tool_result(pid, call_ref, result)` | Deliver a bounded, authorized result to a valid provider call association. |
 | `close(pid)` | Idempotent explicit shutdown; supervision guarantees cleanup. |
 
 `configure/1` must declare the admission facts the room decides on: the
-supported turn-control mode (`turn_control` is `"provider"`, `"external"`, or
-`"hybrid"`), how output text settles, and the endpointing/speech-start
-evidence behind `speech_start?` and `endpointing`. Transcript deltas alone
+selected turn-control mode (`turn_control` is `"provider"`, `"external"`, or
+`"hybrid"`) and the supported list it must belong to, input/output transcript
+coverage (`input_transcript?`, `output_transcript?`), how output text settles
+(`output_settlement` is `:transcript_end` or `:generation_boundary`), and
+whether interrupted history can be reconciled to transport-qualified egress
+evidence (`history_reconciliation?`). Provider and hybrid modes require
+`endpointing: :provider_gap` or `:provider_semantic` plus speech-start evidence.
+External mode requires `endpointing: :external`; its activity boundaries come
+from the consumer. The supported-mode list contains only distinct members of
+those three modes. STS uses the raw, mono, signed little-endian linear16 PCM
+format required by the shared credited output path.
+Transcript deltas alone
 never open or close a turn. Source identity is stamped by the scoped channel,
 so callbacks take no `source_ref`: one permitted input stream exists per STS
 allocation, and a second concurrent source fails admission until a
 source-handoff contract is proven.
 
 The STS event vocabulary is readiness, input speech activity
-(`:speech_started`), input/output transcripts (`:transcript`), output audio
-(through the credited audio path), generation/turn completion
-(`:turn_ended`), interruption, tool call/cancellation, usage, and safe
-failure. Every event is acknowledged with `Speech.Session.ack/2` before room
-handling. Provider turn end and sink playback end are distinct facts; a
-provider completion never finishes the public agent turn until playback and
-the selected transcript source settle.
+(`:speech_started`), caller text (`:input_transcript`) versus agent text
+(`:output_transcript`, each gated by the descriptor's declared coverage),
+explicit text admission (`:input_submitted`, accepted once during the matching
+text callback; duplicates and late submissions settle as stale), credited output
+audio, input turn completion (`:turn_ended`), output generation completion
+(`:output_completed`), provider interruption (`:interrupted`), and tool
+call/cancellation (`:tool_call`/`:tool_cancelled`). The generic `:transcript`
+event belongs to STT and is rejected for STS. Every semantic event is
+acknowledged with `Speech.Session.ack/2` before room handling.
+
+A `:tool_call` carries `call_ref`, `turn_ref`, `tool_name` and `arguments`.
+Arguments are a JSON object with string keys, JSON values, at most 16 nesting
+levels below the root and at most 65,536 encoded bytes. Invalid UTF-8, structs,
+process identifiers and other non-JSON values are rejected. Names are valid
+UTF-8 strings of 1–256 bytes. Arguments are excluded from event inspection.
+The room still owns tool allowlisting, schema validation, active-turn checks
+and execution; accepting an event does not authorize a tool.
+
+### Authorizing and settling STS output
+
+After its policy checks, the consumer calls
+`{:ok, output} = Speech.Session.admit_output(session, turn_ref)`. The provider
+receives `{:vxpipe_speech_output, channel, turn_ref, output_ref}`. That fresh
+output reference, rather than an input-text or provider-turn reference,
+authorizes `Speech.Channel.submit(channel, output_ref, pcm)`. Input admission
+alone does not authorize output. STT/TTS allocations reject this operation.
+Admission requires acknowledged readiness and allows one outstanding output
+turn. A queued admission that exceeds the call deadline cannot later authorize
+output.
+
+The provider keeps one PCM chunk outstanding, bounded to 131,072 even bytes,
+and waits for `{:vxpipe_speech_credit, channel, output_ref, credit_ref, :ok}`
+before submitting another. The consumer validates the exact audio envelope
+with `Session.validate_audio/2` before sink use and acknowledges bounded sink
+acceptance with `Session.ack_audio/2`. Credit acknowledges acceptance, not
+playback. After the final credit, the provider emits:
+
+```elixir
+Event.emit(channel, :output_completed,
+  turn_ref: turn_ref,
+  request_ref: output_ref
+)
+```
+
+The consumer acknowledges completion, waits for actual sink settlement, then
+calls `Session.settle_output(session, output, played_ms)`. The reported playback
+must fit within the credited PCM duration. Completion before the final credit,
+or settlement before completion acknowledgement, returns `:output_pending`.
+The slot stays `:busy` until settlement. Late audio or completion from a
+previous output reference returns `:stale_request`, including when the provider
+turn reference is reused. This path creates no TTS usage facts; STS usage
+emission remains future work.
+
+The runnable provider example is
+[`SpeechSTSContractProvider`](../apps/vxpipe_call_engine/test/support/speech_sts_contract_provider.ex),
+with channel-level conformance in `sts_conformance_test.exs` and
+`sts_output_test.exs`. The [output admission decision](sts-output-admission.md)
+records the shared lifecycle. Room playback/transcript wiring, Morse reply
+generation, interruption and tool execution remain milestone B/C work.
+Generation completion alone never finishes the public agent turn; playback
+and the selected transcript source must both settle.
 
 Register an STS provider through the same closed paths as STT/TTS, plus the
 provider manifest `:sts` entry in `Vxpipe.Providers` (declared only after the
@@ -362,6 +426,7 @@ cd apps/vxpipe_call_engine
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/provider_contract_test.exs --seed 0
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/stt_session_test.exs test/vxpipe/call_engine/speech/tts_session_test.exs
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/sts_session_test.exs test/vxpipe/call_engine/speech/sts_provider_contract_test.exs --seed 0
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/sts_conformance_test.exs test/vxpipe/call_engine/speech/sts_output_test.exs --seed 0
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/call_spec/sts_selection_test.exs --seed 0
 ```
 

@@ -350,6 +350,49 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
            ]
   end
 
+  test "presents stored plans predating STS capabilities" do
+    assessment = result()
+    plan = assessment.prepared_call.plan
+
+    old_caps = fn caps ->
+      caps
+      |> Map.delete(:speech_to_speech)
+      |> Map.delete(:output_speech_to_text)
+    end
+
+    participants =
+      Map.new(plan.participants, fn {key, participant} ->
+        {key, %{participant | capabilities: old_caps.(participant.capabilities)}}
+      end)
+
+    old_plan = %{plan | participants: participants}
+
+    assert {:ok, decoded} =
+             old_plan
+             |> :erlang.term_to_binary([:deterministic])
+             |> Vxpipe.Persistence.ResolvedPlanCodec.decode()
+
+    prepared_call = %{assessment.prepared_call | plan: decoded}
+    response = CallInspectionPresenter.present(%{assessment | prepared_call: prepared_call})
+
+    assert [caller, assistant, support] = response["participants"]
+
+    assert caller["value"]["capabilities"] == [
+             %{"name" => "STT", "provider" => "morse", "model" => "morse"}
+           ]
+
+    assert assistant["value"]["capabilities"] == [
+             %{
+               "name" => "LLM",
+               "provider" => "google",
+               "model" => "gemini-2.5-flash"
+             },
+             %{"name" => "TTS", "provider" => "morse", "model" => "morse"}
+           ]
+
+    assert support["value"]["capabilities"] == []
+  end
+
   defp result do
     snapshot = variable_snapshot()
 
