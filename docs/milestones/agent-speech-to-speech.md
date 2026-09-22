@@ -919,6 +919,10 @@ No new provider advertisement or billable call is authorized by these tasks.
   unchanged room-transcript and Google adapter/session group pass (seed 0,
   two schedulers). Exact red-green methods are recorded in
   `labnotes/20260922-1721-output-stt-private-config.md`.
+  Parent integration `4d786b0a` also passes the same 95-test group, after native
+  Astra xhigh source review found no scoped defect. The normative provider
+  contract is synchronized; post-commit broader evidence is separate in
+  `labnotes/20260922-1746-sts-sidecar-integration.md`.
 - [x] Separate output-STT usage identity, accepted-audio duration and terminal
   outcome from the STS generator. Reproduce a timed-out 16 kHz `stalling_stt`
   recognizer reporting `morse_code`, success, and 4,200 ms for 6,300 ms of

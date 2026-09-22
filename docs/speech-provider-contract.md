@@ -320,6 +320,15 @@ text must settle as a bounded, explicit failure/absence, not invented text or a 
 Transcript selection is independent of the controller that triggers model responses; a text
 delta is not speech onset or turn completion.
 
+Output recognition also reuses ordinary STT public-option validation and tenant
+credential resolution. Retain its private config/transport options separately
+from the generator in `SpeechToSpeechRuntime.output_speech_to_text_private`,
+then pass them through the existing recognizer PrivateInit handoff. Public
+provider tuples and inspection must not expose that field. The local Google
+recognizer startup has synthetic-credential, fake-wire room-allocation evidence,
+including owner cleanup; it does not prove PCM compatibility, generated-audio
+recognition or hosted interoperability. Those remain distinct acceptance gates.
+
 An agent-output recognizer timeout, rejected finite-input finalization or provider
 loss retires that recognition generation before the next reply is admitted.
 Rejection does not imply the provider process will exit by itself. Replacement
