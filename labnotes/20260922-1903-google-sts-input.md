@@ -10,8 +10,10 @@
   Therefore earlier output streaming is not complete caller publication support.
 - Primary-source inspection changes the next action: pinned Google ADK commit
   `8164341ec5dc7d21d405e553c51cb0bd41cc7afa` handles Gemini 3.x input differently
-  from the older accumulated/optional-finished branch. Its receiver gives interim
-  input provisional status and input transcription final status. Its model-name
+  from the older accumulated/optional-finished branch. Its receiver treats input
+  transcription as one final; the Live reference separately defines the interim
+  field. Direct source inspection confirms ADK does not handle that interim
+  field; do not attribute both rules to its receiver. Its model-name
   predicate includes gemini-3.8-live. Do not implement the older input profile
   merely because the shared Python Transcription type has optional `finished`.
 - The Live reference still says input transcription has independent ordering.
@@ -29,7 +31,7 @@
 
 Primary sources inspected 2026-09-22:
 
-- [Pinned Google ADK receive path](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/models/gemini_llm_connection.py#L390)
-- [Pinned ADK model predicate](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/utils/model_name_utils.py#L184)
+- [Pinned Google ADK receive path](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/models/gemini_llm_connection.py#L435)
+- [Pinned ADK model predicate](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/utils/model_name_utils.py)
 - [Live server-content reference](https://ai.google.dev/api/live#BidiGenerateContentServerContent)
 - [Pinned SDK Transcription type](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/types.py#L2051)

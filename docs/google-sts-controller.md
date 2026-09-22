@@ -91,8 +91,9 @@ and independent review evidence is in `labnotes/20260922-1855-google-sts-control
 ## Next correlation checkpoint (not implemented)
 
 The pinned ADK receiver distinguishes Gemini 3.x input transcription from its
-older-model accumulation path: it treats `interimInputTranscription` as provisional
-and `inputTranscription` as final. Its [model predicate](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/utils/model_name_utils.py#L184)
+older-model accumulation path: it treats `inputTranscription` as a single final.
+The Live server-content reference separately defines `interimInputTranscription`
+as provisional; the inspected ADK receiver does not handle that field. Its [model predicate](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/utils/model_name_utils.py)
 includes the configured `gemini-3.8-live` name. This is primary implementation
 evidence for a model-specific codec profile, not a hosted trace. Do not generalize
 the older optional `finished` field to this model or infer input finality from
