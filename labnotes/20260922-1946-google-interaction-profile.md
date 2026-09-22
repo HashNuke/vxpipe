@@ -116,6 +116,10 @@
   numbering/profile and reproduce delayed old idle plus an incompletely covering
   handle before implementing no-loss proof. Successful multi-response ownership
   likewise stays open. Neither gap authorizes history replay or new credentials.
+- Committed implementation as `49213160` before broader gates. Static root
+  handle `5254` exited 0: format check, warnings-as-errors compile, strict Credo
+  (1,085 source files) and unused-lock check all pass. CLI checkpoint notification
+  completed successfully. The new full umbrella run remains separate evidence.
 
 Primary sources inspected:
 
