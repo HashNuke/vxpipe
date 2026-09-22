@@ -122,3 +122,18 @@
   added coverage with no findings. No independent test execution was claimed.
   Shared input delivery, channel response admission and actual Google adoption
   remain required; no cross-origin wire handoff or full milestone clearance.
+- After committing the pure state owner, the next direct checkpoint begins at
+  the closed semantic event shape. Add `response_started` with private reference,
+  positive bounded allocation ordinal and accepted origin reference to `Event`;
+  descriptor support remains opt-in. Test that exact build/support boundary red
+  before code. Channel acknowledgment/high-water/grants and provider emission
+  require the shared input-context integration and are separate open tasks.
+- Closed event red `39956` exited 1 at test compilation because `Event` did not
+  have `response_index`/`response_context` fields. Added only the strict
+  `response_started` shape and descriptor support predicate. Green `12506` exited
+  0: **15 shared event/provider-contract tests**, zero failures, seed 0, two
+  schedulers, log `vxpipe-sts-response-event-green.log`. The event requires an
+  opaque private turn reference, an origin reference and an ordinal in the
+  signed-64-bit positive range. Only STS descriptors explicitly opting in can
+  support it. The existing channel has not yet bound/acknowledged starts or
+  authorized grants; that remains the next integration.

@@ -401,6 +401,15 @@ Events include `ready`, `speech_started`, `input_transcript`, `turn_ended`,
 `transcript` events are invalid for STS. Tool-event admission is not tool execution authority:
 the room still checks allowlisting, argument schema, active turn and current permissions.
 
+The optional `response_started` STS event has a private model-response reference,
+a positive bounded allocation ordinal and an opaque input authorization-origin
+reference. A descriptor must opt into this event; caller `turn_ended` then only
+settles caller evidence. The semantic event shape is implemented, but channel
+binding/acknowledgment, policy-qualified output grants, Google emission and
+bounded origin retirement are still required. Event validity alone does not
+grant a playback slot or authorize reuse after hold/regrant. The provider must
+not announce a public speech turn for thought-only, tool-only or text-only work.
+
 Public caller, agent and tool IDs must be room-owned, with bounded associations to private
 provider references qualified by allocation generation and exact source identity. Private
 references, including their stringified forms, must not become public correlation IDs. Old,

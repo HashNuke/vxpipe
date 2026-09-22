@@ -81,4 +81,40 @@ defmodule Vxpipe.CallEngine.Speech.EventContractTest do
     assert {:error, :invalid_event} = GenServer.call(provider, {:emit, :input_finished, []})
     refute_received {:vxpipe_speech, %Event{kind: :input_finished}}
   end
+
+  test "provider response starts use a closed private reference, bounded ordinal and origin" do
+    turn = make_ref()
+    origin = make_ref()
+
+    assert {:ok,
+            %Event{
+              kind: :response_started,
+              turn_ref: ^turn,
+              response_index: 1,
+              response_context: ^origin
+            } = start} =
+             Event.build(:response_started,
+               turn_ref: turn,
+               response_index: 1,
+               response_context: origin
+             )
+
+    assert Event.supported?(start, %{kind: :sts, response_start?: true})
+    refute Event.supported?(start, %{kind: :sts, response_start?: false})
+    refute Event.supported?(start, %{kind: :stt, response_start?: true})
+    refute Event.supported?(start, %{kind: :tts, response_start?: true})
+
+    for fields <- [
+          [turn_ref: nil, response_index: 1, response_context: origin],
+          [turn_ref: turn, response_index: nil, response_context: origin],
+          [turn_ref: turn, response_index: 0, response_context: origin],
+          [turn_ref: turn, response_index: -1, response_context: origin],
+          [turn_ref: turn, response_index: 9_223_372_036_854_775_808, response_context: origin],
+          [turn_ref: turn, response_index: 1, response_context: nil],
+          [turn_ref: turn, response_index: 1, response_context: "origin"],
+          [turn_ref: turn, response_index: 1, response_context: origin, text: "extra"]
+        ] do
+      assert {:error, :invalid_event} = Event.build(:response_started, fields)
+    end
+  end
 end

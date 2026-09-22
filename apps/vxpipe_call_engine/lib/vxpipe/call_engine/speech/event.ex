@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   alias Vxpipe.CallEngine.Speech.{Channel, ToolArguments}
 
   @maximum_text_bytes 65_536
+  @maximum_response_index 9_223_372_036_854_775_807
 
   @derive {Inspect, only: [:kind, :session, :sequence, :turn_ref]}
   defstruct [
@@ -21,6 +22,8 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :request_ref,
     :provenance,
     :turn_ref,
+    :response_index,
+    :response_context,
     :text,
     :provider_request_id,
     :audio_duration_ms,
@@ -91,6 +94,9 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :output_transcript}, %{kind: :sts} = descriptor),
     do: descriptor.output_transcript?
 
+  def supported?(%__MODULE__{kind: :response_started}, %{kind: :sts, response_start?: true}),
+    do: true
+
   def supported?(%__MODULE__{kind: kind}, %{kind: :sts})
       when kind in [:tool_call, :tool_cancelled, :interrupted, :output_completed],
       do: true
@@ -120,6 +126,9 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   defp allowed_fields(:input_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
   defp allowed_fields(:output_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
 
+  defp allowed_fields(:response_started),
+    do: [:turn_ref, :response_index, :response_context]
+
   defp allowed_fields(:tool_call),
     do: [:call_ref, :turn_ref, :tool_name, :arguments, :provider_request_id]
 
@@ -148,6 +157,16 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     do: mode in [:initialized, :provider_acknowledged]
 
   defp valid_kind?(%__MODULE__{kind: :input_finished}), do: true
+
+  defp valid_kind?(%__MODULE__{
+         kind: :response_started,
+         turn_ref: turn,
+         response_index: index,
+         response_context: context
+       }),
+       do:
+         is_reference(turn) and is_integer(index) and index in 1..@maximum_response_index and
+           is_reference(context)
 
   defp valid_kind?(%__MODULE__{
          kind: :input_submitted,
