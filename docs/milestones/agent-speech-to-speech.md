@@ -978,6 +978,25 @@ Submitted invocation outcomes must still survive privately for later reasoning.
 
 #### Integrated provider follow-up tasks (2026-09-22 audit)
 
+- [ ] Complete documented Google activity-wire/controller integration (codec
+  evidence alone does not establish controller or streaming acceptance).
+  - [ ] Verify official SDK server `voiceActivity` mapping for the selected
+    Gemini v1beta transport, distinct from allowlisted detection signals and
+    client `activityStart`/`activityEnd` fields.
+  - [ ] Reproduce actual-payload decoding failures; validate activity enum and
+    optional offset, and remove invented server-content activity fallbacks.
+  - [ ] Migrate Google codec/session fixtures and verify focused tests without
+    changing session/controller semantics or claiming hosted acceptance.
+
+  Codec design review: decode top-level server activity into the existing private
+  adapter events only. Unspecified activity creates no boundary; malformed known
+  fields fail explicitly. Parent owns activity-end semantics and capability
+  streaming admission. No controller, shared event or manifest changes belong here.
+  Source-verification blocker: JS SDK 2.24.0 exposes `voiceActivityType`, but its
+  generated converter reads raw `type` while the Gemini receive path bypasses
+  that converter. Do not treat SDK-shaped fixture success as raw v1beta proof.
+  Evidence/proposal: `labnotes/20260922-1736-google-voice-activity.md`.
+
 - [ ] Drive the fake Google socket through the real STS capability/controller:
   send output transcript/audio/generation completion before server
   `turnComplete`, and prove early text survives and streaming output starts
