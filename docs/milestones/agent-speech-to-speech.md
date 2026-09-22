@@ -601,6 +601,17 @@ the existing audio round trip. Record discoveries here before implementing.
   successful completion, and prove any synchronization/lifecycle repair with
   controlled evidence. Do not widen deadlines without a measured contract reason.
   Keep any repair in a separate checkpoint; rerun all five root gates afterward.
+  Isolated rerun of the exact two cases passes (two tests, seed 0, 158.9 s),
+  which does not explain or repair the failures. Follow-up tasks:
+  - [ ] For STT release-loss injection, establish that RoomAuthority has received
+    the actual capability-unavailable evidence before releasing the native gate.
+    Current code waits for the mock transport's `DOWN`, which is a different
+    process/boundary. Reproduce the delayed-owner ordering and test an explicit
+    acknowledgement; retain bounded waits and the runtime handoff deadline.
+  - [ ] Isolate missing cue/conversation audio in the five-participant scenario.
+    Identify which peer and output generation loses the expected sequence;
+    compare output acceptance/egress with native receipt before changing any
+    fixture or production logic. A passing isolated retry is not a root cause.
 - [x] Align the STS capability test fixture's asynchronous readiness wait with
   its explicit provider-start deadline. A focused run alongside native WebRTC
   reproduction failed its implicit 100 ms `assert_receive` despite the fixture

@@ -63,3 +63,28 @@ Neither justifies a blind deadline increase.
 Remaining identity work is deliberately not checked off: caller events and
 IDs, generation-qualified bounded retirement (including late starts), and
 tool-only/public tool-call IDs. No claim of final milestone completion.
+
+## Commit and post-commit verification
+
+Committed as `6f5bb3f8` with exact-path staging and cached-diff review before
+starting broader gates. Push notification sent. Root format, warnings-as-errors
+compilation and strict Credo pass; the full root test run remains live. Do not
+restart it merely because an observation returns no output.
+
+The isolated Gateway rerun completed: **two tests, zero failures**, seed 0,
+158.9 seconds. Command from the Gateway child:
+
+```shell
+PGHOST=/var/run/postgresql mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --name-pattern 'five-participant handoff retains|human handoff gates destination and closes after release loss with silent_all waits' --seed 0
+```
+
+Read-only follow-up found that the release-loss test waits for the mock transport
+to terminate, then continues the paused native gate. The actual STT capability
+sends `vxpipe_stt_unavailable` to the room independently; once handled during
+release, `HumanHandoff.fail/3` latches failure before accepting worker completion.
+Transport termination alone does not prove that the room has handled that
+message. This is an ordering hypothesis, not a proven cause. Added a concrete
+controlled-order/acknowledgement task before any further test/runtime repair.
+The gate helper also has a bounded 1,000 ms auto-release, matching the native
+gate call bound; do not simply lengthen either deadline. The missing audio
+sequence still needs peer/generation-specific evidence and remains open.
