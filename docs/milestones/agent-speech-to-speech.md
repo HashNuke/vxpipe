@@ -36,6 +36,13 @@ reproduced two additional tool/interruption failures before the repair and
 reran the three focused regressions green. The PostgreSQL-backed umbrella gate
 remains open.
 
+Controller renewal proof `081a8508` adds fake-wire tool-only and overlapping
+A/B response cases; the controller passes 60 tests and the relevant STS group
+passes 212. Independent review reran both new cases and found no reproduced
+lifecycle defect, while preserving unchecked parent/cross-origin gates. All
+four post-commit root static checks pass. Root `mix test` again stops at the
+same missing local PostgreSQL SCRAM password before its suite starts.
+
 Real-room follow-up (`labnotes/20260922-1209-sts-room-integration.md`) repaired
 STS runtime selection, allocation policy capture, readiness reconciliation and
 source-disconnect cleanup. STS is now a required readiness resource; missing

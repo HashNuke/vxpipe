@@ -17,6 +17,11 @@ An overlapping A-playback/B-generated case confirms neither model idle nor A
 settlement alone permits renewal; B must be credited and settled too. Both new
 focused tests passed on the first run, so no runtime implementation changed.
 The eight-file local STS regression group passes 212 tests, zero failures.
-Independent read-only review is pending. These checks do not prove safe
-cross-origin wire cutover, a resumption coverage watermark, hosted history
-behavior, or the final umbrella gate.
+Independent read-only review reran the two new cases (2/0) and the controller
+file (60/0), found no reproducible lifecycle defect, and agreed the narrow
+leaf checklist closures are supported while parent tasks remain open. After
+commit `081a8508`, root format, warnings-as-errors compile, strict Credo
+(1,094 files, no issues), and unused-lock checks pass. Root `mix test` again
+stops at PostgreSQL SCRAM because no local test password is configured. These
+checks do not prove safe cross-origin wire cutover, a resumption coverage
+watermark, hosted history behavior, or the final umbrella gate.
