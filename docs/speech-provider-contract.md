@@ -139,13 +139,20 @@ revocations also advance a separate origin policy revision, so a later regrant
 cannot inherit an older snapshot's context. Framed microphone input carries
 its release epoch through the same path. Both audio directions must be
 permitted at input acceptance.
-This is pre-input origin binding, not a grant-time policy queue or Google
-interaction association; those remain open.
+This is pre-input origin binding, not a grant-time policy queue. Full Google
+interaction association and authorization remain open.
 The unadvertised Google fixture profile can opt into this callback for local
 association tests. It binds the first accepted context before wire input and
-continues it across `IN_PROGRESS`; a different context is rejected before
-wire send while cutover is unproven. This is not Google response-start emission,
-policy-qualified output, or hosted interoperability approval.
+continues it across `IN_PROGRESS`. A different context is accepted on the same
+socket only after explicit model `IDLE` and completion, no pending caller,
+tool, response or playback, no ambiguity, and no unresolved accepted input.
+Accepted PCM additionally waits for its caller's activity end and independent
+final input transcription before origin cutover. If more PCM arrives after an
+ended caller but before its delayed final, that final cannot discharge the
+later audio obligation. Silence without an observed final remains busy.
+Rejected input never reaches the wire or changes the bound context; fresh
+input during renewal is also busy. These are local fake-wire rules, not
+complete policy-qualified output or hosted interoperability approval.
 Direct legacy input callbacks are rejected for that opted-in allocation; only
 the context-bearing ordered callback can send input to its wire.
 
@@ -691,7 +698,12 @@ Accepted PCM before onset, new caller/typed input, observed model work (includin
 unpublished thought-only parts), and accepted tool results invalidate prior idle evidence;
 a newer handle alone cannot restore it. Pristine setup with no conversational
 work may still use its first safe handle. Pending caller final or activity-end
-evidence also prevents renewal. Model completion invalidates any earlier handle,
+evidence also prevents renewal. An accepted PCM chunk with no corresponding
+caller final remains unresolved even if the model reports `IDLE`; a delayed
+older caller final cannot clear later PCM sent after that caller ended. This
+conservatively blocks silent-input renewal. The [Live WebSocket reference](https://ai.google.dev/api/live)
+does not guarantee input-transcription ordering relative to other server
+messages. Model completion invalidates any earlier handle,
 so renewal also needs a subsequently valid checkpoint. The current local adapter
 latches overlapping model-turn ownership as non-resumable until independent
 correlation is implemented; a later unqualified end/handle cannot clear that

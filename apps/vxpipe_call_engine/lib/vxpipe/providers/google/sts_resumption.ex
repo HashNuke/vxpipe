@@ -25,6 +25,21 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   def await_model_activity(state), do: state
 
+  def await_audio_final(%{response_start?: true, caller: %{ended?: true}} = state),
+    do: %{state | awaiting_audio_final?: true, audio_after_caller_end?: true}
+
+  def await_audio_final(%{response_start?: true} = state),
+    do: %{state | awaiting_audio_final?: true}
+
+  def await_audio_final(state), do: state
+
+  def observed_caller_final(state),
+    do: %{
+      state
+      | awaiting_audio_final?: state.audio_after_caller_end?,
+        audio_after_caller_end?: false
+    }
+
   def observed_model_content(state),
     do: %{model_work(state) | awaiting_model_activity?: false}
 
@@ -163,6 +178,7 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   def quiescent?(state) do
     not state.resumption_ambiguous? and not state.awaiting_model_activity? and
+      not state.awaiting_audio_final? and
       state.model_turn_complete? and
       state.interaction_status == :idle and is_nil(state.caller) and
       map_size(state.pending_tools) == 0 and output_idle?(state)

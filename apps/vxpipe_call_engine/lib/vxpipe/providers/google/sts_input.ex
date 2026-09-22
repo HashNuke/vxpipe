@@ -140,6 +140,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
            final: final?
          ) do
       result when result in [:ok, :discarded] ->
+        state = if final?, do: STSResumption.observed_caller_final(state), else: state
         {:ok, retire(state, %{caller | final?: final?})}
 
       _failure ->

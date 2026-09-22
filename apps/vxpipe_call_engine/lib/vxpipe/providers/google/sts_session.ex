@@ -71,6 +71,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
     generation_pending_done?: false,
     model_turn_complete?: true,
     awaiting_model_activity?: false,
+    awaiting_audio_final?: false,
+    audio_after_caller_end?: false,
     interaction_status: :idle,
     resumption_ambiguous?: false,
     response_start?: false,
@@ -313,7 +315,10 @@ defmodule Vxpipe.Providers.Google.STSSession do
     with {:ok, _encoded} <- STS.encode_audio(audio),
          :ok <- state.wire_module.send_audio(state.wire, audio) do
       {:reply, :ok,
-       state |> STSResumption.invalidate_idle() |> STSResumption.await_model_activity()}
+       state
+       |> STSResumption.invalidate_idle()
+       |> STSResumption.await_model_activity()
+       |> STSResumption.await_audio_final()}
     else
       {:error, :invalid_audio} -> {:reply, {:error, :session_failed}, state}
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}

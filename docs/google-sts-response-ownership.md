@@ -261,6 +261,26 @@ reconciliation, or hosted behavior.
 Verify with focused fake-wire reds/greens for fully settled A→B and each
 unsettled boundary before declaring the milestone item complete.
 
+The [Live WebSocket reference](https://ai.google.dev/api/live) explicitly says
+input transcription is sent independently of other server messages without a
+guaranteed ordering. `IDLE` describes completed model processing, but does not
+by itself prove that an earlier audio caller's final input transcription has
+arrived. A cutover after A audio and model `IDLE`, before A caller final, can
+make that delayed final look like B's caller final once B onset arrives. Require
+the previous audio-origin caller to have both activity end and its one final
+snapshot before cutting over. If no onset/final is ever observed (including
+silence), remain conservative rather than assigning an uncorrelated final to
+another origin. Typed input does not wait for an audio final.
+
+Follow-up review found that a single allocation-wide audio-final boolean is
+insufficient if more PCM arrives after A1's activity end but before A1's
+delayed final. The later PCM may belong to a new caller, so A1's final must
+not discharge its obligation. Track whether audio arrived after an ended,
+unfinalized caller and carry the unresolved obligation forward when that
+caller's final retires. If that PCM was merely silence, the adapter will
+remain busy without another final; this is a deliberate fail-closed limit,
+not hosted evidence that Google emits a second caller.
+
 ### Capability response-admission queue design review
 
 The existing capability holds `pending_turns` as bare provider references and

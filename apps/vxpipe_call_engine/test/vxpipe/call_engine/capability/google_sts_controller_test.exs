@@ -74,6 +74,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    settle_audio_caller(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "REPLY"}}))
     deliver(context, audio_message(1))
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
@@ -100,6 +101,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     capability = context.capability
     sink = context.sink
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    settle_audio_caller(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
     deliver(context, audio_message(1))
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
@@ -137,6 +139,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
     first_context = :sys.get_state(context.provider).interaction_context
+    settle_audio_caller(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
     deliver(context, audio_message(1))
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
@@ -163,6 +166,90 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
   end
 
+  test "opted-in model idle cannot cut over audio lacking its independent caller final" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in late A caller final releases audio-origin cutover without replay" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    caller = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+
+    assert_new_origin_busy(context, first_context)
+    deliver(context, content(%{"inputTranscription" => %{"text" => "A CALLER"}}))
+    assert %{caller: nil, awaiting_audio_final?: false} = :sys.get_state(context.provider)
+
+    refute_received {:vxpipe_sts_input_event, ^capability,
+                     %{event: %Event{kind: :input_transcript, turn_ref: ^caller}}}
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    assert :sys.get_state(context.provider).interaction_context != first_context
+  end
+
+  test "opted-in A1 final cannot clear A2 PCM sent after A1 activity end" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    caller = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    final_caller(context, caller, "A1 CALLER")
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in A2 final clears only its retained audio obligation" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    first = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "first thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+    final_caller(context, first, "A1 CALLER")
+    assert :sys.get_state(context.provider).awaiting_audio_final?
+
+    second = start_caller(context)
+    final_caller(context, second, "A2 CALLER")
+    deliver(context, activity("ACTIVITY_END"))
+    assert :sys.get_state(context.provider).awaiting_audio_final? == false
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    assert :sys.get_state(context.provider).interaction_context != first_context
+  end
+
   test "opted-in idle cutover accepts a new typed input origin" do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
@@ -170,6 +257,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
     first_context = :sys.get_state(context.provider).interaction_context
+    settle_audio_caller(context)
     deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
     deliver(context, interaction_end("IDLE"))
     assert :ok = SpeechToSpeech.hold(capability)
@@ -290,6 +378,12 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
     first_context = :sys.get_state(context.provider).interaction_context
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _start}, 1_000
+    %{caller: %{turn_ref: caller}} = :sys.get_state(context.provider)
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:test_google_sts_control, ^wire, _end}, 1_000
+    final_caller(context, caller, "CALLER")
     deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
     deliver(context, interaction_end("IDLE"))
     assert :ok = SpeechToSpeech.release(capability, make_ref())
@@ -356,6 +450,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     wire = context.wire
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    settle_audio_caller(context)
     deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
     deliver(context, interaction_end("IDLE"))
     assert :ok = SpeechToSpeech.release(capability, make_ref())
@@ -489,6 +584,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    settle_audio_caller(context)
 
     deliver(context, %{
       "toolCall" => %{
@@ -1333,6 +1429,12 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
                       }
                     }},
                    1_000
+  end
+
+  defp settle_audio_caller(context) do
+    turn = start_caller(context)
+    final_caller(context, turn, "CALLER")
+    deliver(context, activity("ACTIVITY_END"))
   end
 
   defp assert_new_origin_busy(context, first_context) do

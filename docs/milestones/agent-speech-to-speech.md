@@ -737,6 +737,13 @@ the existing audio round trip. Record discoveries here before implementing.
   successful completion, and prove any synchronization/lifecycle repair with
   controlled evidence. Do not widen deadlines without a measured contract reason.
   Keep any repair in a separate checkpoint; rerun all five root gates afterward.
+  - [ ] Diagnose the reproducible call-engine `LiveInspectionTest` failure at
+    its post-buffer-crash participant snapshot assertion (full child suite:
+    1,409 tests, one failure; focused rerun: one failure). Establish whether
+    the agent participant exists before the injected buffer crash or startup
+    was never acknowledged. Repair the project-owned test/runtime boundary
+    without changing the STS cutover checkpoint, then rerun focused and full
+    child evidence in a separate commit.
   Isolated rerun of the exact two cases passes (two tests, seed 0, 158.9 s),
   which does not explain or repair the failures. Follow-up tasks:
   - [x] For STT release-loss injection, establish that RoomAuthority has received
@@ -1837,6 +1844,35 @@ Submitted invocation outcomes must still survive privately for later reasoning.
                 after B input on the ordered Google Live wire. If it can, add a
                 causal origin fence before claiming late-A attribution safety;
                 synthetic injection alone does not prove protocol validity.
+                - [x] Audit the official input-transcription ordering contract
+                  separately from model output. Reproduce A audio with no
+                  observed final, an `IDLE` model boundary, and B's attempted
+                  caller onset: prevent A's independently delayed final from
+                  being attributed to B. Require completed A caller evidence
+                  before audio-origin cutover, while retaining typed and
+                  fully-settled external cutover; document silent-input limits.
+                  The [Live WebSocket reference](https://ai.google.dev/api/live)
+                  explicitly disclaims input-transcription ordering. Focused
+                  red accepted B before A's final; the revised 276-test
+                  Google/provider/shared group and 1,407-test call-engine child
+                  suite are green. A late A final after
+                  epoch release retires privately before B cutover. Silence
+                  without a final remains conservatively blocked, including
+                  idle renewal; hosted/product acceptance is still open.
+                - [x] Reproduce PCM A2 arriving after A1's activity end but
+                  before A1's independently delayed final. A1's final must not
+                  clear A2's unresolved audio obligation or admit B after
+                  model `IDLE`. Track a bounded later-audio marker and prove
+                  the eventual A2 final clears only A2's obligation; retain
+                  the existing no-onset and late-final cutover checks.
+                  Focused red accepted B; both A1/A2 tests and the 76-test
+                  controller file pass after the marker fix. Independent
+                  Astra xhigh follow-up found no further concrete issue.
+              - [x] Synchronize the provider contract with the implemented
+                local same-wire cutover and independent audio-final fence;
+                explicitly distinguish proven fake-wire behavior from hosted
+                selection and unresolved silent-input/coverage limits.
+                `docs/speech-provider-contract.md` now records these bounds.
             Same-wire cutover evidence: settled A→B audio, typed and external
             starts, blocked unsettled boundaries, late-`IDLE` B→C and
             same-context renewal were reproduced with focused fake-wire reds
