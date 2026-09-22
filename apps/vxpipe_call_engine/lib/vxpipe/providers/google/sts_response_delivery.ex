@@ -7,7 +7,7 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
   """
 
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
-  alias Vxpipe.Providers.Google.{STSResponses, STSResumption}
+  alias Vxpipe.Providers.Google.{STSInput, STSResponses, STSResumption}
 
   def transcript(%{interaction_context: nil} = state, _text), do: {:ok, state}
 
@@ -35,6 +35,13 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
     end
   end
 
+  def tool_turn(state) do
+    case STSResponses.ensure_wire(state.responses, state.interaction_context) do
+      {:ok, owner, response} -> {:ok, %{state | responses: owner}, response.ref}
+      _failure -> {:error, :session_failed}
+    end
+  end
+
   def generation_end(state) do
     with {:ok, owner} <- STSResponses.generation_end(state.responses),
          do: drain(%{state | responses: owner})
@@ -48,6 +55,8 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
   end
 
   def interrupted(state) do
+    state = STSInput.interrupt_model(state)
+
     case state.responses.wire do
       nil ->
         {:ok, state}

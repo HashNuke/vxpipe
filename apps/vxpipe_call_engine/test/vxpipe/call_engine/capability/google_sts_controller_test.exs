@@ -184,6 +184,72 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     refute_received {:test_google_sts_control, ^wire, _}
   end
 
+  test "opted-in tool call cannot strand a response behind its caller end" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    caller = start_caller(context)
+
+    deliver(context, %{
+      "toolCall" => %{
+        "functionCalls" => [%{"id" => "lookup-1", "name" => "lookup", "args" => %{}}]
+      }
+    })
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent",
+                    %{event: %Event{kind: :tool_call, call_ref: call, turn_ref: tool_turn}}},
+                   1_000
+
+    assert tool_turn != caller
+    deliver(context, content(%{"outputTranscription" => %{"text" => "TOOL REPLY"}}))
+    deliver(context, audio_message(1))
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    final_caller(context, caller, "CALLER")
+    deliver(context, activity("ACTIVITY_END"))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert response == tool_turn
+    assert_audio(context, 1)
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"value" => 1})
+    assert :sys.get_state(capability).pending_turns == []
+  end
+
+  test "opted-in interrupted caller cannot renew from a possibly old idle boundary" do
+    context = start_controller("external", response_start?: true)
+    capability = context.capability
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    deliver(context, content(%{"interrupted" => true}))
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    deliver(context, content(%{"inputTranscription" => %{"text" => "FINAL"}}))
+    deliver(context, interaction_end("IDLE"))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "possibly-old", "resumable" => true}
+    })
+
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :sys.get_state(context.provider).resumption_ambiguous?
+    refute_received {:test_google_sts_started, _, _}
+  end
+
+  test "opted-in provider-ended caller also rejects an interrupted stale idle handle" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    caller = start_caller(context)
+    deliver(context, content(%{"interrupted" => true}))
+    final_caller(context, caller, "FINAL")
+    deliver(context, activity("ACTIVITY_END"))
+    deliver(context, interaction_end("IDLE"))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "possibly-old", "resumable" => true}
+    })
+
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :sys.get_state(context.provider).resumption_ambiguous?
+    refute_received {:test_google_sts_started, _, _}
+  end
+
   test "one genuinely new realtime text input produces one credited controller reply" do
     context = start_controller()
     capability = context.capability

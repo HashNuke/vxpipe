@@ -22,6 +22,12 @@ historical audio replay. Fresh-session context reconstruction is only a
 The earlier runtime checkpoint passed all root format, compile, strict Credo,
 unused-lock and test checks (2,166 tests, zero failures, 42 excluded; seed 0).
 This does not close the remaining implementation or acceptance work below.
+Google response-owner checkpoint `bdbad13c` passes 207 focused STS tests and
+post-commit root format, warnings-as-errors compile, strict Credo (1,093 source
+files, no issues) and unused-lock checks. Root `mix test` cannot enter the
+Persistence suite in this environment: PostgreSQL SCRAM requires a password,
+but the local test connection has none configured. This is an environment
+acceptance blocker, not a passing umbrella gate; no hosted service was used.
 
 Real-room follow-up (`labnotes/20260922-1209-sts-room-integration.md`) repaired
 STS runtime selection, allocation policy capture, readiness reconciliation and
@@ -1707,14 +1713,26 @@ Submitted invocation outcomes must still survive privately for later reasoning.
                 next response. The focused red also proved local interrupt
                 reached newer B's wire; both cases now pass after exact-owner
                 routing.
+              - [x] Reproduce independent response/tool identity when a model
+                tool call arrives during an unfinished caller: caller end and
+                tool result must not strand a queued PCM response. Preserve the
+                tool's own correlation and verify admission with a real opted-in
+                controller after the focused red. The caller/tool-ref equality
+                red and exact response-ref green are in the controller test.
+              - [x] Reproduce unfinished-caller interruption followed by end,
+                delayed model completion and handle update: preserve the
+                ambiguous-history latch and reject renewal from possibly stale
+                `IDLE` evidence. External-mode red and both provider/external
+                greens are in the controller test.
             - [ ] Gate model boundaries, non-speaking retirement and handle
               renewal on every retained response/tool obligation. Verify the
               five controller cases and the relevant Google/provider/shared
               speech group without hosted calls, then seek independent review.
-            - [ ] Keep the Google session below the strict-Credo module-size
+            - [x] Keep the Google session below the strict-Credo module-size
               gate by moving input command normalization and caller-turn
               publication into `STSInput`; retain legacy and opted-in behavior.
-              Session is 794 physical lines; root strict Credo remains pending.
+              Session is 794 physical lines; post-commit strict Credo passes
+              1,093 source files with no issues at `bdbad13c`.
             - [x] Add independent-review proof for A's final credit/settlement
               while B is still generating, admitted discard with outstanding
               credit, capacity recovery including one credit plus 16 pending

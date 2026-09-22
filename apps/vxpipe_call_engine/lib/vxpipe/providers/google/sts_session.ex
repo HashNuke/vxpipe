@@ -20,7 +20,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
     STSResponseDelivery,
     STSResponses,
     STSResumption,
-    STSSocket
+    STSSocket,
+    STSToolCall
   }
 
   @setup_timeout 15_000
@@ -35,8 +36,6 @@ defmodule Vxpipe.Providers.Google.STSSession do
       mark_generation_done: 1,
       drain_output: 1
     ]
-
-  @maximum_pending_tools 16
 
   @derive {Inspect, only: [:ready?]}
   defstruct [
@@ -675,49 +674,15 @@ defmodule Vxpipe.Providers.Google.STSSession do
     end
   end
 
-  defp apply_wire_event({:tool_call, id, name, args}, state) do
-    if map_size(state.pending_tools) >= @maximum_pending_tools do
-      {:error, :session_failed}
-    else
-      call_ref = make_ref()
-      turn = state.input_turn
-
-      case Event.emit(state.channel, :tool_call,
-             call_ref: call_ref,
-             turn_ref: turn,
-             tool_name: name,
-             arguments: args
-           ) do
-        :ok ->
-          {:ok,
-           %{
-             state
-             | pending_tools:
-                 Map.put(state.pending_tools, call_ref, %{id: id, name: name, turn_ref: turn})
-           }}
-
-        :discarded ->
-          {:ok, state}
-
-        _failure ->
-          {:error, :session_failed}
-      end
-    end
+  defp apply_wire_event({:tool_call, id, name, args}, %{response_start?: true} = state) do
+    with {:ok, state, turn} <- STSResponseDelivery.tool_turn(state),
+         do: STSToolCall.start(state, turn, id, name, args)
   end
 
-  defp apply_wire_event({:tool_cancel, id}, state) do
-    case Enum.find(state.pending_tools, fn {_call, tool} -> tool.id == id end) do
-      {call_ref, _tool} ->
-        case Event.emit(state.channel, :tool_cancelled, call_ref: call_ref) do
-          :ok -> {:ok, %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}}
-          :discarded -> {:ok, %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}}
-          _failure -> {:error, :session_failed}
-        end
+  defp apply_wire_event({:tool_call, id, name, args}, state),
+    do: STSToolCall.start(state, state.input_turn, id, name, args)
 
-      nil ->
-        {:ok, state}
-    end
-  end
+  defp apply_wire_event({:tool_cancel, id}, state), do: STSToolCall.cancel(state, id)
 
   defp apply_wire_event({:go_away, remaining_ms}, state),
     do: {:ok, STSResumption.request(state, remaining_ms)}
