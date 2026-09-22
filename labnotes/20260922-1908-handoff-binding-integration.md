@@ -37,3 +37,7 @@
 - Commit this coherent integration before post-commit static/full umbrella gates.
   No native or load worker remains active; finite-recognition implementation is
   isolated in its own worktree. Full milestone acceptance stays open.
+- Committed as `ebf11332`. All four post-commit static gates pass: root format,
+  warnings-as-errors compile, strict Credo (1,082 files) and unused-lock check.
+  The coordinated root suite now runs on that fixed committed runtime; its result
+  is pending and no runtime/build edits may overlap the run.
