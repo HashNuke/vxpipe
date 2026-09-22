@@ -150,6 +150,339 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert :sys.get_state(capability).response_origins.accepted == %{}
   end
 
+  test "an acknowledged response start, not caller turn end, grants opted-in output" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    caller_turn = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended,
+                turn_ref: caller_turn, text: "hello", endpointing: :provider_gap}
+             )
+
+    _ = :sys.get_state(capability)
+    refute_received {:context_output_granted, ^caller_turn, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    assert_receive {:context_output_granted, ^turn, output_ref}
+    assert is_reference(output_ref)
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn}
+  end
+
+  test "a response from a held origin is discarded by its exact reference" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    assert_receive {:context_response_discarded, ^turn}
+    refute_received {:context_output_granted, ^turn, _}
+  end
+
+  test "external caller activity gates an opted-in response until accepted end" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:context_input, context, {:activity, :started}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    refute_receive {:context_output_granted, ^turn, _}, 50
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:context_input, ^context, {:activity, :ended}, _}
+    assert_receive {:context_output_granted, ^turn, _}
+  end
+
+  test "hold retires a queued response even while external activity remains unresolved" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:context_input, context, {:activity, :started}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    _ = :sys.get_state(capability)
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert_receive {:context_response_discarded, ^turn}
+    refute_received {:context_output_granted, ^turn, _}
+  end
+
+  test "a busy-slot response is discarded after hold and cannot replay on release" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    first = make_ref()
+    second = make_ref()
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, first, 1})
+    assert_receive {:context_output_granted, ^first, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, second, 2})
+    _ = :sys.get_state(capability)
+    refute_received {:context_output_granted, ^second, _}
+
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert_receive {:context_response_discarded, ^second}
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    refute_received {:context_output_granted, ^second, _}
+  end
+
+  test "a queued response is discarded when output policy is revoked, not replayed on regrant" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:context_input, context, {:activity, :started}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    _ = :sys.get_state(capability)
+
+    assert :ok = SpeechToSpeech.apply_policy(capability, deny_output())
+    assert_receive {:context_response_discarded, ^turn}
+    assert :ok = SpeechToSpeech.apply_policy(capability, unrestricted())
+    refute_received {:context_output_granted, ^turn, _}
+  end
+
+  test "a busy queued response retires when its direct policy revision changes" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    first = make_ref()
+    second = make_ref()
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, first, 1})
+    assert_receive {:context_output_granted, ^first, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, second, 2})
+    _ = :sys.get_state(capability)
+
+    assert :ok = SpeechToSpeech.apply_policy(capability, unrestricted())
+    assert_receive {:context_response_discarded, ^second}
+    refute_received {:context_output_granted, ^second, _}
+  end
+
+  test "a queued response retries after the credited output settles" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    sink = :sys.get_state(capability).sink
+    first = make_ref()
+    second = make_ref()
+    third = make_ref()
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, first, 1})
+    assert_receive {:context_output_granted, ^first, output_ref}
+    assert :ok = GenServer.call(provider, {:emit_response, context, second, 2})
+    assert :ok = GenServer.call(provider, {:emit_response, context, third, 3})
+    _ = :sys.get_state(capability)
+    refute_received {:context_output_granted, ^second, _}
+    refute_received {:context_output_granted, ^third, _}
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :output_transcript, turn_ref: first, text: "first", final: true}
+             )
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :output_completed, turn_ref: first, request_ref: output_ref}
+             )
+
+    assert_receive {:test_audio_output_finish, ^sink, _}
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:context_output_granted, ^second, second_output_ref}
+    refute_received {:context_output_granted, ^third, _}
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :output_transcript, turn_ref: second, text: "second", final: true}
+             )
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :output_completed, turn_ref: second, request_ref: second_output_ref}
+             )
+
+    assert_receive {:test_audio_output_finish, ^sink, _}
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:context_output_granted, ^third, _}
+  end
+
+  test "replacing an input epoch retires its queued response" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:context_input, context, {:activity, :started}, _}
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    _ = :sys.get_state(capability)
+
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert_receive {:context_response_discarded, ^turn}
+    refute_received {:context_output_granted, ^turn, _}
+  end
+
+  test "the bounded response queue recovers capacity after origin retirement" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:context_input, context, {:activity, :started}, _}
+
+    turns =
+      Enum.map(1..16, fn index ->
+        turn = make_ref()
+        assert :ok = GenServer.call(provider, {:emit_response, context, turn, index})
+        turn
+      end)
+
+    assert :ok = SpeechToSpeech.hold(capability)
+
+    Enum.each(turns, fn turn ->
+      assert_receive {:context_response_discarded, ^turn}
+    end)
+
+    assert :sys.get_state(capability).pending_turns == []
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, fresh_context, {:audio, <<0, 0>>}, _}
+    assert fresh_context != context
+    fresh_turn = make_ref()
+    assert :ok = GenServer.call(provider, {:emit_response, fresh_context, fresh_turn, 17})
+    assert_receive {:context_output_granted, ^fresh_turn, _}
+  end
+
+  test "replacing an activity epoch does not gate a fresh response" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:context_input, old_context, {:activity, :started}, _}
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, fresh_context, {:audio, <<0, 0>>}, _}
+    assert fresh_context != old_context
+
+    assert :ok = GenServer.call(provider, {:emit_response, fresh_context, turn, 1})
+    assert_receive {:context_output_granted, ^turn, _}
+  end
+
+  test "a reused supplied epoch after hold cannot revive an old response origin" do
+    capability = capability()
+    session = :sys.get_state(capability).session
+    provider = Session.provider(session)
+    epoch = session.generation
+    turn = make_ref()
+
+    assert :ok = SpeechToSpeech.release(capability, epoch)
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.release(capability, epoch)
+
+    assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+    assert_receive {:context_response_discarded, ^turn}
+    refute_received {:context_output_granted, ^turn, _}
+  end
+
+  test "provider-detected caller speech gates a same-origin response until its exact end" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    caller_turn = make_ref()
+    other_turn = make_ref()
+    response = make_ref()
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: caller_turn})
+    _ = :sys.get_state(capability)
+    assert :ok = GenServer.call(provider, {:emit_response, context, response, 1})
+    _ = :sys.get_state(capability)
+    refute_received {:context_output_granted, ^response, _}
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended,
+                turn_ref: other_turn, text: "other", endpointing: :provider_gap}
+             )
+
+    _ = :sys.get_state(capability)
+    refute_received {:context_output_granted, ^response, _}
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended,
+                turn_ref: caller_turn, text: "caller", endpointing: :provider_gap}
+             )
+
+    assert_receive {:context_output_granted, ^response, _}
+  end
+
+  test "unresolved provider speech remains bounded when caller forwarding is suppressed" do
+    capability = capability(caller_source: :human_stt)
+    provider = Session.provider(:sys.get_state(capability).session)
+    monitor = Process.monitor(capability)
+
+    Enum.each(1..16, fn _index ->
+      turn = make_ref()
+      assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: turn})
+      assert_receive {:vxpipe_sts_speech_started, ^capability, "agent", ^turn}, 1_000
+    end)
+
+    assert MapSet.size(:sys.get_state(capability).input_turns) == 16
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: make_ref()})
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_caller_overflow}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :pending_caller_overflow}, 1_000
+  end
+
+  test "speech overflow cannot forward the rejected caller start to the room owner" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    monitor = Process.monitor(capability)
+
+    turns =
+      Enum.map(1..16, fn _index ->
+        turn = make_ref()
+        assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: turn})
+        assert_receive {:vxpipe_sts_input_event, ^capability, %{event: %{turn_ref: ^turn}}}, 1_000
+        assert_receive {:vxpipe_sts_speech_started, ^capability, "agent", ^turn}, 1_000
+        turn
+      end)
+
+    assert :ok = SpeechToSpeech.apply_policy(capability, unrestricted())
+    first = List.first(turns)
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :input_transcript, turn_ref: first, text: "stale", final: true}
+             )
+
+    rejected = make_ref()
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: rejected})
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_caller_overflow}, 1_000
+    refute_received {:vxpipe_sts_input_event, ^capability, %{event: %{turn_ref: ^rejected}}}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :pending_caller_overflow}, 1_000
+  end
+
   test "framed input carries the accepted epoch's origin through the ingress boundary" do
     identity = %{
       tenant_id: "tenant",

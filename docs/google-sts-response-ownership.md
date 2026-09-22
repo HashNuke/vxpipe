@@ -226,6 +226,59 @@ Independent Astra xhigh source review found no remaining actionable issue
 after duplicate-key and direct-callback-bypass red/green fixes. This does not
 clear actual controller response delivery or hosted interoperability.
 
+### Capability response-admission queue design review
+
+The existing capability holds `pending_turns` as bare provider references and
+grants from caller `turn_ended`. A queued turn is popped before the present
+policy check; when that check denies it, no response-specific provider discard
+is sent. For an opted-in response start, a bare reference also loses its
+accepted origin. This is not safe across a busy output slot followed by hold,
+revoke/regrant, or source replacement.
+
+Use one bounded capability queue for admission, with each opted-in entry
+retaining the exact private response reference, accepted opaque context and
+immutable origin fingerprint; legacy entries keep their current caller-end
+semantics until separately migrated. The capability acknowledges the exact
+`response_started` event first. It then either admits the oldest eligible
+response, queues it behind the single credited playback slot or unresolved
+external caller activity, or calls `Session.reject_response/2` on that named
+response. Every dequeue repeats the source/epoch/bidirectional-policy check
+against the fingerprint captured before input. A revoked response cannot be
+relabelled by a later policy regrant. Denial removes and discards the specific
+entry, then continues bounded queue draining; it never sends a whole-wire
+interrupt. External activity start gates dequeue, and its accepted end
+triggers recheck, without inventing another caller end.
+
+Rejected alternatives: granting on event shape before ack, using only the
+current route policy, storing only a turn ref, dropping a denied queue entry
+without provider disposition, and treating activity end as authorization.
+Each loses exact origin or leaves provider bytes/obligations alive. This queue
+does not itself solve Google response assembly, safe cross-origin wire cutover,
+or exact response/tool origin retirement.
+
+Independent source review of the first queue implementation found two missing
+cases: a caller can reuse a supplied epoch on release after hold, reviving the
+same fingerprint unless a capability-local lifecycle generation changes; and
+provider-detected `speech_started` must gate response admission until its
+accepted `turn_ended`, not only explicit external activity boundaries. These
+are part of this queue checkpoint and require focused real-capability reds.
+The subsequent re-review also identified an independent unresolved-speech
+set that could exceed the caller-forwarding limit when that forwarding is
+suppressed. It needs a 17-start reproduction and a fail-closed bound.
+After that bound was added, review identified a possible ordering fault:
+caller evidence can be forwarded before the independent overflow gate runs.
+Reproduce a stale-forwarded-turn cleanup followed by a 17th start, and make
+overflow fail-atomic with respect to room-owner evidence.
+
+These four review findings were subsequently reproduced in focused reds and
+fixed. The final capability source re-review found no remaining actionable
+issue. Focused evidence: 23 origin tests and 99 relevant capability tests
+green; no hosted calls. Dependency order remains shared exact-start owner and
+accepted input origin, then capability policy queue, then Google response
+assembly/emission and safe cross-origin cutover. The queue cannot infer a
+response's origin from unlabelled wire output and does not close the Google
+controller reds or exact origin-retirement work.
+
 ## Rejected alternatives
 
 - Reusing the old caller end conflates caller publication and agent generation.

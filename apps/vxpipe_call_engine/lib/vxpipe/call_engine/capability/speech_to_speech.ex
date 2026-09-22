@@ -22,6 +22,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   import Vxpipe.CallEngine.Capability.SpeechToSpeech.Output,
     only: [
       admit_reply: 2,
+      admit_response: 3,
+      retire_stale_pending: 1,
       handle_audio: 2,
       complete_playback: 3,
       notify_output_stt_unavailable: 2,
@@ -51,6 +53,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   @call_timeout 5_000
   @default_output_stt_timeout_ms 5_000
+  @max_open_input_turns 16
 
   def start_link(options) do
     GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
@@ -194,8 +197,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           origin_policy_revision: 0,
           input_contract: nil,
           input_sequence: nil,
-          input_turn: nil,
+          input_turns: MapSet.new(),
+          origin_lifecycle_revision: make_ref(),
           response_origins: ResponseOrigins.new(),
+          external_activity_origin: nil,
           pending_turns: [],
           tool_turns: MapSet.new(),
           tool_calls: %{},
@@ -294,8 +299,36 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {result, state} = ResponseOrigins.submit(state, {:activity, boundary})
 
     case result do
-      :ok -> {:reply, :ok, state}
-      {:error, _reason} = error -> {:reply, error, state}
+      :ok ->
+        state =
+          case {state.descriptor.response_start?, boundary} do
+            {true, :started} ->
+              {:ok, fingerprint} =
+                ResponseOrigins.accepted_fingerprint(state, state.response_origins.current)
+
+              %{state | external_activity_origin: fingerprint}
+
+            {true, :ended} ->
+              {:ok, fingerprint} =
+                ResponseOrigins.accepted_fingerprint(state, state.response_origins.current)
+
+              if fingerprint == state.external_activity_origin,
+                do: %{state | external_activity_origin: nil},
+                else: state
+
+            _other ->
+              state
+          end
+
+        {:noreply, state} =
+          if boundary == :ended and state.descriptor.response_start?,
+            do: admit_next_pending(state),
+            else: {:noreply, state}
+
+        {:reply, :ok, state}
+
+      {:error, _reason} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -307,16 +340,38 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   def handle_call(:hold, _from, state) do
     state = Input.hold(state)
+    state = %{state | origin_lifecycle_revision: make_ref(), input_turns: MapSet.new()}
     state = state |> interrupt_tool_turns() |> ToolEvents.retire()
-    {_played, state} = fence_output(state)
-    {:reply, :ok, state}
+
+    case retire_stale_pending(state) do
+      {:ok, state} ->
+        {_played, state} = fence_output(state)
+
+        {:noreply, state} =
+          if state.descriptor.response_start?,
+            do: admit_next_pending(state),
+            else: {:noreply, state}
+
+        {:reply, :ok, %{state | external_activity_origin: nil}}
+
+      {:error, _reason} ->
+        stop_unavailable(:provider_failed, state)
+    end
   end
 
   def handle_call({:release, epoch}, _from, state) when is_reference(epoch) do
     case Input.release(state, epoch) do
       {:ok, state} ->
-        {:noreply, state} = admit_next_pending(state)
-        {:reply, :ok, state}
+        state = %{state | origin_lifecycle_revision: make_ref(), input_turns: MapSet.new()}
+
+        case retire_stale_pending(state) do
+          {:ok, state} ->
+            {:noreply, state} = admit_next_pending(state)
+            {:reply, :ok, state}
+
+          {:error, _reason} ->
+            stop_unavailable(:provider_failed, state)
+        end
 
       {:error, _reason} = error ->
         {:reply, error, state}
@@ -331,25 +386,37 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         origin_policy_revision: state.origin_policy_revision + 1
     }
 
-    if audio_route_permitted?(state, state.human_id, state.agent_id) and
-         audio_route_permitted?(state, state.agent_id, state.human_id) do
-      {:reply, :ok, state}
-    else
-      {_played, state} = fence_output(state)
-      {:reply, :ok, state}
+    case retire_stale_pending(state) do
+      {:ok, state} ->
+        if audio_route_permitted?(state, state.human_id, state.agent_id) and
+             audio_route_permitted?(state, state.agent_id, state.human_id) do
+          {:reply, :ok, state}
+        else
+          {_played, state} = fence_output(state)
+          {:reply, :ok, state}
+        end
+
+      {:error, _reason} ->
+        stop_unavailable(:provider_failed, state)
     end
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
     case Input.apply_policy(state, snapshot) do
       {:ok, state} ->
-        {_played, state} =
-          if audio_route_permitted?(state, state.human_id, state.agent_id) and
-               audio_route_permitted?(state, state.agent_id, state.human_id),
-             do: {0, state},
-             else: fence_output(state)
+        case retire_stale_pending(state) do
+          {:ok, state} ->
+            {_played, state} =
+              if audio_route_permitted?(state, state.human_id, state.agent_id) and
+                   audio_route_permitted?(state, state.agent_id, state.human_id),
+                 do: {0, state},
+                 else: fence_output(state)
 
-        {:reply, :ok, state}
+            {:reply, :ok, state}
+
+          {:error, _reason} ->
+            stop_unavailable(:provider_failed, state)
+        end
 
       {:error, _reason} = error ->
         {:reply, error, state}
@@ -506,11 +573,26 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     |> Map.put(:log, [])
   end
 
+  defp track_input_turn(%{descriptor: %{response_start?: false}} = state, _turn),
+    do: {:ok, state}
+
+  defp track_input_turn(state, turn) do
+    cond do
+      MapSet.member?(state.input_turns, turn) ->
+        {:ok, state}
+
+      MapSet.size(state.input_turns) >= @max_open_input_turns ->
+        {:error, :pending_caller_overflow}
+
+      true ->
+        {:ok, %{state | input_turns: MapSet.put(state.input_turns, turn)}}
+    end
+  end
+
   defp handle_event(%Event{kind: :speech_started} = event, state) do
     with :ok <- Session.ack(state.session, event),
+         {:ok, state} <- track_input_turn(state, event.turn_ref),
          {:ok, state} <- CallerEvents.forward(state, event) do
-      state = %{state | input_turn: event.turn_ref}
-
       send(
         state.owner,
         {:vxpipe_sts_speech_started, self(), state.agent_id, event.turn_ref}
@@ -542,11 +624,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   defp handle_event(%Event{kind: :turn_ended} = event, state) do
     with :ok <- Session.ack(state.session, event),
          {:ok, state} <- CallerEvents.forward(state, event) do
-      state = %{state | input_turn: nil}
+      state = %{state | input_turns: MapSet.delete(state.input_turns, event.turn_ref)}
 
       cond do
         MapSet.member?(state.tool_turns, event.turn_ref) ->
           {:noreply, state}
+
+        state.descriptor.response_start? ->
+          admit_next_pending(state)
 
         state.held? ->
           {:noreply, state}
@@ -556,6 +641,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       end
     else
       _failure -> stop_unavailable(:provider_failed, state)
+    end
+  end
+
+  defp handle_event(%Event{kind: :response_started} = event, state) do
+    case Session.ack(state.session, event) do
+      :ok -> admit_response(event.turn_ref, event.response_context, state)
+      {:error, _reason} -> stop_unavailable(:provider_failed, state)
     end
   end
 

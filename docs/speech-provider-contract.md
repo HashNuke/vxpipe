@@ -449,12 +449,23 @@ response. A busy output slot does not consume the start. The consumer may call
 `Session.reject_response/2` on an acknowledged pending start to release only
 that response and notify the provider with
 `{:vxpipe_speech_response_discard, channel, turn_ref}`; this is not a whole-wire
-interrupt. Non-opted STS providers retain caller-end admission. This shared
-grant does not yet establish policy-qualified output, Google emission, provider
-handling of the discard message, or bounded origin retirement; those remain
-milestone requirements. Event validity alone does not authorize reuse after
-hold/regrant. The provider must not announce a public speech turn for
-thought-only, tool-only or text-only work.
+interrupt. Non-opted STS providers retain caller-end admission. The STS
+capability now acknowledges the exact opted-in start before admission, then
+keeps its response reference, context and accepted source/epoch/policy
+fingerprint in one bounded queue. It rechecks both audio directions and the
+original fingerprint when granting, gates while accepted external activity or
+provider-detected caller speech is unresolved, and rejects a denied queued
+response by its own reference. Hold and policy/epoch changes retire stale
+queued starts; a capability-local lifecycle revision prevents reuse of the
+same supplied epoch after hold from reviving an old origin. Later regrant
+cannot relabel it. The unresolved provider-speech gate is separately bounded
+at 16 starts even when caller-event forwarding is suppressed; overflow closes
+the capability before publishing caller-start evidence for the rejected turn.
+This does not yet establish Google response emission or provider handling of
+the discard message, complete cross-origin
+cutover, or bounded origin retirement; those remain milestone requirements.
+The provider must not announce a public speech turn for thought-only,
+tool-only or text-only work.
 
 Public caller, agent and tool IDs must be room-owned, with bounded associations to private
 provider references qualified by allocation generation and exact source identity. Private

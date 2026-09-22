@@ -1747,6 +1747,45 @@ Submitted invocation outcomes must still survive privately for later reasoning.
             intervals, block while external caller activity is unresolved,
             and discard only the denied response. Prove hold, revoke/regrant,
             replacement and busy-slot behavior before Google advertises STS.
+            - [ ] Add real-capability focused reds for exact start ack before
+              admission, denied-origin response-specific discard, busy-slot
+              retry, external-activity dequeue gating, and no replay after
+              hold/revoke/regrant or source replacement. Use an opted-in
+              controlled provider and keep legacy caller-end tests green.
+              - [x] Reproduce a hold/release that reuses the original supplied
+                input epoch; require a capability-local lifecycle generation
+                so the old response cannot revive despite that reused token.
+              - [x] Reproduce provider-detected caller `speech_started`
+                before its accepted `turn_ended`; gate same-origin response
+                admission without treating speech evidence as a response start.
+              - [x] Reproduce more than 16 acknowledged caller starts when
+                caller forwarding is suppressed by source selection; bound
+                the independent unresolved-speech gate and fail closed.
+              - [x] Reproduce overflow after caller-forwarding capacity
+                recovers through stale evidence; reject the 17th start before
+                forwarding any caller-start evidence to the room owner.
+            - [x] Retain bounded queue entries with their exact private
+              response/context association and immutable accepted fingerprint;
+              recheck against current allocation/source/epoch and both audio
+              intervals at every grant attempt. On denial, acknowledge and
+              reject the named response, never silently drop a queue entry or
+              interrupt a newer wire generation.
+            - [x] Update the capability's external activity and queued-output
+              lifecycle so activity start gates dequeue, activity end rechecks,
+              and hold/policy/source changes retire denied entries without
+              bypassing the one credited playback slot. Prove repeated
+              queue/drain and bounded capacity recovery.
+            Capability queue evidence: focused real-capability reds reproduced
+            missing start handling, stale origin replay after hold with a reused
+            supplied epoch, unresolved provider-detected speech, unbounded
+            suppressed caller starts, and caller-start publication before
+            overflow rejection. The 23-test origin file and 99-test relevant
+            capability group pass. Three sequential grants and 16 queued
+            discards exercised ordering and capacity recovery. Independent
+            Astra xhigh source re-review found no remaining actionable issue
+            in this capability diff. The first child and parent stay open for
+            explicit source-replacement integration and Google response-owner
+            adoption; this evidence does not clear the five controller reds.
           - [ ] Implement the reviewed context-bearing ordered input overloads
             and opt-in provider callback, with staged/accepted/rejected context
             handling; coordinate bounded origin retention with response/tools.

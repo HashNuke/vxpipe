@@ -9,6 +9,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
 
   def new, do: %{current: nil, accepted: %{}}
 
+  def accepted_fingerprint(state, context) when is_reference(context),
+    do: Map.fetch(state.response_origins.accepted, context)
+
+  def accepted_fingerprint(_state, _context), do: :error
+
+  def current?(state, fingerprint) do
+    case fingerprint(state) do
+      {:ok, ^fingerprint} -> true
+      _other -> false
+    end
+  end
+
   def submit(state, operation) do
     case prepare(state) do
       {:ok, context, fingerprint} ->
@@ -22,6 +34,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
 
   defp prepare(%{descriptor: %{response_start?: true}} = state) do
     origin = state.response_origins
+
+    with {:ok, fingerprint} <- fingerprint(state) do
+      candidate(origin, fingerprint)
+    end
+  end
+
+  defp prepare(_state), do: {:ok, nil, nil}
+
+  defp fingerprint(state) do
     epoch = state.input_epoch || direct_epoch(state)
 
     cond do
@@ -33,20 +54,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
         {:error, :policy_denied}
 
       true ->
-        fingerprint = %{
-          allocation: state.session.generation,
-          source: {state.caller_source, state.human_id, state.frame_identity},
-          epoch: epoch,
-          direct_policy_revision: state.origin_policy_revision,
-          input_interval: interval(state, :audio_input, state.human_id),
-          output_interval: interval(state, :audio_output, state.human_id)
-        }
-
-        candidate(origin, fingerprint)
+        {:ok,
+         %{
+           allocation: state.session.generation,
+           source: {state.caller_source, state.human_id, state.frame_identity},
+           epoch: epoch,
+           lifecycle_revision: state.origin_lifecycle_revision,
+           direct_policy_revision: state.origin_policy_revision,
+           input_interval: interval(state, :audio_input, state.human_id),
+           output_interval: interval(state, :audio_output, state.human_id)
+         }}
     end
   end
-
-  defp prepare(_state), do: {:ok, nil, nil}
 
   defp candidate(%{current: context, accepted: accepted}, fingerprint)
        when is_reference(context) do
