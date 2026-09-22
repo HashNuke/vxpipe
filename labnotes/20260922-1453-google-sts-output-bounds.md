@@ -56,3 +56,20 @@ microphone input was unconnected. Added a task first, then corrected that status
 to distinguish the proven embedded calls/native input checks from the remaining
 full native conversation, caller-turn and lifecycle gates. Documented the Google
 queue limit and lossless PCM splitting without claiming hosted compatibility.
+
+## Post-commit umbrella verification
+
+Checkpoint `3b1fa264` was committed before starting its broader gates. The same
+run was polled to completion without restart and exited successfully:
+
+- `mix format --check-formatted`
+- `mix compile --warnings-as-errors`
+- `mix credo --strict`
+- `PGHOST=/var/run/postgresql mix test --seed 0`: **2,205 tests, zero failures,
+  42 excluded**, including 1,046 Call Engine and 492 Gateway tests.
+- `mix deps.unlock --check-unused`
+
+This is local regression evidence for the buffer/tail checkpoint, not hosted
+Google verification or a repair of the separately tracked intermittent handoff
+failures. The provider-contract documentation follow-up records this completed
+run without restarting it for documentation-only changes.

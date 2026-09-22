@@ -1,32 +1,34 @@
 # Semantic speech provider contract
 
-Status: proposed design, researched on 2026-09-19 against `51a9a17`, with ownership replanned
-after the isolated startup regression.
-The original task requested research and a plan; implementation was subsequently authorized.
-The historical [startup-isolation defect](speech-startup-isolation.md) is now green in the
-scoped R prototype. Its [adoption repair and load evidence](speech-adoption-fix.md) establish
-bounded local behavior. R is accepted with the later
-[deadline/fault evidence](speech-deadlines-and-failure-containment.md); A is accepted with
-[native contract/load verification](native-stt-contract.md). Room migration and hosted
-interoperability remain pending.
-Implementation is tracked in
-[Simpler speech integrations](milestones/simpler-speech-integrations.md).
-The [revised ownership proposal](speech-session-ownership.md) supersedes the prototype's
-global execution model. Its scoped admission/lifecycle contracts apply throughout this design.
+Status: normative provider contract, synchronized on 2026-09-22. The baseline
+[Simpler speech integrations](milestones/simpler-speech-integrations.md) migration
+has all nine checkpoints accepted. The separate
+[Agent speech-to-speech milestone](milestones/agent-speech-to-speech.md) remains
+incomplete. Local adapter and embedded-call evidence does not establish hosted
+Google interoperability or complete STS room lifecycle acceptance.
 
-The later conversational STS capability has a separate
-[consumer-authorized output contract](sts-output-admission.md) and an exact
-[provider author guide](speech-integration-guide.md#speech-to-speech-providers).
-It shares scoped lifetime and PCM credit without a complete-text TTS request.
+The original research below dates to 2026-09-19 against `51a9a17`. The historical
+[startup-isolation defect](speech-startup-isolation.md),
+[adoption repair and load evidence](speech-adoption-fix.md),
+[deadline/fault evidence](speech-deadlines-and-failure-containment.md), and
+[native STT verification](native-stt-contract.md) record the migration's evolution.
+The [scoped ownership contract](speech-session-ownership.md) supersedes the rejected
+global execution prototype and applies to all three speech capabilities.
+
+The [STS lifecycle below](#sts) is part of this contract. Its companion
+[output admission decision](sts-output-admission.md) and
+[provider author guide](speech-integration-guide.md#speech-to-speech-providers)
+give implementation examples. STS shares scoped lifetime and PCM credit without
+a complete-text TTS request.
 
 ## Problem and decision
 
-An integration author should implement speech operations and publish speech results. Today,
-Call Engine calls vendor-shaped encoders, starts a separately configured transport, decodes
-its messages, and coordinates provider speech IDs and cumulative playback offsets. The local
-Morse providers manufacture JSON control messages to use that same path.
+An integration author should implement speech operations and publish speech results. Before
+the baseline migration, Call Engine called vendor-shaped encoders, started a separately
+configured transport, decoded its messages, and coordinated provider speech IDs and cumulative
+playback offsets. The local Morse providers manufactured JSON control messages for that path.
 
-Introduce one documented session behaviour for each capability, STT and TTS. Configuration
+Use a distinct documented session behaviour for each capability: STT, TTS and STS. Configuration
 returns a typed descriptor; a supervised provider session accepts semantic operations and
 emits typed events through reusable delivery helpers with private per-allocation state.
 Network framing, provider control
@@ -35,15 +37,17 @@ Transport helpers remain available as implementation details. An integration may
 modules where appropriate; it does not have to implement or register a second public transport
 behaviour.
 
-Keep this boundary in `vxpipe_call_engine` for this milestone. Keep the existing capability
+Keep this boundary in `vxpipe_call_engine`. Keep the existing capability
 processes as the owners of call attribution, policy, bounded turn queues and playback. Avoid
 creating another call state machine or a new umbrella application just to rename callbacks.
 
 ## Research and evidence
 
-### Repository findings
+### Historical repository findings (2026-09-19)
 
 Paths below are relative to `apps/vxpipe_call_engine/lib/vxpipe/call_engine/` unless linked.
+They describe the pre-migration source, including paths since removed; they are not a map of
+the current implementation. Present-tense observations in this table refer to that research.
 
 | Evidence | Consequence for the design |
 | --- | --- |
@@ -81,11 +85,11 @@ Preserve the current endpoint and model selection during migration; replay curre
 and run the existing tagged live checks before claiming hosted parity. A protocol discrepancy
 is a recorded blocker for that adapter, not permission to silently switch API/model families.
 
-## Proposed author-facing interface
+## Author-facing interface
 
-The standalone STT API implements the scoped ownership contract; TTS and room migration
-remain subsequent checkpoints. The historical global startup prototype was rejected and
-replaced in R. Use `Speech.STTProvider`, `Speech.TTSProvider`,
+The STT/TTS APIs and their room consumers implement scoped ownership. STS extends the same
+boundary with its own conversational lifecycle; its remaining acceptance work is tracked
+separately. Use `Speech.STTProvider`, `Speech.TTSProvider`, `Speech.STSProvider`,
 `Speech.Descriptor`, `Speech.Session`, `Speech.Event` and `Speech.Output` under
 `Vxpipe.CallEngine`. Keep each module in its own file.
 
@@ -93,15 +97,21 @@ replaced in R. Use `Speech.STTProvider`, `Speech.TTSProvider`,
 | --- | --- |
 | `configure(public_options)` | Pure validation; returns `{:ok, descriptor}` or a bounded configuration error. No connection or credential lookup. |
 | `start_link(private_init)` | Performs bounded local startup beneath its owning speech scope and returns promptly; remote preparation is asynchronous. Readiness arrives separately. |
-| STT: `push_audio(pid, audio)` | `:ok` proves actual acceptance into a bounded provider/transport slot. `{:error, :busy}` proves no acceptance and preserves the session. Other failures retire the allocation safely. |
+| STT/STS: `push_audio(pid, audio)` | `:ok` proves actual acceptance into a bounded provider/transport slot. `{:error, :busy}` proves no acceptance and preserves the session. Other failures retire the allocation safely. |
 | TTS: `speak(pid, request_ref, text)` | Admits one bounded complete-text request; returns `:ok` or a bounded error. Synthesis is asynchronous. |
 | TTS: `cancel(pid, request_ref, playback)` | Requests cancellation with a typed, locally confirmed playback report; returns promptly. Terminal cancellation arrives separately for active generation. |
+| STS: `push_text(pid, text_ref, text)` | Admits explicit text through the ordered input slot; publish matching `input_submitted` evidence on protocol acceptance. This is not transcript mirroring. |
+| STS: `input_activity(pid, :started \| :ended)` | Ordered external turn-control evidence, only in a declared external/hybrid mode. It does not select the transcript source. |
+| STS: `interrupt(pid, turn_ref)` | Promptly fences the identified output; retain its private identity until terminal isolation. |
+| STS: `send_tool_result(pid, call_ref, result)` | Delivers a bounded, room-authorized result to the matching private tool-call association. |
 | `close(pid)` | Idempotent, bounded explicit shutdown; supervisor/monitor ownership guarantees cleanup if the call fails. |
 
-This is four required functions for STT and five for TTS, including configuration and startup.
+This is four required callbacks for STT, five for TTS, and eight for STS, including
+configuration and startup. The provider callback is `start_link/1`; the shared provider
+helpers expose `start_link/2` to validate and invoke it with a module and private init.
 Standard GenServer callbacks are an implementation choice; a macro DSL or callback inheritance
-tree is not required. Reusable process/network helpers should arise from the two existing
-providers' demonstrated needs.
+tree is not required. Reusable process/network helpers should arise from demonstrated
+provider needs.
 
 The descriptor contains validated provider-specific public settings, media format, safe usage
 identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged`), and TTS cache
@@ -125,9 +135,10 @@ selected provider; TTS mono little-endian linear16 at a supported sample rate. N
 resampling, new codecs or silent format conversion is introduced. Format validation also
 distinguishes raw Opus packets from containerized Opus and raw PCM from WAV. Adapters perform
 bounded rechunking/pacing where their wire protocol needs it. Do not universally require 48 kHz.
-WebRTC raw Opus is initially mono-only: classify channel mode from each packet rather than SDP
-FMTP, and reject actual stereo until the bounded Membrane conversion in the
-[stereo input issue](issues/webrtc-opus-stereo-input.md) is implemented and accepted.
+WebRTC classifies channel mode from each Opus packet rather than SDP FMTP. Its bounded
+per-connection decoder accepts mono/stereo packets and normalizes provider input to the
+selected strict mono format. The [stereo input issue](issues/webrtc-opus-stereo-input.md)
+records the accepted conversion and its verification; this does not make provider PCM stereo.
 
 `private_init` contains the validated descriptor, private resolved credentials, trusted host
 settings, and an opaque session event channel. Credentials are resolved at existing activation
@@ -273,9 +284,125 @@ while suppressing stale output. An uncorrelated persistent stream cannot be rela
 next request. No replacement request starts before safe terminal isolation. If isolation fails
 by the bounded cancellation deadline, fail/close the session through the existing unavailable
 path. Successful local cancellation proves stale-output isolation, not that an upstream job
-stopped incurring charges. There is no automatic reconnect, replay, fallback or retry in this
-milestone. A future request-based adapter can abort its owned HTTP/SSE worker and quarantine
+stopped incurring charges. The shared boundary adds no implicit reconnect, replay, fallback or
+retry. Provider-specific STS resumption has the explicit contract below. A request-based
+adapter can abort its owned HTTP/SSE worker and quarantine
 late results without manufacturing provider cancellation acknowledgements.
+
+### STS
+
+STS owns the conversational model session, not a composition of independent STT and TTS
+providers. Its agent-owned capability subtree uses the same scoped allocation lifetime beneath
+the room capability supervisor. The provider owns its wire protocol, private turn/tool IDs and
+model context. The room owns source activation, policy, tool authorization, public identity,
+transcript projection and transport-qualified playback evidence. Providers emit through the
+scoped channel; they never publish room events directly.
+
+#### Input, transcript selection and turn control
+
+Declare distinct `input_format` and output `format`: raw, mono, signed little-endian linear16
+PCM with independently validated sample rates. The descriptor also declares input/output
+transcript coverage, selected and supported turn-control modes, output text settlement
+(`:transcript_end` or `:generation_boundary`), readiness and `history_reconciliation?`.
+Provider/hybrid control requires provider endpointing and speech-start evidence; external
+control requires explicit consumer activity boundaries. Configuration fails if these facts
+disagree. One exact permitted caller connection feeds each STS allocation, never mixed room
+audio. Human STT and STS have independent bounded input delivery. Policy, source replacement,
+hold and handoff must fence the old allocation's authority before new input is accepted.
+
+Pin one transcript source for the caller and one for the agent before admission. Selected
+human STT supplies caller text; otherwise require STS input transcription. The agent uses STS
+output transcription, or explicit `output_speech_to_text` when that coverage is absent. That
+agent-owned recognizer receives generated agent audio, not microphone audio, and resolves
+through the existing STT provider registry and host enablement. No mid-turn fallback, duplicate
+transcript source or transcription-driven second model response is permitted. Missing required
+text must settle as a bounded, explicit failure/absence, not invented text or a provider switch.
+Transcript selection is independent of the controller that triggers model responses; a text
+delta is not speech onset or turn completion.
+
+Events include `ready`, `speech_started`, `input_transcript`, `turn_ended`,
+`output_transcript`, `output_completed`, `interrupted`, `input_submitted`, `tool_call` and
+`tool_cancelled`, plus credited audio and safe failure. Acknowledge semantic events with
+`Session.ack/2` before room handling. Input/output transcripts are distinct; generic STT
+`transcript` events are invalid for STS. Tool-event admission is not tool execution authority:
+the room still checks allowlisting, argument schema, active turn and current permissions.
+
+Public caller, agent and tool IDs must be room-owned, with bounded associations to private
+provider references qualified by allocation generation and exact source identity. Private
+references, including their stringified forms, must not become public correlation IDs. Old,
+duplicate or retired-generation evidence cannot create a new public turn. The milestone still
+tracks incomplete caller/tool identity and retirement handling; the implemented agent-output
+path alone does not prove this entire requirement.
+
+#### Output permission, credit and settlement
+
+After policy checks, the consumer calls `Session.admit_output/2` with the private provider turn
+reference. A fresh engine output reference authorizes `Channel.submit/3`; accepted input alone
+does not authorize output. Readiness must be acknowledged and only one output turn may be
+outstanding. A queued admission that expires cannot later grant permission.
+
+Submit one PCM chunk of at most 131,072 even bytes and wait for channel credit before submitting
+another. The consumer validates its envelope before sink use and returns credit only after
+bounded sink acceptance. Credit is not playback. Emit `output_completed` with the turn and
+output references only after the final credit. The consumer acknowledges completion, waits
+for actual sink settlement and calls `Session.settle_output/3` with confirmed played
+milliseconds within the credited duration. The output slot stays busy until settlement;
+late audio/completion for a retired output reference is stale even if a provider reuses a turn
+reference. Successful settlement notifies the provider with
+`{:vxpipe_speech_output_settled, channel, turn_ref, output_ref, played_ms}`.
+This proves local transport-qualified settlement, not remote hearing, and creates no TTS
+input-character or usage facts. STS usage projection remains a separate milestone requirement.
+
+Final agent text and public turn completion wait for both the selected transcript source and
+the room's egress fence. Generation completion alone proves neither. Prompt interruption
+fences local playback and provider output without waiting for late caller transcription.
+A fence-terminal marker can release the output slot after acknowledgement/settlement but
+cannot claim successful speech. Zero-egress output publishes no spoken prefix; uncertain
+partial text is omitted or explicitly qualified, never treated as a fully heard reply.
+Provider history reconciliation must use supported playback evidence, not generated byte count.
+
+#### Bounded provider buffering and lossless PCM
+
+Providers must bound private PCM buffering both before output admission and while waiting
+for active-output credit. A per-chunk size bound alone is insufficient. Keep cancellation and
+failure responsive while credit is withheld. Rechunking valid PCM preserves every sample,
+including a final nonempty partial chunk, in order. Capacity exhaustion fails the owned
+allocation safely; it must not silently truncate speech or reconnect to replay it.
+
+The Google adapter's concrete limit is 16 pending chunks, each at most 131,072 bytes, whether
+awaiting admission or buffering active output, plus the channel's single outstanding audio
+credit. Opening output does not reset that allowance. Local queue, withheld-credit/cleanup and
+PCM-tail regressions prove these limits and FIFO preservation, not hosted capacity. Other
+providers must declare and test their own bounded strategy; 16 is not a universal queue count.
+
+#### Private Google resumption
+
+Google same-allocation renewal and idle connection-loss recovery use only the latest valid,
+safe provider-issued handle, retained privately. New accepted input or revocation invalidates
+the old checkpoint. Handoff waits for an idle input boundary, no pending tools and local
+playback settlement; generation completion alone is insufficient. Retire the old socket
+through its owner and reject new input as `:busy` until replacement setup is acknowledged.
+
+The default connection/setup attempt budget is five seconds, capped by the original local
+expiry or `goAway` deadline and never restarted at an internal stage. The replacement receives
+setup with the handle and then genuinely new input: no historical microphone audio,
+conversation-history replay, tool replay or regeneration of earlier replies. Missing, revoked
+or rejected safe handles, uncertain in-flight work, failed setup or expiry fail explicitly;
+there is no fresh-session fallback. This is provider-private socket handoff, not restoration
+after loss of the capability or provider process. `STSProvider` has no engine context-restore
+callback. See [STS context restoration](sts-context-restoration.md) for exact deadline,
+invalidation and local test evidence.
+
+#### Implementation and acceptance limits
+
+All four caller/agent transcript-source combinations have embedded PCM room-call evidence.
+Agent output has room-owned public IDs and exact bound-source attribution. Native input
+conversion/delivery and readiness have focused evidence. Caller/tool public identity, full
+native conversations, hold/transfer lifecycle, usage/load and final UI acceptance remain open
+in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above
+do not check those tasks off. Google declares `history_reconciliation?: false`. Its manifest
+entry and service badge remain disabled pending explicitly authorized hosted verification;
+local fake-socket tests do not establish hosted continuity or interrupted-history semantics.
 
 ### Flow control and ownership
 
@@ -299,7 +426,8 @@ Startup deadlines must include queue wait, and one call's provider initializatio
 block admission for unrelated calls. The earlier application-global prototype failed this
 requirement in an [isolated process-tree test](speech-startup-isolation.md). Checkpoint R's
 scoped ownership and [deadline/fault evidence](speech-deadlines-and-failure-containment.md)
-replace that rejected startup design; room migration still waits for both native directions.
+replace that rejected startup design. The completed baseline milestone records both native
+directions and their room migration; STS room acceptance remains a separate checklist.
 
 Control events use bounded admission through the same session delivery boundary, with a small
 explicit queue limit and safe overflow failure. Audio credit does not block cancellation or
@@ -371,6 +499,15 @@ explicit in the descriptor, lifecycle rules and milestone conformance tasks.
 Subsequent GPT-6 Astra xhigh review of the ownership replan checked fault boundaries,
 admission/cancellation, deadline lifetime, private-init retention and migration order. See the
 [ownership proposal](speech-session-ownership.md) and its labnote for that separate design
-review. The original isolation regression is now green in the scoped path; R and A are accepted,
-with two of nine checkpoints complete. Historical failing runs remain recorded. The native
-STT contract passed independent review, load and root gates; D remains required before room migration.
+review. The two-of-nine R/A status recorded during that review is historical. The completed
+baseline now includes both native directions and room migration, with all nine checkpoints
+accepted; historical failing runs remain recorded rather than overwritten.
+
+STS verification is tracked separately. The
+[room transcript evidence](../labnotes/20260922-1420-sts-room-transcripts.md),
+[agent identity evidence](../labnotes/20260922-1436-sts-public-identities.md), and
+[Google output-bound evidence](../labnotes/20260922-1453-google-sts-output-bounds.md)
+record focused checks and their limits. The
+[contract synchronization review](../labnotes/20260922-1500-provider-contract-sync.md)
+checks this document against those contracts and implementation sources. Documentation
+synchronization is not acceptance of the remaining STS milestone tasks or hosted Google support.

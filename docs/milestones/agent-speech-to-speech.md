@@ -43,8 +43,10 @@ focused checks passing. All five root gates for identity checkpoint `6f5bb3f8`
 pass (2,199 tests, zero failures, 42 excluded, seed 0). The earlier intermittent
 Gateway failures remain tracked rather than being declared fixed by a retry.
 Caller/tool identity, public caller turns and the broader lifecycle/final
-acceptance remain open. The Google output-buffer/tail repair below has 43
-focused passing checks; its post-commit root gates remain pending.
+acceptance remain open. Google output-buffer/tail checkpoint `3b1fa264` has 43
+focused passing checks and all five post-commit root gates pass (2,205 tests,
+zero failures, 42 excluded, seed 0). This does not resolve the intermittent
+handoff findings or complete the remaining milestone gates.
 [The input-routing decision](../sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
@@ -756,9 +758,28 @@ Evidence: pure buffer/codec tests first failed on unbounded active buffering,
 opening a full pre-admission buffer, and lost PCM tails (11 tests, three failures).
 The fake-socket credit test separately reproduced a non-terminating overflow;
 all 43 Google protocol/resumption and shared STS output/conformance checks now
-pass, seed 0. See `labnotes/20260922-1453-google-sts-output-bounds.md`.
+pass, seed 0. After commit `3b1fa264`, all five umbrella gates pass: 2,205 tests,
+zero failures, 42 excluded, seed 0. See
+`labnotes/20260922-1453-google-sts-output-bounds.md`.
 
 ### F — Service UI, documentation, and final acceptance
+
+- [x] Synchronize the normative `docs/speech-provider-contract.md`, not only
+  this checklist and the author guide (user clarification, 2026-09-22):
+  - [x] Correct historical migration status and callback coverage against the
+    implemented behaviours; label original research as historical evidence.
+  - [x] Specify STS-owned sessions, directional PCM, response/transcript-source
+    separation, consumer-authorized output credit, room-owned public identity,
+    egress-qualified transcript settlement, and safe interruption/overflow.
+  - [x] Require bounded pre-admission and active buffering and lossless PCM
+    rechunking; distinguish Google's concrete limits from universal requirements.
+  - [x] Document private Google handle-based resumption with no historical audio
+    replay or fresh-session fallback, and keep hosted support/unfinished room
+    contracts explicitly gated. Verify local links and source/test references.
+
+  Documentation review/evidence: `labnotes/20260922-1500-provider-contract-sync.md`.
+  This synchronizes the contract; it does not accept pending room/tool, native,
+  lifecycle, hosted, load, UI or final-review tasks.
 
 - [x] Backend service-binding capability response flows from
   `Registry.catalog()`: Google exposes no `s2s`, and credential-free Morse
