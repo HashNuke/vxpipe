@@ -50,6 +50,16 @@ binding. Hold/output generations are separate from resource lifetime and privacy
 Global policy revision numbers must not stand in for a resource's relevant interval: unrelated
 membership, audio policy or hold changes must preserve that resource's descriptor and evidence.
 
+An adopted human handoff can still be waiting behind closed conversational gates
+when a newly attached transport finishes negotiation. A collector's
+`binding_changed` remains terminal for the captured descriptor. On this closed
+side only, the handoff owner recaptures the authoritative graph and reconciles
+the collector against the actual new descriptors, under the original attempt and
+absolute deadline. Replacement bindings require fresh evidence and a drained cue;
+unchanged bindings retain their evidence. This does not replay policy, readmit
+participants, or treat a failed report as ready. Once any connection release has
+started, a changed descriptor remains a fatal partial-release failure.
+
 The barrier is pure state. The supervised collector performs bounded adapter calls outside
 RoomAuthority's receive loop, binds each response to its current batch/request and monitors required
 processes. The barrier alone neither monitors processes nor releases media. Lifecycle use and media

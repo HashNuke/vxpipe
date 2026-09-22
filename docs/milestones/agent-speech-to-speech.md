@@ -835,16 +835,89 @@ the existing audio round trip. Record discoveries here before implementing.
         or changing readiness ordering; a passing retry is not repair evidence.
         A subsequent instrumented five-participant run passes with no handoff
         error. This does not explain that late timeout or close the outer gate.
-        - [ ] Capture the exact release worker result and authoritative connection,
+        After continuity review repairs, a phase-traced single case again times
+        out without a handoff result by the assertion deadline; a second case
+        traces media readiness, cue and successful release (generation 14) and
+        passes. No causal runtime repair follows from this mixed evidence. See
+        `labnotes/20260922-1742-late-attachment-ordering.md`; next reproduction must
+        control the attachment/Session-bind/negotiation boundary, not repeat retries.
+        The parent's subsequent integrated root run independently fails at the
+        same late `transfer.active` assertion (test line 698), after the private
+        continuity checks; the controlled fixture was held until that Gateway
+        lane finished. That root failure alone did not establish a diagnosis.
+        - [x] Capture the exact release worker result and authoritative connection,
           output generation and collector state at the late attachment boundary;
           distinguish failure from pending readiness and lost sideband evidence.
           The existing failing run reaches the final `transfer.active` wait after
           private continuity and returned-listener audio assertions pass.
-        - [ ] Design one controlled ordering reproduction for attachment visible
+        - [x] Design one controlled ordering reproduction for attachment visible
           before transport readiness, using an owned acknowledgement/barrier.
           Inspect capture/hold/preparation and fixture message consumption before
           changing runtime; run no native overlap with the parent's Gateway gate.
-        - [ ] If reproduced, add the smallest owning-child red, repair the proven
+          Parent authorizes fixture implementation during the native hold, but no
+          Mix/native execution until release. Run only the late offer in an owned
+          supervised task; intercept its exact Session bind call after attachment
+          and before negotiation. Trace the exact release worker's readiness
+          notification and phase's terminal result. Before releasing bind, require
+          a collector acknowledgement containing the late transport descriptor,
+          negotiation revision zero, and held output. Classify terminal failure
+          separately from pending-without-ack; then retain existing acceptance and
+          audio assertions. Always release the fixture pause and remove tracing.
+          The authorized controlled case now reproduces a terminal release error:
+          pre-negotiation collector acknowledgement, revision zero, held output,
+          and unchanged absolute deadline all pass; after negotiation the phase
+          reports `{:release, {:error, :binding_changed}}`. One case fails in
+          166.6s, seed 0, two schedulers. This is a causal controlled red, not a
+          passing retry or a pending-release diagnosis. The focused repair and
+          subsequent native verification are tracked below.
+        - [x] Trace the closed-gate adopted preparation path that owns descriptor
+          replacement; design a fresh authoritative recapture on negotiation
+          change without reusing stale descriptors, skipping policy revisions,
+          reopening gates, or extending the deadline. Check collector retirement
+          and wait/cue cleanup before selecting the smallest repair. Add focused
+          owning-child coverage for descriptor change while held and preserve
+          fatal treatment of failures after any conversational release. Coordinate
+          further native verification with the parent; the one authorized case
+          is terminal and no additional run has started.
+          Owning-child red design: use the existing deferred-adoption receipt in
+          the cue-barrier room test, renew the caller transport descriptor while
+          adoption is paused without changing membership/policy, then resume.
+          Require a fresh cue barrier under the same deadline and existing actor
+          identities before successful activation. Retain the existing partial-
+          release descriptor invalidation test as the fatal-boundary countercase.
+          The owning-child red fails with room termination before a fresh cue;
+          the narrow adopted/closed-gate recapture now passes that case. The
+          complete bounded room/collector/barrier group passes 66 tests, seed 0,
+          two schedulers, including post-release descriptor failure. Native green
+          was still pending at that checkpoint and follows below; do not close
+          the outer handoff acceptance task on owning-child evidence alone.
+        - [x] Correct the controlled fixture's distinction between terminal
+          descriptor evidence and terminal handoff outcome before further native
+          verification. At repair checkpoint `1e3d114f`, the authorized controlled
+          run fails before releasing negotiation because `await_bound_listener/4`
+          rejects any failed collector report. The captured worker is actively in
+          authoritative `refresh_preparation/4`, and no phase terminal result is
+          observed. Require the current late-listener descriptor acknowledgement
+          under the same bounded pause, while retaining explicit phase-failure
+          detection; an old failed descriptor is not proof of a failed handoff.
+          Record and review the fixture change before another coordinated run.
+          Parent approves fixture-only implementation: capture the actual late
+          resource while Session bind is held; tolerate only binding_changed
+          descriptor notifications while waiting for a preparing report matching
+          the collector's current published snapshot and exact resource entry.
+          Other failures and phase terminal results still fail immediately;
+          persistent recapture fails under the original one-second bound. Commit
+          after static checks, then run one parent-authorized controlled case.
+          At `ebc8287f`, the single corrected controlled native case passes:
+          1 test, 0 failures, 67 excluded, 169.8s, seed 0, two schedulers. Current
+          descriptor acknowledgement, original bounds, transfer activation and
+          final audio/conversation checks pass. This verifies the controlled
+          descriptor-change repair, not a common cause for every earlier timeout;
+          the parent's serial integrated acceptance gate remains outstanding.
+          Parent integration additionally passes 67 room/collector/barrier tests,
+          including main's later queued private-connection-loss regression; see
+          `labnotes/20260922-1908-handoff-binding-integration.md`.
+        - [x] If reproduced, add the smallest owning-child red, repair the proven
           ordering defect without deadline extension or gate weakening, then run
           only bounded focused checks and retain contrary evidence. Prioritize
           independent continuity review findings in a separate checkpoint.

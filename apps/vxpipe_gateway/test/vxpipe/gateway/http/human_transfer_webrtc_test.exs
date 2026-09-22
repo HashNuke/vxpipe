@@ -373,6 +373,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   @tag changing_listeners: true
+  @tag :controlled_late_attachment
   test "five-participant handoff retains wait cursors through monitor addition and reconnection" do
     alias Vxpipe.CallEngine.MediaPolicy.Authority
 
@@ -690,12 +691,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     await_tone(caller_client, 250, 2_000)
 
     adopted_client =
-      plan
-      |> issue_session(room, adopted_monitor.participant_id)
-      |> then(&connect(&1.session_id, "chat", false, :recvonly))
+      connect_controlled_listener(plan, room, adopted_monitor, phase, support_client)
 
     audience = audience ++ [adopted_client]
-    await_sideband(support_client, "transfer.active", 3_000)
     await_transfer_progress(third_client, "completed")
     assert {:ok, completed} = CallEngine.RoomAuthority.readiness_binding(authority)
     assert completed.room == before.room
@@ -4220,7 +4218,177 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     session
   end
 
-  defp connect(session_id, channel_label, ready? \\ true, direction \\ :sendrecv) do
+  defp connect_controlled_listener(plan, room, participant, phase, destination) do
+    alias CallEngine.RoomAuthority.ParticipantTransfer.Phase
+
+    assert {:ok, %{stage: :release, worker: %Task{pid: worker}} = before} = Phase.scope(phase)
+    assert 1 = :erlang.trace(phase, true, [:send])
+
+    try do
+      assert 1 = :erlang.trace(worker, true, [:receive])
+      session = issue_session(plan, room, participant.participant_id)
+
+      peer =
+        connect(session.session_id, "chat", false, :recvonly, fn ->
+          deadline = min(before.deadline_ms, System.monotonic_time(:millisecond) + 1_000)
+          assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(before.authority)
+
+          connection =
+            Enum.find_value(binding.connections, fn {_id, connection} ->
+              if connection.participant_id == participant.participant_id, do: connection.pid
+            end)
+
+          assert is_pid(connection)
+          assert :sys.get_state(connection).negotiation_revision == 0
+
+          assert {:ok, resource, :preparing} =
+                   Vxpipe.Gateway.WebRTC.Connection.Readiness.readiness(connection, :output)
+
+          collector = await_bound_listener(phase, worker, resource, deadline)
+          entries = :sys.get_state(collector).barrier.entries
+
+          assert Enum.any?(entries, fn {_key, entry} ->
+                   entry.resource == resource and entry.status == :preparing
+                 end)
+
+          assert {:ok, media} = GenServer.call(connection, :vxpipe_connection_readiness)
+          assert :sys.get_state(media.output).held?
+          assert {:ok, current} = Phase.scope(phase)
+          assert current.deadline_ms == before.deadline_ms
+          assert current.stage == :release
+          assert current.worker.pid == worker
+        end)
+
+      await_sideband(destination, "transfer.active", 3_000)
+      peer
+    rescue
+      error in ExUnit.AssertionError ->
+        evidence = controlled_handoff_evidence(phase, worker)
+
+        message =
+          (error.message || "Controlled handoff assertion failed") <>
+            "\ncontrolled handoff: #{inspect(evidence)}"
+
+        reraise %{error | message: message},
+                __STACKTRACE__
+    after
+      stop_handoff_trace(worker, [:receive])
+      stop_handoff_trace(phase, [:send])
+    end
+  end
+
+  defp await_bound_listener(phase, worker, resource, deadline) do
+    assert System.monotonic_time(:millisecond) < deadline,
+           "release pending without current late transport collector acknowledgement"
+
+    receive do
+      {:trace, ^worker, :receive, {:vxpipe_readiness_changed, collector, report}} ->
+        assert report.status != :failed or report.failure == :binding_changed,
+               "non-recapturable collector failure before negotiation: #{inspect(report.failure)}"
+
+        current = :sys.get_state(collector)
+
+        acknowledged? =
+          report.status == :preparing and current.last_snapshot == report and
+            Enum.any?(report.blockers, fn blocker ->
+              blocker.kind == resource.kind and blocker.scope == resource.scope
+            end) and
+            Enum.any?(current.barrier.entries, fn {_key, entry} ->
+              entry.resource == resource and entry.status == :preparing
+            end)
+
+        if acknowledged? do
+          collector
+        else
+          await_bound_listener(phase, worker, resource, deadline)
+        end
+
+      {:trace, ^phase, :send, {:vxpipe_transfer_handoff_result, _ref, stage, result}, _to} ->
+        outcome =
+          case result do
+            {:ok, _ready} -> :ok
+            {:error, reason} -> {:error, reason}
+          end
+
+        flunk("terminal #{stage} before late negotiation: #{inspect(outcome)}")
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("release pending without late transport collector acknowledgement")
+    end
+  end
+
+  defp controlled_handoff_evidence(phase, worker) do
+    result =
+      receive do
+        {:trace, ^phase, :send, {:vxpipe_transfer_handoff_result, _ref, stage, {:error, reason}},
+         _to} ->
+          {stage, {:error, reason}}
+
+        {:trace, ^phase, :send, {:vxpipe_transfer_handoff_result, _ref, stage, {:ok, _ready}},
+         _to} ->
+          {stage, :ok}
+      after
+        0 -> :no_terminal_result_observed
+      end
+
+    %{result: result, worker: Process.info(worker, :current_stacktrace)}
+  end
+
+  defp stop_handoff_trace(pid, flags) do
+    :erlang.trace(pid, false, flags)
+  catch
+    :error, :badarg -> :ok
+  end
+
+  defp offer_at_session_bind(_session_id, request, nil), do: request.()
+
+  defp offer_at_session_bind(session_id, request, at_bound) do
+    [{session, _}] = Registry.lookup(Vxpipe.Gateway.SessionRegistry, session_id)
+    token = make_ref()
+    owner = self()
+
+    assert :ok =
+             :sys.install(
+               session,
+               {token,
+                fn
+                  :done, _event, _process ->
+                    :done
+
+                  _state,
+                  {:in, {:"$gen_call", _from, {:bind_connection, _connection}}},
+                  _process ->
+                    send(owner, {:session_bind_waiting, token})
+
+                    receive do
+                      {:continue_session_bind, ^token} -> :done
+                    after
+                      1_000 ->
+                        send(owner, {:session_bind_expired, token})
+                        :done
+                    end
+
+                  state, _event, _process ->
+                    state
+                end, nil}
+             )
+
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, token}}})
+    offer = Task.Supervisor.async_nolink(tasks, request)
+
+    try do
+      assert_receive {:session_bind_waiting, ^token}, 1_000
+      at_bound.()
+      refute_receive {:session_bind_expired, ^token}, 0
+    after
+      send(session, {:continue_session_bind, token})
+      :sys.remove(session, token)
+    end
+
+    Task.await(offer, 5_000)
+  end
+
+  defp connect(session_id, channel_label, ready? \\ true, direction \\ :sendrecv, at_bound \\ nil) do
     client_id = unique_id("client")
     child_spec = Supervisor.child_spec({PeerConnection, []}, id: {PeerConnection, client_id})
     client = start_supervised!(child_spec)
@@ -4235,7 +4403,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, offer} = PeerConnection.create_offer(client)
     :ok = PeerConnection.set_local_description(client, offer)
 
-    response =
+    request = fn ->
       :post
       |> conn(
         "/api/rtvi/offer",
@@ -4249,6 +4417,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       )
       |> put_req_header("content-type", "application/json")
       |> Endpoint.call(@endpoint_options)
+    end
+
+    response = offer_at_session_bind(session_id, request, at_bound)
 
     assert response.status == 200
 

@@ -549,7 +549,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         :commit_binding_change,
         :adopt_policy_change,
         :adopt_unrelated_change,
-        :adopt_speech_change
+        :adopt_speech_change,
+        :adopt_binding_change
       ] do
     @tag outcome: outcome
     test "human transfer keeps its cue barrier closed until #{outcome}", %{outcome: outcome} do
@@ -576,7 +577,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
               :commit_binding_change,
               :adopt_policy_change,
               :adopt_unrelated_change,
-              :adopt_speech_change
+              :adopt_speech_change,
+              :adopt_binding_change
             ],
           observer_policy:
             if outcome == :adopt_speech_change do
@@ -624,7 +626,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              :commit_binding_change,
              :adopt_policy_change,
              :adopt_unrelated_change,
-             :adopt_speech_change
+             :adopt_speech_change,
+             :adopt_binding_change
            ],
            do: connect_policy_observer(plan, room)
 
@@ -657,7 +660,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              :commit_binding_change,
              :adopt_policy_change,
              :adopt_unrelated_change,
-             :adopt_speech_change
+             :adopt_speech_change,
+             :adopt_binding_change
            ] do
           assert_receive {:test_stt_transport_started, transport, _}, 1_000
 
@@ -708,7 +712,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                :commit_binding_change,
                :adopt_policy_change,
                :adopt_unrelated_change,
-               :adopt_speech_change
+               :adopt_speech_change,
+               :adopt_binding_change
              ] ->
           assert {:ok, before_binding} = CallEngine.RoomAuthority.readiness_binding(authority)
           pending = :sys.get_state(authority).pending_participant_transfer
@@ -718,7 +723,12 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
           first_monitor = Process.monitor(first_player)
           {_callback, first_correlation} = :sys.get_state(caller_sink).callback
 
-          if outcome in [:adopt_policy_change, :adopt_unrelated_change, :adopt_speech_change] do
+          if outcome in [
+               :adopt_policy_change,
+               :adopt_unrelated_change,
+               :adopt_speech_change,
+               :adopt_binding_change
+             ] do
             joining =
               TestTransferConnection.run(
                 attachment_command(plan, room, support, "support-connection"),
@@ -731,8 +741,24 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
             committed = PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id))
             assert MapSet.member?(committed.present_participant_ids, support.participant_id)
 
-            assert {:ok, _changed} =
-                     PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+            if outcome == :adopt_binding_change do
+              connection =
+                TestTransferConnection.run(
+                  attachment_command(plan, room, caller, "caller-connection"),
+                  fn -> self() end
+                )
+
+              assert :ok = GenServer.call(connection, :renew_readiness)
+
+              assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) ==
+                       committed
+            else
+              assert {:ok, _changed} =
+                       PolicyAuthority.admit(
+                         PolicyAuthority.whereis(room.incarnation_id),
+                         observer
+                       )
+            end
 
             assert :ok = GenServer.call(joining, :complete_adoption)
 

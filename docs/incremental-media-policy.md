@@ -81,6 +81,14 @@ revisions retain installed providers and room/media actors; changed transcript p
 only the affected STT transport and await its readiness. The same attempt and deadline apply.
 Failures once connection release begins still close the room because admission may be partial.
 
+The same closed-gate reconciliation now handles a captured transport descriptor
+changing as a late listener negotiates: fresh authoritative preparation supplies
+replacement descriptors to the existing collector before cue/release. The failed
+old descriptor is not reused or accepted, and no policy revision, provider
+replacement, deadline extension or participant readmission is requested merely
+to refresh readiness. This exception is confined to adopted, still-held media;
+post-release descriptor invalidation remains terminal.
+
 Three focused engine cases and three native WebRTC cases cover removed speech demand, unrelated
 policy and changed but still-required speech. The native peers resume bidirectional audio while
 retaining their media actors. See the [release-policy labnote](../labnotes/20260915-0137-handoff-release-policy.md).

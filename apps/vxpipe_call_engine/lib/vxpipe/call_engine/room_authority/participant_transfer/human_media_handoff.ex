@@ -177,11 +177,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       end
 
     case result do
-      {:error, reason} when reason in [:stale_candidate, :room_changed] ->
+      {:error, reason} when reason in [:stale_candidate, :room_changed, :binding_changed] ->
         request = phase.audience_request
 
         with {:ok, waits} <- play(ready.connections, ready.binding, ready.scope, request, :wait),
              prepared = ready |> Map.put(:adopted?, true) |> Map.put(:waits, waits),
+             {:ok, prepared} <- refresh_preparation(prepared, collector, phase, request),
              {:ok, ready} <- prepare_release(prepared, collector, phase, request) do
           validate_adopted_release(Map.delete(ready, :waits), collector, phase)
         end
@@ -277,9 +278,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       progress = report_readiness(progress, report.blockers)
 
       case report.status do
-        :ready -> {:ok, prepared}
-        :failed -> {:error, report.failure || :readiness_failed}
-        :preparing -> await_preparation_change(prepared, collector, phase, request, progress)
+        :ready ->
+          {:ok, prepared}
+
+        # A newly attached transport can finish negotiation after its descriptor
+        # was captured. Only the adopted, still-held path may replace that graph;
+        # failed evidence itself is never promoted to ready.
+        :failed when report.failure == :binding_changed and prepared.adopted? == true ->
+          with {:ok, prepared} <- refresh_preparation(prepared, collector, phase, request) do
+            await_preparation(prepared, collector, phase, request, progress)
+          end
+
+        :failed ->
+          {:error, report.failure || :readiness_failed}
+
+        :preparing ->
+          await_preparation_change(prepared, collector, phase, request, progress)
       end
     end
   end
