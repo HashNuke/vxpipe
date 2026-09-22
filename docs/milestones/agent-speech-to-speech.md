@@ -1206,6 +1206,25 @@ No new provider advertisement or billable call is authorized by these tasks.
         close, multiple segments, duplicate finish, bounded retention/deadline,
         private status and provider/channel lifetime tests. Run red then green
         from the owning child; do not advertise support before this passes.
+      - [x] Prepare a guarded, tagged Flux CloseStream interoperability probe,
+        not a production finite-input profile. Check explicit execution opt-in
+        before fixture/credential resolution or connection; credentials alone
+        do not authorize a run. Do not execute hosted during implementation.
+        - [x] Reproduce offline: gate before connector/resolver, valid Connected,
+          ordered bounded PCM then CloseStream-only sends, latest expected tail,
+          no decoder/provider errors and normalized peer close before expiry.
+        - [x] Reject EOF/error/local teardown, abnormal/early close, missing tail,
+          send failure, limits and expired terminal even when queued first;
+          a prior EndOfTurn or quiet period is not completion. Already-caught-up
+          updates need not be repeated after CloseStream.
+        - [x] Provide one future explicitly authorized command using operator
+          supplied bounded known speech PCM and expected suffix, with only
+          sanitized terminal class/booleans retained. No fixture download/TTS.
+        - [x] Verify isolated offline and existing Socket privacy/ordering tests;
+          preserve production admission/manifest and hosted acceptance as open.
+        - [x] Before committing, keep private connection options out of the test
+          supervisor child specification using existing one-shot PrivateInit;
+          reproduce redacted inspection plus exact private delivery offline.
     - [x] Repair Goodall P2 at `b0b7d411`: a queued `input_finished` processed
       after the recognition deadline must fail, even if it precedes the timeout
       notification in the mailbox. Reproduce with timeout 500 ms: finish
@@ -1272,6 +1291,30 @@ No new provider advertisement or billable call is authorized by these tasks.
   normalized class. After the mapping, 11 transport tests and the combined 27
   privacy/adapter tests pass (seed 0, isolated child, two schedulers). This closes
   only the local transport primitive; hosted finite proof and selection stay open.
+  Probe design review, before tests/code: collect interoperability evidence only
+  in test support using existing Flux decoding and Socket send/peer-close seams.
+  The opt-in gate precedes all credential/network work. A single monotonic budget
+  starts before connection and is checked when evidence is processed, not merely
+  when queued. Bound fixture, events and retained latest-per-turn text; exact
+  private suffix comparison avoids emitting transcripts. A normalized peer close
+  after successful CloseStream is necessary but not by itself sufficient; neither
+  EndOfTurn nor EOF supplies that proof. Do not require a redundant post-finish
+  update. No shared runtime/parser/dependency changes or provider opt-in are
+  needed. See [probe decision/verification plan](../flux-close-stream-probe.md).
+  Probe checkpoint evidence: 24 absent-API red failures, then 24 offline tests
+  green and 52 combined offline/local-loopback/Socket privacy/adapter tests green
+  (seed 0, isolated child, two schedulers). Exact methods and terminal handles are
+  in `labnotes/20260922-2041-flux-close-probe.md`. The separately tagged hosted
+  entry point was not executed, even unarmed. This prepares evidence collection;
+  actual hosted protocol proof, production profile and the parent D gate stay open.
+  Probe privacy design review: the initial tagged test's raw Socket start MFA
+  carries authorization options in its supervisor specification even though Socket
+  status itself is redacted. Reuse existing PrivateInit in test support and retain
+  only its redacted handle in that specification. No new private-state mechanism
+  or shared runtime change is needed; test exact delivery and failed-start cleanup.
+  Privacy follow-up: 26 tests / 2 absent-helper red failures; after the handoff,
+  54 combined focused tests pass, including real-loopback startup using the helper.
+  Exact-path formatting and diff checks pass. Hosted entry point remains unrun.
 - [ ] Complete output-STT adapter resolution through the existing registry,
   retain provider-private startup configuration, and negotiate matching PCM
   formats or use an explicit supported conversion. Prove synthetic-credential,

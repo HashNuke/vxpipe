@@ -94,6 +94,12 @@ must independently prove that this normalized class suffices after finite finish
 peer-close observation alone is not that proof. If the profile requires raw
 empty-versus-explicit-1000 discrimination, this seam cannot provide it.
 
+The separately authorized [guarded interoperability probe](flux-close-stream-probe.md)
+prepares one future operator-authorized observation using known speech and a private
+expected suffix. Implementing that test does not approve a hosted profile or
+execute a billable request; its offline checks must keep credentials insufficient
+for execution and EOF/local teardown insufficient for success.
+
 Local implementation evidence: revised expectations failed in three of eleven
 loopback tests before normalization. The corrected implementation passes all 11
 transport tests and all 27 combined privacy/adapter tests. The optional callback
