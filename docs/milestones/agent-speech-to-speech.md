@@ -737,13 +737,17 @@ the existing audio round trip. Record discoveries here before implementing.
   successful completion, and prove any synchronization/lifecycle repair with
   controlled evidence. Do not widen deadlines without a measured contract reason.
   Keep any repair in a separate checkpoint; rerun all five root gates afterward.
-  - [ ] Diagnose the reproducible call-engine `LiveInspectionTest` failure at
+  - [x] Diagnose the reproducible call-engine `LiveInspectionTest` failure at
     its post-buffer-crash participant snapshot assertion (full child suite:
     1,409 tests, one failure; focused rerun: one failure). Establish whether
     the agent participant exists before the injected buffer crash or startup
     was never acknowledged. Repair the project-owned test/runtime boundary
     without changing the STS cutover checkpoint, then rerun focused and full
-    child evidence in a separate commit.
+    child evidence in a separate commit. A pre-crash assertion confirmed the
+    participant was not registered before fault injection. The repaired test
+    monitors the same room incarnation before and after the buffer crash;
+    its three-test file and the 1,409-test call-engine child suite pass with
+    zero failures (30 integration exclusions). See the live-inspection labnote.
   Isolated rerun of the exact two cases passes (two tests, seed 0, 158.9 s),
   which does not explain or repair the failures. Follow-up tasks:
   - [x] For STT release-loss injection, establish that RoomAuthority has received

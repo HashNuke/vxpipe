@@ -117,6 +117,9 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
 
     refute inspect(updated) =~ "private-live-value"
 
+    assert {:ok, room_monitor} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+
     assert {:ok, inspection_port} = Buffer.port(plan.tenant_id, plan.call_id)
     incarnation_supervisor = incarnation_supervisor_for(inspection_port.buffer)
     inspection_monitor = Process.monitor(inspection_port.buffer)
@@ -128,14 +131,12 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
     assert {:error, :call_not_live} =
              CallEngine.inspect_live_call(plan.tenant_id, plan.call_id)
 
-    assert {:ok, participant} =
-             CallEngine.participant_snapshot(
-               plan.tenant_id,
-               plan.room_id,
-               receiver.participant_id
-             )
+    assert {:ok, next_room_monitor} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
 
-    assert participant.participant_id == receiver.participant_id
+    refute_received {:DOWN, ^room_monitor, :process, _, _}
+    Process.demonitor(room_monitor, [:flush])
+    Process.demonitor(next_room_monitor, [:flush])
   end
 
   defp fact(sequence, kind) do
