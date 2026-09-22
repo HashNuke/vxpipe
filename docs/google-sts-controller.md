@@ -57,7 +57,14 @@ Sequential streaming proof is a dependency, not complete conversation support.
 Independent caller/response association across overlaps, late input transcription,
 history reconciliation, external/hybrid control and safe resumption remain explicit
 milestone tasks. Client activity messages require automatic detection disabled;
-an unsupported mixed control profile must be rejected rather than guessed.
+the local adapter now rejects hybrid configuration before startup, including
+tampered private setup. Shared hybrid support for other providers is unchanged.
+Provider mode accepts only raw server activity for routine turn control; external
+mode disables automatic detection and sends one client start/end per logical
+activity. Idle ends and duplicates are no-ops on both wire and engine admission.
+External end does not promote partial input text to final. These local profile
+checks do not validate the separate interruption command or history contract:
+the current interrupt encoder still requires that explicit milestone repair.
 
 ## Verification
 
@@ -76,3 +83,7 @@ socket retirement before model turn end and now verifies safe deferral with no
 replayed audio or control messages. Three additional provider/typed/external cases
 reproduce a delayed prior model end and prove it cannot authorize an ambiguous
 handoff. Full milestone acceptance remains open.
+
+The subsequent profile/idempotence checkpoint extends that group to 72 passing
+checks, including private setup rejection before socket creation. Its red-green
+and independent review evidence is in `labnotes/20260922-1855-google-sts-control.md`.

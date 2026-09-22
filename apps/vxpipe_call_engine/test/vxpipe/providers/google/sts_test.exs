@@ -3,6 +3,29 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
   alias Vxpipe.Providers.Google.STS
 
+  test "unproven hybrid control is rejected by public, private and descriptor configuration" do
+    assert {:error, :invalid_configuration} = STS.public_options(turn_control: "hybrid")
+
+    assert {:error, :invalid_configuration} =
+             STS.new(api_key: "synthetic", turn_control: "hybrid")
+
+    assert {:error, :invalid_configuration} =
+             Vxpipe.Providers.Google.STSSession.configure(turn_control: "hybrid")
+
+    for mode <- ["provider", "external"] do
+      assert {:ok, descriptor} = Vxpipe.Providers.Google.STSSession.configure(turn_control: mode)
+      assert descriptor.turn_control_supported == ["provider", "external"]
+      assert {:ok, config} = STS.new(api_key: "synthetic", turn_control: mode)
+
+      assert get_in(STS.setup(config), [
+               "setup",
+               "realtimeInputConfig",
+               "automaticActivityDetection"
+             ]) ==
+               %{"disabled" => mode == "external"}
+    end
+  end
+
   test "tool names match the complete accepted alphabet without sanitization" do
     tool = %{
       "name" => "lookup",

@@ -142,6 +142,10 @@ fragment assembly, output-text source isolation and separate generation/playback
 settlement. It also prevents playback from making an unfinished model turn a
 resumable idle checkpoint. Overlapping caller/response correlation, caller final
 text, interruption-history repair and hosted acceptance remain open.
+The local Google STS profile now rejects hybrid before startup. Provider and
+external control retain their distinct automatic-detection settings; duplicate
+external boundaries and idle ends are idempotent. This does not validate the
+still-open interruption encoder/history path or enable the manifest entry.
 
 ## Private STS activation configuration
 

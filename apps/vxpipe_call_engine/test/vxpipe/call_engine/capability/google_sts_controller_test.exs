@@ -198,6 +198,42 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
   end
 
+  test "external idle end sends no wire boundary or output admission" do
+    context = start_controller("external")
+    assert :ok = SpeechToSpeech.input_activity(context.capability, :ended)
+    _ = :sys.get_state(context.capability)
+    refute_received {:test_google_sts_control, _, _}
+    refute_received {:vxpipe_sts_turn_started, _, _, _}
+  end
+
+  test "external duplicates admit and send each boundary once without provider control" do
+    context = start_controller("external")
+    wire = context.wire
+    capability = context.capability
+    deliver(context, activity("ACTIVITY_START"))
+    deliver(context, activity("ACTIVITY_END"))
+    deliver(context, content(%{"turnComplete" => true}))
+    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    refute_received {:vxpipe_sts_speech_started, _, _, _}
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, started}
+    assert JSON.decode!(started) == %{"realtimeInput" => %{"activityStart" => %{}}}
+    refute_received {:test_google_sts_control, ^wire, _}
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:test_google_sts_control, ^wire, ended}
+    assert JSON.decode!(ended) == %{"realtimeInput" => %{"activityEnd" => %{}}}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}
+    _ = :sys.get_state(capability)
+    refute_received {:test_google_sts_control, ^wire, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    assert :sys.get_state(capability).pending_turns == []
+    complete_reply(context, turn, "EXTERNAL", 1)
+  end
+
   for admitted? <- [false, true] do
     test "#{if admitted?, do: "admitted", else: "pre-admission"} interrupted text cannot leak into a fresh reply" do
       context = start_controller()
@@ -320,6 +356,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     capability = SpeechToSpeech.Tree.capability(tree)
     assert_receive {:test_google_sts_started, wire, _}, 1_000
+    assert_receive {:test_google_sts_control, ^wire, _setup}, 1_000
     TestGoogleSTSTransport.deliver(wire, JSON.encode!(%{"setupComplete" => %{}}))
     assert_receive {:vxpipe_sts_ready, ^capability}, 1_000
     provider = Session.provider(:sys.get_state(capability).session)

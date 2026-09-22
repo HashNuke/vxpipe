@@ -463,6 +463,10 @@ and cannot substitute for missing output transcription. Raw caller activity end
 permits a response independently of model `turnComplete`; it does not finalize
 independently delivered caller text. The [controller decision](google-sts-controller.md)
 records sequential fake-wire proof and the remaining correlation limits.
+Google's local descriptor accepts provider and external control, not hybrid;
+client activity controls require disabled automatic detection. External idle ends
+and repeated boundaries do not send duplicate wire controls or reopen output.
+These routine boundary checks do not establish interruption/history support.
 
 In provider-transcript mode, public completion requires settled selected text,
 acknowledged generation completion and matching sink playback. A late explicit final can finish an

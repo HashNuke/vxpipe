@@ -1182,6 +1182,24 @@ Submitted invocation outcomes must still survive privately for later reasoning.
     uses server activity; external controls require disabled automatic detection.
     Verify or reject unsupported hybrid combinations before startup rather than
     sending client activity messages while automatic detection remains enabled.
+    - [x] Reproduce unsupported hybrid configuration/descriptor acceptance;
+      restrict the Google adapter to proven provider/external control profiles
+      before socket startup, leaving shared hybrid support unchanged.
+    - [x] Prove external idle-end and duplicate start/end are idempotent at both
+      wire and engine admission boundaries. Keep raw server activity/model end
+      from becoming external caller control, and do not turn partial caller
+      transcription into final text at external end.
+    - [ ] Complete the separate interruption wire/history audit: current
+      `encode_interrupt` still sends client activity end in provider mode,
+      where automatic detection is enabled. Routine boundary idempotence does
+      not prove that path valid. Use supported provider semantics or explicit
+      session failure, and prove history isolation before hosted advertisement.
+
+    Profile follow-up: 72 focused Google/controller/shared-settlement tests pass;
+    independent xhigh source review found no actionable defect. Tampered private
+    hybrid setup is also rejected before socket creation. See
+    `labnotes/20260922-1855-google-sts-control.md`. The parent profile item remains
+    open for interruption; full external room lifecycle acceptance is separate.
 
   Controller dependency review: shared transcript settlement and the raw activity
   codec are committed prerequisites. First prove caller-end admission and bounded

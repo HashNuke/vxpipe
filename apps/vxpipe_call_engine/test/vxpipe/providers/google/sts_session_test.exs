@@ -6,6 +6,28 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
+  test "tampered private hybrid control fails before connecting a socket" do
+    scope = start_supervised!({CapabilityTree, owner: self()})
+    assert {:ok, config} = STS.new(api_key: "synthetic")
+    config = %{config | turn_control: "hybrid"}
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(scope),
+               provider: STSSession,
+               options: [],
+               owner: self(),
+               private: [
+                 config: config,
+                 wire_module: TestGoogleSTSTransport,
+                 wire_options: [observer: self()]
+               ]
+             )
+
+    assert_receive {:vxpipe_speech_closed, ^session, :initialization_failed}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+    refute_received {:test_google_sts_control, _, _}
+  end
+
   test "a tampered trailing-newline tool name fails before socket connection" do
     scope = start_supervised!({CapabilityTree, owner: self()})
 
@@ -273,9 +295,14 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
 
     assert :ok = Session.input_activity(session, :started)
+    deliver(wire, %{"serverContent" => %{"inputTranscription" => %{"text" => "partial"}}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = partial}
+    assert :ok = Session.ack(session, partial)
     assert :ok = Session.input_activity(session, :ended)
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :turn_ended, text: ""} = ended}
+
     assert :ok = Session.ack(session, ended)
   end
 

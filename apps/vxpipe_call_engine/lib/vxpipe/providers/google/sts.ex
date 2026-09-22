@@ -19,7 +19,7 @@ defmodule Vxpipe.Providers.Google.STS do
   @maximum_output_chunk_bytes 131_072
   @maximum_text_bytes 65_536
   @voice_pattern ~r/\A[A-Za-z][A-Za-z0-9_-]*\z/
-  @turn_controls ["provider", "external", "hybrid"]
+  @turn_controls ["provider", "external"]
 
   @enforce_keys [:api_key, :model, :voice, :turn_control]
   @derive {Inspect, only: [:model, :voice, :turn_control]}

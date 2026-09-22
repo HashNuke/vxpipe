@@ -98,7 +98,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
           if(public.turn_control == "external", do: :external, else: :provider_semantic),
         speech_start?: public.turn_control != "external",
         turn_control: public.turn_control,
-        turn_control_supported: ["provider", "external", "hybrid"],
+        turn_control_supported: ["provider", "external"],
         input_transcript?: true,
         output_transcript?: true,
         output_settlement: :generation_boundary,
@@ -237,6 +237,20 @@ defmodule Vxpipe.Providers.Google.STSSession do
         %{config: %{turn_control: "provider"}} = state
       ),
       do: {:reply, {:error, :unsupported_operation}, state}
+
+  def handle_call(
+        {:input_activity, :started},
+        _from,
+        %{ready?: true, input_turn: turn, input_ended?: false} = state
+      )
+      when not is_nil(turn),
+      do: {:reply, :ok, state}
+
+  def handle_call({:input_activity, :ended}, _from, %{ready?: true, input_turn: nil} = state),
+    do: {:reply, :ok, state}
+
+  def handle_call({:input_activity, :ended}, _from, %{ready?: true, input_ended?: true} = state),
+    do: {:reply, :ok, state}
 
   def handle_call({:input_activity, boundary}, _from, %{ready?: true} = state)
       when boundary in [:started, :ended] do
@@ -650,11 +664,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp activity_boundary(:ended, %{input_turn: nil} = state), do: state
 
   defp activity_boundary(:ended, state) do
-    text = state.input_text || ""
-
     case Event.emit(state.channel, :turn_ended,
            turn_ref: state.input_turn,
-           text: text,
+           text: "",
            endpointing: :external
          ) do
       :ok -> %{state | input_ended?: true}
