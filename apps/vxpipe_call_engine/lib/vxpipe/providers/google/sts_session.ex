@@ -647,6 +647,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   defp full_fence(state) do
+    state = STSInput.interrupt_model(state)
+
     caller_turn =
       case state.caller do
         %{turn_ref: turn, ended?: false} -> turn

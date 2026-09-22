@@ -22,7 +22,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
         {:ok,
          STSResumption.begin_turn(%{
            state
-           | caller: %{turn_ref: turn, ended?: false, final?: false},
+           | caller: %{turn_ref: turn, ended?: false, final?: false, model_interrupted?: false},
              input_turn: turn,
              input_text: nil,
              input_ended?: false
@@ -53,13 +53,26 @@ defmodule Vxpipe.Providers.Google.STSInput do
       result when result in [:ok, :discarded] ->
         # An earlier interrupted model end is not completion of the response
         # that this genuine caller end now permits.
-        state = %{state | input_ended?: true, model_turn_complete?: false}
+        ambiguous? = caller.model_interrupted? and not state.model_turn_complete?
+
+        state = %{
+          state
+          | input_ended?: true,
+            model_turn_complete?: false,
+            resumption_ambiguous?: state.resumption_ambiguous? or ambiguous?
+        }
+
         {:ok, retire(state, %{caller | ended?: true})}
 
       _failure ->
         {:error, :session_failed}
     end
   end
+
+  def interrupt_model(%{caller: %{ended?: false} = caller} = state),
+    do: %{state | caller: %{caller | model_interrupted?: true}}
+
+  def interrupt_model(state), do: state
 
   def transcript(%{caller: nil} = state, _text, _final?), do: {:ok, state}
   def transcript(%{caller: %{final?: true}} = state, _text, _final?), do: {:ok, state}

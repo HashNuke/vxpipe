@@ -126,7 +126,7 @@ input text cannot create a caller or be saved for a future onset. Stronger
 correlation evidence and full response-ownership work remain prerequisites for
 hosted advertisement.
 
-Local verification: 94 focused Google codec/session/output, actual-controller,
+Local verification: 95 focused Google codec/session/output, actual-controller,
 shared-settlement and room transcript-mode tests pass. Twenty sequential actual-
 controller replies retire all caller slots; finals before/after activity end and
 after playback retain the original identity. A real room publishes a post-playback
@@ -140,3 +140,7 @@ reply. Renewal accepts an existing external caller's end instead of blocking the
 evidence needed to reach idle. A real caller end requires subsequent model-end
 evidence before renewal; an earlier interrupted model end cannot mark the fresh
 reply complete. General overlapping model-response ownership is still separate.
+If that interrupted-model end has not arrived when the caller ends, ownership of
+a subsequent model end remains ambiguous. Latch the allocation as non-resumable;
+later ends and handles cannot restore certainty. The reversed-order controller
+regression and combined recognition/startup/room group pass 229 tests locally.

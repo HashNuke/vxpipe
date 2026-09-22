@@ -1338,6 +1338,15 @@ Submitted invocation outcomes must still survive privately for later reasoning.
         block the boundary needed to retire caller evidence and reach idle.
         A completed interrupted model turn cannot qualify the fresh response as
         model-complete; require subsequent model-end evidence before renewal.
+      - [x] Reproduce the reversed model-end ordering from follow-up review:
+        interruption, genuine caller end, delayed interrupted-model `turnComplete`,
+        fresh reply/playback and a handle must not authorize renewal. Latch that
+        ambiguity for the allocation; later ends/handles cannot disambiguate it.
+        Preserve successful renewal when the prior model end was observed before
+        the genuine caller end, and leave full overlap support open.
+        Actual red: 29 controller tests, one premature socket replacement. Green:
+        229 integrated Google/recognition/startup/room tests pass; see
+        `labnotes/20260922-1941-google-caller-renewal.md` for ordering and evidence.
     - [ ] Audit model `interactionStatus` and typed-input encoding for the pinned
       3.x profile before completing response-lifetime/resumption support. Model
       `turnComplete` must not imply a globally idle interaction while further

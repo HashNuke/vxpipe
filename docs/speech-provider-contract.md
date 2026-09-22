@@ -603,7 +603,9 @@ prevents renewal. Model completion invalidates any earlier handle,
 so renewal also needs a subsequently valid checkpoint. The current local adapter
 latches overlapping model-turn ownership as non-resumable until independent
 correlation is implemented; a later unqualified end/handle cannot clear that
-uncertainty. It fails on connection loss or the existing expiry, with no replay
+uncertainty. This also covers an unfinished caller preserved through model
+interruption whose caller end precedes the interrupted model's completion.
+It fails on connection loss or the existing expiry, with no replay
 or fresh fallback. This guard does not satisfy full overlap support. Retire the old socket
 through its owner and reject new input as `:busy` until replacement setup is acknowledged.
 

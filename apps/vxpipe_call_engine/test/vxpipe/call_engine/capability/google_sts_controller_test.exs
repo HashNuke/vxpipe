@@ -451,6 +451,42 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_receive {:test_google_sts_started, _, _}, 1_000
   end
 
+  test "delayed interrupted-model completion cannot authorize the preserved caller's renewal" do
+    context = start_controller("external")
+    capability = context.capability
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    deliver(context, content(%{"interrupted" => true}))
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    deliver(context, content(%{"turnComplete" => true}))
+    final_caller(context, turn, "EXTERNAL CALLER")
+    complete_reply(context, turn, "FRESH REPLY", 1)
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{
+        "newHandle" => "ambiguous-interrupted-end",
+        "resumable" => true
+      }
+    })
+
+    assert :sys.get_state(context.provider).wire == context.wire
+    refute_received {:test_google_sts_started, _, _}
+    deliver(context, content(%{"turnComplete" => true}))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "later-still-ambiguous", "resumable" => true}
+    })
+
+    assert :sys.get_state(context.provider).wire == context.wire
+    refute_received {:test_google_sts_started, _, _}
+    provider = context.provider
+    monitor = Process.monitor(provider)
+    TestGoogleSTSTransport.disconnect(context.wire)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :session_failed}}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+  end
+
   for {mode, turn_control} <- [provider: "provider", typed: "provider", external: "external"] do
     test "#{mode} overlapping model lifetimes cannot create a false idle checkpoint" do
       mode = unquote(mode)
