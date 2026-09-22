@@ -3,6 +3,78 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
   alias Vxpipe.Providers.Google.STS
 
+  test "new Gemini 3.x typed input uses the realtime text stream without history content" do
+    assert {:ok, encoded} = STS.encode_text("genuinely new typed input")
+    assert JSON.decode!(encoded) == %{"realtimeInput" => %{"text" => "genuinely new typed input"}}
+  end
+
+  test "model completion preserves explicit interaction state instead of implying idle" do
+    for {wire, expected} <- [
+          {"IDLE", :idle},
+          {"IN_PROGRESS", :in_progress},
+          {"INTERACTION_STATUS_UNSPECIFIED", :unknown},
+          {"REQUIRES_ACTION", :requires_action}
+        ] do
+      assert {:ok, [{:turn_complete, ^expected}]} =
+               STS.decode(
+                 JSON.encode!(%{
+                   "serverContent" => %{
+                     "turnComplete" => true,
+                     "interactionStatus" => wire
+                   }
+                 })
+               )
+    end
+
+    assert {:ok, [{:turn_complete, :unknown}]} =
+             STS.decode(JSON.encode!(%{"serverContent" => %{"turnComplete" => true}}))
+  end
+
+  test "interaction status requires a valid model-end envelope and closed wire enum" do
+    for invalid <- [nil, 1, true, %{}, "idle", "FUTURE_STATUS"] do
+      assert {:error, :invalid_message} =
+               STS.decode(
+                 JSON.encode!(%{
+                   "serverContent" => %{
+                     "turnComplete" => true,
+                     "interactionStatus" => invalid
+                   }
+                 })
+               )
+    end
+
+    assert {:error, :invalid_message} =
+             STS.decode(JSON.encode!(%{"serverContent" => %{"interactionStatus" => "IDLE"}}))
+
+    assert {:error, :invalid_message} =
+             STS.decode(
+               JSON.encode!(%{
+                 "serverContent" => %{
+                   "turnComplete" => false,
+                   "interactionStatus" => "IDLE"
+                 }
+               })
+             )
+  end
+
+  test "explicit false model completion has no terminal meaning" do
+    assert {:ok, []} =
+             STS.decode(JSON.encode!(%{"serverContent" => %{"turnComplete" => false}}))
+  end
+
+  test "thought-only model content signals private activity without spoken text" do
+    assert {:ok, [:model_activity]} =
+             STS.decode(
+               JSON.encode!(%{
+                 "serverContent" => %{
+                   "modelTurn" => %{
+                     "parts" => [%{"text" => "private thought", "thought" => true}]
+                   }
+                 }
+               })
+             )
+  end
+
   test "Gemini 3.x separates provisional input from its single final transcription" do
     assert {:ok, events} =
              STS.decode(
@@ -220,7 +292,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
         }
       })
 
-    assert {:ok, events} = STS.decode(payload)
+    assert {:ok, [:model_activity | events]} = STS.decode(payload)
     chunks = Enum.map(events, fn {:audio, audio} -> audio end)
     assert IO.iodata_to_binary(chunks) == pcm
     assert Enum.map(chunks, &byte_size/1) == [131_072, 4]
@@ -292,7 +364,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
         }
       })
 
-    assert {:ok, [{:audio, decoded}]} = STS.decode(payload)
+    assert {:ok, [:model_activity, {:audio, decoded}]} = STS.decode(payload)
     assert decoded == chunk
   end
 
@@ -392,7 +464,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
     assert {:audio, audio} in events
     assert {:output_transcript, "hi there"} in events
     assert :generation_complete in events
-    assert :turn_complete in events
+    assert {:turn_complete, :unknown} in events
   end
 
   test "tool calls, cancellations, go-away, resumption and usage decode safely" do

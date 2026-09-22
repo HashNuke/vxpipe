@@ -123,13 +123,7 @@ defmodule Vxpipe.Providers.Google.STS do
 
   def encode_text(text) when is_binary(text) do
     if String.valid?(text) and byte_size(text) in 1..@maximum_text_bytes do
-      {:ok,
-       JSON.encode!(%{
-         "clientContent" => %{
-           "turns" => [%{"role" => "user", "parts" => [%{"text" => text}]}],
-           "turnComplete" => true
-         }
-       })}
+      {:ok, JSON.encode!(%{"realtimeInput" => %{"text" => text}})}
     else
       {:error, :invalid_text}
     end
@@ -192,7 +186,12 @@ defmodule Vxpipe.Providers.Google.STS do
     with {:ok, transcripts} <- transcripts(content),
          {:ok, audio} <- output_audio(content),
          {:ok, boundaries} <- boundaries(content) do
-      {:ok, transcripts ++ audio ++ boundaries}
+      active? =
+        Map.has_key?(content, "modelTurn") or Map.get(content, "generationComplete") == true or
+          Map.get(content, "interrupted") == true
+
+      activity = if active?, do: [:model_activity], else: []
+      {:ok, activity ++ transcripts ++ audio ++ boundaries}
     end
   end
 
@@ -337,10 +336,33 @@ defmodule Vxpipe.Providers.Google.STS do
 
   defp boundaries(content) do
     with {:ok, generation} <- flag(content, "generationComplete", :generation_complete),
-         {:ok, turn} <- flag(content, "turnComplete", :turn_complete),
+         {:ok, turn} <- model_completion(content),
          {:ok, interrupted} <- flag(content, "interrupted", :interrupted) do
       {:ok, generation ++ turn ++ interrupted}
     end
+  end
+
+  defp model_completion(%{"turnComplete" => true} = content) do
+    case Map.fetch(content, "interactionStatus") do
+      :error -> {:ok, [{:turn_complete, :unknown}]}
+      {:ok, "IDLE"} -> {:ok, [{:turn_complete, :idle}]}
+      {:ok, "IN_PROGRESS"} -> {:ok, [{:turn_complete, :in_progress}]}
+      {:ok, "INTERACTION_STATUS_UNSPECIFIED"} -> {:ok, [{:turn_complete, :unknown}]}
+      {:ok, "REQUIRES_ACTION"} -> {:ok, [{:turn_complete, :requires_action}]}
+      _invalid -> {:error, :invalid_message}
+    end
+  end
+
+  defp model_completion(%{"turnComplete" => false} = content) do
+    if Map.has_key?(content, "interactionStatus"),
+      do: {:error, :invalid_message},
+      else: {:ok, []}
+  end
+
+  defp model_completion(content) do
+    if Map.has_key?(content, "turnComplete") or Map.has_key?(content, "interactionStatus"),
+      do: {:error, :invalid_message},
+      else: {:ok, []}
   end
 
   defp tool_calls(%{"toolCall" => %{"functionCalls" => calls}}) when is_list(calls) do

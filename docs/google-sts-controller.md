@@ -144,3 +144,54 @@ If that interrupted-model end has not arrived when the caller ends, ownership of
 a subsequent model end remains ambiguous. Latch the allocation as non-resumable;
 later ends and handles cannot restore certainty. The reversed-order controller
 regression and combined recognition/startup/room group pass 229 tests locally.
+
+## Interaction and new-text profile
+
+The pinned ADK sends genuinely new, single-part Gemini 3.x user text through
+`send_realtime_input(text=...)`. Use raw `realtimeInput.text` for that operation.
+Do not reuse the history-append envelope, replay a conversation, or copy the
+ADK's separate placeholder-generation example. This changes new typed input,
+not resumption or context reconstruction.
+
+The same receiver exposes interaction status because one prompt can span several
+model turns. The [pinned Python SDK](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/types.py)
+defines `IDLE` and `IN_PROGRESS`, plus unspecified and deprecated
+`REQUIRES_ACTION`. The field accompanies model completion. Decode a closed enum
+with that completion; reject invalid types or an unaccompanied status. Missing
+status becomes unknown, not an inherited earlier idle.
+
+The local conservative renewal rule requires explicit `IDLE` after conversational
+work as well as the existing model, caller, playback, tool and ambiguity fences.
+Unspecified and deprecated status do not grant renewal. Treating deprecated
+`REQUIRES_ACTION` conservatively is this adapter's decision, not a claim that the
+SDK calls it active reasoning. New caller/typed work and accepted tool results
+invalidate the previous idle evidence. A valid new handle alone cannot restore
+it. A pristine setup with no conversational work may still use its first handle;
+there is no old response to settle. No resumption deadline is extended.
+
+Verification uses exact codec payloads and the actual capability with a fake wire:
+one new typed input yields one normally credited reply; missing/unspecified/
+in-progress/deprecated model ends defer renewal; explicit idle still requires a
+newer handle; and delivering a tool result after idle requires fresh model/idle
+evidence. Keep late caller-final and pending-playback guards intact.
+
+Review extends invalidation to accepted PCM before provider onset without
+inventing model/caller onset or an overlap latch. A private model-activity marker
+also covers thought-only `modelTurn` parts; output transcription and tool calls
+invalidate idle before any ownership-based drop. Thought text is never published
+as spoken text. Explicit `turnComplete: false` alone produces no completion;
+status still requires a true completion envelope.
+
+This profile repair does not complete continued response delivery. A second model
+response after `IN_PROGRESS` currently lacks an independent response association
+once the first output settles. That needs a separate bounded response owner and
+engine admission, not a fabricated caller end or a longer buffer. The milestone
+keeps that successful multi-response requirement open along with overlap and
+interruption-history acceptance. Red evidence is in
+`labnotes/20260922-1946-google-interaction-profile.md`.
+
+The same status guard must cover standalone generation/interruption notifications,
+with any explicit idle completion in the same envelope applied after observing
+activity. A separate [checkpoint-coverage audit](sts-context-restoration.md#implemented-handle-handoff)
+remains open: idle and handle arrival do not account for the provider's consumed-
+client-message watermark or prove cross-direction no-loss handoff.

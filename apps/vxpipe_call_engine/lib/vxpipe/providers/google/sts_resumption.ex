@@ -15,11 +15,20 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   def invalidate(state), do: %{state | resumption_handle: nil}
 
+  # PCM may precede provider onset, so it invalidates idle but does not prove a
+  # new model turn or manufacture overlapping model ownership.
+  def invalidate_idle(state),
+    do: %{state | resumption_handle: nil, interaction_status: :unknown}
+
+  def model_work(state),
+    do: %{invalidate_idle(state) | model_turn_complete?: false}
+
   def begin_turn(state) do
     %{
       state
       | resumption_handle: nil,
         model_turn_complete?: false,
+        interaction_status: :unknown,
         resumption_ambiguous?: state.resumption_ambiguous? or not state.model_turn_complete?
     }
   end
@@ -143,9 +152,9 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   end
 
   defp idle?(state) do
-    not state.resumption_ambiguous? and state.model_turn_complete? and is_nil(state.input_turn) and
-      is_nil(state.caller) and is_nil(state.output) and state.audio_buffer == [] and
-      map_size(state.pending_tools) == 0
+    not state.resumption_ambiguous? and state.model_turn_complete? and
+      state.interaction_status == :idle and is_nil(state.input_turn) and is_nil(state.caller) and
+      is_nil(state.output) and state.audio_buffer == [] and map_size(state.pending_tools) == 0
   end
 
   defp arm_deadline(state, deadline) do

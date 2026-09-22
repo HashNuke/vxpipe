@@ -680,7 +680,11 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
                     %Event{session: ^session, kind: :output_completed} = completed}
 
     assert :ok = Session.ack(session, completed)
-    deliver_sync(session, wire, %{"serverContent" => %{"turnComplete" => true}})
+
+    deliver_sync(session, wire, %{
+      "serverContent" => %{"turnComplete" => true, "interactionStatus" => "IDLE"}
+    })
+
     output
   end
 

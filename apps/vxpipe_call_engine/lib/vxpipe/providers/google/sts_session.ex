@@ -63,6 +63,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
     audio_fenced?: false,
     generation_pending_done?: false,
     model_turn_complete?: true,
+    interaction_status: :idle,
     resumption_ambiguous?: false,
     output: nil,
     output_text: nil,
@@ -195,7 +196,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_call({:push_audio, audio}, _from, %{ready?: true} = state) do
     with {:ok, _encoded} <- STS.encode_audio(audio),
          :ok <- state.wire_module.send_audio(state.wire, audio) do
-      {:reply, :ok, STSResumption.invalidate(state)}
+      {:reply, :ok, STSResumption.invalidate_idle(state)}
     else
       {:error, :invalid_audio} -> {:reply, {:error, :session_failed}, state}
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -286,7 +287,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
         case send_tool_response(state, id, name, result) do
           :ok ->
             {:reply, :ok,
-             STSResumption.invalidate(%{
+             STSResumption.model_work(%{
                state
                | pending_tools: Map.delete(state.pending_tools, call_ref)
              })}
@@ -458,6 +459,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
           {:go_away, _remaining_ms} -> state
           {:resumption, _handle} -> state
           {:usage, _metadata} -> state
+          :model_activity -> STSResumption.model_work(state)
+          {:output_transcript, _text} -> STSResumption.model_work(state)
+          {:tool_call, _id, _name, _args} -> STSResumption.model_work(state)
           _conversation_event -> STSResumption.invalidate(state)
         end
 
@@ -477,6 +481,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   defp apply_wire_event(:ready, state), do: {:ok, state}
+
+  defp apply_wire_event(:model_activity, state), do: {:ok, state}
 
   defp apply_wire_event(:activity_start, %{config: %{turn_control: "external"}} = state),
     do: {:ok, state}
@@ -528,7 +534,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
     drain_output(mark_generation_done(state))
   end
 
-  defp apply_wire_event(:turn_complete, state), do: {:ok, %{state | model_turn_complete?: true}}
+  defp apply_wire_event({:turn_complete, status}, state),
+    do: {:ok, %{state | model_turn_complete?: true, interaction_status: status}}
 
   defp apply_wire_event(:interrupted, %{input_turn: nil} = state), do: {:ok, state}
 

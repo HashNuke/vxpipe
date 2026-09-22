@@ -1352,21 +1352,38 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       `turnComplete` must not imply a globally idle interaction while further
       generation/tool work remains. Do not introduce history replay or placeholder
       requests from upstream examples.
-      - [ ] Encode genuinely new typed input using the pinned Gemini 3.x
+      - [x] Encode genuinely new typed input using the pinned Gemini 3.x
         `realtimeInput.text` path. Prove exact fake-wire payload and one real
         controller reply without history content, placeholder or caller-audio
         transcript reassignment.
-      - [ ] Decode bounded, validated interaction status with model completion;
+      - [x] Decode bounded, validated interaction status with model completion;
         only explicit idle evidence may authorize renewal after conversational
         work. Missing/unspecified status or `IN_PROGRESS` cannot reuse an earlier
         idle state. Preserve caller, tool, playback and ambiguity fences.
         Reproduce an idle model end with a pending tool, then an accepted tool
         result: a newer handle alone cannot preserve the old idle evidence while
         that result can trigger new model work.
+        - [x] Reproduce accepted PCM before provider onset at both pristine and
+          previously idle boundaries; clear idle without fabricating caller/model
+          onset or poisoning later unambiguous renewal.
+        - [x] Reproduce fresh model audio, thought-only parts and output text
+          after prior idle; observe private model activity before ownership-based
+          dropping so a newer handle cannot reuse stale idle. Keep successful
+          subsequent response delivery as the separate requirement below.
+          Include standalone generation-complete/interruption messages and a
+          same-envelope explicit idle completion control.
+        - [x] Accept an explicit false model-completion boolean as no completion,
+          while rejecting false-plus-status and malformed status envelopes.
       - [ ] Reproduce continued model generation after an `IN_PROGRESS` model
         end. Complete independently credited subsequent response audio/text for
         the same interaction; do not hide the missing response association behind
         a resumption guard. This depends on the full response-owner work above.
+      - [ ] Prove cross-direction handle coverage of accepted client messages:
+        audit the pinned SDK's transparent consumed-message index, numbering and
+        supported wire profile; reproduce delayed old idle and a handle that
+        does not include new PCM/tool input. Require coverage before handoff
+        without replay or an unbounded resend buffer. Prove a fully covered idle
+        checkpoint still renews. Status guards alone do not establish this proof.
 
       Interaction-profile design review (2026-09-22): the pinned ADK distinguishes
       new realtime text from appended history and exposes interaction state for
@@ -1377,6 +1394,14 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       profile. Fresh setup with no conversational work remains eligible for the
       existing private-handle path. Actual subsequent response ownership remains
       required and open; see [the controller decision](../google-sts-controller.md).
+
+      Local interaction-profile evidence: exact realtime-text input, closed status
+      decoding, stale-idle invalidation before provider onset and unowned model
+      work, and same-envelope idle controls pass with the integrated room/recognizer
+      group (249 tests, zero failures, seed 0). Independent xhigh source review
+      clears this bounded repair. See `labnotes/20260922-1946-google-interaction-profile.md`.
+      Continued response ownership, watermark coverage and hosted acceptance are
+      not established by these checks.
   - [ ] Make Google turn-control claims match its wire profile. Provider control
     uses server activity; external controls require disabled automatic detection.
     Verify or reject unsupported hybrid combinations before startup rather than

@@ -597,9 +597,15 @@ hosted compatibility. See [the configuration decision](google-speech-integration
 Google same-allocation renewal and idle connection-loss recovery use only the latest valid,
 safe provider-issued handle, retained privately. New accepted input or revocation invalidates
 the old checkpoint. Handoff waits for an idle input boundary, no pending tools and local
-playback settlement and the model's `turnComplete`; generation completion or local
-playback alone is insufficient. Pending caller final or activity-end evidence also
-prevents renewal. Model completion invalidates any earlier handle,
+playback settlement, the model's `turnComplete`, and explicit interaction `IDLE`
+after conversational work. Generation completion, local playback or a model end
+with missing/unspecified/`IN_PROGRESS` status alone is insufficient. The local
+profile also conservatively declines deprecated `REQUIRES_ACTION` as idle proof.
+Accepted PCM before onset, new caller/typed input, observed model work (including
+unpublished thought-only parts), and accepted tool results invalidate prior idle evidence;
+a newer handle alone cannot restore it. Pristine setup with no conversational
+work may still use its first safe handle. Pending caller final or activity-end
+evidence also prevents renewal. Model completion invalidates any earlier handle,
 so renewal also needs a subsequently valid checkpoint. The current local adapter
 latches overlapping model-turn ownership as non-resumable until independent
 correlation is implemented; a later unqualified end/handle cannot clear that
@@ -618,6 +624,12 @@ there is no fresh-session fallback. This is provider-private socket handoff, not
 after loss of the capability or provider process. `STSProvider` has no engine context-restore
 callback. See [STS context restoration](sts-context-restoration.md) for exact deadline,
 invalidation and local test evidence.
+
+Genuinely new Gemini 3.x typed input uses `realtimeInput.text`, not history
+append. This does not introduce replay or a placeholder trigger. The
+[controller profile](google-sts-controller.md#interaction-and-new-text-profile)
+records primary-source evidence and the separate, still-open requirement for
+independently credited subsequent model responses after an in-progress turn.
 
 #### Implementation and acceptance limits
 

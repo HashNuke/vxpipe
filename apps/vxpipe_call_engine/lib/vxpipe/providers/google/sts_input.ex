@@ -59,6 +59,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
           state
           | input_ended?: true,
             model_turn_complete?: false,
+            interaction_status: :unknown,
             resumption_ambiguous?: state.resumption_ambiguous? or ambiguous?
         }
 

@@ -12,9 +12,11 @@ cannot be used, the implemented behavior is explicit failure, not reconstruction
 ## Provider support and current implementation
 
 Google Live supports resuming a session with a server-issued handle, and
-`clientContent.turns` can append ordered conversation history. `turnComplete`
-controls whether that content starts a generation. Setup acknowledgement must
-precede further client messages. See the official
+`clientContent.turns` can append ordered conversation history. For the pinned
+Gemini 3.x profile, genuinely new text instead uses `realtimeInput.text`; appended
+history is not a substitute for that input. This implementation sends neither
+history nor a placeholder on reconnection. Setup acknowledgement must precede
+further client messages. See the official
 [session-management guide](https://ai.google.dev/gemini-api/docs/live-api/session-management)
 and [Live API reference](https://ai.google.dev/api/live).
 
@@ -40,8 +42,11 @@ Private reconnect-budget overrides must be positive integers at most 15
 seconds. Periodic renewal and expiry timers are socket-qualified; late
 timers/events from retired sockets are ignored.
 
-The adapter waits for an idle input boundary, no outstanding tools, and local
-playback settlement. `Speech.STSOutput` now notifies the provider after successful
+The adapter waits for an idle input boundary, no outstanding tools, local
+playback settlement, model completion and explicit interaction idle after
+conversational work. Accepted PCM before onset invalidates old idle without
+inventing a caller; observed model work and accepted tool results do likewise.
+Missing status cannot inherit an earlier idle. `Speech.STSOutput` notifies the provider after successful
 consumer settlement so generation completion alone cannot trigger reconnection.
 When handoff starts, the old socket is retired through its owning supervisor,
 without sending an additional audio-end command that would alter the checkpoint.
@@ -59,6 +64,16 @@ setup acknowledgement, deferred playback settlement, silence/no historical
 input during reconnection, stale socket events, private status, rejection and
 timeout cleanup. Hosted continuity and interrupted-history semantics are still
 unproven; the Google capability remains unadvertised.
+
+Cross-direction checkpoint coverage is also not yet proven. The
+[pinned SDK resumption update](https://github.com/googleapis/python-genai/blob/938dd7385caa68e1d9fff2ef2507fdbf1cd7eaab/google/genai/types.py#L19197)
+exposes a consumed-client-message index when transparent resumption is requested.
+The current adapter does not request or account for that index. Arrival of a
+new handle is not by itself proof that every accepted client message is included;
+delayed earlier model-idle evidence needs the same audit. The milestone records
+profile/numbering research, a deterministic crossing-direction reproduction and
+successful fully covered renewal as open work before hosted no-loss acceptance.
+This does not authorize replay, buffering historical audio, or a fresh fallback.
 
 ## Proposed fresh-session reconstruction boundary
 

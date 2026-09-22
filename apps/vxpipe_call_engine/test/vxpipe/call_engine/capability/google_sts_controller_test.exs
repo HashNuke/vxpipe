@@ -7,6 +7,185 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestGoogleSTSTransport}
   alias Vxpipe.Providers.Google.{STS, STSSession}
 
+  test "one genuinely new realtime text input produces one credited controller reply" do
+    context = start_controller()
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_text(capability, "typed input")
+    assert_receive {:test_google_sts_control, ^wire, payload}, 1_000
+    assert JSON.decode!(payload) == %{"realtimeInput" => %{"text" => "typed input"}}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    complete_reply(context, turn, "TYPED REPLY", 1)
+    refute_received {:test_google_sts_control, ^wire, _}
+    refute_received {:vxpipe_sts_speech_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+  end
+
+  for status <- [:missing, "IN_PROGRESS", "INTERACTION_STATUS_UNSPECIFIED", "REQUIRES_ACTION"] do
+    test "model end with #{status} cannot authorize renewal without explicit interaction idle" do
+      context = start_controller()
+      turn = begin_reply(context, :provider)
+      complete_reply(context, turn, "FIRST RESPONSE", 1)
+      deliver(context, interaction_end(unquote(status)))
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "not-idle", "resumable" => true}
+      })
+
+      deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert :sys.get_state(context.provider).wire == context.wire
+      refute_received {:test_google_sts_started, _, _}
+      deliver(context, interaction_end("IDLE"))
+      refute_received {:test_google_sts_started, _, _}
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "explicitly-idle", "resumable" => true}
+      })
+
+      assert_receive {:test_google_sts_started, _, _}, 1_000
+    end
+  end
+
+  test "an accepted tool result cannot reuse idle evidence from before its submission" do
+    context = start_controller()
+    capability = context.capability
+    turn = begin_reply(context, :provider)
+
+    deliver(context, %{
+      "toolCall" => %{
+        "functionCalls" => [%{"id" => "profile-tool", "name" => "lookup", "args" => %{}}]
+      }
+    })
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent",
+                    %{event: %Event{kind: :tool_call, call_ref: call}}},
+                   1_000
+
+    complete_reply(context, turn, "BEFORE TOOL RESULT", 1)
+    deliver(context, interaction_end("IDLE"))
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"value" => "result"})
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "after-tool", "resumable" => true}
+    })
+
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :sys.get_state(context.provider).wire == context.wire
+    refute_received {:test_google_sts_started, _, _}
+    deliver(context, interaction_end("IDLE"))
+    refute_received {:test_google_sts_started, _, _}
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "tool-settled", "resumable" => true}
+    })
+
+    assert_receive {:test_google_sts_started, _, _}, 1_000
+  end
+
+  for prior <- [:pristine, :settled] do
+    test "accepted PCM at #{prior} idle cannot renew before its caller onset arrives" do
+      context = start_controller()
+      capability = context.capability
+      wire = context.wire
+
+      if unquote(prior) == :settled do
+        turn = begin_reply(context, :provider)
+        complete_reply(context, turn, "PREVIOUS", 1)
+        deliver(context, interaction_end("IDLE"))
+      end
+
+      assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<5, 0>>)
+      assert_receive {:test_google_sts_audio, ^wire, <<5, 0>>}, 1_000
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "before-onset", "resumable" => true}
+      })
+
+      deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert :sys.get_state(context.provider).wire == wire
+      refute_received {:test_google_sts_started, _, _}
+      refute_received {:vxpipe_sts_speech_started, ^capability, _, _}
+
+      turn = begin_reply(context, :provider)
+      complete_reply(context, turn, "AFTER GENUINE ONSET", 2)
+      deliver(context, interaction_end("IDLE"))
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "after-onset", "resumable" => true}
+      })
+
+      assert_receive {:test_google_sts_started, _, _}, 1_000
+    end
+  end
+
+  for work <- [:audio, :thought, :transcription, :generation, :interruption] do
+    test "new #{work} cannot reuse idle even before a subsequent response has an owner" do
+      context = start_controller()
+      turn = begin_reply(context, :provider)
+      complete_reply(context, turn, "PREVIOUS", 1)
+      deliver(context, interaction_end("IDLE"))
+
+      message =
+        case unquote(work) do
+          :audio ->
+            audio_message(2)
+
+          :thought ->
+            content(%{
+              "modelTurn" => %{"parts" => [%{"text" => "private thought", "thought" => true}]}
+            })
+
+          :transcription ->
+            content(%{"outputTranscription" => %{"text" => "new model work"}})
+
+          :generation ->
+            content(%{"generationComplete" => true})
+
+          :interruption ->
+            content(%{"interrupted" => true})
+        end
+
+      deliver(context, message)
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "during-model-work", "resumable" => true}
+      })
+
+      deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert :sys.get_state(context.provider).wire == context.wire
+      refute_received {:test_google_sts_started, _, _}
+      deliver(context, interaction_end("IDLE"))
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "after-model-work", "resumable" => true}
+      })
+
+      assert_receive {:test_google_sts_started, _, _}, 1_000
+    end
+  end
+
+  for boundary <- ["generationComplete", "interrupted"] do
+    test "#{boundary} in the same envelope cannot erase explicit idle completion" do
+      context = start_controller()
+
+      deliver(
+        context,
+        content(%{
+          unquote(boundary) => true,
+          "turnComplete" => true,
+          "interactionStatus" => "IDLE"
+        })
+      )
+
+      deliver(context, %{
+        "sessionResumptionUpdate" => %{"newHandle" => "same-envelope-idle", "resumable" => true}
+      })
+
+      deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert_receive {:test_google_sts_started, _, _}, 1_000
+    end
+  end
+
   for timing <- [:before_end, :after_end, :after_playback] do
     test "caller final #{timing} retains the exact caller and cannot trigger a reply" do
       context = start_controller()
@@ -50,7 +229,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
       assert_started(context, turn)
       complete_reply(context, turn, "REPLY #{index}", index)
       final_caller(context, turn, "CALLER #{index}")
-      deliver(context, content(%{"turnComplete" => true}))
+      deliver(context, interaction_end("IDLE"))
       assert :sys.get_state(context.capability).caller_turns == %{}
     end
   end
@@ -134,7 +313,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, activity("ACTIVITY_END"))
     assert_started(context, turn)
     complete_reply(context, turn, "REPLY", 1)
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
 
     deliver(context, %{
       "sessionResumptionUpdate" => %{"newHandle" => "before-final", "resumable" => true}
@@ -203,7 +382,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     turn = start_caller(context)
     capability = context.capability
     deliver(context, content(%{"interimInputTranscription" => %{"text" => "partial"}}))
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     refute_received {:vxpipe_sts_input_event, ^capability, %{event: %Event{kind: :turn_ended}}}
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
     deliver(context, activity("ACTIVITY_END"))
@@ -223,7 +402,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, activity("ACTIVITY_END"))
     assert_started(context, turn)
     deliver(context, activity("ACTIVITY_END"))
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
     assert :sys.get_state(capability).pending_turns == []
   end
@@ -308,7 +487,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
     assert :sys.get_state(context.provider).wire == context.wire
     refute_received {:test_google_sts_started, _, _}
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     refute_received {:test_google_sts_started, _, _}
 
     deliver(context, %{
@@ -360,7 +539,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     capability = context.capability
     deliver(context, activity("ACTIVITY_START"))
     deliver(context, activity("ACTIVITY_END"))
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     refute_received {:vxpipe_sts_turn_started, _, _, _}
     refute_received {:vxpipe_sts_speech_started, _, _, _}
 
@@ -394,7 +573,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
     deliver(context, content(%{"outputTranscription" => %{"text" => "LATE"}}))
     deliver(context, content(%{"interrupted" => true}))
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     turn = start_caller(context)
     assert turn != old_turn
     deliver(context, activity("ACTIVITY_END"))
@@ -413,7 +592,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     capability = context.capability
     deliver(context, content(%{"outputTranscription" => %{"text" => "OLD"}}))
     deliver(context, content(%{"interrupted" => true}))
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     refute_received {:vxpipe_sts_input_event, ^capability, %{event: %Event{kind: :turn_ended}}}
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
     final_caller(context, old_turn, "CALLER")
@@ -429,7 +608,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     capability = context.capability
     assert :ok = SpeechToSpeech.input_activity(capability, :started)
     deliver(context, content(%{"interrupted" => true}))
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
     assert :ok = SpeechToSpeech.input_activity(capability, :ended)
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
@@ -442,7 +621,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     assert :sys.get_state(context.provider).wire == context.wire
     refute_received {:test_google_sts_started, _, _}
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
 
     deliver(context, %{
       "sessionResumptionUpdate" => %{"newHandle" => "complete-external", "resumable" => true}
@@ -459,7 +638,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
     assert :ok = SpeechToSpeech.input_activity(capability, :ended)
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
     final_caller(context, turn, "EXTERNAL CALLER")
     complete_reply(context, turn, "FRESH REPLY", 1)
 
@@ -472,7 +651,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     assert :sys.get_state(context.provider).wire == context.wire
     refute_received {:test_google_sts_started, _, _}
-    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
 
     deliver(context, %{
       "sessionResumptionUpdate" => %{"newHandle" => "later-still-ambiguous", "resumable" => true}
@@ -494,7 +673,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
       first = begin_reply(context, mode)
       complete_reply(context, first, "FIRST", 1)
       second = begin_reply(context, mode)
-      deliver(context, content(%{"turnComplete" => true}))
+      deliver(context, interaction_end("IDLE"))
       complete_reply(context, second, "SECOND", 2)
 
       deliver(context, %{
@@ -504,7 +683,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
       deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
       assert :sys.get_state(context.provider).wire == context.wire
       refute_received {:test_google_sts_started, _, _}
-      deliver(context, content(%{"turnComplete" => true}))
+      deliver(context, interaction_end("IDLE"))
 
       deliver(context, %{
         "sessionResumptionUpdate" => %{"newHandle" => "still-ambiguous", "resumable" => true}
@@ -653,6 +832,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
   defp activity(type), do: %{"voiceActivity" => %{"type" => type}}
   defp content(body), do: %{"serverContent" => body}
+
+  defp interaction_end(:missing), do: content(%{"turnComplete" => true})
+
+  defp interaction_end(status),
+    do: content(%{"turnComplete" => true, "interactionStatus" => status})
 
   defp audio_message(index) do
     content(%{
