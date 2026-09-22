@@ -1178,6 +1178,19 @@ Submitted invocation outcomes must still survive privately for later reasoning.
     A single mutable input reference must not relabel old output. Preserve
     bounded retirement and safe idle resumption; no history replay or fabricated
     caller final text from a model boundary.
+    - [ ] Verify the pinned Gemini 3.x input-transcription profile, not the older
+      fragment/optional-finished path. Distinguish interim input from final input
+      in the codec and prove final-before-end, final-after-end and final-after-next-
+      onset correlation without relabelling the prior caller or response.
+    - [ ] Retain bounded unfinished caller associations independently of output
+      playback/retirement; complete more than sixteen sequential actual-controller
+      turns without leaking caller slots. Preserve source/policy/epoch checks and
+      no transcript-driven activity or response trigger. Add real-room proof.
+    - [ ] Audit model `interactionStatus` and typed-input encoding for the pinned
+      3.x profile before completing response-lifetime/resumption support. Model
+      `turnComplete` must not imply a globally idle interaction while further
+      generation/tool work remains. Do not introduce history replay or placeholder
+      requests from upstream examples.
   - [ ] Make Google turn-control claims match its wire profile. Provider control
     uses server activity; external controls require disabled automatic detection.
     Verify or reject unsupported hybrid combinations before startup rather than

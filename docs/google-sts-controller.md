@@ -87,3 +87,23 @@ handoff. Full milestone acceptance remains open.
 The subsequent profile/idempotence checkpoint extends that group to 72 passing
 checks, including private setup rejection before socket creation. Its red-green
 and independent review evidence is in `labnotes/20260922-1855-google-sts-control.md`.
+
+## Next correlation checkpoint (not implemented)
+
+The pinned ADK receiver distinguishes Gemini 3.x input transcription from its
+older-model accumulation path: it treats `interimInputTranscription` as provisional
+and `inputTranscription` as final. Its [model predicate](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/utils/model_name_utils.py#L184)
+includes the configured `gemini-3.8-live` name. This is primary implementation
+evidence for a model-specific codec profile, not a hosted trace. Do not generalize
+the older optional `finished` field to this model or infer input finality from
+model completion. Output fragment assembly remains separate.
+
+The current local adapter still treats every input transcription as partial and
+ties it to one mutable caller reference. The next checkpoint must keep pending
+caller-final associations independently of output settlement, preserve existing
+room attribution/policy boundaries, and prove late finals across caller onset.
+The interim conservative resumption latch stays until response ownership is
+actually established. Model interaction status and typed-input profile also need
+verification before claiming complete Google conversation support; neither a
+placeholder request nor history replay is authorized. Research and concrete tasks
+are recorded in `labnotes/20260922-1903-google-sts-input.md` and the milestone.
