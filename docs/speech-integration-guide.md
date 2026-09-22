@@ -403,11 +403,13 @@ credential-free `Vxpipe.Providers.MorseCode` namespace (`STTSession`,
 the public agent turn; playback and the selected transcript source must both
 settle.
 
-Room integration remains incomplete: startup/readiness/source cleanup now have
-real-call tests, but the transport microphone path is not yet connected to STS.
-The capability examples above are not proof of a complete callable STS route.
-The [input-routing decision](sts-input-routing.md) records the independent
-consumer queues, directional formats and transport readiness work still needed.
+Room integration remains incomplete, but the microphone path is connected:
+all four transcript-source combinations complete embedded PCM room calls, and
+native WebRTC/telephony conversion, input delivery and readiness have focused
+tests. Agent output uses room-owned IDs and its exact bound source connection.
+These checks do not prove full native conversations, public caller turns or
+complete hold/transfer lifecycle acceptance. The [input-routing decision](sts-input-routing.md)
+records the independent queues, directional formats and readiness contract.
 
 ### Agent-output STT
 
@@ -473,6 +475,14 @@ hosted byte compatibility is not claimed. History reconciliation is declared
 false and the manifest keeps no Google `:sts` entry, so hosted selection and
 its service badge stay gated until the authorized interoperability check
 passes within its fixed budget.
+
+Both pre-admission and active Google output keep at most 16 pending PCM chunks,
+in addition to the channel's single outstanding audio credit. A full queue fails
+the owned session; it does not silently drop speech or reconnect to replay it.
+Wire decoding preserves the final partial chunk when splitting large PCM parts
+at the unchanged 131,072-byte limit. Local buffer, fake-socket credit/cleanup
+and PCM-tail regressions cover these guarantees (`sts_output_test.exs`,
+`sts_session_test.exs`, `sts_test.exs`); they do not establish hosted capacity.
 
 Register an STS provider through the same closed paths as STT/TTS, plus the
 provider manifest `:sts` entry in `Vxpipe.Providers` (declared only after the

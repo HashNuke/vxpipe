@@ -39,9 +39,12 @@ agent-output-STT admission through the shared STT provider settings; 93 focused
 tests pass. Its root run completed with two Gateway handoff failures (2,191 tests,
 42 excluded, seed 0); investigation is tracked below. The next identity checkpoint
 gives agent output room-owned public IDs and exact-source attribution, with 101
-focused checks passing. Caller/tool identity, public caller turns and the broader
-lifecycle/final acceptance remain open; root gates for the identity checkpoint
-are pending.
+focused checks passing. All five root gates for identity checkpoint `6f5bb3f8`
+pass (2,199 tests, zero failures, 42 excluded, seed 0). The earlier intermittent
+Gateway failures remain tracked rather than being declared fixed by a retry.
+Caller/tool identity, public caller turns and the broader lifecycle/final
+acceptance remain open. The Google output-buffer/tail repair below has 43
+focused passing checks; its post-commit root gates remain pending.
 [The input-routing decision](../sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
@@ -717,6 +720,43 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
   the Console catalog test locks the badge off). The tagged hosted check is
   deferred to the coordinated final pass with explicit billable
   authorization; without it, Google production selection stays gated.
+
+#### Google output-credit follow-up tasks (2026-09-22)
+
+Inspection found that `Google.STSOutput.buffer_audio/2` caps the pre-admission
+buffer at 16 chunks but appends without a bound once output is admitted. This
+does not satisfy the same bounded-output contract under a slow consumer.
+
+- [x] Prove the existing 16-pending-chunk limit also applies to an admitted
+  output whose consumer holds its single audio credit. Cover the limit exactly,
+  the first rejected chunk, FIFO order, and capacity released by acknowledged
+  delivery. Keep the existing wire PCM size/framing validation.
+- [x] Enforce that shared limit in both buffer states. Fail the owned session
+  on overflow through its existing safe failure path; do not drop arbitrary
+  generated speech, allocate a second queue, or reconnect/replay to hide loss.
+- [x] Preserve every validated PCM byte when splitting a large wire audio part.
+  Inspection found the fixed-size binary comprehension discards a non-full
+  tail after a 131,072-byte chunk. Add a non-multiple-length PCM regression,
+  require exact concatenation and bounded/even chunks, then repair splitting
+  without increasing wire message or output-chunk limits.
+- [x] Exercise the fake-socket/session/channel path with withheld credit,
+  requiring explicit failure and supervised cleanup. Rerun Google protocol,
+  resumption and shared output conformance checks; commit before broader gates.
+  No hosted calls, manifest enablement, public configuration or new timeout.
+- [x] Update the author guide with the implemented buffer/tail guarantees and
+  correct its stale claim that the transport microphone path is unconnected.
+  Preserve the distinction between native input tests and full native call
+  acceptance; documentation must not overstate either checkpoint.
+
+Design/dependency review: the Google adapter owns its provider-ahead-of-credit
+queue; the channel owns the one outstanding audio credit. Reuse the existing
+16-chunk contract rather than increasing buffering. This check is independent
+of public caller-turn design and does not close hosted or lifecycle acceptance.
+Evidence: pure buffer/codec tests first failed on unbounded active buffering,
+opening a full pre-admission buffer, and lost PCM tails (11 tests, three failures).
+The fake-socket credit test separately reproduced a non-terminating overflow;
+all 43 Google protocol/resumption and shared STS output/conformance checks now
+pass, seed 0. See `labnotes/20260922-1453-google-sts-output-bounds.md`.
 
 ### F — Service UI, documentation, and final acceptance
 

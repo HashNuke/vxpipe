@@ -3,6 +3,31 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
   alias Vxpipe.Providers.Google.STS
 
+  test "large wire audio parts preserve their non-full PCM tail" do
+    pcm = :binary.copy(<<42, 0>>, 65_536) <> <<7, 0, 8, 0>>
+
+    payload =
+      JSON.encode!(%{
+        "serverContent" => %{
+          "modelTurn" => %{
+            "parts" => [
+              %{
+                "inlineData" => %{
+                  "mimeType" => "audio/pcm;rate=24000",
+                  "data" => Base.encode64(pcm)
+                }
+              }
+            ]
+          }
+        }
+      })
+
+    assert {:ok, events} = STS.decode(payload)
+    chunks = Enum.map(events, fn {:audio, audio} -> audio end)
+    assert IO.iodata_to_binary(chunks) == pcm
+    assert Enum.map(chunks, &byte_size/1) == [131_072, 4]
+  end
+
   test "public options pin the live model with 16k input and 24k output" do
     assert {:ok, public} = STS.public_options(model: "gemini-3.8-live", voice: "Kore")
     assert public.model == "gemini-3.8-live"

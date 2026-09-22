@@ -268,8 +268,8 @@ defmodule Vxpipe.Providers.Google.STS do
   defp split_audio(pcm) when byte_size(pcm) <= @maximum_output_chunk_bytes, do: [pcm]
 
   defp split_audio(pcm) do
-    size = @maximum_output_chunk_bytes - rem(@maximum_output_chunk_bytes, 2)
-    for <<chunk::binary-size(size) <- pcm>>, do: chunk
+    <<chunk::binary-size(@maximum_output_chunk_bytes), rest::binary>> = pcm
+    [chunk | split_audio(rest)]
   end
 
   defp boundaries(content) do

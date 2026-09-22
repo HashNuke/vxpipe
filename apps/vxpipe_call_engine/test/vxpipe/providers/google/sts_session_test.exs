@@ -6,6 +6,58 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
+  test "active output overflow retires the allocation while consumer audio credit is held" do
+    {session, wire, _output} = start_output()
+    provider = Session.provider(session)
+    provider_monitor = Process.monitor(provider)
+    tree = Session.tree(session)
+    tree_monitor = Process.monitor(tree)
+    wire_monitor = Process.monitor(wire)
+
+    deliver_sync(session, wire, audio_message(1))
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = held}
+    assert held.payload == <<1, 0>>
+
+    for index <- 2..17, do: deliver_sync(session, wire, audio_message(index))
+    refute_received {:vxpipe_speech_audio, _}
+    deliver(wire, audio_message(18))
+
+    assert_receive {:DOWN, ^provider_monitor, :process, ^provider, {:shutdown, :session_failed}},
+                   1_000
+
+    assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _reason}, 1_000
+    assert_receive {:DOWN, ^wire_monitor, :process, ^wire, _reason}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+    refute_received {:vxpipe_speech_audio, _}
+  end
+
+  test "acknowledged audio frees pending capacity and preserves FIFO through completion" do
+    {session, wire, output} = start_output()
+    deliver_sync(session, wire, audio_message(1))
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = first}
+    for index <- 2..17, do: deliver_sync(session, wire, audio_message(index))
+
+    assert :ok = Session.ack_audio(session, first)
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = second}
+    assert second.payload == <<2, 0>>
+    deliver_sync(session, wire, audio_message(18))
+    assert :ok = Session.ack_audio(session, second)
+
+    for index <- 3..18 do
+      assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}
+      assert audio.payload == <<index::little-signed-16>>
+      assert :ok = Session.ack_audio(session, audio)
+    end
+
+    deliver(wire, %{"serverContent" => %{"generationComplete" => true}})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_completed} = completed}
+
+    assert :ok = Session.ack(session, completed)
+    assert :ok = Session.settle_output(session, output, 0)
+  end
+
   test "setup pins the live model with voice and transcriptions, keeping credentials private" do
     {_session, wire} = start_session()
     assert_receive {:test_google_sts_control, ^wire, setup}
@@ -370,6 +422,35 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
     assert :ok = Session.ack(session, ready)
     {session, wire}
+  end
+
+  defp start_output do
+    {session, wire} = start_session()
+    deliver(wire, %{"serverContent" => %{"activityStart" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
+    assert :ok = Session.ack(session, started)
+    deliver(wire, %{"serverContent" => %{"turnComplete" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
+    assert :ok = Session.ack(session, ended)
+    assert {:ok, output} = Session.admit_output(session, ended.turn_ref)
+    {session, wire, output}
+  end
+
+  defp audio_message(index) do
+    %{
+      "serverContent" => %{
+        "modelTurn" => %{
+          "parts" => [
+            %{
+              "inlineData" => %{
+                "mimeType" => "audio/pcm;rate=24000",
+                "data" => Base.encode64(<<index::little-signed-16>>)
+              }
+            }
+          ]
+        }
+      }
+    }
   end
 
   defp deliver(wire, message) do

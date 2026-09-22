@@ -7,8 +7,11 @@ defmodule Vxpipe.Providers.Google.STSOutput do
 
   def buffer_audio(state, pcm) do
     case state.output do
-      %{queue: queue} = output ->
+      %{queue: queue} = output when length(queue) < @maximum_pending_audio ->
         {:ok, %{state | output: %{output | queue: queue ++ [pcm]}}}
+
+      %{queue: _full} ->
+        {:error, :session_failed}
 
       nil ->
         if length(state.audio_buffer) < @maximum_pending_audio do

@@ -88,3 +88,9 @@ controlled-order/acknowledgement task before any further test/runtime repair.
 The gate helper also has a bounded 1,000 ms auto-release, matching the native
 gate call bound; do not simply lengthen either deadline. The missing audio
 sequence still needs peer/generation-specific evidence and remains open.
+
+The root run subsequently completed with exit status 0: all five gates pass,
+**2,199 tests, zero failures, 42 excluded**, seed 0. The earlier two Gateway
+failures remain investigation tasks; a passing rerun does not establish a cause.
+This result covers identity checkpoint `6f5bb3f8`; the later Google output
+changes started after this run's Call Engine suite and need their own gates.
