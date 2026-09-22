@@ -12,6 +12,94 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
   @human "human1"
   @agent "agent1"
 
+  test "multiple final segments publish once only after finite-input completion" do
+    {_tree, capability, _sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [observer: self()]
+      )
+
+    assert_receive {:output_stt_started, recognizer}
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+    complete_playback(20)
+
+    first = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :transcript, [turn_ref: first, text: "FIRST DRAFT"]}
+             )
+
+    assert :ok =
+             GenServer.call(recognizer, {:emit, :transcript, [turn_ref: first, text: "FIRST"]})
+
+    assert :ok = emit_segment(recognizer, first, "FIRST")
+    refute_receive {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, ^capability, _, _}
+    assert :ok = emit_segment(recognizer, first, "FIRST")
+    assert :ok = emit_segment(recognizer, make_ref(), "SECOND")
+    assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "FIRST SECOND", ^turn, 20,
+                    _},
+                   1_000
+
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 1_000
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+  end
+
+  test "successful finite recognition retires ONE before accepting TWO and ignores old endpoints" do
+    {_tree, capability, _sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [observer: self()]
+      )
+
+    assert_receive {:output_stt_started, recognizer}
+    original = :sys.get_state(capability).output_stt.session
+    monitor = Process.monitor(recognizer)
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first}
+    complete_playback(20)
+    assert :ok = emit_segment(recognizer, make_ref(), "ONE")
+    assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "ONE", ^first, _, _}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
+    assert_receive {:output_stt_started, replacement}, 1_000
+    assert :ok = SpeechToSpeech.push_text(capability, "TWO")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, second}, 1_000
+
+    send(
+      capability,
+      {:vxpipe_speech,
+       %Vxpipe.CallEngine.Speech.Event{
+         session: original,
+         kind: :turn_ended,
+         sequence: 99,
+         text: "DELAYED ONE"
+       }}
+    )
+
+    assert :ok = emit_segment(replacement, make_ref(), "TWO")
+    complete_playback(20)
+    refute_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, _, ^second, _, _}
+    assert :ok = GenServer.call(replacement, {:emit, :input_finished, []})
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "TWO", ^second, _, _},
+                   1_000
+  end
+
+  defp emit_segment(recognizer, reference, text) do
+    GenServer.call(
+      recognizer,
+      {:emit, :turn_ended, [text: text, turn_ref: reference, endpointing: :provider_gap]}
+    )
+  end
+
   test "recognition readiness preserves every pending reply in order" do
     {_tree, capability, _sink} = start_deferred_output_stt()
     assert_receive {:output_stt_waiting, recognizer}
@@ -33,13 +121,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
         turn
       end
 
-    assert :ok = Vxpipe.CallEngine.SpeechOutputSTTSlowProvider.release_ready(recognizer)
-
-    for turn <- turns do
+    Enum.reduce(turns, recognizer, fn turn, current ->
+      assert :ok = Vxpipe.CallEngine.SpeechOutputSTTSlowProvider.release_ready(current)
       assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^turn}, 1_000
       complete_playback(20)
       assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 1_000
-    end
+      assert_receive {:output_stt_waiting, replacement}, 1_000
+      replacement
+    end)
   end
 
   test "pending reply overflow fails the allocation instead of growing without bound" do
@@ -295,7 +384,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert stt.outcome == :failed
   end
 
-  test "recognizer loss after completed generation and final preserves successful usage" do
+  test "idle replacement loss after finite recognition preserves successful usage" do
     {_tree, capability, sink} =
       start_output_stt_capability(
         policy: unrestricted(),
@@ -308,6 +397,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert :ok = SpeechToSpeech.push_text(capability, "ONE")
     assert_receive {:test_audio_output_finish, ^sink, _}, 5_000
 
+    pending = :sys.get_state(capability).active_output
+    assert pending.generation_done?
+    refute pending.playback_done?
+    assert pending.text_deadline == nil
+    assert pending.text_expires_at == nil
+
     assert :ok =
              GenServer.call(
                recognizer,
@@ -315,14 +410,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
                 [text: "RECEIVED ONE", turn_ref: make_ref(), endpointing: :provider_gap]}
              )
 
+    monitor = Process.monitor(recognizer)
+    assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+    assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
+    assert_receive {:output_stt_started, replacement}, 1_000
     before_loss = :sys.get_state(capability)
     assert before_loss.active_output.generation_done?
     assert before_loss.active_output.stt_outcome == :succeeded
-    monitor = Process.monitor(recognizer)
-    Process.exit(recognizer, :kill)
-    assert_receive {:DOWN, ^monitor, :process, ^recognizer, :killed}
-    assert_receive {:output_stt_started, replacement}, 5_000
-    refute replacement == recognizer
+    monitor = Process.monitor(replacement)
+    Process.exit(replacement, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^replacement, :killed}
+    assert_receive {:output_stt_started, next}, 5_000
+    refute next == replacement
     _ = :sys.get_state(capability)
 
     :ok = TestAudioOutputSink.playback_progress(sink, 20, 1_020)
@@ -366,6 +465,107 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 2_000
     assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, :timeout}, 2_000
     refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
+  end
+
+  test "a final segment without input_finished still fails at the recognition deadline" do
+    {_tree, capability, _sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        usage_context: sts_usage_context(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [observer: self()],
+        output_stt_timeout_ms: 100
+      )
+
+    assert_receive {:output_stt_started, recognizer}
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+    assert :ok = emit_segment(recognizer, make_ref(), "NOT COMPLETE")
+    complete_playback(20)
+    assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, :timeout}, 2_000
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 2_000
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}
+    assert Enum.find(observations, &(&1.capability == :output_speech_to_text)).outcome == :failed
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+  end
+
+  @tag :recognition_deadline_race
+  test "queued terminal proof processed after absolute recognition expiry cannot succeed" do
+    {_tree, capability, _sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        usage_context: sts_usage_context(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [observer: self()],
+        output_stt_timeout_ms: 500
+      )
+
+    assert_receive {:output_stt_started, recognizer}
+    monitor = Process.monitor(recognizer)
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+    complete_playback(20)
+    assert :ok = emit_segment(recognizer, make_ref(), "LATE FINAL")
+    output = :sys.get_state(capability).active_output
+    assert output.generation_done? and output.playback_done?
+
+    assert Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputRecognition.text(output.stt_segments) ==
+             "LATE FINAL"
+
+    timer = output.text_deadline
+    assert is_reference(timer)
+    assert :ok = :sys.suspend(capability)
+
+    try do
+      assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+      remaining = Process.read_timer(timer)
+      assert is_integer(remaining) and remaining > 0
+      token = make_ref()
+      Process.send_after(self(), {:recognition_budget_elapsed, token}, remaining + 50)
+      assert_receive {:recognition_budget_elapsed, ^token}, 1_500
+    after
+      :ok = :sys.resume(capability)
+    end
+
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 1_000
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}, 1_000
+    assert Enum.find(observations, &(&1.capability == :output_speech_to_text)).outcome == :failed
+    assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, :timeout}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, ^capability, _, _}
+    refute_received {:vxpipe_usage_observations, ^capability, _}
+  end
+
+  for failure <- [:conflicting_final, :recognition_overflow] do
+    test "#{failure} fails recognition without publishing a partial aggregate" do
+      {_tree, capability, _sink} =
+        start_output_stt_capability(
+          policy: unrestricted(),
+          output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+          output_stt_private: [observer: self()]
+        )
+
+      assert_receive {:output_stt_started, recognizer}
+      monitor = Process.monitor(recognizer)
+      assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+      complete_playback(20)
+      ref = make_ref()
+
+      text =
+        if unquote(failure) == :recognition_overflow,
+          do: String.duplicate("x", 65_536),
+          else: "FIRST"
+
+      assert :ok = emit_segment(recognizer, ref, text)
+      next_ref = if unquote(failure) == :recognition_overflow, do: make_ref(), else: ref
+      assert :ok = emit_segment(recognizer, next_ref, "SECOND")
+      assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, unquote(failure)}, 1_000
+      assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 1_000
+      refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    end
   end
 
   for failure <- [:timeout, :finalization_error] do
@@ -424,6 +624,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
                )
 
       complete_playback(20)
+
+      assert :ok = GenServer.call(provider, {:emit, :input_finished, []})
 
       assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "CURRENT SECOND REPLY",
                       ^second, _, _},

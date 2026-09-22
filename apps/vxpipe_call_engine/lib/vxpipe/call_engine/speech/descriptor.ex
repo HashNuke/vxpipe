@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   defstruct @enforce_keys ++
               [
                 input_format: nil,
+                finite_input?: false,
                 speech_start?: false,
                 eager_end?: false,
                 resume?: false,
@@ -22,6 +23,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   @fields @enforce_keys ++
             [
               :input_format,
+              :finite_input?,
               :speech_start?,
               :eager_end?,
               :resume?,
@@ -40,6 +42,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           settings: map(),
           format: map(),
           input_format: map() | nil,
+          finite_input?: boolean(),
           usage_identity: map(),
           readiness: :initialized | :provider_acknowledged,
           endpointing: :provider_semantic | :provider_gap | :external | :none,
@@ -77,6 +80,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          descriptor.endpointing in [:provider_semantic, :provider_gap, :external, :none] and
          is_boolean(descriptor.speech_start?) and is_boolean(descriptor.eager_end?) and
          is_boolean(descriptor.resume?) and
+         is_boolean(descriptor.finite_input?) and
+         (not descriptor.finite_input? or descriptor.kind == :stt) and
          (not descriptor.eager_end? or
             descriptor.endpointing in [:provider_semantic, :provider_gap]) and
          valid_kind?(descriptor) do

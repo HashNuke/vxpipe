@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event}
 
   @derive {Inspect, only: [:turn_ref]}
-  defstruct [:decoder, :channel, :turn_ref]
+  defstruct [:decoder, :channel, :turn_ref, finished?: false]
 
   @impl true
   def configure(options) do
@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
          {:ok, config} <- Config.new(options) do
       Descriptor.new(
         kind: :stt,
+        finite_input?: true,
         settings: config,
         format: %{
           encoding: :linear16,
@@ -75,6 +76,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
   end
 
   @impl true
+  def handle_call({:push_audio, _audio}, _from, %{finished?: true} = state),
+    do: {:reply, {:error, :session_failed}, state}
+
   def handle_call({:push_audio, audio}, _from, state) do
     with {:ok, decoder, events} <- Decoder.push(state.decoder, audio),
          {:ok, state} <- publish(events, %{state | decoder: decoder}) do
@@ -86,12 +90,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT.Session do
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 
+  def handle_call(:finish_input, _from, %{finished?: true} = state), do: {:reply, :ok, state}
+
   def handle_call(:finish_input, _from, state) do
     case Decoder.flush(state.decoder) do
       {:ok, decoder, events} ->
-        case publish(events, %{state | decoder: decoder}) do
-          {:ok, state} -> {:reply, :ok, state}
-          {:error, _reason} -> {:reply, {:error, :session_failed}, state}
+        with {:ok, state} <- publish(events, %{state | decoder: decoder}),
+             :ok <- Event.emit(state.channel, :input_finished) do
+          {:reply, :ok, %{state | finished?: true}}
+        else
+          _error -> {:reply, {:error, :session_failed}, state}
         end
 
       {:error, _reason} ->

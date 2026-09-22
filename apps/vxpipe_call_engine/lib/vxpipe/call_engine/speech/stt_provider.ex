@@ -33,11 +33,17 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
   Bounded finite-input finalization for agent-output STT.
 
   Called once at the STS generation boundary after the last output chunk was
-  admitted. The provider flushes recognition for the finite fed input and emits
-  its turn evidence; it must not invent conversational onset or turn-end rules
-  beyond its declared descriptor. Human conversational onset and turn-end
-  requirements are unchanged. Optional: providers without finite fed input
-  simply omit it.
+  admitted. `:ok` proves acceptance, not completion. A provider declaring
+  `finite_input?: true` flushes all recognition segments, then emits the ordered,
+  fieldless `:input_finished` event after every final `:turn_ended`. No subsequent
+  audio or recognition events belong to this allocation. Repeated finalization
+  must not duplicate the terminal event. The consumer retires the allocation.
+
+  Segment endpointing remains governed by the descriptor; a speech endpoint,
+  callback return or quiet period is not finite-stream terminal evidence. Human
+  conversational STT does not require this optional operation. Providers without
+  implemented terminal proof leave `finite_input?` false and cannot serve as
+  agent-output recognizers.
   """
   @callback finish_input(pid()) :: :ok | {:error, atom()}
 

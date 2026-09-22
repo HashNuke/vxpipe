@@ -62,4 +62,23 @@ defmodule Vxpipe.CallEngine.Speech.EventContractTest do
       assert :ok = Session.close(allocation)
     end
   end
+
+  test "input_finished requires finite STT capability at the channel boundary" do
+    tree = start_supervised!({CapabilityTree, owner: self()})
+    {:ok, descriptor} = MorseSession.configure([])
+    descriptor = %{descriptor | finite_input?: false}
+
+    {:ok, session, :starting} =
+      Session.start(CapabilityTree.scope(tree),
+        provider: SpeechSessionProbe,
+        options: [descriptor: descriptor],
+        private: [observer: self()]
+      )
+
+    assert_receive {:probe_initializing, provider, _}
+    assert_receive {:vxpipe_speech, ready}
+    assert :ok = Session.ack(session, ready)
+    assert {:error, :invalid_event} = GenServer.call(provider, {:emit, :input_finished, []})
+    refute_received {:vxpipe_speech, %Event{kind: :input_finished}}
+  end
 end

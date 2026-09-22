@@ -22,12 +22,45 @@ defmodule Vxpipe.CallEngine.Speech.STTFinishInputTest do
 
     provider = Session.provider(session)
     assert :ok = MorseSTT.finish_input(provider)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_finished} = finished}
+    assert :ok = Session.ack(session, finished)
+    assert :ok = MorseSTT.finish_input(provider)
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_finished}}
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+    assert {:error, :session_failed} = MorseSTT.push_audio(provider, <<0, 0>>)
   end
 
   test "finish_input is advertised as an optional agent-output STT operation" do
     callbacks = Vxpipe.CallEngine.Speech.STTProvider.behaviour_info(:optional_callbacks)
     assert [finish_input: 1] == callbacks
+  end
+
+  test "Morse emits all segments including a flushed tail before one terminal marker" do
+    session = start_session()
+    {:ok, config} = Config.new([])
+    {:ok, first} = Encoder.encode(config, "E")
+    {:ok, second} = Encoder.encode(config, "T")
+
+    gap_bytes =
+      config.end_gap_units * div(config.sample_rate * config.unit_duration_ms, 1_000) * 2
+
+    tail = binary_part(second, 0, byte_size(second) - gap_bytes)
+    push_pcm(session, first <> tail)
+    assert :ok = MorseSTT.finish_input(Session.provider(session))
+
+    events = collect_until_finished(session, [])
+    assert Enum.filter(events, &(&1.kind == :turn_ended)) |> Enum.map(& &1.text) == ["E", "T"]
+    assert List.last(events).kind == :input_finished
+    assert Enum.count(events, &(&1.kind == :input_finished)) == 1
+  end
+
+  defp collect_until_finished(session, events) do
+    assert_receive {:vxpipe_speech, %Event{session: ^session} = event}, 1_000
+    assert :ok = Session.ack(session, event)
+
+    if event.kind == :input_finished,
+      do: Enum.reverse([event | events]),
+      else: collect_until_finished(session, [event | events])
   end
 
   defp start_session do

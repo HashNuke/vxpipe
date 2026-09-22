@@ -15,54 +15,62 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
   alias Vxpipe.Providers.Google.{STT, STTSession}
   alias Vxpipe.Providers.MorseCode.STSSession
 
-  test "room allocation hands selected Google STT private config to the sidecar fake wire" do
-    alias Vxpipe.CallEngine
+  test "hosted STT without finite-input proof is rejected before credentials or allocation" do
+    for recognizer <- [
+          google(),
+          %{
+            provider: "deepgram",
+            model: "flux-general-en",
+            options: %{encoding: "linear16", sample_rate: 16_000}
+          }
+        ] do
+      plan = plan(16_000, recognizer)
 
-    alias Vxpipe.CallEngine.{
-      RoomCapabilitySupervisor,
-      TestAudioOutputSink,
-      TestCallStartup,
-      TestTransferConnection
-    }
+      for result <- [PlanStartup.validate(plan, options()), PlanStartup.new(plan, options())] do
+        assert {:error, error} = result
 
-    alias Vxpipe.CallEngine.Command.AttachConnection
-    alias Vxpipe.CallEngine.Speech.Session
+        assert error.details["path"] == [
+                 "participants",
+                 "assistant",
+                 "capabilities",
+                 "output_speech_to_text"
+               ]
 
-    original = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
+        assert error.details["reason"] =~ "finite-input"
+      end
+    end
 
-    settings =
-      Keyword.merge(original, Keyword.take(options(), [:speech_to_text, :speech_to_speech]))
+    refute_received {:tenant_credential_resolved, _, _, _}
+    refute_received {:test_google_stt_started, _, _}
+  end
 
-    Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
-    on_exit(fn -> Application.put_env(:vxpipe_call_engine, CallEngine.Application, original) end)
+  test "direct sidecar allocation also rejects a non-finite descriptor before startup" do
+    alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
 
-    plan = plan()
-    caller = Map.fetch!(plan.participants, plan.entry_caller)
-    agent = Map.fetch!(plan.participants, plan.entry_receiver)
-    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    for provider <- [STTSession, Vxpipe.Providers.Deepgram.STTSession] do
+      state = %{output_stt: nil, output_stt_options: {{provider, []}, self(), []}}
+      assert {:error, :unsupported_finite_input} = Output.start_output_stt(state)
+    end
 
-    assert {:ok, room} =
-             TestCallStartup.start_call(plan, Keyword.take(options(), [:credential_source]))
+    refute_received {:test_google_stt_started, _, _}
+  end
 
-    assert {:ok, command} =
-             AttachConnection.new(
-               tenant_id: plan.tenant_id,
-               actor_id: plan.actor_id,
-               room_id: plan.room_id,
-               incarnation_id: room.incarnation_id,
-               participant_id: caller.participant_id,
-               connection_id: "output-source-#{System.unique_integer([:positive])}",
-               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-             )
+  test "ordinary human Google STT retains private configuration and actual fake-wire startup" do
+    alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
 
-    assert {:ok, _} =
-             TestTransferConnection.attach(command, sink,
-               input_track: %{
-                 track_id: "microphone",
-                 codec: :linear16,
-                 sample_rate: 16_000,
-                 channels: 1
-               }
+    assert {:ok, startup} =
+             PlanStartup.new(plan(16_000, morse(), %{speech_to_text: google()}), options())
+
+    runtime = startup.speech_to_text_runtimes[startup.caller.participant_id]
+    assert {STTSession, public} = runtime.provider
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: STTSession,
+               options: public,
+               private: runtime.provider_private,
+               owner: self()
              )
 
     assert_receive {:test_google_stt_started, wire, connection}, 1_000
@@ -70,24 +78,18 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert_receive {:test_google_stt_control, ^wire, payload}, 1_000
     assert JSON.decode!(payload)["setup"]["model"] == "models/gemini-3.5-transcribe-live"
     refute payload =~ "synthetic-output-stt-private"
-    TestCallStartup.await_ready(plan.room_id)
-
-    capability =
-      RoomCapabilitySupervisor.whereis_speech_to_speech(room.incarnation_id, agent.participant_id)
-
-    state = :sys.get_state(capability)
-    assert {STTSession, _public} = state.output_stt.provider
-    recognizer = Session.provider(state.output_stt.session)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
+    assert :ok = Session.ack(session, ready)
+    recognizer = Session.provider(session)
     assert :sys.get_state(recognizer).config.api_key == "synthetic-output-stt-private"
 
-    for pid <- [capability, recognizer] do
-      refute inspect(:sys.get_status(pid)) =~ "synthetic-output-stt-private"
-      refute inspect(:sys.get_status(pid)) =~ "Reply privately."
-    end
+    refute inspect(:sys.get_status(recognizer)) =~ "synthetic-output-stt-private"
+    refute inspect(startup) =~ "synthetic-output-stt-private"
+    refute inspect(runtime) =~ "synthetic-output-stt-private"
 
     refute_received {:test_google_stt_audio, _, _}
     monitor = Process.monitor(recognizer)
-    stop_supervised!({TestTransferConnection, command.connection_id})
+    assert :ok = Session.close(session)
     assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
   end
 
@@ -103,12 +105,15 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
              CapabilityCatalog.provider_settings(settings, STTSession, :speech_to_text)
   end
 
-  test "startup retains recognizer private configuration separately from the STS generator" do
-    plan = plan()
+  test "startup keeps human credentials independent of the finite sidecar and STS generator" do
+    plan = plan(16_000, morse(), %{speech_to_text: google()})
     assert {:ok, startup} = PlanStartup.new(plan, options())
     runtime = startup.speech_to_speech
-    assert {STTSession, public} = runtime.output_speech_to_text
-    private = runtime.output_speech_to_text_private
+    human = startup.speech_to_text_runtimes[startup.caller.participant_id]
+    assert {STTSession, public} = human.provider
+    private = human.provider_private
+    assert {Vxpipe.Providers.MorseCode.STTSession, _} = runtime.output_speech_to_text
+    assert runtime.output_speech_to_text_private == []
     assert %STT{api_key: "synthetic-output-stt-private", sample_rate: 16_000} = private[:config]
     assert private[:wire_module] == Vxpipe.CallEngine.TestGoogleSTTTransport
     assert private[:wire_options] == [observer: self(), ready_on_start: true]
@@ -123,15 +128,15 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert_received {:tenant_credential_resolved, "tenant-output-config", "google", "recognizer"}
   end
 
-  test "output recognition retains host and tenant credential admission gates" do
-    plan = plan()
+  test "human Google recognition retains host and tenant credential admission gates" do
+    plan = plan(16_000, morse(), %{speech_to_text: google()})
 
     for registry <- [%{}, %{STTSession => [enabled: false]}] do
       settings = Keyword.put(options(), :speech_to_text, providers: registry)
       assert {:error, error} = PlanStartup.validate(plan, settings)
 
       assert error.details["path"] ==
-               ["participants", "assistant", "capabilities", "output_speech_to_text"]
+               ["participants", "caller", "capabilities", "speech_to_text"]
     end
 
     for credentials <- [
@@ -147,6 +152,33 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
 
       assert {:error, _error} = PlanStartup.new(plan, settings)
       refute_received {:test_google_stt_started, _, _}
+    end
+  end
+
+  test "a finite sidecar still requires its existing STT host enablement" do
+    plan = plan(16_000, morse())
+
+    for registry <- [%{}, %{Vxpipe.Providers.MorseCode.STTSession => [enabled: false]}] do
+      settings = Keyword.put(options(), :speech_to_text, providers: registry)
+
+      assert {:error, error} = PlanStartup.validate(plan, settings)
+
+      assert error.details["path"] == [
+               "participants",
+               "assistant",
+               "capabilities",
+               "output_speech_to_text"
+             ]
+
+      # Construction retains its existing enclosing STS-runtime error projection.
+      assert {:error, error} = PlanStartup.new(plan, settings)
+
+      assert error.details["path"] == [
+               "participants",
+               "assistant",
+               "capabilities",
+               "speech_to_speech"
+             ]
     end
   end
 
@@ -185,17 +217,19 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
       speech_to_text: %{provider: "morse", model: "morse", options: %{sample_rate: 8_000}}
     }
 
-    assert {:ok, startup} = PlanStartup.new(plan(16_000, google(), human), options())
+    assert {:ok, startup} = PlanStartup.new(plan(16_000, morse(), human), options())
 
     assert {Vxpipe.Providers.MorseCode.STTSession, human_options} =
              startup.speech_to_text_runtimes[startup.caller.participant_id].provider
 
     assert human_options[:sample_rate] == 8_000
-    assert {STTSession, recognizer_options} = startup.speech_to_speech.output_speech_to_text
+
+    assert {Vxpipe.Providers.MorseCode.STTSession, recognizer_options} =
+             startup.speech_to_speech.output_speech_to_text
+
     assert recognizer_options[:sample_rate] == 16_000
 
-    assert startup.speech_to_speech.output_speech_to_text_private[:config].api_key ==
-             "synthetic-output-stt-private"
+    assert startup.speech_to_speech.output_speech_to_text_private == []
   end
 
   test "output slot rejects invalid public selections without enabling Google STS" do
@@ -221,7 +255,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     }
   end
 
-  defp plan(rate \\ 16_000, recognizer \\ google(), human_capabilities \\ %{}) do
+  defp morse, do: %{provider: "morse", model: "morse", options: %{sample_rate: 16_000}}
+
+  defp plan(rate, recognizer, human_capabilities \\ %{}) do
     source = %{
       schema_version: CallSpec.schema_version(),
       entry_caller: "caller",
@@ -282,6 +318,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
           Vxpipe.Providers.MorseCode.STTSession => [enabled: true, media_ingress: []],
           STTSession => [
             enabled: true,
+            media_ingress: [],
             wire_module: Vxpipe.CallEngine.TestGoogleSTTTransport,
             wire_options: [observer: self(), ready_on_start: true]
           ]

@@ -118,8 +118,9 @@ identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged
 identity. STT declares endpointing provenance (provider semantic detection, provider silence/gap
 detection, external boundary required, or none), speech-start evidence and supported optional
 eager/resume events. STT providers that support finite fed input for the agent-output STS mode
-may additionally export the optional `finish_input/1` operation; human conversational onset
-and turn-end requirements are unchanged by it. This is a small validated capability description, not arbitrary feature
+declare `finite_input?: true` (default false, legal only for STT) and export the
+optional `finish_input/1` operation. Human conversational onset and turn-end
+requirements are unchanged by it. This is a small validated capability description, not arbitrary feature
 flags. Identity values exclude credentials, URLs, headers and raw provider responses.
 STS additionally requires separate validated `input_format` and output `format`
 PCM declarations; deriving microphone format from generated output is not safe.
@@ -219,6 +220,14 @@ a provider's finalized transcript segment alone does not prove the person finish
 Adapters assemble segmented results when necessary and supply genuine endpointing evidence.
 The existing room signal names `turn_started`/`transcript_updated` remain internal
 projections during migration; the native helper does not expose both spellings.
+
+Finite-input STT additionally emits fieldless `input_finished`, admitted only by
+the declaring descriptor. `finish_input/1` returning `:ok` accepts finalization;
+it is not completion evidence. The provider drains all accepted input and emits
+every final segment before this ordered terminal marker, without later audio or
+recognition events in the allocation. Repeated finalization must not duplicate
+the marker. A segment endpoint, quiet period or successful callback is not this
+proof. Consumers acknowledge the marker through the same channel/session boundary.
 
 The conversational path requires provider-owned endpointing and the speech-start evidence
 needed by its current barge-in behavior. A transcript-only or manually finalized provider is
@@ -324,17 +333,20 @@ Output recognition also reuses ordinary STT public-option validation and tenant
 credential resolution. Retain its private config/transport options separately
 from the generator in `SpeechToSpeechRuntime.output_speech_to_text_private`,
 then pass them through the existing recognizer PrivateInit handoff. Public
-provider tuples and inspection must not expose that field. The local Google
-recognizer startup has synthetic-credential, fake-wire room-allocation evidence,
-including owner cleanup; it does not prove generated-audio recognition or hosted
-interoperability. Those remain distinct acceptance gates.
+provider tuples and inspection must not expose that field. Earlier local Google
+fake-wire room-allocation evidence established private startup wiring, not
+finite-input completion. Current admission rejects Google/Deepgram sidecars
+without implemented terminal proof; ordinary human STT private configuration and
+fake-wire setup remain tested. Hosted finite-input support remains an open gate.
 
 Before room allocation or credential resolution, PlanStartup compares complete,
 validated public descriptors for STS generated output `format` and recognizer
 STT input `format`. They must match exactly; a mismatch fails admission at the
 agent's `output_speech_to_text` path. The microphone's separate `input_format`
 and any independently selected human STT do not participate in that comparison.
-No output-side conversion or silent option rewriting is implemented. Compatible
+Admission also requires `finite_input?: true` and an implemented `finish_input/1`;
+the sidecar allocation boundary repeats that capability check. No output-side
+conversion or silent option rewriting is implemented. Compatible
 selections retain their private configuration unchanged. Direct low-level
 allocations bypassing PlanStartup are outside this startup validation boundary.
 
@@ -345,8 +357,20 @@ readiness gates further output, and retired-session events cannot supply next-tu
 text. At most ten consecutive restart attempts are allowed; only acknowledged
 readiness resets that budget. Exhaustion ends the owning STS allocation explicitly
 instead of silently switching to provider transcripts. Focused tests cover these
-failure boundaries; multi-segment and successful-boundary recognition settlement
-and full hosted output-route acceptance remain separate milestone gates.
+failure boundaries. Successful finite recognition also retires/replaces its
+allocation before the next reply. Accumulate `turn_ended` finals in acknowledged
+event order, deduplicating identical final references, with one space between
+nonempty segments. Conflicting finals or more than 64 references/65,536 UTF-8
+bytes (including separators) fail recognition without publishing partial text.
+Only acknowledged `input_finished` after generation ends freezes this aggregate;
+playback and policy still gate publication. Missing terminal evidence fails at
+the existing deadline even when segments arrived. The recognition budget begins
+after generation and playback complete; acceptance checks its fixed monotonic
+expiry, so queued terminal proof cannot win merely by preceding the timer message.
+This does not bound the separate wait for playback. Local Morse and controlled
+fixtures prove this boundary; hosted finite-input support and full hosted
+output-route acceptance remain explicit milestone requirements. See the
+[settlement decision](output-recognition-settlement.md).
 
 Locally measured agent-output recognition is a separate usage observation. Its
 provider/model and PCM rate come from that reply's ready recognizer descriptor,
@@ -357,7 +381,7 @@ selected rate and channel count, not a universal 24 kHz divisor; unsupported
 encodings provide no invented duration. Timeout, rejected finalization, provider
 failure or incomplete input yield failed recognition usage. Interruption cancels
 unfinished recognition, while completed recognition keeps its own outcome.
-Once generation and an acknowledged final are complete, later idle recognizer
+Once generation and acknowledged finite-input completion are complete, later idle recognizer
 loss cannot revoke that reply's text or successful usage while playback drains.
 The failed recognizer still retires and replacement readiness gates the next reply.
 These are local processing facts, not provider token counts or billing estimates.

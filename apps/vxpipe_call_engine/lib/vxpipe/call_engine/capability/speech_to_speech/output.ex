@@ -7,7 +7,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   lifecycle, independently of caller input and tool-event handling.
   """
 
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{OutputTranscript, Usage}
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{
+    OutputRecognition,
+    OutputRecognizer,
+    OutputTranscript,
+    Usage
+  }
+
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Speech.{Audio, Event, OutputTurn, Session}
@@ -43,6 +49,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
               pending_text: nil,
               text_final?: false,
               stt_text: nil,
+              stt_segments: OutputRecognition.new(),
               stt_bytes: 0,
               stt_descriptor: if(state.output_stt, do: state.output_stt.descriptor),
               stt_outcome: :in_progress,
@@ -172,6 +179,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         state
 
       true ->
+        expires = System.monotonic_time(:millisecond) + state.output_stt_timeout_ms
+
         timer =
           Process.send_after(
             self(),
@@ -179,7 +188,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
             state.output_stt_timeout_ms
           )
 
-        %{state | active_output: %{output | text_deadline: timer}}
+        %{state | active_output: %{output | text_deadline: timer, text_expires_at: expires}}
     end
   end
 
@@ -236,6 +245,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
   defp resolve_agent_text(%{pending_text: text}, %{output_stt: nil}), do: text
   defp resolve_agent_text(%{stt_text: :failed}, _state), do: nil
+  defp resolve_agent_text(%{stt_text: ""}, _state), do: nil
   defp resolve_agent_text(%{stt_text: text}, _state), do: text
 
   defp publish_agent_transcript(output, played_ms, state) do
@@ -289,47 +299,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  def start_output_stt(%{output_stt_options: {nil, _scope, _private}} = state),
-    do: {:ok, %{state | output_stt: nil}}
-
-  def start_output_stt(%{output_stt_options: {{module, opts}, scope, private}} = state)
-      when not is_nil(scope) do
-    session_options = [
-      owner: self(),
-      consumer: self(),
-      provider: module,
-      options: opts,
-      private: private,
-      usage: false
-    ]
-
-    case Session.start(scope, session_options) do
-      {:ok, session, :starting} ->
-        {:ok,
-         %{
-           state
-           | output_stt: %{
-               provider: {module, opts},
-               session: session,
-               descriptor: nil,
-               ready?: false,
-               pending_text: nil,
-               pending_audio: [],
-               fed_chunks: 0,
-               dropped_chunks: 0,
-               restarts: 0,
-               restart_attempts: 0,
-               retry_scheduled?: false,
-               recovery_failed?: false
-             }
-         }}
-
-      {:error, _reason} = error ->
-        error
-    end
-  end
-
-  def start_output_stt(state), do: {:ok, %{state | output_stt: nil}}
+  defdelegate start_output_stt(state), to: OutputRecognizer, as: :start
 
   def close_output_stt(%{output_stt: nil}), do: :ok
   def close_output_stt(%{output_stt: %{session: nil}}), do: :ok
@@ -498,30 +468,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  def finish_output_stt_input(%{output_stt: nil}), do: :ok
-  def finish_output_stt_input(%{active_output: %{stt_text: :failed}}), do: :ok
-
-  def finish_output_stt_input(%{
-        output_stt: %{provider: {module, _}, session: session, ready?: true}
-      }) do
-    if function_exported?(module, :finish_input, 1) do
-      case Session.provider(session) do
-        provider when is_pid(provider) ->
-          try do
-            apply(module, :finish_input, [provider])
-          catch
-            _, _ -> {:error, :unavailable}
-          end
-
-        _missing ->
-          {:error, :unavailable}
-      end
-    else
-      :ok
-    end
-  end
-
-  def finish_output_stt_input(_state), do: :ok
+  defdelegate finish_output_stt_input(state), to: OutputRecognizer, as: :finish_input
 
   def handle_output_stt_event(%Event{kind: :ready} = event, state) do
     with :ok <- Session.ack(state.output_stt.session, event),
@@ -567,12 +514,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
           nil ->
             {:noreply, state}
 
-          output ->
-            outcome = if output.stt_outcome == :failed, do: :failed, else: :succeeded
+          %{stt_text: nil} = output ->
+            case OutputRecognition.add(output.stt_segments, event.turn_ref, event.text) do
+              {:ok, segments} ->
+                {:noreply, %{state | active_output: %{output | stt_segments: segments}}}
 
-            {:noreply,
-             %{state | active_output: %{output | stt_text: event.text, stt_outcome: outcome}}}
-            |> then(fn {:noreply, state} -> maybe_finish_turn(state) end)
+              {:error, reason} ->
+                _ = notify_output_stt_unavailable(state, reason)
+                handle_output_stt_failure(state)
+            end
+
+          _settled ->
+            {:noreply, state}
         end
 
       {:error, _reason} ->
@@ -580,7 +533,40 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
+  def handle_output_stt_event(%Event{kind: :input_finished} = event, state) do
+    with :ok <- Session.ack(state.output_stt.session, event),
+         %{generation_done?: true, stt_text: nil} = output <- state.active_output,
+         :ok <- recognition_deadline(output) do
+      outcome = if output.stt_outcome == :failed, do: :failed, else: :succeeded
+
+      output = %{
+        output
+        | stt_text: OutputRecognition.text(output.stt_segments),
+          stt_segments: OutputRecognition.new(),
+          stt_outcome: outcome
+      }
+
+      state = %{state | active_output: output}
+      state |> restart_output_stt() |> maybe_finish_turn()
+    else
+      {:error, :timeout} ->
+        _ = notify_output_stt_unavailable(state, :timeout)
+        handle_output_stt_failure(state)
+
+      _invalid ->
+        handle_output_stt_failure(state)
+    end
+  end
+
   def handle_output_stt_event(_event, state), do: {:noreply, state}
+
+  defp recognition_deadline(%{text_expires_at: nil}), do: :ok
+
+  defp recognition_deadline(%{text_expires_at: deadline}) do
+    if System.monotonic_time(:millisecond) < deadline,
+      do: :ok,
+      else: {:error, :timeout}
+  end
 
   def handle_output_stt_failure(state) do
     # Invalidate the old generation before settlement can admit queued work.

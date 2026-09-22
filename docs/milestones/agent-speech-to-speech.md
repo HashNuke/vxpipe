@@ -1004,6 +1004,9 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
   Google output-STT registry/private startup wiring now passes synthetic-credential
   fake-wire checks. Startup now explicitly rejects mismatched PCM without
   conversion; hosted output-route acceptance remains open.
+  Subsequent finite-input review rejects hosted sidecar admission until terminal
+  support is implemented; the prior private-wiring evidence is historical, not
+  proof of a currently admitted hosted output-recognition route.
 - [x] Credited STS output feeds an agent-scoped STT allocation in the same
   agent-owned tree (separate scope, caller microphone never connected), with
   `STTProvider.finish_input/1` finalization at the STS generation boundary,
@@ -1064,6 +1067,56 @@ No new provider advertisement or billable call is authorized by these tasks.
   - [ ] Prove bounded aggregation/settlement of multiple recognition segments
     within one generated reply and no delayed endpoint crossing a successful
     reply boundary. Failure-generation isolation alone does not close this gate.
+    - [x] Reproduce first-segment publication and later-final overwrite with
+      controlled multi-segment recognition, including delayed ONE events in TWO.
+    - [x] Define explicit ordered finite-input terminal evidence separately from
+      segment endpoints; update the local Morse adapter and controlled fixtures.
+    - [x] Bound aggregate bytes/segments, deduplicate final references, wait for
+      terminal proof, and retire successful recognizer generations before reuse.
+    - [x] Verify missing terminal, overflow, provider loss, policy/interruption,
+      private startup and usage regressions without heuristic quiet periods.
+    - [x] Declare validated STT finite-input capability and reject unsupported
+      selected sidecars at admission, before credentials or runtime allocation;
+      retain ordinary human STT and private-config resolution/redaction tests.
+    - [x] Keep Output within the 800-line module-size gate: extract recognizer
+      allocation/finalization into a focused lifecycle helper after focused green,
+      preserving the existing private startup handoff and callback failure path.
+    - [ ] Implement and verify hosted recognizer finite-input terminal proof
+      before restoring hosted output-STT route admission/acceptance. Morse proof
+      and preserved Google private configuration do not complete this requirement.
+    - [x] Repair Goodall P2 at `b0b7d411`: a queued `input_finished` processed
+      after the recognition deadline must fail, even if it precedes the timeout
+      notification in the mailbox. Reproduce with timeout 500 ms: finish
+      generation/playback, acknowledge a segment, capture the timer, suspend the
+      capability, enqueue terminal proof, wait `read_timer + 50` using a bounded
+      receive, and resume in `after`. Require timeout, failed recognition usage,
+      recognizer retirement and no transcript. Store/check absolute monotonic
+      expiry at terminal acceptance, preserving the existing budget start.
+      Red: one selected test reports succeeded usage after expiry. Green: the
+      selected regression and 152 focused child tests pass (seed 0); exact
+      commands/logs/handles in `labnotes/20260922-1922-recognition-deadline-proof.md`.
+
+  Successful-recognition design review: `finish_input/1` acceptance and the first
+  `turn_ended` do not prove the complete finite stream. The approved scoped seam
+  needs a fieldless ordered STT `input_finished` event, bounded aggregation and
+  successful-generation retirement. See [decision and rejected alternatives](../output-recognition-settlement.md).
+  This is separate from implementation progress, hosted proof and parent-owned
+  Google/controller or handoff work.
+  Refactor review after 46 focused tests passed: terminal aggregation adds enough
+  responsibility to push Output past its size limit. A recognizer lifecycle helper
+  owns admission, allocation and finite-input callback invocation; Output retains
+  playback/recognition coordination and the separate accumulator retains bounds.
+  Local checkpoint: 140 focused child tests pass (seed 0), including ordered
+  terminal conformance, Morse flushed-tail segments, failed and successful
+  generation isolation, usage, startup/private/PCM and room transcript modes.
+  See `labnotes/20260922-1856-output-recognition-settlement.md` for actual reds,
+  commands and terminal handles. Hosted support and the overall D gate stay open.
+  Deadline repair review: the existing recognition budget starts only after both
+  generation and playback complete, not at generation alone. Preserve that
+  playback-dependent budget in this scoped repair; it does not bound the time
+  spent awaiting playback. Timer mailbox order is not expiry authority. Reuse
+  the existing output absolute-expiry field without changing provider-transcript
+  timing or the parent-owned capability timeout handler.
 - [ ] Complete output-STT adapter resolution through the existing registry,
   retain provider-private startup configuration, and negotiate matching PCM
   formats or use an explicit supported conversion. Prove synthetic-credential,

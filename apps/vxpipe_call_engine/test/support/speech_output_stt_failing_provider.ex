@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.SpeechOutputSTTFailingProvider do
     with true <- is_list(options) and Keyword.keyword?(options) do
       Descriptor.new(
         kind: :stt,
+        finite_input?: true,
         settings: %{},
         format: %{
           encoding: :linear16,

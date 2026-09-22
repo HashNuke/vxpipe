@@ -82,6 +82,9 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :transcript}, %{kind: :stt}),
     do: true
 
+  def supported?(%__MODULE__{kind: :input_finished}, %{kind: :stt, finite_input?: true}),
+    do: true
+
   def supported?(%__MODULE__{kind: :input_transcript}, %{kind: :sts} = descriptor),
     do: descriptor.input_transcript?
 
@@ -143,6 +146,8 @@ defmodule Vxpipe.CallEngine.Speech.Event do
 
   defp valid_kind?(%__MODULE__{kind: :ready, readiness: mode}),
     do: mode in [:initialized, :provider_acknowledged]
+
+  defp valid_kind?(%__MODULE__{kind: :input_finished}), do: true
 
   defp valid_kind?(%__MODULE__{
          kind: :input_submitted,

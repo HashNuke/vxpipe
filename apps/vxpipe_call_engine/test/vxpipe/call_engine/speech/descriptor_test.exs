@@ -75,6 +75,46 @@ defmodule Vxpipe.CallEngine.Speech.DescriptorTest do
     refute_received {:vxpipe_speech, _event}
   end
 
+  test "finite-input completion is admitted only by a declaring STT descriptor and remains ordered" do
+    tree = start_supervised!({CapabilityTree, owner: self()})
+    {:ok, descriptor} = MorseSession.configure([])
+    descriptor = Map.put(descriptor, :finite_input?, true)
+    assert :ok = Descriptor.validate(descriptor)
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(Map.put(descriptor, :finite_input?, :maybe))
+
+    {:ok, generator} = Vxpipe.Providers.MorseCode.STSSession.configure([])
+    assert {:error, :invalid_descriptor} = Descriptor.validate(%{generator | finite_input?: true})
+
+    {:ok, allocation, :starting} =
+      Session.start(CapabilityTree.scope(tree),
+        provider: SpeechSessionProbe,
+        options: [descriptor: descriptor],
+        private: [observer: self()]
+      )
+
+    assert_receive {:probe_initializing, provider, _}, 500
+    assert_receive {:vxpipe_speech, ready}, 500
+    assert :ok = Session.ack(allocation, ready)
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended,
+                [turn_ref: make_ref(), text: "SEGMENT", endpointing: :provider_gap]}
+             )
+
+    assert :ok = GenServer.call(provider, {:emit, :input_finished, []})
+    assert_receive {:vxpipe_speech, %Event{kind: :turn_ended} = segment}
+    refute_received {:vxpipe_speech, %Event{kind: :input_finished}}
+    assert :ok = Session.ack(allocation, segment)
+    assert_receive {:vxpipe_speech, %Event{kind: :input_finished} = finished}
+    assert :ok = Session.ack(allocation, finished)
+    refute Event.supported?(finished, Map.put(descriptor, :finite_input?, false))
+    assert {:error, :invalid_event} = Event.build(:input_finished, text: "not a segment")
+  end
+
   test "eager-end support requires provider-owned endpointing evidence" do
     {:ok, descriptor} = MorseSession.configure([])
 

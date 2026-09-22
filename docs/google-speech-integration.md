@@ -93,12 +93,14 @@ config and transport options. Runtime inspection excludes that private field.
 Room allocation forwards it through the existing sidecar PrivateInit handoff.
 The generator's private configuration remains separate and unchanged.
 
-A synthetic-credential fake-wire test starts the selected Google recognizer under
-the agent tree with matching 16 kHz Morse-generator/Google-recognizer fixtures.
-It verifies the setup model, private credential delivery, status redaction and
-cleanup. Missing/disabled hosts, missing or wrong-tenant credentials and invalid
-public selections remain rejected. Dropping private options or copying them into
-public descriptors is not an acceptable fallback.
+The earlier synthetic-credential fake-wire checkpoint started the selected Google
+recognizer under the agent tree with matching 16 kHz fixture formats. That proved
+private startup wiring, not finite-input terminal support. Current startup rejects
+Google as an output recognizer before credential lookup/allocation: its ordinary
+STT adapter does not implement `finite_input?`/`finish_input` terminal proof.
+Fake-wire tests retain private credential delivery, setup model, status redaction
+and cleanup for independent human Google STT. Host/tenant gates remain intact.
+Private sidecar fields/handoff remain in place for future supporting adapters.
 
 PlanStartup now rejects incompatible generated-output/recognizer-input formats
 before room or recognizer allocation and before resolving private credentials.
@@ -111,13 +113,16 @@ For example, Google STS declares 24 kHz output and Google STT requires 16 kHz;
 those descriptors are incompatible even though their microphone-input rates
 coincide. This does not enable Google STS selection.
 
-This is startup/configuration evidence only; per-reply recognizer finalization
-and overall output-route acceptance remain separate work. Direct low-level
-allocations bypassing PlanStartup are outside this admission checkpoint.
+Hosted finite-input terminal support and overall output-route acceptance remain
+explicit open requirements. Per-segment final text is not proof that every segment
+from one generated reply has arrived. Direct low-level sidecar allocation also
+rejects missing terminal capability; its PCM validation remains a separate boundary.
 No generated audio is submitted by this probe; no hosted call or Google STS
 manifest enablement is claimed. See
 `labnotes/20260922-1721-output-stt-private-config.md` and
-`labnotes/20260922-1815-output-stt-format-admission.md` for red-green methods.
+`labnotes/20260922-1815-output-stt-format-admission.md` for historical red-green methods,
+and [the finite-input settlement decision](output-recognition-settlement.md) for
+the current admission contract. No Google protocol behavior was changed here.
 
 ## Raw STS server voice activity
 

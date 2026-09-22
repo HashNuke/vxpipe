@@ -445,21 +445,34 @@ provider-settings section. Missing or disabled STT providers fail admission
 at the selected agent-output role. The agent-owned tree feeds credited STS output audio only
 (never caller microphone audio) into that second allocation, with bounded
 fanout: a slow STT consumer drops chunks with a counter and can never block
-sink audio. At the STS generation boundary the tree calls the optional
-`STTProvider.finish_input/1` when the selected adapter exports it; adapters
-without finite fed input omit it, and human conversational onset/turn-end
-requirements are unchanged. The resulting text takes the single agent
+sink audio. Admission requires the STT descriptor's `finite_input?: true` and
+`STTProvider.finish_input/1`; unsupported selections fail before credentials or
+allocation. Human conversational STT does not require this capability.
+At the STS generation boundary the tree calls `finish_input/1`; `:ok` means
+acceptance only. Emit all final `turn_ended` segments, then one ordered, fieldless
+`input_finished` after the entire accepted finite stream is recognized. Do not
+use a quiet period or an individual speech final as terminal proof. Do not accept
+new audio or emit later recognition on that allocation.
+
+The consumer aggregates finals in order (64 segment references/65,536 UTF-8 bytes
+including separating spaces), ignores identical repeated finals and fails on
+conflicts/overflow. Only terminal proof freezes the text; missing proof fails at
+the existing deadline. It retires/replaces successful recognizers before another
+reply and requires replacement readiness. The resulting text takes the single agent
 transcript role after the same egress fence as provider transcripts; on
 interruption the tree restarts the output STT so late text cannot leak into
 the next turn, and an output STT failure settles the turn honestly without
-agent text. Morse STT implements `finish_input/1` via decoder flush
+agent text. Morse STT implements `finish_input/1` via decoder flush and terminal emission
 (`stt_finish_input_test.exs`); the capability boundary is proven in
 `speech_to_speech_output_stt_test.exs`, including denied policy, failure and
 slow-consumer settlement. `room_authority/sts_transcript_modes_test.exs` drives
 compiled embedded PCM calls across all four caller/agent transcript-source
 combinations, decodes the Morse reply and checks single, correctly attributed
-final transcripts after playback settlement. Native conversations and complete
-room lifecycle acceptance remain separate milestone gates.
+final transcripts after playback settlement. Google/Deepgram finite-input support
+is not implemented and remains an explicit open milestone requirement; their
+ordinary human STT remains available, but sidecar selection is rejected before
+runtime. Native conversations and complete room lifecycle acceptance remain
+separate milestone gates. See [the decision](output-recognition-settlement.md).
 
 The capability keeps at most 16 pending reply turns while output playback or
 recognizer readiness prevents admission. Readiness releases them in FIFO order;

@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTFormat do
       :ok ->
         :ok
 
-      {:error, _reason} ->
+      {:error, reason} ->
         {:error,
          Error.new(
            :unsupported_call_plan,
@@ -26,20 +26,27 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTFormat do
                "capabilities",
                "output_speech_to_text"
              ],
-             "reason" =>
-               "output recognition requires matching speech formats; conversion is not supported"
+             "reason" => failure_reason(reason)
            }
          )}
     end
   end
 
+  defp failure_reason(:unsupported_finite_input),
+    do: "output recognition requires explicit finite-input completion support"
+
+  defp failure_reason(_reason),
+    do: "output recognition requires matching speech formats; conversion is not supported"
+
   def validate(_generator, nil), do: :ok
 
   def validate(%CapabilitySelection{} = generator, %CapabilitySelection{} = recognizer) do
     with {:ok, output} <- descriptor(generator),
-         {:ok, input} <- descriptor(recognizer) do
+         {:ok, input} <- descriptor(recognizer),
+         :ok <- finite_input(recognizer, input) do
       validate_descriptors(output, input)
     else
+      {:error, :unsupported_finite_input} = error -> error
       _invalid -> {:error, :incompatible_output_stt_format}
     end
   rescue
@@ -63,6 +70,17 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTFormat do
 
   def validate_descriptors(_generator, _recognizer),
     do: {:error, :incompatible_output_stt_format}
+
+  defp finite_input(selection, %Descriptor{finite_input?: true}) do
+    with {:ok, provider} <- CapabilityCatalog.adapter(selection),
+         true <- function_exported?(provider, :finish_input, 1) do
+      :ok
+    else
+      _ -> {:error, :unsupported_finite_input}
+    end
+  end
+
+  defp finite_input(_selection, _descriptor), do: {:error, :unsupported_finite_input}
 
   # configure/1 is the existing pure public-metadata boundary: no credential
   # lookup, private config, session allocation or audio conversion belongs here.

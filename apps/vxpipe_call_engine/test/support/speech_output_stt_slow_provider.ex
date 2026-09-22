@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.SpeechOutputSTTSlowProvider do
     with true <- is_list(options) and Keyword.keyword?(options) do
       Descriptor.new(
         kind: :stt,
+        finite_input?: true,
         settings: %{},
         format: %{
           encoding: :linear16,
@@ -91,7 +92,8 @@ defmodule Vxpipe.CallEngine.SpeechOutputSTTSlowProvider do
              turn_ref: turn,
              text: "SLOW RESULT",
              endpointing: :provider_gap
-           ) do
+           ),
+         :ok <- Event.emit(state.channel, :input_finished) do
       {:reply, :ok, state}
     else
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
