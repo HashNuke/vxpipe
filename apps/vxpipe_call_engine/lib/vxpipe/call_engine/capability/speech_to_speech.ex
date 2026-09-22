@@ -24,7 +24,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       admit_reply: 2,
       handle_audio: 2,
       complete_playback: 3,
-      maybe_finish_turn: 1,
       notify_output_stt_unavailable: 2,
       admit_next_pending: 1,
       start_output_stt: 1,
@@ -428,7 +427,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       %{provider_turn: ^turn, stt_text: nil} = output ->
         _ = notify_output_stt_unavailable(state, :timeout)
         state = %{state | active_output: %{output | stt_text: :failed, text_deadline: nil}}
-        maybe_finish_turn(state)
+        handle_output_stt_failure(state)
 
       _settled_or_answered ->
         {:noreply, state}
@@ -437,6 +436,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   def handle_info(:vxpipe_retry_output_stt_start, %{output_stt: nil} = state) do
     {:noreply, state}
+  end
+
+  def handle_info(
+        :vxpipe_output_stt_recovery_failed,
+        %{output_stt: %{recovery_failed?: true}} = state
+      ) do
+    stop_unavailable(:output_stt_restart_failed, state)
   end
 
   def handle_info(:vxpipe_retry_output_stt_start, state) do
@@ -553,15 +559,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
               end
 
             {:error, reason} ->
-              # Finalization failed: settle honestly without recognition text.
-              # The DOWN/closed message owns the restart; never restart here
-              # or a second reserve collides with it on the same scope.
+              # A rejected finalization need not terminate its provider. Retire
+              # that recognition generation before admitting another reply.
               _ = notify_output_stt_unavailable(state, reason)
 
               case OutputSink.finish(state.sink, output.sink_turn, self()) do
                 :ok ->
-                  {:noreply,
-                   %{state | active_output: %{output | generation_done?: true, stt_text: :failed}}}
+                  handle_output_stt_failure(%{
+                    state
+                    | active_output: %{output | generation_done?: true, stt_text: :failed}
+                  })
 
                 {:error, _reason} ->
                   stop_unavailable(:audio_output_failed, state)

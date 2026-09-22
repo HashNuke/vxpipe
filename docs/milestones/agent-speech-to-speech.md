@@ -839,6 +839,18 @@ No new provider advertisement or billable call is authorized by these tasks.
   correlate recognizer generations after timeout and finalization failure so
   TWO cannot publish `OLD FIRST REPLY`. Cover delayed endpoints and multiple
   recognition segments without assuming one endpoint per output.
+  - [x] First isolate failure generations: recognition timeout, a finalization
+    error from a still-live recognizer, and provider loss must retire the old
+    allocation before any queued next reply is admitted. Verify old provider
+    `DOWN`, replacement readiness and legitimate next-turn text; do not rely
+    on providers always terminating themselves after a rejected finalization.
+  - [x] Preserve the selected transcript source through bounded restart attempts.
+    A failed restart must invalidate the old allocation immediately, retain
+    failed recognition rather than silently fall back to STS transcripts, and
+    fail the owning allocation explicitly when recovery is exhausted.
+  - [ ] Prove bounded aggregation/settlement of multiple recognition segments
+    within one generated reply and no delayed endpoint crossing a successful
+    reply boundary. Failure-generation isolation alone does not close this gate.
 - [ ] Complete output-STT adapter resolution through the existing registry,
   retain provider-private startup configuration, and negotiate matching PCM
   formats or use an explicit supported conversion. Prove synthetic-credential,

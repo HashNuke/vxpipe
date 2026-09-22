@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
   @max_pending_turns 16
   @max_output_stt_buffer 16
+  @max_output_stt_restart_attempts 10
+  @output_stt_retry_ms 200
 
   def admit_reply(turn_ref, state) do
     cond do
@@ -206,7 +208,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
         {:error, reason} ->
           _ = notify_output_stt_unavailable(state, reason)
-          %{state | active_output: %{output | stt_text: :failed}}
+          state |> fail_output_stt_turn() |> restart_output_stt()
       end
     else
       state
@@ -301,7 +303,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
                dropped_chunks: 0,
                restarts: 0,
                restart_attempts: 0,
-               retry_scheduled?: false
+               retry_scheduled?: false,
+               recovery_failed?: false
              }
          }}
 
@@ -318,13 +321,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
   def restart_output_stt(%{output_stt: nil} = state), do: state
 
+  def restart_output_stt(%{output_stt: %{recovery_failed?: true}} = state), do: state
+
   # Starts a replacement recognition session, serializing attempts so retired
   # scope entries (which count toward the scope limit until their trees die)
   # can never pile up behind a flood of failing pushes.
   def restart_output_stt(state) do
     previous = state.output_stt
     _ = close_output_stt(state)
+    previous = %{previous | session: nil, ready?: false, pending_text: nil}
 
+    if previous.restart_attempts >= @max_output_stt_restart_attempts do
+      fail_output_stt_recovery(%{state | output_stt: previous})
+    else
+      replace_output_stt(state, %{previous | restart_attempts: previous.restart_attempts + 1})
+    end
+  end
+
+  defp replace_output_stt(state, previous) do
     case start_output_stt(%{state | output_stt: nil}) do
       {:ok, %{output_stt: nil} = state} ->
         %{state | output_stt: previous}
@@ -344,25 +358,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         fed_chunks: Map.get(previous, :fed_chunks, 0),
         dropped_chunks:
           Map.get(previous, :dropped_chunks, 0) + Map.get(fresh, :dropped_chunks, 0),
-        restart_attempts: 0,
+        restart_attempts: previous.restart_attempts,
         retry_scheduled?: false
     }
   end
 
-  @max_output_stt_restart_attempts 10
-  @output_stt_retry_ms 200
-
   defp schedule_output_stt_retry(%{output_stt: nil} = state), do: state
+
+  defp schedule_output_stt_retry(%{output_stt: %{recovery_failed?: true}} = state), do: state
 
   defp schedule_output_stt_retry(state) do
     attempts = Map.get(state.output_stt, :restart_attempts, 0)
 
     if attempts >= @max_output_stt_restart_attempts do
-      _ = notify_output_stt_unavailable(state, :restart_failed)
-      %{state | output_stt: nil}
+      fail_output_stt_recovery(state)
     else
-      state = %{state | output_stt: Map.put(state.output_stt, :restart_attempts, attempts + 1)}
-
       if Map.get(state.output_stt, :retry_scheduled?, false) do
         state
       else
@@ -370,6 +380,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         %{state | output_stt: Map.put(state.output_stt, :retry_scheduled?, true)}
       end
     end
+  end
+
+  defp fail_output_stt_recovery(state) do
+    _ = notify_output_stt_unavailable(state, :restart_failed)
+    send(self(), :vxpipe_output_stt_recovery_failed)
+    %{state | output_stt: %{state.output_stt | recovery_failed?: true, ready?: false}}
   end
 
   defp output_stt_waiting?(%{output_stt: nil}), do: false
@@ -489,7 +505,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
   def handle_output_stt_event(%Event{kind: :ready} = event, state) do
     with :ok <- Session.ack(state.output_stt.session, event) do
-      state = %{state | output_stt: %{state.output_stt | ready?: true}}
+      state = %{state | output_stt: %{state.output_stt | ready?: true, restart_attempts: 0}}
       state = flush_output_buffer(state)
       state = finish_recovered_turn(state)
       admit_next_pending(state)
@@ -534,20 +550,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   def handle_output_stt_event(_event, state), do: {:noreply, state}
 
   def handle_output_stt_failure(state) do
-    # Settle the active turn first so a dead recognition leg never delays
-    # the public turn outcome; the replacement session starts afterwards.
-    state = fail_output_stt_turn(state)
-
-    case maybe_finish_turn(state) do
-      {:noreply, state} -> {:noreply, restart_output_stt(state)}
-    end
+    # Invalidate the old generation before settlement can admit queued work.
+    # Its delayed events/close cannot become evidence for the replacement turn.
+    state |> fail_output_stt_turn() |> restart_output_stt() |> maybe_finish_turn()
   end
 
   defp fail_output_stt_turn(state) do
-    state = drop_stt_buffer(state)
+    state = state |> cancel_text_deadline() |> drop_stt_buffer()
 
     case state.active_output do
-      %{stt_text: nil} = output ->
+      %{} = output ->
         %{state | active_output: %{output | stt_text: :failed}}
 
       _other ->

@@ -320,6 +320,17 @@ text must settle as a bounded, explicit failure/absence, not invented text or a 
 Transcript selection is independent of the controller that triggers model responses; a text
 delta is not speech onset or turn completion.
 
+An agent-output recognizer timeout, rejected finite-input finalization or provider
+loss retires that recognition generation before the next reply is admitted.
+Rejection does not imply the provider process will exit by itself. Replacement
+readiness gates further output, and retired-session events cannot supply next-turn
+text. At most ten consecutive restart attempts are allowed; only acknowledged
+readiness resets that budget. Exhaustion ends the owning STS allocation explicitly
+instead of silently switching to provider transcripts. Focused tests cover these
+failure boundaries; multi-segment and successful-boundary recognition settlement,
+hosted configuration, PCM compatibility and truthful recognition usage remain
+separate milestone gates.
+
 Events include `ready`, `speech_started`, `input_transcript`, `turn_ended`,
 `output_transcript`, `output_completed`, `interrupted`, `input_submitted`, `tool_call` and
 `tool_cancelled`, plus credited audio and safe failure. Acknowledge semantic events with
@@ -467,8 +478,8 @@ in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirem
 do not check those tasks off. Google declares `history_reconciliation?: false`. Its manifest
 entry and service badge remain disabled pending explicitly authorized hosted verification;
 local fake-socket tests do not establish hosted continuity or interrupted-history semantics.
-Independent review also identified open directional output-revocation,
-recognizer timeout-generation isolation, hosted sidecar configuration/format,
+Independent review also identified directional output-revocation,
+recognizer generation isolation, hosted sidecar configuration/format,
 recognizer usage attribution and integrated Google response-ordering defects.
 The milestone records their reproduction methods and repair tasks; successful
 Morse or manually admitted provider-session fixtures do not close those gaps.
@@ -585,3 +596,5 @@ records private/public identity, exact-source settlement and pending-map limits,
 separately from the remaining execution and retirement requirements.
 The [ordered tool-evidence checkpoint](../labnotes/20260922-1602-sts-tool-retirement.md)
 records replay retirement, current-policy settlement, hold and capability bounds.
+The [recognizer isolation checkpoint](../labnotes/20260922-1627-sts-recognizer-isolation.md)
+records timeout/finalization generation retirement and bounded recovery exhaustion.

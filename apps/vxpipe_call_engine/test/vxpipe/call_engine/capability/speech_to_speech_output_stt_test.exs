@@ -204,6 +204,74 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
   end
 
+  for failure <- [:timeout, :finalization_error] do
+    test "#{failure} retires a still-live recognizer before the next reply" do
+      private =
+        if unquote(failure) == :finalization_error,
+          do: [finish_error: :rejected_finalization],
+          else: []
+
+      {_tree, capability, _sink} =
+        start_output_stt_capability(
+          policy: unrestricted(),
+          output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+          output_stt_private: Keyword.put(private, :observer, self()),
+          output_stt_timeout_ms: 100
+        )
+
+      assert_receive {:output_stt_started, recognizer}
+      original = :sys.get_state(capability).output_stt.session
+      assert Session.provider(original) == recognizer
+      monitor = Process.monitor(recognizer)
+      assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first}
+      complete_playback(20)
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^first}, 2_000
+      assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, _}, 2_000
+      assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
+
+      assert_receive {:output_stt_started, replacement_provider}, 1_000
+      assert :ok = GenServer.call(replacement_provider, {:finish_error, nil})
+
+      assert :ok = SpeechToSpeech.push_text(capability, "TWO")
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, second}, 2_000
+      replacement = :sys.get_state(capability).output_stt.session
+      refute replacement == original
+      # An already-forwarded retired-generation endpoint must also be inert.
+      send(
+        capability,
+        {:vxpipe_speech,
+         %Vxpipe.CallEngine.Speech.Event{
+           session: original,
+           kind: :turn_ended,
+           sequence: 99,
+           text: "OLD FIRST REPLY"
+         }}
+      )
+
+      provider = Session.provider(replacement)
+      assert provider == replacement_provider
+
+      assert :ok =
+               GenServer.call(
+                 provider,
+                 {:emit, :turn_ended,
+                  [text: "CURRENT SECOND REPLY", turn_ref: make_ref(), endpointing: :provider_gap]}
+               )
+
+      complete_playback(20)
+
+      assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "CURRENT SECOND REPLY",
+                      ^second, _, _},
+                     2_000
+
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^second}, 2_000
+
+      refute_received {:vxpipe_sts_agent_transcript, ^capability, @agent, "OLD FIRST REPLY", _, _,
+                       _}
+    end
+  end
+
   test "output-STT audio arriving before recognition readiness is buffered, not dropped" do
     alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output, as: STS
 
@@ -227,6 +295,40 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     overflowed = STS.buffer_output_audio(buffered, <<17, 0>>)
     assert length(overflowed.output_stt.pending_audio) == 16
     assert overflowed.output_stt.dropped_chunks == suspended.output_stt.dropped_chunks + 1
+  end
+
+  test "exhausted recognizer recovery ends the allocation without transcript-source fallback" do
+    counter = start_supervised!({Agent, fn -> 0 end})
+
+    {tree, capability, _sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [start_counter: counter],
+        output_stt_timeout_ms: 100
+      )
+
+    capability_monitor = Process.monitor(capability)
+    tree_monitor = Process.monitor(tree)
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first}
+    assert :ok = SpeechToSpeech.push_text(capability, "TWO")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "TWO", turn_ref: second}}}
+
+    complete_playback(20)
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^first}, 2_000
+    assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, :restart_failed}, 4_000
+
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability,
+                    :output_stt_restart_failed},
+                   1_000
+
+    assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _}, 1_000
+    assert Agent.get(counter, & &1) in 2..11
+    refute_received {:vxpipe_sts_turn_started, ^capability, @agent, ^second}
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
   end
 
   test "a slow output STT consumer cannot block sink audio" do
