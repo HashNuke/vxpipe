@@ -31,6 +31,8 @@ and a second source connection is rejected. The committed embedded PCM room path
 now routes microphone input into STS. Native WebRTC/telephony conversion,
 callback delivery and phone-room readiness now have focused evidence (43 tests,
 seed 0); full native multi-mode calls and lifecycle acceptance remain incomplete.
+Native checkpoint `a6615d91` and formatting-only repair `447b3045` pass all
+five root gates: 2,185 tests, zero failures, 42 excluded (seed 0).
 [The input-routing decision](../sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
@@ -492,9 +494,11 @@ implementation paused to record this breakdown per the discovery-first rule.
   are green, move its input preparation/delivery helpers into the existing
   incoming-audio module; rerun connection and malformed-packet regressions.
   Refactored after green callbacks; connection is now 769 lines.
-- [ ] Record focused red/green evidence and review the diff; commit this native
+- [x] Record focused red/green evidence and review the diff; commit this native
   checkpoint before running root gates. Record any gate repair as a separate
   task here before implementing and committing it.
+  Committed as `a6615d91`; repair `447b3045` follows the task below. All root
+  gates pass after both commits (2,185 tests, zero failures, 42 excluded; seed 0).
 - [x] Gate repair after `a6615d91`: normalize the multiline provider keyword
   argument in `telephony/media_session_test.exs`; root format checking found
   the expression still unformatted. Verify that exact file and its focused
@@ -511,7 +515,8 @@ local design review, separate from implementation/acceptance evidence.
 Evidence: `labnotes/20260922-1344-sts-native-input.md`.
 Focused verification: 43 Gateway tests pass, seed 0. Native socket/codec tests
 are local; this is not carrier interoperability, rendered WebRTC acceptance,
-or the final ten-call load. Umbrella gates for this checkpoint are pending.
+or the final ten-call load. Umbrella gates for this checkpoint pass; B/C/F's
+remaining acceptance tasks and the milestone index remain unchecked.
 
 ### C — Interruption, tools, and transfer lifecycle
 

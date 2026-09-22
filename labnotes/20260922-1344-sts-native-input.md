@@ -86,3 +86,15 @@ complete room transfer/hold/recording/usage acceptance. Milestone remains open.
   commit the formatting repair separately.
 - Exact-file formatting check and three phone-session tests pass after the
   formatting-only repair (seed 0); no runtime logic changed.
+- Committed the repair separately as `447b3045`, then restarted the root
+  gates without further implementation edits. All five pass: format check,
+  warnings-as-errors compile, strict Credo, full tests and unused-lock check.
+  Full root tests: **2,185 tests, 0 failures, 42 excluded**, seed 0.
+  Call Engine: 1,026 tests; Gateway: 492 tests. Native Gateway took 459 seconds;
+  the same test process was retained throughout, not restarted on tool yields.
+  Database tests used `PGHOST=/var/run/postgresql`. Final verification process
+  exited 0 and the worktree was clean before this documentation-only record.
+- No further implementation finding from this root run. Milestone and index
+  remain incomplete; next work is the already listed integrated transcript-mode
+  and lifecycle acceptance, with any newly discovered work broken into milestone
+  tasks before implementation.
