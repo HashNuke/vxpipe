@@ -468,6 +468,16 @@ client activity controls require disabled automatic detection. External idle end
 and repeated boundaries do not send duplicate wire controls or reopen output.
 These routine boundary checks do not establish interruption/history support.
 
+For the pinned Gemini 3.x profile, `interimInputTranscription` is provisional and
+`inputTranscription` is one final caller snapshot. Retain caller identity until
+both final text and explicit caller activity end, independently of output playback,
+typed submissions and model interruption. Neither final text nor model completion
+can manufacture caller activity. The current local profile keeps one unfinished
+caller and fails explicitly if another audio onset would make attribution
+ambiguous; it does not assume FIFO final ordering or silently evict old evidence.
+Sequential late-final room publication is covered, but successful overlapping-
+caller correlation remains an open prerequisite, not an advertised capability.
+
 In provider-transcript mode, public completion requires settled selected text,
 acknowledged generation completion and matching sink playback. A late explicit final can finish an
 already-drained output, but partial text alone cannot. Missing explicit finals
@@ -564,7 +574,8 @@ Google same-allocation renewal and idle connection-loss recovery use only the la
 safe provider-issued handle, retained privately. New accepted input or revocation invalidates
 the old checkpoint. Handoff waits for an idle input boundary, no pending tools and local
 playback settlement and the model's `turnComplete`; generation completion or local
-playback alone is insufficient. Model completion invalidates any earlier handle,
+playback alone is insufficient. Pending caller final or activity-end evidence also
+prevents renewal. Model completion invalidates any earlier handle,
 so renewal also needs a subsequently valid checkpoint. The current local adapter
 latches overlapping model-turn ownership as non-resumable until independent
 correlation is implemented; a later unqualified end/handle cannot clear that

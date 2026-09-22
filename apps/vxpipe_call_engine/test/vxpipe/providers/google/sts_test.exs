@@ -3,6 +3,32 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
   alias Vxpipe.Providers.Google.STS
 
+  test "Gemini 3.x separates provisional input from its single final transcription" do
+    assert {:ok, events} =
+             STS.decode(
+               JSON.encode!(%{
+                 "serverContent" => %{
+                   "interimInputTranscription" => %{"text" => "provisional"},
+                   "inputTranscription" => %{"text" => "final caller text"}
+                 }
+               })
+             )
+
+    assert events == [
+             {:input_transcript, "provisional", false},
+             {:input_transcript, "final caller text", true}
+           ]
+  end
+
+  test "interim input must satisfy the same bounded text contract as final input" do
+    for invalid <- [nil, %{}, %{"text" => 42}, %{"text" => String.duplicate("x", 65_537)}] do
+      assert {:error, :invalid_message} =
+               STS.decode(
+                 JSON.encode!(%{"serverContent" => %{"interimInputTranscription" => invalid}})
+               )
+    end
+  end
+
   test "unproven hybrid control is rejected by public, private and descriptor configuration" do
     assert {:error, :invalid_configuration} = STS.public_options(turn_control: "hybrid")
 
@@ -362,7 +388,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
     assert {:ok, events} = STS.decode(payload)
     assert :activity_start in events
-    assert {:input_transcript, "hello"} in events
+    assert {:input_transcript, "hello", true} in events
     assert {:audio, audio} in events
     assert {:output_transcript, "hi there"} in events
     assert :generation_complete in events

@@ -7,6 +7,152 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestGoogleSTSTransport}
   alias Vxpipe.Providers.Google.{STS, STSSession}
 
+  for timing <- [:before_end, :after_end, :after_playback] do
+    test "caller final #{timing} retains the exact caller and cannot trigger a reply" do
+      context = start_controller()
+      turn = start_caller(context)
+      capability = context.capability
+
+      deliver(context, content(%{"interimInputTranscription" => %{"text" => "provisional"}}))
+
+      assert_receive {:vxpipe_sts_input_event, ^capability,
+                      %{
+                        event: %Event{
+                          kind: :input_transcript,
+                          turn_ref: ^turn,
+                          text: "provisional",
+                          final: false
+                        }
+                      }},
+                     1_000
+
+      if unquote(timing == :before_end), do: final_caller(context, turn, "caller final")
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      deliver(context, activity("ACTIVITY_END"))
+      assert_started(context, turn)
+
+      if unquote(timing == :after_end), do: final_caller(context, turn, "caller final")
+      complete_reply(context, turn, "REPLY", 1)
+      if unquote(timing == :after_playback), do: final_caller(context, turn, "caller final")
+
+      assert :sys.get_state(capability).caller_turns == %{}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_speech_started, ^capability, _, _}
+    end
+  end
+
+  test "twenty sequential late caller finals retire their bounded controller slots" do
+    context = start_controller()
+
+    for index <- 1..20 do
+      turn = start_caller(context)
+      deliver(context, activity("ACTIVITY_END"))
+      assert_started(context, turn)
+      complete_reply(context, turn, "REPLY #{index}", index)
+      final_caller(context, turn, "CALLER #{index}")
+      deliver(context, content(%{"turnComplete" => true}))
+      assert :sys.get_state(context.capability).caller_turns == %{}
+    end
+  end
+
+  test "a competing caller onset fails without guessing ownership of the missing final" do
+    context = start_controller()
+    turn = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, turn)
+    complete_reply(context, turn, "REPLY", 1)
+    provider = context.provider
+    monitor = Process.monitor(provider)
+    TestGoogleSTSTransport.deliver(context.wire, JSON.encode!(activity("ACTIVITY_START")))
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :session_failed}}, 1_000
+    refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
+    refute_received {:test_google_sts_started, _, _}
+  end
+
+  test "a typed submission cannot acquire an earlier audio caller's final" do
+    context = start_controller()
+    turn = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, turn)
+    complete_reply(context, turn, "AUDIO REPLY", 1)
+    assert :ok = SpeechToSpeech.push_text(context.capability, "typed input")
+    final_caller(context, turn, "AUDIO CALLER")
+    assert :sys.get_state(context.capability).caller_turns == %{}
+  end
+
+  test "model interruption cannot erase unfinished caller transcription evidence" do
+    context = start_controller()
+    turn = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, turn)
+    deliver(context, content(%{"interrupted" => true}))
+    final_caller(context, turn, "CALLER AFTER MODEL INTERRUPTION")
+    assert :sys.get_state(context.capability).caller_turns == %{}
+  end
+
+  test "a final snapshot cannot be replaced before the caller's activity ends" do
+    context = start_controller()
+    turn = start_caller(context)
+    final_caller(context, turn, "FIRST FINAL")
+    deliver(context, content(%{"inputTranscription" => %{"text" => "DUPLICATE"}}))
+    deliver(context, content(%{"interimInputTranscription" => %{"text" => "LATE INTERIM"}}))
+    refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
+    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, turn)
+    assert :sys.get_state(context.capability).caller_turns == %{}
+  end
+
+  test "unassociated input snapshots cannot create or prefill a caller" do
+    context = start_controller()
+    deliver(context, content(%{"inputTranscription" => %{"text" => "UNASSOCIATED"}}))
+    deliver(context, content(%{"interimInputTranscription" => %{"text" => "UNASSOCIATED"}}))
+    refute_received {:vxpipe_sts_input_event, _, _}
+    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    turn = start_caller(context)
+    final_caller(context, turn, "NEW CALLER")
+    refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
+  end
+
+  test "external competing onset fails before another wire activity start" do
+    context = start_controller("external")
+    assert :ok = SpeechToSpeech.input_activity(context.capability, :started)
+    assert :ok = SpeechToSpeech.input_activity(context.capability, :ended)
+    wire = context.wire
+    assert_receive {:test_google_sts_control, ^wire, _start}
+    assert_receive {:test_google_sts_control, ^wire, _end}
+    provider = context.provider
+    monitor = Process.monitor(provider)
+    assert {:error, _reason} = SpeechToSpeech.input_activity(context.capability, :started)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :session_failed}}, 1_000
+    refute_received {:test_google_sts_control, ^wire, _}
+  end
+
+  test "pending caller final prevents socket replacement after model end and playback" do
+    context = start_controller()
+    turn = start_caller(context)
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, turn)
+    complete_reply(context, turn, "REPLY", 1)
+    deliver(context, content(%{"turnComplete" => true}))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "before-final", "resumable" => true}
+    })
+
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :sys.get_state(context.provider).wire == context.wire
+    refute_received {:test_google_sts_started, _, _}
+    final_caller(context, turn, "LATE CALLER")
+    refute_received {:test_google_sts_started, _, _}
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "after-final", "resumable" => true}
+    })
+
+    assert_receive {:test_google_sts_started, _, _}, 1_000
+  end
+
   test "caller activity end streams twenty credited chunks before model turn completion" do
     context = start_controller()
     turn = start_caller(context)
@@ -56,7 +202,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     context = start_controller()
     turn = start_caller(context)
     capability = context.capability
-    deliver(context, content(%{"inputTranscription" => %{"text" => "partial"}}))
+    deliver(context, content(%{"interimInputTranscription" => %{"text" => "partial"}}))
     deliver(context, content(%{"turnComplete" => true}))
     refute_received {:vxpipe_sts_input_event, ^capability, %{event: %Event{kind: :turn_ended}}}
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
@@ -108,6 +254,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     for {text, index} <- [{"FIRST", 1}, {"SECOND", 2}] do
       turn = start_caller(context)
+      final_caller(context, turn, "CALLER #{index}")
       deliver(context, content(%{"outputTranscription" => %{"text" => text}}))
       deliver(context, activity("ACTIVITY_END"))
       assert_started(context, turn)
@@ -144,6 +291,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
   test "handle renewal waits for model turn completion even after local playback" do
     context = start_controller()
     turn = start_caller(context)
+    final_caller(context, turn, "CALLER")
     deliver(context, activity("ACTIVITY_END"))
     assert_started(context, turn)
     deliver(context, content(%{"outputTranscription" => %{"text" => "Reply"}}))
@@ -234,34 +382,73 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     complete_reply(context, turn, "EXTERNAL", 1)
   end
 
-  for admitted? <- [false, true] do
-    test "#{if admitted?, do: "admitted", else: "pre-admission"} interrupted text cannot leak into a fresh reply" do
-      context = start_controller()
-      old_turn = start_caller(context)
-      deliver(context, content(%{"outputTranscription" => %{"text" => "OLD"}}))
+  test "admitted interrupted text cannot leak into a fresh reply" do
+    context = start_controller()
+    old_turn = start_caller(context)
+    final_caller(context, old_turn, "OLD CALLER")
+    deliver(context, content(%{"outputTranscription" => %{"text" => "OLD"}}))
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, old_turn)
+    deliver(context, audio_message(1))
+    assert_audio(context, 1)
+    assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
+    deliver(context, content(%{"outputTranscription" => %{"text" => "LATE"}}))
+    deliver(context, content(%{"interrupted" => true}))
+    deliver(context, content(%{"turnComplete" => true}))
+    turn = start_caller(context)
+    assert turn != old_turn
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, turn)
+    deliver(context, content(%{"outputTranscription" => %{"text" => "NEW"}}))
+    deliver(context, audio_message(2))
+    assert_audio(context, 2)
+    finish_generation(context)
+    finish_playback(context, turn, "NEW", 20)
+    refute_received {:vxpipe_sts_turn_completed, _, _, ^old_turn}
+  end
 
-      if unquote(admitted?) do
-        deliver(context, activity("ACTIVITY_END"))
-        assert_started(context, old_turn)
-        deliver(context, audio_message(1))
-        assert_audio(context, 1)
-        assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
-        deliver(context, content(%{"outputTranscription" => %{"text" => "LATE"}}))
-      end
+  test "pre-admission model interruption cannot fabricate caller completion" do
+    context = start_controller()
+    old_turn = start_caller(context)
+    capability = context.capability
+    deliver(context, content(%{"outputTranscription" => %{"text" => "OLD"}}))
+    deliver(context, content(%{"interrupted" => true}))
+    deliver(context, content(%{"turnComplete" => true}))
+    refute_received {:vxpipe_sts_input_event, ^capability, %{event: %Event{kind: :turn_ended}}}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    final_caller(context, old_turn, "CALLER")
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, old_turn)
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    assert :sys.get_state(capability).caller_turns == %{}
+    complete_reply(context, old_turn, "FRESH REPLY AFTER CALLER END", 1)
+  end
 
-      deliver(context, content(%{"interrupted" => true}))
-      deliver(context, content(%{"turnComplete" => true}))
-      turn = start_caller(context)
-      assert turn != old_turn
-      deliver(context, activity("ACTIVITY_END"))
-      assert_started(context, turn)
-      deliver(context, content(%{"outputTranscription" => %{"text" => "NEW"}}))
-      deliver(context, audio_message(2))
-      assert_audio(context, 2)
-      finish_generation(context)
-      finish_playback(context, turn, "NEW", 20)
-      refute_received {:vxpipe_sts_turn_completed, _, _, ^old_turn}
-    end
+  test "renewal allows an existing external caller to finish after model interruption" do
+    context = start_controller("external")
+    capability = context.capability
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    deliver(context, content(%{"interrupted" => true}))
+    deliver(context, content(%{"turnComplete" => true}))
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    final_caller(context, turn, "EXTERNAL CALLER")
+    complete_reply(context, turn, "FRESH REPLY", 1)
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "old-model-end", "resumable" => true}
+    })
+
+    assert :sys.get_state(context.provider).wire == context.wire
+    refute_received {:test_google_sts_started, _, _}
+    deliver(context, content(%{"turnComplete" => true}))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "complete-external", "resumable" => true}
+    })
+
+    assert_receive {:test_google_sts_started, _, _}, 1_000
   end
 
   for {mode, turn_control} <- [provider: "provider", typed: "provider", external: "external"] do
@@ -299,6 +486,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
   defp begin_reply(context, :provider) do
     turn = start_caller(context)
+    final_caller(context, turn, "CALLER")
     deliver(context, activity("ACTIVITY_END"))
     assert_started(context, turn)
     turn
@@ -314,6 +502,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     capability = context.capability
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    if mode == :external, do: final_caller(context, turn, "EXTERNAL CALLER")
     turn
   end
 
@@ -324,6 +513,22 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     finish_generation(context)
     finish_playback(context, turn, text, 20)
     _ = :sys.get_state(context.provider)
+  end
+
+  defp final_caller(context, turn, text) do
+    deliver(context, content(%{"inputTranscription" => %{"text" => text}}))
+    capability = context.capability
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      event: %Event{
+                        kind: :input_transcript,
+                        turn_ref: ^turn,
+                        text: ^text,
+                        final: true
+                      }
+                    }},
+                   1_000
   end
 
   defp start_controller(turn_control \\ "provider") do

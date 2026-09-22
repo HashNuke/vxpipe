@@ -13,7 +13,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
   @behaviour Vxpipe.CallEngine.Speech.STSProvider
 
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, SessionTree, STSProvider}
-  alias Vxpipe.Providers.Google.{STS, STSResumption, STSSocket}
+  alias Vxpipe.Providers.Google.{STS, STSInput, STSResumption, STSSocket}
 
   @setup_timeout 15_000
   @default_renew_after 420_000
@@ -56,6 +56,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
     renew_requested?: false,
     resuming?: false,
     resumption_handle: nil,
+    caller: nil,
     input_turn: nil,
     input_text: nil,
     input_ended?: false,
@@ -186,7 +187,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
   @impl true
   def handle_call(command, _from, %{renew_requested?: true, input_turn: nil, output: nil} = state)
-      when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] do
+      when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] and
+             command != {:input_activity, :ended} do
     {:reply, {:error, :busy}, state}
   end
 
@@ -241,21 +243,29 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_call(
         {:input_activity, :started},
         _from,
-        %{ready?: true, input_turn: turn, input_ended?: false} = state
-      )
-      when not is_nil(turn),
+        %{ready?: true, caller: %{ended?: false}} = state
+      ),
       do: {:reply, :ok, state}
 
-  def handle_call({:input_activity, :ended}, _from, %{ready?: true, input_turn: nil} = state),
+  def handle_call({:input_activity, :started}, _from, %{ready?: true, caller: caller} = state)
+      when not is_nil(caller),
+      do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+
+  def handle_call({:input_activity, :ended}, _from, %{ready?: true, caller: nil} = state),
     do: {:reply, :ok, state}
 
-  def handle_call({:input_activity, :ended}, _from, %{ready?: true, input_ended?: true} = state),
-    do: {:reply, :ok, state}
+  def handle_call(
+        {:input_activity, :ended},
+        _from,
+        %{ready?: true, caller: %{ended?: true}} = state
+      ),
+      do: {:reply, :ok, state}
 
   def handle_call({:input_activity, boundary}, _from, %{ready?: true} = state)
       when boundary in [:started, :ended] do
-    with :ok <- state.wire_module.send_activity(state.wire, boundary) do
-      {:reply, :ok, activity_boundary(boundary, STSResumption.invalidate(state))}
+    with :ok <- state.wire_module.send_activity(state.wire, boundary),
+         {:ok, state} <- activity_boundary(boundary, STSResumption.invalidate(state)) do
+      {:reply, :ok, state}
     else
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
@@ -471,67 +481,15 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp apply_wire_event(:activity_start, %{config: %{turn_control: "external"}} = state),
     do: {:ok, state}
 
-  defp apply_wire_event(:activity_start, %{input_turn: turn, input_ended?: false} = state)
-       when not is_nil(turn),
-       do: {:ok, state}
-
-  defp apply_wire_event(:activity_start, state) do
-    turn = make_ref()
-
-    case Event.emit(state.channel, :speech_started, turn_ref: turn) do
-      :ok ->
-        {:ok,
-         STSResumption.begin_turn(%{
-           state
-           | input_turn: turn,
-             input_text: nil,
-             input_ended?: false
-         })}
-
-      :discarded ->
-        {:ok, state}
-
-      _failure ->
-        {:error, :session_failed}
-    end
-  end
+  defp apply_wire_event(:activity_start, state), do: STSInput.start(state)
 
   defp apply_wire_event(:activity_end, %{config: %{turn_control: "external"}} = state),
     do: {:ok, state}
 
-  defp apply_wire_event(:activity_end, %{input_turn: nil} = state), do: {:ok, state}
-  defp apply_wire_event(:activity_end, %{input_ended?: true} = state), do: {:ok, state}
+  defp apply_wire_event(:activity_end, state), do: STSInput.finish(state)
 
-  defp apply_wire_event(:activity_end, state) do
-    # Activity ends the caller's turn, not its independently delivered transcript.
-    case Event.emit(state.channel, :turn_ended,
-           turn_ref: state.input_turn,
-           text: "",
-           endpointing: input_endpointing(state)
-         ) do
-      result when result in [:ok, :discarded] -> {:ok, %{state | input_ended?: true}}
-      _failure -> {:error, :session_failed}
-    end
-  end
-
-  defp apply_wire_event({:input_transcript, text}, %{input_turn: nil} = state) do
-    _ = text
-    {:ok, state}
-  end
-
-  defp apply_wire_event({:input_transcript, text}, state) do
-    state = %{state | input_text: text}
-
-    case Event.emit(state.channel, :input_transcript,
-           turn_ref: state.input_turn,
-           text: text,
-           final: false
-         ) do
-      :ok -> {:ok, state}
-      :discarded -> {:ok, state}
-      _failure -> {:error, :session_failed}
-    end
-  end
+  defp apply_wire_event({:input_transcript, text, final?}, state),
+    do: STSInput.transcript(state, text, final?)
 
   defp apply_wire_event({:audio, pcm}, %{audio_fenced?: true} = state) do
     _ = pcm
@@ -649,31 +607,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
     end
   end
 
-  defp activity_boundary(:started, %{input_turn: turn, input_ended?: false} = state)
-       when not is_nil(turn),
-       do: state
-
-  defp activity_boundary(:started, state),
-    do:
-      STSResumption.begin_turn(%{
-        state
-        | input_turn: state.input_turn || make_ref(),
-          input_ended?: false
-      })
-
-  defp activity_boundary(:ended, %{input_turn: nil} = state), do: state
-
-  defp activity_boundary(:ended, state) do
-    case Event.emit(state.channel, :turn_ended,
-           turn_ref: state.input_turn,
-           text: "",
-           endpointing: :external
-         ) do
-      :ok -> %{state | input_ended?: true}
-      :discarded -> %{state | input_ended?: true}
-      _failure -> state
-    end
-  end
+  defp activity_boundary(:started, state), do: STSInput.start(state)
+  defp activity_boundary(:ended, state), do: STSInput.finish(state)
 
   defp input_endpointing(%{config: %{turn_control: "external"}}), do: :external
   defp input_endpointing(_state), do: :provider_semantic
@@ -712,13 +647,19 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   defp full_fence(state) do
+    caller_turn =
+      case state.caller do
+        %{turn_ref: turn, ended?: false} -> turn
+        _finished -> nil
+      end
+
     %{
       state
       | output: nil,
         output_text: nil,
         audio_buffer: [],
         audio_fenced?: false,
-        input_turn: nil,
+        input_turn: caller_turn,
         input_text: nil,
         input_ended?: false,
         generation_pending_done?: false

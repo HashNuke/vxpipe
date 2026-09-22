@@ -1259,6 +1259,32 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       playback/retirement; complete more than sixteen sequential actual-controller
       turns without leaking caller slots. Preserve source/policy/epoch checks and
       no transcript-driven activity or response trigger. Add real-room proof.
+      - [x] Preserve one unambiguous audio caller's final/end evidence separately
+        from model output and typed input; settle finals before/after activity end
+        and after playback, and block resumption while either fact is missing.
+      - [x] Reproduce competing unfinished audio onsets and fail without assigning
+        an unqualified final to a guessed caller. Preserve caller evidence across
+        model interruption. This conservative checkpoint does not close successful
+        overlap support: pinned sources establish one final for Gemini 3.x but do
+        not establish FIFO correlation across unfinished callers. Do not drop an
+        old association to make room or silently copy the dedicated STT FIFO.
+
+        Local caller checkpoint: 94 focused codec/session/output/controller,
+        shared settlement and room transcript-mode tests pass. Twenty sequential
+        replies retire all caller slots; a post-playback caller final retains the
+        original room-owned IDs. The Google room fixture injects only a prepared
+        private test runtime, not production selection. Sources and red-green
+        methods are in `labnotes/20260922-1903-google-sts-input.md`. The parent
+        input/overlap items stay open; explicit ambiguity failure is not successful
+        overlapping conversation support.
+      - [x] Repair review findings at the caller/model boundary: an unfinished
+        caller must survive pre-admission model interruption and its later end
+        must not open an output slot whose provider has discarded the owner.
+        Extend the regression through fresh audio/text/playback settlement.
+        During renewal, allow an existing external caller's end signal; do not
+        block the boundary needed to retire caller evidence and reach idle.
+        A completed interrupted model turn cannot qualify the fresh response as
+        model-complete; require subsequent model-end evidence before renewal.
     - [ ] Audit model `interactionStatus` and typed-input encoding for the pinned
       3.x profile before completing response-lifetime/resumption support. Model
       `turnComplete` must not imply a globally idle interaction while further
@@ -1565,6 +1591,14 @@ zero failures, 42 excluded, seed 0. See
   projections, and call-spec/API example updates remain open alongside the
   hosted/load/UI/review gates. Mark the index complete only after all
   applicable acceptance gates.
+
+  Latest pre-caller-correlation integration baseline `ebf11332` passes all five
+  root gates: 2,363 tests, zero failures, 45 excluded (seed 0, two schedulers),
+  including 1,203 Call Engine and 492 Gateway tests. The controlled handoff
+  binding-change regression passed inside that run. See
+  `labnotes/20260922-1908-handoff-binding-integration.md`. This is checkpoint
+  evidence, not acceptance of subsequent caller/recognizer changes or the still
+  open full-milestone gates.
 
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 

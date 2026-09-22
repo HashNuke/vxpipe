@@ -295,8 +295,9 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :speech_started}}
 
     assert :ok = Session.input_activity(session, :started)
-    deliver(wire, %{"serverContent" => %{"inputTranscription" => %{"text" => "partial"}}})
+    deliver(wire, %{"serverContent" => %{"interimInputTranscription" => %{"text" => "partial"}}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = partial}
+    refute partial.final
     assert :ok = Session.ack(session, partial)
     assert :ok = Session.input_activity(session, :ended)
 
@@ -343,6 +344,11 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
+
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = caller_end}
+    assert :ok = Session.ack(session, caller_end)
+    caller_final(session, wire, "FIRST CALLER")
 
     provider = Session.provider(session)
     assert :ok = STSSession.interrupt(provider, started.turn_ref)
@@ -645,6 +651,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
     assert :ok = Session.ack(session, ended)
+    caller_final(session, wire, "CALLER BEFORE RENEWAL")
     assert {:ok, output} = Session.admit_output(session, ended.turn_ref)
 
     deliver(wire, %{
@@ -675,6 +682,15 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert :ok = Session.ack(session, completed)
     deliver_sync(session, wire, %{"serverContent" => %{"turnComplete" => true}})
     output
+  end
+
+  defp caller_final(session, wire, text) do
+    deliver(wire, %{"serverContent" => %{"inputTranscription" => %{"text" => text}}})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :input_transcript, final: true} = event}
+
+    assert :ok = Session.ack(session, event)
   end
 
   defp drain_until_tool_response(wire, response) do

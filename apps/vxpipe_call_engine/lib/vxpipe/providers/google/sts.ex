@@ -239,12 +239,17 @@ defmodule Vxpipe.Providers.Google.STS do
   end
 
   defp transcripts(content) do
-    with {:ok, input} <- transcript_text(content, "inputTranscription", :input_transcript),
+    with {:ok, interim} <-
+           transcript_text(content, "interimInputTranscription", :input_transcript),
+         {:ok, input} <- transcript_text(content, "inputTranscription", :input_transcript),
          {:ok, output} <- transcript_text(content, "outputTranscription", :output_transcript),
          :ok <- validate_model_text(content) do
-      {:ok, input ++ output}
+      {:ok, input_finality(interim, false) ++ input_finality(input, true) ++ output}
     end
   end
+
+  defp input_finality(events, final?),
+    do: Enum.map(events, fn {kind, text} -> {kind, text, final?} end)
 
   defp flag(content, key, event) do
     case Map.fetch(content, key) do

@@ -144,7 +144,8 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   defp idle?(state) do
     not state.resumption_ambiguous? and state.model_turn_complete? and is_nil(state.input_turn) and
-      is_nil(state.output) and state.audio_buffer == [] and map_size(state.pending_tools) == 0
+      is_nil(state.caller) and is_nil(state.output) and state.audio_buffer == [] and
+      map_size(state.pending_tools) == 0
   end
 
   defp arm_deadline(state, deadline) do

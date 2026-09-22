@@ -88,7 +88,7 @@ The subsequent profile/idempotence checkpoint extends that group to 72 passing
 checks, including private setup rejection before socket creation. Its red-green
 and independent review evidence is in `labnotes/20260922-1855-google-sts-control.md`.
 
-## Next correlation checkpoint (not implemented)
+## Caller correlation checkpoint
 
 The pinned ADK receiver distinguishes Gemini 3.x input transcription from its
 older-model accumulation path: it treats `inputTranscription` as a single final.
@@ -99,12 +99,44 @@ evidence for a model-specific codec profile, not a hosted trace. Do not generali
 the older optional `finished` field to this model or infer input finality from
 model completion. Output fragment assembly remains separate.
 
-The current local adapter still treats every input transcription as partial and
-ties it to one mutable caller reference. The next checkpoint must keep pending
-caller-final associations independently of output settlement, preserve existing
-room attribution/policy boundaries, and prove late finals across caller onset.
+The local adapter now separates interim/final input and retains its caller-final
+association independently of output settlement, preserving the existing room
+attribution/policy boundaries. Late finals across a competing caller onset remain
+unproven and cannot be assigned by guesswork.
 The interim conservative resumption latch stays until response ownership is
 actually established. Model interaction status and typed-input profile also need
 verification before claiming complete Google conversation support; neither a
 placeholder request nor history replay is authorized. Research and concrete tasks
 are recorded in `labnotes/20260922-1903-google-sts-input.md` and the milestone.
+
+Design review found no primary-source premise for FIFO attribution across several
+unfinished callers. A delayed A final after B onset is indistinguishable from a B
+final before B activity end while A remains missing. The first caller checkpoint
+therefore retains one unfinished audio-caller record independently of output and
+typed input, retiring it only after final text and activity end. A new audio onset
+that would compete with an unfinished caller fails the allocation explicitly;
+no timeout/drop/queue shift is allowed. Model interruption cannot retire this
+caller evidence. Unfinished evidence also forbids idle resumption.
+
+This is an interim unambiguous profile, not successful overlap support or a change
+to the required milestone outcome. It relies on the pinned model's single-final
+premise; arbitrary cross-turn duplicate finals cannot be distinguished from the
+next caller repeating the same words without upstream identity. Unassociated
+input text cannot create a caller or be saved for a future onset. Stronger
+correlation evidence and full response-ownership work remain prerequisites for
+hosted advertisement.
+
+Local verification: 94 focused Google codec/session/output, actual-controller,
+shared-settlement and room transcript-mode tests pass. Twenty sequential actual-
+controller replies retire all caller slots; finals before/after activity end and
+after playback retain the original identity. A real room publishes a post-playback
+final using its original public caller IDs. That room fixture replaces only the
+prepared private runtime before source attachment; it does not bypass or claim
+production-selection acceptance. Google remains absent from the manifest.
+
+Review repairs retain the unfinished caller's response-admission anchor through
+model interruption, so a genuine later caller end can stream and settle a fresh
+reply. Renewal accepts an existing external caller's end instead of blocking the
+evidence needed to reach idle. A real caller end requires subsequent model-end
+evidence before renewal; an earlier interrupted model end cannot mark the fresh
+reply complete. General overlapping model-response ownership is still separate.

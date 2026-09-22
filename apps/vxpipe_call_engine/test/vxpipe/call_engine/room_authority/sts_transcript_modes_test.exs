@@ -21,6 +21,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestCallStartup, TestTransferConnection}
   alias Vxpipe.Providers.MorseCode.{STSSession, STTSession}
+  alias Vxpipe.Providers.Google.STSSession, as: GoogleSTS
+  alias Vxpipe.CallEngine.Speech.Session
+  alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
   @morse [unit_duration_ms: 20]
   @track %{track_id: "microphone", codec: :linear16, sample_rate: 16_000, channels: 1}
@@ -96,6 +99,73 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert :sys.get_state(context.capability).input_epoch == epoch
   end
 
+  test "Google final arriving after reply playback retains room-owned caller identity" do
+    context = room(false, false, %{}, :google)
+    caller = context.caller
+    agent = context.agent
+    google_deliver(context, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller} = started},
+                   1_000
+
+    google_deliver(context, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{participant_id: ^caller} = ended},
+                   1_000
+
+    refute_received {:vxpipe_event, %ParticipantTranscription{final: true}}
+
+    pcm = :binary.copy(<<1, 0>>, 480)
+
+    google_deliver(context, %{
+      "serverContent" => %{
+        "outputTranscription" => %{"text" => "REPLY"},
+        "modelTurn" => %{
+          "parts" => [
+            %{
+              "inlineData" => %{
+                "mimeType" => "audio/pcm;rate=24000",
+                "data" => Base.encode64(pcm)
+              }
+            }
+          ]
+        },
+        "generationComplete" => true
+      }
+    })
+
+    assert collect_output(context.sink, []) == pcm
+    assert :ok = TestAudioOutputSink.playback_progress(context.sink, 20, 20)
+    assert :ok = TestAudioOutputSink.playback_completed(context.sink)
+    assert_receive {:vxpipe_event, %TextOutput{participant_id: ^agent, text: "REPLY"}}, 1_000
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{participant_id: ^agent}}, 1_000
+    _ = :sys.get_state(context.provider)
+
+    google_deliver(context, %{"serverContent" => %{"inputTranscription" => %{"text" => "CALLER"}}})
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTranscription{
+                      participant_id: ^caller,
+                      text: "CALLER",
+                      final: true
+                    } = text},
+                   1_000
+
+    assert String.starts_with?(text.correlation_id, "turn_")
+    assert String.starts_with?(text.command_id, "cmd_")
+    assert text.correlation_id == started.correlation_id
+    assert ended.correlation_id == started.correlation_id
+    assert text.command_id == started.command_id
+    assert ended.command_id == started.command_id
+    assert text.connection_id == context.command.connection_id
+    assert ended.sequence < text.sequence
+    assert :sys.get_state(context.authority).sts_caller_turns == %{}
+    assert :sys.get_state(context.capability).caller_turns == %{}
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+    refute_received {:vxpipe_event, %ParticipantTurnCompleted{}}
+    refute_received {:vxpipe_event, %ParticipantTranscription{final: true}}
+  end
+
   test "a live Morse STS room tool uses public IDs throughout execution and settlement" do
     context = room(false, false, %{"echo_context" => %{type: "host", tool: "echo_context"}})
 
@@ -129,12 +199,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     refute_received {:vxpipe_event, %ToolCallCompleted{}}
   end
 
-  defp room(human_stt?, output_stt?, tools \\ %{}) do
+  defp room(human_stt?, output_stt?, tools \\ %{}, provider \\ :morse) do
     plan = compile_plan(human_stt?, output_stt?, tools)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     agent = Map.fetch!(plan.participants, plan.entry_receiver)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     assert {:ok, room} = TestCallStartup.start_call(plan)
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    install_google_fixture(authority, provider)
 
     assert {:ok, command} =
              AttachConnection.new(
@@ -148,6 +220,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
              )
 
     assert {:ok, _attachment} = TestTransferConnection.attach(command, sink, input_track: @track)
+    wire = google_ready(provider)
     TestCallStartup.await_ready(plan.room_id)
     attachment = TestTransferConnection.attachment(command)
 
@@ -157,7 +230,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     capability =
       RoomCapabilitySupervisor.whereis_speech_to_speech(room.incarnation_id, agent.participant_id)
 
-    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
     assert {:ok, config} = Config.new(@morse)
     assert {:ok, pcm} = Encoder.encode(config, "HI")
 
@@ -168,11 +240,56 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       config: config,
       pcm: pcm,
       capability: capability,
+      wire: wire,
+      provider: Session.provider(:sys.get_state(capability).session),
       ingress: ingress,
       authority: authority,
       caller: caller.participant_id,
       agent: agent.participant_id
     }
+  end
+
+  defp install_google_fixture(_authority, :morse), do: :ok
+
+  defp install_google_fixture(authority, :google) do
+    assert {:error, :unsupported_provider_capability} =
+             Vxpipe.Providers.Registry.fetch_capability("google", :sts)
+
+    assert {:ok, config} = Vxpipe.Providers.Google.STS.new(api_key: "synthetic-room-key")
+    observer = self()
+
+    # Replace only the prepared private test runtime before source attachment.
+    # This exercises room allocation/publication, not gated production selection.
+    :sys.replace_state(authority, fn state ->
+      runtime = %{
+        state.speech_to_speech_runtime
+        | provider: {GoogleSTS, []},
+          provider_private: [
+            config: config,
+            wire_module: TestGoogleSTSTransport,
+            wire_options: [observer: observer]
+          ]
+      }
+
+      %{state | speech_to_speech_runtime: runtime}
+    end)
+  end
+
+  defp google_ready(:morse), do: nil
+
+  defp google_ready(:google) do
+    assert_receive {:test_google_sts_started, wire, _}, 1_000
+    assert_receive {:test_google_sts_control, ^wire, _}, 1_000
+    TestGoogleSTSTransport.deliver(wire, JSON.encode!(%{"setupComplete" => %{}}))
+    wire
+  end
+
+  defp google_deliver(context, message) do
+    TestGoogleSTSTransport.deliver(context.wire, JSON.encode!(message))
+    _ = :sys.get_state(context.wire)
+    _ = :sys.get_state(context.provider)
+    _ = :sys.get_state(context.capability)
+    _ = :sys.get_state(context.authority)
   end
 
   defp push_human_stt(context) do
