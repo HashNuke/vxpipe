@@ -17,3 +17,9 @@
   settlement remain open. No hosted requests or Google STS enablement occurred.
 - Post-commit static/full umbrella results will be recorded separately; the
   preceding 2,299-test root pass must not be attributed to this later checkpoint.
+
+Post-commit static gates pass: root format check, warnings-as-errors compilation,
+strict Credo and unused-lock check. A new full umbrella run was started at
+`a41a4ab1` (same runtime as `4d786b0a`, subsequent docs only); output is in
+`vxpipe-sts-sidecar-integration-umbrella.log`. Completion remains pending until
+the process exits and every application result is checked.
