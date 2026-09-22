@@ -660,14 +660,25 @@ the existing audio round trip. Record discoveries here before implementing.
       publication tests also verify actual provider-result delivery.
       Exercise a live Morse STS room tool call through public start/completion
       events and require the action context to use those same public IDs.
-    - [ ] Preserve acknowledged channel order in the owner envelope and retire
+    - [x] Preserve acknowledged channel order in the owner envelope and retire
       settled envelopes with a scalar watermark. Reject active duplicate calls,
       wrong agents, replaced sources and retired input epochs; clear associations
       on capability replacement. Bound both capability and room pending maps.
       Public-boundary checks now cover active duplicates, wrong agents, exact
       source/epoch retirement, unknown cancellation, replacement cleanup and the
       16-pending-room-call limit. Capability bounds and ordered post-terminal
-      owner-envelope retirement remain unimplemented in this checkpoint.
+      owner-envelope retirement now have focused regression coverage.
+      Carry the acknowledged typed event, source identity,
+      input epoch and source audio-policy interval to the room; remove the old
+      unqualified call/cancel owner messages. Check current permission again at
+      admission/result delivery, and let only a matching cancellation retire an
+      old association without publishing under a replacement source. Prove
+      delayed/repeated owner messages cannot reopen settled work, active duplicate
+      calls preserve their first association, overflow ends the owned allocation,
+      and unknown/stale results never reach a permissive provider callback.
+      Hold retires provider associations without claiming to cancel submitted
+      engine workers. Provider events first observed after a new epoch still
+      require the separate upstream late-evidence isolation gate.
     - [ ] Replace unowned `Task.start` execution with the existing supervised
       invocation machinery under the agent-owned STS lifecycle. Distinguish
       provider association cancellation from submitted invocation lifetime:
@@ -717,6 +728,12 @@ the existing audio round trip. Record discoveries here before implementing.
     Identify which peer and output generation loses the expected sequence;
     compare output acceptance/egress with native receipt before changing any
     fixture or production logic. A passing isolated retry is not a root cause.
+    Root run after tool identity checkpoint `3c3456c6` reproduces the same test
+    at an earlier stage: the returned listener receives no expected 250 Hz wait
+    audio within the existing two-second bound after reconnection (test line
+    587). All 2,243 tests ran with one failure, 42 excluded, seed 0; Call Engine
+    passes 1,084 tests and the other four root gates pass. The isolated Gateway
+    agent owns investigation of both observed failure stages.
 - [x] Align the STS capability test fixture's asynchronous readiness wait with
   its explicit provider-start deadline. A focused run alongside native WebRTC
   reproduction failed its implicit 100 ms `assert_receive` despite the fixture
@@ -759,12 +776,15 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
   (`vxpipe_sts_*`) and `interrupt/hold/release/apply_policy/stop` for it.
   Evidence: `sts_tool_test.exs` (3), capability tool/owner tests,
   `sts_turn_control_test.exs` (4), revocation/hold/teardown tests.
-- [x] The STS controller honors the existing contracts: policy-gated
+- [ ] The STS controller honors the existing contracts: policy-gated
   admission and revocation fencing, allowlist-shaped tool evidence (room
   authorization stays the owner's duty), readiness via `vxpipe_sts_ready`,
   generation-fenced cleanup, and explicit rejection of concurrent second
   sources (`:source_mismatch`) and unsupported handoff. Cancellation IDs
   survive until the matching result or cancellation settles.
+  Reopened by independent review: existing revocation checks cover the
+  human-to-agent direction, not revocation of agent-to-human output alone.
+  Complete the directional egress/credit tasks below before closing this claim.
 - [ ] Slice exit: real room interruption/hold/transfer tests prove one
   terminal turn outcome, zero stale queued playback, bounded command handling
   and cleanup after owner loss. Wider scenario and latency assessment stay
@@ -772,12 +792,14 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
 
 ### D — STS plus agent-output STT
 
-- [x] A Morse variant declaring no output transcription fails selection
+- [ ] A Morse variant declaring no output transcription fails selection
   without `output_speech_to_text` and yields exactly one agent transcript
   with it (selection rules proven in checkpoint A and unchanged).
   Real-call admission and both caller-transcript variants now pass in
   `sts_transcript_modes_test.exs`; output-STT enablement uses the STT registry,
   not a separate provider-settings namespace.
+  The Morse evidence stands; general registry reuse remains incomplete because
+  hosted output-STT adapter selection and private configuration are not wired.
 - [x] Credited STS output feeds an agent-scoped STT allocation in the same
   agent-owned tree (separate scope, caller microphone never connected), with
   `STTProvider.finish_input/1` finalization at the STS generation boundary,
@@ -791,11 +813,70 @@ or rendered WebRTC transport, and are not the final ten-concurrent-call load.
   transcript, no caller transcript or duplicate, denied policy, STT failure
   honesty with next-turn recovery, slow-consumer isolation). The
   provider-transcript path remains independently green.
-- [x] Exit: complete and interrupted turns, denied policy, STT failure, and
+- [ ] Exit: complete and interrupted turns, denied policy, STT failure, and
   slow consumer cases settle honestly. Interrupted output restarts the
   output STT so late text cannot leak into the next turn.
+  Reopened by the delayed-final-after-timeout reproduction below; interruption
+  restart alone does not establish timeout/finalization isolation.
+
+#### Independent acceptance audit follow-up (2026-09-22)
+
+Read-only Astra review at `5e7fed4c` passed 30 existing local tests and reported
+six failing additional in-memory probes. These are diagnostic reproductions,
+not native-call, root-suite or hosted acceptance. Parent review must preserve
+each method as an automated regression before repair. Task/dependency review:
+finish ordered tool evidence first; keep output-policy, recognizer isolation,
+provider-controller ordering and sidecar startup/usage as coherent checkpoints.
+No new provider advertisement or billable call is authorized by these tasks.
+
+- [ ] Reproduce directional egress revocation: queue a Morse reply, retain
+  human-to-agent audio, revoke only agent-to-human audio, and require sink
+  interruption during both generation and drain. Fence queued output, return
+  held provider credit, and settle exactly one terminal outcome; denied audio
+  must not merely clear `active_output` and strand credit or turn state.
+- [ ] Reproduce recognizer cross-turn contamination with the stalling output-STT
+  fixture: time out ONE, begin TWO, then deliver ONE's delayed final. Retire or
+  correlate recognizer generations after timeout and finalization failure so
+  TWO cannot publish `OLD FIRST REPLY`. Cover delayed endpoints and multiple
+  recognition segments without assuming one endpoint per output.
+- [ ] Complete output-STT adapter resolution through the existing registry,
+  retain provider-private startup configuration, and negotiate matching PCM
+  formats or use an explicit supported conversion. Prove synthetic-credential,
+  fake-wire hosted-adapter startup and differing Morse STS/STT sample rates;
+  reject unsupported combinations explicitly before allocating a live call.
+- [ ] Separate output-STT usage identity, accepted-audio duration and terminal
+  outcome from the STS generator. Reproduce a timed-out 16 kHz `stalling_stt`
+  recognizer reporting `morse_code`, success, and 4,200 ms for 6,300 ms of
+  accepted audio. Verify correct provider/rate attribution and failed outcome
+  through persisted usage, not only internal capability state.
+
+The audit also reproduced tool admission/result delivery under denied policy.
+That reproduction is covered by the already-planned ordered-tool-envelope task
+above: retaining an exact source/epoch alone is not current authorization.
+Submitted invocation outcomes must still survive privately for later reasoning.
 
 ### E — Google Gemini 3.8 Live
+
+#### Integrated provider follow-up tasks (2026-09-22 audit)
+
+- [ ] Drive the fake Google socket through the real STS capability/controller:
+  send output transcript/audio/generation completion before server
+  `turnComplete`, and prove early text survives and streaming output starts
+  before the end of the response. Extend past 16 chunks with normal sink credit
+  to distinguish correct streaming admission from unbounded buffering. Existing
+  session tests manually arrange admission and do not prove this ordering.
+- [ ] Implement explicit output-transcript final settlement consistently with
+  the descriptor: `Event.build(:output_transcript, ..., final: true)` currently
+  rejects the event despite accepting `output_settlement: :transcript_end`.
+  Test final/late/missing text and history reconciliation without fabricating
+  played content or claiming the hosted history gate passed.
+- [ ] Carry bounded private agent prompt and authorized tool schemas through
+  STS activation configuration into initial and resumed Google setup. Reject
+  unsupported configuration explicitly. Verify fake-wire setup contents; an
+  injected function-call response is not evidence of provider tool discovery.
+- [ ] Add the tagged hosted controller/interruption/resumption acceptance check
+  before requesting billable execution. Keep it excluded by default and Google
+  unadvertised until the separately authorized acceptance gate passes.
 
 - [x] Fixture-driven tests for setup, voice, PCM conversion (16 kHz in /
   24 kHz out), multi-part message parsing, out-of-order transcripts/audio,

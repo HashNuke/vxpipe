@@ -124,3 +124,14 @@ The remaining task now explicitly includes one running acknowledgement, separate
 private completion, blocking/non-blocking admission and unknown submitted
 timeouts. Provider continuation encoding must be tested, not assumed from the
 text-model path. This is contract clarification, not completed implementation.
+
+Post-commit root run for `3c3456c6` finished with **2,243 tests, one failure,
+42 excluded**, seed 0. Format, warnings-as-errors compile and strict Credo passed;
+the unused-lock check passed separately after the failed test command stopped
+the chained gates. All 1,084 Call Engine tests pass. The recurring Gateway
+five-participant handoff case now fails earlier: test line 587 waits for 250 Hz
+audio on the returned listener after reconnection (two-second bound), rather
+than the older final cue/conversation assertion. The exact failure and log were
+sent to the dedicated Gateway repair agent. Do not widen the timeout or mark
+the intermittent problem fixed based on an isolated retry. This root process
+is terminal and was not restarted.

@@ -331,7 +331,7 @@ Public caller, agent and tool IDs must be room-owned, with bounded associations 
 provider references qualified by allocation generation and exact source identity. Private
 references, including their stringified forms, must not become public correlation IDs. Old,
 duplicate or retired-generation evidence cannot create a new public turn. The milestone still
-tracks ordered tool retirement, supervised execution, agent-output retirement and
+tracks supervised execution, upstream late-tool isolation, agent-output retirement and
 complete lifecycle handling; the implemented publication paths do not prove this
 entire requirement.
 
@@ -361,12 +361,27 @@ of a reference cannot acquire that reference's association. Execution context,
 completion, failure and cancellation use the started public IDs. Active duplicate
 calls and unknown/wrong-agent cancellations do not create additional work/events.
 
-The room bounds pending tool associations to 16 and rejects excess calls without
-evicting admitted work. Admission requires the current agent, exact source and
-open input epoch. Source loss, replacement, hold or epoch retirement suppresses
-late provider-result delivery and public settlement; capability replacement clears
-the associations. This is not yet a complete execution-lifetime guarantee:
-ordered owner-envelope retirement, capability-side bounds, worker/timer cleanup,
+Both capability and room bound pending tool associations to 16. Capability
+overflow ends the allocation explicitly; room saturation rejects excess calls
+without evicting admitted work. The capability forwards acknowledged typed tool
+events with channel sequence, exact input identity, input epoch and source audio
+interval. Legacy unqualified tool-owner tuples cannot admit or cancel work.
+Admission requires the current agent, exact source, open input epoch and current
+audio permission; both boundaries recheck association evidence before delivering
+a result. Source loss, replacement, hold, epoch retirement or a revoked/regranted
+audio interval suppresses late provider delivery and public settlement.
+
+Cancellation retains its original admission scope: it may retire that matching
+association after epoch change, but cannot publish under the new source/epoch.
+Hold retires provider associations even when the provider emits no cancellation.
+A room-owned scalar sequence watermark rejects repeated or delayed forwarded
+envelopes after settlement; capability replacement resets the watermark and
+associations. This avoids an unbounded set of completed call IDs. It does not
+deduplicate upstream events that adapters relabel with fresh semantic sequences,
+or establish safety for old evidence first observed after a new input epoch.
+Those upstream cases remain explicit acceptance gates.
+
+This is not yet a complete execution-lifetime guarantee: worker/timer cleanup,
 schema checks and full tool-binding adoption remain explicit milestone tasks.
 In particular, removing a pending association alone does not stop a host action
 or prove retention of its submitted result for future reasoning.
@@ -443,13 +458,20 @@ All four caller/agent transcript-source combinations have embedded PCM room-call
 Caller turns and agent output have room-owned public IDs and exact bound-source attribution
 in the embedded provider-controlled path. Native input conversion/delivery and readiness
 have focused evidence. Public tool identity has room-boundary and live Morse
-tool-only-call evidence; ordered retirement and execution ownership remain open.
+tool-only-call evidence; qualified ordered-owner retirement and policy checks
+also have focused coverage. Execution ownership and upstream late-evidence
+isolation remain open.
 Complete turn-controller/lifecycle coverage, full
 native conversations, usage/load and final UI acceptance remain open
 in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above
 do not check those tasks off. Google declares `history_reconciliation?: false`. Its manifest
 entry and service badge remain disabled pending explicitly authorized hosted verification;
 local fake-socket tests do not establish hosted continuity or interrupted-history semantics.
+Independent review also identified open directional output-revocation,
+recognizer timeout-generation isolation, hosted sidecar configuration/format,
+recognizer usage attribution and integrated Google response-ordering defects.
+The milestone records their reproduction methods and repair tasks; successful
+Morse or manually admitted provider-session fixtures do not close those gaps.
 
 ### Flow control and ownership
 
@@ -561,3 +583,5 @@ synchronization is not acceptance of the remaining STS milestone tasks or hosted
 The [tool-boundary checkpoint](../labnotes/20260922-1545-sts-tool-boundary.md)
 records private/public identity, exact-source settlement and pending-map limits,
 separately from the remaining execution and retirement requirements.
+The [ordered tool-evidence checkpoint](../labnotes/20260922-1602-sts-tool-retirement.md)
+records replay retirement, current-policy settlement, hold and capability bounds.

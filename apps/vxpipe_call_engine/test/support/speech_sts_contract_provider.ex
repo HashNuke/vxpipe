@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.SpeechSTSContractProvider do
   @impl true
   def interrupt(_pid, _ref), do: {:error, :unsupported_operation}
   @impl true
-  def send_tool_result(_pid, _ref, _result), do: {:error, :unsupported_operation}
+  def send_tool_result(pid, ref, result), do: GenServer.call(pid, {:tool_result, ref, result})
   @impl true
   def close(pid), do: GenServer.stop(pid)
 
@@ -66,6 +66,11 @@ defmodule Vxpipe.CallEngine.SpeechSTSContractProvider do
     do: {:reply, :ok, %{state | inputs: [{:activity, boundary} | state.inputs]}}
 
   def handle_call(:inputs, _from, state), do: {:reply, Enum.reverse(state.inputs), state}
+
+  def handle_call({:tool_result, ref, result}, _from, state) do
+    send(state.observer, {:contract_tool_result, ref, result})
+    {:reply, :ok, state}
+  end
 
   def handle_call({:emit, kind, fields}, _from, state),
     do: {:reply, Event.emit(state.channel, kind, fields), state}

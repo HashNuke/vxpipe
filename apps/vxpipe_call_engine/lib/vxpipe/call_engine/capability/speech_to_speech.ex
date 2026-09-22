@@ -41,7 +41,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     ]
 
   alias Vxpipe.CallEngine.Telemetry
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{CallerEvents, Input}
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{CallerEvents, Input, ToolEvents}
 
   @call_timeout 5_000
   @default_output_stt_timeout_ms 5_000
@@ -289,6 +289,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   def handle_call(:hold, _from, state) do
     state = Input.hold(state)
+    state = state |> interrupt_tool_turns() |> ToolEvents.retire()
     {_played, state} = fence_output(state)
     {:reply, :ok, state}
   end
@@ -338,12 +339,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     provider = Session.provider(state.session)
 
     cond do
+      not ToolEvents.current?(state, call_ref) ->
+        {:reply, {:error, :stale_request}, ToolEvents.drop(state, call_ref)}
+
       not is_pid(provider) ->
         {:reply, {:error, :unavailable}, state}
 
       true ->
         case apply(state.provider, :send_tool_result, [provider, call_ref, result]) do
-          :ok -> {:reply, :ok, drop_tool_call(state, call_ref)}
+          :ok -> {:reply, :ok, ToolEvents.drop(state, call_ref)}
           {:error, _reason} = error -> {:reply, error, state}
         end
     end
@@ -607,31 +611,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     end
   end
 
-  defp handle_event(%Event{kind: :tool_call} = event, state) do
-    with :ok <- Session.ack(state.session, event) do
-      send(
-        state.owner,
-        {:vxpipe_sts_tool_call, self(), state.agent_id, event.call_ref, event.turn_ref,
-         event.tool_name, event.arguments}
-      )
-
-      state = %{
-        state
-        | tool_turns: MapSet.put(state.tool_turns, event.turn_ref),
-          tool_calls: Map.put(state.tool_calls, event.call_ref, event.turn_ref)
-      }
-
+  defp handle_event(%Event{kind: kind} = event, state)
+       when kind in [:tool_call, :tool_cancelled] do
+    with :ok <- Session.ack(state.session, event),
+         {:ok, state} <- ToolEvents.forward(state, event) do
       {:noreply, state}
     else
-      _failure -> stop_unavailable(:provider_failed, state)
-    end
-  end
-
-  defp handle_event(%Event{kind: :tool_cancelled} = event, state) do
-    with :ok <- Session.ack(state.session, event) do
-      send(state.owner, {:vxpipe_sts_tool_cancelled, self(), state.agent_id, event.call_ref})
-      {:noreply, drop_tool_call(state, event.call_ref)}
-    else
+      {:error, :pending_tool_overflow} -> stop_unavailable(:pending_tool_overflow, state)
       _failure -> stop_unavailable(:provider_failed, state)
     end
   end
@@ -656,23 +642,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   defp interrupt_tool_turns(state) do
     Enum.each(state.tool_turns, &interrupt_provider(state, &1))
     state
-  end
-
-  defp drop_tool_call(state, call_ref) do
-    case Map.fetch(state.tool_calls, call_ref) do
-      {:ok, turn_ref} ->
-        tool_calls = Map.delete(state.tool_calls, call_ref)
-
-        tool_turns =
-          if Enum.any?(tool_calls, fn {_call, turn} -> turn == turn_ref end),
-            do: state.tool_turns,
-            else: MapSet.delete(state.tool_turns, turn_ref)
-
-        %{state | tool_calls: tool_calls, tool_turns: tool_turns}
-
-      :error ->
-        state
-    end
   end
 
   defp normalize_usage_context(nil, _identity), do: nil

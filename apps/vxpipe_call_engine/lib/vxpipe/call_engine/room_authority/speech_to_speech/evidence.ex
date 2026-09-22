@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence do
   @moduledoc "Identity and event attribution shared by room-owned STS publications."
 
   alias Vxpipe.CallEngine.Id
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
   alias Vxpipe.CallEngine.STSInputHandle
   alias Vxpipe.CallEngine.RoomAuthority.State
 
@@ -14,6 +15,36 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence do
   def current_agent?(state, capability, agent_id) do
     current?(state, capability) and state.speech_to_speech_capability.participant_id == agent_id
   end
+
+  def policy_snapshot(%State{media_policy_authority: authority}) when is_pid(authority) do
+    Authority.snapshot(authority)
+  catch
+    :exit, _reason -> nil
+  end
+
+  def policy_snapshot(%State{}), do: nil
+
+  def tool_scope_current?(state, evidence),
+    do: tool_scope_current?(state, evidence, policy_snapshot(state))
+
+  def tool_scope_current?(state, evidence, %Snapshot{} = policy) do
+    with %{identity: identity, epoch: epoch, audio_interval: interval} <- evidence,
+         %{input_handle: handle, input_epoch: ^epoch, participant_id: agent} <-
+           state.speech_to_speech_capability,
+         true <- is_reference(epoch) and identity == handle.identity,
+         {_, connection} <- agent_connection(state),
+         false <- MapSet.member?(state.held_participant_ids, connection.participant_id),
+         true <- Snapshot.valid?(policy),
+         true <- MapSet.member?(policy.present_participant_ids, connection.participant_id),
+         true <- MapSet.member?(policy.present_participant_ids, agent) do
+      interval == Snapshot.interval(policy, :audio_input, connection.participant_id) and
+        Effective.audio_route_permitted?(policy.effective, connection.participant_id, agent)
+    else
+      _invalid -> false
+    end
+  end
+
+  def tool_scope_current?(_state, _evidence, _policy), do: false
 
   def human_connection(state, human_id) do
     Enum.find_value(state.connections, nil, fn {id, connection} ->

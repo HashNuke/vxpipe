@@ -51,16 +51,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
      )}
   end
 
-  def handle(
-        {:vxpipe_sts_tool_call, capability, agent_id, call_ref, turn, name, args},
-        state
-      ) do
-    {:noreply,
-     SpeechToSpeech.handle_tool_call(state, capability, agent_id, call_ref, turn, name, args)}
-  end
-
-  def handle({:vxpipe_sts_tool_cancelled, capability, agent_id, call_ref}, state) do
-    {:noreply, SpeechToSpeech.handle_tool_cancelled(state, capability, agent_id, call_ref)}
+  def handle({:vxpipe_sts_tool_event, capability, agent_id, evidence}, state) do
+    {:noreply, SpeechToSpeech.handle_tool_event(state, capability, agent_id, evidence)}
   end
 
   def handle({:vxpipe_sts_tool_executed, capability, call_ref, outcome}, state) do

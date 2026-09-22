@@ -588,6 +588,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              :vxpipe_sts_agent_transcript,
              :vxpipe_sts_turn_completed,
              :vxpipe_sts_interrupted,
+             :vxpipe_sts_tool_event,
              :vxpipe_sts_tool_call,
              :vxpipe_sts_tool_cancelled,
              :vxpipe_sts_tool_executed,

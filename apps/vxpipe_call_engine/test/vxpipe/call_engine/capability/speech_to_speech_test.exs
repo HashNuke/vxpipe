@@ -195,8 +195,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
 
-    assert_receive {:vxpipe_sts_tool_call, ^capability, @agent, call_ref, tool_turn, "echo",
-                    %{"text" => "hi"}}
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{
+                      event: %{
+                        kind: :tool_call,
+                        call_ref: call_ref,
+                        turn_ref: tool_turn,
+                        tool_name: "echo",
+                        arguments: %{"text" => "hi"}
+                      }
+                    }}
 
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
 
@@ -215,10 +223,22 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     {_tree, capability, _sink} = start_capability(policy: unrestricted())
 
     assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
-    assert_receive {:vxpipe_sts_tool_call, ^capability, @agent, call_ref, turn_ref, "echo", _args}
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{
+                      event: %{
+                        kind: :tool_call,
+                        call_ref: call_ref,
+                        turn_ref: turn_ref,
+                        tool_name: "echo"
+                      }
+                    }}
 
     assert {:ok, _played} = SpeechToSpeech.interrupt(capability)
-    assert_receive {:vxpipe_sts_tool_cancelled, ^capability, @agent, ^call_ref}
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_cancelled, call_ref: ^call_ref}}}
+
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn_ref, _, _}
     assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, call_ref, %{})
   end
@@ -240,6 +260,121 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:DOWN, ^owner_monitor, :process, ^owner, _reason}
     assert_receive {:DOWN, ^capability_monitor, :process, ^capability, _reason}
     assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _reason}
+  end
+
+  test "tool association overflow explicitly retires the capability and provider tree" do
+    {tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    capability_monitor = Process.monitor(capability)
+    provider_monitor = Process.monitor(provider)
+    tree_monitor = Process.monitor(tree)
+
+    for _ <- 1..16 do
+      assert :ok = emit_tool(provider, make_ref(), make_ref())
+      assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{kind: :tool_call}}}
+    end
+
+    assert map_size(:sys.get_state(capability).tool_calls) == 16
+    assert :ok = emit_tool(provider, make_ref(), make_ref())
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_tool_overflow}, 1_000
+
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :pending_tool_overflow},
+                   1_000
+
+    assert_receive {:DOWN, ^provider_monitor, :process, ^provider, _}, 1_000
+    assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _}, 1_000
+  end
+
+  test "tool evidence retains channel order and the original association on duplicates" do
+    {_tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    epoch = make_ref()
+    assert :ok = SpeechToSpeech.release(capability, epoch)
+    call = make_ref()
+    turn = make_ref()
+    assert :ok = emit_tool(provider, call, turn)
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{
+                      epoch: ^epoch,
+                      audio_interval: 0,
+                      event: %{
+                        kind: :tool_call,
+                        call_ref: ^call,
+                        turn_ref: ^turn,
+                        sequence: sequence
+                      }
+                    }}
+
+    assert is_integer(sequence) and sequence > 0
+    original = :sys.get_state(capability).tool_calls
+    assert :ok = emit_tool(provider, call, make_ref())
+    marker = make_ref()
+    assert :ok = emit_tool(provider, marker, make_ref())
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: ^marker}}}
+
+    assert Map.fetch!(:sys.get_state(capability).tool_calls, call) == Map.fetch!(original, call)
+    assert :ok = GenServer.call(provider, {:emit, :tool_cancelled, [call_ref: call]})
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{
+                      epoch: ^epoch,
+                      event: %{kind: :tool_cancelled, call_ref: ^call, sequence: terminal}
+                    }}
+
+    assert terminal > sequence
+    assert map_size(original) == 1
+    assert Map.keys(:sys.get_state(capability).tool_calls) == [marker]
+    refute_received {:vxpipe_sts_tool_event, ^capability, _, _}
+    refute_received {:vxpipe_sts_tool_call, _, _, _, _, _, _}
+  end
+
+  test "unknown results never reach a permissive provider" do
+    {_tree, capability, _sink} = start_contract_capability()
+    assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, make_ref(), %{})
+    refute_received {:contract_tool_result, _, _}
+  end
+
+  test "revoked and regranted tool evidence cannot reach a permissive provider" do
+    {_tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    call = make_ref()
+    assert :ok = emit_tool(provider, call, make_ref())
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^call}}}
+    assert :ok = SpeechToSpeech.apply_policy(capability, deny_audio(@human, @agent))
+    assert :ok = SpeechToSpeech.apply_policy(capability, unrestricted())
+    assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, call, %{})
+    refute_received {:contract_tool_result, _, _}
+  end
+
+  test "hold retires tool associations and fences late results after release" do
+    {_tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    call = make_ref()
+    assert :ok = emit_tool(provider, call, make_ref())
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{kind: :tool_call}}}
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :sys.get_state(capability).tool_calls == %{}
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, call, %{})
+    refute_received {:contract_tool_result, _, _}
+  end
+
+  defp start_contract_capability do
+    start_capability(
+      policy: unrestricted(),
+      provider: {Vxpipe.CallEngine.SpeechSTSContractProvider, []},
+      provider_private: [observer: self()]
+    )
+  end
+
+  defp emit_tool(provider, call, turn) do
+    GenServer.call(
+      provider,
+      {:emit, :tool_call, [call_ref: call, turn_ref: turn, tool_name: "echo", arguments: %{}]}
+    )
   end
 
   test "provider speech onset fences active playback without a local interrupt" do

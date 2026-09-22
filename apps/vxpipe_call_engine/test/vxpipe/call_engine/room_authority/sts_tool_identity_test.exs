@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
 
   alias Vxpipe.CallEngine.Room.Snapshot
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolEvents
   alias Vxpipe.CallEngine.STSInputHandle
 
   @agent "agent"
@@ -21,7 +22,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
 
   setup do
     capability = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
-    %{capability: capability, state: state(capability)}
+    authority = start_supervised!({Vxpipe.CallEngine.TestSTSPolicySnapshot, policy()})
+    %{capability: capability, state: %{state(capability) | media_policy_authority: authority}}
   end
 
   for kind <- [:binary, :reference] do
@@ -268,6 +270,163 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end
+  end
+
+  test "replayed owner envelopes cannot reopen settled work", context do
+    call = make_ref()
+    evidence = tool_evidence(context.state, call, 10)
+    state = tool_event(context.state, context.capability, evidence)
+    assert_receive {:vxpipe_event, %ToolCallStarted{} = started}
+    state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{})
+    assert_receive {:vxpipe_event, %ToolCallCompleted{} = completed}
+    assert_receive {:provider_tool_result, ^call, %{}}
+    assert ids(completed) == ids(started)
+    assert tool_event(state, context.capability, evidence) == state
+    assert state.sts_tool_sequence == 10
+    refute_received {:vxpipe_event, _}
+  end
+
+  test "wrong agent, source, epoch and policy cannot admit an ordered tool event", context do
+    evidence = tool_evidence(context.state, make_ref(), 1)
+
+    assert ToolEvents.handle(context.state, context.capability, "other-agent", evidence, policy()) ==
+             context.state
+
+    assert tool_event(context.state, self(), evidence) == context.state
+
+    for invalid <- [
+          %{evidence | epoch: make_ref()},
+          %{evidence | identity: %{evidence.identity | connection_id: "other"}},
+          %{evidence | audio_interval: 1}
+        ] do
+      assert tool_event(context.state, context.capability, invalid) == context.state
+    end
+
+    denied = %{policy() | effective: %{policy().effective | audio_routes: %{}}}
+
+    assert ToolEvents.handle(context.state, context.capability, @agent, evidence, denied) ==
+             context.state
+
+    refute_received {:vxpipe_event, _}
+  end
+
+  test "cancellation retires only its original scope, including after an epoch change", context do
+    call = make_ref()
+    evidence = tool_evidence(context.state, call, 1)
+    state = tool_event(context.state, context.capability, evidence)
+    assert_receive {:vxpipe_event, %ToolCallStarted{}}
+    cancel = %{evidence | event: %{evidence.event | kind: :tool_cancelled, sequence: 2}}
+    wrong = %{cancel | epoch: make_ref()}
+    assert tool_event(state, context.capability, wrong).sts_tool_calls == state.sts_tool_calls
+    state = invalidate(state, :retired_epoch, context.capability)
+    state = tool_event(state, context.capability, cancel)
+    assert state.sts_tool_calls == %{}
+    assert state.sts_tool_sequence == 2
+    assert tool_event(state, context.capability, evidence) == state
+    refute_received {:vxpipe_event, _}
+    refute_received {:provider_tool_result, _, _}
+  end
+
+  test "legacy unqualified owner messages are ignored", context do
+    alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events
+
+    assert {:noreply, state} =
+             Events.handle(
+               {:vxpipe_sts_tool_call, context.capability, @agent, make_ref(), make_ref(), "echo",
+                %{}},
+               context.state
+             )
+
+    assert state == context.state
+    refute_received {:vxpipe_event, _}
+  end
+
+  test "room hold retires provider associations even without a provider cancellation", context do
+    call = make_ref()
+    state = tool_event(context.state, context.capability, tool_evidence(context.state, call, 1))
+    assert_receive {:vxpipe_event, %ToolCallStarted{}}
+    state = SpeechToSpeech.hold(state)
+    assert_receive :sts_receiver_held
+    assert state.sts_tool_calls == %{}
+    assert state.speech_to_speech_capability.input_epoch == nil
+    assert state.sts_tool_sequence == 1
+    assert_receive {:vxpipe_event, %ToolCallCancelled{}}
+    assert SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{}) == state
+    refute_received {:provider_tool_result, _, _}
+  end
+
+  for change <- [:denied, :regranted, :absent, :unavailable] do
+    test "#{change} policy prevents delivery of an admitted tool result", context do
+      call = make_ref()
+      evidence = tool_evidence(context.state, call, 1)
+      state = tool_event(context.state, context.capability, evidence)
+      assert_receive {:vxpipe_event, %ToolCallStarted{}}
+
+      changed =
+        case unquote(change) do
+          :denied -> %{policy() | effective: %{policy().effective | audio_routes: %{}}}
+          :regranted -> %{policy() | revision: 2}
+          :absent -> %{policy() | present_participant_ids: MapSet.new([@agent])}
+          :unavailable -> nil
+        end
+
+      :ok = GenServer.call(state.media_policy_authority, {:replace, changed})
+      state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{})
+      assert state.sts_tool_calls == %{}
+      refute_received {:provider_tool_result, _, _}
+      refute_received {:vxpipe_event, _}
+    end
+  end
+
+  test "completed tool history retains only a sequence watermark", context do
+    state =
+      Enum.reduce(1..50, context.state, fn sequence, state ->
+        call = make_ref()
+        state = tool_event(state, context.capability, tool_evidence(state, call, sequence))
+        assert_receive {:vxpipe_event, %ToolCallStarted{}}
+        state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{})
+        assert_receive {:vxpipe_event, %ToolCallCompleted{}}
+        assert_receive {:provider_tool_result, ^call, %{}}
+        assert state.sts_tool_calls == %{}
+        assert state.sts_tool_sequence == sequence
+        state
+      end)
+
+    replacement = SpeechToSpeech.bind_capability(state, self(), @agent)
+    assert replacement.sts_tool_sequence == 0
+    assert replacement.sts_tool_calls == %{}
+  end
+
+  defp tool_event(state, capability, evidence),
+    do: ToolEvents.handle(state, capability, @agent, evidence, policy())
+
+  defp tool_evidence(state, call, sequence) do
+    %{
+      identity: state.speech_to_speech_capability.input_handle.identity,
+      epoch: state.speech_to_speech_capability.input_epoch,
+      audio_interval: 0,
+      event: %Vxpipe.CallEngine.Speech.Event{
+        kind: :tool_call,
+        call_ref: call,
+        turn_ref: make_ref(),
+        sequence: sequence,
+        tool_name: "echo",
+        arguments: %{}
+      }
+    }
+  end
+
+  defp policy do
+    %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new(["human", @agent]),
+      effective: %Vxpipe.CallEngine.MediaPolicy.Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: :unrestricted,
+        record_audio: false,
+        save_transcripts: false
+      }
+    }
   end
 
   defp call(state, capability, call, turn),

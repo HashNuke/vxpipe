@@ -21,7 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     TextOutput
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{CallerTurns, Evidence, Tools}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{CallerTurns, Evidence, ToolEvents, Tools}
 
   import Evidence,
     only: [
@@ -56,7 +56,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         sts_turns: %{},
         sts_caller_turns: %{},
         sts_caller_sequence: 0,
-        sts_tool_calls: %{}
+        sts_tool_calls: %{},
+        sts_tool_sequence: 0
     }
   end
 
@@ -265,6 +266,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   defdelegate handle_tool_timeout(state, capability, call_ref), to: Tools
   defdelegate handle_tool_cancelled(state, capability, agent_id, call_ref), to: Tools
 
+  defdelegate handle_tool_event(state, capability, agent_id, evidence),
+    to: ToolEvents,
+    as: :handle
+
   @spec handle_unavailable(State.t(), pid(), term()) :: State.t()
   def handle_unavailable(%State{} = state, capability, _reason) do
     if current?(state, capability) do
@@ -274,7 +279,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           speech_to_speech_ready?: false,
           sts_turns: %{},
           sts_caller_turns: %{},
-          sts_caller_sequence: 0
+          sts_caller_sequence: 0,
+          sts_tool_calls: %{},
+          sts_tool_sequence: 0
       }
     else
       state
@@ -328,9 +335,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   def hold(%State{} = state) do
     _ = Capability.hold(state.speech_to_speech_capability.pid)
-    retire_caller_epoch(state)
+    state |> cancel_pending_tools() |> retire_caller_epoch()
   catch
-    :exit, _reason -> retire_caller_epoch(state)
+    :exit, _reason -> state |> cancel_pending_tools() |> retire_caller_epoch()
   end
 
   @spec release(State.t()) :: State.t()
@@ -390,7 +397,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         sts_turns: %{},
         sts_caller_turns: %{},
         sts_caller_sequence: 0,
-        sts_tool_calls: %{}
+        sts_tool_calls: %{},
+        sts_tool_sequence: 0
     }
   catch
     :exit, _reason ->
@@ -402,7 +410,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           sts_turns: %{},
           sts_caller_turns: %{},
           sts_caller_sequence: 0,
-          sts_tool_calls: %{}
+          sts_tool_calls: %{},
+          sts_tool_sequence: 0
       }
   end
 

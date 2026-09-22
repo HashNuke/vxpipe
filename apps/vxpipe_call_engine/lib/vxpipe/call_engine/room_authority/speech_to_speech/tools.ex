@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
 
   import Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence,
@@ -429,12 +430,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   defp pending_connection(state, pending) do
     with true <- pending.source == state.speech_to_speech_capability,
-         {_, connection} <- permitted_connection(state) do
+         {_, connection} <- permitted_connection(state),
+         true <- pending_policy_current?(state, pending) do
       {:ok, connection}
     else
       _stale -> :error
     end
   end
+
+  defp pending_policy_current?(state, %{evidence: evidence}),
+    do: Evidence.tool_scope_current?(state, evidence)
+
+  defp pending_policy_current?(_state, _pending), do: true
 
   defp permitted_connection(state) do
     with %{input_epoch: epoch} when is_reference(epoch) <- state.speech_to_speech_capability,

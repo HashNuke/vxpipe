@@ -52,7 +52,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 sts_turns: %{},
                 sts_caller_turns: %{},
                 sts_caller_sequence: 0,
-                sts_tool_calls: %{}
+                sts_tool_calls: %{},
+                sts_tool_sequence: 0
               ]
 
   @type t :: %__MODULE__{
@@ -100,7 +101,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           sts_turns: map(),
           sts_caller_turns: map(),
           sts_caller_sequence: non_neg_integer(),
-          sts_tool_calls: map()
+          sts_tool_calls: map(),
+          sts_tool_sequence: non_neg_integer()
         }
 
   @spec new(
