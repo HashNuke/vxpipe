@@ -198,7 +198,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     end)
   end
 
-  defp variable_binding(plan, receiver, options) do
+  @doc false
+  def variable_binding(plan, receiver, options) do
     cond do
       map_size(receiver.variable_permissions.grants) == 0 ->
         {:ok, nil}

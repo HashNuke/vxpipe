@@ -17,6 +17,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     assert public[:turn_control] in [nil, "provider"]
     assert startup.speech_to_speech.output_speech_to_text == nil
     refute inspect(startup) =~ "private-marker"
+    refute inspect(startup) =~ "Answer briefly."
+
+    assert Keyword.fetch!(startup.speech_to_speech.provider_private, :activation).system_prompt ==
+             "Answer briefly."
   end
 
   test "STS without output transcription resolves its agent output STT" do
@@ -35,6 +39,29 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     assert startup.agent_activation == nil
     assert {STSSession, _public} = startup.speech_to_speech.provider
     assert {STTSession, _stt_public} = startup.speech_to_speech.output_speech_to_text
+  end
+
+  test "compiled STS activation retains only configured host tools, without another model" do
+    plan =
+      compile_plan(
+        %{speech_to_speech: %{provider: "morse", model: "morse", options: %{}}},
+        %{"test_agent_tool" => %{type: "host", tool: "test_agent_tool"}}
+      )
+
+    assert {:ok, startup} = PlanStartup.new(plan, options())
+    assert startup.agent_activation == nil
+    activation = Keyword.fetch!(startup.speech_to_speech.provider_private, :activation)
+    assert [tool] = activation.tools
+    definition = Vxpipe.CallEngine.TestAgentTool.definition()
+
+    assert tool == %{
+             name: definition.name,
+             description: definition.description,
+             input_schema: definition.parameters
+           }
+
+    refute inspect(startup) =~ definition.description
+    refute inspect(startup) =~ "Answer briefly."
   end
 
   test "agent-output recognition still requires its STT provider to be enabled" do
@@ -62,7 +89,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     end
   end
 
-  defp compile_plan(agent_caps) do
+  defp compile_plan(agent_caps, tools \\ %{}) do
     source = %{
       schema_version: "20260915.01",
       name: "STS activation",
@@ -79,7 +106,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
           type: "agent",
           prompt: "Answer briefly.",
           first_message: %{mode: "wait_for_input"},
-          tools: %{},
+          tools: tools,
           transfers: [],
           capabilities: agent_caps
         }
@@ -93,7 +120,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
              tenant_id: "tenant-sts",
              actor_id: "operator-sts"
            ),
-         {:ok, plan} <- CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}}) do
+         {:ok, plan} <-
+           CallSpecCompiler.compile(call_spec, invocation, %{
+             host_tools: %{
+               "test_agent_tool" => Vxpipe.CallEngine.TestAgentTool,
+               "echo_context" => Vxpipe.CallEngine.STSContextTool
+             }
+           }) do
       plan
     else
       {:error, error} -> flunk("plan failed: #{inspect(error)}")

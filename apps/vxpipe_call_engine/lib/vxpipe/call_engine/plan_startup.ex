@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination
   alias Vxpipe.CallEngine.PlanStartup.HumanDestination
+  alias Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
@@ -30,6 +31,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   @error_code :unsupported_call_plan
   @error_message "The resolved call plan is not supported by this runtime."
 
+  @derive {Inspect, only: [:speech_to_speech]}
   @enforce_keys [
     :caller,
     :caller_command,
@@ -527,15 +529,16 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:ok, nil} ->
         {:ok, nil}
 
-      {:ok, {provider_module, provider_config} = provider, settings} ->
-        with {:ok, runtime_provider, provider_private} <-
-               SpeechToSpeechRuntime.provider(provider, settings),
+      {:ok, {provider_module, _provider_config} = provider, settings} ->
+        with {:ok, activation} <- SpeechToSpeechActivation.resolve(plan, participant, options),
+             {:ok, {^provider_module, runtime_options} = runtime_provider, provider_private} <-
+               SpeechToSpeechRuntime.provider(provider, settings, activation),
              {:ok, usage_provider} <-
                speech_to_speech_usage_provider(
                  plan,
                  participant,
                  provider_module,
-                 provider_config
+                 runtime_options
                ),
              {:ok, output_speech_to_text} <-
                output_speech_to_text_runtime(plan, participant, options) do

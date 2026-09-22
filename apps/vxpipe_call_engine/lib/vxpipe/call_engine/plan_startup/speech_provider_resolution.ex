@@ -78,10 +78,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
   end
 
   defp configure_provider(provider, options, :speech_to_speech) do
-    case provider.configure(options) do
-      {:ok, _descriptor} -> {:ok, options}
-      {:error, _reason} = error -> error
-    end
+    Vxpipe.CallEngine.SpeechToSpeechRuntime.configure(provider, options)
   end
 
   defp configure_provider(provider, options, _kind),

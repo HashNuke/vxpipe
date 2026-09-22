@@ -6,6 +6,102 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
+  test "tampered private setup fails before connecting a socket" do
+    scope = start_supervised!({CapabilityTree, owner: self()})
+    assert {:ok, config} = STS.new(api_key: "synthetic")
+    config = %{config | tools: [%{"private-invalid-schema" => "not a declaration"}]}
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(scope),
+               provider: STSSession,
+               options: [],
+               owner: self(),
+               private: [
+                 config: config,
+                 wire_module: TestGoogleSTSTransport,
+                 wire_options: [observer: self()]
+               ]
+             )
+
+    assert_receive {:vxpipe_speech_closed, ^session, :initialization_failed}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+  end
+
+  test "private activation prompt and exact authorized declarations survive handle resumption" do
+    alias Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation
+    alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+    alias Vxpipe.CallEngine.TestAgentTool
+
+    participant = %{
+      prompt: "private-instruction-marker",
+      variable_permissions: %{grants: %{}},
+      tools: %{
+        "test_agent_tool" => %ToolBinding{
+          name: "test_agent_tool",
+          type: :host,
+          conversation_mode: :blocking,
+          action: TestAgentTool
+        }
+      }
+    }
+
+    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant, [])
+    definition = TestAgentTool.definition()
+
+    expected = [
+      %{
+        "functionDeclarations" => [
+          %{
+            "name" => definition.name,
+            "description" => definition.description,
+            "parametersJsonSchema" => definition.parameters
+          }
+        ]
+      }
+    ]
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        {session, wire} = start_session(activation: activation)
+        assert_receive {:test_google_sts_control, ^wire, initial}
+        initial = JSON.decode!(initial)["setup"]
+        assert initial["systemInstruction"] == %{"parts" => [%{"text" => participant.prompt}]}
+        assert initial["tools"] == expected
+        refute JSON.encode!(initial) =~ "synthetic-google-sts-key"
+
+        update_handle(session, wire, "private-resumption-marker")
+        deliver(wire, %{"goAway" => %{"timeLeft" => "60s"}})
+        assert_receive {:test_google_sts_started, pending, _connection}
+        assert_receive {:test_google_sts_control, ^pending, resumed}
+        resumed = JSON.decode!(resumed)["setup"]
+
+        assert resumed ==
+                 Map.put(initial, "sessionResumption", %{"handle" => "private-resumption-marker"})
+
+        deliver_sync(session, pending, %{"setupComplete" => %{}})
+        refute_received {:test_google_sts_audio, ^pending, _}
+        refute_received {:test_google_sts_control, ^pending, _}
+
+        provider = Session.provider(session)
+
+        for visible <- [session, :sys.get_status(provider)] do
+          refute inspect(visible) =~ participant.prompt
+          refute inspect(visible) =~ definition.description
+          refute inspect(visible) =~ "private-resumption-marker"
+          refute inspect(visible) =~ "synthetic-google-sts-key"
+        end
+
+        monitor = Process.monitor(provider)
+        deliver(pending, %{"error" => %{"message" => participant.prompt}})
+        assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+      end)
+
+    refute log =~ participant.prompt
+    refute log =~ definition.description
+    refute log =~ "private-resumption-marker"
+    refute log =~ "synthetic-google-sts-key"
+  end
+
   test "active output overflow retires the allocation while consumer audio credit is held" do
     {session, wire, _output} = start_output()
     provider = Session.provider(session)
@@ -393,13 +489,29 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     scope =
       start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
 
-    {:ok, config} =
+    {:ok, base_config} =
       STS.new(
         api_key: "synthetic-google-sts-key",
         model: "gemini-3.8-live",
         voice: "Kore",
         turn_control: turn_control
       )
+
+    config =
+      case Keyword.fetch(opts, :activation) do
+        {:ok, activation} ->
+          {:ok, {STSSession, _public}, private} =
+            Vxpipe.CallEngine.SpeechToSpeechRuntime.provider(
+              {STSSession, [api_key: "synthetic-google-sts-key", turn_control: turn_control]},
+              [],
+              activation
+            )
+
+          Keyword.fetch!(private, :config)
+
+        :error ->
+          base_config
+      end
 
     private =
       [

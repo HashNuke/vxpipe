@@ -971,10 +971,34 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   rejects the event despite accepting `output_settlement: :transcript_end`.
   Test final/late/missing text and history reconciliation without fabricating
   played content or claiming the hosted history gate passed.
-- [ ] Carry bounded private agent prompt and authorized tool schemas through
+- [x] Carry bounded private agent prompt and authorized tool schemas through
   STS activation configuration into initial and resumed Google setup. Reject
   unsupported configuration explicitly. Verify fake-wire setup contents; an
   injected function-call response is not evidence of provider tool discovery.
+  - [x] Resolve the pinned prompt and allowed tool descriptors through the existing
+    tool compiler; carry only model-visible fields in redacted private startup data.
+  - [x] Validate Google instruction/declaration encoding against official sources;
+    reject invalid, unsupported and oversized configuration before socket startup.
+  - [x] Prove exact initial and handle-resumed fake-wire setup, empty tools, bounds,
+    and inspect/status/log redaction with focused Call Engine red-green tests.
+  - [x] Document local evidence and remaining gated selection/hosted acceptance.
+
+  Configuration design review (2026-09-22): reuse the private provider-init path
+  and retained resumption config, without changing capability/room ownership or
+  invoking tools/another model. Tool declarations must preserve authorized names
+  and schemas, never serialize invocation bindings. Unsupported activation contexts
+  fail explicitly. Google remains absent from the manifest; local tests exercise
+  the startup configuration boundary directly without enabling production selection.
+  Parent owns shared execution lifetime, normative-contract sync and final gates.
+
+  Configuration evidence: 88 focused startup/selection, Google codec/session and
+  shared STS conformance/output tests pass, seed 0, two schedulers. Initial and
+  resumed setup contain the exact authorized JSON schemas and pinned instruction;
+  malformed private setup fails before connecting. Unsupported MCP activation
+  ownership fails explicitly, as do unavailable variable bindings and oversized
+  configuration. See [Google configuration decision](../google-speech-integration.md#private-sts-activation-configuration)
+  and `labnotes/20260922-1650-google-activation-config.md`. Public Google selection,
+  hosted interoperability and overall milestone acceptance remain incomplete.
 - [ ] Add the tagged hosted controller/interruption/resumption acceptance check
   before requesting billable execution. Keep it excluded by default and Google
   unadvertised until the separately authorized acceptance gate passes.

@@ -81,3 +81,62 @@ Sources: [Google speech generation](https://ai.google.dev/gemini-api/docs/speech
 [Interactions streaming](https://ai.google.dev/gemini-api/docs/streaming),
 [Live transcription](https://ai.google.dev/gemini-api/docs/live-api/live-transcribe), and
 [Live API reference](https://ai.google.dev/api/live).
+
+## Private STS activation configuration
+
+Local implementation checkpoint, 2026-09-22; Google STS remains unadvertised and
+public selection remains gated. The hosted evidence above concerns the separate
+STT/TTS integrations, not Gemini STS acceptance.
+
+`PlanStartup.SpeechToSpeechActivation` resolves the pinned agent prompt and uses
+the existing `AgentRuntime.ToolDescriptors` compiler for the configured tool
+allowlist and authorized Call Variables actions. It retains only each tool's
+name, description and input schema. Invocation bindings, variable values and
+executable handlers never enter provider configuration. Variable permissions
+require the existing activation binding; remote MCP tools fail explicitly because
+this startup path has no owning MCP runtime. This checkpoint does not create that
+owner, execute tools, change invocation lifetime or start a text-model session.
+
+`SpeechToSpeechRuntime` splits public model/voice/turn-control settings from the
+private Google config. That config contains the resolved credential, instruction
+and declarations. `PlanStartup`, activation and Google config inspection redact
+the private contents. Provider status and failure logs also redact them. The
+existing private-init handoff and retained resumption config carry these values;
+no capability/room runtime or resumption algorithm change is required.
+
+The wire encoding follows Google's [Live setup reference](https://ai.google.dev/api/live#bidigeneratecontentsetup):
+`systemInstruction.parts[].text`, `tools[].functionDeclarations`, and activity
+detection nested under `realtimeInputConfig`. Each declaration uses
+[`parametersJsonSchema`](https://ai.google.dev/api/generate-content#FunctionDeclaration)
+to preserve the authorized JSON schema exactly. It does not convert schemas to
+Google's separate OpenAPI-shaped `parameters` representation. The same validated
+setup is sent after private handle renewal, with only `sessionResumption.handle`
+changed. No history/audio/tool replay or fresh-session fallback is added.
+
+Local bounds are 65,536 UTF-8 prompt bytes, 64 declarations and 131,072 bytes for
+the combined prompt/declarations, checked both as an Erlang external term and
+as encoded JSON (including escaping). Existing descriptor limits additionally
+bound tool names, descriptions and individual schemas. Schemas must be valid
+JSON objects describing an object, pass the existing schema compiler and round
+trip through JSON without changing values. Unknown declaration fields, duplicate
+names/options, public prompt/tool options, non-object schemas, unavailable
+bindings and invalid/oversized input return sanitized configuration errors.
+Session startup revalidates private structs before connecting, including the fixed
+endpoint. These are adapter bounds, not claims about Google's maximum capacity.
+
+Rejected alternatives: dropping schemas or unsupported bindings would silently
+change the agent's allowed tools; retaining complete descriptors would retain
+execution authority unnecessarily; placing prompt/tools in public descriptors
+would expose private content. A second LLM session would split conversational
+ownership. Google non-blocking behavior overrides and built-in tools are not
+accepted by this declaration-only configuration path.
+
+Verification: 88 focused startup/selection, Google codec/session and shared STS
+conformance/output tests pass (seed 0, two schedulers). Fake-wire checks assert
+exact initial/resumed instructions and parameter schemas, no replay, empty
+allowlists, redaction and pre-connect rejection. The initial red run was 16 tests
+with five failures; later focused reds reproduced tampered config reaching a
+socket and the misplaced activity-detection field. Commands and evidence are in
+`labnotes/20260922-1650-google-activation-config.md`. No hosted call, registry or UI
+enablement, full umbrella/native/load gate or overall milestone acceptance is
+claimed by this checkpoint.

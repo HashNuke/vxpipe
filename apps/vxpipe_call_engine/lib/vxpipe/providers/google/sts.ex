@@ -23,20 +23,41 @@ defmodule Vxpipe.Providers.Google.STS do
 
   @enforce_keys [:api_key, :model, :voice, :turn_control]
   @derive {Inspect, only: [:model, :voice, :turn_control]}
-  defstruct @enforce_keys ++ [endpoint: @endpoint]
+  defstruct @enforce_keys ++ [endpoint: @endpoint, system_prompt: "", tools: []]
 
   def new(options) when is_list(options) do
-    with {:ok, public} <- public_options(Keyword.drop(options, [:api_key])),
+    with true <- Keyword.keyword?(options),
+         true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
+         {:ok, public} <-
+           public_options(Keyword.drop(options, [:api_key, :system_prompt, :tools])),
          api_key when is_binary(api_key) <- Keyword.get(options, :api_key),
          true <- byte_size(api_key) in 1..8_192,
-         true <- Regex.match?(~r/\A[\x21-\x7E]+\z/, api_key) do
-      {:ok, struct(__MODULE__, Map.merge(public, %{api_key: api_key}))}
+         true <- Regex.match?(~r/\A[\x21-\x7E]+\z/, api_key),
+         prompt = Keyword.get(options, :system_prompt, ""),
+         tools = Keyword.get(options, :tools, []),
+         :ok <- Vxpipe.Providers.Google.STSAgentConfig.validate(prompt, tools) do
+      {:ok,
+       struct(
+         __MODULE__,
+         Map.merge(public, %{api_key: api_key, system_prompt: prompt, tools: tools})
+       )}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   end
 
   def new(_options), do: {:error, :invalid_configuration}
+
+  def validate(%__MODULE__{endpoint: @endpoint} = config) do
+    options = config |> Map.from_struct() |> Map.delete(:endpoint) |> Map.to_list()
+
+    case new(options) do
+      {:ok, ^config} -> :ok
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  def validate(_config), do: {:error, :invalid_configuration}
 
   def public_options(options) when is_list(options) do
     with {:ok, options} <-
@@ -77,7 +98,12 @@ defmodule Vxpipe.Providers.Google.STS do
         "inputAudioTranscription" => %{},
         "outputAudioTranscription" => %{},
         "sessionResumption" => %{},
-        "automaticActivityDetection" => %{"disabled" => config.turn_control == "external"}
+        "systemInstruction" => %{"parts" => [%{"text" => config.system_prompt}]},
+        "tools" =>
+          if(config.tools == [], do: [], else: [%{"functionDeclarations" => config.tools}]),
+        "realtimeInputConfig" => %{
+          "automaticActivityDetection" => %{"disabled" => config.turn_control == "external"}
+        }
       }
     }
   end

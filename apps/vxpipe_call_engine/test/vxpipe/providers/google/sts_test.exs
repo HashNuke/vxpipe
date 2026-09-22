@@ -3,6 +3,127 @@ defmodule Vxpipe.Providers.Google.STSTest do
 
   alias Vxpipe.Providers.Google.STS
 
+  test "private prompt and exact JSON tool schema reach setup without inspect disclosure" do
+    tool = %{
+      "name" => "lookup",
+      "description" => "private-schema-marker",
+      "parametersJsonSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "query" => %{"type" => "string", "enum" => ["private-enum-marker"]}
+        },
+        "required" => ["query"],
+        "additionalProperties" => false
+      }
+    }
+
+    assert {:ok, config} =
+             STS.new(api_key: "synthetic", system_prompt: "private-prompt-marker", tools: [tool])
+
+    assert STS.setup(config)["setup"]["tools"] == [%{"functionDeclarations" => [tool]}]
+
+    assert STS.setup(config)["setup"]["systemInstruction"] == %{
+             "parts" => [%{"text" => "private-prompt-marker"}]
+           }
+
+    refute inspect(config) =~ "private-"
+  end
+
+  test "private configuration rejects invalid schemas, duplicates and bounded payload overflow" do
+    tool = %{
+      "name" => "lookup",
+      "description" => "lookup",
+      "parametersJsonSchema" => %{"type" => "object"}
+    }
+
+    for overrides <- [
+          [system_prompt: <<255>>],
+          [system_prompt: 42],
+          [system_prompt: String.duplicate("x", 65_537)],
+          [tools: [Map.put(tool, "parametersJsonSchema", %{"type" => "string"})]],
+          [
+            tools: [
+              Map.put(tool, "parametersJsonSchema", %{"type" => "object", "properties" => 1})
+            ]
+          ],
+          [
+            tools: [
+              Map.put(tool, "parametersJsonSchema", %{"type" => "object", "private" => self()})
+            ]
+          ],
+          [tools: [Map.put(tool, "behavior", "NON_BLOCKING")]],
+          [tools: [tool, tool]],
+          [tools: List.duplicate(tool, 65)],
+          [tools: [Map.put(tool, "description", String.duplicate("x", 131_073))]]
+        ] do
+      assert {:error, :invalid_configuration} = STS.new([api_key: "synthetic"] ++ overrides)
+    end
+
+    assert {:error, :invalid_configuration} = STS.public_options(system_prompt: "private")
+    assert {:error, :invalid_configuration} = STS.public_options(tools: [tool])
+  end
+
+  test "private configuration cannot be tampered after validation" do
+    assert {:ok, config} = STS.new(api_key: "synthetic")
+    assert :ok = STS.validate(config)
+
+    for bad <- [
+          %{config | system_prompt: <<255>>},
+          %{config | tools: [%{}]},
+          %{config | endpoint: "wss://unsupported.invalid"},
+          %{config | api_key: ""}
+        ] do
+      assert {:error, :invalid_configuration} = STS.validate(bad)
+    end
+  end
+
+  test "configuration bounds include aggregate size, JSON escaping and tool count" do
+    tool = %{
+      "name" => "lookup",
+      "description" => "lookup",
+      "parametersJsonSchema" => %{"type" => "object", "properties" => %{}}
+    }
+
+    tools = for index <- 1..64, do: Map.put(tool, "name", "lookup_#{index}")
+
+    assert {:ok, _} =
+             STS.new(
+               api_key: "synthetic",
+               tools: tools,
+               system_prompt: String.duplicate("x", 65_536)
+             )
+
+    assert {:error, :invalid_configuration} =
+             STS.new(api_key: "synthetic", tools: tools ++ [Map.put(tool, "name", "extra")])
+
+    assert {:error, :invalid_configuration} =
+             STS.new(api_key: "synthetic", system_prompt: String.duplicate(<<0>>, 65_536))
+
+    large_tools =
+      Enum.map(tools, fn tool ->
+        put_in(tool, ["parametersJsonSchema", "description"], String.duplicate("x", 3_000))
+      end)
+
+    assert {:error, :invalid_configuration} = STS.new(api_key: "synthetic", tools: large_tools)
+
+    assert {:error, :invalid_configuration} =
+             STS.new(api_key: "synthetic", tools: [], tools: tools)
+
+    assert {:error, :invalid_configuration} =
+             STS.new(api_key: "synthetic", endpoint: "wss://unsupported.invalid")
+  end
+
+  test "setup nests activity detection under the documented realtime input configuration" do
+    assert {:ok, config} = STS.new(api_key: "synthetic", turn_control: "external")
+    setup = STS.setup(config)["setup"]
+
+    assert setup["realtimeInputConfig"] == %{
+             "automaticActivityDetection" => %{"disabled" => true}
+           }
+
+    refute Map.has_key?(setup, "automaticActivityDetection")
+  end
+
   test "large wire audio parts preserve their non-full PCM tail" do
     pcm = :binary.copy(<<42, 0>>, 65_536) <> <<7, 0, 8, 0>>
 
@@ -59,7 +180,12 @@ defmodule Vxpipe.Providers.Google.STSTest do
         turn_control: "external"
       )
 
-    assert get_in(STS.setup(manual), ["setup", "automaticActivityDetection", "disabled"]) == true
+    assert get_in(STS.setup(manual), [
+             "setup",
+             "realtimeInputConfig",
+             "automaticActivityDetection",
+             "disabled"
+           ]) == true
   end
 
   test "audio encodes as 16k PCM and decodes 24k output in bounded chunks" do

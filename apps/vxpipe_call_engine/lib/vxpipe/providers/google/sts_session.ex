@@ -140,7 +140,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
     expire_after = Keyword.get(private, :expire_after_ms, @default_expire_after)
     resume_timeout = Keyword.get(private, :resumption_timeout_ms, 5_000)
 
-    with %STS{} <- config,
+    with :ok <- STS.validate(config),
          {:ok, expected} <-
            configure(model: config.model, voice: config.voice, turn_control: config.turn_control),
          true <- descriptor == expected,
