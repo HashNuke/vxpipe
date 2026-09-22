@@ -1011,6 +1011,34 @@ zero failures, 42 excluded, seed 0. See
   playback acknowledgement, turn completion, interruption and failure
   isolation p50/p95/p99 plus drops, mailbox growth and cleanup. Pause and
   investigate any proven new call/app instability before shipping.
+  - [x] Implement a dedicated, reproducible tagged lane with ten barrier-synchronized
+    pinned room calls per mode: fixture LLM + Morse TTS, Morse STS provider
+    transcript, and Morse STS + agent-output STT. Use allowed room PCM input,
+    public events and a bounded, clock-paced synthetic playback sink.
+  - [x] Test harness-owned bounds, percentile calculation and playback accounting
+    red/green; cap schedulers, run duration, turns, retained samples and PCM.
+  - [x] Collect measured admission/startup, input acceptance, speech onset, first
+    audio, playback acknowledgement, completion, interruption and isolated failure
+    timings, dropped input/output, sampled mailbox growth and monitored cleanup.
+    - [x] Wire Morse STT's existing optional ingress-owner notifications to a
+      bounded harness observer and reconcile delivered/dropped/rejected input.
+      The room's default nil observer supplies no drop evidence; absence of
+      notifications must not be reported as a measured zero.
+  - [x] Smoke-test the lane under contention; record defects before any runtime
+    repair. Dedicated harness scope excludes STS/provider runtime changes.
+  - [ ] Run the integrated ten-call comparison only in a parent-scheduled quiet
+    window; retain p50/p95/p99 reports and review isolation/cleanup evidence before
+    completing load acceptance. Contended smoke output is not performance evidence.
+
+  Load harness design review (2026-09-22): allocation-only conformance is insufficient;
+  each mode must pass actual admitted room audio and public completion. Synthetic
+  sink playback describes paced PCM consumption, never human hearing. Final load
+  acceptance depends on integrated lifecycle behavior and a quiet measurement window.
+  Harness evidence: [method and commands](../sts-comparative-call-load.md) and
+  `labnotes/20260922-1610-comparative-call-load.md`. Three two-call smoke modes
+  pass; each observes five complete turns, two interruptions and one healthy
+  post-fault call. The ten-call lane is implemented but has not been run in a
+  quiet window. These implementation/smoke checkboxes do not complete load acceptance.
 - [ ] Run focused child suites and root format, warnings-as-errors compile,
   strict Credo, full tests and unused-lock gates. Verify no real-key fixtures,
   no credential/database migration loss, provider tag accuracy, and a clean
