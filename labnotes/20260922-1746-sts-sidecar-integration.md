@@ -23,3 +23,11 @@ strict Credo and unused-lock check. A new full umbrella run was started at
 `a41a4ab1` (same runtime as `4d786b0a`, subsequent docs only); output is in
 `vxpipe-sts-sidecar-integration-umbrella.log`. Completion remains pending until
 the process exits and every application result is checked.
+
+Final result: the full process exited 0 on the `a41a4ab1` runtime: **2,304 tests,
+zero failures, 45 excluded**, seed 0. Call Engine: 1,144; Gateway: 492. All five
+root gates therefore pass for this checkpoint. Runtime sources and compiled
+artifacts stayed fixed throughout. After Call Engine had completed, the parent
+added later transcript-settlement tests and ran them in a separate non-Mix VM;
+those expected reds and test-only fixture edits are not included in this result.
+Their repair remains a new checkpoint with its own gates.
