@@ -119,10 +119,9 @@ bindings, separate from the credential scope. References:
 - Storybook reads the allowlisted public settings in its Node configuration and injects
   only the resulting origin. No environment map or provider credentials reach the browser.
 - Production must derive one authoritative public origin in `config/runtime.exs` and
-  expose safe URL metadata through Console responses. The current
-  `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` compatibility path must be explicit: preserve it as
-  an override during migration, default to the `APP_HOST` public origin, and generate
-  both displayed and outgoing callback URLs from the same resolved value.
+  expose safe URL metadata through Console responses. `TELEPHONY_HOST` overrides the
+  `APP_HOST` public origin, and both displayed and outgoing callback URLs use the same
+  resolved value.
 - A localhost URL previews local routing only. Live Telnyx acceptance needs a public
   endpoint; the UI preview is not evidence of remote reachability.
 

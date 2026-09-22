@@ -158,9 +158,9 @@ the shared endpoint remain pending.
 
 Implementation checkpoint 3 selected Phoenix LiveDashboard for platform VM/runtime inspection
 and a separate Vxpipe page for call-path measurements. These dependencies live only in Console.
-The subsequent access correction keeps diagnostics disabled by default but adds no Console-page
-authentication when enabled. The project-owned Plug now checks only the enabled setting, and
-Repository development exposes `/diagnostics*` on the shared Console endpoint. API keys
+The subsequent access correction keeps diagnostics disabled by default and protects the Console
+pages and LiveDashboard with installation-operator authentication. Repository development exposes
+`/admin/diagnostics*` on the shared Console endpoint. API keys
 and join tokens retain only their API/admission meanings. Rendered desktop/mobile checks verify
 the LiveDashboard surface. The React/Vite playground source is now Console-owned:
 the Phoenix endpoint supervises its Vite watcher in development, while release

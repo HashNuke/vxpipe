@@ -22,8 +22,8 @@ parameters so links are reloadable and browser navigation restores the selected
 view.
 
 The older RTVI playground is a separate `PlaygroundApp` entry point mounted with
-the `/samples` basename. Its `/pipecat-console` and `/transfer` child routes also
-use React Router, producing `/samples/pipecat-console` and `/samples/transfer`.
+the `/admin/samples` basename. Its `/pipecat-console` and `/transfer` child routes also
+use React Router, producing `/admin/samples/pipecat-console` and `/admin/samples/transfer`.
 Storybook keeps its isolated hash navigation because Storybook runs inside
 `/iframe.html` and is not the production application router.
 
@@ -53,6 +53,6 @@ Storybook keeps its isolated hash navigation because Storybook runs inside
 - Route tests cover direct loads, nested parameters, search parameters,
   redirects, browser history, stale request cancellation, and unknown-route
   canonicalization.
-- Playground and endpoint tests cover both `/samples` routes and prove the former
+- Playground and endpoint tests cover both `/admin/samples` routes and prove the former
   root-level routes are absent.
 - TypeScript and ESLint validate the route integration.

@@ -30,7 +30,7 @@ beforeEach(() => {
     <head><meta name="csrf-token" content="csrf-test-token" /></head>
     <body></body>
   `;
-  document.documentElement.setAttribute("phx-socket", "/calls/live");
+  document.documentElement.setAttribute("phx-socket", "/admin/diagnostics/live");
 });
 
 test("connects the page-selected LiveView socket with shared hooks", async () => {
@@ -41,12 +41,12 @@ test("connects the page-selected LiveView socket with shared hooks", async () =>
 
   const [path, socket, options] = phoenix.liveSocket.mock.calls[0];
 
-  expect(path).toBe("/calls/live");
+  expect(path).toBe("/admin/diagnostics/live");
   expect(socket).toBe(phoenix.socket);
   expect(options).toMatchObject({
     hooks: { MetricPulse: { updated: expect.any(Function) } },
     params: { _csrf_token: "csrf-test-token" },
   });
   expect(phoenix.connect).toHaveBeenCalledOnce();
-  expect(window.liveSocket).toMatchObject({ path: "/calls/live" });
+  expect(window.liveSocket).toMatchObject({ path: "/admin/diagnostics/live" });
 });

@@ -6,8 +6,8 @@ behavior in the browser. The Console's Phoenix endpoint supervises Phoenix's esb
 wrapper as its development watcher and uses LiveReload for browser refreshes;
 `mix assets.deploy` writes the minified release bundle to the Console application's
 ignored `priv/static/assets` directory. Phoenix serves the UI and mounted gateway
-from one listener. The caller playground is mounted at `/samples/pipecat-console`; the root is a directory
-of the available Console interfaces.
+from one listener. The caller playground is mounted at `/admin/samples/pipecat-console` and requires an
+installation-operator session.
 
 The esbuild profile has independent named entries for the React sample, the shared LiveView client,
 call-inspection styles, and diagnostics styles. Operator assets are served by the same Phoenix
@@ -22,14 +22,14 @@ client, and uses the Small WebRTC transport. The default offer URL is
 
 Development uses the local `vxpipe_dev` PostgreSQL database by default;
 `VXPIPE_DATABASE_URL` optionally overrides that connection. The **Create room** control calls
-`POST /sample/calls` on the same Phoenix origin. The Console's supervised sample
+`POST /admin/samples/calls` on the same Phoenix origin. The Console's supervised sample
 backend uses its private development API key and configured initial variables to
 prepare a call, then returns only its public tenant/call/participant locator and
 five-minute join token. The browser presents that token to the matching gateway
 participant-session route. Its atomic claim starts the stored pinned plan and returns
 the Small WebRTC session. The API key and initial variables never enter the browser.
 
-For hosts that disable the managed sample, `POST /sample/calls` returns 404 and
+For hosts that disable the managed sample, `POST /admin/samples/calls` returns 404 and
 the control keeps the database-free fallback: it calls `POST /api/rooms` with a random room ID,
 and the trusted gateway adapter starts the configured plan and returns its session.
 Only after either path succeeds does the creation screen give the whole viewport to
@@ -61,7 +61,7 @@ spoken through the configured Deepgram path.
    Google and Deepgram for one tenant. Set `VXPIPE_DEV_TENANT` to its public key alongside the
    platform encryption settings in the ignored repository-root `.env`.
 2. From the repository root, run `bin/dev`.
-3. Open `https://<this-machine's-tailscale-fqdn>:4000/samples/pipecat-console`, choose **Create room**,
+3. Open `https://<this-machine's-tailscale-fqdn>:4000/admin/samples/pipecat-console`, choose **Create room**,
    and then choose **Connect** in the Pipecat console.
 4. Type or say: `Use the get_current_time tool and tell me the current UTC time.`
 5. In the console event log, verify an `llm-function-call-in-progress` event for
@@ -78,8 +78,8 @@ is a failed test.
 
 1. Create/migrate `vxpipe_dev`, provision the tenant’s Google and Deepgram credentials,
    select that tenant with `VXPIPE_DEV_TENANT`, and start `bin/dev`.
-2. Open `/samples/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
-3. Open `/samples/transfer` in a second browser or device. Use headphones when both clients are on one
+2. Open `/admin/samples/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
+3. Open `/admin/samples/transfer` in a second browser or device. Use headphones when both clients are on one
    machine so the two live microphones do not feed each other.
 4. In the caller console, type or say: `Please transfer me to human support. I need help with my
    sample order.` The development agent must invoke its catalog-bound transfer tool; a model reply

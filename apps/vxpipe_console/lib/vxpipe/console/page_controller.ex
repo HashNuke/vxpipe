@@ -6,6 +6,8 @@ defmodule Vxpipe.Console.PageController do
 
     with true <- required_assets_available?(settings),
          {:ok, html} <- File.read(index_path(settings)) do
+      html = String.replace(html, "__VXPIPE_CSRF_TOKEN__", Plug.CSRFProtection.get_csrf_token())
+
       conn
       |> Plug.Conn.put_resp_content_type("text/html")
       |> Plug.Conn.put_resp_header("cache-control", "no-store")

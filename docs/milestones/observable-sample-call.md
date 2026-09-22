@@ -175,7 +175,7 @@ the diagnostics UI remain pending. Final gates pass with call engine `102 tests,
 (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console `2 tests, 0 failures`.
 
 Implementation evidence, checkpoint 3 (2026-09-08): selected Phoenix LiveDashboard 0.9.1
-for VM/runtime inspection and reserved the separate `/diagnostics` page for Vxpipe call-path
+for VM/runtime inspection and reserved the separate `/admin/diagnostics` page for Vxpipe call-path
 measurements. Diagnostics are off by default. The initial implementation used a development-only
 loopback exposure check; the subsequent access correction below supersedes that behavior.
 Chromium rendered LiveDashboard at desktop and 390x844 mobile without browser errors. Call
@@ -186,7 +186,7 @@ telemetry and the finished Vxpipe dashboard remain pending. Final gates passed w
 Implementation evidence, access correction (2026-09-08): enabled Console diagnostics add no
 authentication layer. The project-owned Plug now owns only the enabled/disabled setting, and an
 enabled request behaves the same for loopback and non-loopback peers. Caddy routes
-`/diagnostics` and `/diagnostics/*` to the Console endpoint, including the LiveView socket path;
+`/admin/diagnostics` and `/admin/diagnostics/*` to the Console endpoint, including the LiveView socket path;
 API-key authentication remains confined to call-management endpoints and join-token
 validation to call admission. Neither protects Console or LiveDashboard routes. This
 correction supersedes the checkpoint-3 loopback restriction.
@@ -442,7 +442,7 @@ compilation, unused-dependency checking, and strict Credo over 801 files.
 
 Implementation evidence, pre-delivery route cleanup (2026-09-13): `/` now renders a compact
 directory linking every stable Console UI entry point. The Pipecat caller sample is at
-`/samples/pipecat-console`; `/samples/transfer` remains its separate transfer-destination page. Existing navigation
+`/admin/samples/pipecat-console`; `/admin/samples/transfer` remains its separate transfer-destination page. Existing navigation
 from diagnostics, call inspection, operator sign-in, and the transfer desk points directly to the
 new caller URL rather than assuming the sample owns the root route.
 

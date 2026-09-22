@@ -110,7 +110,7 @@ export default function TransferPage() {
     record("Requesting destination admission");
 
     try {
-      const admission = await requestSampleAdmission("/sample/transfers");
+      const admission = await requestSampleAdmission("/admin/samples/transfers");
 
       if (!admission) {
         setError(
@@ -177,7 +177,7 @@ export default function TransferPage() {
     <main className="transfer-page">
       <div className="transfer-shell">
         <header className="transfer-header">
-          <a href="/samples/pipecat-console" aria-label="Vxpipe caller sample">VX</a>
+          <a href="/admin/samples/pipecat-console" aria-label="Vxpipe caller sample">VX</a>
           <p>Human transfer desk</p>
         </header>
 

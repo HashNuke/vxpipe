@@ -5,8 +5,8 @@ defmodule Vxpipe.Console.EndpointTest do
 
   require Phoenix.ChannelTest
 
-  alias Vxpipe.Console.DiagnosticsSocket
-  alias Vxpipe.Console.{SampleCall, TestSampleCallBackend}
+  alias Vxpipe.Console.{DiagnosticsSocket, LiveReloadSocket}
+  alias Vxpipe.Console.{InstallationOperatorSession, SampleCall, TestSampleCallBackend}
   alias Vxpipe.Gateway.HTTP
 
   @endpoint Vxpipe.Console.Endpoint
@@ -14,21 +14,30 @@ defmodule Vxpipe.Console.EndpointTest do
   test "serves the configured sample index and mounted gateway routes through one endpoint" do
     configure_sample_index(Path.expand("../../../priv/static/index.html", __DIR__))
 
-    console_conn = get(build_conn(), "/samples/pipecat-console")
+    console_conn = get(authenticated_conn(), "/admin/samples/pipecat-console")
 
     html = html_response(console_conn, 200)
 
     assert html =~ "Vxpipe RTVI Playground"
+    assert html =~ ~r/<meta name="csrf-token" content="[^"]+"/
     assert html =~ ~s(src="/assets/app.js")
     assert html =~ ~s(href="/assets/app.css")
     refute html =~ "/src/main.tsx"
     assert Plug.Conn.get_resp_header(console_conn, "cache-control") == ["no-store"]
 
-    transfer_conn = get(build_conn(), "/samples/transfer")
+    transfer_conn = get(authenticated_conn(), "/admin/samples/transfer")
     assert html_response(transfer_conn, 200) =~ "Vxpipe RTVI Playground"
 
-    assert response(get(build_conn(), "/pipecat-console"), 404)
-    assert response(get(build_conn(), "/transfer"), 404)
+    assert redirected_to(
+             get(build_conn(), "https://localhost/admin/samples/pipecat-console"),
+             302
+           ) ==
+             "/auth/login"
+
+    assert redirected_to(get(build_conn(), "https://localhost/admin/samples/transfer"), 302) ==
+             "/auth/login"
+
+    assert response(get(build_conn(), "/"), 404)
 
     gateway_conn = get(build_conn(), "/healthz")
 
@@ -41,7 +50,7 @@ defmodule Vxpipe.Console.EndpointTest do
   test "reports unavailable sample assets without hiding the release error" do
     configure_sample_index(Path.join(System.tmp_dir!(), "missing-vxpipe-sample-index.html"))
 
-    conn = get(build_conn(), "/samples/pipecat-console")
+    conn = get(authenticated_conn(), "/admin/samples/pipecat-console")
 
     assert response(conn, 503) == "Vxpipe Console assets are not built"
   end
@@ -52,7 +61,7 @@ defmodule Vxpipe.Console.EndpointTest do
       [Path.join(System.tmp_dir!(), "missing-vxpipe-sample-app.js")]
     )
 
-    conn = get(build_conn(), "/samples/pipecat-console")
+    conn = get(authenticated_conn(), "/admin/samples/pipecat-console")
 
     assert response(conn, 503) == "Vxpipe Console assets are not built"
   end
@@ -89,9 +98,9 @@ defmodule Vxpipe.Console.EndpointTest do
     assert sample == Process.whereis(SampleCall)
 
     conn =
-      build_conn()
+      authenticated_conn()
       |> Plug.Conn.put_req_header("origin", "https://other.example.test")
-      |> post("/sample/calls", %{})
+      |> post("/admin/samples/calls", %{})
 
     assert %{
              "call_id" => call_id,
@@ -139,9 +148,9 @@ defmodule Vxpipe.Console.EndpointTest do
     assert {:ok, _caller_token} = SampleCall.prepare()
 
     conn =
-      build_conn()
+      authenticated_conn()
       |> Plug.Conn.put_req_header("origin", "https://other.example.test")
-      |> post("/sample/transfers", %{})
+      |> post("/admin/samples/transfers", %{})
 
     assert %{
              "call_id" => call_id,
@@ -164,13 +173,13 @@ defmodule Vxpipe.Console.EndpointTest do
   test "returns not found when the durable trusted sample is disabled" do
     assert Process.whereis(SampleCall) == nil
 
-    conn = post(build_conn(), "/sample/calls", %{})
+    conn = post(authenticated_conn(), "/admin/samples/calls", %{})
 
     assert %{"error" => %{"code" => "durable_sample_disabled"}} = json_response(conn, 404)
   end
 
   test "diagnostics are disabled by default" do
-    conn = get(build_conn(), "/diagnostics")
+    conn = get(build_conn(), "/admin/diagnostics")
 
     assert response(conn, 404) == "not found"
   end
@@ -186,40 +195,87 @@ defmodule Vxpipe.Console.EndpointTest do
 
     Application.put_env(:vxpipe_console, :diagnostics, Keyword.put(original, :enabled, true))
 
-    assert {:ok, %Phoenix.Socket{}} = Phoenix.ChannelTest.connect(DiagnosticsSocket, %{})
+    assert :error = Phoenix.ChannelTest.connect(DiagnosticsSocket, %{})
+
+    session = Plug.Conn.get_session(authenticated_conn())
+
+    assert {:ok, %Phoenix.Socket{}} =
+             Phoenix.ChannelTest.connect(DiagnosticsSocket, %{},
+               connect_info: %{session: session}
+             )
+
+    original_host = Application.get_env(:vxpipe_console, :telephony_host, :missing)
+    Application.put_env(:vxpipe_console, :telephony_host, "calls.example.test")
+
+    on_exit(fn ->
+      case original_host do
+        :missing -> Application.delete_env(:vxpipe_console, :telephony_host)
+        value -> Application.put_env(:vxpipe_console, :telephony_host, value)
+      end
+    end)
+
+    assert :error =
+             Phoenix.ChannelTest.connect(DiagnosticsSocket, %{},
+               connect_info: %{
+                 session: session,
+                 uri: URI.parse("https://calls.example.test/admin/diagnostics/live")
+               }
+             )
+
+    assert {:ok, %Phoenix.Socket{}} =
+             Phoenix.ChannelTest.connect(LiveReloadSocket, %{},
+               connect_info: %{uri: URI.parse("https://localhost/phoenix/live_reload/socket")}
+             )
+
+    assert :error =
+             Phoenix.ChannelTest.connect(LiveReloadSocket, %{},
+               connect_info: %{
+                 uri: URI.parse("https://calls.example.test/phoenix/live_reload/socket")
+               }
+             )
 
     assert Enum.any?(@endpoint.__sockets__(), fn
-             {"/diagnostics/live", DiagnosticsSocket, _options} -> true
+             {"/admin/diagnostics/live", DiagnosticsSocket, _options} -> true
+             _socket -> false
+           end)
+
+    refute Enum.any?(@endpoint.__sockets__(), fn
+             {"/calls/live", _socket, _options} -> true
              _socket -> false
            end)
   end
 
-  test "enabled diagnostics require no authentication" do
+  test "enabled diagnostics require installation operator authentication" do
     original = Application.fetch_env!(:vxpipe_console, :diagnostics)
 
     on_exit(fn -> Application.put_env(:vxpipe_console, :diagnostics, original) end)
 
     Application.put_env(:vxpipe_console, :diagnostics, enabled: true)
 
-    diagnostics_conn = get(build_conn(), "/diagnostics")
+    diagnostics_conn = get(authenticated_conn(), "/admin/diagnostics")
     assert html_response(diagnostics_conn, 200) =~ "Vxpipe diagnostics"
 
-    dashboard_conn = get(build_conn(), "/diagnostics/system")
+    dashboard_conn = get(authenticated_conn(), "/admin/diagnostics/system")
     dashboard_path = redirected_to(dashboard_conn, 302)
-    assert dashboard_path == "/diagnostics/system/home"
+    assert dashboard_path == "/admin/diagnostics/system/home"
 
     dashboard_page = dashboard_conn |> recycle() |> get(dashboard_path)
     assert html_response(dashboard_page, 200) =~ "Phoenix LiveDashboard"
 
-    %Plug.Conn{} = remote_conn = build_conn()
-    remote_conn = %Plug.Conn{remote_conn | remote_ip: {203, 0, 113, 9}}
-    remote_diagnostics_conn = get(remote_conn, "/diagnostics")
-
-    assert html_response(remote_diagnostics_conn, 200) =~ "Vxpipe diagnostics"
+    assert html_response(get(authenticated_conn(), "/admin/diagnostics"), 200) =~
+             "Vxpipe diagnostics"
   end
 
   defp configure_sample_index(index_path) do
     configure_sample_assets(index_path, [])
+  end
+
+  defp authenticated_conn(conn \\ build_conn()) do
+    %Plug.Conn{} = conn = %{conn | host: "localhost", scheme: :https}
+
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> InstallationOperatorSession.put()
   end
 
   defp configure_sample_assets(index_path, required_paths) do

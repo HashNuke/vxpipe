@@ -57,29 +57,23 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireTenant
   end
 
-  pipeline :sample_api do
-    plug :accepts, ["json"]
-    plug :put_secure_browser_headers
-  end
-
-  scope "/sample" do
-    pipe_through :sample_api
-
-    post "/calls", Vxpipe.Console.SampleCallController, :create
-    post "/transfers", Vxpipe.Console.SampleTransferController, :create
-  end
-
-  scope "/samples" do
-    pipe_through :browser
+  scope "/admin/samples" do
+    pipe_through [:browser, :operator_pages, :installation_operator]
 
     get "/pipecat-console", Vxpipe.Console.PageController, :index
     get "/transfer", Vxpipe.Console.PageController, :index
   end
 
+  scope "/admin/samples" do
+    pipe_through :installation_operator_api
+
+    post "/calls", Vxpipe.Console.SampleCallController, :create
+    post "/transfers", Vxpipe.Console.SampleTransferController, :create
+  end
+
   scope "/" do
     pipe_through :browser
 
-    get "/", Vxpipe.Console.HomeController, :index
     get "/operator/sign-in", Vxpipe.Console.LegacyOperatorSessionController, :guidance
     post "/operator/session", Vxpipe.Console.LegacyOperatorSessionController, :reject
     post "/operator/sign-out", Vxpipe.Console.LegacyOperatorSessionController, :reject
@@ -153,13 +147,6 @@ defmodule Vxpipe.Console.Router do
           :update
   end
 
-  scope "/admin" do
-    pipe_through [:browser, :operator_pages, :installation_operator]
-
-    get "/", Vxpipe.Console.AdminPageController, :index
-    get "/*path", Vxpipe.Console.AdminPageController, :index
-  end
-
   scope "/tenants/:tenant_key/calls" do
     pipe_through [:browser, :operator_pages, :installation_operator]
 
@@ -186,15 +173,24 @@ defmodule Vxpipe.Console.Router do
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
   end
 
-  scope "/diagnostics" do
-    pipe_through [:diagnostics, :browser]
+  scope "/admin/diagnostics" do
+    pipe_through [:diagnostics, :browser, :operator_pages, :installation_operator]
 
     live_session :vxpipe_diagnostics,
+      on_mount: Vxpipe.Console.DiagnosticsAuth,
       root_layout: {Vxpipe.Console.DiagnosticsLayout, :root} do
       live "/", Vxpipe.Console.DiagnosticsLive, :index
     end
 
     live_dashboard "/system",
-      live_socket_path: "/diagnostics/live"
+      live_socket_path: "/admin/diagnostics/live",
+      on_mount: Vxpipe.Console.DiagnosticsAuth
+  end
+
+  scope "/admin" do
+    pipe_through [:browser, :operator_pages, :installation_operator]
+
+    get "/", Vxpipe.Console.AdminPageController, :index
+    get "/*path", Vxpipe.Console.AdminPageController, :index
   end
 end

@@ -51,7 +51,7 @@ Direct Mix commands do not load `.env`. Development uses `vxpipe_dev` on localho
 default; set `VXPIPE_DB_URL` to connect to a different database. The sample keeps
 its call-scoped API key on the server and reuses your tenant after a restart.
 
-Open [the voice console](http://localhost:4000/samples/pipecat-console), select
+Open [the voice console](http://localhost:4000/admin/samples/pipecat-console), select
 **Create room**, then **Connect**, and allow microphone access. You can speak or
 type to the agent. Try:
 

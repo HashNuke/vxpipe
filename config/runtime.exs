@@ -350,16 +350,24 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
            host: nonempty_env.("APP_HOST"),
            port: nonempty_env.("PORT"),
            tls: if(config_env() == :dev, do: nonempty_env.("VXPIPE_DEV_TLS")),
-           override: nonempty_env.("VXPIPE_TELEPHONY_PUBLIC_BASE_URL")
+           override: nonempty_env.("TELEPHONY_HOST")
          ) do
       {:ok, origin} ->
         origin
 
       _invalid ->
-        raise "invalid APP_HOST / PORT / VXPIPE_DEV_TLS / VXPIPE_TELEPHONY_PUBLIC_BASE_URL configuration"
+        raise "invalid APP_HOST / PORT / VXPIPE_DEV_TLS / TELEPHONY_HOST configuration"
     end
 
   config :vxpipe_console, :service_public_origin, service_public_origin
+
+  telephony_host =
+    case nonempty_env.("TELEPHONY_HOST") do
+      nil -> nil
+      value -> URI.parse(value).host
+    end
+
+  config :vxpipe_console, :telephony_host, telephony_host
 
   telephony_public_base_url =
     if URI.parse(service_public_origin).scheme == "https", do: service_public_origin

@@ -13,7 +13,7 @@ function offerUrl(sessionEndpoint: string): string {
 
 export default function PlaygroundApp() {
   return (
-    <BrowserRouter basename="/samples">
+    <BrowserRouter basename="/admin/samples">
       <Routes>
         <Route path="/pipecat-console" element={<PlaygroundSession />} />
         <Route path="/transfer" element={<TransferPage />} />

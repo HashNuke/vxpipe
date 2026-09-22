@@ -37,11 +37,12 @@ Public deployments terminate HTTPS either in the Console endpoint or at a same-h
 The Console accepts `X-Forwarded-Proto: https` only from a loopback peer. Plain HTTP operator access
 is limited to a loopback peer requesting a loopback host.
 
-The Console root is a small directory of browser-facing interfaces. The tracked React SPA index is
-served at `/samples/pipecat-console` for the caller sample and `/samples/transfer` for its transfer destination.
+The Console root has no public page. The tracked React SPA index is served at
+`/admin/samples/pipecat-console` for the caller sample and `/admin/samples/transfer` for its transfer
+destination; both require an installation-operator session.
 `Plug.Static` serves all revalidated `/assets/*` files. If either compiled sample bundle is absent,
 those SPA routes return 503 rather than a nonfunctional shell. The separate bounded diagnostics
-surface remains available at `/diagnostics`. This application does not own Ecto or call
+surface remains available at `/admin/diagnostics` and requires the same session. This application does not own Ecto or call
 protocol implementations; as the repository executable host, it may compose and
 start their owning umbrella applications.
 

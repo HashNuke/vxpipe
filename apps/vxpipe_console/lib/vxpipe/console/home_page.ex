@@ -24,13 +24,13 @@ defmodule Vxpipe.Console.HomePage do
           <nav aria-label="Console interfaces">
             <ul class="surface-list">
               <li>
-                <a href="/samples/pipecat-console">
+                <a href="/admin/samples/pipecat-console">
                   <strong>Pipecat console</strong>
                   <span>Create a sample room and exercise the RTVI voice path.</span>
                 </a>
               </li>
               <li>
-                <a href="/samples/transfer">
+                <a href="/admin/samples/transfer">
                   <strong>Human transfer desk</strong>
                   <span>Join and accept a development human-transfer flow.</span>
                 </a>
@@ -42,13 +42,13 @@ defmodule Vxpipe.Console.HomePage do
                 </a>
               </li>
               <li>
-                <a href="/diagnostics">
+                <a href="/admin/diagnostics">
                   <strong>Vxpipe diagnostics</strong>
                   <span>Watch bounded gateway and call-engine measurements.</span>
                 </a>
               </li>
               <li>
-                <a href="/diagnostics/system">
+                <a href="/admin/diagnostics/system">
                   <strong>System dashboard</strong>
                   <span>Inspect the running BEAM and OTP system through LiveDashboard.</span>
                 </a>

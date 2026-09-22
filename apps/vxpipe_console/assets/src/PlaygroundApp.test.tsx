@@ -40,7 +40,7 @@ vi.mock("@pipecat-ai/voice-ui-kit", () => ({
 import PlaygroundApp from "./PlaygroundApp";
 
 beforeEach(() => {
-  window.history.replaceState({}, "", "/samples/pipecat-console");
+  window.history.replaceState({}, "", "/admin/samples/pipecat-console");
 });
 
 afterEach(() => {
@@ -57,7 +57,7 @@ test("starts on the Pipecat Console room-creation page", () => {
 });
 
 test("keeps transfer acceptance on its own destination page", () => {
-  window.history.replaceState({}, "", "/samples/transfer");
+  window.history.replaceState({}, "", "/admin/samples/transfer");
 
   render(<PlaygroundApp />);
 
@@ -85,7 +85,7 @@ test("creates a room when randomUUID is unavailable on an HTTP origin", async ()
 
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/sample/calls", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/samples/calls", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),
@@ -115,7 +115,7 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
   expect(screen.queryByRole("button", { name: "Create room" })).not.toBeInTheDocument();
   expect(screen.queryByText("room_demo")).not.toBeInTheDocument();
   expect(screen.queryByText("rinc_demo")).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/sample/calls", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/samples/calls", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),

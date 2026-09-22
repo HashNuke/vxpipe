@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
+  alias Vxpipe.Console.InstallationOperatorSession
   alias Vxpipe.Console.TelemetryReporter
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
   alias Vxpipe.Gateway.HTTP.Mount
@@ -47,11 +48,11 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   end
 
   test "loads diagnostics through compiled static assets" do
-    html = html_response(get(build_conn(), "/diagnostics"), 200)
+    html = html_response(get(authenticated_conn(), "/admin/diagnostics"), 200)
 
     assert html =~ ~s(href="/assets/diagnostics.css")
     assert html =~ ~s(type="module" src="/assets/live.js")
-    refute html =~ "/diagnostics/assets/"
+    refute html =~ "/admin/diagnostics/assets/"
     refute html =~ "<style>"
   end
 
@@ -136,7 +137,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
     emit_runtime(7)
 
-    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
 
     assert has_element?(view, "#diagnostics-board")
     assert has_element?(view, "#collection-state", "Collecting")
@@ -182,14 +183,14 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert has_element?(view, "#mcp-request-invocation-remote-error td:nth-child(3)", "8.0 ms")
     assert has_element?(view, "#mcp-request-invocation-remote-error td:last-child", "1")
 
-    assert has_element?(view, ~s(a[href="/diagnostics/system"]), "System dashboard")
-    assert has_element?(view, ~s(a[href="/samples/pipecat-console"]), "Voice console")
+    assert has_element?(view, ~s(a[href="/admin/diagnostics/system"]), "System dashboard")
+    assert has_element?(view, ~s(a[href="/admin/samples/pipecat-console"]), "Voice console")
     refute render(view) =~ sentinel
   end
 
   test "refreshes the current snapshot without accumulating browser history" do
     emit_runtime(3)
-    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
 
     assert has_element?(view, ~s([data-metric="active-rooms"]), "3")
 
@@ -208,7 +209,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
       Keyword.put(diagnostics, :reporter, :missing_diagnostics_reporter)
     )
 
-    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
 
     assert has_element?(view, "#collection-state", "Collector unavailable")
     assert has_element?(view, "#diagnostics-unavailable", "Call traffic is unaffected")
@@ -247,7 +248,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
       %{capability: :model, provider: :req_llm, category: :unavailable}
     )
 
-    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
 
     assert has_element?(view, ".empty-state", "No first-output timing observed.")
 
@@ -278,7 +279,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert health_request().status == 200
     assert health_request().status == 200
 
-    {:ok, first_view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, first_view, _html} = live(authenticated_conn(), "/admin/diagnostics")
     assert has_element?(first_view, "#collection-state", "Collector unavailable")
 
     first_view_monitor = Process.monitor(first_view.pid)
@@ -312,7 +313,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert %{received_events: 0, dropped_events: 0, last_event_age_ms: nil} =
              TelemetryReporter.snapshot(second_reporter)
 
-    {:ok, second_view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, second_view, _html} = live(authenticated_conn(), "/admin/diagnostics")
     assert has_element?(second_view, "#collection-state", "Waiting for signals")
 
     assert health_request().status == 200
@@ -329,7 +330,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     room_children_before = room_children()
 
     assert TelemetryReporter.snapshot(reporter).received_events == 0
-    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
     assert has_element?(view, "#diagnostics-board")
 
     assert MapSet.subset?(registry_entries(), registry_entries_before)
@@ -358,7 +359,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
       Keyword.put(diagnostics, :model_fixture, fixture)
     )
 
-    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
 
     assert has_element?(view, "#model-fixture-controls", "Next request: Success")
     assert view |> element(~s(button[phx-value-scenario="failure"])) |> render_click()
@@ -436,5 +437,14 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     |> DynamicSupervisor.which_children()
     |> Enum.map(fn {_id, pid, _type, _modules} -> pid end)
     |> MapSet.new()
+  end
+
+  defp authenticated_conn do
+    %Plug.Conn{} = conn = build_conn()
+    conn = %{conn | host: "localhost", scheme: :https}
+
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> InstallationOperatorSession.put()
   end
 end

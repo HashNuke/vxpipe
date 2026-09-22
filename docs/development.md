@@ -64,10 +64,14 @@ when running Mix directly.
 For existing Telnyx/Twilio calls, provision a tenant carrier credential and register its service
 as described in [tenant telephony setup](tenant-telephony-services.md#trusted-registration-and-lookup).
 Public `APP_HOST` supplies the HTTPS callback origin. Use
-`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` to override it, including a mounted path prefix.
+`TELEPHONY_HOST` to override it, including a mounted path prefix.
 Local HTTP URLs are previews and do not enable live telephony ingress. Provider
 credentials come from PostgreSQL. See [scoped Telnyx setup](scoped-telnyx-service-bindings.md)
 for platform inheritance, tenant overrides and matching Console webhook URLs.
+
+When `TELEPHONY_HOST` is configured, requests using that host are restricted to
+Telnyx and Twilio webhook/media routes plus `/healthz`. Tailscale and localhost
+hosts retain access to the full application.
 
 ## Local fixtures
 
@@ -99,9 +103,9 @@ The call engine, gateway, and Console applications run in one BEAM instance.
 The Console's Phoenix endpoint supervises its esbuild development watcher,
 serves the React assets, and mounts the reusable gateway on the same endpoint.
 By default Phoenix serves HTTP at `http://localhost:4000/`, with no Tailscale
-dependency. WebRTC media continues to use its negotiated ICE path. The root page
-lists the available Console interfaces. The Pipecat sample itself is available
-at `/samples/pipecat-console`.
+dependency. WebRTC media continues to use its negotiated ICE path. The sample
+pages and diagnostics are under `/admin` and require installation-operator
+authentication. The Pipecat sample is available at `/admin/samples/pipecat-console`.
 
 The Console asset watcher consumes its Phoenix parent's lifecycle. Restart
 `bin/dev` after changes to umbrella code or runtime configuration that Phoenix
@@ -163,9 +167,9 @@ Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
 call spec publication are documented in
 [Tenant control-plane operations](tenant-control-plane.md).
 
-The human transfer desk at `/samples/transfer` requires this PostgreSQL-backed sample.
+The human transfer desk at `/admin/samples/transfer` requires this PostgreSQL-backed sample.
 After migrating the database, start `bin/dev`, create
-a new room in `/samples/pipecat-console`, and request human support before connecting the
+a new room in `/admin/samples/pipecat-console`, and request human support before connecting the
 desk. Follow the [human-transfer walkthrough](../apps/vxpipe_console/assets/README.md#manual-human-transfer-test)
 for the two-browser flow.
 

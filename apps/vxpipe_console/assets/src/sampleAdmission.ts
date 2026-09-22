@@ -48,9 +48,14 @@ type ManagedSessionResponse = SessionResponse & {
 export async function requestSampleAdmission(
   endpoint: string,
 ): Promise<ManagedAdmission | undefined> {
+  const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+    },
     body: JSON.stringify({}),
   });
 

@@ -29,7 +29,7 @@ subject to their existing review hold. Existing incomplete live-carrier gates re
 | Existing source | Reuse / gap |
 | --- | --- |
 | [HomePage](../apps/vxpipe_console/lib/vxpipe/console/home_page.ex) | `/` already serves a small Vxpipe directory, not Phoenix's generated welcome. Replace this directory with the conditional developer home. |
-| [React playground](../apps/vxpipe_console/assets/src/PlaygroundApp.tsx) | `/samples/pipecat-console` wraps Voice UI Kit `ConsoleTemplate`. It resets to room creation on disconnect, losing the visible run. Keep working SDK/transport integration and build a Vxpipe-owned presentation/state model. |
+| [React playground](../apps/vxpipe_console/assets/src/PlaygroundApp.tsx) | `/admin/samples/pipecat-console` wraps Voice UI Kit `ConsoleTemplate`. It resets to room creation on disconnect, losing the visible run. Keep working SDK/transport integration and build a Vxpipe-owned presentation/state model. |
 | [Transfer client](../apps/vxpipe_console/assets/src/transferConnection.ts) | Human acceptance already uses the separate `vxpipe` data channel. Reuse this path and its authority; do not pretend it is an RTVI message or add another transfer implementation. |
 | [RTVI codec](../apps/vxpipe_gateway/lib/vxpipe/gateway/rtvi/codec.ex) | The server advertises RTVI 2.1.0, emits ordinary transcripts/output, and carries versioned `vxpipe.turn`/`vxpipe.transfer` server messages. Ordinary bot output lacks participant identity, and RTVI has no standard call-variable message. Add the reviewed correlated participant projection and authorized `vxpipe.variables` snapshot envelope. |
 | [Tenant principal](../apps/vxpipe_calls/lib/vxpipe/calls/principal.ex) | Existing API keys are tenant-bound with independent `admin`/`calls` scopes. A platform key is a separate programmatic authority contract. Neither key type authenticates the operator UI. |
@@ -54,7 +54,7 @@ be reviewed before visual approval. No new brand or design-system project is req
 ### Debug console
 
 Proposed route: `/debug`, with a stable authorized run view at `/debug/calls/:call_id`.
-Only public identifiers belong in URLs. `/samples/pipecat-console` can redirect once its supported workflow
+Only public identifiers belong in URLs. `/admin/samples/pipecat-console` can redirect once its supported workflow
 has a replacement; the existing transfer desk remains usable during the cutover.
 
 ```text

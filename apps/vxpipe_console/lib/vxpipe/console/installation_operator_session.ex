@@ -28,10 +28,14 @@ defmodule Vxpipe.Console.InstallationOperatorSession do
 
   @spec fetch(Conn.t(), keyword()) :: {:ok, InstallationOperatorGrant.t()} | :error
   def fetch(%Conn{} = conn, options \\ []) do
+    fetch_session(Conn.get_session(conn), options)
+  end
+
+  @spec fetch_session(map() | nil, keyword()) :: {:ok, InstallationOperatorGrant.t()} | :error
+  def fetch_session(session, options \\ []) do
     with {:ok, secret} <- OperatorLoginConfiguration.session_secret() do
-      conn
-      |> Conn.get_session(@session_key)
-      |> decode(secret, now_unix(options))
+      grant = if is_map(session), do: Map.get(session, @session_key), else: nil
+      decode(grant, secret, now_unix(options))
     else
       {:error, :invalid_operator_login_secret} -> :error
     end

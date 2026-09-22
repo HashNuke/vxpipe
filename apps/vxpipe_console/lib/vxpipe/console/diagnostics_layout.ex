@@ -8,7 +8,7 @@ defmodule Vxpipe.Console.DiagnosticsLayout do
 
     ~H"""
     <!doctype html>
-    <html lang="en" phx-socket="/diagnostics/live">
+    <html lang="en" phx-socket="/admin/diagnostics/live">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />

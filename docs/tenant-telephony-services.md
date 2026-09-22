@@ -245,7 +245,7 @@ credential resolution at the owning live-reader boundary.
 ## Live readers and platform callback origin
 
 Public `APP_HOST` defaults the callback origin to HTTPS. Optional
-`VXPIPE_TELEPHONY_PUBLIC_BASE_URL` overrides that origin and its mounted path,
+`TELEPHONY_HOST` overrides that origin and its mounted path,
 for example `https://voice.example.test/voice`. A resolved HTTPS origin enables telephony routes;
 local HTTP URLs are previews. The existing Console/Gateway listener still serves the routes.
 Use the externally visible URL because

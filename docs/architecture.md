@@ -1131,7 +1131,7 @@ remain separate; Twilio keeps its own ingress and signature contracts.
 Outbound lookup requires the prepared participant's canonical tenant/service/provider/account/
 credential reference. The alias never falls back to application configuration. Stored service
 metadata owns originating number, machine-detection and media/timer settings. Public `APP_HOST`
-supplies HTTPS, with `VXPIPE_TELEPHONY_PUBLIC_BASE_URL` as an explicit origin/path override.
+supplies HTTPS, with `TELEPHONY_HOST` as an explicit origin/path override.
 Console and outgoing callbacks share this resolved value and the selected credential scope.
 
 The HTTP boundary keeps the original body for verification. Bounded untrusted identifiers can
@@ -3384,7 +3384,7 @@ Phoenix is approved for the separate `vxpipe_console` application, not a gateway
 migration. Preserve the existing gateway protocol handlers, React sample,
 application-option ownership and engine/persistence dependency direction.
 The Console root is an interface directory, while the Pipecat caller sample is mounted at
-`/samples/pipecat-console` and its human-transfer destination remains at `/samples/transfer`. These are host UI
+`/admin/samples/pipecat-console` and its human-transfer destination remains at `/admin/samples/transfer`. These are host UI
 routes rather than additions to the reusable gateway protocol surface.
 Phoenix LiveDashboard is selected for platform VM/runtime inspection; a separate
 Vxpipe diagnostics page owns bounded call-path measurements. Diagnostics are disabled
@@ -4056,7 +4056,7 @@ explicit embedding choice, not a hosted fallback:
    `VXPIPE_DEV_TENANT`, issues a server-held call-scoped API key and publishes the sample call spec
    through public Calls workflows. It does not bootstrap a replacement tenant on restart. Its inspect projection excludes the plaintext key and
    initial variables.
-2. `POST /sample/calls` authenticates with that server-held key, prepares a durable call,
+2. `POST /admin/samples/calls` authenticates with that server-held key, prepares a durable call,
    and returns only the public tenant/call/participant locator and opaque join token.
 3. The browser posts an empty body and that bearer token to the tenant-scoped participant
    session route. The gateway claims the token in one short repository transaction, then

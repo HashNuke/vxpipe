@@ -87,7 +87,7 @@ test("connects the latest sample destination and activates only after explicit a
   fireEvent.click(screen.getByRole("button", { name: "Connect transfer desk" }));
 
   await vi.waitFor(() => expect(openTransferConnection).toHaveBeenCalledOnce());
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/sample/transfers", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/samples/transfers", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),

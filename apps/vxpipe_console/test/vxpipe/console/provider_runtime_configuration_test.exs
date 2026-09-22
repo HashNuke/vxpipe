@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID
     VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_DEV_SPEECH_PROFILE
     VXPIPE_DEV_MODEL_FIXTURE VXPIPE_DEV_TENANT DEEPGRAM_API_KEY GEMINI_API_KEY APP_HOST PORT VXPIPE_DEV_TLS
-    VXPIPE_TELEPHONY_PUBLIC_BASE_URL VXPIPE_CONFIG)
+    TELEPHONY_HOST VXPIPE_CONFIG)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -80,7 +80,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   end
 
   test "platform callback origin enables tenant telephony without static credentials" do
-    System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "https://voice.example.test/voice/")
+    System.put_env("TELEPHONY_HOST", "https://voice.example.test/voice/")
     configuration = Config.Reader.read!(@runtime, env: :dev)
 
     http =
@@ -99,7 +99,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
            |> Keyword.fetch!(:service_public_origin) ==
              "https://voice.example.test/voice"
 
-    System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "   ")
+    System.put_env("TELEPHONY_HOST", "   ")
     configuration = Config.Reader.read!(@runtime, env: :dev)
 
     http =
@@ -138,7 +138,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   end
 
   test "an invalid callback origin fails without echoing embedded credentials" do
-    System.put_env("VXPIPE_TELEPHONY_PUBLIC_BASE_URL", "https://private-value@example.test")
+    System.put_env("TELEPHONY_HOST", "https://private-value@example.test")
     error = assert_raise RuntimeError, fn -> Config.Reader.read!(@runtime, env: :dev) end
     refute Exception.message(error) =~ "private-value"
   end

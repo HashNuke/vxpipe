@@ -71,7 +71,7 @@ export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
     setError(undefined);
 
     try {
-      const admission = await requestSampleAdmission("/sample/calls");
+      const admission = await requestSampleAdmission("/admin/samples/calls");
 
       if (admission) {
         onCreated(await claimSampleSession(admission));
