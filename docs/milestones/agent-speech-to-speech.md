@@ -1813,6 +1813,38 @@ Submitted invocation outcomes must still survive privately for later reasoning.
               and avoid committing a context when a callback rejects input.
               This conservative cross-origin backpressure does not close the
               later successful cutover/lifecycle acceptance task.
+            - [ ] Complete a same-socket cross-origin cutover only after an
+              explicit `IDLE` model boundary and full caller/response/tool
+              quiescence. First reproduce the current permanent `:busy` after
+              A settles, then prove B input and independent response delivery
+              without replay or assigning A's late work to B. Cover audio,
+              typed text and external activity as B's first accepted input.
+              - [x] Keep B blocked before explicit idle, during retained A
+                playback or a pending tool, and after ambiguous interruption;
+                no rejected B input may reach the wire or change A's origin.
+                Also reject a fresh activity-end and new input during renewal.
+              - [x] Reproduce a second new-origin attempt C after B audio is
+                accepted but before any B model activity: a late or duplicate
+                uncorrelated `IDLE` from A must not make B look quiescent or
+                relabel its eventual output as C. Retain a bounded unresolved
+                input obligation until later model content is observed; do not
+                infer coverage from the handle alone.
+              - [x] Reproduce and reject same-context input after renewal is
+                requested while a typed input turn remains open. No new PCM,
+                text, or external activity may reach the retiring wire, even
+                when an older open-turn guard would allow it.
+              - [ ] Establish whether post-`IDLE` A content can validly arrive
+                after B input on the ordered Google Live wire. If it can, add a
+                causal origin fence before claiming late-A attribution safety;
+                synthetic injection alone does not prove protocol validity.
+            Same-wire cutover evidence: settled A→B audio, typed and external
+            starts, blocked unsettled boundaries, late-`IDLE` B→C and
+            same-context renewal were reproduced with focused fake-wire reds
+            before fixes. Google controller tests pass 72/0; the call-engine
+            child suite passes 1,405/0 (30 integration exclusions). A read-only
+            review reproduced same-context PCM reaching a retiring wire and
+            confirmed the broader post-`IDLE` attribution premise remains
+            unproven. Keep the cutover parent open pending that protocol proof.
             Provider input evidence: 28 focused Google session tests and the
             297-test Google-provider/shared-speech group pass (three
             integration exclusions). The local profile binds context before

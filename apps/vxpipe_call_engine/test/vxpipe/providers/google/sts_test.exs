@@ -63,7 +63,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
   end
 
   test "thought-only model content signals private activity without spoken text" do
-    assert {:ok, [:model_activity]} =
+    assert {:ok, [:model_activity, :model_content]} =
              STS.decode(
                JSON.encode!(%{
                  "serverContent" => %{
@@ -292,7 +292,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
         }
       })
 
-    assert {:ok, [:model_activity | events]} = STS.decode(payload)
+    assert {:ok, [:model_activity, :model_content | events]} = STS.decode(payload)
     chunks = Enum.map(events, fn {:audio, audio} -> audio end)
     assert IO.iodata_to_binary(chunks) == pcm
     assert Enum.map(chunks, &byte_size/1) == [131_072, 4]
@@ -364,7 +364,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
         }
       })
 
-    assert {:ok, [:model_activity, {:audio, decoded}]} = STS.decode(payload)
+    assert {:ok, [:model_activity, :model_content, {:audio, decoded}]} = STS.decode(payload)
     assert decoded == chunk
   end
 

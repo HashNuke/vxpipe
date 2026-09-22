@@ -20,6 +20,14 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   def invalidate_idle(state),
     do: %{state | resumption_handle: nil, interaction_status: :unknown}
 
+  def await_model_activity(%{response_start?: true} = state),
+    do: %{state | awaiting_model_activity?: true}
+
+  def await_model_activity(state), do: state
+
+  def observed_model_content(state),
+    do: %{model_work(state) | awaiting_model_activity?: false}
+
   def model_work(state),
     do: %{invalidate_idle(state) | model_turn_complete?: false}
 
@@ -33,7 +41,7 @@ defmodule Vxpipe.Providers.Google.STSResumption do
     }
   end
 
-  def recoverable?(state), do: idle?(state) and is_binary(state.resumption_handle)
+  def recoverable?(state), do: quiescent?(state) and is_binary(state.resumption_handle)
 
   def request(state, remaining_ms \\ nil)
 
@@ -50,7 +58,9 @@ defmodule Vxpipe.Providers.Google.STSResumption do
     now = now_ms()
     available = max(state.expire_deadline - now, 0)
     available = if is_integer(remaining_ms), do: min(available, remaining_ms), else: available
-    budget = if idle?(state), do: min(available, state.resumption_timeout_ms), else: available
+
+    budget =
+      if quiescent?(state), do: min(available, state.resumption_timeout_ms), else: available
 
     %{state | renew_requested?: true, renew_timer: nil}
     |> arm_deadline(now + budget)
@@ -151,8 +161,9 @@ defmodule Vxpipe.Providers.Google.STSResumption do
     end
   end
 
-  defp idle?(state) do
-    not state.resumption_ambiguous? and state.model_turn_complete? and
+  def quiescent?(state) do
+    not state.resumption_ambiguous? and not state.awaiting_model_activity? and
+      state.model_turn_complete? and
       state.interaction_status == :idle and is_nil(state.caller) and
       map_size(state.pending_tools) == 0 and output_idle?(state)
   end

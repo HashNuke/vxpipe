@@ -191,7 +191,14 @@ defmodule Vxpipe.Providers.Google.STS do
           Map.get(content, "interrupted") == true
 
       activity = if active?, do: [:model_activity], else: []
-      {:ok, activity ++ transcripts ++ audio ++ boundaries}
+
+      content_evidence =
+        case content do
+          %{"modelTurn" => %{"parts" => [_ | _]}} -> [:model_content]
+          _other -> []
+        end
+
+      {:ok, activity ++ content_evidence ++ transcripts ++ audio ++ boundaries}
     end
   end
 

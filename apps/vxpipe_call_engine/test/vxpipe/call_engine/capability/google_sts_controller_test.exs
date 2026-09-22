@@ -130,6 +130,243 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert JSON.decode!(setup)["setup"]["sessionResumption"] == %{"handle" => "both-pending"}
   end
 
+  test "opted-in settled idle interaction accepts a new origin on the same wire" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
+    deliver(context, audio_message(1))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+    assert_audio(context, 1)
+    finish_generation(context)
+    finish_playback(context, first, "FIRST", 20)
+    deliver(context, interaction_end("IDLE"))
+
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    second_context = :sys.get_state(context.provider).interaction_context
+    assert is_reference(second_context) and second_context != first_context
+
+    deliver(context, content(%{"outputTranscription" => %{"text" => "SECOND"}}))
+    deliver(context, audio_message(2))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second}, 1_000
+    assert second != first
+    assert_audio(context, 2)
+    finish_generation(context)
+    finish_playback(context, second, "SECOND", 20)
+    deliver(context, interaction_end("IDLE"))
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+  end
+
+  test "opted-in idle cutover accepts a new typed input origin" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+
+    assert :ok = SpeechToSpeech.push_text(capability, "NEXT")
+    assert_receive {:test_google_sts_control, ^wire, payload}, 1_000
+    assert JSON.decode!(payload) == %{"realtimeInput" => %{"text" => "NEXT"}}
+    assert :sys.get_state(context.provider).interaction_context != first_context
+    deliver(context, content(%{"outputTranscription" => %{"text" => "TYPED REPLY"}}))
+    deliver(context, audio_message(3))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert_audio(context, 3)
+    finish_generation(context)
+    finish_playback(context, response, "TYPED REPLY", 20)
+    deliver(context, interaction_end("IDLE"))
+  end
+
+  test "opted-in idle cutover accepts new external activity without replay" do
+    context = start_controller("external", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _start}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:test_google_sts_control, ^wire, _end}, 1_000
+    deliver(context, content(%{"inputTranscription" => %{"text" => "FIRST CALLER"}}))
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _new_start}, 1_000
+    second_context = :sys.get_state(context.provider).interaction_context
+    assert second_context != first_context
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:test_google_sts_control, ^wire, _new_end}, 1_000
+    deliver(context, content(%{"inputTranscription" => %{"text" => "SECOND CALLER"}}))
+    deliver(context, content(%{"outputTranscription" => %{"text" => "EXTERNAL REPLY"}}))
+    deliver(context, audio_message(4))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert_audio(context, 4)
+    finish_generation(context)
+    finish_playback(context, response, "EXTERNAL REPLY", 20)
+    deliver(context, interaction_end("IDLE"))
+  end
+
+  test "opted-in in-progress model work blocks a new wire origin" do
+    context = start_controller("provider", response_start?: true)
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(context.capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, interaction_end("IN_PROGRESS"))
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in retained playback blocks a new wire origin despite model idle" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
+    deliver(context, audio_message(1))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", _first}, 1_000
+    assert_audio(context, 1)
+    finish_generation(context)
+    deliver(context, interaction_end("IDLE"))
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in pending tool blocks a new wire origin despite model idle" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+
+    deliver(context, %{
+      "toolCall" => %{
+        "functionCalls" => [%{"id" => "cutover-tool", "name" => "lookup", "args" => %{}}]
+      }
+    })
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent",
+                    %{event: %Event{kind: :tool_call}}},
+                   1_000
+
+    deliver(context, interaction_end("IDLE"))
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in ambiguous interrupted caller blocks a new wire origin" do
+    context = start_controller("external", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, content(%{"interrupted" => true}))
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:test_google_sts_control, ^wire, _}, 1_000
+    deliver(context, content(%{"inputTranscription" => %{"text" => "FINAL"}}))
+    deliver(context, interaction_end("IDLE"))
+    assert :sys.get_state(context.provider).resumption_ambiguous?
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in fresh activity end cannot cut over a completed interaction" do
+    context = start_controller("external", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+
+    assert {:error, :busy} = SpeechToSpeech.input_activity(capability, :ended)
+    _ = :sys.get_state(wire)
+    refute_received {:test_google_sts_control, ^wire, _}
+    assert :sys.get_state(context.provider).interaction_context == first_context
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    assert :sys.get_state(context.provider).interaction_context != first_context
+  end
+
+  test "opted-in renewal request blocks a new wire origin despite model idle" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    first_context = :sys.get_state(context.provider).interaction_context
+    deliver(context, interaction_end("IDLE"))
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :sys.get_state(context.provider).renew_requested?
+    assert_new_origin_busy(context, first_context)
+  end
+
+  test "opted-in renewal blocks same-context PCM while a typed turn is open" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_text(capability, "FIRST")
+    assert_receive {:test_google_sts_control, ^wire, _text}, 1_000
+    deliver(context, interaction_end("IDLE"))
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert %{renew_requested?: true, input_turn: turn} = :sys.get_state(context.provider)
+    assert is_reference(turn)
+
+    assert {:error, :busy} = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert {:error, :busy} = SpeechToSpeech.push_text(capability, "SECOND")
+    _ = :sys.get_state(wire)
+    refute_received {:test_google_sts_audio, ^wire, _}
+    refute_received {:test_google_sts_control, ^wire, _}
+  end
+
+  test "opted-in renewal blocks new activity but permits ending the active caller" do
+    context = start_controller("external", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _started}, 1_000
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert :sys.get_state(context.provider).renew_requested?
+
+    assert {:error, :busy} = SpeechToSpeech.input_activity(capability, :started)
+    _ = :sys.get_state(wire)
+    refute_received {:test_google_sts_control, ^wire, _}
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:test_google_sts_control, ^wire, _ended}, 1_000
+  end
+
+  test "opted-in late idle cannot permit C before B has model activity" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
+    deliver(context, interaction_end("IDLE"))
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:test_google_sts_audio, ^wire, <<0, 0>>}, 1_000
+    second_context = :sys.get_state(context.provider).interaction_context
+
+    deliver(context, interaction_end("IDLE"))
+    assert_new_origin_busy(context, second_context)
+  end
+
   test "opted-in text-only model work retires without a public speech turn" do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
@@ -248,7 +485,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :sys.get_state(capability).pending_turns == []
   end
 
-  test "opted-in tool-only response stays private and needs fresh idle after its result" do
+  test "opted-in tool-only response needs model content and fresh idle after its result" do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
@@ -283,6 +520,9 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     })
 
     refute_received {:test_google_sts_started, _, _}
+    deliver(context, interaction_end("IDLE"))
+    refute_received {:test_google_sts_started, _, _}
+    deliver(context, content(%{"modelTurn" => %{"parts" => [%{"text" => "private thought"}]}}))
     deliver(context, interaction_end("IDLE"))
 
     deliver(context, %{
@@ -1093,6 +1333,16 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
                       }
                     }},
                    1_000
+  end
+
+  defp assert_new_origin_busy(context, first_context) do
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert {:error, :busy} = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    _ = :sys.get_state(wire)
+    refute_received {:test_google_sts_audio, ^wire, <<0, 0>>}
+    assert :sys.get_state(context.provider).interaction_context == first_context
   end
 
   defp start_controller(turn_control \\ "provider", provider_options \\ []) do

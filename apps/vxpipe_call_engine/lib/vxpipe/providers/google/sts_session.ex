@@ -70,6 +70,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
     audio_fenced?: false,
     generation_pending_done?: false,
     model_turn_complete?: true,
+    awaiting_model_activity?: false,
     interaction_status: :idle,
     resumption_ambiguous?: false,
     response_start?: false,
@@ -269,10 +270,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
         case send_tool_response(state, id, name, result) do
           :ok ->
             {:reply, :ok,
-             STSResumption.model_work(%{
-               state
-               | pending_tools: Map.delete(state.pending_tools, call_ref)
-             })}
+             %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}
+             |> STSResumption.model_work()
+             |> STSResumption.await_model_activity()}
 
           {:error, _reason} ->
             {:reply, {:error, :invalid_tool_result}, state}
@@ -288,6 +288,21 @@ defmodule Vxpipe.Providers.Google.STSSession do
     {:stop, :normal, :ok, state}
   end
 
+  defp input_call(command, %{response_start?: true, resuming?: true} = state)
+       when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity],
+       do: {:reply, {:error, :busy}, state}
+
+  defp input_call(command, %{response_start?: true, renew_requested?: true} = state)
+       when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] and
+              command != {:input_activity, :ended},
+       do: {:reply, {:error, :busy}, state}
+
+  defp input_call(
+         {:input_activity, :ended},
+         %{response_start?: true, renew_requested?: true, caller: nil} = state
+       ),
+       do: {:reply, {:error, :busy}, state}
+
   defp input_call(command, %{renew_requested?: true, input_turn: nil, output: nil} = state)
        when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] and
               command != {:input_activity, :ended} do
@@ -297,7 +312,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp input_call({:push_audio, audio}, %{ready?: true} = state) do
     with {:ok, _encoded} <- STS.encode_audio(audio),
          :ok <- state.wire_module.send_audio(state.wire, audio) do
-      {:reply, :ok, STSResumption.invalidate_idle(state)}
+      {:reply, :ok,
+       state |> STSResumption.invalidate_idle() |> STSResumption.await_model_activity()}
     else
       {:error, :invalid_audio} -> {:reply, {:error, :session_failed}, state}
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -325,7 +341,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
                  input_text: text
              })
            ) do
-      {:reply, :ok, state}
+      {:reply, :ok, STSResumption.await_model_activity(state)}
     else
       {:error, :invalid_text} -> {:reply, {:error, :invalid_text}, state}
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -364,7 +380,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
        when boundary in [:started, :ended] do
     with :ok <- state.wire_module.send_activity(state.wire, boundary),
          {:ok, state} <- STSInput.activity_boundary(boundary, STSResumption.invalidate(state)) do
-      {:reply, :ok, state}
+      {:reply, :ok, STSResumption.await_model_activity(state)}
     else
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
@@ -565,8 +581,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
           {:resumption, _handle} -> state
           {:usage, _metadata} -> state
           :model_activity -> STSResumption.model_work(state)
-          {:output_transcript, _text} -> STSResumption.model_work(state)
-          {:tool_call, _id, _name, _args} -> STSResumption.model_work(state)
+          :model_content -> STSResumption.observed_model_content(state)
+          {:output_transcript, _text} -> STSResumption.observed_model_content(state)
+          {:tool_call, _id, _name, _args} -> STSResumption.observed_model_content(state)
           _conversation_event -> STSResumption.invalidate(state)
         end
 
@@ -588,6 +605,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp apply_wire_event(:ready, state), do: {:ok, state}
 
   defp apply_wire_event(:model_activity, state), do: {:ok, state}
+  defp apply_wire_event(:model_content, state), do: {:ok, state}
 
   defp apply_wire_event(:activity_start, %{config: %{turn_control: "external"}} = state),
     do: {:ok, state}

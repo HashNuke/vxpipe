@@ -228,6 +228,39 @@ Independent Astra xhigh source review found no remaining actionable issue
 after duplicate-key and direct-callback-bypass red/green fixes. This does not
 clear actual controller response delivery or hosted interoperability.
 
+### Same-wire origin cutover decision
+
+The initial opted-in adapter conservatively retains its first accepted context
+for the lifetime of a Google socket. That prevents relabeling A's `IN_PROGRESS`
+continuation as B, but strands every post-hold or post-policy B input with
+`:busy`, even after A has fully ended. The [Google Live interaction profile](https://ai.google.dev/gemini-api/docs/live-api/thinking)
+describes `IN_PROGRESS` as continuing work and `IDLE` as completion of the
+overall task. For same-wire cutover, require an explicit model `IDLE` boundary,
+the corresponding model turn completion, no unfinished caller, no outstanding
+tool, no retained response generation or playback, and no ambiguity latch.
+Only then may the provider bind the next engine-accepted opaque context before
+sending B input. The shared capability still owns source/epoch/policy authority;
+the provider does not mint or infer a context. Retain A across `IN_PROGRESS`.
+
+Rejected alternatives: switch on `turnComplete` alone (an `IN_PROGRESS`
+interaction can speak again), switch when A playback ends (upstream work can
+continue), or accept B while A has a pending tool/caller/response (unlabelled
+wire output could be misattributed). Keep renewal-requested or resuming sockets
+closed to new input, including same-context input with an open typed turn: a
+read-only review reproduced PCM reaching the retiring wire after `goAway`.
+A focused fake-wire sequence also reproduced a second gap: after B input was
+accepted, a duplicate `IDLE` with no B model content made the adapter appear
+quiescent and admitted C. Track a bounded unresolved
+accepted-input obligation. A turn-complete or `IDLE` notification alone cannot
+clear it; require subsequent model content or a tool call before another
+cutover. This is conservative for silent responses and does not claim that
+unlabelled late content is causally attributable to B. This decision is limited
+to ordered input/output on the same live socket; it does not establish
+resumption-handle consumed-message coverage, interrupted provider-history
+reconciliation, or hosted behavior.
+Verify with focused fake-wire reds/greens for fully settled A→B and each
+unsettled boundary before declaring the milestone item complete.
+
 ### Capability response-admission queue design review
 
 The existing capability holds `pending_turns` as bare provider references and

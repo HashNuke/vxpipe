@@ -45,6 +45,16 @@ defmodule Vxpipe.Providers.Google.STSInput do
       when is_reference(context),
       do: {:ok, state}
 
+  def bind_context(%{interaction_context: previous} = state, context, operation)
+      when is_reference(previous) and is_reference(context) do
+    if operation != {:activity, :ended} and not state.renew_requested? and
+         not state.resuming? and STSResumption.quiescent?(state) do
+      {:ok, %{state | interaction_context: context}}
+    else
+      {:error, :busy}
+    end
+  end
+
   def bind_context(_state, _context, _operation), do: {:error, :busy}
 
   # The pinned profile has one final per audio caller, but no correlation ID.
