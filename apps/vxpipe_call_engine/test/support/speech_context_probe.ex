@@ -64,6 +64,9 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
     {:reply, result, state}
   end
 
+  def handle_call({:emit, kind, fields}, _, state),
+    do: {:reply, Event.emit(state.channel, kind, fields), state}
+
   def handle_call(:release, _, state) do
     GenServer.reply(state.held, state.result)
     {:reply, :ok, %{state | held: nil}}
@@ -122,4 +125,21 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
     send(state.observer, {:legacy_input, operation})
     {:reply, :ok, state}
   end
+
+  def handle_info({:vxpipe_speech_output, channel, turn, reference}, state) do
+    if channel == GenServer.whereis(state.channel),
+      do: send(state.observer, {:context_output_granted, turn, reference})
+
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_speech_response_discard, channel, turn}, state) do
+    if channel == GenServer.whereis(state.channel),
+      do: send(state.observer, {:context_response_discarded, turn})
+
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_speech_output_settled, _channel, _turn, _reference, _played}, state),
+    do: {:noreply, state}
 end

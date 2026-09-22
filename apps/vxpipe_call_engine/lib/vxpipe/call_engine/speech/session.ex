@@ -139,6 +139,12 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def admit_output(_allocation, _turn_ref), do: {:error, :invalid_turn}
 
+  @doc "Reject one acknowledged, not-yet-granted opted-in STS response."
+  def reject_response(allocation, turn_ref) when is_reference(turn_ref),
+    do: call(allocation, {:reject_response, turn_ref})
+
+  def reject_response(_allocation, _turn_ref), do: {:error, :invalid_turn}
+
   @doc """
   Admit bounded text and return a request handle before provider acceptance.
   Actual submission arrives as `input_submitted`; clean provider rejection is a

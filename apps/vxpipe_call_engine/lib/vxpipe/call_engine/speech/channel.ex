@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     OutputState,
     ProviderName,
     ResponseContexts,
+    ResponseStarts,
     ScopeControl,
     STSInput,
     STSOutput,
@@ -70,6 +71,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        events: EventQueue.new(),
        input: nil,
        response_contexts: ResponseContexts.new(),
+       response_starts: ResponseStarts.new(),
        output: OutputState.new(),
        usage?: false,
        cancellation: nil,
@@ -362,6 +364,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   def handle_call({:admit_output, command, turn}, {caller, _tag}, state),
     do: STSOutput.admit(state, caller, command, turn)
 
+  def handle_call({:reject_response, turn}, {caller, _tag}, state),
+    do: STSOutput.reject(state, caller, turn)
+
   def handle_call({:settle_sts_output, handle, played}, {caller, _tag}, state),
     do: STSOutput.settle(state, caller, handle, played)
 
@@ -429,9 +434,14 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     if Allocation.valid?(state.allocation) do
       case EventQueue.acknowledge(state.events, event) do
         {:ok, events} ->
-          state = acknowledged(event, %{state | events: events})
-          state = state |> dispatch() |> dispatch_audio()
-          ChannelFailure.reply_after_ack(state)
+          case EventDelivery.acknowledge(event, %{state | events: events}) do
+            {:ok, state} ->
+              state = state |> dispatch() |> dispatch_audio()
+              ChannelFailure.reply_after_ack(state)
+
+            {:error, _reason} ->
+              ChannelFailure.fail(state, :session_failed)
+          end
 
         error ->
           {:reply, error, state}
@@ -711,19 +721,6 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        do: {:error, :stale_request}
 
   defp accept_event(event, state), do: {:ok, event, state}
-
-  defp acknowledged(%Event{kind: :ready}, state), do: %{state | ready_acked?: true}
-
-  defp acknowledged(%Event{kind: :output_completed, request_ref: reference}, state),
-    do: STSOutput.acknowledge(state, reference)
-
-  defp acknowledged(
-         %Event{kind: :input_submitted, request_ref: reference},
-         %{output: %OutputState{request: %{ref: reference}}} = state
-       ),
-       do: %{state | output: OutputState.mark_submission_acked(state.output, reference)}
-
-  defp acknowledged(_event, state), do: state
 
   defp dispatch_audio(
          %{

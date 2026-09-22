@@ -1,7 +1,14 @@
 defmodule Vxpipe.CallEngine.Speech.STSOutput do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Speech.{Allocation, Event, OutputState, OutputTurn}
+  alias Vxpipe.CallEngine.Speech.{
+    Allocation,
+    Event,
+    OutputState,
+    OutputTurn,
+    ResponseContexts,
+    ResponseStarts
+  }
 
   def admit(state, caller, command, turn) do
     cond do
@@ -25,10 +32,54 @@ defmodule Vxpipe.CallEngine.Speech.STSOutput do
         {:reply, {:error, :command_timeout}, state}
 
       true ->
-        handle = %OutputTurn{session: state.allocation, turn_ref: turn, ref: make_ref()}
-        output = OutputState.admit_sts(state.output, handle)
-        send(state.producer, {:vxpipe_speech_output, self(), turn, handle.ref})
-        {:reply, {:ok, handle}, %{state | output: output}}
+        case authorize_start(state, turn) do
+          {:ok, state} ->
+            handle = %OutputTurn{session: state.allocation, turn_ref: turn, ref: make_ref()}
+            output = OutputState.admit_sts(state.output, handle)
+            send(state.producer, {:vxpipe_speech_output, self(), turn, handle.ref})
+            {:reply, {:ok, handle}, %{state | output: output}}
+
+          error ->
+            {:reply, error, state}
+        end
+    end
+  end
+
+  def reject(state, caller, turn) do
+    cond do
+      caller != state.consumer ->
+        {:reply, {:error, :not_owner}, state}
+
+      not Allocation.valid?(state.allocation) ->
+        {:reply, {:error, :closed}, state}
+
+      state.descriptor.kind != :sts or not state.descriptor.response_start? ->
+        {:reply, {:error, :unsupported_operation}, state}
+
+      true ->
+        case ResponseStarts.reject(state.response_starts, turn) do
+          {:ok, starts, _context} ->
+            send(state.producer, {:vxpipe_speech_response_discard, self(), turn})
+            {:reply, :ok, %{state | response_starts: starts}}
+
+          error ->
+            {:reply, error, state}
+        end
+    end
+  end
+
+  defp authorize_start(%{descriptor: %{response_start?: false}} = state, _turn),
+    do: {:ok, state}
+
+  defp authorize_start(state, turn) do
+    case ResponseStarts.grant(state.response_starts, turn) do
+      {:ok, starts, context} ->
+        if ResponseContexts.status(state.response_contexts, context) == :accepted,
+          do: {:ok, %{state | response_starts: starts}},
+          else: {:error, :stale_response}
+
+      error ->
+        error
     end
   end
 

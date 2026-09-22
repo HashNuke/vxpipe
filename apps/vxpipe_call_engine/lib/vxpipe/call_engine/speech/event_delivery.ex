@@ -1,7 +1,15 @@
 defmodule Vxpipe.CallEngine.Speech.EventDelivery do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Speech.{Allocation, Event, EventQueue, ResponseContexts}
+  alias Vxpipe.CallEngine.Speech.{
+    Allocation,
+    Event,
+    EventQueue,
+    OutputState,
+    ResponseContexts,
+    ResponseStarts,
+    STSOutput
+  }
 
   def dispatch(%{active?: true} = state) do
     if Allocation.valid?(state.allocation) do
@@ -57,7 +65,7 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
   def accept_response_start(%Event{response_context: context} = event, state) do
     case ResponseContexts.status(state.response_contexts, context) do
       :accepted ->
-        {:ok, event, state}
+        record_response_start(event, state)
 
       :staged ->
         pending = state.response_contexts.pending
@@ -65,7 +73,7 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
         case state.input do
           %{command: %{ref: reference, response_context: ^context}}
           when pending == {reference, context} ->
-            {:ok, event, state}
+            record_response_start(event, state)
 
           _other ->
             {:error, :stale_response}
@@ -73,6 +81,33 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
 
       :unknown ->
         {:error, :stale_response}
+    end
+  end
+
+  def acknowledge(%Event{kind: :response_started} = event, state) do
+    case ResponseStarts.acknowledge(state.response_starts, event) do
+      {:ok, starts} -> {:ok, %{state | response_starts: starts}}
+      error -> error
+    end
+  end
+
+  def acknowledge(%Event{kind: :ready}, state), do: {:ok, %{state | ready_acked?: true}}
+
+  def acknowledge(%Event{kind: :output_completed, request_ref: reference}, state),
+    do: {:ok, STSOutput.acknowledge(state, reference)}
+
+  def acknowledge(
+        %Event{kind: :input_submitted, request_ref: reference},
+        %{output: %OutputState{request: %{ref: reference}}} = state
+      ),
+      do: {:ok, %{state | output: OutputState.mark_submission_acked(state.output, reference)}}
+
+  def acknowledge(_event, state), do: {:ok, state}
+
+  defp record_response_start(event, state) do
+    case ResponseStarts.accept(state.response_starts, event) do
+      {:ok, starts} -> {:ok, event, %{state | response_starts: starts}}
+      error -> error
     end
   end
 

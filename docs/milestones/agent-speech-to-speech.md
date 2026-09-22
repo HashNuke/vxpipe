@@ -1648,6 +1648,29 @@ Submitted invocation outcomes must still survive privately for later reasoning.
         - [ ] Review and implement explicit provider-response admission evidence,
           separate from caller end, with closed descriptor/event validation and
           bounded monotonic response retirement. Keep room-owned public IDs.
+          - [x] Add an allocation-local bounded response-start owner with a
+            monotonic signed-64 ordinal high-water mark and at most 16 pending
+            starts. Accept gaps; reject duplicate/conflicting or exhausted
+            ordinals without a reusable tombstone set. Bind private response ref,
+            ordinal and accepted/staged opaque context before event enqueue.
+          - [x] Require the exact queued `response_started` acknowledgement and
+            accepted context before `Session.admit_output/2` can grant an opted-in
+            response; consume that start only on actual grant. Keep legacy STS
+            caller-end admission unchanged for non-opted descriptors.
+          - [x] Provide a consumer-owned response rejection/disposition path:
+            release only an acknowledged pending start, notify the provider to
+            discard that response specifically, and advance the same high-water
+            mark so a late duplicate cannot reopen it. Do not send a whole-wire
+            interrupt. Cover busy slot, queue bounds, long sequential retirement,
+            wrong consumer and stale generation with focused red/green tests.
+          Design review and acceptance limits: [shared response-start grant](../sts-response-start-grant.md).
+          Shared boundary evidence: 33 focused tests pass, including real-Channel
+          pre-ack, busy retry, 16-pending overflow, 25 sequential retirements,
+          wrong consumer and cross-allocation stale-reference checks. The speech
+          group passed 216/0 with three integration tests excluded;
+          independent Astra xhigh source review found no actionable issue.
+          This closes only the three shared subtasks, not the Google/provider
+          response-admission parent or policy-qualified origin queue.
         - [ ] Separate upstream response assembly from the credited playback slot;
           preserve global PCM/text limits across pending responses and retire only
           the matching generation/model/playback obligations.

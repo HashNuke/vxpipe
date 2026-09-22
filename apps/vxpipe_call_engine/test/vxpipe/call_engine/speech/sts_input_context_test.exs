@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
     CapabilityTree,
     Channel,
     Descriptor,
+    Event,
     Input,
     ResponseContexts,
     Session
@@ -223,6 +224,142 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
     assert :ok = Session.ack(session, event)
   end
 
+  test "opted-in output grant requires an exact acknowledged response start" do
+    session = session()
+    context = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+    assert {:error, :stale_response} = Session.admit_output(session, make_ref())
+
+    {turn, start} = announce_response(session, context, 1)
+    assert {:error, :response_not_acknowledged} = Session.admit_output(session, turn)
+    refute_received {:context_output_granted, _, _}
+    assert :ok = Session.ack(session, start)
+    assert {:ok, output} = Session.admit_output(session, turn)
+    assert_receive {:context_output_granted, ^turn, reference}
+    assert reference == output.ref
+    assert {:error, :busy} = Session.admit_output(session, turn)
+    assert :ok = emit_output_completed(session, output)
+    assert :ok = Session.settle_output(session, output, 0)
+    assert {:error, :stale_response} = Session.admit_output(session, turn)
+  end
+
+  test "a busy playback slot preserves the next acknowledged start for retry" do
+    session = session()
+    context = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+    {first, first_start} = announce_response(session, context, 1)
+    assert :ok = Session.ack(session, first_start)
+    assert {:ok, output} = Session.admit_output(session, first)
+    assert_receive {:context_output_granted, ^first, _}
+    {second, second_start} = announce_response(session, context, 2)
+    assert :ok = Session.ack(session, second_start)
+    assert {:error, :busy} = Session.admit_output(session, second)
+    assert :ok = emit_output_completed(session, output)
+    assert :ok = Session.settle_output(session, output, 0)
+    assert {:ok, replacement} = Session.admit_output(session, second)
+    assert_receive {:context_output_granted, ^second, reference}
+    assert reference == replacement.ref
+  end
+
+  test "acknowledged response rejection discards only that response and advances admission" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+    {first, first_start} = announce_response(session, context, 1)
+    assert {:error, :response_not_acknowledged} = Session.reject_response(session, first)
+    assert :ok = Session.ack(session, first_start)
+    {second, second_start} = announce_response(session, context, 2)
+    assert :ok = Session.ack(session, second_start)
+    stranger = start_supervised!({SpeechSessionOwner, self()})
+
+    assert {:error, :not_owner} =
+             SpeechSessionOwner.run(stranger, fn _ -> Session.reject_response(session, first) end)
+
+    assert :ok = Session.reject_response(session, first)
+    assert_receive {:context_response_discarded, ^first}
+    refute_received {:context_output_granted, ^first, _}
+    assert {:error, :stale_response} = Session.reject_response(session, first)
+
+    assert {:error, :stale_response} =
+             GenServer.call(provider, {:emit_response, context, first, 1})
+
+    assert {:ok, _output} = Session.admit_output(session, second)
+    assert_receive {:context_output_granted, ^second, _}
+  end
+
+  test "sixteen pending starts are bounded, then rejection releases one slot" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+
+    turns =
+      Enum.map(1..16, fn index ->
+        {turn, start} = announce_response(session, context, index)
+        assert :ok = Session.ack(session, start)
+        turn
+      end)
+
+    overflow = make_ref()
+
+    assert {:error, :response_overflow} =
+             GenServer.call(provider, {:emit_response, context, overflow, 17})
+
+    first = hd(turns)
+    assert :ok = Session.reject_response(session, first)
+    assert_receive {:context_response_discarded, ^first}
+    {_turn, start} = announce_response(session, context, 18)
+    assert :ok = Session.ack(session, start)
+  end
+
+  test "sequential grants retire past the pending bound without reopening old starts" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+
+    first =
+      Enum.reduce(1..25, nil, fn index, first ->
+        {turn, start} = announce_response(session, context, index)
+        assert :ok = Session.ack(session, start)
+        assert {:ok, output} = Session.admit_output(session, turn)
+        assert_receive {:context_output_granted, ^turn, reference}
+        assert reference == output.ref
+        assert :ok = emit_output_completed(session, output)
+        assert :ok = Session.settle_output(session, output, 0)
+        first || {turn, start}
+      end)
+
+    {old_turn, old_start} = first
+    assert {:error, :stale_response} = Session.admit_output(session, old_turn)
+
+    assert {:error, :stale_response} =
+             GenServer.call(
+               provider,
+               {:emit_response, context, old_turn, old_start.response_index}
+             )
+  end
+
+  test "an old allocation's response reference cannot grant or reject on a new allocation" do
+    old = session()
+    old_context = make_ref()
+    assert :ok = Session.push_audio(old, <<0, 0>>, response_context: old_context)
+    {old_turn, old_start} = announce_response(old, old_context, 1)
+    assert :ok = Session.ack(old, old_start)
+
+    replacement = session()
+    new_context = make_ref()
+    assert :ok = Session.push_audio(replacement, <<0, 0>>, response_context: new_context)
+    {new_turn, new_start} = announce_response(replacement, new_context, 1)
+    assert :ok = Session.ack(replacement, new_start)
+
+    assert {:error, :stale_response} = Session.admit_output(replacement, old_turn)
+    assert {:error, :stale_response} = Session.reject_response(replacement, old_turn)
+    assert {:ok, _output} = Session.admit_output(replacement, new_turn)
+    assert_receive {:context_output_granted, ^new_turn, _}
+  end
+
   test "early text submission is withheld until the callback accepts" do
     session = session()
     provider = Session.provider(session)
@@ -432,6 +569,31 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
   defp status(session, context),
     do:
       ResponseContexts.status(:sys.get_state(Channel.address(session)).response_contexts, context)
+
+  defp announce_response(session, context, index) do
+    turn = make_ref()
+    assert :ok = GenServer.call(Session.provider(session), {:emit_response, context, turn, index})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{kind: :response_started, turn_ref: ^turn, response_context: ^context} =
+                      event},
+                   1_000
+
+    {turn, event}
+  end
+
+  defp emit_output_completed(session, output) do
+    provider = Session.provider(session)
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :output_completed, [turn_ref: output.turn_ref, request_ref: output.ref]}
+             )
+
+    assert_receive {:vxpipe_speech, %Event{kind: :output_completed} = event}, 1_000
+    Session.ack(session, event)
+  end
 
   defp submit_async(session, context, timeout \\ 1_000) do
     command = %{

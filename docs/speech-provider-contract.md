@@ -420,13 +420,23 @@ Events include `ready`, `speech_started`, `input_transcript`, `turn_ended`,
 the room still checks allowlisting, argument schema, active turn and current permissions.
 
 The optional `response_started` STS event has a private model-response reference,
-a positive bounded allocation ordinal and an opaque input authorization-origin
+a positive signed-64 allocation ordinal and an opaque input authorization-origin
 reference. A descriptor must opt into this event; caller `turn_ended` then only
-settles caller evidence. Its shape and early-input delivery gate are implemented,
-but response-to-context binding/acknowledgment, policy-qualified output grants, Google emission and
-bounded origin retirement are still required. Event validity alone does not
-grant a playback slot or authorize reuse after hold/regrant. The provider must
-not announce a public speech turn for thought-only, tool-only or text-only work.
+settles caller evidence. The channel binds each start to an accepted or exactly
+staged context before enqueue. Its allocation-local ordinal high-water mark
+accepts gaps but rejects old, duplicate and conflicting starts; at most 16
+starts may await disposition. The exact queued event must be acknowledged, and
+its context accepted, before `Session.admit_output/2` grants the earliest pending
+response. A busy output slot does not consume the start. The consumer may call
+`Session.reject_response/2` on an acknowledged pending start to release only
+that response and notify the provider with
+`{:vxpipe_speech_response_discard, channel, turn_ref}`; this is not a whole-wire
+interrupt. Non-opted STS providers retain caller-end admission. This shared
+grant does not yet establish policy-qualified output, Google emission, provider
+handling of the discard message, or bounded origin retirement; those remain
+milestone requirements. Event validity alone does not authorize reuse after
+hold/regrant. The provider must not announce a public speech turn for
+thought-only, tool-only or text-only work.
 
 Public caller, agent and tool IDs must be room-owned, with bounded associations to private
 provider references qualified by allocation generation and exact source identity. Private
@@ -574,7 +584,9 @@ coverage. Authorization and bounded retirement of not-yet-admitted/queued replie
 across revoke/regrant remain separate milestone gates.
 
 After policy checks, the consumer calls `Session.admit_output/2` with the private provider turn
-reference. A fresh engine output reference authorizes `Channel.submit/3`; accepted input alone
+reference. For an opted-in response-start descriptor, the exact start must first be
+acknowledged and its context accepted; grants proceed oldest-pending first. A fresh
+engine output reference authorizes `Channel.submit/3`; accepted input alone
 does not authorize output. Readiness must be acknowledged and only one output turn may be
 outstanding. A queued admission that expires cannot later grant permission.
 
