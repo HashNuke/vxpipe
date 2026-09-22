@@ -2,8 +2,36 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTFormat do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CapabilityCatalog
+  alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.Speech.Descriptor
+
+  def validate_participant(participant) do
+    case validate(
+           participant.capabilities.speech_to_speech,
+           participant.capabilities.output_speech_to_text
+         ) do
+      :ok ->
+        :ok
+
+      {:error, _reason} ->
+        {:error,
+         Error.new(
+           :unsupported_call_plan,
+           "The resolved call plan is not supported by this runtime.",
+           details: %{
+             "path" => [
+               "participants",
+               participant.call_spec_key,
+               "capabilities",
+               "output_speech_to_text"
+             ],
+             "reason" =>
+               "output recognition requires matching speech formats; conversion is not supported"
+           }
+         )}
+    end
+  end
 
   def validate(_generator, nil), do: :ok
 

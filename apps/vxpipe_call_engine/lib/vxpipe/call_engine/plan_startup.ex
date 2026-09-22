@@ -69,7 +69,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp supported_configuration(entries, options) do
     with :ok <- supported_model(entries.receiver),
-         :ok <- supported_output_stt_format(entries.receiver),
+         :ok <- OutputSTTFormat.validate_participant(entries.receiver),
          {:ok, _integrations} <-
            AgentActivationOptions.mcp_integrations(entries.receiver, options) do
       for participant <- [entries.caller, entries.receiver],
@@ -78,22 +78,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         :ok -> supported_speech(participant, kind, options)
         error -> error
       end
-    end
-  end
-
-  defp supported_output_stt_format(participant) do
-    case OutputSTTFormat.validate(
-           participant.capabilities.speech_to_speech,
-           participant.capabilities.output_speech_to_text
-         ) do
-      :ok ->
-        :ok
-
-      {:error, _reason} ->
-        unsupported(
-          ["participants", participant.call_spec_key, "capabilities", "output_speech_to_text"],
-          "output recognition requires matching speech formats; conversion is not supported"
-        )
     end
   end
 
@@ -157,7 +141,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     with :ok <- current_plan(plan),
          {:ok, entries} <- entries(plan),
          %{caller: caller, receiver: receiver} = entries,
-         :ok <- supported_output_stt_format(receiver),
+         :ok <- OutputSTTFormat.validate_participant(receiver),
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
            speech_to_text_runtimes(plan, [caller, receiver], plan.opening_audio, options),

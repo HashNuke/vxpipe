@@ -1015,6 +1015,11 @@ No new provider advertisement or billable call is authorized by these tasks.
       microphone `input_format`, against STT `format` in full.
     - [x] Cover encoding/container/channel/order/signedness and rate rejection,
       independent human STT, sanitized errors and unchanged private options.
+    - [ ] Repair the post-commit strict Credo gate at `9bf245a5`: adding format
+      validation increased PlanStartup to 806 lines above the 800-line SRP limit.
+      Move the output-format admission error construction into its existing
+      focused helper, keeping the public error and validation order unchanged;
+      rerun focused startup/selection/room tests and commit before broader gates.
 
   PCM admission design review (2026-09-22): the shared Descriptor owns supported
   raw mono format validation; no shared converter exists on the output sidecar
