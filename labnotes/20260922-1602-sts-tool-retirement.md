@@ -71,7 +71,7 @@ Final focused pass: **132 tests, zero failures**, seed 0, two BEAM schedulers.
 Ran the capability/output-STT/caller-event suites; room tool/caller/output
 identity, transcript modes, call and STS publication suites; startup activation;
 and provider tool/turn-control suites from the owning Call Engine child. Logs:
-`/tmp/vxpipe-sts-tool-retirement-focused.log`. Format applied to the exact changed
+temporary log `vxpipe-sts-tool-retirement-focused.log`. Format applied to the exact changed
 Elixir paths; `git diff --check` and all 44 local links in the changed
 milestone/contract/labnotes pass. Updated the provider contract with the
 implemented boundary and explicit upstream/execution limits. Commit this

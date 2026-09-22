@@ -1053,6 +1053,11 @@ zero failures, 42 excluded, seed 0. See
   pass; each observes five complete turns, two interruptions and one healthy
   post-fault call. The ten-call lane is implemented but has not been run in a
   quiet window. These implementation/smoke checkboxes do not complete load acceptance.
+  Parent integration at `9908a1a1` also passes all seven harness contract tests
+  and all three two-call modes against the latest tool, recognizer and egress
+  fixes. Root static gates pass; full umbrella and quiet ten-call measurement
+  remain pending. Review/integration evidence:
+  `labnotes/20260922-1650-sts-load-integration.md`.
 - [ ] Run focused child suites and root format, warnings-as-errors compile,
   strict Credo, full tests and unused-lock gates. Verify no real-key fixtures,
   no credential/database migration loss, provider tag accuracy, and a clean

@@ -40,3 +40,7 @@ formatting, whitespace checks and 46 local documentation links pass. The complet
 1,102-test Call Engine run recorded in the preceding recognizer labnote passed
 before these changes; it is not a full-suite claim for this checkpoint. Commit
 before broader gates and preserve the pending native/Gateway integration window.
+
+After commit `51926f76`, root format, warnings-as-errors compile, strict Credo
+and unused-lock checks pass. Full umbrella/Gateway testing remains pending
+integration of the independent handoff repair. No new root test pass is claimed.
