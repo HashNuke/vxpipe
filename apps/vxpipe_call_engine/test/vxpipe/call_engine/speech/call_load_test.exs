@@ -11,8 +11,16 @@ defmodule Vxpipe.CallEngine.Speech.CallLoadTest do
     test "bounded pinned room calls: #{mode}" do
       profile = System.get_env("VXPIPE_CALL_LOAD_PROFILE", "smoke")
       calls = if profile == "measured", do: 10, else: 2
-      supervisor = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
-      tasks = start_supervised!({Task.Supervisor, name: nil})
+      scope = make_ref()
+
+      name = fn role ->
+        {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {__MODULE__, scope, role}}}
+      end
+
+      supervisor =
+        start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: name.(:connections)})
+
+      tasks = start_supervised!({Task.Supervisor, name: name.(:tasks)})
       observer = start_supervised!(Vxpipe.CallEngine.CallLoad.IngressObserver)
 
       fixture =

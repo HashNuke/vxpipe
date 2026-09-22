@@ -28,6 +28,7 @@ Focused harness tests, from `apps/vxpipe_call_engine`:
 
 ```shell
 ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_contract_test.exs test/vxpipe/call_engine/speech/call_load_sink_test.exs test/vxpipe/call_engine/speech/call_load_ingress_observer_test.exs
+ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_attribution_test.exs
 ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_test.exs --only mode:sts_provider --seed 0
 ```
 
@@ -51,6 +52,9 @@ It accounts for mono PCM duration, including gaps between arriving chunks, and
 acknowledges completion only after that duration has elapsed. Interruption returns
 only the consumed duration and fences stale timers. This models paced local PCM
 consumption; it does not establish physical speaker playback or human hearing.
+The stale-timer unit regression injects a controlled clock and captured schedule
+tokens with acknowledgement barriers. The runnable smoke/measured lane always
+uses the sink's real monotonic clock and actual timer defaults.
 Do not interpret these results as hosted model, native transport or browser
 capacity. A crashed room authority exercises room-failure isolation, not upstream
 provider reconnection.
@@ -72,7 +76,14 @@ never an invented zero. Latencies in milliseconds are:
 | Failure isolation | Fault injection start through a surviving room's subsequent completion |
 | Cleanup | Explicit room stop/fault through monitored descendant exits |
 
-Sink IDs and public turn IDs have separate timing maps. Public events include
+Caller, sink and public turn IDs have separate immutable input-origin bindings.
+Input timestamps are captured before feeder creation. Before starting the next
+input (including barge-in), the driver waits for the current caller onset, public
+agent onset, sink first audio and feeder completion. A sink notification arriving
+before a public onset cannot advance the attribution frontier. Late completion
+uses its bound origin; duplicate onsets, extra uncorrelated onsets, unknown
+completion IDs and wrong room/connection/participant identities fail explicitly.
+Public events include
 connection-forwarding overhead. Reports also include received/rejected chunks,
 chunks discarded by intentional interruption, decoded replies, accepted/rejected
 input, ingress drop evidence, final caller/agent transcript counts, and monitored

@@ -15,6 +15,11 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
     {:ok,
      %{
        observer: Keyword.fetch!(options, :observer),
+       clock: Keyword.get(options, :clock, fn -> System.monotonic_time(:millisecond) end),
+       schedule_finish:
+         Keyword.get(options, :schedule_finish, fn message, delay ->
+           Process.send_after(self(), message, delay)
+         end),
        config: config,
        active: nil,
        stats: %{
@@ -33,7 +38,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
   def handle_call(:stats, _from, state), do: {:reply, state.stats, state}
 
   def handle_call({:vxpipe_audio_output, frame}, _from, state) do
-    now = now()
+    now = state.clock.()
     active = state.active || new_turn(frame, state.config, now)
 
     with true <- frame.codec == :linear16 and frame.sample_rate == 16_000 and frame.channels == 1,
@@ -78,8 +83,8 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
         _from,
         %{active: %{turn: turn}} = state
       ) do
-    delay = max(0, ceil(state.active.ledger.due - now()))
-    Process.send_after(self(), {:finish, state.active.token}, delay)
+    delay = max(0, ceil(state.active.ledger.due - state.clock.()))
+    state.schedule_finish.({:finish, state.active.token}, delay)
     {:reply, :ok, put_in(state.active.callback, callback)}
   end
 
@@ -88,9 +93,9 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
         _from,
         %{active: %{turn: turn}} = state
       ) do
-    played = Playback.played_ms(state.active.ledger, now())
+    played = Playback.played_ms(state.active.ledger, state.clock.())
     dropped = Enum.count(state.active.chunks, &(&1 > played))
-    notify(state, {:sink_interrupted, turn, now()})
+    notify(state, {:sink_interrupted, turn, state.clock.()})
     state = update_in(state.stats.interrupted_chunks, &(&1 + dropped))
     {:reply, {:ok, played}, %{state | active: nil}}
   end
@@ -102,7 +107,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
     do: {:reply, {:ok, 0}, state}
 
   def handle_call(:vxpipe_audio_output_clear, _from, state) do
-    played = Playback.played_ms(state.active.ledger, now())
+    played = Playback.played_ms(state.active.ledger, state.clock.())
     dropped = Enum.count(state.active.chunks, &(&1 > played))
     state = update_in(state.stats.cleared_chunks, &(&1 + dropped))
     {:reply, {:ok, played}, %{state | active: nil}}
@@ -115,9 +120,9 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
 
   @impl true
   def handle_info({:finish, token}, %{active: %{token: token} = active} = state) do
-    played = Playback.played_ms(active.ledger, now())
+    played = Playback.played_ms(active.ledger, state.clock.())
     send(active.callback, {:vxpipe_audio_playback, self(), active.turn, {:completed, played}})
-    notify(state, {:playback_ack, active.turn, now()})
+    notify(state, {:playback_ack, active.turn, state.clock.()})
     state = update_in(state.stats.completed_playbacks, &(&1 + 1))
     {:noreply, %{state | active: nil}}
   end
@@ -138,5 +143,4 @@ defmodule Vxpipe.CallEngine.CallLoad.Sink do
   end
 
   defp notify(state, event), do: send(state.observer, {:call_load, event})
-  defp now, do: System.monotonic_time(:millisecond)
 end

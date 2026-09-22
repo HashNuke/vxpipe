@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.CallLoad.Runner do
   @moduledoc false
   alias Vxpipe.CallEngine
-  alias Vxpipe.CallEngine.CallLoad.{IngressObserver, Metrics, Room, Sink}
+  alias Vxpipe.CallEngine.CallLoad.{Attribution, IngressObserver, Metrics, Room, Sink}
   alias Vxpipe.CallEngine.Media.STSIngress
 
   alias Vxpipe.CallEngine.Event.{
@@ -207,10 +207,8 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
       input_started: nil,
       barge_at: nil,
       turn: 0,
-      turn_starts: %{},
-      public_turn_starts: %{},
+      attribution: Attribution.new(),
       input_finished: 0,
-      second_audio: false,
       deadline: now() + 90_000
     }
     |> measure(:admission_ms, context.admission_ms)
@@ -219,11 +217,13 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
 
   defp begin_input(state, turn) do
     observer = self()
+    started = now()
+    attribution = Attribution.begin_input(state.attribution, turn, started)
 
     {:ok, _} =
       Task.Supervisor.start_child(state.tasks, fn -> Room.feed(state.context, turn, observer) end)
 
-    %{state | input_started: now(), turn: turn}
+    %{state | input_started: started, turn: turn, attribution: attribution}
   end
 
   defp until(state, phase) do
@@ -234,7 +234,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
     if now() > state.deadline,
       do:
         raise(
-          "call deadline in #{phase}: #{inspect(Map.take(state, [:completed, :interruptions, :input_frames, :input_rejections, :caller_transcripts, :agent_transcripts, :turn, :second_audio]))}"
+          "call deadline in #{phase}: #{inspect(Map.take(state, [:completed, :interruptions, :input_frames, :input_rejections, :caller_transcripts, :agent_transcripts, :turn]))}"
         )
 
     state =
@@ -246,26 +246,29 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
           |> Map.update!(:input_rejections, &(&1 + if(result == :ok, do: 0, else: 1)))
 
         {:call_load, {:first_audio, turn, at}} ->
-          state =
-            state
-            |> measure(:first_audio_ms, at - state.input_started)
-            |> put_in([:turn_starts, turn], state.input_started)
-
-          if phase == :barge and state.turn == 2, do: %{state | second_audio: true}, else: state
+          observe(state, :sink, turn, at, :first_audio_ms)
 
         {:input_finished, turn} ->
-          %{state | input_finished: turn}
+          %{
+            state
+            | input_finished: turn,
+              attribution: Attribution.finish_input(state.attribution, turn)
+          }
 
         {:call_load, {:playback_ack, turn, at}} ->
-          measure(state, :playback_ack_ms, at - Map.fetch!(state.turn_starts, turn))
+          measure(
+            state,
+            :playback_ack_ms,
+            Attribution.elapsed(state.attribution, :sink, turn, at)
+          )
 
-        {:vxpipe_event, %ParticipantTurnStarted{}} ->
-          measure(state, :speech_onset_ms, now() - state.input_started)
+        {:vxpipe_event, %ParticipantTurnStarted{} = event} ->
+          validate_event!(state.context, event, :caller)
+          observe(state, :caller, event.correlation_id, now(), :speech_onset_ms)
 
-        {:vxpipe_event, %AgentSpeechStarted{correlation_id: turn}} ->
-          state
-          |> measure(:agent_speech_onset_ms, now() - state.input_started)
-          |> put_in([:public_turn_starts, turn], state.input_started)
+        {:vxpipe_event, %AgentSpeechStarted{} = event} ->
+          validate_event!(state.context, event, :agent)
+          observe(state, :public, event.correlation_id, now(), :agent_speech_onset_ms)
 
         {:vxpipe_event, %ParticipantTranscription{final: true, text: "HI"}} ->
           Map.update!(state, :caller_transcripts, &(&1 + 1))
@@ -273,16 +276,25 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
         {:vxpipe_event, %TextOutput{text: "RECEIVED HI"}} ->
           Map.update!(state, :agent_transcripts, &(&1 + 1))
 
-        {:vxpipe_event, %AgentTurnInterrupted{}} ->
-          if state.barge_at == nil, do: raise("unexpected interruption")
+        {:vxpipe_event, %AgentTurnInterrupted{} = event} ->
+          validate_event!(state.context, event, :agent)
+
+          if state.barge_at == nil or
+               Attribution.input(state.attribution, :public, event.correlation_id) != 2,
+             do: raise("unexpected interruption")
 
           state
           |> measure(:interruption_ms, now() - state.barge_at)
           |> Map.update!(:interruptions, &(&1 + 1))
 
-        {:vxpipe_event, %AgentTurnCompleted{correlation_id: turn}} ->
+        {:vxpipe_event, %AgentTurnCompleted{} = event} ->
+          validate_event!(state.context, event, :agent)
+
           state
-          |> measure(:turn_completion_ms, now() - Map.fetch!(state.public_turn_starts, turn))
+          |> measure(
+            :turn_completion_ms,
+            Attribution.elapsed(state.attribution, :public, event.correlation_id, now())
+          )
           |> Map.update!(:completed, &(&1 + 1))
 
         {:vxpipe_event, %AgentTurnFailed{}} ->
@@ -295,9 +307,12 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
       end
 
     state =
-      if phase == :barge and state.turn == 2 and state.input_finished == 2 and state.second_audio,
-        do: %{begin_input(state, 3) | barge_at: now()},
-        else: state
+      if phase == :barge and state.turn == 2 and Attribution.ready?(state.attribution) do
+        next = begin_input(state, 3)
+        %{next | barge_at: next.input_started}
+      else
+        state
+      end
 
     {mailbox, memory} = sample(state.context)
 
@@ -319,9 +334,27 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
 
     settled =
       length(state.samples.playback_ack_ms) >= state.completed and
-        state.agent_transcripts >= state.completed and state.input_finished == state.turn
+        state.agent_transcripts >= state.completed and state.input_finished == state.turn and
+        Attribution.ready?(state.attribution)
 
     if done and settled, do: %{state | deadline: now() + 90_000}, else: loop(state, phase)
+  end
+
+  defp observe(state, kind, id, at, metric) do
+    {attribution, elapsed} = Attribution.observe(state.attribution, kind, id, at)
+    measure(%{state | attribution: attribution}, metric, elapsed)
+  end
+
+  defp validate_event!(context, event, role) do
+    participant =
+      if role == :caller, do: context.plan.entry_caller, else: context.plan.entry_receiver
+
+    expected = Map.fetch!(context.plan.participants, participant).participant_id
+
+    if event.tenant_id != context.command.tenant_id or event.room_id != context.command.room_id or
+         event.incarnation_id != context.command.incarnation_id or
+         event.connection_id != context.command.connection_id or event.participant_id != expected,
+       do: raise(ArgumentError, "uncorrelated public event identity")
   end
 
   defp input_drops(%{mode: :llm_tts} = context, state) do

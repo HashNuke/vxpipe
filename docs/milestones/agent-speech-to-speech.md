@@ -1029,6 +1029,20 @@ zero failures, 42 excluded, seed 0. See
   - [ ] Run the integrated ten-call comparison only in a parent-scheduled quiet
     window; retain p50/p95/p99 reports and review isolation/cleanup evidence before
     completing load acceptance. Contended smoke output is not performance evidence.
+  - [x] Repair harness timing attribution before integration: record input origin
+    before feeder spawn; bind caller/public/sink IDs independently to immutable
+    input origins; gate barge-in on all phase-two onset evidence and reject
+    unknown/duplicate correlation. Add a deterministic sink-before-public-onset
+    regression and uniquely named test supervisors; rerun focused/smoke checks.
+    Evidence: `labnotes/20260922-1636-fence-load-attribution.md`; seven focused
+    contracts and all three two-call smoke modes pass. Quiet ten-call acceptance
+    remains pending.
+  - [x] Make the harness sink stale-finish regression deterministic: replace
+    scheduler-sensitive interrupt/clear timing assertions with controlled clock
+    and captured timer tokens, explicit stale-token injection and acknowledgement
+    barriers. Retain pure PCM arithmetic tests and actual paced smoke coverage.
+    Same review checkpoint evidence: seven focused tests and three real-paced
+    two-call modes pass; no scheduler-relative interrupt/clear assertion remains.
 
   Load harness design review (2026-09-22): allocation-only conformance is insufficient;
   each mode must pass actual admitted room audio and public completion. Synthetic
