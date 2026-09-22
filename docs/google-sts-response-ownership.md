@@ -1,17 +1,19 @@
 # Google STS response ownership
 
-Status: pure response-state owner implemented and locally verified; actual
-controller/shared-admission adoption is not implemented. Google remains
-unadvertised. This completes neither response delivery, hosted acceptance nor
-interruption-history or resumption-watermark proof.
+Status: the bounded response-state owner, shared exact-start admission queue
+and local opted-in Google controller adoption are implemented and verified with
+fake transport. Google remains unadvertised. Successful cross-origin cutover,
+interruption-history reconciliation, resumption watermark, hosted acceptance
+and full milestone acceptance remain open.
 
 ## Problem and required outcome
 
-The current adapter uses one caller/input reference for generated output and
-clears it after playback. A model end with `IN_PROGRESS` can precede another
-response to the same input, but subsequent audio/text then has no owner. If it
-arrives before playback finishes, it can instead enter the completed response's
-buffer. An idle guard prevents premature renewal, not lost or mixed responses.
+At the original design baseline, the adapter used one caller/input reference
+for generated output and cleared it after playback. A model end with
+`IN_PROGRESS` could precede another response to the same input, but subsequent
+audio/text then had no owner. If it arrived before playback finished, it could
+instead enter the completed response's buffer. An idle guard prevented
+premature renewal, not lost or mixed responses.
 
 The [pinned ADK receiver](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/models/gemini_llm_connection.py)
 surfaces interaction status for prompts spanning several model turns. The

@@ -95,6 +95,41 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
              %{"handle" => "pending-playback"}
   end
 
+  test "opted-in renewal waits for both overlapping response playback obligations" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    sink = context.sink
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
+    deliver(context, audio_message(1))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+    assert_audio(context, 1)
+    finish_generation(context)
+    deliver(context, interaction_end("IN_PROGRESS"))
+
+    deliver(context, content(%{"outputTranscription" => %{"text" => "SECOND"}}))
+    deliver(context, audio_message(2))
+    deliver(context, content(%{"generationComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "both-pending", "resumable" => true}
+    })
+
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    refute_received {:test_google_sts_started, _, _}
+    finish_playback(context, first, "FIRST", 20)
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second}, 1_000
+    assert second != first
+    assert_audio(context, 2)
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+    finish_playback(context, second, "SECOND", 20)
+    assert_receive {:test_google_sts_started, pending, _}, 1_000
+    assert_receive {:test_google_sts_control, ^pending, setup}, 1_000
+    assert JSON.decode!(setup)["setup"]["sessionResumption"] == %{"handle" => "both-pending"}
+  end
+
   test "opted-in text-only model work retires without a public speech turn" do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
@@ -211,6 +246,52 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_audio(context, 1)
     assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"value" => 1})
     assert :sys.get_state(capability).pending_turns == []
+  end
+
+  test "opted-in tool-only response stays private and needs fresh idle after its result" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+
+    deliver(context, %{
+      "toolCall" => %{
+        "functionCalls" => [%{"id" => "tool-only", "name" => "lookup", "args" => %{}}]
+      }
+    })
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent",
+                    %{event: %Event{kind: :tool_call, call_ref: call}}},
+                   1_000
+
+    deliver(context, content(%{"generationComplete" => true}))
+    deliver(context, interaction_end("IDLE"))
+    assert :sys.get_state(context.provider).responses.records == %{}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "tool-pending", "resumable" => true}
+    })
+
+    deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
+    refute_received {:test_google_sts_started, _, _}
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"value" => 1})
+    assert :sys.get_state(context.provider).pending_tools == %{}
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "before-new-idle", "resumable" => true}
+    })
+
+    refute_received {:test_google_sts_started, _, _}
+    deliver(context, interaction_end("IDLE"))
+
+    deliver(context, %{
+      "sessionResumptionUpdate" => %{"newHandle" => "after-new-idle", "resumable" => true}
+    })
+
+    assert_receive {:test_google_sts_started, pending, _}, 1_000
+    assert_receive {:test_google_sts_control, ^pending, setup}, 1_000
+    assert JSON.decode!(setup)["setup"]["sessionResumption"] == %{"handle" => "after-new-idle"}
   end
 
   test "opted-in interrupted caller cannot renew from a possibly old idle boundary" do

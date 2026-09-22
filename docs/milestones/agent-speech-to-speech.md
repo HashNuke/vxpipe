@@ -1659,8 +1659,9 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       - [ ] Reproduce continued model generation after an `IN_PROGRESS` model
         end. Complete independently credited subsequent response audio/text for
         the same interaction; do not hide the missing response association behind
-        a resumption guard. This depends on the full response-owner work above.
-        - [ ] Reproduce the second response after first playback and before first
+        a resumption guard. The opted-in real-controller A/B cases prove this
+        with the shared credited output slot; cross-origin cutover remains separate.
+        - [x] Reproduce the second response after first playback and before first
           playback settles through the real capability/fake wire, with distinct
           PCM/text and no additional caller onset, end or input replay.
         - [ ] Review and implement explicit provider-response admission evidence,
@@ -1701,14 +1702,16 @@ Submitted invocation outcomes must still survive privately for later reasoning.
               reds to allocate only the local opted-in Google profile, leaving
               legacy fixture tests on their existing path. Confirm focused
               failure moves from caller-end admission to absent PCM-start grant.
-            - [ ] Adopt `STSResponses` as the opted-in controller's actual
+            - [x] Adopt `STSResponses` as the opted-in controller's actual
               independent wire/playback owner. Bind each wire response to the
               accepted interaction context, announce only on its first PCM,
               and keep text/PCM/limits per response across `IN_PROGRESS`.
-            - [ ] Route exact output grants, credits, completions, settlement
+              Local controller and pure-owner checks cover this same-origin path.
+            - [x] Route exact output grants, credits, completions, settlement
               and response-specific discards through that owner; preserve A's
               playback while B generates, and never interrupt a newer wire
-              generation when only an older response is denied.
+              generation when only an older response is denied. Controller
+              cases cover A/B playback, held discard and exact local interrupt.
               - [x] Reproduce the post-credit PCM stall with a real
                 opted-in controller: credit the first frame, send another before
                 generation end, and require immediate credited delivery without
@@ -1735,6 +1738,16 @@ Submitted invocation outcomes must still survive privately for later reasoning.
               renewal on every retained response/tool obligation. Verify the
               five controller cases and the relevant Google/provider/shared
               speech group without hosted calls, then seek independent review.
+              - [x] Prove a tool-only opted-in response stays private and retires
+                its non-speaking record at model end while its unresolved tool
+                still blocks handle renewal. After the tool result, require new
+                explicit idle evidence before renewal; cover the real controller
+                with fake wire and no hosted request.
+              - [x] Prove a private handle cannot renew while A retains playback
+                and B is generated/queued, even after the model reports idle;
+                require both credited responses to settle before replacement.
+                Exercise the actual controller and keep the same-origin
+                continuation path live without replay.
             - [x] Keep the Google session below the strict-Credo module-size
               gate by moving input command normalization and caller-turn
               publication into `STSInput`; retain legacy and opted-in behavior.
@@ -1862,10 +1875,12 @@ Submitted invocation outcomes must still survive privately for later reasoning.
             root retirement before final acceptance. The input-only interim
             16-lifetime-origin bound is not this proof; exercise more than 16
             sequential fully retired rotations without evicting live obligations.
-        - [ ] Correct first-response reds to deliver content before expecting
+        - [x] Correct first-response reds to deliver content before expecting
           admission; caller end and transcription alone must not admit output,
           and first response identity must differ from caller identity. Check
-          every retained response obligation before allowing resumption.
+          every retained response obligation before allowing resumption. The
+          opted-in controller proves first PCM start and owner-wide renewal;
+          cross-origin and watermark coverage remain separate unchecked gates.
       - [ ] Prove cross-direction handle coverage of accepted client messages:
         audit the pinned SDK's transparent consumed-message index, numbering and
         supported wire profile; reproduce delayed old idle and a handle that
