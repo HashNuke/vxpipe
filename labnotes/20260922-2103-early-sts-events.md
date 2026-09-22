@@ -96,3 +96,8 @@ test was started for this red/green cycle.
 Russell Astra xhigh cleared the extraction by read-only source review: moved
 FIFO/early classification remains equivalent and the settlement helper keeps
 deadline, reply and dispatch order. It did not rerun tests or static gates.
+
+Committed as `7de338c9`. Post-commit root static gates all exit 0: format,
+warnings-as-errors compile, strict Credo (1,089 files, zero issues) and unused
+dependency check. The full umbrella suite remains deferred until the five
+known Google controller behavior reds are resolved.
