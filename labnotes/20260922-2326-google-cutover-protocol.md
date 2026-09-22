@@ -50,4 +50,11 @@ unrelated `LiveInspectionTest` failure; a focused rerun reproduced that test's
 pre-existing invalid participant-readiness assumption. It is tracked as a
 separate root-gate repair, not a Google cutover failure. Independent Astra
 xhigh follow-up found no new concrete cutover issue (two A1/A2 tests and
-the 76-test controller file green). Root gates remain pending.
+the 76-test controller file green).
+
+After commits `94785e08` and `05cba4fe`, the call-engine child suite passes
+1,409/0 (30 integration exclusions). Post-commit root format,
+warnings-as-errors compile, strict Credo (1,094 files, no issues), and
+unused-lock checks pass. Root `mix test` stops before Persistence tests because
+the local PostgreSQL SCRAM connection has no password configured; no hosted
+Google call or secret-bearing diagnostic was run.

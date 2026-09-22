@@ -17,4 +17,7 @@ audio-final checkpoint.
 
 The entire three-test file passes 3/0; the full call-engine child suite passes
 1,409/0 with 30 integration exclusions (seed 20131). Root umbrella gates
-remain to be run after commit.
+were run after commit: format, warnings-as-errors compile, strict Credo
+(1,094 files, no issues), and unused-lock pass. Root `mix test` stops before
+the Persistence suite because the local PostgreSQL SCRAM connection lacks a
+configured password. This is not a passing umbrella test gate.

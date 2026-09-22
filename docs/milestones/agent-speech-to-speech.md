@@ -43,6 +43,14 @@ lifecycle defect, while preserving unchecked parent/cross-origin gates. All
 four post-commit root static checks pass. Root `mix test` again stops at the
 same missing local PostgreSQL SCRAM password before its suite starts.
 
+Same-wire audio-final cutover `94785e08` and the separate live-inspection gate
+repair `05cba4fe` pass the full call-engine child suite (1,409 tests, zero
+failures, 30 integration exclusions). Post-commit format, warnings-as-errors
+compile, strict Credo (1,094 files, no issues), and unused-lock checks pass.
+Root `mix test` still stops before the Persistence suite at the same missing
+local PostgreSQL SCRAM password. The hosted attribution, silent-input,
+response-policy, and final acceptance gates remain open.
+
 Real-room follow-up (`labnotes/20260922-1209-sts-room-integration.md`) repaired
 STS runtime selection, allocation policy capture, readiness reconciliation and
 source-disconnect cleanup. STS is now a required readiness resource; missing
