@@ -6,7 +6,12 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   @enforce_keys [:kind, :provider, :model, :credential_name, :options, :provider_options]
   defstruct @enforce_keys
 
-  @type kind :: :speech_to_text | :model_inference | :text_to_speech
+  @type kind ::
+          :speech_to_text
+          | :model_inference
+          | :text_to_speech
+          | :speech_to_speech
+          | :output_speech_to_text
 
   @type t :: %__MODULE__{
           kind: kind(),
@@ -53,7 +58,13 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
 
   defp valid_shape?(selection) do
     MapSet.new(Map.keys(selection)) == MapSet.new([:__struct__ | @enforce_keys]) and
-      selection.kind in [:speech_to_text, :model_inference, :text_to_speech] and
+      selection.kind in [
+        :speech_to_text,
+        :model_inference,
+        :text_to_speech,
+        :speech_to_speech,
+        :output_speech_to_text
+      ] and
       is_binary(selection.provider) and is_binary(selection.model) and
       String.valid?(selection.model) and byte_size(selection.model) in 1..256 and
       valid_binding?(selection) and is_map(selection.options) and

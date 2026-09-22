@@ -1,7 +1,7 @@
 defmodule Vxpipe.Providers do
   @moduledoc "Manifest contract for provider-owned, optional capabilities."
 
-  @type capability :: :credential | :credential_validation | :stt | :tts | :telephony
+  @type capability :: :credential | :credential_validation | :stt | :tts | :sts | :telephony
 
   @callback id() :: String.t()
   @callback capabilities() :: %{optional(capability()) => module()}

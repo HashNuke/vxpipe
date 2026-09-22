@@ -281,6 +281,58 @@ and explicit lifecycle operations. `terminate/2` is only suitable for best-effor
 Override `format_status/1` whenever state or messages can contain credentials, audio, transcript
 text, or provider payloads.
 
+## Speech-to-speech providers
+
+A service that owns the model conversation, tools, and bidirectional agent turn
+lifecycle implements `Vxpipe.CallEngine.Speech.STSProvider`, not `STTProvider`
+plus `TTSProvider`. Composing the two independent behaviours would create two
+conflicting turn authorities and fragile transcript attribution. The provider
+owns its bidirectional model session, wire protocol, turn identifiers,
+resumption handle, and model context. The room owns source selection, policy
+and permission decisions, public turn/event IDs, transcript projection, output
+sink, playback evidence, transfers, and interruption. The provider never
+publishes to the room directly; all results flow through `Speech.Event.emit/3`
+on the scoped channel, which stamps allocation identity, producer, and order.
+
+Required callbacks:
+
+| Callback | Meaning |
+| --- | --- |
+| `configure(public_options)` | Pure validation of model, voice, PCM formats, transcript coverage, and turn-control support. Returns `{:ok, descriptor}` with `kind: :sts` or `{:error, :invalid_configuration}`. No credentials or I/O. |
+| `start_link(private_init)` | Bounded local startup under the agent capability tree via `STSProvider.start_link/2`; remote readiness is asynchronous and arrives as `:ready`. |
+| `push_audio(pid, audio)` | Bounded admission of one permitted input chunk. `:ok` proves acceptance; `{:error, :busy}` means the chunk was not accepted and existing work remains valid. |
+| `push_text(pid, text)` | Bounded explicit text input for typed-chat/continuation workflows. |
+| `interrupt(pid, turn_ref)` | Promptly fence stale output for the given turn; keep the cancellation identifier until terminal isolation. |
+| `send_tool_result(pid, call_ref, result)` | Deliver a bounded, authorized result to a valid provider call association. |
+| `close(pid)` | Idempotent explicit shutdown; supervision guarantees cleanup. |
+
+`configure/1` must declare the admission facts the room decides on: the
+supported turn-control mode (`turn_control` is `"provider"`, `"external"`, or
+`"hybrid"`), how output text settles, and the endpointing/speech-start
+evidence behind `speech_start?` and `endpointing`. Transcript deltas alone
+never open or close a turn. Source identity is stamped by the scoped channel,
+so callbacks take no `source_ref`: one permitted input stream exists per STS
+allocation, and a second concurrent source fails admission until a
+source-handoff contract is proven.
+
+The STS event vocabulary is readiness, input speech activity
+(`:speech_started`), input/output transcripts (`:transcript`), output audio
+(through the credited audio path), generation/turn completion
+(`:turn_ended`), interruption, tool call/cancellation, usage, and safe
+failure. Every event is acknowledged with `Speech.Session.ack/2` before room
+handling. Provider turn end and sink playback end are distinct facts; a
+provider completion never finishes the public agent turn until playback and
+the selected transcript source settle.
+
+Register an STS provider through the same closed paths as STT/TTS, plus the
+provider manifest `:sts` entry in `Vxpipe.Providers` (declared only after the
+adapter passes local room/contract checks). An agent `speech_to_speech`
+selection rejects any simultaneous `model_inference`/`text_to_speech`; an
+agent `output_speech_to_text` selection is explicit per agent and never
+inherited from human STT defaults. It resolves through the existing `:stt`
+provider manifest and is required only when the selected STS descriptor lacks
+output transcription.
+
 ## Production registration
 
 Adding a module does not make untrusted call-spec input able to select it. Register a production
@@ -309,6 +361,8 @@ Run the shared provider checks from the Call Engine application while iterating:
 cd apps/vxpipe_call_engine
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/provider_contract_test.exs --seed 0
 ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/stt_session_test.exs test/vxpipe/call_engine/speech/tts_session_test.exs
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/speech/sts_session_test.exs test/vxpipe/call_engine/speech/sts_provider_contract_test.exs --seed 0
+ERL_FLAGS='+S 4:4' mix test test/vxpipe/call_engine/call_spec/sts_selection_test.exs --seed 0
 ```
 
 Then run provider-specific unit and tagged integration tests. Before committing a production

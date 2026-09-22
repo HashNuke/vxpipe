@@ -23,6 +23,14 @@ defmodule Vxpipe.Calls.UsageProjectionTest do
     assert observation.measurement.provenance == :billing_lookup
   end
 
+  test "restores a speech-to-speech usage observation from its archive fact" do
+    fact = usage_fact()
+    payload = put_in(fact.payload, ["capability"], "speech_to_speech")
+
+    assert {:ok, observation} = UsageObservationProjection.project(%{fact | payload: payload})
+    assert observation.capability == :speech_to_speech
+  end
+
   test "rejects an archive payload whose attribution disagrees with the fact envelope" do
     fact = usage_fact()
     payload = put_in(fact.payload, ["attribution", "participant_id"], "participant-other")

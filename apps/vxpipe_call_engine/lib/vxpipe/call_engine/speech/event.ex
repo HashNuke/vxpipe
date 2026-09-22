@@ -53,25 +53,30 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :ready, readiness: readiness}, descriptor),
     do: descriptor.readiness == readiness
 
-  def supported?(%__MODULE__{kind: :speech_started}, %{kind: :stt} = descriptor),
-    do: descriptor.speech_start?
+  def supported?(%__MODULE__{kind: :speech_started}, %{kind: kind} = descriptor)
+      when kind in [:stt, :sts],
+      do: descriptor.speech_start?
 
-  def supported?(%__MODULE__{kind: :turn_resumed}, %{kind: :stt} = descriptor),
-    do: descriptor.resume?
+  def supported?(%__MODULE__{kind: :turn_resumed}, %{kind: kind} = descriptor)
+      when kind in [:stt, :sts],
+      do: descriptor.resume?
 
   def supported?(
         %__MODULE__{kind: :eager_turn_ended, endpointing: evidence},
-        %{kind: :stt} = descriptor
-      ),
+        %{kind: kind} = descriptor
+      )
+      when kind in [:stt, :sts],
       do: descriptor.eager_end? and descriptor.endpointing == evidence
 
   def supported?(
         %__MODULE__{kind: :turn_ended, endpointing: evidence},
-        %{kind: :stt} = descriptor
-      ),
+        %{kind: kind} = descriptor
+      )
+      when kind in [:stt, :sts],
       do: descriptor.endpointing == evidence
 
-  def supported?(%__MODULE__{kind: :transcript}, %{kind: :stt}), do: true
+  def supported?(%__MODULE__{kind: :transcript}, %{kind: kind}) when kind in [:stt, :sts],
+    do: true
 
   def supported?(
         %__MODULE__{kind: :input_submitted, provenance: provenance},

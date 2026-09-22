@@ -64,7 +64,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, _integrations} <-
            AgentActivationOptions.mcp_integrations(entries.receiver, options) do
       for participant <- [entries.caller, entries.receiver],
-          kind <- [:speech_to_text, :text_to_speech],
+          kind <- [:speech_to_text, :text_to_speech, :speech_to_speech, :output_speech_to_text],
           reduce: :ok do
         :ok -> supported_speech(participant, kind, options)
         error -> error
@@ -79,6 +79,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
        })
        when provider in ["google", "zenmux", "fixture"],
        do: :ok
+
+  defp supported_model(%{capabilities: %{speech_to_speech: %CapabilitySelection{}}}), do: :ok
 
   defp supported_model(participant),
     do: unsupported_speech_configuration(participant, :model_inference)
@@ -701,7 +703,13 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp validate_planned_selections(plan) do
     selections =
       Enum.flat_map(plan.participants, fn {ref, participant} ->
-        for kind <- [:speech_to_text, :model_inference, :text_to_speech] do
+        for kind <- [
+              :speech_to_text,
+              :model_inference,
+              :text_to_speech,
+              :speech_to_speech,
+              :output_speech_to_text
+            ] do
           {Map.fetch!(participant.capabilities, kind), kind,
            ["participants", ref, "capabilities", Atom.to_string(kind)]}
         end
@@ -739,6 +747,12 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     do: unsupported(path, "must contain a valid inline selection")
 
   defp unsupported_speech_configuration_reason(:speech_to_text),
+    do: :unsupported_speech_to_text_configuration
+
+  defp unsupported_speech_configuration_reason(:speech_to_speech),
+    do: :unsupported_speech_to_speech_configuration
+
+  defp unsupported_speech_configuration_reason(:output_speech_to_text),
     do: :unsupported_speech_to_text_configuration
 
   defp unsupported_speech_configuration_reason(:text_to_speech),

@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilityRequirements do
     kinds =
       if participant.kind == :human,
         do: [:speech_to_text],
-        else: [:model_inference, :text_to_speech]
+        else: [:speech_to_speech, :model_inference, :text_to_speech, :output_speech_to_text]
 
     Enum.map(kinds, fn kind ->
       case Capabilities.ref(participant.capabilities, kind) do

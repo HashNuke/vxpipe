@@ -323,6 +323,33 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
     assert metric["value"]["value"] == 43
   end
 
+  test "presents agent speech-to-speech selections with distinct transcript provenance" do
+    assessment = result()
+    plan = assessment.prepared_call.plan
+    assistant = plan.participants["assistant"]
+
+    sts_caps = %Capabilities{
+      speech_to_speech: selection(:speech_to_speech, "morse", "morse"),
+      output_speech_to_text: selection(:output_speech_to_text, "morse", "morse")
+    }
+
+    participants = Map.put(plan.participants, "assistant", %{assistant | capabilities: sts_caps})
+    plan = %{plan | participants: participants}
+    prepared_call = %{assessment.prepared_call | plan: plan}
+    response = CallInspectionPresenter.present(%{assessment | prepared_call: prepared_call})
+
+    assert [caller, presented_assistant, _support] = response["participants"]
+
+    assert caller["value"]["capabilities"] == [
+             %{"name" => "STT", "provider" => "morse", "model" => "morse"}
+           ]
+
+    assert presented_assistant["value"]["capabilities"] == [
+             %{"name" => "STS", "provider" => "morse", "model" => "morse"},
+             %{"name" => "Agent STT", "provider" => "morse", "model" => "morse"}
+           ]
+  end
+
   defp result do
     snapshot = variable_snapshot()
 

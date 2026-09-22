@@ -77,6 +77,21 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
 
+  def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "deepgram"}),
+    do: Registry.resolve_capability("deepgram", :sts)
+
+  def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "google"}),
+    do: Registry.resolve_capability("google", :sts)
+
+  def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "rime"}),
+    do: Registry.resolve_capability("rime", :sts)
+
+  def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "morse"}),
+    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTS.Session}
+
+  def adapter(%CapabilitySelection{kind: :output_speech_to_text, provider: "morse"}),
+    do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeSTT.Session}
+
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "morse"}),
     do: {:ok, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session}
 
@@ -214,19 +229,50 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     end
   end
 
+  def speech_options(%CapabilitySelection{
+        kind: :speech_to_speech,
+        provider: "morse",
+        model: "morse",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, @morse_keys ++ [:turn_control]),
+         :ok <- validate_turn_control(options) do
+      {:ok, options}
+    end
+  end
+
   def speech_options(%CapabilitySelection{provider: "morse", model: "morse", options: input}),
     do: normalize(input, @morse_keys)
 
+  def speech_options(%CapabilitySelection{kind: kind, provider: "morse"})
+      when kind in [:speech_to_speech, :output_speech_to_text] do
+    {:error, :unsupported_capability}
+  end
+
   def speech_options(_selection), do: {:error, :unsupported_capability}
 
-  defp validate_speech(%{provider: "morse", credential_name: nil, kind: kind}, options)
-       when kind in [:speech_to_text, :text_to_speech] do
-    provider =
-      if kind == :speech_to_text,
-        do: Vxpipe.CallEngine.Provider.MorseCodeSTT.Session,
-        else: Vxpipe.CallEngine.Provider.MorseCodeTTS.Session
+  defp validate_turn_control(options) do
+    case Keyword.fetch(options, :turn_control) do
+      {:ok, mode} when mode in ["provider", "external", "hybrid"] -> :ok
+      {:ok, _mode} -> {:error, :unsupported_capability}
+      :error -> :ok
+    end
+  end
 
-    validate_provider(provider, options)
+  defp validate_speech(%{provider: "morse", credential_name: nil, kind: kind}, options)
+       when kind in [:speech_to_text, :output_speech_to_text] do
+    validate_provider(Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, options)
+  end
+
+  defp validate_speech(
+         %{provider: "morse", credential_name: nil, kind: :speech_to_speech},
+         options
+       ) do
+    validate_provider(Vxpipe.CallEngine.Provider.MorseCodeSTS.Session, options)
+  end
+
+  defp validate_speech(%{provider: "morse", credential_name: nil, kind: :text_to_speech}, options) do
+    validate_provider(Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, options)
   end
 
   defp validate_speech(%{provider: "deepgram", kind: :speech_to_text}, options),

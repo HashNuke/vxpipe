@@ -331,11 +331,29 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     end)
   end
 
+  defp resolve_capabilities(%{kind: :human} = participant, defaults) do
+    if not is_nil(participant.capabilities.speech_to_speech) or
+         not is_nil(participant.capabilities.output_speech_to_text) do
+      invalid(
+        ["participants", participant.call_spec_key, "capabilities"],
+        "speech-to-speech selections are only supported for agent participants"
+      )
+    else
+      kinds = [:speech_to_text]
+
+      Enum.reduce_while(kinds, {:ok, %ResolvedCallPlan.Capabilities{}}, fn kind, {:ok, acc} ->
+        {ref, path} = effective_ref(participant, defaults, kind)
+
+        case resolve_capability(ref, kind, path, participant.kind) do
+          {:ok, selection} -> {:cont, {:ok, put_capability(acc, kind, selection)}}
+          {:error, _error} = error -> {:halt, error}
+        end
+      end)
+    end
+  end
+
   defp resolve_capabilities(participant, defaults) do
-    kinds =
-      if participant.kind == :human,
-        do: [:speech_to_text],
-        else: [:model_inference, :text_to_speech]
+    kinds = [:speech_to_speech, :model_inference, :text_to_speech, :output_speech_to_text]
 
     Enum.reduce_while(kinds, {:ok, %ResolvedCallPlan.Capabilities{}}, fn kind, {:ok, acc} ->
       {ref, path} = effective_ref(participant, defaults, kind)
@@ -345,6 +363,10 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
         {:error, _error} = error -> {:halt, error}
       end
     end)
+    |> case do
+      {:ok, capabilities} -> validate_agent_response_path(participant, capabilities)
+      {:error, _error} = error -> error
+    end
   end
 
   defp effective_ref(participant, defaults, kind) do
@@ -359,9 +381,7 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
     end
   end
 
-  defp resolve_capability(nil, :model_inference, path, :agent) do
-    invalid(path, "is required for an agent participant")
-  end
+  defp resolve_capability(nil, :model_inference, _path, :agent), do: {:ok, nil}
 
   defp resolve_capability(nil, _kind, _path, _participant_kind), do: {:ok, nil}
 
@@ -387,6 +407,45 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
 
   defp put_capability(capabilities, :text_to_speech, selection),
     do: %{capabilities | text_to_speech: selection}
+
+  defp put_capability(capabilities, :speech_to_speech, selection),
+    do: %{capabilities | speech_to_speech: selection}
+
+  defp put_capability(capabilities, :output_speech_to_text, selection),
+    do: %{capabilities | output_speech_to_text: selection}
+
+  defp validate_agent_response_path(participant, capabilities) do
+    sts? = not is_nil(capabilities.speech_to_speech)
+    llm? = not is_nil(capabilities.model_inference)
+    tts? = not is_nil(capabilities.text_to_speech)
+    output_stt? = not is_nil(capabilities.output_speech_to_text)
+
+    cond do
+      sts? and (llm? or tts?) ->
+        invalid(
+          ["participants", participant.call_spec_key, "capabilities", "speech_to_speech"],
+          "must not be combined with model_inference or text_to_speech"
+        )
+
+      output_stt? and not sts? ->
+        invalid(
+          ["participants", participant.call_spec_key, "capabilities", "output_speech_to_text"],
+          "requires speech_to_speech on the same agent participant"
+        )
+
+      sts? ->
+        {:ok, capabilities}
+
+      llm? ->
+        {:ok, capabilities}
+
+      true ->
+        invalid(
+          ["participants", participant.call_spec_key, "capabilities", "model_inference"],
+          "is required for an agent participant without speech-to-speech"
+        )
+    end
+  end
 
   defp resolve_tools(
          %CallSpec.Participant{kind: :human},

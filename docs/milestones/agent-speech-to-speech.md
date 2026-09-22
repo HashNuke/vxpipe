@@ -304,19 +304,26 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
 
 ### A — Selection and contract, local only
 
-- [ ] Add a failing Call Engine test for the three valid agent modes, illegal
+- [x] Add a failing Call Engine test for the three valid agent modes, illegal
   STS + LLM/TTS combinations, per-participant transcript-source requirements,
   turn-control selection independent of those sources, and unchanged
   published specs. Add `speech_to_speech` to call-spec/resolved structs,
   compiler, catalog, startup and inspection/usage schema where needed. Add
   the explicit `output_speech_to_text` agent selection and reject accidental
   inheritance from human STT defaults.
-- [ ] Add a failing independent-provider conformance test, then implement
+  Evidence: `labnotes/20260922-0539-agent-sts-checkpoint-a.md`; STS selection
+  (5 tests), usage projection (+1), inspection presenter (+1); old
+  LLM + TTS path unchanged.
+- [x] Add a failing independent-provider conformance test, then implement
   `STSProvider`, descriptor/event/channel rules, bounded commands, identity
   fencing, activity/text-settlement/history capabilities, and provider
   manifest `:sts` support. Update provider and speech author docs with exact
   callback, event, configuration, and error contracts.
-- [ ] Exit: local contract/compile tests prove unsupported providers fail
+  Evidence: STS session (3 tests) + contract (5 tests) through the owned
+  Channel/Session machinery; Morse STS lifecycle; `docs/speech-integration-guide.md`
+  STS section. Hosted output-STT resolution and turn-event drain stay deferred
+  to D/B (fail closed now); no manifest entry until E.
+- [x] Exit: local contract/compile tests prove unsupported providers fail
   closed and old LLM + TTS selection still runs. No STS service badge yet.
 
 ### B — Morse STS with provider transcript
@@ -420,6 +427,136 @@ its hosted acceptance check passes; the check remains opt-in for billable use.
   no credential/database migration loss, provider tag accuracy, and a clean
   diff. Run an independent implementation review in this same final pass.
   Mark the index complete only after all applicable acceptance gates.
+
+## Suggested code-change mapping (non-normative, 2026-09-22 review)
+
+Suggestions only; normative behavior stays in the checkpoints above. Paths
+relative to repo root unless prefixed with `apps/`.
+
+### A — Selection and contract
+
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_spec/capabilities.ex`: add
+  `:speech_to_speech` and agent-only `:output_speech_to_text` to `@kinds`, struct,
+  `new/2`; reject STS + `model_inference`/`text_to_speech` combos and inherited
+  agent-output STT from human defaults.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/resolved_call_plan/capabilities.ex`:
+  mirror the two new selections in the pinned resolved struct.
+- `.../call_spec/capability_selection.ex`, `capability_requirements.ex`,
+  `call_spec_compiler.ex`: validate new kinds/options, keep stored specs unchanged,
+  carry selections into the resolved plan.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/capability_catalog.ex`: add
+  `validate/1`, `adapter/1`, `speech_options/1`, `speech_adapters/1`,
+  `validate_provider_settings` branches for the new kinds (Morse + Google
+  `gemini-3.8-live` settings); fail closed on unknown provider/model.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup.ex`,
+  `plan_startup/agent_activation.ex`, `plan_startup/agent_model.ex`: resolve STS
+  activation instead of ReqLLM when selected; keep credential lease/private-init
+  boundary; cover transfer-destination descriptors.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/descriptor.ex`: add
+  `kind: :sts` plus admission facts (turn-control modes, transcript coverage,
+  text-settlement rule, interruption/history-reconciliation flags, 16 kHz in /
+  24 kHz out formats); keep `:stt`/`:tts` validation intact.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/`: add `sts_provider.ex`
+  (`configure/start_link/push_audio/input_activity/push_text/interrupt/send_tool_result/close`);
+  extend `event.ex` (readiness, input activity, input/output transcripts, output
+  audio, generation/turn completion, interruption, tool call/cancel, usage,
+  failure), `channel.ex`/`session.ex`/`session_tree.ex`/`capability_tree.ex`/
+  `scope.ex`/`allocation.ex`/`input.ex`/`playback.ex`/`audio.ex` for bounded
+  commands, ordered boundaries, identity/generation fencing, no direct room publish.
+- `apps/vxpipe_providers/lib/vxpipe/providers.ex`, `registry.ex`,
+  `providers/google.ex`: add `:sts` capability type; declare Google STS in the
+  manifest only when the adapter passes local checks.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/usage/` (`speech_to_text_projection.ex`
+  pattern), `live_inspection/snapshot.ex`,
+  `apps/vxpipe_calls/lib/vxpipe/calls/call_history.ex` + `usage_projections.ex`:
+  extend inspection/usage/history schemas for the new capability.
+- `docs/speech-integration-guide.md`, `docs/speech-provider-contract.md`: STS
+  author example plus shared conformance test.
+
+### B — Morse STS with provider transcript
+
+- NEW `apps/vxpipe_call_engine/lib/vxpipe/call_engine/provider/morse_code_sts/session.ex`
+  (+ private tone/text codec): mirror `morse_code_stt/session.ex` and
+  `morse_code_tts/session.ex`; credential-free local only.
+- NEW `apps/vxpipe_call_engine/lib/vxpipe/call_engine/capability/speech_to_speech.ex`
+  (+ tree/state/policy/usage): agent-owned subtree under
+  `room_capability_supervisor.ex`; bounded input/output, no mixed-audio echo,
+  no cross-room state.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority.ex`,
+  `room_authority/event_publisher.ex`, `transcript_router.ex`: publish public
+  `ParticipantTurn*` (human) and `AgentSpeech*`/`AgentTurn*` (agent) events only
+  via `publish_transcript`; egress-fenced agent transcripts; human-STT text never
+  dispatches through text-model `SendText`.
+- `apps/vxpipe_call_engine/lib/vxpipe/call_engine/media/ingress.ex`,
+  `media/normalized_frame.ex`, `media/output_sink.ex`, `media/pcm.ex`: reuse room
+  conversion/sink where formats agree, explicit convert/reject otherwise; admit
+  source audio only after media-policy snapshot + `audio_route_permitted?`, plus
+  `transcript_route_permitted?` for transcripts; bounded independent fanout to
+  human STT and STS.
+
+### C — Interruption, tools, transfer lifecycle
+
+- `room_authority.ex` interruption path + `media/output_sink.ex`: fence queued
+  audio first, keep cancellation ID until terminal isolation, report local egress
+  estimate, zero-egress publishes no spoken prefix.
+- `room_authority/participant_transfer.ex`,
+  `participant_transfer/destination_preparer.ex`, `preparation.ex`,
+  `private_speech.ex`, `history.ex`, `connection_speech_preparation.ex`,
+  `room_supervisor.ex`: connect STS controller to hold/transfer/teardown,
+  first-message/opening, private briefing, readiness, cleanup; reject unsupported
+  concurrent source/transfer explicitly.
+- `agent_runtime/coordinator.ex`, `readiness.ex`, `history.ex`,
+  `model_usage.ex`/`usage_rounds.ex`: scope allowlisted tools/variables to the
+  active agent turn/activation; retain provider cancellation IDs until the
+  matching result/cancel settles; interrupted tool result reusable next turn
+  without reviving old speech.
+
+### D — STS plus agent-output STT
+
+- Reuse `speech/capability_tree.ex` + `session.ex` allocation: second agent-owned
+  STT child fed by credited STS output only (never caller mic), with explicit
+  finite-input finalization at the STS generation boundary, bounded fanout,
+  playback fencing, agent-attributed text.
+- `speech/stt_provider.ex` + `descriptor.ex` (conditional): add bounded
+  finite-input operation/descriptor only if the selected adapter needs it; keep
+  human conversational onset/turn-end requirements intact.
+- `docs/speech-integration-guide.md`: agent-output STT author notes.
+
+### E — Google Gemini 3.8 Live
+
+- NEW `apps/vxpipe_call_engine/lib/vxpipe/providers/google/sts_session.ex`
+  (public `STSSession`) + private `sts_socket.ex`: setup/voice/PCM handling
+  (16 kHz in, 24 kHz out), multi-part parsing, out-of-order transcript/audio
+  correlation, `generationComplete`/`turnComplete` vs playback completion,
+  pre-first-audio interruption, turn-control mode enforcement, tool
+  cancellation, `goAway`/resumption/expiry with generation fence, no replay;
+  private credential resolution; map `usageMetadata` to existing usage
+  projection (no PCM-byte billing inference).
+- `capability_catalog.ex` + `providers/google.ex` manifest: advertise `:sts`
+  only after fixture/contract gates pass; no parallel old socket or fallback.
+- `media/pcm.ex`, `media/normalized_frame.ex`, telephony normalizer: mono PCM16
+  conversion for STS input; fail closed on unsupported formats.
+
+### F — Service UI, docs, final acceptance
+
+- `apps/vxpipe_console/lib/vxpipe/console/admin_services_controller.ex`,
+  `router.ex`, `apps/vxpipe_calls/lib/vxpipe/calls/operator_service_bindings.ex`:
+  expose gated `s2s` via `Registry.catalog()` in `provider_capabilities`; no
+  second Google credential entry.
+- `apps/vxpipe_console/assets/src/admin/setupCatalog.json` (+ `.ts`),
+  `SetupServiceCard.tsx`, `ServiceSetupModal.tsx`, `TenantSetupPage.tsx`,
+  `ServiceInventory.tsx`, `sampleRecipes.ts`, `demo_samples.ex`: gated Google
+  `s2s` tag/model choice; Morse stays local-test-only; frontend tests now,
+  rendered desktop/mobile pass deferred to final acceptance.
+- `apps/vxpipe_calls/lib/vxpipe/calls/usage_observation_projection.ex`
+  (`capability/1`), `usage_report.ex`/`usage_aggregation.ex`,
+  `apps/vxpipe_console/lib/vxpipe/console/call_inspection_presenter.ex`
+  (`capability_name/1`) + frontend `callInspection.ts`/`CallDetailsPage.tsx`/
+  `packages/react`: add S2S labels and transcript-provenance display.
+- Docs: update `docs/provider-integration-packages.md`,
+  `docs/speech-provider-contract.md`, `docs/speech-integration-guide.md`,
+  call-spec/API examples, operator guidance; reconcile index checklist with
+  evidence.
 
 ## Alternatives and implications
 

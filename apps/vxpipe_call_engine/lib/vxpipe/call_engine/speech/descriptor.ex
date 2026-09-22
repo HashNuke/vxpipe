@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   @identity_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/
 
   @type t :: %__MODULE__{
-          kind: :stt | :tts,
+          kind: :stt | :tts | :sts,
           settings: map(),
           format: map(),
           usage_identity: map(),
@@ -71,6 +71,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
 
   defp valid_kind?(%{kind: :stt, cache_identity: nil}), do: true
+
+  defp valid_kind?(%{kind: :sts, cache_identity: nil}), do: true
 
   defp valid_kind?(%{kind: :tts, cache_identity: identity} = descriptor),
     do:

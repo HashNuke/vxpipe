@@ -172,7 +172,9 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     [
       participant.capabilities.speech_to_text,
       participant.capabilities.model_inference,
-      participant.capabilities.text_to_speech
+      participant.capabilities.text_to_speech,
+      participant.capabilities.speech_to_speech,
+      participant.capabilities.output_speech_to_text
     ]
     |> Enum.map(&capability/1)
     |> Enum.reject(&is_nil/1)
@@ -467,6 +469,8 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   defp capability_name(:model_inference), do: "LLM"
   defp capability_name(:speech_to_text), do: "STT"
   defp capability_name(:text_to_speech), do: "TTS"
+  defp capability_name(:speech_to_speech), do: "STS"
+  defp capability_name(:output_speech_to_text), do: "Agent STT"
   defp capability_name(:tool), do: "Tool"
   defp capability_name(:telephony), do: "Telephony"
 

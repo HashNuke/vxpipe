@@ -212,7 +212,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       not state.active? ->
         {:reply, {:error, :not_ready}, state}
 
-      state.descriptor.kind != :stt ->
+      state.descriptor.kind not in [:stt, :sts] ->
         {:reply, {:error, :unsupported_operation}, state}
 
       command.deadline <= System.monotonic_time(:millisecond) ->

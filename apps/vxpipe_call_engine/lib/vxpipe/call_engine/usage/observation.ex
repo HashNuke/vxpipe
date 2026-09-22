@@ -3,7 +3,14 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
 
   alias Vxpipe.CallEngine.Usage.{Attribution, Measurement, ProviderContext}
 
-  @capabilities [:model_inference, :speech_to_text, :text_to_speech, :tool, :telephony]
+  @capabilities [
+    :model_inference,
+    :speech_to_text,
+    :text_to_speech,
+    :speech_to_speech,
+    :tool,
+    :telephony
+  ]
   @outcomes [:in_progress, :succeeded, :failed, :cancelled, :unknown]
 
   @enforce_keys [
@@ -21,7 +28,12 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
   defstruct @enforce_keys ++ [delivery_id: nil, source_sequence: nil, measurement: nil]
 
   @type capability ::
-          :model_inference | :speech_to_text | :text_to_speech | :tool | :telephony
+          :model_inference
+          | :speech_to_text
+          | :text_to_speech
+          | :speech_to_speech
+          | :tool
+          | :telephony
 
   @type outcome :: :in_progress | :succeeded | :failed | :cancelled | :unknown
 
