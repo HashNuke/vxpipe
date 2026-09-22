@@ -9,21 +9,20 @@ From the repository root:
 
 ```shell
 npm --prefix vxpipe-docs ci
-bin/dev
+bin/site-dev
 ```
 
-This starts Astro alongside the application. See the
-[development setup](../docs/development.md) for the stack's prerequisites.
+This starts only Astro. Run `bin/dev` separately for the Elixir application. See
+the [development setup](../docs/development.md) for the prerequisites.
 Open `http://localhost:4321/en/docs/` for the docs or `http://localhost:4321/` for
-the landing page. Ctrl-C stops the stack, including Astro.
+the landing page. Ctrl-C stops Astro.
 
-For Tailscale access, run `bin/dev --tailscale` and open
+For Tailscale access, run `bin/site-dev --tailscale` and open
 `https://<machine-fqdn>:4321/` or `https://<machine-fqdn>:4321/en/docs/`.
 Astro uses the same discovered Tailscale address and certificate as the Console;
 its port remains 4321 and live reload stays enabled.
 
-To run just the site, use `npm --prefix vxpipe-docs run dev` from the repository
-root.
+Astro reloads the site as you edit it.
 
 Run `npm --prefix vxpipe-docs test` to check the development configuration.
 

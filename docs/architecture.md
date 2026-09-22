@@ -3464,15 +3464,15 @@ secret-safe, and exportable without a local interactive login.
 
 ### Development ingress
 
-The repository development stack uses the Console Phoenix endpoint as its single tailnet
-HTTPS listener. Phoenix/Bandit binds to the discovered Tailscale address on port 4000,
+The Vxpipe application development server uses the Console Phoenix endpoint as its
+tailnet HTTPS listener. Phoenix/Bandit binds to the discovered Tailscale address on port 4000,
 serves the Console-owned React assets, and invokes the gateway Plug in-process. This
 supplies one stable secure browser origin without a reverse-proxy hop or second web server.
 
 The Console Phoenix endpoint supervises Phoenix's esbuild wrapper as a development
-asset watcher and uses Phoenix LiveReload for browser refreshes. Goreman
-does not model the playground as a separate application; it starts the shared BEAM
-runtime and reload helper. React remains the sample UI and is
+asset watcher and uses Phoenix LiveReload for browser refreshes. `bin/dev` starts
+the shared BEAM runtime directly; `bin/site-dev` starts the optional Astro site.
+React remains the sample UI and is
 not replaced by LiveView. There is no separate frontend HTTP listener: esbuild writes
 the watched bundle into Console `priv/static`, and Phoenix serves it on the same endpoint
 as API, health and diagnostics routes.

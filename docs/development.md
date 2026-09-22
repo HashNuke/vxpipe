@@ -13,24 +13,15 @@ Vxpipe from source.
 The localhost demo requires Elixir 1.19 / Erlang/OTP 28, PostgreSQL, Node.js 24 and npm,
 Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 
-For `bin/dev`, also install [Goreman](https://github.com/mattn/goreman) and
-[Watchman](https://facebook.github.io/watchman/) with its `watchman-make`
-Python client. Only `bin/dev --tailscale` also requires Tailscale and `jq`.
-
-Install the Watchman Python client as an isolated user-level tool:
-
-```shell
-uv tool install pywatchman
-```
+The `--tailscale` mode of either development launcher also requires Tailscale and `jq`.
 
 ## Start the development stack
 
-Install the application and frontend dependencies from the repository root:
+Install the application and Console frontend dependencies from the repository root:
 
 ```shell
 mix deps.get
 mix assets.setup
-npm --prefix vxpipe-docs ci
 ```
 
 With PostgreSQL running, initialize the default `vxpipe_dev` database:
@@ -49,19 +40,26 @@ Set `VXPIPE_DEV_TENANT` to that tenant's public key. The sample selects Google G
 Deepgram Flux directly in its call spec and resolves their `default` tenant bindings.
 The server can boot without provider credentials; an unprovisioned sample cannot create calls.
 
-Then start the Vxpipe umbrella, Console frontend, and Astro docs together:
+Then start the Vxpipe umbrella and Console frontend:
 
 ```shell
 bin/dev
 ```
 
-The Console is at `http://localhost:4000/`. The landing page is at
-`http://localhost:4321/` and English documentation is at
-`http://localhost:4321/docs/en/`. Astro reloads as you edit the site and stops with
-the rest of the stack on Ctrl-C. Use `--tailscale` for HTTPS access over Tailscale.
+The Console is at `http://localhost:4000/`. `bin/dev` starts only the Elixir
+application. To work on the Astro site separately, run these in another shell:
 
-Unlike `bin/dev`, direct `mix` commands do not load `.env`; export the platform settings
-in the launching shell or inject them through your secret manager.
+```shell
+npm --prefix vxpipe-docs ci
+bin/site-dev
+```
+
+The site is at `http://localhost:4321/`, with docs at `/en/docs/`. Astro handles
+its own live reload. Either launcher accepts `--tailscale` for HTTPS access.
+
+`bin/dev` loads the repository-root `.env`; direct `mix` commands do not. Export
+platform settings in the launching shell or inject them through your secret manager
+when running Mix directly.
 
 For existing Telnyx/Twilio calls, provision a tenant carrier credential and register its service
 as described in [tenant telephony setup](tenant-telephony-services.md#trusted-registration-and-lookup).
@@ -93,25 +91,22 @@ Browser microphone RTP is Opus; Morse STT accepts mono little-endian linear16.
 
 ## Reloading and HTTPS
 
-Goreman loads platform configuration into its child processes, including Watchman
-restarts. Runtime configuration supplies the database and encryption keyring; reusable
+`bin/dev` loads platform configuration from `.env` before starting the BEAM.
+Runtime configuration supplies the database and encryption keyring; reusable
 call-engine code resolves tenant credentials through the injected credential source.
 
-Goreman runs the call engine, gateway, and Console applications in one BEAM
-instance. The Console's Phoenix endpoint supervises its esbuild development watcher,
+The call engine, gateway, and Console applications run in one BEAM instance.
+The Console's Phoenix endpoint supervises its esbuild development watcher,
 serves the React assets, and mounts the reusable gateway on the same endpoint.
 By default Phoenix serves HTTP at `http://localhost:4000/`, with no Tailscale
 dependency. WebRTC media continues to use its negotiated ICE path. The root page
 lists the available Console interfaces. The Pipecat sample itself is available
 at `/samples/pipecat-console`.
 
-Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
-Mix manifests, or runtime configuration ask Goreman to restart only the
-`vxpipe` process. A reload therefore starts a fresh BEAM instance and discards
-development rooms, sessions, and WebRTC connections. Test changes do not
-restart the development server. The Console asset watcher consumes its Phoenix
-parent's lifecycle, so a reload does not leave a second frontend listener or
-orphaned development server.
+The Console asset watcher consumes its Phoenix parent's lifecycle. Restart
+`bin/dev` after changes to umbrella code or runtime configuration that Phoenix
+does not reload; a restart discards development rooms, sessions, and WebRTC
+connections.
 
 To enable HTTPS on the machine's Tailscale address, run:
 
@@ -120,16 +115,16 @@ bin/dev --tailscale
 ```
 
 This discovers the machine's FQDN and Tailscale IPv4 address and serves the Console
-at `https://<machine-fqdn>:4000/`, the Astro landing page at
-`https://<machine-fqdn>:4321/`, and docs at
-`https://<machine-fqdn>:4321/docs/en/`. It asks the local Tailscale daemon for a
+at `https://<machine-fqdn>:4000/`. It asks the local Tailscale daemon for a
 certificate for the discovered `.ts.net` hostname and gives its ignored runtime
-paths to Phoenix/Bandit and Astro. MagicDNS
-and HTTPS certificates must be enabled for the tailnet. The complete stack runs as
-the calling user; no root process, reverse proxy, `TS_PERMIT_CERT_UID`, or manually
-exported TLS variables are required. Phoenix and Astro bind only to the discovered
-Tailscale address, retaining ports 4000 and 4321. Astro's live reload also uses
-port 4321. This does not use Tailscale Funnel or make the development stack public.
+paths to Phoenix/Bandit. MagicDNS and HTTPS certificates must be enabled for the
+tailnet. The stack runs as the calling user; no root process, reverse proxy,
+`TS_PERMIT_CERT_UID`, or manually exported TLS variables are required. Phoenix binds
+only to the discovered Tailscale address on port 4000. This does not use Tailscale
+Funnel or make the development stack public.
+
+To serve the optional Astro site over Tailscale, run `bin/site-dev --tailscale`
+in another shell. It uses the same discovered hostname and certificate on port 4321.
 
 With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
 `APP_HOST` in the shell or `.env` selects the hostname and bind address; that
@@ -141,10 +136,9 @@ Local development accepts Phoenix socket connections from both `localhost` and
 reload. Remote development hosts and production retain Phoenix's configured-host
 origin check.
 
-The visible repository-root `env.sample` documents platform settings. Goreman automatically loads `.env` from the repository
-root selected by `-basedir`, including when `bin/dev` is launched from another
-directory. Values reach its child processes without being exported into the
-parent shell.
+The visible repository-root `env.sample` documents platform settings. `bin/dev`
+loads the shell-compatible `.env` from the repository root, including when it is
+launched from another directory. Those values are exported to the Elixir process.
 
 ## PostgreSQL storage
 

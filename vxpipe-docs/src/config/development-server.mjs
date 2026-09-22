@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 export function developmentServerConfig(env) {
-  // bin/dev --tailscale provisions the certificate before starting Astro.
+  // bin/site-dev --tailscale provisions the certificate before starting Astro.
   const tailscale = env.VXPIPE_DEV_TLS === 'phoenix';
 
   return {

@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ $# -eq 0 ]]; then
+  echo "Usage: bin/with-tailscale COMMAND [ARG...]" >&2
+  exit 1
+fi
+
+if ! command -v tailscale >/dev/null 2>&1; then
+  echo "Error: --tailscale requires tailscale on PATH." >&2
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Error: --tailscale requires jq on PATH." >&2
+  exit 1
+fi
+
+# The macOS app must run from its bundle, not through a PATH symlink.
+tailscale_bin="$(command -v tailscale)"
+while [[ -L "$tailscale_bin" ]]; do
+  tailscale_dir="$(cd "$(dirname "$tailscale_bin")" && pwd -P)"
+  tailscale_link="$(readlink "$tailscale_bin")"
+  case "$tailscale_link" in
+    /*) tailscale_bin="$tailscale_link" ;;
+    *) tailscale_bin="$tailscale_dir/$tailscale_link" ;;
+  esac
+done
+tailscale_bin="$(cd "$(dirname "$tailscale_bin")" && pwd -P)/${tailscale_bin##*/}"
+
+if ! tailscale_status="$("$tailscale_bin" status --json)"; then
+  echo "Error: unable to read Tailscale status." >&2
+  exit 1
+fi
+
+if ! tailscale_host="$(
+  jq -er '.Self.DNSName | strings | sub("\\.$"; "") | select(length > 0)' \
+    <<<"$tailscale_status"
+)"; then
+  echo "Error: unable to determine this machine's Tailscale FQDN." >&2
+  exit 1
+fi
+
+if ! tailscale_ip="$(
+  jq -er '[.Self.TailscaleIPs[] | select(contains(":") | not)] | first | select(length > 0)' \
+    <<<"$tailscale_status"
+)"; then
+  echo "Error: unable to determine this machine's Tailscale IPv4 address." >&2
+  exit 1
+fi
+
+export APP_HOST="$tailscale_host"
+export VXPIPE_TAILSCALE_IP="$tailscale_ip"
+export VXPIPE_DEV_TLS="phoenix"
+
+tls_runtime_dir="$repo_root/tmp/tls"
+export VXPIPE_DEV_TLS_CERTFILE="$tls_runtime_dir/$tailscale_host.crt"
+export VXPIPE_DEV_TLS_KEYFILE="$tls_runtime_dir/$tailscale_host.key"
+
+umask 077
+mkdir -p "$tls_runtime_dir"
+chmod 700 "$tls_runtime_dir"
+
+# The macOS app's sandbox cannot write here; the shell owns these private files.
+tls_staging_dir="$(mktemp -d "$tls_runtime_dir/.tailscale-cert.XXXXXX")"
+trap 'rm -rf "$tls_staging_dir"' EXIT
+
+if ! "$tailscale_bin" cert --cert-file - "$tailscale_host" >"$tls_staging_dir/cert" ||
+  ! "$tailscale_bin" cert --key-file - "$tailscale_host" >"$tls_staging_dir/key"; then
+  echo "Error: unable to provision this machine's Tailscale certificate." >&2
+  exit 1
+fi
+
+mv "$tls_staging_dir/cert" "$VXPIPE_DEV_TLS_CERTFILE"
+mv "$tls_staging_dir/key" "$VXPIPE_DEV_TLS_KEYFILE"
+rm -rf "$tls_staging_dir"
+trap - EXIT
+
+exec "$@"
