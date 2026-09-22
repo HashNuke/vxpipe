@@ -328,8 +328,26 @@ text. At most ten consecutive restart attempts are allowed; only acknowledged
 readiness resets that budget. Exhaustion ends the owning STS allocation explicitly
 instead of silently switching to provider transcripts. Focused tests cover these
 failure boundaries; multi-segment and successful-boundary recognition settlement,
-hosted configuration, PCM compatibility and truthful recognition usage remain
-separate milestone gates.
+hosted configuration and PCM compatibility remain separate milestone gates.
+
+Locally measured agent-output recognition is a separate usage observation. Its
+provider/model and PCM rate come from that reply's ready recognizer descriptor,
+retained across recognizer replacement; it does not inherit the generator's
+integration identity or successful playback outcome. Count only PCM accepted by
+the recognizer, excluding rejected or dropped chunks. Linear16 duration uses the
+selected rate and channel count, not a universal 24 kHz divisor; unsupported
+encodings provide no invented duration. Timeout, rejected finalization, provider
+failure or incomplete input yield failed recognition usage. Interruption cancels
+unfinished recognition, while completed recognition keeps its own outcome.
+These are local processing facts, not provider token counts or billing estimates.
+
+Both `speech_to_speech` and `output_speech_to_text` persist through the ordinary
+archive and usage store. Deploy migration `20260922171000_add_sts_usage_capabilities`
+before writing them. It extends observation/amount constraints without deleting
+existing usage; downgrade refuses incompatible STS rows rather than removing them.
+STS observations use the archive's microsecond timestamp precision for exact
+idempotent retries. Persisted timeout regressions verify identity, duration,
+outcome and effective amount; full hosted/lifecycle usage acceptance remains open.
 
 Events include `ready`, `speech_started`, `input_transcript`, `turn_ended`,
 `output_transcript`, `output_completed`, `interrupted`, `input_submitted`, `tool_call` and
@@ -491,7 +509,10 @@ local fake-socket tests do not establish hosted continuity or interrupted-histor
 Independent review also identified directional output-revocation,
 recognizer generation isolation, hosted sidecar configuration/format,
 recognizer usage attribution and integrated Google response-ordering defects.
-The milestone records their reproduction methods and repair tasks; successful
+The local recognition-usage defect now has real-capability and database regression
+coverage, including rejected input and failed finalization; the remaining defects
+and broader acceptance retain their checklist gates. The milestone records
+reproduction methods and repair tasks; successful
 Morse or manually admitted provider-session fixtures do not close those gaps.
 
 ### Flow control and ownership

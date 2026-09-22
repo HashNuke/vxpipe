@@ -43,6 +43,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
               pending_text: nil,
               stt_text: nil,
               stt_bytes: 0,
+              stt_descriptor: if(state.output_stt, do: state.output_stt.descriptor),
+              stt_outcome: :in_progress,
               text_deadline: nil,
               generation_done?: false,
               playback_done?: false,
@@ -133,7 +135,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
               output.provider_turn,
               :succeeded,
               played_ms,
-              output.stt_bytes || 0
+              output
             )
 
           state = drop_stt_buffer(%{state | active_output: nil, egress_ms: played_ms})
@@ -307,6 +309,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
            | output_stt: %{
                provider: {module, opts},
                session: session,
+               descriptor: nil,
                ready?: false,
                pending_text: nil,
                pending_audio: [],
@@ -424,7 +427,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   def buffer_output_audio(%{output_stt: %{ready?: false} = stt} = state, payload)
       when is_binary(payload) do
     if length(stt.pending_audio) >= @max_output_stt_buffer do
-      %{state | output_stt: %{stt | dropped_chunks: stt.dropped_chunks + 1}}
+      state
+      |> Map.put(:output_stt, %{stt | dropped_chunks: stt.dropped_chunks + 1})
+      |> fail_recognition_usage()
     else
       %{state | output_stt: %{stt | pending_audio: stt.pending_audio ++ [payload]}}
     end
@@ -477,7 +482,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         count_stt_fed(state, byte_size(payload))
 
       {:error, :busy} ->
-        %{state | output_stt: %{stt | dropped_chunks: stt.dropped_chunks + 1}}
+        state
+        |> Map.put(:output_stt, %{stt | dropped_chunks: stt.dropped_chunks + 1})
+        |> fail_recognition_usage()
 
       {:error, reason} ->
         # Recognition cannot resume halfway through an utterance. Keep the
@@ -515,8 +522,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   def finish_output_stt_input(_state), do: :ok
 
   def handle_output_stt_event(%Event{kind: :ready} = event, state) do
-    with :ok <- Session.ack(state.output_stt.session, event) do
-      state = %{state | output_stt: %{state.output_stt | ready?: true, restart_attempts: 0}}
+    with :ok <- Session.ack(state.output_stt.session, event),
+         {:ok, descriptor} <- Session.describe(state.output_stt.session) do
+      state = %{
+        state
+        | output_stt: %{
+            state.output_stt
+            | ready?: true,
+              descriptor: descriptor,
+              restart_attempts: 0
+          }
+      }
+
       state = flush_output_buffer(state)
       state = finish_recovered_turn(state)
       admit_next_pending(state)
@@ -549,7 +566,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
             {:noreply, state}
 
           output ->
-            {:noreply, %{state | active_output: %{output | stt_text: event.text}}}
+            outcome = if output.stt_outcome == :failed, do: :failed, else: :succeeded
+
+            {:noreply,
+             %{state | active_output: %{output | stt_text: event.text, stt_outcome: outcome}}}
             |> then(fn {:noreply, state} -> maybe_finish_turn(state) end)
         end
 
@@ -571,12 +591,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
     case state.active_output do
       %{} = output ->
-        %{state | active_output: %{output | stt_text: :failed}}
+        %{state | active_output: %{output | stt_text: :failed, stt_outcome: :failed}}
 
       _other ->
         state
     end
   end
+
+  defp fail_recognition_usage(%{active_output: nil} = state), do: state
+
+  defp fail_recognition_usage(state),
+    do: %{state | active_output: %{state.active_output | stt_outcome: :failed}}
 
   def settle_fenced_output(state, event) do
     handle = %OutputTurn{session: state.session, turn_ref: event.turn_ref, ref: event.request_ref}
@@ -611,7 +636,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         _ = clear_sink(state)
         _ = interrupt_provider(state, provider_turn)
         _ = settle_fenced_generation(state, output, played_ms)
-        _ = emit_turn_usage(state, provider_turn, :cancelled, played_ms, output.stt_bytes || 0)
+        _ = emit_turn_usage(state, provider_turn, :cancelled, played_ms, output)
         state = cancel_text_deadline(state)
         state = drop_stt_buffer(state)
         state = restart_output_stt(state)
@@ -635,7 +660,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  defp emit_turn_usage(state, provider_turn, outcome, egress_ms, stt_bytes) do
+  defp emit_turn_usage(state, provider_turn, outcome, egress_ms, output) do
     case state.usage_context do
       nil ->
         :ok
@@ -650,8 +675,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
             provider_turn,
             outcome,
             egress_ms,
-            pcm_bytes_to_ms(stt_bytes),
-            state.output_stt != nil
+            recognition_usage(output, outcome)
           )
 
         unless observations == [] do
@@ -662,10 +686,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  defp pcm_bytes_to_ms(bytes) when is_integer(bytes) and bytes >= 0,
-    do: div(bytes * 1_000, 48_000)
+  defp recognition_usage(%{stt_descriptor: nil}, _outcome), do: nil
 
-  defp pcm_bytes_to_ms(_bytes), do: 0
+  defp recognition_usage(output, outcome) do
+    %{
+      descriptor: output.stt_descriptor,
+      accepted_bytes: output.stt_bytes,
+      outcome: if(output.stt_outcome == :in_progress, do: outcome, else: output.stt_outcome)
+    }
+  end
 
   defp clear_sink(state) do
     case OutputSink.clear(state.sink) do
@@ -725,8 +754,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     Telemetry.provider_failure(:sts, state.provider, reason)
 
     case state.active_output do
-      %{provider_turn: turn, played_ms: played, stt_bytes: stt_bytes} ->
-        _ = emit_turn_usage(state, turn, :failed, played, stt_bytes || 0)
+      %{provider_turn: turn, played_ms: played} = output ->
+        _ = emit_turn_usage(state, turn, :failed, played, output)
 
       _no_active ->
         :ok

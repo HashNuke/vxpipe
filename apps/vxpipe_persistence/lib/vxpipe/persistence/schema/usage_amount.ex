@@ -11,16 +11,22 @@ defmodule Vxpipe.Persistence.Schema.UsageAmount do
     field(:attempt_id, :string)
 
     field(:capability, Ecto.Enum,
-      values: [:model_inference, :speech_to_text, :text_to_speech, :tool, :telephony]
+      values: [
+        :model_inference,
+        :speech_to_text,
+        :text_to_speech,
+        :speech_to_speech,
+        :output_speech_to_text,
+        :tool,
+        :telephony
+      ]
     )
 
     field(:provider, :map)
     field(:attribution, :map)
     field(:component, :string)
 
-    field(:unit, Ecto.Enum,
-      values: [:tokens, :characters, :milliseconds, :requests, :currency]
-    )
+    field(:unit, Ecto.Enum, values: [:tokens, :characters, :milliseconds, :requests, :currency])
 
     field(:currency, :string)
     field(:quantity, :decimal)

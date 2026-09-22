@@ -172,6 +172,129 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert Enum.all?(observations, &(&1.attribution.participant_id == @agent))
   end
 
+  for field <- [:provider, :duration, :outcome] do
+    test "timed-out recognition reports its own #{field} independently of successful playback" do
+      {_tree, capability, _sink} =
+        start_output_stt_capability(
+          policy: unrestricted(),
+          usage_context: sts_usage_context(),
+          output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+          output_stt_timeout_ms: 100
+        )
+
+      assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+      complete_playback(20)
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 2_000
+      assert_receive {:vxpipe_usage_observations, ^capability, observations}
+      sts = Enum.find(observations, &(&1.capability == :speech_to_speech))
+      stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
+      assert sts.outcome == :succeeded
+      assert sts.provider.integration_id == "local-sts"
+
+      case unquote(field) do
+        :provider ->
+          assert stt.provider.name == "stalling_stt"
+          assert stt.provider.model == "stalling_stt"
+          assert stt.provider.integration_id == nil
+
+        :duration ->
+          {:ok, config} = Config.new([])
+          {:ok, pcm} = Encoder.encode(config, "RECEIVED ONE")
+          assert stt.measurement.quantity == div(byte_size(pcm) * 1_000, 16_000 * 2)
+          assert stt.measurement.provenance == :locally_measured
+
+        :outcome ->
+          assert stt.outcome == :failed
+      end
+
+      refute_received {:vxpipe_usage_observations, ^capability, _}
+    end
+  end
+
+  for rate <- [8_000, 24_000] do
+    test "successful recognition uses the selected #{rate} Hz PCM rate" do
+      {_tree, capability, _sink} =
+        start_output_stt_capability(
+          policy: unrestricted(),
+          usage_context: sts_usage_context(),
+          provider_options: [sample_rate: unquote(rate)],
+          output_stt: {Vxpipe.Providers.MorseCode.STTSession, [sample_rate: unquote(rate)]}
+        )
+
+      assert :ok = SpeechToSpeech.push_text(capability, "HI")
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+      complete_playback(20)
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}
+      assert_receive {:vxpipe_usage_observations, ^capability, observations}
+      stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
+      {:ok, config} = Config.new(sample_rate: unquote(rate))
+      {:ok, pcm} = Encoder.encode(config, "RECEIVED HI")
+      assert stt.measurement.quantity == div(byte_size(pcm) * 1_000, unquote(rate) * 2)
+      assert stt.outcome == :succeeded
+    end
+  end
+
+  test "a rejected recognition finalization does not inherit playback success" do
+    {_tree, capability, _sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        usage_context: sts_usage_context(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+        output_stt_private: [finish_error: :rejected_finalization]
+      )
+
+    assert :ok = SpeechToSpeech.push_text(capability, "HI")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
+    complete_playback(20)
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}
+    stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
+    assert stt.outcome == :failed
+  end
+
+  test "interruption cancels unfinished recognition without discarding accepted duration" do
+    {_tree, capability, sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        usage_context: sts_usage_context(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []}
+      )
+
+    assert :ok = SpeechToSpeech.push_text(capability, "HI")
+    assert_receive {:test_audio_output_finish, ^sink, _}, 5_000
+    assert {:ok, 0} = SpeechToSpeech.interrupt(capability)
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}
+    stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
+    assert stt.outcome == :cancelled
+    assert stt.provider.name == "stalling_stt"
+    assert stt.measurement.quantity == 5_700
+    refute_received {:vxpipe_usage_observations, ^capability, _}
+  end
+
+  test "rejected recognition chunks are excluded and cannot yield successful usage" do
+    {_tree, capability, sink} =
+      start_output_stt_capability(
+        policy: unrestricted(),
+        usage_context: sts_usage_context(),
+        output_stt: {Vxpipe.CallEngine.SpeechOutputSTTSlowProvider, []}
+      )
+
+    assert :ok = SpeechToSpeech.push_text(capability, "HI")
+    # The controlled recognizer rejects exactly the first two PCM submissions.
+    assert_receive {:test_audio_output, ^sink, first}, 5_000
+    assert_receive {:test_audio_output, ^sink, second}, 5_000
+    complete_playback(20)
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _}
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}
+    stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
+    {:ok, config} = Config.new([])
+    {:ok, pcm} = Encoder.encode(config, "RECEIVED HI")
+    accepted_bytes = byte_size(pcm) - byte_size(first.payload) - byte_size(second.payload)
+    assert stt.measurement.quantity == div(accepted_bytes * 1_000, 16_000 * 2)
+    assert stt.outcome == :failed
+  end
+
   test "output STT finalization errors are explicit instead of silent" do
     {_tree, capability, _sink} =
       start_output_stt_capability(
@@ -368,7 +491,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
              owner: self(),
              agent_id: @agent,
              human_id: @human,
-             provider: {Vxpipe.Providers.MorseCode.STSSession, [output_transcript: false]},
+             provider:
+               {Vxpipe.Providers.MorseCode.STSSession,
+                Keyword.put(
+                  Keyword.get(options, :provider_options, []),
+                  :output_transcript,
+                  false
+                )},
              provider_private: private_init,
              output_stt: output_stt,
              output_stt_private: output_private,

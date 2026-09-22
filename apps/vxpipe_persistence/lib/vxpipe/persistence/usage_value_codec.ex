@@ -154,6 +154,12 @@ defmodule Vxpipe.Persistence.UsageValueCodec do
   def capability(value) when value in ["text_to_speech", :text_to_speech],
     do: {:ok, :text_to_speech}
 
+  def capability(value) when value in ["speech_to_speech", :speech_to_speech],
+    do: {:ok, :speech_to_speech}
+
+  def capability(value) when value in ["output_speech_to_text", :output_speech_to_text],
+    do: {:ok, :output_speech_to_text}
+
   def capability(value) when value in ["tool", :tool], do: {:ok, :tool}
   def capability(value) when value in ["telephony", :telephony], do: {:ok, :telephony}
   def capability(_capability), do: {:error, :invalid_capability}
@@ -174,6 +180,7 @@ defmodule Vxpipe.Persistence.UsageValueCodec do
   defp decode_unit("characters"), do: {:ok, :characters}
   defp decode_unit("milliseconds"), do: {:ok, :milliseconds}
   defp decode_unit("requests"), do: {:ok, :requests}
+
   defp decode_unit(%{"currency" => currency}) when is_binary(currency),
     do: {:ok, {:currency, currency}}
 

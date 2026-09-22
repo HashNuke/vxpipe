@@ -5,8 +5,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
   Each settled STS turn produces exactly one `:speech_to_speech` observation
   carrying the locally measured egress duration, plus one
   `:output_speech_to_text` observation when the agent-output STT leg is
-  selected. Only locally measured quantities are reported; provider-reported
-  token counts are never inferred from audio bytes.
+  selected. Recognition retains its own descriptor, accepted PCM duration and
+  outcome, independently of playback. Only locally measured quantities are
+  reported; provider-reported token counts are never inferred from audio bytes.
   """
 
   alias Vxpipe.CallEngine.Id
@@ -28,8 +29,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
           reference(),
           atom(),
           non_neg_integer(),
-          non_neg_integer(),
-          boolean()
+          map() | nil
         ) ::
           [Observation.t()]
   def turn_observations(
@@ -38,11 +38,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
         provider_turn,
         outcome,
         egress_ms,
-        stt_ms,
-        output_stt?
+        recognition
       )
       when is_map(context) and is_reference(provider_turn) and is_integer(egress_ms) and
-             egress_ms >= 0 and is_integer(stt_ms) and stt_ms >= 0 and is_boolean(output_stt?) do
+             egress_ms >= 0 do
     with {:ok, provider} <- provider_context(context, descriptor),
          {:ok, attribution} <- attribution(context),
          {:ok, measurement} <- egress_measurement(egress_ms),
@@ -57,23 +56,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
              attribution: attribution,
              measurement: measurement,
              outcome: outcome,
-             observed_at: DateTime.utc_now(:millisecond)
+             observed_at: DateTime.utc_now(:microsecond)
            ) do
-      if output_stt? do
-        [
-          observation
-          | output_stt_observation(context, provider, attribution, provider_turn, outcome, stt_ms)
-        ]
-      else
-        [observation]
-      end
+      [observation | output_stt_observation(context, attribution, provider_turn, recognition)]
     else
       _invalid -> []
     end
   end
 
-  defp output_stt_observation(context, provider, attribution, provider_turn, outcome, stt_ms) do
-    with {:ok, measurement} <- recognition_measurement(stt_ms),
+  defp output_stt_observation(_context, _attribution, _provider_turn, nil), do: []
+
+  defp output_stt_observation(context, attribution, provider_turn, recognition) do
+    with {:ok, provider} <- provider_context(%{}, recognition.descriptor),
+         {:ok, measurement} <- recognition_measurement(recognition),
          {:ok, observation} <-
            Observation.new(
              id: Id.generate(:turn),
@@ -84,8 +79,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
              provider: provider,
              attribution: attribution,
              measurement: measurement,
-             outcome: outcome,
-             observed_at: DateTime.utc_now(:millisecond)
+             outcome: recognition.outcome,
+             observed_at: DateTime.utc_now(:microsecond)
            ) do
       [observation]
     else
@@ -122,14 +117,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
     )
   end
 
-  defp recognition_measurement(ms) do
+  defp recognition_measurement(%{
+         descriptor: %{format: %{encoding: :linear16, sample_rate: rate, channels: channels}},
+         accepted_bytes: bytes
+       }) do
     Measurement.new(
       component: "output_recognition",
       unit: :milliseconds,
-      quantity: ms,
+      quantity: div(bytes * 1_000, rate * channels * 2),
       mode: :delta,
       status: :final,
       provenance: :locally_measured
     )
   end
+
+  # Unsupported encodings have no locally measured duration; never invent zero.
+  defp recognition_measurement(_recognition), do: {:ok, nil}
 end

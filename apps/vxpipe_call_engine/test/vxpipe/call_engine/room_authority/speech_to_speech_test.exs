@@ -301,7 +301,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     }
 
     [observation] =
-      STSUsage.turn_observations(context, descriptor, make_ref(), :succeeded, 20, 0, false)
+      STSUsage.turn_observations(context, descriptor, make_ref(), :succeeded, 20, nil)
 
     recorded = UsageObservations.record(state, stub, [observation])
     assert %_{} = recorded

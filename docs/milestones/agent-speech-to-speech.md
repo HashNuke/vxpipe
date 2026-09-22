@@ -896,11 +896,41 @@ No new provider advertisement or billable call is authorized by these tasks.
   formats or use an explicit supported conversion. Prove synthetic-credential,
   fake-wire hosted-adapter startup and differing Morse STS/STT sample rates;
   reject unsupported combinations explicitly before allocating a live call.
-- [ ] Separate output-STT usage identity, accepted-audio duration and terminal
+- [x] Separate output-STT usage identity, accepted-audio duration and terminal
   outcome from the STS generator. Reproduce a timed-out 16 kHz `stalling_stt`
   recognizer reporting `morse_code`, success, and 4,200 ms for 6,300 ms of
   accepted audio. Verify correct provider/rate attribution and failed outcome
   through persisted usage, not only internal capability state.
+  - [x] Add focused regressions for the recognizer's own provider/model, accepted
+    PCM duration at its selected rate, and timeout/finalization outcomes independent
+    of successful STS playback. Include cancellation and rejected input accounting.
+  - [x] Capture the ready recognizer's validated descriptor for each reply's usage;
+    retain it across replacement, count only accepted input, and derive recognition
+    success/failure/cancellation without borrowing the generator's context.
+  - [x] Persist real capability observations through the ordinary archive/usage
+    store and read back provider, duration and outcome; synchronize the provider
+    contract and commit focused evidence before broader umbrella gates.
+    - [x] Repair the newly reproduced persistence rejection: observation/amount
+      schema enums, value decoding and database capability constraints must accept
+      both STS and agent-output STT. Add an additive migration without editing the
+      historical migration or deleting existing usage; verify actual writes and
+      idempotent readback, not only the Calls archive projection.
+    - [x] Emit STS usage timestamps at the archive's microsecond precision. The
+      real retry reproduction stores a millisecond timestamp then rejects the
+      identical fact because stored precision differs; preserve exact immutable
+      fact comparison rather than changing generic archive deduplication here.
+
+  Usage checkpoint design review: descriptor identity and PCM rate belong to the
+  selected recognizer; playback success does not prove recognition success. Reuse
+  existing immutable usage observations and persistence, without new billing
+  estimates or token inference. Hosted startup and PCM conversion remain the
+  separate preceding task; this checkpoint measures bytes actually accepted.
+  Focused evidence: 118 capability/room STS tests and four database usage tests
+  pass (seed 0). Real timed-out recognition persists `stalling_stt`, failed and
+  6,300 ms alongside successful STS playback, including identical-write retries.
+  See `labnotes/20260922-1704-sts-recognizer-usage.md`. Independent review and
+  post-commit umbrella gates remain pending; multi-segment and hosted/lifecycle
+  accounting are not established by this checkpoint.
 
 The audit also reproduced tool admission/result delivery under denied policy.
 That reproduction is covered by the already-planned ordered-tool-envelope task

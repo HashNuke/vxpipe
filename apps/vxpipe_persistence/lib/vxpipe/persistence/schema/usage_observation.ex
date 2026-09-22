@@ -11,7 +11,15 @@ defmodule Vxpipe.Persistence.Schema.UsageObservation do
     field(:attempt_id, :string)
 
     field(:capability, Ecto.Enum,
-      values: [:model_inference, :speech_to_text, :text_to_speech, :tool, :telephony]
+      values: [
+        :model_inference,
+        :speech_to_text,
+        :text_to_speech,
+        :speech_to_speech,
+        :output_speech_to_text,
+        :tool,
+        :telephony
+      ]
     )
 
     field(:delivery_id, :string)
@@ -20,9 +28,7 @@ defmodule Vxpipe.Persistence.Schema.UsageObservation do
     field(:attribution, :map)
     field(:measurement, :map)
 
-    field(:outcome, Ecto.Enum,
-      values: [:in_progress, :succeeded, :failed, :cancelled, :unknown]
-    )
+    field(:outcome, Ecto.Enum, values: [:in_progress, :succeeded, :failed, :cancelled, :unknown])
 
     field(:observed_at, :utc_datetime_usec)
     belongs_to(:call, Call)

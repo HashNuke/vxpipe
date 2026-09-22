@@ -157,6 +157,81 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     assert Decimal.equal?(totals[{:currency, "USD"}], Decimal.new("0.0046"))
   end
 
+  test "real timed-out STS recognition persists its own provider, rate and failed outcome",
+       context do
+    alias Vxpipe.CallEngine.Capability.SpeechToSpeech
+    alias Vxpipe.CallEngine.Speech.PrivateInit
+    alias Vxpipe.CallEngine.TestAudioOutputSink
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    {:ok, private} = PrivateInit.open([], 5_000)
+    {:ok, stt_private} = PrivateInit.open([], 5_000)
+
+    tree =
+      start_supervised!(
+        {SpeechToSpeech.Tree,
+         owner: self(),
+         agent_id: "participant-agent",
+         human_id: "participant-human",
+         provider: {Vxpipe.Providers.MorseCode.STSSession, [output_transcript: false]},
+         provider_private: private,
+         output_stt: {Vxpipe.CallEngine.SpeechOutputSTTStallingProvider, []},
+         output_stt_private: stt_private,
+         output_stt_timeout_ms: 100,
+         sink: sink,
+         frame_identity: %{},
+         caller_source: :sts,
+         policy: nil,
+         usage_context: %{
+           tenant_id: @tenant_key,
+           call_id: @call_id,
+           room_id: @room_id,
+           incarnation_id: @incarnation_id,
+           participant_id: "participant-agent",
+           activation_id: "activation-sts"
+         }}
+      )
+
+    capability = SpeechToSpeech.Tree.capability(tree)
+    assert_receive {:vxpipe_sts_ready, ^capability}, 5_000
+    assert :ok = SpeechToSpeech.push_text(capability, "ONE")
+    assert_receive {:test_audio_output_finish, ^sink, _}, 5_000
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+    :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, _, _}, 2_000
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}
+
+    for {observation, sequence} <- Enum.with_index(observations, 1) do
+      fact = engine_fact(observation, sequence)
+      assert :ok = EctoStorage.write(context.options, fact)
+      assert {:ok, archived} = ArchiveStore.fetch_call_facts(Repo, @tenant_key, @call_id)
+      stored_fact = Enum.find(archived, &(&1.id == fact.id))
+      assert DateTime.compare(stored_fact.occurred_at, fact.occurred_at) == :eq
+      assert stored_fact.occurred_at.microsecond == fact.occurred_at.microsecond
+      assert :ok = EctoStorage.write(context.options, fact)
+    end
+
+    assert {:ok, persisted} = UsageStore.fetch_usage_observations(Repo, @tenant_key, @call_id)
+    assert length(persisted) == 2
+    stt = Enum.find(persisted, &(&1.capability == :output_speech_to_text))
+    sts = Enum.find(persisted, &(&1.capability == :speech_to_speech))
+    assert sts.outcome == :succeeded
+    assert stt.provider.name == "stalling_stt"
+    assert stt.provider.model == "stalling_stt"
+    assert stt.outcome == :failed
+    assert stt.measurement.quantity == 6_300
+    assert stt.measurement.unit == :milliseconds
+    assert stt.measurement.provenance == :locally_measured
+
+    assert {:ok, report} =
+             Vxpipe.Calls.fetch_usage_report(context.principal, @call_id, context.options)
+
+    stt_amount = Enum.find(report.amounts, &(&1.capability == :output_speech_to_text))
+    assert stt_amount.quantity == 6_300
+    assert stt_amount.provider.name == "stalling_stt"
+    assert Repo.aggregate(UsageObservation, :count) == 2
+  end
+
   test "delayed billing enrichment commits after call end and cannot revive a purged call",
        context do
     source = observation("usage-before-end", "model-attempt-ended", 160, 1, :final)
