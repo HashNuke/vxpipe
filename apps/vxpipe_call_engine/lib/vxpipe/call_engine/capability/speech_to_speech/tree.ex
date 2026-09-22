@@ -4,7 +4,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
   use Supervisor
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions
+  alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, PrivateInit}
+  alias Vxpipe.CallEngine.Tool.{InvocationRegistry, InvocationSupervisor}
 
   def start_link(options), do: Supervisor.start_link(__MODULE__, options)
 
@@ -31,6 +34,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {__MODULE__, :parent, capability}) do
       [{tree, nil}] -> tree
       [] -> nil
+    end
+  end
+
+  def invocation_registry(capability), do: child(capability, :invocation_registry)
+  def invocation_supervisor(capability), do: child(capability, :invocation_supervisor)
+  def tool_completions(capability), do: child(capability, :tool_completions)
+
+  defp child(capability, kind) do
+    case parent(capability) do
+      nil -> nil
+      tree -> GenServer.whereis(address(tree, kind))
     end
   end
 
@@ -67,6 +81,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
 
     children =
       children ++
+        invocation_children(options) ++
         [
           %{
             id: SpeechToSpeech,
@@ -77,6 +92,32 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
         ]
 
     Supervisor.init(children, strategy: :one_for_all, auto_shutdown: :any_significant)
+  end
+
+  defp invocation_children(options) do
+    activation = Keyword.get(options, :activation_id) || Id.generate(:activation)
+    supervisor = address(self(), :invocation_supervisor)
+    registry = address(self(), :invocation_registry)
+    completions = address(self(), :tool_completions)
+
+    [
+      {InvocationSupervisor, activation_id: activation, name: supervisor, maximum_children: 16},
+      {ToolCompletions,
+       name: completions,
+       registry: registry,
+       owner: Keyword.fetch!(options, :owner),
+       activation_id: activation},
+      {InvocationRegistry,
+       activation_id: activation,
+       name: registry,
+       invocation_supervisor: supervisor,
+       completion_target: completions,
+       maximum_invocations: 16,
+       maximum_consumed_invocations: 16,
+       invocation_timeout_ms: 5_000,
+       maximum_result_bytes: 65_536}
+    ]
+    |> Enum.map(&Supervisor.child_spec(&1, restart: :temporary, significant: true))
   end
 
   @doc false

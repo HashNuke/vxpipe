@@ -592,6 +592,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              :vxpipe_sts_tool_call,
              :vxpipe_sts_tool_cancelled,
              :vxpipe_sts_tool_executed,
+             :vxpipe_sts_tool_completion,
              :vxpipe_sts_tool_timeout,
              :vxpipe_sts_output_stt_unavailable,
              :vxpipe_sts_unavailable

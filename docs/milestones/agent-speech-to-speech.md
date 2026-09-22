@@ -957,7 +957,98 @@ Focused checkpoint: 93 startup, selection, room, input-policy and STS capability
 tests pass (seed 0). These calls use an embedded PCM connection, not live carrier
 or rendered WebRTC transport, and are not the final ten-concurrent-call load.
 
+#### Supervised host-invocation checkpoint (2026-09-22)
+
+Design review, separate from implementation: [STS tool lifecycle](../sts-tool-lifecycle.md)
+records the tree ownership, registry leases, five-second budget and proposed
+parent-owned response seam before tests/code. This is a B/C lifecycle slice;
+the full execution/continuation tasks above remain open.
+Parent integration must also synchronize the normative provider contract's
+implementation status: record supervised host ownership, retained unconsumed
+leases and original admission-deadline checks without claiming the deferred
+model-continuation or complete schema/binding protocol.
+
+- [x] Prove actual compiled-room host submission starts an Invocation-owned worker;
+  enforce 16 outstanding records across retired provider associations.
+- [x] Prove ordinary interruption preserves that worker and its terminal outcome
+  in the existing registry under a completion lease, without stale delivery.
+- [x] Prove monitored worker DOWN on five-second deadline, capability loss,
+  explicit activation-tree stop and room-owner loss; report timeout as unknown.
+- [x] Preserve current public IDs and exact-source/epoch/policy settlement; run
+  focused room tool identity and embedded transcript regressions.
+- [ ] Parent coordination: implement correlated running acknowledgement, private
+  continuation commit receipts and blocking/nonblocking model admission. OPEN;
+  ordinary final-result delivery does not satisfy this gate.
+- [x] Approved separate privacy repair: capture an actual argument-bearing
+  Invocation crash under supervisor loss before editing runtime; add only
+  `Tool.Invocation.format_status/1` sanitizing state/message/reason/log. Preserve
+  execution, timers, outcomes and startup handling. Verify actual crash capture,
+  diagnostic status/log redaction, and the 83-test group plus owning Invocation
+  tests with two schedulers. If supervisor child-spec/start arguments still leak,
+  obtain exact additional scope before changing startup or private handles.
+
+Privacy repair design review (before tests/code), separate from implementation:
+the reproduced boundary is GenServer's formatted crash state, not business
+execution. Use synthetic canaries and captured real crash output, require an
+actual termination report and monitored worker/task DOWN, and then assert no
+canary escapes. Also inspect status with diagnostic message logging enabled.
+Do not suppress Logger or replace outcomes to make privacy assertions pass.
+The narrow formatter is sufficient only if the complete captured failure path
+is clean. See `labnotes/20260922-2025-invocation-crash-privacy.md`.
+
+Privacy repair evidence: both actual parent-loss and worker-termination crash
+captures first exposed the synthetic argument; both now omit argument/message
+canaries, including with diagnostic logging enabled. Ordinary formatted status
+and all four formatter fields pass. The previous 83 tests plus owning Invocation
+tests pass (99 total, seed 0, two schedulers). No child-start argument leak was
+observed in these captured paths; startup/private handles are unchanged. Explicit
+VM introspection of OTP's raw debug ring remains outside formatter protection,
+as does raw `:sys.get_state`; this repair closes the demonstrated crash-log gap,
+not every privileged diagnostic surface.
+
+Focused evidence: 11 new compiled-room lifecycle checks and 72 existing room
+identity/transcript/capability checks pass (83 tests, seed 0, two schedulers).
+Registry/supervisor/bridge loss also ends submitted workers. Completion records
+remain leased and unconsumed; the 16-record limit includes completed work until
+the parent-owned continuation protocol exists. The broader B/C exits and index
+remain unchecked. See `labnotes/20260922-2013-sts-tool-lifecycle.md`.
+
 ### C — Interruption, tools, and transfer lifecycle
+
+#### Invocation admission deadline repair (2026-09-22)
+
+Parent review of `96fb0395` found a late-execution window: the registry checks
+admission expiry before preparation, but a suspended invocation supervisor can
+delay preparation until after submit/reconcile both report unavailable.
+
+- [x] Red-test the actual compiled-room window: suspend its invocation supervisor,
+  observe registry entering start_child, await ToolCallFailed unavailable, resume
+  in guaranteed cleanup, then require no host execution or retained record.
+- [x] Add owning boundary coverage for delayed preparation and delayed begin.
+  Preserve the original absolute admission deadline through preparation and
+  the worker's begin admission; clean up unstarted prepared workers.
+- [x] Keep accepted outcomes, execution budgets and reconciliation unchanged;
+  rerun only focused room and owning Invocation tests with two schedulers, then
+  commit separately from the privacy repair.
+
+Design review before tests/code: caller timeout does not revoke queued work.
+The registry must recheck the original deadline after preparation, and the
+worker must check that same deadline before creating its action Task, because
+begin itself can queue. The minimal write set is InvocationRegistry deadline
+threading/cleanup plus deadline-aware InvocationSupervisor/Invocation begin
+forwarding and admission. No asynchronous startup rewrite, new deadline budget,
+private handle, provider API or generic execution policy is introduced. This
+review is planning evidence, not proof of repair. See
+`labnotes/20260922-2031-invocation-admission-deadline.md`.
+
+Repair evidence: the first focused run failed three of 26 tests, including both
+actual late running records after caller-visible unavailable. The same selection
+now passes all 26. The complete approved group passes 102 tests (seed 0, two
+schedulers), including privacy and existing Invocation regressions. Expired
+preparation leaves no record or supervisor child; expired begin creates no host
+Task or execution timer. Original deadline, execution budget, accepted outcomes
+and reconciliation behavior are retained. Parent integration/root review remains
+separate; this does not close the STS model-continuation requirements.
 
 - [x] Morse session/capability tests for human speech onset handling,
   queued playback, zero-playback interruption (`:no_prefix`), late

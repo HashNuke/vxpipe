@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   @moduledoc "Room-owned authorization, execution and settlement of STS tool calls."
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
 
   alias Vxpipe.CallEngine.Event.{
     ToolCallCancelled,
@@ -14,6 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
+  alias Vxpipe.CallEngine.Tool.{CompletionLease, InvocationBinding, InvocationRegistry}
 
   import Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence,
     only: [
@@ -28,7 +30,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   @max_tool_result_bytes 65_536
   @maximum_pending 16
-  @sts_tool_timeout_ms 5_000
 
   @spec handle_tool_call(State.t(), pid(), String.t(), reference(), turn_ref(), String.t(), map()) ::
           State.t()
@@ -245,34 +246,50 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   defp maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending) do
     if executable_host_tool?(binding) do
-      room = self()
       context = tool_context(state, pending.turn, pending.tool_call_id)
-      action = Map.get(binding, :action)
-      timeout = @sts_tool_timeout_ms
-      _timer = Process.send_after(room, {:vxpipe_sts_tool_timeout, capability, call_ref}, timeout)
 
-      _ =
-        Task.start(fn ->
-          outcome =
-            try do
-              apply(action, :execute, [arguments, context])
-            rescue
-              _exception -> {:error, :failed}
-            catch
-              _, _ -> {:error, :failed}
-            end
+      invocation = %InvocationBinding{
+        name: pending.name,
+        conversation_mode: Map.get(binding, :conversation_mode),
+        handler: {:host, Map.get(binding, :action)}
+      }
 
-          send(
-            room,
-            {:vxpipe_sts_tool_executed, capability, call_ref, normalize_outcome(outcome)}
-          )
-        end)
-
-      state
+      case InvocationRegistry.submit(
+             Tree.invocation_registry(capability),
+             invocation,
+             arguments,
+             context,
+             pending.tool_call_id
+           ) do
+        {:accepted, _mode} -> state
+        {:error, reason} -> handle_tool_executed(state, capability, call_ref, {:error, reason})
+      end
     else
       state
     end
   end
+
+  def handle_completion(
+        %State{speech_to_speech_capability: %{pid: capability}} = state,
+        bridge,
+        %CompletionLease{} = lease
+      ) do
+    if Tree.tool_completions(capability) == bridge do
+      case Enum.find(state.sts_tool_calls, fn {_ref, pending} ->
+             pending.tool_call_id == lease.invocation_id
+           end) do
+        {call_ref, _pending} ->
+          handle_tool_executed(state, capability, call_ref, lease.completion.outcome)
+
+        nil ->
+          state
+      end
+    else
+      state
+    end
+  end
+
+  def handle_completion(state, _bridge, _lease), do: state
 
   defp executable_host_tool?(binding) when is_map(binding) do
     action = Map.get(binding, :action)
@@ -297,11 +314,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       tool_call_id: tool_call_id
     }
   end
-
-  defp normalize_outcome({:ok, result}) when is_map(result), do: {:ok, result}
-  defp normalize_outcome({:ok, _result}), do: {:error, :invalid_result}
-  defp normalize_outcome({:error, reason}) when is_atom(reason), do: {:error, reason}
-  defp normalize_outcome({:error, _reason}), do: {:error, :failed}
 
   defp settle_executed_tool(state, capability, pending, call_ref, outcome) do
     case pending_connection(state, pending) do
@@ -366,6 +378,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
     catch
       :exit, _reason -> {:error, :unavailable}
     end
+  end
+
+  defp deliver_provider_tool_result(capability, call_ref, {:error, :unknown}) do
+    deliver_provider_tool_result(capability, call_ref, {:ok, %{"status" => "unknown"}})
   end
 
   defp deliver_provider_tool_result(capability, call_ref, {:error, _reason}) do

@@ -27,6 +27,14 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec begin(GenServer.server(), integer()) ::
+          :ok | {:error, :already_started | :unavailable}
+  def begin(invocation, admission_deadline) when is_integer(admission_deadline) do
+    GenServer.call(invocation, {:begin, admission_deadline}, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
@@ -39,6 +47,15 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
   end
 
   @impl true
+  def handle_call({:begin, admission_deadline}, from, state)
+      when is_integer(admission_deadline) do
+    if System.monotonic_time(:millisecond) < admission_deadline do
+      handle_call(:begin, from, state)
+    else
+      {:reply, {:error, :unavailable}, state}
+    end
+  end
+
   def handle_call(:begin, _from, %{task: nil} = state) do
     task =
       Task.async(fn ->
@@ -78,6 +95,15 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
 
   def handle_info({:EXIT, _pid, _reason}, state), do: {:noreply, state}
   def handle_info(_message, state), do: {:noreply, state}
+
+  @impl true
+  def format_status(status) do
+    status
+    |> Map.put(:state, :tool_invocation)
+    |> Map.put(:message, :redacted)
+    |> Map.put(:reason, :redacted)
+    |> Map.put(:log, [])
+  end
 
   @impl true
   def terminate(_reason, %{task: nil}), do: :ok

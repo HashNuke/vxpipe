@@ -238,6 +238,39 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
                     %{outcome: :consumed}}
   end
 
+  test "preparation cannot start work after submit and reconciliation expire" do
+    {registry, supervisor} = start_registry(maximum_invocations: 1)
+    tasks = start_supervised!({Task.Supervisor, name: __MODULE__.AdmissionTasks})
+    :erlang.trace(registry, true, [:send])
+    :ok = :sys.suspend(supervisor)
+
+    try do
+      submission =
+        Task.Supervisor.async_nolink(tasks, fn ->
+          InvocationRegistry.submit(
+            registry,
+            host_binding(:blocking),
+            %{"value" => "expired-preparation"},
+            context(),
+            "expired-preparation"
+          )
+        end)
+
+      assert_receive {:trace, ^registry, :send, {:"$gen_call", _, {:start_child, _}},
+                      ^supervisor},
+                     1_000
+
+      assert {:error, :unavailable} = Task.await(submission, 3_000)
+    after
+      :sys.resume(supervisor)
+      :erlang.trace(registry, false, [:send])
+    end
+
+    assert {:ok, []} = InvocationRegistry.snapshot(registry)
+    assert DynamicSupervisor.which_children(supervisor) == []
+    refute_receive {:submitted_host_tool_started, _, "expired-preparation"}
+  end
+
   test "publishes one private usage boundary for an accepted invocation and its outcome" do
     {registry, _supervisor} =
       start_registry(

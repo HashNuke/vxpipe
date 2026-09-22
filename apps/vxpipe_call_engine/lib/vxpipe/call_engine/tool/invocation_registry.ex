@@ -126,7 +126,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
       {:error, :unavailable} ->
         if admission_open?(admission_deadline) do
-          start_invocation(submission, state)
+          start_invocation(submission, state, admission_deadline)
         else
           InvocationTelemetry.admission(
             :unavailable,
@@ -266,7 +266,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   def handle_info(_message, state), do: {:noreply, state}
 
-  defp start_invocation(submission, state) do
+  defp start_invocation(submission, state, admission_deadline) do
     if State.full?(state) do
       InvocationTelemetry.admission(
         :saturated,
@@ -276,11 +276,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
       {:reply, {:error, :saturated}, state}
     else
-      start_available_invocation(submission, state)
+      start_available_invocation(submission, state, admission_deadline)
     end
   end
 
-  defp start_available_invocation(submission, state) do
+  defp start_available_invocation(submission, state, admission_deadline) do
     options = [
       invocation_id: submission.invocation_id,
       binding: submission.binding,
@@ -296,7 +296,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         monitor = Process.monitor(worker)
         record = InvocationRecord.new(submission, worker, monitor)
 
-        case InvocationSupervisor.begin_invocation(worker) do
+        case begin_prepared_invocation(worker, admission_deadline) do
           :ok ->
             record =
               InvocationUsage.started(
@@ -352,6 +352,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         )
 
         {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  defp begin_prepared_invocation(worker, admission_deadline) do
+    if admission_open?(admission_deadline) do
+      InvocationSupervisor.begin_invocation(worker, admission_deadline)
+    else
+      {:error, :unavailable}
     end
   end
 

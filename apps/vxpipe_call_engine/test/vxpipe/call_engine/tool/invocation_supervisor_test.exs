@@ -305,6 +305,42 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
     binding
   end
 
+  test "a queued begin cannot execute after its original admission deadline" do
+    supervisor = start_invocation_supervisor(1)
+    tasks = start_supervised!({Task.Supervisor, name: __MODULE__.AdmissionTasks})
+
+    assert {:ok, worker} =
+             InvocationSupervisor.prepare_invocation(supervisor,
+               invocation_id: "expired-begin",
+               binding: host_binding(:blocking),
+               arguments: %{"value" => "expired-begin"},
+               context: context(),
+               reply_to: self(),
+               timeout_ms: 5_000,
+               maximum_result_bytes: 4_096
+             )
+
+    :ok = :sys.suspend(worker)
+    deadline = System.monotonic_time(:millisecond) + 100
+
+    try do
+      admission =
+        Task.Supervisor.async_nolink(tasks, fn ->
+          InvocationSupervisor.begin_invocation(worker, deadline)
+        end)
+
+      assert {:error, :unavailable} = Task.await(admission, 2_000)
+    after
+      :sys.resume(worker)
+    end
+
+    assert %{task: nil, timer: nil} = :sys.get_state(worker)
+    refute_receive {:submitted_host_tool_started, _, "expired-begin"}
+    monitor = Process.monitor(worker)
+    assert :ok = DynamicSupervisor.terminate_child(supervisor, worker)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :shutdown}
+  end
+
   defp context do
     %Context{
       tenant_id: "tenant-demo",

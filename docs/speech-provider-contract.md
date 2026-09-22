@@ -405,8 +405,8 @@ Public caller, agent and tool IDs must be room-owned, with bounded associations 
 provider references qualified by allocation generation and exact source identity. Private
 references, including their stringified forms, must not become public correlation IDs. Old,
 duplicate or retired-generation evidence cannot create a new public turn. The milestone still
-tracks supervised execution, upstream late-tool isolation, agent-output retirement and
-complete lifecycle handling; the implemented publication paths do not prove this
+tracks complete execution/continuation adoption, upstream late-tool isolation,
+agent-output retirement and complete lifecycle handling; the implemented publication paths do not prove this
 entire requirement.
 
 The provider-controlled embedded caller path now publishes one room-owned
@@ -455,10 +455,28 @@ deduplicate upstream events that adapters relabel with fresh semantic sequences,
 or establish safety for old evidence first observed after a new input epoch.
 Those upstream cases remain explicit acceptance gates.
 
-This is not yet a complete execution-lifetime guarantee: worker/timer cleanup,
-schema checks and full tool-binding adoption remain explicit milestone tasks.
-In particular, removing a pending association alone does not stop a host action
-or prove retention of its submitted result for future reasoning.
+The current host execution path uses the existing supervised Invocation registry
+and workers beneath the exact STS capability tree. Its 16-record budget includes
+running work and retained terminal outcomes after provider associations retire.
+Ordinary interruption leaves accepted work running; capability/tree/room-owner
+loss ends local workers. The five-second execution deadline reports unknown,
+not proof of remote rollback. An engine-private bridge retains completion leases;
+public delivery or an ordinary provider result does not consume them.
+
+The original absolute submission deadline applies before and after preparation
+and again when the worker handles begin. A timed-out submission cannot become a
+new execution when stalled preparation resumes; expired prepared workers are
+removed without an accepted invocation record. Formatted invocation crash/status
+reports redact arguments and diagnostic messages; privileged raw VM inspection
+is not protected by this formatter.
+
+This remains incomplete adoption: correlated running acknowledgement, private
+continuation commit receipts, blocking/nonblocking model admission, full schema
+checks and supported tool-binding coverage are milestone tasks. Until commit
+receipts exist, retained completions occupy capacity for the allocation lifetime.
+The existing active-call final-result path is an incremental implementation, not
+acceptance of the final conversation protocol. See [STS tool lifecycle](sts-tool-lifecycle.md).
+
 Provider cancellation retires the provider call/speech association; ordinary
 speech interruption does not authorize cancellation of an already-submitted
 engine invocation. The approved [tool execution model](tool-execution-model.md)
@@ -638,8 +656,10 @@ Caller turns and agent output have room-owned public IDs and exact bound-source 
 in the embedded provider-controlled path. Native input conversion/delivery and readiness
 have focused evidence. Public tool identity has room-boundary and live Morse
 tool-only-call evidence; qualified ordered-owner retirement and policy checks
-also have focused coverage. Execution ownership and upstream late-evidence
-isolation remain open.
+also have focused coverage. Supervised host execution, private lease retention,
+owner-loss cleanup, unknown timeouts and admission-deadline fencing now have
+compiled-room and owning-worker evidence. Full private continuation and upstream
+late-evidence isolation remain open.
 Complete turn-controller/lifecycle coverage, full
 native conversations, usage/load and final UI acceptance remain open
 in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above

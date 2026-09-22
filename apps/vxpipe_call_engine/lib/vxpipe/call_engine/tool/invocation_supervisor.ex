@@ -46,6 +46,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisor do
   @spec begin_invocation(GenServer.server()) :: :ok | {:error, :already_started | :unavailable}
   def begin_invocation(invocation), do: Invocation.begin(invocation)
 
+  @spec begin_invocation(GenServer.server(), integer()) ::
+          :ok | {:error, :already_started | :unavailable}
+  def begin_invocation(invocation, admission_deadline),
+    do: Invocation.begin(invocation, admission_deadline)
+
   @impl true
   def init(options) do
     maximum_children = Keyword.fetch!(options, :maximum_children)
