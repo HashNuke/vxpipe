@@ -81,8 +81,11 @@ defmodule Vxpipe.CallEngine.Speech.STSConcurrencyTest do
       assert_receive {:vxpipe_sts_ready, ^capability}, 5_000
       push_morse(capability, human, word)
 
-      assert_receive {:vxpipe_sts_input_transcript, ^capability, ^human, ^word, _turn, _final,
-                      _interval},
+      assert_receive {:vxpipe_sts_input_event, ^capability,
+                      %{
+                        identity: %{participant_id: ^human},
+                        event: %{kind: :input_transcript, text: ^word}
+                      }},
                      5_000
 
       assert_receive {:vxpipe_sts_turn_started, ^capability, ^agent, _turn}, 5_000

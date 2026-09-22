@@ -10,6 +10,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     AgentTurnCompleted,
     AgentTurnInterrupted,
     ParticipantTranscription,
+    ParticipantTurnCompleted,
+    ParticipantTurnStarted,
     TextOutput
   }
 
@@ -81,6 +83,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     refute_received {:test_audio_output_interrupt, _, _, _}
     refute_received {:vxpipe_event, %AgentTurnInterrupted{}}
     settle_and_assert_reply(context, output)
+  end
+
+  test "reopening already-open room input preserves its caller publication epoch" do
+    context = room(false, false)
+    state = :sys.get_state(context.authority)
+    epoch = state.speech_to_speech_capability.input_epoch
+    assert is_reference(epoch)
+    assert Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.release(state) == state
+    assert :sys.get_state(context.capability).input_epoch == epoch
   end
 
   defp room(human_stt?, output_stt?) do
@@ -182,8 +193,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     caller = context.caller
 
     assert_receive {:vxpipe_event,
-                    %ParticipantTranscription{participant_id: ^caller, text: "HI", final: true}},
+                    %ParticipantTranscription{participant_id: ^caller, text: "HI", final: true} =
+                      text},
                    1_000
+
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller} = started},
+                   1_000
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnCompleted{participant_id: ^caller} = completed},
+                   1_000
+
+    assert String.starts_with?(started.correlation_id, "turn_")
+    assert String.starts_with?(started.command_id, "cmd_")
+    assert text.correlation_id == started.correlation_id
+    assert completed.correlation_id == started.correlation_id
+    assert text.command_id == started.command_id
+    assert completed.command_id == started.command_id
+    assert started.connection_id == context.command.connection_id
+    assert started.sequence < text.sequence
+    assert text.sequence < completed.sequence
+    assert started.modality == :audio
+    assert completed.modality == :audio
   end
 
   defp collect_output(sink, frames) do
@@ -230,6 +261,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     _ = :sys.get_state(context.authority)
     _ = TestTransferConnection.run(context.command, fn -> :ok end)
     refute_received {:vxpipe_event, %ParticipantTranscription{final: true}}
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+    refute_received {:vxpipe_event, %ParticipantTurnCompleted{}}
     refute_received {:vxpipe_event, %TextOutput{}}
     refute_received {:vxpipe_event, %AgentTurnCompleted{}}
     refute_received {:vxpipe_event, %AgentTurnInterrupted{}}

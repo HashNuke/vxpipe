@@ -37,12 +37,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       settle_fenced_output: 2,
       interrupt_provider: 2,
       stop_unavailable: 2,
-      audio_route_permitted?: 3,
-      transcript_route_permitted?: 3
+      audio_route_permitted?: 3
     ]
 
   alias Vxpipe.CallEngine.Telemetry
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Input
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{CallerEvents, Input}
 
   @call_timeout 5_000
   @default_output_stt_timeout_ms 5_000
@@ -115,8 +114,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   @spec release(pid()) :: :ok | {:error, term()}
-  def release(capability) when is_pid(capability) do
-    GenServer.call(capability, :release, @call_timeout)
+  @spec release(pid(), reference()) :: :ok | {:error, term()}
+  def release(capability, epoch \\ make_ref()) when is_pid(capability) and is_reference(epoch) do
+    GenServer.call(capability, {:release, epoch}, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -185,7 +185,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           tool_turns: MapSet.new(),
           tool_calls: %{},
           fenced_turns: MapSet.new(),
-          finalized_input_turns: MapSet.new(),
+          caller_turns: %{},
           active_output: nil,
           output_generation: Keyword.get(options, :output_generation, 0),
           egress_ms: 0,
@@ -293,8 +293,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {:reply, :ok, state}
   end
 
-  def handle_call(:release, _from, state) do
-    case Input.release(state) do
+  def handle_call({:release, epoch}, _from, state) when is_reference(epoch) do
+    case Input.release(state, epoch) do
       {:ok, state} ->
         {:noreply, state} = admit_next_pending(state)
         {:reply, :ok, state}
@@ -468,7 +468,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   defp handle_event(%Event{kind: :speech_started} = event, state) do
-    with :ok <- Session.ack(state.session, event) do
+    with :ok <- Session.ack(state.session, event),
+         {:ok, state} <- CallerEvents.forward(state, event) do
       state = %{state | input_turn: event.turn_ref}
 
       send(
@@ -485,31 +486,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           {:noreply, state}
       end
     else
+      {:error, :pending_caller_overflow} -> stop_unavailable(:pending_caller_overflow, state)
       _failure -> stop_unavailable(:provider_failed, state)
     end
   end
 
   defp handle_event(%Event{kind: :input_transcript} = event, state) do
-    with :ok <- Session.ack(state.session, event) do
-      final? = event.final != false
-
-      state =
-        if final?,
-          do: %{
-            state
-            | finalized_input_turns: MapSet.put(state.finalized_input_turns, event.turn_ref)
-          },
-          else: state
-
-      if state.caller_source == :sts and
-           transcript_route_permitted?(state, state.human_id, state.agent_id) do
-        send(
-          state.owner,
-          {:vxpipe_sts_input_transcript, self(), state.human_id, event.text, event.turn_ref,
-           final?, Input.transcript_interval(state, state.human_id)}
-        )
-      end
-
+    with :ok <- Session.ack(state.session, event),
+         {:ok, state} <- CallerEvents.forward(state, event) do
       {:noreply, state}
     else
       _failure -> stop_unavailable(:provider_failed, state)
@@ -517,9 +501,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   defp handle_event(%Event{kind: :turn_ended} = event, state) do
-    with :ok <- Session.ack(state.session, event) do
+    with :ok <- Session.ack(state.session, event),
+         {:ok, state} <- CallerEvents.forward(state, event) do
       state = %{state | input_turn: nil}
-      state = maybe_publish_final_input(event, state)
 
       cond do
         MapSet.member?(state.tool_turns, event.turn_ref) ->
@@ -653,34 +637,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   defp handle_event(_event, state), do: stop_unavailable(:invalid_provider_message, state)
-
-  defp maybe_publish_final_input(%Event{turn_ref: turn, text: text}, state) do
-    cond do
-      MapSet.member?(state.finalized_input_turns, turn) ->
-        state
-
-      MapSet.member?(state.tool_turns, turn) ->
-        state
-
-      not is_binary(text) or text == "" ->
-        state
-
-      state.caller_source != :sts ->
-        %{state | finalized_input_turns: MapSet.put(state.finalized_input_turns, turn)}
-
-      not transcript_route_permitted?(state, state.human_id, state.agent_id) ->
-        %{state | finalized_input_turns: MapSet.put(state.finalized_input_turns, turn)}
-
-      true ->
-        send(
-          state.owner,
-          {:vxpipe_sts_input_transcript, self(), state.human_id, text, turn, true,
-           Input.transcript_interval(state, state.human_id)}
-        )
-
-        %{state | finalized_input_turns: MapSet.put(state.finalized_input_turns, turn)}
-    end
-  end
 
   defp validate_transcript_mode(descriptor, state) do
     {output_stt, _scope, _private} = state.output_stt_options

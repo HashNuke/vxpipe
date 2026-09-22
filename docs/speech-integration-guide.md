@@ -406,9 +406,13 @@ settle.
 Room integration remains incomplete, but the microphone path is connected:
 all four transcript-source combinations complete embedded PCM room calls, and
 native WebRTC/telephony conversion, input delivery and readiness have focused
-tests. Agent output uses room-owned IDs and its exact bound source connection.
-These checks do not prove full native conversations, public caller turns or
-complete hold/transfer lifecycle acceptance. The [input-routing decision](sts-input-routing.md)
+tests. Caller start/text/end and agent output use room-owned IDs and their exact
+bound source connection. Caller publication retains late final text, bounds
+unsettled associations and fences old owner-message epochs/policy intervals;
+selected human STT does not create a duplicate caller pair. These checks do not
+prove full native conversations, external/hybrid room control or complete
+hold/transfer lifecycle acceptance. The [caller-publication decision](sts-caller-publication.md)
+records that distinction. The [input-routing decision](sts-input-routing.md)
 records the independent queues, directional formats and readiness contract.
 
 ### Agent-output STT

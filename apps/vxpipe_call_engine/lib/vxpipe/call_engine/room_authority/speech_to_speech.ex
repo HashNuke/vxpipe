@@ -18,15 +18,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     AgentSpeechStarted,
     AgentTurnCompleted,
     AgentTurnInterrupted,
-    ParticipantTranscription,
     TextOutput
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{Evidence, Tools}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{CallerTurns, Evidence, Tools}
 
   import Evidence,
     only: [
-      human_connection: 2,
       agent_connection: 1,
       turn_key: 1,
       agent_participant: 1,
@@ -50,11 +48,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           pid: capability,
           participant_id: agent_id,
           activation_id: activation_id,
+          input_epoch: nil,
           monitor: nil
         },
         speech_to_speech_monitor: nil,
         speech_to_speech_ready?: false,
-        sts_turns: %{}
+        sts_turns: %{},
+        sts_caller_turns: %{},
+        sts_caller_sequence: 0
     }
   end
 
@@ -76,66 +77,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   @type turn_ref :: String.t() | reference()
 
-  @spec handle_input_transcript(State.t(), pid(), String.t(), String.t(), turn_ref(), boolean()) ::
-          State.t()
-  def handle_input_transcript(
-        %State{} = state,
-        capability,
-        human_id,
-        text,
-        provider_turn,
-        final? \\ true,
-        interval \\ 0
-      )
-      when is_binary(human_id) and is_binary(text) and
-             (is_binary(provider_turn) or is_reference(provider_turn)) and is_boolean(final?) do
-    if current?(state, capability) do
-      case human_connection(state, human_id) do
-        {connection_id, connection} ->
-          turn_key = turn_key(provider_turn)
+  def handle_input_event(%State{} = state, capability, evidence) do
+    if current?(state, capability) and is_pid(state.media_policy_authority) do
+      policy = Authority.snapshot(state.media_policy_authority)
 
-          event = %ParticipantTranscription{
-            id: Id.generate(:event),
-            sequence: state.next_sequence,
-            tenant_id: state.snapshot.tenant_id,
-            room_id: state.snapshot.room_id,
-            incarnation_id: state.snapshot.incarnation_id,
-            participant_id: human_id,
-            connection_id: connection_id,
-            command_id: Id.generate(:command),
-            correlation_id: turn_key,
-            text: text,
-            final: final?,
-            provider_turn_index: 0,
-            occurred_at: DateTime.utc_now(:millisecond)
-          }
-
-          {state, _policy} =
-            EventPublisher.publish_transcript(state, connection.pid, event,
-              media_policy_revision: interval
-            )
-
-          state = %{state | next_sequence: state.next_sequence + 1}
-
-          if final? do
-            %{
-              state
-              | spoken_history:
-                  Vxpipe.CallEngine.RoomAuthority.SpokenHistory.confirm_user(
-                    state.spoken_history,
-                    text
-                  )
-            }
-          else
-            state
-          end
-
-        nil ->
-          state
+      case CallerTurns.handle(state, capability, evidence, policy) do
+        {:ok, state} -> state
+        {:error, :pending_caller_overflow} -> stop(state)
       end
     else
       state
     end
+  catch
+    :exit, _reason -> state
   end
 
   @spec handle_turn_started(State.t(), pid(), String.t(), turn_ref()) :: State.t()
@@ -313,7 +267,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   @spec handle_unavailable(State.t(), pid(), term()) :: State.t()
   def handle_unavailable(%State{} = state, capability, _reason) do
     if current?(state, capability) do
-      %{state | speech_to_speech_capability: nil, speech_to_speech_ready?: false, sts_turns: %{}}
+      %{
+        state
+        | speech_to_speech_capability: nil,
+          speech_to_speech_ready?: false,
+          sts_turns: %{},
+          sts_caller_turns: %{},
+          sts_caller_sequence: 0
+      }
     else
       state
     end
@@ -366,19 +327,42 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   def hold(%State{} = state) do
     _ = Capability.hold(state.speech_to_speech_capability.pid)
-    state
+    retire_caller_epoch(state)
   catch
-    :exit, _reason -> state
+    :exit, _reason -> retire_caller_epoch(state)
   end
 
   @spec release(State.t()) :: State.t()
   def release(%State{speech_to_speech_capability: nil} = state), do: state
 
+  def release(%State{speech_to_speech_capability: %{input_epoch: epoch}} = state)
+      when is_reference(epoch), do: state
+
   def release(%State{} = state) do
-    _ = Capability.release(state.speech_to_speech_capability.pid)
-    state
+    epoch = make_ref()
+
+    case Capability.release(state.speech_to_speech_capability.pid, epoch) do
+      :ok ->
+        %{
+          state
+          | speech_to_speech_capability:
+              Map.put(state.speech_to_speech_capability, :input_epoch, epoch)
+        }
+
+      _unavailable ->
+        retire_caller_epoch(state)
+    end
   catch
-    :exit, _reason -> state
+    :exit, _reason -> retire_caller_epoch(state)
+  end
+
+  defp retire_caller_epoch(state) do
+    %{
+      state
+      | speech_to_speech_capability:
+          Map.put(state.speech_to_speech_capability, :input_epoch, nil),
+        sts_caller_turns: %{}
+    }
   end
 
   @spec stop(State.t()) :: State.t()
@@ -403,6 +387,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         speech_to_speech_monitor: nil,
         speech_to_speech_ready?: false,
         sts_turns: %{},
+        sts_caller_turns: %{},
+        sts_caller_sequence: 0,
         sts_tool_calls: %{}
     }
   catch
@@ -413,6 +399,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           speech_to_speech_monitor: nil,
           speech_to_speech_ready?: false,
           sts_turns: %{},
+          sts_caller_turns: %{},
+          sts_caller_sequence: 0,
           sts_tool_calls: %{}
       }
   end

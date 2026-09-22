@@ -331,8 +331,26 @@ Public caller, agent and tool IDs must be room-owned, with bounded associations 
 provider references qualified by allocation generation and exact source identity. Private
 references, including their stringified forms, must not become public correlation IDs. Old,
 duplicate or retired-generation evidence cannot create a new public turn. The milestone still
-tracks incomplete caller/tool identity and retirement handling; the implemented agent-output
-path alone does not prove this entire requirement.
+tracks incomplete tool identity, agent-output retirement and complete lifecycle handling;
+the implemented caller and agent-output paths do not prove this entire requirement.
+
+The provider-controlled embedded caller path now publishes one room-owned
+`ParticipantTurnStarted`/`ParticipantTurnCompleted` pair, with partial/final caller text using
+the same public IDs. Selected human STT retains its existing pair without a duplicate STS
+publication. Caller evidence carries the exact source, ordered channel sequence, input epoch
+and source audio/transcript intervals captured at onset. The room rechecks these against
+current authority; text alone cannot open a public audio turn. A final transcript may arrive
+after semantic end and retains the same IDs. Denied text cannot leak through the end-event
+fallback; permitted turn completion still releases that association without text.
+
+The capability and room each bound unsettled caller associations to 16. Both final text and
+semantic end retire an association; a scalar sequence watermark rejects delayed/repeated
+owner envelopes after retirement. Overflow fails the allocation. Hold invalidates the
+room-owned input epoch; release after hold creates a new one, while repeated open calls are
+idempotent. These checks fence forwarded owner evidence, not all late upstream provider
+events first observed after release. Complete external/hybrid room control and provider-level
+hold/transfer isolation remain milestone work. See the
+[caller-publication decision](sts-caller-publication.md) for evidence and limits.
 
 #### Output permission, credit and settlement
 
@@ -396,9 +414,10 @@ invalidation and local test evidence.
 #### Implementation and acceptance limits
 
 All four caller/agent transcript-source combinations have embedded PCM room-call evidence.
-Agent output has room-owned public IDs and exact bound-source attribution. Native input
-conversion/delivery and readiness have focused evidence. Caller/tool public identity, full
-native conversations, hold/transfer lifecycle, usage/load and final UI acceptance remain open
+Caller turns and agent output have room-owned public IDs and exact bound-source attribution
+in the embedded provider-controlled path. Native input conversion/delivery and readiness
+have focused evidence. Tool identity, complete turn-controller/lifecycle coverage, full
+native conversations, usage/load and final UI acceptance remain open
 in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above
 do not check those tasks off. Google declares `history_reconciliation?: false`. Its manifest
 entry and service badge remain disabled pending explicitly authorized hosted verification;

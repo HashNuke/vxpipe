@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     state = state()
     capability = self()
 
-    state = SpeechToSpeech.handle_input_transcript(state, capability, @human, "HELLO", "turn-1")
+    state = caller_transcript(state, "HELLO", "turn-1")
 
     assert_receive {:vxpipe_event, %_{text: "HELLO", participant_id: @human}}
 
@@ -53,7 +53,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     capability = self()
     turn = make_ref()
 
-    state = SpeechToSpeech.handle_input_transcript(state, capability, @human, "HELLO", turn)
+    state = caller_transcript(state, "HELLO", turn)
     assert_receive {:vxpipe_event, %_{text: "HELLO", participant_id: @human}}
 
     state = SpeechToSpeech.handle_turn_started(state, capability, @agent, turn)
@@ -246,23 +246,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
       assert :ok = SpeechToSpeech.offer_audio(state, @human_connection, tail)
     end
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      identity: %{participant_id: @human},
+                      event: %{kind: :input_transcript, text: "HI", final: true}
+                    }}
   end
 
   test "partial caller transcripts publish without settling history" do
     state = state()
-    capability = self()
     before = state.spoken_history
 
     state =
-      SpeechToSpeech.handle_input_transcript(state, capability, @human, "HE", "turn-p", false)
+      caller_transcript(state, "HE", "turn-p", false)
 
     assert_receive {:vxpipe_event, %ParticipantTranscription{text: "HE", final: false}}
     assert state.spoken_history == before
 
     state =
-      SpeechToSpeech.handle_input_transcript(state, capability, @human, "HELLO", "turn-p", true)
+      caller_transcript(state, "HELLO", "turn-p", true)
 
     assert_receive {:vxpipe_event, %ParticipantTranscription{text: "HELLO", final: true}}
     assert state.spoken_history != before
@@ -355,14 +357,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   end
 
   test "STS transfer hold and release work without any text capability" do
-    stub = start_supervised!({Agent, fn -> :ok end})
-    state = state() |> bind_capability(stub, @agent)
+    {_tree, capability} = start_real_capability()
+    state = state() |> bind_capability(capability, @agent)
     assert state.text_capability == nil
 
     held = SpeechToSpeech.hold(state)
     assert held.speech_to_speech_capability != nil
+    assert held.speech_to_speech_capability.input_epoch == nil
+    assert held.sts_caller_turns == %{}
+    assert :sys.get_state(capability).held?
 
     released = SpeechToSpeech.release(held)
+    assert is_reference(released.speech_to_speech_capability.input_epoch)
+
+    assert :sys.get_state(capability).input_epoch ==
+             released.speech_to_speech_capability.input_epoch
+
+    refute :sys.get_state(capability).held?
     assert released.speech_to_speech_capability != nil
 
     assert %_{} = SpeechToSpeech.release(%{state | speech_to_speech_capability: nil})
@@ -430,6 +441,58 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     |> bind_capability(self(), @agent)
   end
 
+  defp caller_transcript(state, text, turn, final? \\ true) do
+    alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
+    alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns
+    alias Vxpipe.CallEngine.Speech.Event
+
+    policy = %Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: %Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: :unrestricted,
+        record_audio: false,
+        save_transcripts: false
+      }
+    }
+
+    evidence = %{
+      identity: state.speech_to_speech_capability.input_handle.identity,
+      epoch: state.speech_to_speech_capability.input_epoch,
+      audio_interval: 0,
+      transcript_interval: 0
+    }
+
+    {:ok, state} =
+      CallerTurns.handle(
+        state,
+        self(),
+        Map.put(evidence, :event, %Event{
+          kind: :speech_started,
+          turn_ref: turn,
+          sequence: state.sts_caller_sequence + 1
+        }),
+        policy
+      )
+
+    {:ok, state} =
+      CallerTurns.handle(
+        state,
+        self(),
+        Map.put(evidence, :event, %Event{
+          kind: :input_transcript,
+          turn_ref: turn,
+          sequence: state.sts_caller_sequence + 1,
+          text: text,
+          final: final?
+        }),
+        policy
+      )
+
+    state
+  end
+
   defp bind_capability(state, capability, agent_id, activation_id \\ nil) do
     state = SpeechToSpeech.bind_capability(state, capability, agent_id, activation_id)
     source = Map.fetch!(state.connections, @human_connection)
@@ -438,6 +501,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
       Map.merge(state.speech_to_speech_capability, %{
         connection_id: @human_connection,
         connection: source.pid,
+        input_epoch: make_ref(),
         input_handle: Vxpipe.CallEngine.STSInputHandle.new(source.attach_command, source.pid)
       })
 

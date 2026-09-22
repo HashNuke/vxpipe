@@ -42,8 +42,13 @@ gives agent output room-owned public IDs and exact-source attribution, with 101
 focused checks passing. All five root gates for identity checkpoint `6f5bb3f8`
 pass (2,199 tests, zero failures, 42 excluded, seed 0). The earlier intermittent
 Gateway failures remain tracked rather than being declared fixed by a retry.
-Caller/tool identity, public caller turns and the broader lifecycle/final
-acceptance remain open. Google output-buffer/tail checkpoint `3b1fa264` has 43
+The next caller-publication checkpoint gives provider-controlled embedded calls
+one correlated caller start/text/end pair with room-owned IDs, bounded pending
+associations and source/policy/epoch checks. All four transcript modes preserve
+one caller pair, including selected human STT; 146 focused tests pass (seed 0).
+Its post-commit root gates remain pending. Tool identity, agent-output retirement,
+complete external/hybrid room control and broader lifecycle/final acceptance
+remain open. Google output-buffer/tail checkpoint `3b1fa264` has 43
 focused passing checks and all five post-commit root gates pass (2,205 tests,
 zero failures, 42 excluded, seed 0). This does not resolve the intermittent
 handoff findings or complete the remaining milestone gates.
@@ -573,6 +578,43 @@ the existing audio round trip. Record discoveries here before implementing.
   Reject stale capability/connection/policy/hold evidence; do not synthesize
   conversational boundaries merely from a transcript delta. Cover human-STT
   coexistence without duplicate public turns or a second interruption.
+  - [x] Require one correlated caller start/text/end sequence in all four
+    embedded transcript-source modes; first reproduce the missing STS-sourced
+    pair. Preserve the existing human-STT pair without dispatching a second reply.
+  - [x] Forward acknowledged caller evidence with channel sequence, exact source,
+    source transcript interval and room-owned input epoch. Keep publication
+    separate from immediate capability interruption. Fence held/replaced epochs
+    and stale source/policy evidence at the room boundary.
+  - [x] Add a bounded caller association owner: room-generated public IDs,
+    duplicate suppression, no turns synthesized from text, late final text after
+    turn end, and sequence retirement. Bound unsettled associations and fail the
+    allocation on overflow rather than dropping text or growing history forever.
+  - [x] Verify reference and binary provider IDs, wrong capability/source,
+    replacement, hold/release, policy revoke/regrant and human-STT coexistence.
+    Record remaining provider-level late-evidence isolation separately from
+    room-message retirement; do not claim full hold/transfer acceptance here.
+  - [x] Treat transcript-route denial as no permission to publish terminal
+    fallback text, while still completing the permitted audio turn and releasing
+    its association. Prove repeated denied-text turns do not exhaust the pending
+    budget; preserve explicit caller-overflow failure attribution and cleanup.
+  - [x] Keep repeated room input-open/release idempotent while already open;
+    rotate the caller publication epoch only after an actual hold. Otherwise a
+    readiness reconciliation could invalidate an ongoing caller association.
+  - [x] Replace the room hold/release test's generic Agent stub with a real
+    supervised STS capability and assert both sides' held/epoch state. The stub
+    does not implement those calls; catching its exit is not lifecycle evidence.
+  - [ ] Complete the same publication guarantees with external/hybrid room
+    control and provider-level late evidence first arriving after hold/release
+    or source-policy revoke/regrant. The owner-message epoch fence alone does
+    not prove that old upstream speech cannot be relabeled into a new interval.
+
+  Evidence: the embedded matrix first failed both STS-caller modes (five tests,
+  two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,
+  explicit overflow cleanup and idempotent-release checks now pass; the broader
+  146-test STS group passes with seed 0. See
+  [caller publication decision](../sts-caller-publication.md) and
+  `labnotes/20260922-1514-sts-caller-publication.md`. This is provider-controlled
+  embedded proof, not complete native/hold/transfer acceptance.
 - [ ] Keep provider references private: assign room-owned public command/turn
   IDs and correlate caller transcript/turn and agent playback/terminal events
   using exact allocation/source identity. Cover duplicates, delayed evidence,
@@ -588,9 +630,15 @@ the existing audio round trip. Record discoveries here before implementing.
     Evidence: eight publication-boundary tests failed before the repair; all
     eight and the five real-room transcript tests now pass. The broader focused
     startup/selection/room/capability group passes 101 tests (seed 0).
-  - [ ] Add caller-turn/transcript identity associations and bounded, generation-
+  - [x] Add caller-turn/transcript identity associations and bounded, generation-
     qualified retirement so delayed starts cannot recreate completed public
     turns. Preserve privacy for both reference and binary provider identifiers.
+    Caller owner envelopes are qualified by the current capability, input epoch
+    and channel sequence; adapters still own upstream deduplication before
+    assigning fresh channel sequences.
+  - [ ] Apply bounded retirement to agent output as well: the current active-ID
+    association rejects repeated active starts, but a delayed start after its
+    terminal association was removed can still create another public turn.
   - [ ] Apply the same public identity boundary to tools: inspection also found
     `inspect(call_ref)` in public tool-call IDs and provider-turn fallback IDs
     when no audio turn exists. Give tool-only turns and tool calls room-owned

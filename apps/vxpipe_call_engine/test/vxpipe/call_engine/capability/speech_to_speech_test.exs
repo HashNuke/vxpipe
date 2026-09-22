@@ -15,8 +15,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     push_morse(capability, "HI")
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      identity: %{participant_id: @human},
+                      event: %{kind: :input_transcript, text: "HI", final: true}
+                    }}
 
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, frame}
@@ -60,7 +63,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     {:ok, pcm} = encode("HI")
     <<first::binary-size(320), _::binary>> = pcm
     assert {:error, :policy_denied} = SpeechToSpeech.push_audio(capability, @human, first)
-    refute_received {:vxpipe_sts_input_transcript, _, _, _, _, _, _interval}
+    refute_received {:vxpipe_sts_input_event, _, %{event: %{kind: :input_transcript}}}
     refute_received {:test_audio_output, _, _}
   end
 
@@ -134,7 +137,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", _, _,
                     _interval}
 
-    refute_received {:vxpipe_sts_input_transcript, _, _, _, _, _, _interval}
+    refute_received {:vxpipe_sts_input_event, _, %{event: %{kind: :input_transcript}}}
     refute_received {:vxpipe_send_text, _, _, _}
   end
 
@@ -245,8 +248,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first_turn}
     assert_receive {:test_audio_output, _sink, _frame}
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^first_turn, true,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      event: %{
+                        kind: :input_transcript,
+                        text: "HI",
+                        turn_ref: ^first_turn,
+                        final: true
+                      }
+                    }}
 
     {:ok, pcm} = encode("BY")
 
@@ -268,8 +278,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn}
     assert_receive {:test_audio_output, _sink, _frame}
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^turn, true,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", turn_ref: ^turn, final: true}}}
 
     session = :sys.get_state(capability).session
     provider = Vxpipe.CallEngine.Speech.Session.provider(session)
@@ -331,14 +341,28 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first_turn}
     assert_receive {:test_audio_output, _sink, _frame}
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", ^first_turn, true,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      event: %{
+                        kind: :input_transcript,
+                        text: "HI",
+                        turn_ref: ^first_turn,
+                        final: true
+                      }
+                    }}
 
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^first_turn, _played, _prefix}
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", second_turn, true,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      event: %{
+                        kind: :input_transcript,
+                        text: "HI",
+                        turn_ref: second_turn,
+                        final: true
+                      }
+                    }}
 
     assert second_turn != first_turn
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^second_turn}
@@ -358,13 +382,68 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     refute_received {:vxpipe_sts_turn_completed, _, _, _}
   end
 
+  test "caller association overflow reports its cause and retires the owned tree" do
+    {tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.CallEngine.SpeechSTSContractProvider, []},
+        provider_private: [observer: self()]
+      )
+
+    session = :sys.get_state(capability).session
+    provider = Vxpipe.CallEngine.Speech.Session.provider(session)
+    capability_monitor = Process.monitor(capability)
+    tree_monitor = Process.monitor(tree)
+    provider_monitor = Process.monitor(provider)
+
+    for _index <- 1..16 do
+      turn = make_ref()
+      assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: turn]})
+
+      assert_receive {:vxpipe_sts_input_event, ^capability,
+                      %{event: %{kind: :speech_started, turn_ref: ^turn}}}
+    end
+
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: make_ref()]})
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_caller_overflow}, 1_000
+
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :pending_caller_overflow},
+                   1_000
+
+    assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _}, 1_000
+    assert_receive {:DOWN, ^provider_monitor, :process, ^provider, _}, 1_000
+  end
+
+  test "hold retires caller evidence and release uses the room-supplied epoch" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.CallEngine.SpeechSTSContractProvider, []},
+        provider_private: [observer: self()]
+      )
+
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    first = make_ref()
+    assert :ok = SpeechToSpeech.release(capability, first)
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: make_ref()]})
+    assert_receive {:vxpipe_sts_input_event, ^capability, %{epoch: ^first}}
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :sys.get_state(capability).caller_turns == %{}
+    second = make_ref()
+    assert :ok = SpeechToSpeech.release(capability, second)
+    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: make_ref()]})
+    assert_receive {:vxpipe_sts_input_event, ^capability, %{epoch: ^second}}
+  end
+
   defp start_capability(options) do
     alias Vxpipe.CallEngine.Speech.PrivateInit
 
     startup_timeout_ms = 5_000
     owner = Keyword.get(options, :owner, self())
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
-    {:ok, private_init} = PrivateInit.open([], startup_timeout_ms)
+
+    {:ok, private_init} =
+      PrivateInit.open(Keyword.get(options, :provider_private, []), startup_timeout_ms)
 
     tree =
       start_supervised!(
@@ -374,7 +453,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
              owner: owner,
              agent_id: @agent,
              human_id: @human,
-             provider: {Vxpipe.Providers.MorseCode.STSSession, []},
+             provider:
+               Keyword.get(options, :provider, {Vxpipe.Providers.MorseCode.STSSession, []}),
              provider_private: private_init,
              sink: sink,
              frame_identity: %{},
@@ -441,7 +521,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
   defp collect_transcripts(capability, turn, acc) do
     receive do
-      {:vxpipe_sts_input_transcript, ^capability, @human, text, ^turn, final?, _interval} ->
+      {:vxpipe_sts_input_event, ^capability,
+       %{event: %{kind: :input_transcript, text: text, turn_ref: ^turn, final: final?}}} ->
         collect_transcripts(capability, turn, [{text, final?} | acc])
     after
       0 -> Enum.reverse(acc)

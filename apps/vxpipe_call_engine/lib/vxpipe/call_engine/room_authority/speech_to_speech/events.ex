@@ -15,21 +15,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
     {:noreply, SpeechToSpeech.handle_speech_started(state, capability, agent_id, turn)}
   end
 
-  def handle(
-        {:vxpipe_sts_input_transcript, capability, human_id, text, turn, final?, interval},
-        state
-      )
-      when is_boolean(final?) do
-    {:noreply,
-     SpeechToSpeech.handle_input_transcript(
-       state,
-       capability,
-       human_id,
-       text,
-       turn,
-       final?,
-       interval
-     )}
+  def handle({:vxpipe_sts_input_event, capability, evidence}, state) do
+    {:noreply, SpeechToSpeech.handle_input_event(state, capability, evidence)}
   end
 
   def handle({:vxpipe_sts_turn_started, capability, agent_id, turn}, state) do

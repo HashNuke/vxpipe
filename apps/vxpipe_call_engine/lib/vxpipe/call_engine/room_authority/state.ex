@@ -50,6 +50,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 speech_to_speech_ready?: false,
                 speech_to_speech_policy_revision: 0,
                 sts_turns: %{},
+                sts_caller_turns: %{},
+                sts_caller_sequence: 0,
                 sts_tool_calls: %{}
               ]
 
@@ -96,6 +98,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           speech_to_speech_ready?: boolean(),
           speech_to_speech_policy_revision: non_neg_integer(),
           sts_turns: map(),
+          sts_caller_turns: map(),
+          sts_caller_sequence: non_neg_integer(),
           sts_tool_calls: map()
         }
 

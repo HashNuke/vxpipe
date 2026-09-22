@@ -583,7 +583,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       when elem(message, 0) in [
              :vxpipe_sts_ready,
              :vxpipe_sts_speech_started,
-             :vxpipe_sts_input_transcript,
+             :vxpipe_sts_input_event,
              :vxpipe_sts_turn_started,
              :vxpipe_sts_agent_transcript,
              :vxpipe_sts_turn_completed,

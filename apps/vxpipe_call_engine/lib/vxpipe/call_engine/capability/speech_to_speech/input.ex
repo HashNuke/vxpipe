@@ -17,25 +17,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   def transcript_interval(state, source),
     do: Snapshot.interval(state.input_policy, :speech_to_text, source)
 
+  def audio_interval(%{input_policy: nil} = state, _source), do: state.policy_revision
+
+  def audio_interval(state, source),
+    do: Snapshot.interval(state.input_policy, :audio_input, source)
+
   def bind(state, ingress, owner) when state.owner == owner and state.input == nil do
     {:reply, :ok, %{state | input: ingress, input_monitor: Process.monitor(ingress)}}
   end
 
   def bind(state, _ingress, _owner), do: {:reply, {:error, :wrong_owner}, state}
 
-  def hold(%{input: nil} = state), do: %{state | held?: true}
+  def hold(%{input: nil} = state), do: %{state | held?: true, input_epoch: nil, caller_turns: %{}}
 
   def hold(state) do
     _ = STSIngress.hold(state.input)
-    %{state | held?: true, input_epoch: nil}
+    %{state | held?: true, input_epoch: nil, caller_turns: %{}}
   end
 
-  def release(%{input: nil, input_required?: true}), do: {:error, :not_ready}
-  def release(%{input: nil} = state), do: {:ok, %{state | held?: false}}
+  def release(%{input: nil, input_required?: true}, _epoch), do: {:error, :not_ready}
 
-  def release(state) do
-    epoch = make_ref()
+  def release(%{input: nil} = state, epoch),
+    do: {:ok, %{state | held?: false, input_epoch: epoch}}
 
+  def release(state, epoch) do
     with {:ok, contract} <- STSIngress.input_contract(state.input),
          :ok <- STSIngress.open(state.input, epoch),
          do: {:ok, %{state | held?: false, input_epoch: epoch, input_contract: contract}}

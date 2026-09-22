@@ -20,8 +20,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
       for text <- ["ONE", "TWO", "THREE"] do
         assert :ok = SpeechToSpeech.push_text(capability, text)
 
-        assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, ^text, turn, true,
-                        _interval}
+        assert_receive {:vxpipe_sts_input_event, ^capability,
+                        %{
+                          event: %{
+                            kind: :input_transcript,
+                            text: ^text,
+                            turn_ref: turn,
+                            final: true
+                          }
+                        }}
 
         turn
       end
@@ -44,8 +51,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     for _ <- 1..17 do
       assert :ok = SpeechToSpeech.push_text(capability, "HI")
 
-      assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, true,
-                      _interval}
+      assert_receive {:vxpipe_sts_input_event, ^capability,
+                      %{event: %{kind: :input_transcript, text: "HI", final: true}}}
     end
 
     assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_turn_overflow}, 1_000
@@ -67,8 +74,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
 
     push_morse(capability, "HI")
 
-    assert_receive {:vxpipe_sts_input_transcript, ^capability, @human, "HI", _turn, _final,
-                    _interval}
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      identity: %{participant_id: @human},
+                      event: %{kind: :input_transcript, text: "HI"}
+                    }}
 
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn}
     assert_receive {:test_audio_output, _sink, _frame}
@@ -79,7 +89,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
 
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, _turn}
     refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _interval}
-    refute_received {:vxpipe_sts_input_transcript, ^capability, @agent, _, _, _, _interval}
+    refute_received {:vxpipe_sts_input_event, ^capability, %{identity: %{participant_id: @agent}}}
   end
 
   test "denied transcript policy settles the turn without agent text" do
