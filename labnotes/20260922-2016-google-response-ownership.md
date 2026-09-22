@@ -137,3 +137,8 @@
   signed-64-bit positive range. Only STS descriptors explicitly opting in can
   support it. The existing channel has not yet bound/acknowledged starts or
   authorized grants; that remains the next integration.
+- Committed pure owner `9b8508b9` and response event `ec896817`, both before
+  their umbrella gates. Static root handle `32426` exited 0: format,
+  warnings-as-errors compile, strict Credo (1,087 source files), and unused-lock
+  check pass on the committed event checkpoint. Push notification completed.
+  Full root tests are pending the five deliberately red Google controller cases.
