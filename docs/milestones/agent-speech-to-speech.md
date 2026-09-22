@@ -1,7 +1,10 @@
 # Agent speech-to-speech
 
-Status: full A–F scope selected; implementation has not started. Every
-implementation and acceptance box below is open.
+Status: full A–F scope selected; checkpoint A (selection and contract, local
+only) is implemented and committed as `a31a479f` with evidence in
+`labnotes/20260922-0539-agent-sts-checkpoint-a.md`. Checkpoints B–F remain
+open, and the milestones index entry stays unchecked until all acceptance
+gates pass.
 
 Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Provider integration packages](provider-integration-packages.md), and
