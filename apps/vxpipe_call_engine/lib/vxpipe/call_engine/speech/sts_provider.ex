@@ -30,6 +30,20 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback push_audio(pid(), binary()) :: :ok | {:error, :busy | :session_failed}
+  @doc """
+  Atomic input and consumer-issued opaque origin for `response_start?` allocations.
+  Contexts are engine-owned, never provider-issued. Required for opted-in
+  descriptors; there is no legacy fallback. `:ok` reports input acceptance, not
+  output authority. An early event can correlate staged input but cannot grant it.
+  """
+  @callback submit_input(
+              pid(),
+              reference(),
+              {:audio, binary()}
+              | {:text, reference(), String.t()}
+              | {:activity, :started | :ended}
+            ) :: :ok | {:error, :busy | :unsupported_operation | :session_failed}
+  @optional_callbacks submit_input: 3
   @callback push_text(pid(), reference(), String.t()) :: :ok | {:error, atom()}
   @callback input_activity(pid(), :started | :ended) :: :ok | {:error, atom()}
   @callback interrupt(pid(), reference()) :: :ok | {:error, atom()}

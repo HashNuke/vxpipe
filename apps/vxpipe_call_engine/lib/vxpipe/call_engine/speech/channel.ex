@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     Input,
     OutputState,
     ProviderName,
+    ResponseContexts,
     ScopeControl,
     STSInput,
     STSOutput,
@@ -67,6 +68,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        prepared?: false,
        events: EventQueue.new(),
        input: nil,
+       response_contexts: ResponseContexts.new(),
        output: OutputState.new(),
        usage?: false,
        cancellation: nil,
@@ -227,10 +229,21 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
         {:reply, {:error, :command_timeout}, state}
 
       true ->
-        timer = Process.send_after(self(), {:input_expired, command.ref}, remaining(command))
-        input = %{command: command, from: from, timer: timer, claimed?: false}
-        Input.submit(allocation, command, audio)
-        {:noreply, %{state | input: input}}
+        case STSInput.stage_context(
+               state.descriptor,
+               state.module,
+               command,
+               state.response_contexts
+             ) do
+          {:ok, contexts} ->
+            timer = Process.send_after(self(), {:input_expired, command.ref}, remaining(command))
+            input = %{command: command, from: from, timer: timer, claimed?: false}
+            Input.submit(allocation, command, audio)
+            {:noreply, %{state | input: input, response_contexts: contexts}}
+
+          error ->
+            {:reply, error, state}
+        end
     end
   end
 
@@ -453,6 +466,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
               {:ok, state, reply} ->
                 if remaining(command) > 0 and Allocation.valid?(state.allocation) do
                   Process.cancel_timer(input.timer)
+                  contexts = STSInput.finish_context(state.response_contexts, command, result)
+                  state = %{state | response_contexts: contexts}
                   ChannelFailure.reply_input(input, reply)
                   TTSFlow.continue_after_input(command, result, %{state | input: nil})
                 else

@@ -1050,6 +1050,40 @@ Task or execution timer. Original deadline, execution budget, accepted outcomes
 and reconciliation behavior are retained. Parent integration/root review remains
 separate; this does not close the STS model-continuation requirements.
 
+#### Atomic context-bearing STS input checkpoint (2026-09-22)
+
+Design review is recorded separately in
+[Atomic STS input contexts](../sts-input-context.md), before tests/runtime.
+This shared-input assignment does not close response-start admission, private
+tool continuation, or Google cross-origin handoff.
+
+- [x] Inspect the actual Session/Input/Channel slot and parent atomic-origin
+  design; record the bounded owner API proposal and ownership coordination seam.
+- [x] Coordinate retained-origin/last-root semantics with the parent response
+  owner before runtime; retain a hard 16-context bound without automatic eviction.
+- [ ] Parent follow-up before full lifecycle acceptance: integrate bounded exact
+  response/tool obligation holds and engine-authorized root retirement; prove
+  more than 16 sequential fully retired origin rotations without unbounded
+  tombstones. Context references are consumer-owned, never provider-issued.
+  Allocation-lifetime retention here is INTERIM; no retain/release is implemented.
+- [x] Add real-channel/probe reds for closed context-bearing options and mandatory
+  atomic `submit_input/3` on opted-in STS, preserving legacy dispatch otherwise.
+- [x] Implement Session overloads, STSInput admission, Input atomic dispatch,
+  optional STSProvider callback and descriptor opt-in fact with minimal Channel
+  staging/claim/result hooks and a cohesive pure context owner.
+- [x] Prove stage-before-callback, timely acceptance only, first-use rollback,
+  accepted-context reuse, stale-command isolation and the retained-context bound.
+- [x] Cover absent/invalid/unknown options, wrong consumer, prepared allocations,
+  unsupported callbacks, callback busy and timeouts with no unauthorized delivery.
+- [x] Run focused owning-child regressions with two schedulers; review exact
+  staged paths and commit a coherent green checkpoint with design and lab evidence.
+  The focused selection passes 74 tests (15 new); exact commands and terminal
+  handles are in `labnotes/20260922-2045-sts-input-context.md`. This is input-only
+  evidence, not response-start grant or complete origin-lifecycle acceptance.
+- [ ] Parent integration: bind early response events without treating staging as
+  accepted authority; retain input/response/tool origins through their obligations.
+  Response grant/retirement and successful cross-origin Google handoff remain open.
+
 - [x] Morse session/capability tests for human speech onset handling,
   queued playback, zero-playback interruption (`:no_prefix`), late
   audio/text fencing (ack-and-discard, no revival), provider interruption

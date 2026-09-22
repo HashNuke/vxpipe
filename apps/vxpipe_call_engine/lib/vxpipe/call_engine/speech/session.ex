@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     Request,
     Scope,
     ScopeControl,
-    SessionTree
+    SessionTree,
+    STSInput
   }
 
   @timeout 5_000
@@ -252,40 +253,64 @@ defmodule Vxpipe.CallEngine.Speech.Session do
   means no acceptance; this function never retries. The command budget measures
   age from API entry, including queue waits. Raw bytes carry no capture timestamp;
   upstream ingress retains responsibility for captured-frame age limits.
+
+  Opted-in STS descriptors require `response_context: reference`, issued by the
+  consumer's engine policy owner. It is delivered atomically with input; provider
+  acceptance does not authorize output. Options are closed, and non-opted-in
+  allocations reject supplied contexts instead of silently discarding them.
   """
-  def push_audio(allocation, audio)
+  def push_audio(allocation, audio, options \\ [])
+
+  def push_audio(allocation, audio, options)
       when is_binary(audio) and byte_size(audio) in 1..@maximum_audio_bytes do
-    submit_input(allocation, command(allocation), audio)
+    with {:ok, command} <- input_command(allocation, options),
+         do: submit_input(allocation, command, audio)
   end
 
-  def push_audio(_allocation, audio) when is_binary(audio), do: {:error, :invalid_audio_size}
-  def push_audio(_allocation, _audio), do: {:error, :invalid_audio}
+  def push_audio(_allocation, audio, _options) when is_binary(audio),
+    do: {:error, :invalid_audio_size}
+
+  def push_audio(_allocation, _audio, _options), do: {:error, :invalid_audio}
 
   @doc """
   Admit bounded explicit text for an STS allocation through the same ordered
   input slot as audio. `:ok` means bounded provider acceptance; the provider
   publishes `:input_submitted` with the returned text reference. STT and TTS
   allocations reject text with `:unsupported_operation`.
+  The same closed `response_context` option and acceptance rules as audio apply.
   """
-  def push_text(allocation, text) when is_binary(text) and byte_size(text) in 1..4_096 do
-    reference = make_ref()
-    command = Map.put(command(allocation), :operation, {:push_text, reference, text})
-    submit_input(allocation, command, text)
+  def push_text(allocation, text, options \\ [])
+
+  def push_text(allocation, text, options) when is_binary(text) and byte_size(text) in 1..4_096 do
+    with {:ok, command} <- input_command(allocation, options) do
+      command = Map.put(command, :operation, {:push_text, make_ref(), text})
+      submit_input(allocation, command, text)
+    end
   end
 
-  def push_text(_allocation, _text), do: {:error, :invalid_text}
+  def push_text(_allocation, _text, _options), do: {:error, :invalid_text}
 
   @doc """
   Deliver an ordered external turn-control boundary to an STS allocation
   through the same input slot as audio and text. Unavailable in
   provider-controlled turn mode (`:unsupported_operation`).
+  The same closed `response_context` option and acceptance rules as audio apply.
   """
-  def input_activity(allocation, boundary) when boundary in [:started, :ended] do
-    command = Map.put(command(allocation), :operation, {:input_activity, boundary})
-    submit_input(allocation, command, <<>>)
+  def input_activity(allocation, boundary, options \\ [])
+
+  def input_activity(allocation, boundary, options) when boundary in [:started, :ended] do
+    with {:ok, command} <- input_command(allocation, options) do
+      command = Map.put(command, :operation, {:input_activity, boundary})
+      submit_input(allocation, command, <<>>)
+    end
   end
 
-  def input_activity(_allocation, _boundary), do: {:error, :invalid_activity}
+  def input_activity(_allocation, _boundary, _options), do: {:error, :invalid_activity}
+
+  defp input_command(allocation, options) do
+    with {:ok, context} <- STSInput.context_options(options),
+         do: {:ok, Map.merge(command(allocation), context)}
+  end
 
   defp submit_input(allocation, command, payload) do
     try do

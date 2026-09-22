@@ -10,7 +10,40 @@ defmodule Vxpipe.CallEngine.Speech.STSInput do
   during that callback and a late submission after it settle as stale.
   """
 
-  alias Vxpipe.CallEngine.Speech.Event
+  alias Vxpipe.CallEngine.Speech.{Event, ResponseContexts}
+
+  @doc false
+  def context_options([]), do: {:ok, %{}}
+
+  def context_options(response_context: context) when is_reference(context),
+    do: {:ok, %{response_context: context}}
+
+  def context_options(_options), do: {:error, :invalid_options}
+
+  @doc false
+  def stage_context(descriptor, module, command, contexts) do
+    case {descriptor.response_start?, Map.fetch(command, :response_context)} do
+      {true, {:ok, context}} when is_reference(context) ->
+        if function_exported?(module, :submit_input, 3),
+          do: ResponseContexts.stage(contexts, context, command.ref),
+          else: {:error, :unsupported_operation}
+
+      {true, _missing} ->
+        {:error, :invalid_response_context}
+
+      {false, :error} ->
+        {:ok, contexts}
+
+      {false, _present} ->
+        {:error, :unsupported_operation}
+    end
+  end
+
+  @doc false
+  def finish_context(contexts, command, :ok), do: ResponseContexts.accept(contexts, command.ref)
+
+  def finish_context(contexts, command, _result),
+    do: ResponseContexts.rollback(contexts, command.ref)
 
   @doc "Whether an input-slot command is supported for the descriptor kind."
   def supported?(%{kind: kind}, %{operation: {:push_text, _, _}}), do: kind == :sts

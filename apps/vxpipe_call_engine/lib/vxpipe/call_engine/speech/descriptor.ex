@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
                 input_format: nil,
                 finite_input?: false,
                 speech_start?: false,
+                response_start?: false,
                 eager_end?: false,
                 resume?: false,
                 cache_identity: nil,
@@ -25,6 +26,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
               :input_format,
               :finite_input?,
               :speech_start?,
+              :response_start?,
               :eager_end?,
               :resume?,
               :cache_identity,
@@ -47,6 +49,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           readiness: :initialized | :provider_acknowledged,
           endpointing: :provider_semantic | :provider_gap | :external | :none,
           speech_start?: boolean(),
+          response_start?: boolean(),
           eager_end?: boolean(),
           resume?: boolean(),
           cache_identity: binary() | nil,
@@ -79,6 +82,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          descriptor.readiness in [:initialized, :provider_acknowledged] and
          descriptor.endpointing in [:provider_semantic, :provider_gap, :external, :none] and
          is_boolean(descriptor.speech_start?) and is_boolean(descriptor.eager_end?) and
+         is_boolean(descriptor.response_start?) and
+         (not descriptor.response_start? or descriptor.kind == :sts) and
          is_boolean(descriptor.resume?) and
          is_boolean(descriptor.finite_input?) and
          (not descriptor.finite_input? or descriptor.kind == :stt) and
