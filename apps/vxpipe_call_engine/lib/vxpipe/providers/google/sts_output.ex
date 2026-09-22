@@ -1,9 +1,37 @@
 defmodule Vxpipe.Providers.Google.STSOutput do
-  @moduledoc "Google STS PCM buffering and generation completion through engine output credit."
+  @moduledoc "Google STS bounded output assembly and completion through engine output credit."
 
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
 
   @maximum_pending_audio 16
+  @maximum_text_bytes 65_536
+
+  def buffer_transcript(%{audio_fenced?: true} = state, _text), do: {:ok, state}
+  def buffer_transcript(%{generation_pending_done?: true} = state, _text), do: {:ok, state}
+
+  def buffer_transcript(%{output: %{generation_done?: true}} = state, _text),
+    do: {:ok, state}
+
+  def buffer_transcript(state, text) do
+    accumulated = (state.output_text || "") <> text
+
+    if byte_size(accumulated) <= @maximum_text_bytes,
+      do: publish_transcript(%{state | output_text: accumulated}),
+      else: {:error, :session_failed}
+  end
+
+  def publish_transcript(%{output: nil} = state), do: {:ok, state}
+  def publish_transcript(%{output_text: nil} = state), do: {:ok, state}
+
+  def publish_transcript(state) do
+    case Event.emit(state.channel, :output_transcript,
+           turn_ref: state.output.turn_ref,
+           text: state.output_text
+         ) do
+      result when result in [:ok, :discarded] -> {:ok, state}
+      _failure -> {:error, :session_failed}
+    end
+  end
 
   def buffer_audio(state, pcm) do
     case state.output do

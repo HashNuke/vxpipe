@@ -15,6 +15,15 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   def invalidate(state), do: %{state | resumption_handle: nil}
 
+  def begin_turn(state) do
+    %{
+      state
+      | resumption_handle: nil,
+        model_turn_complete?: false,
+        resumption_ambiguous?: state.resumption_ambiguous? or not state.model_turn_complete?
+    }
+  end
+
   def recoverable?(state), do: idle?(state) and is_binary(state.resumption_handle)
 
   def request(state, remaining_ms \\ nil)
@@ -134,8 +143,8 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   end
 
   defp idle?(state) do
-    is_nil(state.input_turn) and is_nil(state.output) and state.audio_buffer == [] and
-      map_size(state.pending_tools) == 0
+    not state.resumption_ambiguous? and state.model_turn_complete? and is_nil(state.input_turn) and
+      is_nil(state.output) and state.audio_buffer == [] and map_size(state.pending_tools) == 0
   end
 
   defp arm_deadline(state, deadline) do

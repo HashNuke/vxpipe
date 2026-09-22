@@ -19,7 +19,14 @@ defmodule Vxpipe.Providers.Google.STSSession do
   @default_renew_after 420_000
   @default_expire_after 570_000
   import Vxpipe.Providers.Google.STSOutput,
-    only: [buffer_audio: 2, open_output: 3, mark_generation_done: 1, drain_output: 1]
+    only: [
+      buffer_audio: 2,
+      buffer_transcript: 2,
+      publish_transcript: 1,
+      open_output: 3,
+      mark_generation_done: 1,
+      drain_output: 1
+    ]
 
   @maximum_pending_tools 16
 
@@ -54,7 +61,10 @@ defmodule Vxpipe.Providers.Google.STSSession do
     input_ended?: false,
     audio_fenced?: false,
     generation_pending_done?: false,
+    model_turn_complete?: true,
+    resumption_ambiguous?: false,
     output: nil,
+    output_text: nil,
     audio_buffer: [],
     pending_tools: %{},
     usage: nil
@@ -204,7 +214,13 @@ defmodule Vxpipe.Providers.Google.STSSession do
              provenance: :provider_reported
            ),
          {:ok, state} <-
-           open_text_turn(STSResumption.invalidate(%{state | input_turn: turn, input_text: text})) do
+           open_text_turn(
+             STSResumption.begin_turn(%{
+               state
+               | input_turn: turn,
+                 input_text: text
+             })
+           ) do
       {:reply, :ok, state}
     else
       {:error, :invalid_text} -> {:reply, {:error, :invalid_text}, state}
@@ -341,8 +357,10 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_info({:vxpipe_speech_output, channel, turn_ref, output_ref}, state)
       when is_reference(turn_ref) and is_reference(output_ref) do
     if channel == state.channel and turn_ref == state.input_turn do
-      case drain_output(open_output(state, turn_ref, output_ref)) do
-        {:ok, state} -> {:noreply, state}
+      with {:ok, state} <- publish_transcript(open_output(state, turn_ref, output_ref)),
+           {:ok, state} <- drain_output(state) do
+        {:noreply, state}
+      else
         {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
       end
     else
@@ -381,7 +399,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
         {:vxpipe_speech_output_settled, channel, turn, ref, _played_ms},
         %{channel: channel, output: %{turn_ref: turn, output_ref: ref}} = state
       ) do
-    state = %{state | output: nil}
+    state = %{state | output: nil, output_text: nil}
 
     state =
       if state.input_turn == turn,
@@ -439,20 +457,48 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp apply_wire_event(:activity_start, %{config: %{turn_control: "external"}} = state),
     do: {:ok, state}
 
+  defp apply_wire_event(:activity_start, %{input_turn: turn, input_ended?: false} = state)
+       when not is_nil(turn),
+       do: {:ok, state}
+
   defp apply_wire_event(:activity_start, state) do
     turn = make_ref()
 
     case Event.emit(state.channel, :speech_started, turn_ref: turn) do
-      :ok -> {:ok, %{state | input_turn: turn, input_text: nil, input_ended?: false}}
-      :discarded -> {:ok, state}
-      _failure -> {:error, :session_failed}
+      :ok ->
+        {:ok,
+         STSResumption.begin_turn(%{
+           state
+           | input_turn: turn,
+             input_text: nil,
+             input_ended?: false
+         })}
+
+      :discarded ->
+        {:ok, state}
+
+      _failure ->
+        {:error, :session_failed}
     end
   end
 
   defp apply_wire_event(:activity_end, %{config: %{turn_control: "external"}} = state),
     do: {:ok, state}
 
-  defp apply_wire_event(:activity_end, state), do: {:ok, state}
+  defp apply_wire_event(:activity_end, %{input_turn: nil} = state), do: {:ok, state}
+  defp apply_wire_event(:activity_end, %{input_ended?: true} = state), do: {:ok, state}
+
+  defp apply_wire_event(:activity_end, state) do
+    # Activity ends the caller's turn, not its independently delivered transcript.
+    case Event.emit(state.channel, :turn_ended,
+           turn_ref: state.input_turn,
+           text: "",
+           endpointing: input_endpointing(state)
+         ) do
+      result when result in [:ok, :discarded] -> {:ok, %{state | input_ended?: true}}
+      _failure -> {:error, :session_failed}
+    end
+  end
 
   defp apply_wire_event({:input_transcript, text}, %{input_turn: nil} = state) do
     _ = text
@@ -504,38 +550,13 @@ defmodule Vxpipe.Providers.Google.STSSession do
     {:ok, state}
   end
 
-  defp apply_wire_event({:output_transcript, text}, state) do
-    case Event.emit(state.channel, :output_transcript, turn_ref: state.input_turn, text: text) do
-      :ok -> {:ok, state}
-      :discarded -> {:ok, state}
-      _failure -> {:error, :session_failed}
-    end
-  end
+  defp apply_wire_event({:output_transcript, text}, state), do: buffer_transcript(state, text)
 
   defp apply_wire_event(:generation_complete, state) do
     drain_output(mark_generation_done(state))
   end
 
-  defp apply_wire_event(:turn_complete, %{input_turn: nil} = state), do: {:ok, state}
-
-  defp apply_wire_event(:turn_complete, state) do
-    text = state.input_text || ""
-
-    case Event.emit(state.channel, :turn_ended,
-           turn_ref: state.input_turn,
-           text: text,
-           endpointing: input_endpointing(state)
-         ) do
-      :ok ->
-        {:ok, %{state | input_ended?: true}}
-
-      :discarded ->
-        {:ok, %{state | input_ended?: true}}
-
-      _failure ->
-        {:error, :session_failed}
-    end
-  end
+  defp apply_wire_event(:turn_complete, state), do: {:ok, %{state | model_turn_complete?: true}}
 
   defp apply_wire_event(:interrupted, %{input_turn: nil} = state), do: {:ok, state}
 
@@ -614,8 +635,17 @@ defmodule Vxpipe.Providers.Google.STSSession do
     end
   end
 
+  defp activity_boundary(:started, %{input_turn: turn, input_ended?: false} = state)
+       when not is_nil(turn),
+       do: state
+
   defp activity_boundary(:started, state),
-    do: %{state | input_turn: state.input_turn || make_ref(), input_ended?: false}
+    do:
+      STSResumption.begin_turn(%{
+        state
+        | input_turn: state.input_turn || make_ref(),
+          input_ended?: false
+      })
 
   defp activity_boundary(:ended, %{input_turn: nil} = state), do: state
 
@@ -643,14 +673,14 @@ defmodule Vxpipe.Providers.Google.STSSession do
         other -> other
       end
 
-    %{state | output: output, audio_buffer: [], audio_fenced?: true}
+    %{state | output: output, output_text: nil, audio_buffer: [], audio_fenced?: true}
   end
 
   defp fence_local_output(state, turn_ref) do
     case state.output do
       %{turn_ref: ^turn_ref} = output ->
         output = %{output | queue: [], interrupted?: true}
-        state = %{state | output: output, audio_buffer: [], audio_fenced?: true}
+        state = %{state | output: output, output_text: nil, audio_buffer: [], audio_fenced?: true}
 
         if not output.completed_emitted? and is_nil(output.awaiting) do
           _ =
@@ -673,6 +703,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
     %{
       state
       | output: nil,
+        output_text: nil,
         audio_buffer: [],
         audio_fenced?: false,
         input_turn: nil,

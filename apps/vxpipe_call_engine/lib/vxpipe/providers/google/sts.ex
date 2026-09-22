@@ -241,8 +241,8 @@ defmodule Vxpipe.Providers.Google.STS do
   defp transcripts(content) do
     with {:ok, input} <- transcript_text(content, "inputTranscription", :input_transcript),
          {:ok, output} <- transcript_text(content, "outputTranscription", :output_transcript),
-         {:ok, turn_text} <- turn_texts(content) do
-      {:ok, input ++ output ++ turn_text}
+         :ok <- validate_model_text(content) do
+      {:ok, input ++ output}
     end
   end
 
@@ -268,26 +268,27 @@ defmodule Vxpipe.Providers.Google.STS do
     end
   end
 
-  defp turn_texts(%{"modelTurn" => %{"parts" => parts}}) when is_list(parts) do
-    Enum.reduce_while(parts, {:ok, []}, fn part, {:ok, events} ->
+  # Model text (including thoughts) is not the selected audio transcription.
+  defp validate_model_text(%{"modelTurn" => %{"parts" => parts}}) when is_list(parts) do
+    Enum.reduce_while(parts, :ok, fn part, :ok ->
       case part do
         %{"text" => text}
         when is_binary(text) and byte_size(text) <= @maximum_text_bytes ->
           if String.valid?(text),
-            do: {:cont, {:ok, events ++ [{:output_transcript, text}]}},
+            do: {:cont, :ok},
             else: {:halt, {:error, :invalid_message}}
 
         %{"text" => _invalid} ->
           {:halt, {:error, :invalid_message}}
 
         _other ->
-          {:cont, {:ok, events}}
+          {:cont, :ok}
       end
     end)
   end
 
-  defp turn_texts(%{"modelTurn" => _invalid}), do: {:error, :invalid_message}
-  defp turn_texts(_content), do: {:ok, []}
+  defp validate_model_text(%{"modelTurn" => _invalid}), do: {:error, :invalid_message}
+  defp validate_model_text(_content), do: :ok
 
   defp output_audio(%{"modelTurn" => %{"parts" => parts}}) when is_list(parts) do
     Enum.reduce_while(parts, {:ok, []}, fn part, {:ok, events} ->

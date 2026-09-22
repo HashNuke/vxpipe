@@ -1152,6 +1152,49 @@ Submitted invocation outcomes must still survive privately for later reasoning.
     explicitly and keep hosted selection gated. Both activity enum values decoded
     to `{:ok, []}` in the original audit; sources and exact read-only probe are
     in `labnotes/20260922-1721-sts-google-wire-audit.md`.
+  - [x] Reproduce the real capability path with raw activity start/end followed
+    by early transcription/audio and at least twenty credited PCM chunks before
+    model `turnComplete`. Caller activity end, not model response end, permits
+    the reply. Duplicate boundaries cannot reopen it; no manual fixture admission.
+    - [x] Preserve the resumption safety boundary after earlier playback: a
+      completed local reply alone cannot make an unfinished model turn idle.
+      Reproduce handle/go-away after playback but before model `turnComplete`,
+      then require model completion and a subsequently valid private handle.
+      - [x] Reproduce review's A-playback/B-start/delayed-A-model-end ordering.
+        Until independent response correlation is proven, latch ambiguous model
+        ownership as non-resumable for this allocation; an unqualified end or a
+        newer handle cannot clear it. Cover provider, typed and external starts,
+        retain bounded failure/no replay, and keep full overlap support open.
+  - [x] Preserve bounded output transcription before admission and accumulate
+    Google fragments into cumulative shared-channel snapshots. Freeze at the
+    declared generation boundary, retain the independent playback fence, reject
+    aggregate overflow, and clear retained text on settlement/fencing.
+    - [x] Keep the configured output-audio transcription as the only spoken-text
+      source. Ordinary model text (including thought parts) must not be appended
+      to it or substitute for a missing transcription; reproduce both mixed
+      messages and model-text-only generation through the real controller.
+  - [ ] Prove separate caller/response associations across overlapping onset,
+    interruption, delayed input transcription, model completion and next reply.
+    A single mutable input reference must not relabel old output. Preserve
+    bounded retirement and safe idle resumption; no history replay or fabricated
+    caller final text from a model boundary.
+  - [ ] Make Google turn-control claims match its wire profile. Provider control
+    uses server activity; external controls require disabled automatic detection.
+    Verify or reject unsupported hybrid combinations before startup rather than
+    sending client activity messages while automatic detection remains enabled.
+
+  Controller dependency review: shared transcript settlement and the raw activity
+  codec are committed prerequisites. First prove caller-end admission and bounded
+  output snapshots through the actual capability, then complete overlap/history,
+  external/hybrid and room publication acceptance. Provider session owns raw
+  correlation and fragment assembly; engine owns permission, output credit and
+  playback. Do not enlarge buffers to conceal admission delayed until model end.
+  Research and test evidence: `labnotes/20260922-1830-google-sts-controller.md`.
+  Sequential controller, Google codec/session/output and shared settlement checks
+  pass: 68 tests, zero failures, seed 0. Model completion is not caller completion;
+  activity end carries no fabricated caller final text. Local interruption tests
+  prove retained-text isolation, not history reconciliation. The parent controller
+  item remains open for overlap, input finality and supported control profiles.
 - [ ] Implement explicit output-transcript final settlement consistently with
   the descriptor: `Event.build(:output_transcript, ..., final: true)` currently
   rejects the event despite accepting `output_settlement: :transcript_end`.

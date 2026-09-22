@@ -455,6 +455,15 @@ cannot replace either settled form, and a different turn reference cannot settle
 the current output. Upstream reference retirement remains a separate requirement.
 Morse now emits the explicit final its descriptor declares.
 
+Google assembles `outputTranscription` fragments into these snapshots, retaining
+early text until output permission arrives. Its aggregate limit is 65,536 bytes;
+overflow fails the allocation, and settlement/interruption clears retained text.
+Ordinary `modelTurn` text, including thoughts, is not an audio-transcript source
+and cannot substitute for missing output transcription. Raw caller activity end
+permits a response independently of model `turnComplete`; it does not finalize
+independently delivered caller text. The [controller decision](google-sts-controller.md)
+records sequential fake-wire proof and the remaining correlation limits.
+
 In provider-transcript mode, public completion requires settled selected text,
 acknowledged generation completion and matching sink playback. A late explicit final can finish an
 already-drained output, but partial text alone cannot. Missing explicit finals
@@ -550,7 +559,13 @@ hosted compatibility. See [the configuration decision](google-speech-integration
 Google same-allocation renewal and idle connection-loss recovery use only the latest valid,
 safe provider-issued handle, retained privately. New accepted input or revocation invalidates
 the old checkpoint. Handoff waits for an idle input boundary, no pending tools and local
-playback settlement; generation completion alone is insufficient. Retire the old socket
+playback settlement and the model's `turnComplete`; generation completion or local
+playback alone is insufficient. Model completion invalidates any earlier handle,
+so renewal also needs a subsequently valid checkpoint. The current local adapter
+latches overlapping model-turn ownership as non-resumable until independent
+correlation is implemented; a later unqualified end/handle cannot clear that
+uncertainty. It fails on connection loss or the existing expiry, with no replay
+or fresh fallback. This guard does not satisfy full overlap support. Retire the old socket
 through its owner and reject new input as `:busy` until replacement setup is acknowledged.
 
 The default connection/setup attempt budget is five seconds, capped by the original local

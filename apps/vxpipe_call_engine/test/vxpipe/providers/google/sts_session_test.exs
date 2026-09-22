@@ -226,16 +226,16 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert :ok = Session.ack(session, started)
 
     deliver(wire, %{
-      "serverContent" => %{"inputTranscription" => %{"text" => "hello"}, "turnComplete" => true}
+      "voiceActivity" => %{"type" => "ACTIVITY_END"},
+      "serverContent" => %{"inputTranscription" => %{"text" => "hello"}}
     })
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = input}
-    assert :ok = Session.ack(session, input)
-
     assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :turn_ended, text: "hello"} = ended}
+                    %Event{session: ^session, kind: :turn_ended, text: ""} = ended}
 
     assert :ok = Session.ack(session, ended)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = input}
+    assert :ok = Session.ack(session, input)
     assert {:ok, output} = Session.admit_output(session, ended.turn_ref)
 
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}
@@ -346,16 +346,16 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert next.turn_ref != started.turn_ref
 
     deliver(wire, %{
-      "serverContent" => %{"inputTranscription" => %{"text" => "again"}, "turnComplete" => true}
+      "voiceActivity" => %{"type" => "ACTIVITY_END"},
+      "serverContent" => %{"inputTranscription" => %{"text" => "again"}}
     })
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = input}
-    assert :ok = Session.ack(session, input)
-
     assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :turn_ended, text: "again"} = ended}
+                    %Event{session: ^session, kind: :turn_ended, text: ""} = ended}
 
     assert :ok = Session.ack(session, ended)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = input}
+    assert :ok = Session.ack(session, input)
   end
 
   test "go-away without a resumption handle fails closed instead of restarting silently" do
@@ -570,7 +570,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
-    deliver(wire, %{"serverContent" => %{"turnComplete" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
     assert :ok = Session.ack(session, ended)
     assert {:ok, output} = Session.admit_output(session, ended.turn_ref)
@@ -615,7 +615,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
-    deliver(wire, %{"serverContent" => %{"turnComplete" => true}})
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
     assert :ok = Session.ack(session, ended)
     assert {:ok, output} = Session.admit_output(session, ended.turn_ref)
@@ -646,6 +646,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
                     %Event{session: ^session, kind: :output_completed} = completed}
 
     assert :ok = Session.ack(session, completed)
+    deliver_sync(session, wire, %{"serverContent" => %{"turnComplete" => true}})
     output
   end
 

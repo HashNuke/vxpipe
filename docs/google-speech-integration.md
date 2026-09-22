@@ -136,8 +136,12 @@ SDK-facing `voiceActivityType` is not a second accepted wire spelling. Invented
 `serverContent.activityStart`/`activityEnd` fields are no longer interpreted;
 client encoders remain unchanged. The allowlisted detection signal and deprecated
 speechState are not fallback boundaries. This checkpoint proves codec behavior
-and migrated fake-wire fixtures only, not controller activity-end semantics,
-streaming admission, explicit transcript settlement or hosted acceptance.
+and migrated fake-wire fixtures. The subsequent [STS controller checkpoint](google-sts-controller.md)
+adds actual capability/sink proof of caller-end streaming admission, bounded
+fragment assembly, output-text source isolation and separate generation/playback
+settlement. It also prevents playback from making an unfinished model turn a
+resumable idle checkpoint. Overlapping caller/response correlation, caller final
+text, interruption-history repair and hosted acceptance remain open.
 
 ## Private STS activation configuration
 
