@@ -79,3 +79,12 @@ limit. This is an architectural hygiene gate, not a response-behavior failure.
 Added a milestone refactor task before code changes. Extract cohesive response
 admission/queue ownership, keep the focused capability group green, and rerun
 the static gates after a follow-up commit.
+
+Refactor committed as `13673cdd`: `ResponseQueue` owns admission/retirement,
+and `Output` delegates while retaining playback and recognition. `Output` is
+691 lines and `ResponseQueue` 194. The 99 focused capability tests remained
+green, and independent Astra read-only review found no reproducible behavior
+regression. All four root post-commit static gates pass: format, warnings-as-
+errors compile, strict Credo (1,092 files/no issues), and unused dependencies.
+Root `mix test` is deferred until the five deliberately red Google controller
+cases are implemented; these static gates do not claim milestone completion.

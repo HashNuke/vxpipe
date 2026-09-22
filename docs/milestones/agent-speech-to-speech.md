@@ -1775,7 +1775,7 @@ Submitted invocation outcomes must still survive privately for later reasoning.
               and hold/policy/source changes retire denied entries without
               bypassing the one credited playback slot. Prove repeated
               queue/drain and bounded capacity recovery.
-            - [ ] Extract cohesive response admission/queue ownership from
+            - [x] Extract cohesive response admission/queue ownership from
               `Output` after the root strict-Credo module-size gate; preserve
               the focused behavior and rerun the post-commit static gates.
             Capability queue evidence: focused real-capability reds reproduced
@@ -1789,6 +1789,10 @@ Submitted invocation outcomes must still survive privately for later reasoning.
             in this capability diff. The first child and parent stay open for
             explicit source-replacement integration and Google response-owner
             adoption; this evidence does not clear the five controller reds.
+            The admission queue extraction kept the 99-test capability group
+            green; independent source review found no regression. After commit
+            `13673cdd`, root format, warnings-as-errors compile, strict Credo
+            (1,092 source files, no issues), and unused-dependency gates pass.
           - [ ] Implement the reviewed context-bearing ordered input overloads
             and opt-in provider callback, with staged/accepted/rejected context
             handling; coordinate bounded origin retention with response/tools.
