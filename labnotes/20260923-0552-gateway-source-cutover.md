@@ -1,7 +1,8 @@
 # Gateway source cutover
 
-Status: design investigation for the existing unchecked STS source-time fence;
-no Gateway implementation or room hold acceptance is claimed.
+Status: Gateway provenance enablers and a receiver-owned WebRTC peer barrier
+are implemented in focused checkpoints; room hold/reopen acceptance remains
+unchecked.
 
 ## Reproduced problem
 
@@ -227,3 +228,86 @@ new epoch. An absolute execution deadline now rejects that late queued
 request, and the receiver test file passes 4/0. Caller-side closed state
 still has to handle an ambiguous reply-timeout race before this is usable
 as a live cutover.
+
+## Receiver-owned peer barrier implementation in progress
+
+The first receiver-local `rotate/4` API is removed from the current worktree:
+it permitted a caller to bypass the peer ordering barrier. A focused new
+red test called `bind_peer/3` before that API existed and failed with the
+expected undefined function (one test, one failure). The replacement receiver
+owns a fixed peer binding and calls `PeerConnection.controlling_process(peer,
+self())` itself. After the peer acknowledgement, it queues a private
+`{:commit_source_epoch, token}` marker, returns to its mailbox, forwards
+earlier peer RTP under the old epoch, and commits only at the marker. A
+monotonic absolute deadline is checked both when handling a queued request
+and before committing, so a timed-out suspended request cannot mutate later.
+The Connection binds its newly started peer before continuing startup.
+
+A fake peer GenServer reproduces the same sender/destination ordering: it
+sends non-media and RTP to Receiver before replying to Receiver's barrier
+call. The focused receiver test verifies old RTP, non-media passthrough,
+fresh RTP after the marker, stale-old-epoch rejection, peer-barrier error,
+unbound/different/dead peer rejection and the suspended/expired cutover case.
+The receiver file passes 6/0; receiver, STS-input and local HTTP WebRTC files
+pass 20/0 on seeds 0 and 1. These are protocol tests, not proof of a live
+room hold/reopen. The peer's public call has its
+dependency-owned five-second default timeout; a caller using a shorter
+deadline must fail closed, and the remaining room integration must not reopen
+on an ambiguous timeout. A first independent read-only review and an actual-
+peer off-heap challenge are recorded below; room integration remains pending.
+
+First independent read-only review reran the actual `ExWebRTC.PeerConnection`
+with Receiver's mailbox configured `message_queue_data: :off_heap`: 100/100
+old/fresh epoch trials held after 64 senders × 4,000 warmup messages and
+16 senders × 100 contention messages per trial. The probe emits RTP from
+inside the actual peer via `:sys.replace_state`, preserving the peer's sender
+identity while avoiding a remote ICE/media fixture; it compares forwarded
+epoch references before and after the receiver-owned cutover. This is the
+same adversarial signal-buffer method that broke the rejected Connection-side
+barrier, and is a diagnostic challenge rather than a default test. Six
+additional local probes found no defect in wrong rebinding, dead peer,
+peer death during barrier, receiver death, late peer reply after timeout or
+owner death. A production startup probe confirmed the Connection binds its
+exact peer and rejects wrong-peer RTP downstream. The reviewer observed that
+a caller deadline shorter than ExWebRTC's five-second peer-call timeout leaves
+Receiver processing blocked until that peer call returns, even though the
+absolute deadline prevents a late epoch commit. This is a remaining caller-
+side timing/availability contract, not evidence of a completed room release.
+
+An explicit Codex Astra xhigh read-only review independently reran the
+20-test Gateway receiver/STS-input/HTTP group, 100/100 actual-peer off-heap
+trials and six lifecycle/timeout diagnostics; it reproduced no defect in the
+receiver-owned cutover. Its startup probes passed 5/5, including exact
+Connection/Receiver/peer binding and sibling shutdown on peer/Receiver death.
+It separately reran the already-known external/hybrid room-control reds:
+`timeout 45s mix test test/vxpipe/call_engine/room_authority/sts_transcript_modes_test.exs:93
+test/vxpipe/call_engine/room_authority/sts_transcript_modes_test.exs:105 --seed 0`
+from the Call Engine child. Both fail because no STS reply reaches the room
+sink; they are not Gateway regressions and remain outside this commit.
+
+Reproducible off-heap challenge recipe for future teammate development:
+run a bounded inline ExUnit diagnostic under `MIX_ENV=test mix run --no-start
+--no-compile` in `apps/vxpipe_gateway`, with real `ExWebRTC.PeerConnection`
+controlling a `SourceReceiver`. Inside Receiver's `:sys.replace_state`, set
+`Process.flag(:message_queue_data, :off_heap)`. Warm its queue with 64 tasks
+each sending 4,000 benign messages and await them all. Suspend the peer;
+start a cutover in another task and trace Receiver's `{:controlling_process,
+receiver}` GenServer call into the peer before continuing. Add 16 tasks of
+100 benign sends. Inside the actual peer's `:sys.replace_state`, send to its
+current owner valid RTP sequence 1, one non-media notification, then RTP
+sequence 2. Resume the peer. Require cutover `:ok` and observe, in order,
+old-epoch RTP/1, unchanged non-media and old-epoch RTP/2; then emit RTP/3
+inside the same peer and require the fresh epoch. Reject an old-epoch second
+cutover as stale. Tear down both children and repeat 100 times. A separate
+late-ack variant uses a 30-ms caller deadline, waits for timeout, then
+resumes the peer and checks that old RTP keeps the old epoch. This exact
+method formerly exposed the rejected cross-sender race; it does not assert
+real ICE/DTLS capture timing.
+
+The review measured one important bound: when a peer is suspended, a 30-ms
+cutover caller times out while Receiver remains inside ExWebRTC's fixed
+five-second peer call; non-media waits about 5,001 ms. The old epoch stays
+intact, but a future live caller must choose a compatible deadline, keep
+downstream admission closed on uncertainty and treat Receiver availability
+as part of its recovery contract. The same limitation is left visible in
+the milestone task.

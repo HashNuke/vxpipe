@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.Gateway.Media.STSInput
   alias Vxpipe.Gateway.WebRTC.Connection.Readiness
   alias Vxpipe.Gateway.WebRTC.Connection.SourceAudio
+  alias Vxpipe.Gateway.WebRTC.SourceReceiver
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -115,6 +116,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
              source_receiver,
              Keyword.fetch!(options, :ice_servers)
            ),
+         :ok <- SourceReceiver.bind_peer(source_receiver, peer_connection, 1_000),
          {:ok, output_track} <- add_output_track(peer_connection),
          {:ok, audio_egress} <-
            ConnectionPeerSupervisor.start_audio_egress(

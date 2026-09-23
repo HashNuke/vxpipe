@@ -833,10 +833,17 @@ the existing audio round trip. Record discoveries here before implementing.
                         new epoch. A stale second rotation cannot rewrite it.
                         Also prove a timed-out queued rotation cannot apply
                         after the caller has failed closed. Current focused
-                        proof covers receiver-mailbox ordering, stale calls and
-                        late queued timeout; a reply-timeout race still needs
-                        caller-side fail-closed proof. This is receiver-local,
-                        not the peer barrier or room cutover.
+                        proof uses a receiver-owned peer call and a post-ack
+                        mailbox marker; fake-peer tests cover old/fresh RTP,
+                        non-media order, stale calls, peer-barrier error and
+                        late queued timeout. The Connection binds its initial
+                        peer. Independent real-peer off-heap (100/100 trials),
+                        peer/receiver-death and startup probes found no defect;
+                        caller-side fail-closed proof remains open. The peer
+                        API's fixed five-second call can keep Receiver busy
+                        after a shorter caller deadline; live coordination
+                        must use a compatible budget and stay closed on
+                        uncertainty. This is not a room hold/reopen cutover.
                   - [ ] Red-test Twilio and Telnyx raw media queued at their
                     WebSock callbacks before cutover, including a separately
                     delayed Leg dispatch. Stamp one immutable source epoch
