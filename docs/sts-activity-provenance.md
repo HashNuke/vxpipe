@@ -72,10 +72,40 @@ rejected before queueing. Current WebRTC and telephony Gateway paths preserve
 the frame, not when raw media enters the callback mailbox. Astra xhigh
 reproduced pre-reopen raw messages first handled afterward receiving a fresh
 timestamp and bypassing the cutoff. The cutoff conservatively rejects
-equal-millisecond frames; a source-issued generation, enqueue-time stamp or
-acknowledged upstream drain remains necessary. Room-owned ordering of close,
-native retirement, fresh readiness and release also remains unproven, so this
-is not the completed cutover contract above.
+equal-millisecond frames. Room-owned ordering of close, native retirement,
+fresh readiness and release also remains unproven, so this is not the
+completed cutover contract above.
+
+The reviewed next boundary is an acknowledged **source-admission epoch**,
+separate from the STT native allocation generation and transfer generation.
+An upstream owner fixes that epoch before handing media to an asynchronous
+consumer; a downstream handler must never read a mutable current epoch and
+apply it to older queued bytes. During cutover, close ingress and revoke the
+old source epoch, hold/fence the source with an acknowledgement, retire the
+old recognizer, bind the fresh ready STT origin while closed, arm a fresh
+source epoch with an acknowledgement, then reopen ingress. Timeout, owner
+death, stale acknowledgement or another active hold leaves input closed.
+Selected-STT reopening cannot clear a transfer's independent hold.
+
+For WebRTC, the ExWebRTC peer's controlling-process notifications are the
+earliest project-usable handoff. A per-epoch receiver is one possible way to
+keep already-emitted notifications on their old epoch; merely relaying them
+through a process that reads a mutable epoch would preserve the bug. A peer
+ordering barrier or owner switch needs proof that old notifications cannot
+overtake its acknowledgement and that non-media peer notifications retain
+their required ordering. For telephony, the WebSock callback must assign the
+epoch before asynchronous SocketDispatch, then carry it unchanged through
+Leg to MediaSession. While held, stale media may be dropped with successful
+dispatch acknowledgement, but marks, readiness and lifecycle messages must
+continue. An acknowledgement at the socket alone does not drain already
+queued Leg events. Synchronous nested calls can form a Leg/MediaSession cycle;
+the implementation must prove its ordering without such a cycle.
+
+This is a reviewed design candidate, not implemented acceptance. It fences
+project-observable queues at the stated admission boundary; it does not prove
+when a remote microphone captured audio, when a packet entered ICE/DTLS, or
+when TCP bytes arrived before a WebSock callback. Those upstream limits must
+be stated in tests and in the final acceptance claim.
 
 The producer-side slice preserves the native STT event's allocation
 generation and turn reference plus the source's audio-input/output intervals
@@ -121,6 +151,11 @@ an end that prompts an old reply.
 - Query STT origin on each frame push as a substitute for source admission.
   It can stamp previously received audio with a fresh allocation generation,
   and the current five-second query would block a media caller on the hot path.
+- Stamp raw media only when the Gateway callback eventually handles it, or
+  pass it through a relay that consults a mutable current epoch. Both relabel
+  already-queued old bytes after reopening.
+- Treat a socket-only acknowledgement as a telephony drain. An older dispatch
+  may still be waiting in Leg's asynchronous mailbox.
 - Rotate a generation while keeping the same provider session. A provider
   event first surfaced after reopen could still describe audio from before it.
 - Clear only the ingress queue. One PCM envelope may already be in the STT
@@ -140,7 +175,10 @@ revision as a substitute.
 Focused reds must cover emitted old signals delayed across hold/release, old
 provider evidence first produced afterward, audio-only revoke/regrant while
 transcripts remain demanded, already-sent PCM crossing allocation replacement,
-queued and pre-cutoff frames, both enforcer orders, unchanged-policy rebase,
+queued and pre-cutoff frames, raw WebRTC RTP and Twilio/Telnyx callback backlog
+(including Leg backlog), stale/duplicate/wrong-source acknowledgements, source
+timeout/death, fresh media overtaking an arm acknowledgement, overlapping
+transfer hold, both enforcer orders, unchanged-policy rebase,
 failure-closed readiness, and compiled external/hybrid room response timing.
 The first capability red (`selected activity STT resets its provider on
 audio-route loss despite transcript demand`) failed 1/1 because no new provider

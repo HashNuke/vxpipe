@@ -793,12 +793,35 @@ the existing audio round trip. Record discoveries here before implementing.
                   callback mailbox before reopen but is first handled afterward.
                   Handler-time `received_at` stamps can label that old payload
                   as new; prove both transports with a suspended callback and
-                  use an enqueue-time/source-issued generation or an
-                  acknowledged upstream drain before claiming full cutover.
+                  use an immutable source-admission epoch fixed before
+                  asynchronous forwarding, or an acknowledged upstream drain
+                  that proves the same boundary, before claiming full cutover.
                   Scoped Astra xhigh reproduced this bypass with queued raw
                   messages; an old frame carrying its original timestamp was
                   correctly rejected by ingress. This is part of the existing
                   source-time fence, not a new product feature.
+                  - [ ] Red-test raw WebRTC RTP queued before cutover and first
+                    handled after reopen. Fence the ExWebRTC notification at
+                    its source-admission boundary, preserve non-media ordering,
+                    and prove old packets cannot acquire the fresh STT origin
+                    while a genuinely fresh packet still reaches it. Test the
+                    same peer identity across hold, adoption and release.
+                  - [ ] Red-test Twilio and Telnyx raw media queued at their
+                    WebSock callbacks before cutover, including a separately
+                    delayed Leg dispatch. Stamp one immutable source epoch
+                    before asynchronous SocketDispatch and carry it through
+                    Leg to MediaSession; stale media drops successfully without
+                    killing the socket, while marks and lifecycle events remain
+                    responsive during the hold.
+                  - [ ] Coordinate close, source hold/fence acknowledgement,
+                    native STT retirement, fresh origin binding, source arm
+                    acknowledgement and ingress reopen. Fail closed on source
+                    timeout, death, wrong/stale acknowledgement or overlapping
+                    transfer hold; STT release must not override transfer hold.
+                    Use explicit barriers rather than sleeps and state precisely
+                    which local queues are fenced. Do not claim remote capture,
+                    ICE/DTLS buffering or TCP receipt-time guarantees from
+                    these local tests.
             - [x] First reject policy-stale, already-sent PCM with captured
               STT and source audio-input/output intervals at capability
               delivery. A focused owning test captured a real ingress envelope
