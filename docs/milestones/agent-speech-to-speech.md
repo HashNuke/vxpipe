@@ -780,6 +780,20 @@ the existing audio round trip. Record discoveries here before implementing.
     monitors the same room incarnation before and after the buffer crash;
     its three-test file and the 1,409-test call-engine child suite pass with
     zero failures (30 integration exclusions). See the live-inspection labnote.
+  - [x] Reproduce the Morse STS conversation helper's 100 ms ready wait under
+    the full call-engine child suite at seed 473663, while its focused test
+    passes. Replace only that test-owned startup wait with a bounded interval
+    justified by the local supervised/provider initialization contract; keep
+    runtime deadlines unchanged, and rerun the focused test plus the same-seed
+    child suite before claiming the gate green.
+    - [x] Confirm the exact same-seed full-suite failure twice and the focused
+      one-test pass; locate the default 100 ms `assert_receive` in `start_session`.
+    - [x] Use an explicit bounded readiness wait, then prove the focused and
+      same-seed full child suites without changing production timeouts. The
+      focused test passes 1/0 and the seed-473663 child suite passes 1,414/0
+      (30 integration exclusions). The helper now waits at most 1,000 ms for
+      asynchronous local readiness; no runtime deadline changed. See the
+      Morse-readiness labnote.
   Isolated rerun of the exact two cases passes (two tests, seed 0, 158.9 s),
   which does not explain or repair the failures. Follow-up tasks:
   - [x] For STT release-loss injection, establish that RoomAuthority has received

@@ -53,7 +53,7 @@ defmodule Vxpipe.CallEngine.Speech.MorseSTSConversationTest do
 
     {:ok, session, :starting} = Session.start(CapabilityTree.scope(scope), options)
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message, 1_000
     send(self(), message)
 
     session
