@@ -2988,6 +2988,18 @@ zero failures, 42 excluded, seed 0. See
   - [ ] Complete the post-commit root rerun for this repair and record the
     actual final summary; do not infer a passing umbrella gate from the green
     Persistence child suite.
+  - [ ] Investigate the separate post-`dc394717` Call Engine root failure in
+    `SpeechToSpeechOutputSTTTest`'s multi-segment finite-input case (1 failure
+    among 1,501 tests). Its isolated case, whole file and 30 focused repeats
+    pass; the root run was stopped during Gateway after the failing Call Engine
+    summary and is not a full gate. Reproduce the exact failing interleaving
+    or capture its unmatched `GenServer.call` result under bounded adjacent
+    concurrency before changing runtime or test deadlines. Keep any repair
+    focused and rerun the full root gate afterward. A 99-test adjacent
+    capability/speech group passes ten consecutive seed-0 repetitions; this
+    does not explain the root-only failure. The complete Call Engine child
+    suite then passes 1,501/0 (30 excluded), seed 0; its one root-context
+    failure remains intermittent and unclaimed as a code defect.
 
   Google interruption checkpoint `d400edfa` passes post-commit root format,
   warnings-as-errors compile, strict Credo, and unused-dependency checks. The
