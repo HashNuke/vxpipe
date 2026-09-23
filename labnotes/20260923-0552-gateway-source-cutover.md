@@ -166,3 +166,64 @@ exit 0. Root `mix test` exits 1 before tests during Persistence test-database
 creation because local PostgreSQL SCRAM authentication lacks a configured
 password. No credential was changed or logged. This remains an environment
 blocker for the umbrella test gate, not a runtime regression attribution.
+
+## Rejected Connection-side barrier and candidate receiver-owned cutover
+
+`PeerConnection.controlling_process(peer, same_receiver)` is a documented
+synchronous call that processes in the peer GenServer without replacing its
+notification owner. The first candidate called it from Connection and then
+asked Receiver to rotate. That is **rejected**: Astra xhigh reproduced an RTP
+notification emitted by the peer before the barrier but processed after the
+Connection-to-Receiver rotate under OTP off-heap signal contention. The peer
+sends RTP to Receiver and its reply to Connection, so this is not a same-
+sender/destination ordering guarantee. The old receiver-local test sends RTP
+and rotate from one test process and cannot disprove this cross-sender race.
+
+Reproduction method to retain for future teammate work: run an actual local
+ExWebRTC peer with the current receiver configured `message_queue_data:
+:off_heap`; warm its signal queue with 64 concurrent senders of 4,000 benign
+messages. From inside the peer process, emit one raw RTP notification to its
+owner using `:sys.replace_state` without changing peer state. From Connection,
+call `PeerConnection.controlling_process(peer, same_receiver)` and then the
+old `SourceReceiver.rotate` API while coordinating receiver suspension with
+send tracing. Compare the old packet's forwarded epoch to the old and fresh
+references. Astra observed `actual == fresh`; the parent reran the bounded
+probe on OTP 28.5 and reproduced `fresh?: true` on trial 1 (exit 0). This is a
+diagnostic probe, not a default test: it uses VM signal-buffer contention and
+dependency state instrumentation. See the
+[OTP signal ordering contract](https://www.erlang.org/docs/28/system/ref_man_processes.html)
+and the
+[OTP parallel-signal explanation](https://www.erlang.org/blog/parallel-signal-sending-optimization/).
+The fix's focused tests must encode the project protocol deterministically, and
+the off-heap challenge should be rerun as a separate adversarial check.
+
+The revised candidate has Receiver call the peer itself, queue a private
+post-ack commit marker, return to its loop to process older notifications,
+then commit the new epoch at that marker. Mutating on the nested call return
+would still be unsafe because selective receive can leave RTP unhandled.
+Astra's in-memory challenge held the old epoch through 100 off-heap trials;
+that is design evidence, not a committed regression or live room proof.
+Peer/receiver timeout, operation token, absolute deadline and downstream
+fail-closed state still need implementation. Avoid synchronous
+RoomAuthority→Connection calls that could cycle with Connection→room input
+preparation. ICE/DTLS packets not yet delivered to the peer are outside this
+local mailbox guarantee.
+
+Receiver-local red/green: the focused rotation test failed 1/1 because
+`SourceReceiver.rotate/4` did not exist. It now passes 3/0 in the receiver
+test file. The call requires the exact old epoch and a positive bounded
+timeout; a stale second call leaves the fresh epoch intact. The test queues
+old RTP before the rotation call and verifies old/fresh envelopes. This
+does not include a peer barrier or any room/Gateway release path.
+
+Timeout hazard reproduced before committing: `GenServer.call` timeout does not
+remove a queued `{:rotate, old, new}` from the receiver mailbox. If the
+receiver is suspended longer than the caller timeout, it may later apply the
+rotation despite the caller reporting failure. The existing milestone timeout
+task now explicitly requires a late-queued-call reproduction and execution-
+deadline check. The focused suspended-receiver red failed 1/1: after the
+10-ms call timed out and the receiver resumed, its next RTP carried the
+new epoch. An absolute execution deadline now rejects that late queued
+request, and the receiver test file passes 4/0. Caller-side closed state
+still has to handle an ambiguous reply-timeout race before this is usable
+as a live cutover.

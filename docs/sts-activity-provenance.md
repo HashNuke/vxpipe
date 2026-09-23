@@ -115,6 +115,38 @@ envelopes are dropped. This is not yet an acknowledged owner switch, old
 receiver drain, or room-coordinated hold/reopen. The same peer identity and
 non-media order across an actual switch remain acceptance work.
 
+A same-receiver design avoids changing ExWebRTC's controlling process and
+accumulating old receivers, but a **Connection-side** peer call followed by a
+receiver rotate is unsafe. The peer sends RTP to Receiver and its call reply
+to Connection. OTP does not guarantee transitive delivery order across those
+two destinations and the subsequent Connection-to-Receiver request. Astra
+xhigh reproduced an old peer-emitted RTP notification stamped with the fresh
+epoch under off-heap signal buffering and contention, even though the peer
+call completed before Connection requested rotation. An ordinary notification
+already in Receiver's mailbox stays ahead of the call; the bypass concerns
+signals not yet delivered into that mailbox. This is still inside the local
+peer/receiver boundary, not ICE/DTLS backlog.
+
+The narrower candidate is receiver-owned: while downstream admission is
+closed, Receiver itself calls the peer's documented controlling-process API
+with the **same** receiver. After the peer reply, Receiver queues a private
+normal commit marker, returns to its mailbox loop, processes preceding RTP
+with the old epoch, then commits the new epoch at that marker and acknowledges
+Connection. It must not mutate the epoch immediately in the nested call's
+selective receive. Exact operation tokens, absolute deadlines and fail-closed
+handling of ambiguous timeouts remain required. This candidate preserves
+non-media delivery on one owner but is not yet implemented or accepted.
+
+The receiver-local part of the old candidate has an exact-old-epoch rotation
+call. A focused test queues RTP before the call, observes the old epoch in
+its forwarded envelope, then the new epoch on later RTP; a repeated stale
+rotation fails. The peer barrier and downstream fail-closed sequencing are
+not implemented. The call now carries an absolute execution deadline so a
+queued request cannot mutate the receiver
+after the caller has given up. A reply-timeout race still requires the caller
+to remain closed. This does not authorize rotating a live source during a
+call yet.
+
 The first telephony enabler now stamps decoded media with a monotonic time
 and private socket-lifetime epoch before SocketDispatch; Leg preserves the
 packet and MediaSession carries that evidence into the input `AudioFrame`.

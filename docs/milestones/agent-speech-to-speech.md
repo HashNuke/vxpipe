@@ -814,6 +814,29 @@ the existing audio round trip. Record discoveries here before implementing.
                       keeps its old epoch after a successor starts. This does
                       not yet switch receivers on hold/reopen or prove drain
                       ordering with a live peer.
+                    - [ ] Prove a bounded, acknowledged same-peer cutover:
+                      close downstream admission, have the receiver obtain the
+                      ExWebRTC peer acknowledgement and commit its new epoch
+                      only after an internal post-ack mailbox marker; reopen
+                      only after the fresh native STT origin is ready. Reproduce queued
+                      old RTP, fresh RTP, non-media order, wrong/stale
+                      acknowledgements, peer/receiver death and timeout with
+                      explicit barriers. A Connection-side peer call followed
+                      by a receiver rotate is rejected: Astra reproduced old
+                      peer RTP stamped with the fresh epoch under off-heap
+                      signal contention because the peer reply and RTP target
+                      different processes. The receiver-owned marker protocol
+                      is only a candidate until those probes pass.
+                      - [ ] Add an exact-old-epoch acknowledged receiver
+                        rotation and prove one already-queued RTP notification
+                        leaves with the old epoch while a later one carries the
+                        new epoch. A stale second rotation cannot rewrite it.
+                        Also prove a timed-out queued rotation cannot apply
+                        after the caller has failed closed. Current focused
+                        proof covers receiver-mailbox ordering, stale calls and
+                        late queued timeout; a reply-timeout race still needs
+                        caller-side fail-closed proof. This is receiver-local,
+                        not the peer barrier or room cutover.
                   - [ ] Red-test Twilio and Telnyx raw media queued at their
                     WebSock callbacks before cutover, including a separately
                     delayed Leg dispatch. Stamp one immutable source epoch
