@@ -396,3 +396,22 @@ and unused-lock checks pass. Root `mix test` again stops before the Persistence
 suite because PostgreSQL SCRAM requires a local password that is not configured;
 do not count this as a passing umbrella test gate. The intentionally red
 compiled-room external/hybrid tests remain unstaged for the next slice.
+
+Next design/red checkpoint: the two compiled-room external/hybrid focused
+tests still fail 2/2 because selected human-STT end does not deliver a reply
+to the STS room sink. Before room wiring, I added a focused selected-STT PCM
+test requiring native allocation generation on an otherwise current-interval
+envelope. It failed 1/1: capability acknowledged `:ok` and the fake provider
+received the payload. This test is deliberately uncommitted/red pending the
+matching ingress-admission implementation.
+
+Astra xhigh read-only cutover review reproduced a separate old-frame relabel:
+a delayed frame with its pre-replacement origin was rejected, but querying
+origin after replacement labeled that same old frame with the new generation
+and intervals and allowed delivery. The design therefore uses room-owned
+close/retire/readiness/open acknowledgement, explicit admission installed in
+ingress, immutable admission captured at enqueue, capability generation check,
+and an upstream received-before-open fence. Per-frame origin queries are not
+cutover proof and can block a media caller. This design review is separate
+from implementation acceptance; both enforcer orders and hold/reopen remain
+unproven.

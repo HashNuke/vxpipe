@@ -46,6 +46,18 @@ existing `AudioFrame.received_at` is a possible seam only if every source
 preserves its original timestamp; a source-issued generation is stronger. Both
 policy-enforcer application orders need focused proof.
 
+The reviewed admission shape is explicit and room-owned: close ingress,
+acknowledge native STT retirement, wait for a fresh ready allocation, then
+install its exact origin at ingress open. Ingress freezes that admission when
+each frame is enqueued; capability compares the frozen native generation and
+scoped policy intervals before provider delivery. The hot path does not query
+STT for each frame. A separate source-side fence rejects an old frame received
+before reopen but first pushed afterward. Read-only review reproduced why a
+query at push is insufficient: the same delayed old frame was rejected with
+its pre-replacement origin, then accepted when a post-replacement query labeled
+it with the fresh generation and intervals. This is design evidence, not
+implemented cutover acceptance.
+
 An enabling interval-proof slice now captures the ingress snapshot's STT,
 audio-input and audio-output intervals in each asynchronous PCM envelope and
 rejects a mismatch at capability delivery. A focused test first reproduced an
@@ -95,6 +107,9 @@ an end that prompts an old reply.
   already-emitted old evidence after hold/release.
 - Stamp only the current STT transcript interval. Audio-only route changes can
   leave that interval unchanged.
+- Query STT origin on each frame push as a substitute for source admission.
+  It can stamp previously received audio with a fresh allocation generation,
+  and the current five-second query would block a media caller on the hot path.
 - Rotate a generation while keeping the same provider session. A provider
   event first surfaced after reopen could still describe audio from before it.
 - Clear only the ingress queue. One PCM envelope may already be in the STT

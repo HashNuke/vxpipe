@@ -745,6 +745,23 @@ the existing audio round trip. Record discoveries here before implementing.
             allocation/input generation and reject a stale envelope before
             provider delivery; prove queued, in-flight, pre-reopen frames and
             both policy-enforcer orders.
+            - [ ] Require a selected-activity PCM envelope to carry the exact
+              current native allocation generation at capability delivery;
+              missing or stale generations fail closed even when policy
+              intervals still match. Preserve transcript-only compatibility.
+            - [ ] Capture the generation and ingress lifecycle at frame
+              admission, not when an old queued frame is dispatched. Recheck
+              both before provider delivery and fence upstream pre-reopen
+              frames; prove both enforcer orders and in-flight acknowledgement.
+              - [ ] Use an explicit, room-owned input admission after ingress
+                closure, acknowledged native STT retirement and fresh readiness.
+                Install that admission at ingress open; do not query the STT
+                capability per frame or relabel a delayed source frame with a
+                newly queried generation. A source-time/generation fence must
+                reject frames received before reopening, even if pushed later.
+                Separate Astra xhigh design review reproduced the old-frame
+                relabel caused by querying after replacement; this is not
+                implementation or hold/reopen acceptance evidence.
             - [x] First reject policy-stale, already-sent PCM with captured
               STT and source audio-input/output intervals at capability
               delivery. A focused owning test captured a real ingress envelope
