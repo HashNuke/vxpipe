@@ -241,3 +241,37 @@ seed 1. Astra xhigh re-reviewed the Gateway repair and cleared the scoped
 change with no remaining reproduced actionable issue: Gateway 11/0 and STT
 ingress/capability 30/0, both seed 0. The parent generation/hold cutoff
 remains open.
+
+Producer-side signal provenance red: a selected activity STT emitted a
+`turn_started` signal without its native allocation generation, turn reference
+or source audio intervals (focused 1/1 expected KeyError). The scoped change
+copies `Speech.Event` generation/turn reference and current source audio
+intervals into the private signal immediately after native event acknowledgement.
+The focused test now passes and checks matching start/transcript/end origin,
+unchanged origin through an unrelated membership revision, a fresh generation
+after audio-only revoke/regrant, and unchanged captured old evidence. The
+adjacent ingress/capability/room group passes 58/0 on seeds 0 and 1. Astra
+xhigh scoped review is pending. This is not the STS epoch binding, native PCM
+cutover or room-control acceptance.
+
+Astra xhigh reviewed the metadata slice with 23 passing focused tests and
+five in-memory probes. It reproduced one important limit: suspend the STT
+capability, enqueue a recording-only policy change, then emit a native end
+from the still-live provider before resuming. The native end remained on the
+old allocation, but capability-emission stamping assigned the new audio-input
+interval. This is not true audio-origin proof. The issue was recorded in the
+milestone before the follow-up behavior change. A focused owning test repeated
+the exact queued-native-event sequence and failed 1/1: no replacement started,
+and the old end was published under input interval 1. The shared selected-
+activity authority check now also compares scoped source audio-input/output
+intervals, so recording-only changes retire the old provider and discard its
+queued event. The focused test passes and the adjacent 61-test demand/ingress/
+capability/room group passes on seeds 0 and 1. This intentionally supersedes
+the earlier recording-only no-restart expectation for selected activity STT;
+non-selected STT behavior is unchanged. Independent review of this follow-up
+found no remaining reproduced actionable defect. Astra xhigh ran 76 tests
+and 15 in-memory probes (seed 0) covering both policy-enforcer orders,
+prepared recording-policy replacement/rebase/adoption, intervening interval
+invalidation, ingress queue clearing, stale envelopes/acknowledgements and
+legacy non-selected behavior. It did not claim native PCM generation/cutoff,
+checked retirement, hold or room-control acceptance.

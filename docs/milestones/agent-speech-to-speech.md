@@ -679,6 +679,35 @@ the existing audio round trip. Record discoveries here before implementing.
           intervals. The room must compare that frozen evidence with the exact
           active source/controller epoch; it must never stamp a delayed signal
           with the epoch current at delivery.
+          - [x] Preserve the native STT event's allocation generation and turn
+            reference plus exact source audio intervals in the private signal
+            when the STT capability emits it. Prove an already-emitted signal
+            retains its old evidence after audio-only route loss/regrant and
+            an unrelated revision does not rotate its allocation. This is
+            producer evidence only; STS epoch binding and room acceptance
+            remain separate. Focused red failed 1/1 on missing generation;
+            the 58-test adjacent group passed seeds 0 and 1 before the
+            follow-up below. Astra xhigh found no defect in that narrow
+            capability-emission metadata contract after 23 tests and five
+            probes, but reproduced the delayed-native interval race below.
+          - [x] Reproduce native STT evidence delayed before capability
+            processing across an audio-input interval change that keeps the
+            recognizer alive (for example recording-only policy). Capability-
+            emission stamping can otherwise relabel old native evidence with
+            the new interval. For selected activity, retire the native
+            allocation on any scoped source audio-input/output interval change
+            before accepting a new controller interval; this supersedes the
+            earlier recording-only no-restart assumption, while unrelated
+            membership revisions still retain the allocation. Prove the
+            queued old native end is not published under the new interval,
+            and include prepared-policy/ingress consistency before room
+            control consumes these fields. The focused native-end red failed
+            1/1 with old generation/turn reference but input interval 1; the
+            shared reset makes it green, and the 61-test adjacent group passes
+            seeds 0 and 1. Astra xhigh scoped re-review passed 76 tests and
+            15 probes covering both enforcer orders, prepared rebase/adoption,
+            stale ingress envelopes and unrelated membership retention. This
+            does not prove checked retirement, hold/reopen or native PCM cutoff.
         - [ ] Reproduce and fence stale provider evidence when the selected
           STS audio route changes but transcript demand keeps STT alive. A
           retained recognizer could emit an old boundary after revoke/regrant;

@@ -1,10 +1,11 @@
 # STT-owned activity provenance for room STS
 
-Status: reviewed design candidate, not implemented room control. The initial
-selected-STT demand checkpoint is committed; a focused red reproduced the
-remaining transcript-demand/audio-route provider-retention gap. The provider
-reset change in the worktree is only an enabling slice. Ingress cutover,
-allocation binding, hold/release and room acceptance remain open.
+Status: reviewed design candidate, not implemented room control. Selected-STT
+demand, audio-route provider reset, and the ingress policy-interval proof are
+committed enabling slices. Native allocation/input cutover, hold/release and
+room acceptance remain open. Scoped capability-emission signal metadata and
+recording-only retirement checks pass, but they are not a room controller
+binding.
 
 ## Decision
 
@@ -39,6 +40,23 @@ old envelope reaching a replacement provider, then proved old rejection and
 fresh delivery. This does not yet qualify the native allocation generation,
 fence pre-reopen frames, or coordinate hold; it must not be treated as the
 completed cutover contract above.
+
+The next producer-side slice preserves the native STT event's allocation
+generation and turn reference plus the source's audio-input/output intervals
+in each private signal at capability emission. This is immutable evidence for
+later room comparison; it does not itself authorize external activity or bind
+the selected STS epoch. The room must not infer a missing epoch from its state
+when a delayed signal arrives.
+
+Capability-emission stamping is not evidence of audio origin if a native event
+waits across a policy change while its provider allocation remains alive. A
+focused queued-native-end reproduction found exactly that on a recording-only
+change: the old end acquired the new audio-input interval. Selected activity
+STT now retires its provider on any scoped source audio-input/output interval
+change, including recording-only changes, so a queued event from that old
+allocation is rejected. This relies on successful session retirement and does
+not solve hold/reopen, pre-cutoff PCM or native evidence first produced by a
+provider that is allowed to survive another lifecycle boundary.
 
 Hold, route loss, source replacement and transfer retire the room controller
 association before a new interval opens. Under the current STT provider

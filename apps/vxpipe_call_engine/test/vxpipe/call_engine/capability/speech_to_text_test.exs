@@ -370,7 +370,132 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     }
 
     assert :ok = Enforcer.apply(capability, unrelated, 500)
+    assert_receive {:test_stt_transport_started, fourth, _connection}
+    assert fourth != third
+  end
+
+  test "selected STT activity signals retain native origin and source audio intervals" do
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+
+    capability =
+      start_capability_process(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert_receive {:test_stt_transport_started, first, _connection}
+    assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(first, connected_message("first", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    TestSpeechToTextTransport.deliver(first, turn_message("StartOfTurn", 1, "old"))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started} = old_start}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated} = old_text}
+
+    old_generation = old_start.allocation_generation
+    old_turn = old_start.turn_ref
+    assert is_reference(old_generation)
+    assert is_reference(old_turn)
+    assert old_text.allocation_generation == old_generation
+    assert old_text.turn_ref == old_turn
+    assert old_start.audio_input_interval == 0
+    assert old_start.audio_output_interval == 0
+
+    unrelated = %{
+      active
+      | revision: 1,
+        present_participant_ids: MapSet.new(["part-human", "part-agent", "part-support"])
+    }
+
+    assert :ok = Enforcer.apply(capability, unrelated, 500)
     refute_receive {:test_stt_transport_started, _, _}
+    TestSpeechToTextTransport.deliver(first, turn_message("Update", 2, "updated"))
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated} = rebased}
+
+    assert rebased.allocation_generation == old_generation
+    assert rebased.turn_ref == old_turn
+    assert rebased.audio_input_interval == 0
+    assert rebased.audio_output_interval == 0
+
+    TestSpeechToTextTransport.deliver(first, turn_message("EndOfTurn", 3, "old final"))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_ended} = old_end}
+    assert old_end.allocation_generation == old_generation
+    assert old_end.turn_ref == old_turn
+
+    denied = %{unrelated | revision: 2, effective: %{unrelated.effective | audio_routes: %{}}}
+    assert :ok = Enforcer.apply(capability, denied, 500)
+    assert_receive {:test_stt_transport_started, denied_provider, _connection}
+    assert denied_provider != first
+
+    restored = %{unrelated | revision: 3}
+    assert :ok = Enforcer.apply(capability, restored, 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    assert replacement != denied_provider
+    TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    TestSpeechToTextTransport.deliver(replacement, turn_message("StartOfTurn", 1, "new"))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started} = fresh}
+
+    assert fresh.allocation_generation != old_generation
+    assert fresh.turn_ref != old_turn
+    assert fresh.audio_input_interval > 0
+    assert fresh.audio_output_interval > 0
+    assert old_start.audio_input_interval == 0
+    assert old_start.audio_output_interval == 0
+  end
+
+  test "a selected STT native end queued before an audio-interval change cannot inherit the new interval" do
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+
+    {capability, transport} =
+      start_capability(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("old", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    TestSpeechToTextTransport.deliver(transport, turn_message("StartOfTurn", 1, "old"))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started} = started}
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :transcript_updated}}
+
+    previous = :sys.get_state(capability)
+    provider = :sys.get_state(transport).owner
+    recording_off = %{active | revision: 1, effective: %{active.effective | record_audio: false}}
+    assert :ok = :sys.suspend(capability)
+
+    {request, native} =
+      try do
+        request =
+          :gen.send_request(
+            capability,
+            :"$gen_call",
+            {:vxpipe_apply_media_policy, recording_off}
+          )
+
+        TestSpeechToTextTransport.deliver(transport, turn_message("EndOfTurn", 2, "old end"))
+        _ = :sys.get_state(transport)
+        _ = :sys.get_state(provider)
+        {:messages, messages} = Process.info(capability, :messages)
+
+        assert {:vxpipe_speech, native} =
+                 Enum.find(messages, fn
+                   {:vxpipe_speech, %{kind: :turn_ended}} -> true
+                   _ -> false
+                 end)
+
+        assert native.generation == started.allocation_generation
+        assert native.turn_ref == started.turn_ref
+        assert :sys.get_state(capability).session == previous.session
+        {request, native}
+      after
+        :sys.resume(capability)
+      end
+
+    assert {:reply, :ok} = :gen.receive_response(request, 1_000)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    assert replacement != transport
+    assert :sys.get_state(capability).session != previous.session
+    native_turn = native.turn_ref
+    refute_receive {:vxpipe_stt_signal, ^capability, _, %Signal{turn_ref: ^native_turn}}
   end
 
   test "an STT ingress envelope admitted before route loss cannot enter the replacement provider" do

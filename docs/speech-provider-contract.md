@@ -383,9 +383,15 @@ requires producer-side lifecycle/audio provenance and delivery-side authority
 rechecks. The bound STS ingress/capability path now serializes and rechecks
 controls. STT PCM delivery now checks captured transcript and source audio
 intervals at the capability, but still lacks native allocation-generation and
-hold/reopen cutover proof. Current STT signals likewise lack that frozen
-provenance, and the room does not yet supply turn controls. This is a design
-candidate with open prerequisites, not room-level implementation; see the
+hold/reopen cutover proof. Private STT signals now preserve native allocation
+generation, turn reference and source audio intervals at capability emission;
+the room does not yet bind that evidence to an STS epoch or supply turn
+controls. Selected activity STT is retired when either scoped source audio
+interval changes, including a recording-only input-interval change, to avoid
+relabeling queued native events under the new interval. Checked retirement,
+hold/reopen cutover and room acceptance remain open. This is a design candidate
+with open prerequisites, not room-level
+implementation; see the
 [external room-control decision](sts-external-room-control.md) and
 [activity-provenance design](sts-activity-provenance.md).
 

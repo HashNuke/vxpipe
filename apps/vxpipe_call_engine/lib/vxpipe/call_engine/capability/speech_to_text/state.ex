@@ -197,13 +197,28 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       ) do
     with :ok <- Session.ack(session, event),
          {:ok, signal, state} <- semantic_signal(state, event) do
-      {:ok, signal, state}
+      {:ok, signal_provenance(signal, event, state), state}
     else
       _invalid -> {:error, :invalid_provider_event}
     end
   end
 
   def event(%__MODULE__{}, %Event{}), do: {:error, :stale_session}
+
+  defp signal_provenance(signal, event, state) do
+    source = state.identity.participant_id
+
+    %{
+      signal
+      | allocation_generation: event.generation,
+        turn_ref: event.turn_ref,
+        audio_input_interval: source_interval(state.policy, :audio_input, source),
+        audio_output_interval: source_interval(state.policy, :audio_output, source)
+    }
+  end
+
+  defp source_interval(nil, _kind, _source), do: nil
+  defp source_interval(policy, kind, source), do: Snapshot.interval(policy, kind, source)
 
   def adopt_prepared(%__MODULE__{session: session} = state, deadline) do
     case Session.adopt(session, self(), deadline) do

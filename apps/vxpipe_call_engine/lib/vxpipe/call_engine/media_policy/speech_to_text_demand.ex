@@ -32,7 +32,15 @@ defmodule Vxpipe.CallEngine.MediaPolicy.SpeechToTextDemand do
   def activity_authority_changed?(nil, _snapshot, _source, _agent), do: true
 
   def activity_authority_changed?(previous, snapshot, source, agent) do
-    activity_authority(previous, source, agent) != activity_authority(snapshot, source, agent)
+    activity_authority(previous, source, agent) != activity_authority(snapshot, source, agent) or
+      source_audio_intervals(previous, source) != source_audio_intervals(snapshot, source)
+  end
+
+  defp source_audio_intervals(snapshot, source) do
+    {
+      Snapshot.interval(snapshot, :audio_input, source),
+      Snapshot.interval(snapshot, :audio_output, source)
+    }
   end
 
   defp activity_authority(snapshot, source, agent) do

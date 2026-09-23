@@ -16,6 +16,10 @@ defmodule Vxpipe.CallEngine.Provider.SpeechToText.Signal do
   defstruct @enforce_keys ++
               [
                 :policy_revision,
+                :allocation_generation,
+                :turn_ref,
+                :audio_input_interval,
+                :audio_output_interval,
                 :request_id,
                 :provider_turn_index,
                 :audio_duration_ms,
@@ -38,6 +42,10 @@ defmodule Vxpipe.CallEngine.Provider.SpeechToText.Signal do
           kind: kind(),
           provider_sequence: non_neg_integer(),
           policy_revision: non_neg_integer() | nil,
+          allocation_generation: reference() | nil,
+          turn_ref: reference() | nil,
+          audio_input_interval: non_neg_integer() | nil,
+          audio_output_interval: non_neg_integer() | nil,
           request_id: String.t() | nil,
           provider_turn_index: non_neg_integer() | nil,
           audio_duration_ms: non_neg_integer() | nil,
