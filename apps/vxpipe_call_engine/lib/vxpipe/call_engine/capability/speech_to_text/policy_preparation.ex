@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   alias Vxpipe.CallEngine.MediaPolicy.{
     Authority,
     Candidate,
+    Effective,
     Intervals,
     Snapshot,
     SpeechToTextDemand
@@ -184,12 +185,29 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
          snapshot,
          :speech_to_text,
          state.identity.participant_id
-       ) do
+       ) and activity_authority_unchanged?(state, snapshot) do
       state
     else
       {:ok, state} = discard(state, state.pending_policy.token)
       state
     end
+  end
+
+  defp activity_authority_unchanged?(%{activity_agent_id: nil}, _snapshot), do: true
+  defp activity_authority_unchanged?(%{policy: nil}, _snapshot), do: false
+
+  defp activity_authority_unchanged?(state, snapshot) do
+    source = state.identity.participant_id
+    agent = state.activity_agent_id
+    activity_authority(state.policy, source, agent) == activity_authority(snapshot, source, agent)
+  end
+
+  defp activity_authority(snapshot, source, agent) do
+    {
+      MapSet.member?(snapshot.present_participant_ids, agent),
+      Effective.audio_route_permitted?(snapshot.effective, source, agent),
+      Effective.audio_route_permitted?(snapshot.effective, agent, source)
+    }
   end
 
   def prepared(%{pending_policy: %{state: session} = pending} = state, allocation, descriptor) do
@@ -313,10 +331,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   end
 
   defp resources(state) do
-    if SpeechToTextDemand.required?(
-         state.pending_policy.candidate.snapshot,
-         state.identity.participant_id
-       ) do
+    if demanded?(state, state.pending_policy.candidate.snapshot) do
       {:ok, resource, status} = State.readiness(state)
       [{resource, status}]
     else
@@ -327,15 +342,27 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   defp change(state, snapshot) do
     cond do
       state.policy_revision ==
-          Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) ->
+        Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) and
+          current_demand?(state) == demanded?(state, snapshot) ->
         :retain
 
-      SpeechToTextDemand.required?(snapshot, state.identity.participant_id) ->
+      demanded?(state, snapshot) ->
         :replace
 
       true ->
         :disable
     end
+  end
+
+  defp current_demand?(%{policy: nil}), do: false
+  defp current_demand?(state), do: demanded?(state, state.policy)
+
+  defp demanded?(state, snapshot) do
+    SpeechToTextDemand.required?(
+      snapshot,
+      state.identity.participant_id,
+      state.activity_agent_id
+    )
   end
 
   defp prepare_session(state, snapshot, :replace, options),

@@ -483,6 +483,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
            %SpeechToTextRuntime{
              call_id: plan.call_id,
              participant_id: participant.participant_id,
+             activity_agent_id:
+               Vxpipe.CallEngine.SpeechToTextActivitySource.controller_agent_id(
+                 plan,
+                 participant.participant_id
+               ),
              activation_id: participant.activation_id,
              provider: runtime_provider,
              provider_private: provider_private,

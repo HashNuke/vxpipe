@@ -190,7 +190,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
             provider: provider,
             provider_private: private_init,
             usage: usage
-          ] ++ Keyword.take(initialization_options, [:initial_policy, :preparation])
+          ] ++
+          Keyword.take(initialization_options, [:initial_policy, :preparation, :activity_agent_id])
 
       tree_options = [
         owner: room_authority,

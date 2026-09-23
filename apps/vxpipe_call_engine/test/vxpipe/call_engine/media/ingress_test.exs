@@ -113,6 +113,28 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert changed_resource.generation == resource.generation
   end
 
+  test "keeps activity-only microphone demand and removes it on audio-route revocation" do
+    {capability, transport} = start_capability()
+    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
+    assert_receive {:test_stt_audio, ^transport, <<1>>}
+
+    denied = %{active | revision: 1, effective: %{active.effective | audio_routes: %{}}}
+    assert :ok = Enforcer.apply(ingress, denied, 500)
+    assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>))
+    refute_receive {:test_stt_audio, ^transport, <<2>>}
+
+    restored = %{active | revision: 2}
+    assert :ok = Enforcer.apply(ingress, restored, 500)
+    assert :ok = Ingress.push(ingress, audio_frame(3, <<3>>))
+    assert_receive {:test_stt_audio, ^transport, <<3>>}
+  end
+
   test "bounds queued audio while preserving accepted frame order" do
     {capability, transport} = start_capability(send_mode: :manual)
 

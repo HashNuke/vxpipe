@@ -649,6 +649,24 @@ the existing audio round trip. Record discoveries here before implementing.
         when transcription retention and live transcript routes are off; or
         reject/retire such selections before readiness. Cover demand removal
         mid-call without silently losing the end controller.
+        - [x] Carry the entry caller's selected external/hybrid STS agent through
+          planned STT runtime, readiness, capability, ingress and private speech.
+          Demand the recognizer while both participants and bidirectional audio
+          route are present even with transcript publication disabled; retire
+          and recreate its session on audio-only revoke/regrant. Focused
+          readiness, demand, capability and ingress checks pass (88/0 with the
+          adjacent plan/room STT tests, seeds 0 and 1).
+          - [x] Retire a prepared activity-only STT replacement when an audio-
+            only policy revision removes its demand, even when the transcript
+            interval does not change. Astra xhigh reproduced a retained
+            prepared session and `:preparation_conflict` on refreshed
+            preparation. The owning focused red failed 1/1 and now passes;
+            unrelated-policy rebase retains its token. Astra xhigh re-review
+            independently verified the original race, regrant and transfer
+            refresh with no remaining reproduced defect. The six-file group
+            passes 88/0 on seeds 0 and 1.
+        - [ ] Complete room controller retirement when activity demand disappears
+          mid-turn; a closed recognizer will not necessarily emit an end.
       - [ ] Give already-emitted STT activity producer-side lifecycle and audio
         interval provenance. An end/start first handled after hold/release or
         audio-only revoke/regrant cannot be relabeled with the new STS epoch.

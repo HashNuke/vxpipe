@@ -16,7 +16,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
     :activation_id,
     :usage_provider
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [activity_agent_id: nil]
 
   @type t :: %__MODULE__{
           provider: {module(), term()},
@@ -25,7 +25,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
           call_id: String.t(),
           participant_id: String.t(),
           activation_id: String.t() | nil,
-          usage_provider: Vxpipe.CallEngine.Usage.ProviderContext.t()
+          usage_provider: Vxpipe.CallEngine.Usage.ProviderContext.t(),
+          activity_agent_id: String.t() | nil
         }
 
   def provider({FluxSession, %Flux{} = config}, settings) do

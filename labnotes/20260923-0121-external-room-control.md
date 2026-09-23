@@ -135,3 +135,40 @@ against limit 20. Recorded a milestone cleanup task, split participant-presence
 and bidirectional-route predicates without changing check order or error
 results, then reran the owning 87 tests (seed 0, 0 failures) and root Credo
 (no issues). This is a follow-up checkpoint to `a224ccfe`.
+
+Selected-STT demand checkpoint: readiness inventory first failed a focused
+external-STS/no-transcript assertion (25 tests, one expected failure). The
+entry receiver is the only agent eligible for the current room STS allocation;
+the first test revision accidentally selected a different agent and was fixed
+before implementation proof. `SpeechToTextActivitySource` now extracts the
+entry caller/receiver external or hybrid selection. Shared demand also requires
+both participants present and bidirectional audio permission. The agent id is
+carried in `SpeechToTextRuntime` through room startup to capability and ingress;
+the readiness inventory and private transfer use the same rule. Capability
+policy preparation and ingress compare demand changes in addition to the STT
+transcript interval, so audio-only revoke/regrant retires and restarts the
+recognizer. The 87-test demand/capability/ingress/inventory/plan/room group
+passes with seed 0. Room controller retirement when demand vanishes, producer
+signal provenance, and provider hold state remain open. Independent code
+review is pending; no root-gate or commit claim yet.
+
+Astra xhigh reproduced a prepared-policy race the first local group did not
+cover. Its method was a bounded in-memory ExUnit probe: load the existing STT
+capability test fixture with `MIX_ENV=test mix run --no-compile -e`, inject one
+temporary test into the source string, and run only that test without editing
+files. The probe prepared activity-only STT while the selected agent was
+prospective, applied a restrictive audio-only policy revision that left the
+STT transcript interval unchanged, then refreshed the candidate. The old
+prepared transport remained and refresh returned `:preparation_conflict`.
+For future teammate cycles, turn such a probe into an owning focused test,
+record its expected red, then repair and rerun the relevant group. Here the
+formal STT capability test failed 1/1 on that exact conflict. The repair
+invalidates a pending preparation if the selected agent's presence or either
+direction of its audio route changes, while preserving unrelated membership
+rebasing; the focused test passes and the six-file group passes 88/0, seed 0.
+Independent Astra xhigh re-review found no remaining reproduced defect: the
+original provider retires, refresh succeeds, regrant starts a new session,
+unrelated membership/recording changes retain token/generation/readiness, and
+transfer refresh avoids the old conflict. The six-file group passes 88/0 on
+seeds 0 and 1. The broader room-controller, provenance and hold gates remain
+open.

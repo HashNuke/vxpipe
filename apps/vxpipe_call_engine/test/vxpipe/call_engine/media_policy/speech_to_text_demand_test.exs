@@ -22,6 +22,25 @@ defmodule Vxpipe.CallEngine.MediaPolicy.SpeechToTextDemandTest do
            )
   end
 
+  test "requires selected activity STT only while its agent and audio route are present" do
+    active = snapshot(0, ["source", "agent"], %{}, false)
+    assert SpeechToTextDemand.required?(active, "source", "agent")
+    refute SpeechToTextDemand.required?(active, "source")
+
+    absent = %{active | present_participant_ids: MapSet.new(["source"])}
+    refute SpeechToTextDemand.required?(absent, "source", "agent")
+
+    denied = %{active | effective: %{active.effective | audio_routes: %{}}}
+    refute SpeechToTextDemand.required?(denied, "source", "agent")
+
+    one_way = %{
+      active
+      | effective: %{active.effective | audio_routes: %{"source" => MapSet.new(["agent"])}}
+    }
+
+    refute SpeechToTextDemand.required?(one_way, "source", "agent")
+  end
+
   defp snapshot(revision, present, routes, save_transcripts) do
     %Snapshot{
       revision: revision,

@@ -36,6 +36,118 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     refute_receive {:test_stt_transport_closed, ^transport}
   end
 
+  test "activity-only demand starts STT and retires it across audio-only revoke and regrant" do
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+
+    capability =
+      start_capability_process(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert_receive {:test_stt_transport_started, transport, _connection}
+    assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("activity", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    denied = %{
+      active
+      | revision: 1,
+        effective: %{active.effective | audio_routes: %{}}
+    }
+
+    assert :ok = Enforcer.apply(capability, denied, 500)
+    assert {:ok, _retired, :preparing} = SpeechToText.readiness(capability)
+    refute_receive {:test_stt_transport_started, _, _}
+
+    restored = %{active | revision: 2}
+    assert :ok = Enforcer.apply(capability, restored, 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    assert replacement != transport
+  end
+
+  test "audio-only demand loss discards a prepared activity session before refresh" do
+    alias Vxpipe.CallEngine.ResolvedCallPlan
+    alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+
+    incarnation_id = "rinc-#{System.unique_integer([:positive])}"
+    normal = %{MediaPolicy.inherit() | transcript_routes: %{}, save_transcripts: false}
+
+    participants =
+      Map.new(["part-human", "part-agent", "observer", "restrictor"], fn id ->
+        policy =
+          if id == "restrictor",
+            do: %{MediaPolicy.inherit() | audio_routes: %{}},
+            else: MediaPolicy.inherit()
+
+        {id, struct(Participant, participant_id: id, while_present: policy)}
+      end)
+
+    plan = struct(ResolvedCallPlan, media_policy: normal, participants: participants)
+
+    authority =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Authority, plan: plan, incarnation_id: incarnation_id},
+          significant: false
+        )
+      )
+
+    assert {:ok, base} = Authority.admit(authority, "part-human")
+
+    capability =
+      start_capability_process(
+        initial_policy: base,
+        activity_agent_id: "part-agent",
+        incarnation_id: incarnation_id
+      )
+
+    assert {:ok, ^base} = Authority.register_enforcer(authority, capability)
+
+    options = [
+      owner: self(),
+      attempt_id: "activity-preparation",
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(base.present_participant_ids, "part-agent")
+             )
+
+    assert {:ok, %{change: :replace, resources: [_resource]} = prepared} =
+             SpeechToText.prepare_policy(capability, candidate, options)
+
+    assert_receive {:test_stt_transport_started, transport, _connection}
+    monitor = Process.monitor(transport)
+
+    assert {:ok, before_denial} = Authority.admit(authority, "observer")
+
+    assert {:ok, rebased} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(before_denial.present_participant_ids, "part-agent")
+             )
+
+    assert {:ok, %{token: token}} = SpeechToText.prepare_policy(capability, rebased, options)
+    assert token == prepared.token
+
+    assert {:ok, denied} = Authority.admit(authority, "restrictor")
+
+    assert Snapshot.interval(before_denial, :speech_to_text, "part-human") ==
+             Snapshot.interval(denied, :speech_to_text, "part-human")
+
+    assert {:ok, refreshed} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(denied.present_participant_ids, "part-agent")
+             )
+
+    assert {:ok, %{resources: []}} =
+             SpeechToText.prepare_policy(capability, refreshed, options)
+
+    assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+  end
+
   test "readiness requires the provider acknowledgement and preserves unchanged session evidence" do
     {capability, transport} = start_capability()
     assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
@@ -592,14 +704,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
          owner: self(),
          tenant_id: "tenant-demo",
          room_id: "room-demo",
-         incarnation_id: "rinc-demo",
+         incarnation_id: Keyword.get(options, :incarnation_id, "rinc-demo"),
          participant_id: "part-human",
          connection_id: "conn-demo",
          speech_scope: CapabilityTree.scope(tree),
          provider: {FluxSession, provider_options},
          provider_private: provider_private,
          usage: Keyword.get(options, :usage)
-       ] ++ Keyword.take(options, [:initial_policy])}
+       ] ++ Keyword.take(options, [:initial_policy, :activity_agent_id])}
     )
   end
 

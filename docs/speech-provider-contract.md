@@ -375,8 +375,10 @@ external mode forwards its admitted start/end, while hybrid takes provider onset
 and forwards its admitted end. Provider-controlled mode receives no external
 boundaries even when human STT supplies caller text. A room selection of external
 or hybrid control without human STT must fail startup until another activity
-source is explicitly designed and proven. Selection must also keep that STT
-active as an activity demand when transcript demand is absent. Source activity
+source is explicitly designed and proven. The selected entry caller's STT now
+has a plan-pinned activity demand when transcript demand is absent and the
+bidirectional source/agent audio route remains permitted. The room controller
+must still retire an active pair if that demand disappears. Source activity
 requires producer-side lifecycle/audio provenance and delivery-side authority
 rechecks. The bound STS ingress/capability path now serializes and rechecks
 controls, but current STT signals lack that provenance and the room does not

@@ -96,9 +96,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
              present,
              max(remaining_ms(pending), 1)
            ) do
-      if SpeechToTextDemand.required?(candidate.snapshot, command.participant_id),
-        do: ensure_pair(command, pending, runtime, state, base),
-        else: clear(command, state)
+      if SpeechToTextDemand.required?(
+           candidate.snapshot,
+           command.participant_id,
+           runtime.activity_agent_id
+         ),
+         do: ensure_pair(command, pending, runtime, state, base),
+         else: clear(command, state)
     else
       _unavailable -> {:reply, {:error, unavailable()}, state}
     end

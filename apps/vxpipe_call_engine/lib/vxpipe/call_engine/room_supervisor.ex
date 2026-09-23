@@ -230,10 +230,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
              room_authority,
              command,
              runtime.provider,
-             Keyword.put(runtime.media_ingress, :input_admission, :closed),
+             runtime.media_ingress
+             |> Keyword.put(:input_admission, :closed)
+             |> Keyword.put(:activity_agent_id, runtime.activity_agent_id),
              speech_to_text_usage(runtime),
              provider_private: runtime.provider_private,
-             initial_policy: policy
+             initial_policy: policy,
+             activity_agent_id: runtime.activity_agent_id
            ) do
       bind_connection_speech_to_text(
         room_authority,

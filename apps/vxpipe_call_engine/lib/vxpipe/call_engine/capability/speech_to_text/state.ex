@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   ]
   defstruct @enforce_keys ++
               [
+                activity_agent_id: nil,
                 readiness_generation: nil,
                 readiness_status: :preparing,
                 pending_policy: nil,
@@ -40,6 +41,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   @type t :: %__MODULE__{
           descriptor: Descriptor.t() | nil,
+          activity_agent_id: String.t() | nil,
           identity: map(),
           last_provider_sequence: integer(),
           media_format: map(),
@@ -77,7 +79,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     owner = Keyword.fetch!(options, :owner)
     {provider_module, provider_options} = Keyword.fetch!(options, :provider)
 
-    with {:ok, demanded?} <- initial_demand(options, identity.participant_id),
+    with {:ok, demanded?} <-
+           initial_demand(
+             options,
+             identity.participant_id,
+             Keyword.get(options, :activity_agent_id)
+           ),
          {:ok, allocation} <- PrivateAllocation.new(options, identity.participant_id),
          {:ok, state} <-
            build_state(
@@ -257,7 +264,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   defp apply_policy(%__MODULE__{} = state, snapshot) do
     if state.policy_revision ==
-         Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) do
+         Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) and
+         demanded?(state, state.policy) == demanded?(state, snapshot) do
       {:ok, %{state | policy: snapshot}}
     else
       replace_session(state, snapshot)
@@ -288,7 +296,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   defp demanded?(state, snapshot) do
-    SpeechToTextDemand.required?(snapshot, state.identity.participant_id)
+    SpeechToTextDemand.required?(
+      snapshot,
+      state.identity.participant_id,
+      state.activity_agent_id
+    )
   end
 
   defp supported_audio?(state, frame) do
@@ -304,14 +316,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       byte_size(frame.payload) <= @maximum_audio_bytes
   end
 
-  defp initial_demand(options, participant_id) do
+  defp initial_demand(options, participant_id, activity_agent_id) do
     case Keyword.fetch(options, :initial_policy) do
       :error ->
         {:ok, true}
 
       {:ok, snapshot} ->
         if Snapshot.valid?(snapshot),
-          do: {:ok, SpeechToTextDemand.required?(snapshot, participant_id)},
+          do: {:ok, SpeechToTextDemand.required?(snapshot, participant_id, activity_agent_id)},
           else: {:error, :invalid_initial_policy}
     end
   end
@@ -342,6 +354,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
            ) do
       {:ok,
        %__MODULE__{
+         activity_agent_id: Keyword.get(options, :activity_agent_id),
          descriptor: descriptor,
          identity: identity,
          last_provider_sequence: -1,

@@ -1,9 +1,10 @@
 # Room-owned STS external and hybrid turn control
 
-Status: design candidate. Ordered ingress and capability authority have focused
-local proof; STT activity demand, producer provenance and provider hold-state
-retirement remain open. This is not room-level implementation or acceptance
-evidence. The milestone tracks those separately.
+Status: design candidate. Ordered ingress/capability authority and selected-STT
+activity demand have focused local proof; controller retirement on demand loss,
+producer provenance and provider hold-state retirement remain open. This is not
+room-level implementation or acceptance evidence. The milestone tracks those
+separately.
 
 ## Decision
 
@@ -28,6 +29,24 @@ transcript demand is removed mid-call, or reject/retire the selection before
 readiness. Do not infer boundaries from transcript deltas, PCM arrival, or
 silence. The provider descriptor must still declare and validate the selected
 mode; the room cannot repair an unsupported provider configuration.
+
+The current demand slice pins the entry caller and selected external/hybrid
+entry receiver in the plan, then carries that agent identity into the STT
+runtime, readiness inventory, capability and ingress. It requires source and
+agent presence plus both audio routes, independent of transcript retention.
+An audio-only route change closes or recreates the STT session even if the STT
+transcript interval is unchanged. Closing a recognizer during an active turn
+does not itself settle or cancel the room controller; that remains a separate
+room-wiring requirement.
+
+Prepared activity-only replacements need the same fence. A review probe
+reproduced a retained prepared provider and `:preparation_conflict` after an
+audio-only demand loss that left the transcript interval unchanged. The
+preparation now compares selected-agent presence and both exact audio routes
+before retaining a pending session; a focused test covers both invalidation
+and unrelated membership rebase. Astra xhigh re-review independently verified
+the original race, regrant and transfer refresh with no remaining reproduced
+defect in this demand slice.
 
 Only signals from the currently bound human STT capability and exact active
 source connection may control STS. Require the selected STS capability, open

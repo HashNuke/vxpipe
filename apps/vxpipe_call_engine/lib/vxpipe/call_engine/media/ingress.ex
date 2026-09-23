@@ -131,7 +131,8 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
        queue: :queue.new(),
        track_id: nil,
        total_bytes: 0,
-       sts_target: Keyword.get(options, :sts_target)
+       sts_target: Keyword.get(options, :sts_target),
+       activity_agent_id: Keyword.get(options, :activity_agent_id)
      }}
   end
 
@@ -162,10 +163,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
     case Snapshot.prepare(snapshot, state.policy) do
       {:ok, snapshot} ->
-        demand? = SpeechToTextDemand.required?(snapshot, state.identity.participant_id)
+        demand? =
+          SpeechToTextDemand.required?(
+            snapshot,
+            state.identity.participant_id,
+            state.activity_agent_id
+          )
 
         state =
-          if state.policy != nil and
+          if state.policy != nil and state.policy_demand? == demand? and
                Snapshot.interval(state.policy, :speech_to_text, state.identity.participant_id) ==
                  Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) do
             %{state | policy: snapshot}

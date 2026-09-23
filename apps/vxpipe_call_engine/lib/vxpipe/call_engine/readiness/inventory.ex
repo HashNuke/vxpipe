@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
 
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot, SpeechToTextDemand}
   alias Vxpipe.CallEngine.ResolvedCallPlan
+  alias Vxpipe.CallEngine.SpeechToTextActivitySource
 
   @enforce_keys [
     :policy,
@@ -45,7 +46,7 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
        %__MODULE__{
          policy: policy,
          participant_ids: policy.present_participant_ids,
-         connections: connection_demands(connections, present, policy, recorded),
+         connections: connection_demands(connections, present, policy, recorded, plan),
          missing_participants: missing_participants(present, connections),
          participant_capabilities: participant_capabilities(present, policy, recorded),
          recording_participant_ids: recorded,
@@ -82,7 +83,7 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
 
   defp admitted?(_connection, _attempt_id), do: false
 
-  defp connection_demands(connections, participants, policy, recorded) do
+  defp connection_demands(connections, participants, policy, recorded, plan) do
     connections
     |> Map.filter(fn {_id, connection} -> media_connection?(connection) end)
     |> Map.new(fn {id, connection} ->
@@ -100,7 +101,11 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
             end),
         speech_to_text?:
           microphone? and participant.capabilities.speech_to_text != nil and
-            SpeechToTextDemand.required?(policy, participant.participant_id)
+            SpeechToTextDemand.required?(
+              policy,
+              participant.participant_id,
+              SpeechToTextActivitySource.controller_agent_id(plan, participant.participant_id)
+            )
       ]
 
       {id,

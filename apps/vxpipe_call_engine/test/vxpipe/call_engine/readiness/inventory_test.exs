@@ -107,6 +107,60 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
     assert Keyword.fetch!(inventory.connections["two"].demand, :speech_to_text?)
   end
 
+  test "demands selected STT for external STS activity without transcript publication", context do
+    plan = agent("departing", context.plan)
+    selected = %{selection(:speech_to_speech) | options: %{"turn_control" => "external"}}
+
+    plan =
+      update_in(plan.participants["departing"].capabilities, fn capabilities ->
+        %{capabilities | speech_to_speech: selected}
+      end)
+
+    effective = %{
+      context.policy.effective
+      | transcript_routes: %{},
+        save_transcripts: false
+    }
+
+    policy = %{
+      context.policy
+      | effective: effective,
+        present_participant_ids:
+          MapSet.put(context.policy.present_participant_ids, context.ids["departing"])
+    }
+
+    assert {:ok, inventory} = build(%{context | plan: plan, policy: policy})
+    assert Keyword.fetch!(inventory.connections["one"].demand, :speech_to_text?)
+    refute Keyword.fetch!(inventory.connections["three"].demand, :speech_to_text?)
+
+    hybrid =
+      put_in(
+        plan.participants["departing"].capabilities.speech_to_speech.options,
+        %{"turn_control" => "hybrid"}
+      )
+
+    assert {:ok, inventory} = build(%{context | plan: hybrid, policy: policy})
+    assert Keyword.fetch!(inventory.connections["one"].demand, :speech_to_text?)
+
+    provider =
+      put_in(
+        plan.participants["departing"].capabilities.speech_to_speech.options,
+        %{"turn_control" => "provider"}
+      )
+
+    assert {:ok, inventory} = build(%{context | plan: provider, policy: policy})
+    refute Keyword.fetch!(inventory.connections["one"].demand, :speech_to_text?)
+
+    absent = %{
+      policy
+      | present_participant_ids:
+          MapSet.delete(policy.present_participant_ids, context.ids["departing"])
+    }
+
+    assert {:ok, inventory} = build(%{context | plan: plan, policy: absent})
+    refute Keyword.fetch!(inventory.connections["one"].demand, :speech_to_text?)
+  end
+
   test "enabled recording requires only the selected permitted microphone tracks", context do
     policy = %{context.policy | effective: %{context.policy.effective | audio_routes: %{}}}
     context = %{context | policy: policy}
