@@ -13,19 +13,19 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
       context = start_controller(unquote(turn_control), response_start?: true)
       capability = context.capability
       caller = submit_response_input(context, mode)
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
 
       deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST RESPONSE"}}))
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
       deliver(context, audio_message(1))
 
-      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response, _}, 1_000
       assert response != caller
       assert_audio(context, 1)
       finish_generation(context)
       finish_playback(context, response, "FIRST RESPONSE", 20)
       deliver(context, interaction_end("IDLE"))
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     end
   end
 
@@ -35,11 +35,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
       capability = context.capability
       sink = context.sink
       caller = submit_response_input(context, :provider)
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
       deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST RESPONSE"}}))
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
       deliver(context, audio_message(1))
-      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first, _}, 1_000
       assert first != caller
       assert_audio(context, 1)
       finish_generation(context)
@@ -54,11 +54,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
       if unquote(timing) == :before_playback do
         refute_received {:test_audio_output, ^sink, _}
-        refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+        refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
         finish_playback(context, first, "FIRST RESPONSE", 20)
       end
 
-      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second}, 1_000
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second, _}, 1_000
       assert second != first
       assert_audio(context, 2)
       assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
@@ -77,7 +77,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     settle_audio_caller(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "REPLY"}}))
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response, _}, 1_000
     assert_audio(context, 1)
     finish_generation(context)
     deliver(context, interaction_end("IDLE"))
@@ -104,7 +104,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     settle_audio_caller(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first, _}, 1_000
     assert_audio(context, 1)
     finish_generation(context)
     deliver(context, interaction_end("IN_PROGRESS"))
@@ -121,7 +121,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
     refute_received {:test_google_sts_started, _, _}
     finish_playback(context, first, "FIRST", 20)
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second, _}, 1_000
     assert second != first
     assert_audio(context, 2)
     assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
@@ -142,7 +142,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     settle_audio_caller(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first, _}, 1_000
     assert_audio(context, 1)
     finish_generation(context)
     finish_playback(context, first, "FIRST", 20)
@@ -157,13 +157,13 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     deliver(context, content(%{"outputTranscription" => %{"text" => "SECOND"}}))
     deliver(context, audio_message(2))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second, _}, 1_000
     assert second != first
     assert_audio(context, 2)
     finish_generation(context)
     finish_playback(context, second, "SECOND", 20)
     deliver(context, interaction_end("IDLE"))
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
   end
 
   test "opted-in model idle cannot cut over audio lacking its independent caller final" do
@@ -269,7 +269,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :sys.get_state(context.provider).interaction_context != first_context
     deliver(context, content(%{"outputTranscription" => %{"text" => "TYPED REPLY"}}))
     deliver(context, audio_message(3))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response, _}, 1_000
     assert_audio(context, 3)
     finish_generation(context)
     finish_playback(context, response, "TYPED REPLY", 20)
@@ -300,7 +300,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"inputTranscription" => %{"text" => "SECOND CALLER"}}))
     deliver(context, content(%{"outputTranscription" => %{"text" => "EXTERNAL REPLY"}}))
     deliver(context, audio_message(4))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response, _}, 1_000
     assert_audio(context, 4)
     finish_generation(context)
     finish_playback(context, response, "EXTERNAL REPLY", 20)
@@ -326,7 +326,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     first_context = :sys.get_state(context.provider).interaction_context
     deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", _first}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", _first, _}, 1_000
     assert_audio(context, 1)
     finish_generation(context)
     deliver(context, interaction_end("IDLE"))
@@ -470,8 +470,8 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"generationComplete" => true}))
     deliver(context, interaction_end("IDLE"))
 
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
-    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _, _}
     assert :sys.get_state(context.provider).responses.records == %{}
   end
 
@@ -482,7 +482,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.input_activity(capability, :started)
     assert_receive {:test_google_sts_control, ^wire, _activity_start}, 1_000
     deliver(context, audio_message(1))
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     assert :ok = SpeechToSpeech.hold(capability)
     owner = :sys.get_state(context.provider).responses
 
@@ -500,7 +500,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     capability = context.capability
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", _response}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", _response, _}, 1_000
     assert_audio(context, 1)
 
     for index <- 2..18 do
@@ -516,13 +516,13 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :sys.get_state(context.provider).input_turn == nil
     deliver(context, content(%{"outputTranscription" => %{"text" => "OLD"}}))
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first, _}, 1_000
     assert_audio(context, 1)
 
     deliver(context, content(%{"interrupted" => true}))
     deliver(context, content(%{"outputTranscription" => %{"text" => "NEW"}}))
     deliver(context, audio_message(2))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second, _}, 1_000
     assert second != first
     assert_audio(context, 2)
 
@@ -540,7 +540,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     deliver(context, content(%{"outputTranscription" => %{"text" => "FIRST"}}))
     deliver(context, audio_message(1))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first, _}, 1_000
     assert_audio(context, 1)
     finish_generation(context)
     deliver(context, interaction_end("IN_PROGRESS"))
@@ -570,10 +570,10 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert tool_turn != caller
     deliver(context, content(%{"outputTranscription" => %{"text" => "TOOL REPLY"}}))
     deliver(context, audio_message(1))
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     final_caller(context, caller, "CALLER")
     deliver(context, activity("ACTIVITY_END"))
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", response, _}, 1_000
     assert response == tool_turn
     assert_audio(context, 1)
     assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"value" => 1})
@@ -599,7 +599,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"generationComplete" => true}))
     deliver(context, interaction_end("IDLE"))
     assert :sys.get_state(context.provider).responses.records == %{}
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
 
     deliver(context, %{
       "sessionResumptionUpdate" => %{"newHandle" => "tool-pending", "resumable" => true}
@@ -674,11 +674,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.push_text(capability, "typed input")
     assert_receive {:test_google_sts_control, ^wire, payload}, 1_000
     assert JSON.decode!(payload) == %{"realtimeInput" => %{"text" => "typed input"}}
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn, _}, 1_000
     complete_reply(context, turn, "TYPED REPLY", 1)
     refute_received {:test_google_sts_control, ^wire, _}
     refute_received {:vxpipe_sts_speech_started, ^capability, _, _}
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
   end
 
   for status <- [:missing, "IN_PROGRESS", "INTERACTION_STATUS_UNSPECIFIED", "REQUIRES_ACTION"] do
@@ -866,7 +866,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
                      1_000
 
       if unquote(timing == :before_end), do: final_caller(context, turn, "caller final")
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
       deliver(context, activity("ACTIVITY_END"))
       assert_started(context, turn)
 
@@ -875,7 +875,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
       if unquote(timing == :after_playback), do: final_caller(context, turn, "caller final")
 
       assert :sys.get_state(capability).caller_turns == %{}
-      refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+      refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
       refute_received {:vxpipe_sts_speech_started, ^capability, _, _}
     end
   end
@@ -936,7 +936,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"inputTranscription" => %{"text" => "DUPLICATE"}}))
     deliver(context, content(%{"interimInputTranscription" => %{"text" => "LATE INTERIM"}}))
     refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
-    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    refute_received {:vxpipe_sts_turn_started, _, _, _, _}
     deliver(context, activity("ACTIVITY_END"))
     assert_started(context, turn)
     assert :sys.get_state(context.capability).caller_turns == %{}
@@ -947,7 +947,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"inputTranscription" => %{"text" => "UNASSOCIATED"}}))
     deliver(context, content(%{"interimInputTranscription" => %{"text" => "UNASSOCIATED"}}))
     refute_received {:vxpipe_sts_input_event, _, _}
-    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    refute_received {:vxpipe_sts_turn_started, _, _, _, _}
     turn = start_caller(context)
     final_caller(context, turn, "NEW CALLER")
     refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
@@ -1007,7 +1007,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"outputTranscription" => %{"text" => "world"}}))
     finish_generation(context)
     deliver(context, content(%{"outputTranscription" => %{"text" => "LATE"}}))
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
     finish_playback(context, turn, "Hello world", 400)
   end
 
@@ -1044,7 +1044,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"interimInputTranscription" => %{"text" => "partial"}}))
     deliver(context, interaction_end("IDLE"))
     refute_received {:vxpipe_sts_input_event, ^capability, %{event: %Event{kind: :turn_ended}}}
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     deliver(context, activity("ACTIVITY_END"))
 
     assert_receive {:vxpipe_sts_input_event, ^capability,
@@ -1063,7 +1063,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_started(context, turn)
     deliver(context, activity("ACTIVITY_END"))
     deliver(context, interaction_end("IDLE"))
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     assert :sys.get_state(capability).pending_turns == []
   end
 
@@ -1084,7 +1084,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     )
 
     assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :session_failed}}, 1_000
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
     refute_received {:test_google_sts_started, _, _}
   end
 
@@ -1182,7 +1182,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
     assert_receive {:vxpipe_sts_unavailable, ^capability, :output_transcript_missing}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^capability, :output_transcript_missing}, 1_000
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
   end
 
   test "external idle end sends no wire boundary or output admission" do
@@ -1190,7 +1190,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.input_activity(context.capability, :ended)
     _ = :sys.get_state(context.capability)
     refute_received {:test_google_sts_control, _, _}
-    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    refute_received {:vxpipe_sts_turn_started, _, _, _, _}
   end
 
   test "external duplicates admit and send each boundary once without provider control" do
@@ -1200,7 +1200,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, activity("ACTIVITY_START"))
     deliver(context, activity("ACTIVITY_END"))
     deliver(context, interaction_end("IDLE"))
-    refute_received {:vxpipe_sts_turn_started, _, _, _}
+    refute_received {:vxpipe_sts_turn_started, _, _, _, _}
     refute_received {:vxpipe_sts_speech_started, _, _, _}
 
     assert :ok = SpeechToSpeech.input_activity(capability, :started)
@@ -1213,10 +1213,10 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :ok = SpeechToSpeech.input_activity(capability, :ended)
     assert_receive {:test_google_sts_control, ^wire, ended}
     assert JSON.decode!(ended) == %{"realtimeInput" => %{"activityEnd" => %{}}}
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn, _}
     _ = :sys.get_state(capability)
     refute_received {:test_google_sts_control, ^wire, _}
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     assert :sys.get_state(capability).pending_turns == []
     complete_reply(context, turn, "EXTERNAL", 1)
   end
@@ -1243,7 +1243,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_audio(context, 2)
     finish_generation(context)
     finish_playback(context, turn, "NEW", 20)
-    refute_received {:vxpipe_sts_turn_completed, _, _, ^old_turn}
+    refute_received {:vxpipe_sts_turn_completed, _, _, ^old_turn, _}
   end
 
   test "pre-admission model interruption cannot fabricate caller completion" do
@@ -1254,11 +1254,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"interrupted" => true}))
     deliver(context, interaction_end("IDLE"))
     refute_received {:vxpipe_sts_input_event, ^capability, %{event: %Event{kind: :turn_ended}}}
-    refute_received {:vxpipe_sts_turn_started, ^capability, _, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
     final_caller(context, old_turn, "CALLER")
     deliver(context, activity("ACTIVITY_END"))
     assert_started(context, old_turn)
-    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _, _}
     assert :sys.get_state(capability).caller_turns == %{}
     complete_reply(context, old_turn, "FRESH REPLY AFTER CALLER END", 1)
   end
@@ -1271,7 +1271,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, interaction_end("IDLE"))
     deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
     assert :ok = SpeechToSpeech.input_activity(capability, :ended)
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn, _}, 1_000
     final_caller(context, turn, "EXTERNAL CALLER")
     complete_reply(context, turn, "FRESH REPLY", 1)
 
@@ -1297,7 +1297,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     deliver(context, content(%{"interrupted" => true}))
     deliver(context, %{"goAway" => %{"timeLeft" => "60s"}})
     assert :ok = SpeechToSpeech.input_activity(capability, :ended)
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn, _}, 1_000
     deliver(context, interaction_end("IDLE"))
     final_caller(context, turn, "EXTERNAL CALLER")
     complete_reply(context, turn, "FRESH REPLY", 1)
@@ -1401,7 +1401,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     end
 
     capability = context.capability
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", turn, _}, 1_000
     if mode == :external, do: final_caller(context, turn, "EXTERNAL CALLER")
     turn
   end
@@ -1493,7 +1493,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
 
   defp assert_started(context, turn) do
     capability = context.capability
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn}, 1_000
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn, _}, 1_000
   end
 
   defp deliver(context, message) do
@@ -1524,11 +1524,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     capability = context.capability
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent", ^expected, ^turn,
-                    ^duration, _},
+                    ^duration, _, _},
                    1_000
 
-    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^turn}, 1_000
-    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^turn, _}, 1_000
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _, _}
   end
 
   defp activity(type), do: %{"voiceActivity" => %{"type" => type}}

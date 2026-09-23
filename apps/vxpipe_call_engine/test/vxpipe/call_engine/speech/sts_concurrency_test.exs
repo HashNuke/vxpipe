@@ -88,16 +88,16 @@ defmodule Vxpipe.CallEngine.Speech.STSConcurrencyTest do
                       }},
                      5_000
 
-      assert_receive {:vxpipe_sts_turn_started, ^capability, ^agent, _turn}, 5_000
+      assert_receive {:vxpipe_sts_turn_started, ^capability, ^agent, _turn, _}, 5_000
       assert_receive {:test_audio_output_finish, ^sink, _turn}, 5_000
       TestAudioOutputSink.playback_progress(sink, 20, 1_020)
       TestAudioOutputSink.playback_completed(sink)
 
       assert_receive {:vxpipe_sts_agent_transcript, ^capability, ^agent, agent_text, _turn, 20,
-                      _interval},
+                      _interval, _},
                      5_000
 
-      assert_receive {:vxpipe_sts_turn_completed, ^capability, ^agent, _turn}, 5_000
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, ^agent, _turn, _}, 5_000
 
       %{id: id, word: word, input: word, agent: agent_text}
     after

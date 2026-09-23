@@ -668,9 +668,33 @@ the existing audio round trip. Record discoveries here before implementing.
     Caller owner envelopes are qualified by the current capability, input epoch
     and channel sequence; adapters still own upstream deduplication before
     assigning fresh channel sequences.
-  - [ ] Apply bounded retirement to agent output as well: the current active-ID
-    association rejects repeated active starts, but a delayed start after its
-    terminal association was removed can still create another public turn.
+  - [x] Apply bounded retirement to agent output as well: completed starts
+    cannot recreate a public turn after their terminal association is removed.
+    - [x] Reproduce a completed output reopened by a delayed start at the room
+      publication boundary; verify interrupted output too, and prove an older
+      start cannot reopen after more than 16 later turns or a capability
+      replacement.
+    - [x] Carry the acknowledged output-start order in the capability-owned
+      owner envelope, including queued legacy and opted-in responses. Retire
+      terminal starts with a scalar watermark while preserving later live
+      starts, transcripts and exact-source checks; verify at both the room
+      boundary and real capability/controller path.
+    Design review: channel semantic-event order is the authority for replay
+    retirement; neither provider turn references nor room publication order
+    identify an old start. The capability's one credited slot sends a terminal
+    before granting the next queued start. Exact sequence on text/terminal
+    messages is required if a private turn reference is later reused. This is
+    owner-message retirement, not upstream provider deduplication or Google
+    cross-origin proof; see [decision](../sts-agent-output-retirement.md).
+    Verification: a focused room red recreated the second public start after
+    completion. The 12 room identity tests, 203 affected capability/controller/
+    room tests and 27 embedded room/lifecycle tests pass. A 25-turn retirement
+    run, reused-reference late text/terminal checks, source replacement and
+    later-live-turn preservation have focused coverage. Independent Astra xhigh
+    read-only review found no concrete defect. The first full call-engine child
+    run finished 1,412 tests with one unrelated 100 ms Morse readiness timeout
+    (30 integration exclusions); its isolated rerun passed. The full gate is
+    still tracked separately and is not claimed green on that run.
   - [ ] Apply the same public identity boundary to tools: inspection also found
     `inspect(call_ref)` in public tool-call IDs and provider-turn fallback IDs
     when no audio turn exists. Give tool-only turns and tool calls room-owned

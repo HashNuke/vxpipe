@@ -19,12 +19,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
     {:noreply, SpeechToSpeech.handle_input_event(state, capability, evidence)}
   end
 
-  def handle({:vxpipe_sts_turn_started, capability, agent_id, turn}, state) do
-    {:noreply, SpeechToSpeech.handle_turn_started(state, capability, agent_id, turn)}
+  def handle({:vxpipe_sts_turn_started, capability, agent_id, turn, sequence}, state) do
+    {:noreply, SpeechToSpeech.handle_turn_started(state, capability, agent_id, turn, sequence)}
   end
 
   def handle(
-        {:vxpipe_sts_agent_transcript, capability, agent_id, text, turn, played, interval},
+        {:vxpipe_sts_agent_transcript, capability, agent_id, text, turn, played, interval,
+         sequence},
         state
       ) do
     {:noreply,
@@ -35,19 +36,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
        text,
        turn,
        played,
-       interval
+       interval,
+       sequence
      )}
   end
 
-  def handle({:vxpipe_sts_turn_completed, capability, agent_id, turn}, state) do
-    {:noreply,
-     CallerIdle.reconcile(SpeechToSpeech.handle_turn_completed(state, capability, agent_id, turn))}
-  end
-
-  def handle({:vxpipe_sts_interrupted, capability, agent_id, turn, played, prefix}, state) do
+  def handle({:vxpipe_sts_turn_completed, capability, agent_id, turn, sequence}, state) do
     {:noreply,
      CallerIdle.reconcile(
-       SpeechToSpeech.handle_interrupted(state, capability, agent_id, turn, played, prefix)
+       SpeechToSpeech.handle_turn_completed(state, capability, agent_id, turn, sequence)
+     )}
+  end
+
+  def handle(
+        {:vxpipe_sts_interrupted, capability, agent_id, turn, played, prefix, sequence},
+        state
+      ) do
+    {:noreply,
+     CallerIdle.reconcile(
+       SpeechToSpeech.handle_interrupted(
+         state,
+         capability,
+         agent_id,
+         turn,
+         played,
+         prefix,
+         sequence
+       )
      )}
   end
 

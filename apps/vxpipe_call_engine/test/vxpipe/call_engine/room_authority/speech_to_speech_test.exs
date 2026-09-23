@@ -346,16 +346,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     end
 
     assert_receive {:vxpipe_sts_speech_started, ^capability, @agent, turn}
-    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^turn}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^turn, _}
     assert_receive {:test_audio_output_finish, sink, _sink_turn}, 5_000
 
     assert SpeechToSpeech.handle_speech_started(state, capability, @agent, turn) == state
-    refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _}
+    refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _, _}
     Vxpipe.CallEngine.TestAudioOutputSink.playback_progress(sink, 20, 1_020)
     Vxpipe.CallEngine.TestAudioOutputSink.playback_completed(sink)
 
-    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn}, 1_000
-    refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _}
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn, _}, 1_000
+    refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _, _}
   end
 
   test "STS transfer hold and release work without any text capability" do

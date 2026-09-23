@@ -10,9 +10,9 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     context = start_output()
     assert :ok = transcript(context, "FINAL", true)
     _ = :sys.get_state(context.capability)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
     finish_generation(context)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
     finish_playback(context)
     assert_transcript(context, "FINAL")
   end
@@ -22,8 +22,8 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     assert :ok = transcript(context, "PARTIAL")
     finish_generation(context)
     finish_playback(context)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
-    refute_received {:vxpipe_sts_turn_completed, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, _, _, _, _}
     assert :ok = transcript(context, "FINAL", true)
     assert_transcript(context, "FINAL")
   end
@@ -43,8 +43,8 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     assert :ok = transcript(%{context | turn: make_ref()}, "FOREIGN", true)
     finish_generation(context)
     finish_playback(context)
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
-    refute_received {:vxpipe_sts_turn_completed, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, _, _, _, _}
     assert :ok = transcript(context, "CURRENT", true)
     assert_transcript(context, "CURRENT")
   end
@@ -62,8 +62,8 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
 
     assert_receive {:vxpipe_sts_unavailable, ^capability, :output_transcript_timeout}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^capability, :output_transcript_timeout}, 1_000
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
-    refute_received {:vxpipe_sts_turn_completed, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, _, _, _, _}
   end
 
   test "generation-boundary text freezes at generation completion" do
@@ -82,7 +82,7 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     finish_generation(context)
     assert_receive {:vxpipe_sts_unavailable, ^capability, :output_transcript_missing}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^capability, :output_transcript_missing}, 1_000
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
   end
 
   test "invalid transcript budgets reject startup without opening an allocation" do
@@ -140,8 +140,8 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
 
     assert_receive {:vxpipe_sts_unavailable, ^capability, :output_transcript_timeout}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^capability, :output_transcript_timeout}, 1_000
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
-    refute_received {:vxpipe_sts_turn_completed, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, _, _, _, _}
   end
 
   test "late final and timeout from a held output cannot settle its replacement" do
@@ -159,8 +159,8 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     assert :ok = transcript(context, "RETIRED", true)
     _ = :sys.get_state(context.capability)
     refute_received {:vxpipe_sts_unavailable, _, _}
-    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _}
-    refute_received {:vxpipe_sts_turn_completed, _, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, _, _, _, _}
     assert :ok = transcript(next, "CURRENT", true)
     assert_transcript(next, "CURRENT")
   end
@@ -200,7 +200,7 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
              )
 
     assert_receive {:sts_output_permitted, ^provider, _channel, ^turn, output}
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn, _}
     assert {:ok, _credit} = GenServer.call(provider, {:output, output})
     assert_receive {:test_audio_output, ^sink, _frame}
     assert_receive {:vxpipe_speech_credit, _, ^output, _, :ok}
@@ -234,8 +234,10 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     capability = context.capability
     turn = context.turn
 
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent", ^expected, ^turn, 20, _}
-    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^turn}
-    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _}
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent", ^expected, ^turn, 20, _,
+                    _}
+
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^turn, _}
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _, _}
   end
 end

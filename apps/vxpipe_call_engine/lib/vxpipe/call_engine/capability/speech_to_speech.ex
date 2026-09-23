@@ -21,8 +21,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   import Vxpipe.CallEngine.Capability.SpeechToSpeech.Output,
     only: [
-      admit_reply: 2,
-      admit_response: 3,
+      admit_reply: 3,
+      admit_response: 4,
       retire_stale_pending: 1,
       handle_audio: 2,
       complete_playback: 3,
@@ -637,7 +637,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           {:noreply, state}
 
         true ->
-          admit_reply(event.turn_ref, state)
+          admit_reply(event.turn_ref, event.sequence, state)
       end
     else
       _failure -> stop_unavailable(:provider_failed, state)
@@ -646,7 +646,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   defp handle_event(%Event{kind: :response_started} = event, state) do
     case Session.ack(state.session, event) do
-      :ok -> admit_response(event.turn_ref, event.response_context, state)
+      :ok -> admit_response(event.turn_ref, event.response_context, event.sequence, state)
       {:error, _reason} -> stop_unavailable(:provider_failed, state)
     end
   end
@@ -718,7 +718,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           _other ->
             send(
               state.owner,
-              {:vxpipe_sts_interrupted, self(), state.agent_id, event.turn_ref, 0, :no_prefix}
+              {:vxpipe_sts_interrupted, self(), state.agent_id, event.turn_ref, 0, :no_prefix,
+               event.sequence}
             )
 
             {:noreply, state}

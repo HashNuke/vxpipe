@@ -171,7 +171,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
     assert_receive {:context_output_granted, ^turn, output_ref}
     assert is_reference(output_ref)
-    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^turn, _}
   end
 
   test "a response from a held origin is discarded by its exact reference" do
@@ -282,9 +282,17 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
     assert :ok = GenServer.call(provider, {:emit_response, context, first, 1})
     assert_receive {:context_output_granted, ^first, output_ref}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^first, first_sequence}
     assert :ok = GenServer.call(provider, {:emit_response, context, second, 2})
     assert :ok = GenServer.call(provider, {:emit_response, context, third, 3})
-    _ = :sys.get_state(capability)
+    pending = :sys.get_state(capability).pending_turns
+
+    assert [
+             {:response, ^second, ^context, _, second_sequence},
+             {:response, ^third, ^context, _, third_sequence}
+           ] = pending
+
+    assert first_sequence < second_sequence and second_sequence < third_sequence
     refute_received {:context_output_granted, ^second, _}
     refute_received {:context_output_granted, ^third, _}
 
@@ -303,6 +311,8 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert_receive {:test_audio_output_finish, ^sink, _}
     assert :ok = TestAudioOutputSink.playback_completed(sink)
     assert_receive {:context_output_granted, ^second, second_output_ref}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^second, ^second_sequence}
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^first, ^first_sequence}
     refute_received {:context_output_granted, ^third, _}
 
     assert :ok =
@@ -320,6 +330,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert_receive {:test_audio_output_finish, ^sink, _}
     assert :ok = TestAudioOutputSink.playback_completed(sink)
     assert_receive {:context_output_granted, ^third, _}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^third, ^third_sequence}
   end
 
   test "replacing an input epoch retires its queued response" do

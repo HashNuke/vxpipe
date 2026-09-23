@@ -740,6 +740,13 @@ also have focused coverage. Supervised host execution, private lease retention,
 owner-loss cleanup, unknown timeouts and admission-deadline fencing now have
 compiled-room and owning-worker evidence. Full private continuation and upstream
 late-evidence isolation remain open.
+Agent output now carries its acknowledged channel start order through queued
+credit, text and terminal owner messages. The room retires completed starts
+with a scalar watermark and requires exact order for text/terminal publication;
+this bounds delayed owner-message replay without treating a reused private
+provider turn as a public ID. See the
+[output-retirement decision](sts-agent-output-retirement.md). Upstream provider
+deduplication and Google cross-origin proof remain separate.
 Complete turn-controller/lifecycle coverage, full
 native conversations, usage/load and final UI acceptance remain open
 in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above

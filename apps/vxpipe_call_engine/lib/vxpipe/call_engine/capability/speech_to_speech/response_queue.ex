@@ -12,10 +12,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
 
   @max_pending_turns 16
 
-  def admit_response(turn_ref, context, state) do
+  def admit_response(turn_ref, context, sequence, state) do
     case ResponseOrigins.accepted_fingerprint(state, context) do
       {:ok, fingerprint} ->
-        entry = {:response, turn_ref, context, fingerprint}
+        entry = {:response, turn_ref, context, fingerprint, sequence}
         admit_response_entry(entry, state, :back)
 
       :error ->
@@ -23,7 +23,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
     end
   end
 
-  defp admit_response_entry({:response, turn_ref, _context, fingerprint} = entry, state, position) do
+  defp admit_response_entry(
+         {:response, turn_ref, _context, fingerprint, _sequence} = entry,
+         state,
+         position
+       ) do
     cond do
       not ResponseOrigins.current?(state, fingerprint) ->
         reject_response(turn_ref, state)
@@ -39,7 +43,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
     end
   end
 
-  def admit_reply(turn_ref, state), do: admit_reply(turn_ref, state, turn_ref, :back)
+  def admit_reply(turn_ref, sequence, state),
+    do: admit_reply(turn_ref, state, {:legacy, turn_ref, sequence}, :back)
 
   defp admit_reply(turn_ref, state, entry, position) do
     cond do
@@ -57,6 +62,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
             output = %{
               output: handle,
               provider_turn: turn_ref,
+              owner_sequence: entry_sequence(entry),
               transcript_interval: Input.transcript_interval(state, state.agent_id),
               sink_turn: sink_turn,
               pending_text: nil,
@@ -73,7 +79,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
               played_ms: 0
             }
 
-            send(state.owner, {:vxpipe_sts_turn_started, self(), state.agent_id, turn_ref})
+            send(
+              state.owner,
+              {:vxpipe_sts_turn_started, self(), state.agent_id, turn_ref, entry_sequence(entry)}
+            )
+
             {:noreply, %{state | active_output: output}}
 
           {:error, :busy} ->
@@ -114,11 +124,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
     end
   end
 
-  defp response_entry?({:response, _turn, _context, _fingerprint}), do: true
+  defp response_entry?({:response, _turn, _context, _fingerprint, _sequence}), do: true
   defp response_entry?(_entry), do: false
 
-  defp entry_turn({:response, turn, _context, _fingerprint}), do: turn
-  defp entry_turn(turn), do: turn
+  defp entry_turn({:response, turn, _context, _fingerprint, _sequence}), do: turn
+  defp entry_turn({:legacy, turn, _sequence}), do: turn
+
+  defp entry_sequence({:response, _turn, _context, _fingerprint, sequence}), do: sequence
+  defp entry_sequence({:legacy, _turn, sequence}), do: sequence
 
   def retire_stale_pending(state) do
     state =
@@ -181,9 +194,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
 
   def admit_next_pending(state), do: {:noreply, state}
 
-  defp gated_admit(turn, state) do
+  defp gated_admit(entry, state) do
     if Output.audio_route_permitted?(state, state.human_id, state.agent_id) and not state.held? do
-      admit_reply(turn, state)
+      admit_reply(entry_turn(entry), state, entry, :front)
     else
       {:noreply, state}
     end

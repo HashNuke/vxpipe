@@ -88,6 +88,89 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSOutputIdentityTest do
     refute_received {:vxpipe_event, _}
   end
 
+  test "a delayed start cannot reopen a completed public output" do
+    state = SpeechToSpeech.handle_turn_started(state(), self(), @agent, "private-turn")
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "private-turn")
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
+
+    assert SpeechToSpeech.handle_turn_started(state, self(), @agent, "private-turn") == state
+    refute_received {:vxpipe_event, %AgentSpeechStarted{}}
+  end
+
+  test "retired output order stays bounded across 25 turns and preserves a later live turn" do
+    state = state()
+
+    state =
+      Enum.reduce(1..25, state, fn sequence, state ->
+        turn = "private-#{sequence}"
+        state = SpeechToSpeech.handle_turn_started(state, self(), @agent, turn, sequence)
+        assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+        state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, turn, sequence)
+        assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
+        assert state.sts_turns == %{}
+        state
+      end)
+
+    assert state.sts_output_sequence == 25
+    assert SpeechToSpeech.handle_turn_started(state, self(), @agent, "private-1", 1) == state
+    assert SpeechToSpeech.handle_turn_started(state, self(), @agent, "private-25", 25) == state
+    refute_received {:vxpipe_event, %AgentSpeechStarted{}}
+
+    state = SpeechToSpeech.handle_turn_started(state, self(), @agent, "fresh", 26)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{} = fresh}
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "fresh", 26)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{} = completed}
+    assert same_turn?(fresh, completed)
+    assert state.sts_output_sequence == 26
+  end
+
+  test "a late old terminal or transcript cannot settle a reused private turn" do
+    state = SpeechToSpeech.handle_turn_started(state(), self(), @agent, "private", 1)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+    state = SpeechToSpeech.handle_interrupted(state, self(), @agent, "private", 0, :no_prefix, 1)
+    assert_receive {:vxpipe_event, %AgentTurnInterrupted{}}
+
+    state = SpeechToSpeech.handle_turn_started(state, self(), @agent, "private", 2)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{} = fresh}
+    assert SpeechToSpeech.handle_turn_completed(state, self(), @agent, "private", 1) == state
+
+    assert SpeechToSpeech.handle_agent_transcript(
+             state,
+             self(),
+             @agent,
+             "OLD",
+             "private",
+             20,
+             0,
+             1
+           ) == state
+
+    refute_received {:vxpipe_event, %TextOutput{}}
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "private", 2)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{} = completed}
+    assert same_turn?(fresh, completed)
+    assert state.sts_turns == %{}
+  end
+
+  test "retiring an earlier output preserves a later live association" do
+    state = SpeechToSpeech.handle_turn_started(state(), self(), @agent, "first", 1)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+    state = SpeechToSpeech.handle_turn_started(state, self(), @agent, "later", 2)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{} = later}
+
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "first", 1)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
+    assert state.sts_output_sequence == 1
+    assert Map.has_key?(state.sts_turns, "later")
+    assert SpeechToSpeech.handle_turn_started(state, self(), @agent, "first", 1) == state
+
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "later", 2)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{} = completed}
+    assert same_turn?(later, completed)
+    assert state.sts_output_sequence == 2
+  end
+
   test "the current capability cannot publish under another agent's identity" do
     state = state()
     assert SpeechToSpeech.handle_turn_started(state, self(), "other-agent", "turn") == state
@@ -169,10 +252,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSOutputIdentityTest do
   test "replacing an allocation clears its old output associations" do
     state = SpeechToSpeech.handle_turn_started(state(), self(), @agent, "old-turn")
     assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+    old_binding = state.speech_to_speech_capability
     replacement = start_supervised!({Agent, fn -> :unused end})
     state = SpeechToSpeech.bind_capability(state, replacement, @agent)
+
+    binding =
+      Map.merge(
+        state.speech_to_speech_capability,
+        Map.take(old_binding, [:connection, :connection_id, :input_handle])
+      )
+
+    state = %{state | speech_to_speech_capability: binding}
     assert state.sts_turns == %{}
+    assert state.sts_output_sequence == 0
+    assert SpeechToSpeech.handle_turn_started(state, self(), @agent, "old-turn", 1) == state
     assert SpeechToSpeech.handle_turn_completed(state, self(), @agent, "old-turn") == state
+    state = SpeechToSpeech.handle_turn_started(state, replacement, @agent, "new-turn", 1)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+    assert Map.has_key?(state.sts_turns, "new-turn")
     refute_received {:vxpipe_event, _}
   end
 

@@ -24,8 +24,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   @max_output_stt_restart_attempts 10
   @output_stt_retry_ms 200
 
-  defdelegate admit_response(turn_ref, context, state), to: ResponseQueue
-  defdelegate admit_reply(turn_ref, state), to: ResponseQueue
+  defdelegate admit_response(turn_ref, context, sequence, state), to: ResponseQueue
+  defdelegate admit_reply(turn_ref, sequence, state), to: ResponseQueue
   defdelegate retire_stale_pending(state), to: ResponseQueue
   defdelegate admit_next_pending(state), to: ResponseQueue
 
@@ -95,7 +95,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
           send(
             state.owner,
-            {:vxpipe_sts_turn_completed, self(), state.agent_id, output.provider_turn}
+            {:vxpipe_sts_turn_completed, self(), state.agent_id, output.provider_turn,
+             output.owner_sequence}
           )
 
           admit_next_pending(state)
@@ -202,7 +203,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
       played_ms <= 0 ->
         send(
           state.owner,
-          {:vxpipe_sts_interrupted, self(), state.agent_id, output.provider_turn, 0, :no_prefix}
+          {:vxpipe_sts_interrupted, self(), state.agent_id, output.provider_turn, 0, :no_prefix,
+           output.owner_sequence}
         )
 
         state
@@ -211,7 +213,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         send(
           state.owner,
           {:vxpipe_sts_agent_transcript, self(), state.agent_id, text, output.provider_turn,
-           played_ms, output.transcript_interval}
+           played_ms, output.transcript_interval, output.owner_sequence}
         )
 
         state
@@ -572,7 +574,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
         send(
           state.owner,
-          {:vxpipe_sts_interrupted, self(), state.agent_id, provider_turn, played_ms, prefix}
+          {:vxpipe_sts_interrupted, self(), state.agent_id, provider_turn, played_ms, prefix,
+           output.owner_sequence}
         )
 
         {played_ms,
