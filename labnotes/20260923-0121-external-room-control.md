@@ -347,3 +347,15 @@ changed. The nine-file group passes 213/0 on seeds 0 and 1 after both test
 changes, and Astra xhigh cleared their scoped review, including simulated
 suppressed terminal probe replies. Active-turn reuse, hosted Google, full
 room lifecycle and final gates remain open.
+
+Post-commit `a540af9c` gates: root format, warnings-as-errors compile and
+unused-lock checks pass. Strict Credo reports two project-owned size failures:
+Channel 803 lines and Google STS session 805 versus an 800-line limit. Root
+`mix test` stops before the Persistence suite because local PostgreSQL SCRAM
+has no password configured; this is not a passing umbrella test gate. A
+separate mechanical repair moves the new Channel input-idle predicate into
+STSInput and Google's bounded reusable-input predicate into STSResumption.
+Channel is now 798 lines, Google STS session 799, and the ten-file adjacent
+group including Google fake-wire provider tests passes 251/0 on seeds 0 and 1.
+Scoped review and post-repair root gates remain pending. The two deliberately
+red compiled-room external/hybrid tests remain outside this checkpoint.

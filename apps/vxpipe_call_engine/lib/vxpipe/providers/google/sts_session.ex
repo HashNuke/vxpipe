@@ -248,13 +248,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_call({:submit_input, _context, _operation}, _from, state),
     do: {:reply, {:error, :unsupported_operation}, state}
 
-  def handle_call(:input_quiescent?, _from, state) do
-    quiescent? =
-      state.ready? and is_pid(state.wire) and not state.resuming? and
-        STSResumption.quiescent?(state)
-
-    {:reply, quiescent?, state}
-  end
+  def handle_call(:input_quiescent?, _from, state),
+    do: {:reply, STSResumption.input_quiescent?(state), state}
 
   def handle_call(command, _from, state)
       when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] do

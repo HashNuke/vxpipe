@@ -137,11 +137,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   def handle_call(:input_evidence_idle?, {consumer, _tag}, state) do
-    idle? =
-      consumer == state.consumer and Allocation.valid?(state.allocation) and
-        EventQueue.idle?(state.events) and is_nil(state.input)
-
-    {:reply, idle?, state}
+    {:reply, consumer == state.consumer and STSInput.input_evidence_idle?(state), state}
   end
 
   def handle_call({:submit_audio, reference, audio}, {producer, _tag}, state) do

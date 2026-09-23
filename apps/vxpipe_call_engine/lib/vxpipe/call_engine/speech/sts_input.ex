@@ -10,7 +10,12 @@ defmodule Vxpipe.CallEngine.Speech.STSInput do
   during that callback and a late submission after it settle as stale.
   """
 
-  alias Vxpipe.CallEngine.Speech.{Event, ResponseContexts}
+  alias Vxpipe.CallEngine.Speech.{Allocation, Event, EventQueue, ResponseContexts}
+
+  @doc false
+  def input_evidence_idle?(state) do
+    Allocation.valid?(state.allocation) and EventQueue.idle?(state.events) and is_nil(state.input)
+  end
 
   @doc false
   def context_options([]), do: {:ok, %{}}

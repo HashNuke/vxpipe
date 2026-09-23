@@ -184,6 +184,9 @@ defmodule Vxpipe.Providers.Google.STSResumption do
       map_size(state.pending_tools) == 0 and output_idle?(state)
   end
 
+  def input_quiescent?(state),
+    do: state.ready? and is_pid(state.wire) and not state.resuming? and quiescent?(state)
+
   defp output_idle?(%{response_start?: true} = state), do: STSResponses.idle?(state.responses)
 
   defp output_idle?(state),
