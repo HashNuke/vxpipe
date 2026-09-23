@@ -18,9 +18,30 @@ defmodule Vxpipe.CallEngine.MediaPolicy.SpeechToTextDemand do
   defp activity_required?(_snapshot, _source, nil), do: false
 
   defp activity_required?(snapshot, source, agent) when is_binary(agent) do
-    MapSet.member?(snapshot.present_participant_ids, agent) and
-      Effective.audio_route_permitted?(snapshot.effective, source, agent) and
+    {true, true, true, true} == activity_authority(snapshot, source, agent)
+  end
+
+  @spec activity_authority_changed?(
+          Snapshot.t() | nil,
+          Snapshot.t(),
+          String.t(),
+          String.t() | nil
+        ) ::
+          boolean()
+  def activity_authority_changed?(_previous, _snapshot, _source, nil), do: false
+  def activity_authority_changed?(nil, _snapshot, _source, _agent), do: true
+
+  def activity_authority_changed?(previous, snapshot, source, agent) do
+    activity_authority(previous, source, agent) != activity_authority(snapshot, source, agent)
+  end
+
+  defp activity_authority(snapshot, source, agent) do
+    {
+      MapSet.member?(snapshot.present_participant_ids, source),
+      MapSet.member?(snapshot.present_participant_ids, agent),
+      Effective.audio_route_permitted?(snapshot.effective, source, agent),
       Effective.audio_route_permitted?(snapshot.effective, agent, source)
+    }
   end
 
   defp live_recipient?(snapshot, source_participant_id) do

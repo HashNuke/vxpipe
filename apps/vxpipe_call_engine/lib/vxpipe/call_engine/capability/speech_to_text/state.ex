@@ -265,7 +265,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   defp apply_policy(%__MODULE__{} = state, snapshot) do
     if state.policy_revision ==
          Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) and
-         demanded?(state, state.policy) == demanded?(state, snapshot) do
+         demanded?(state, state.policy) == demanded?(state, snapshot) and
+         not activity_authority_changed?(state, snapshot) do
       {:ok, %{state | policy: snapshot}}
     else
       replace_session(state, snapshot)
@@ -297,6 +298,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   defp demanded?(state, snapshot) do
     SpeechToTextDemand.required?(
+      snapshot,
+      state.identity.participant_id,
+      state.activity_agent_id
+    )
+  end
+
+  defp activity_authority_changed?(state, snapshot) do
+    SpeechToTextDemand.activity_authority_changed?(
+      state.policy,
       snapshot,
       state.identity.participant_id,
       state.activity_agent_id

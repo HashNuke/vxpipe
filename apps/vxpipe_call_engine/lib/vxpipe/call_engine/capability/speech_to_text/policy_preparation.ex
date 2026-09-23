@@ -6,7 +6,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   alias Vxpipe.CallEngine.MediaPolicy.{
     Authority,
     Candidate,
-    Effective,
     Intervals,
     Snapshot,
     SpeechToTextDemand
@@ -185,29 +184,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
          snapshot,
          :speech_to_text,
          state.identity.participant_id
-       ) and activity_authority_unchanged?(state, snapshot) do
+       ) and
+         not SpeechToTextDemand.activity_authority_changed?(
+           state.policy,
+           snapshot,
+           state.identity.participant_id,
+           state.activity_agent_id
+         ) do
       state
     else
       {:ok, state} = discard(state, state.pending_policy.token)
       state
     end
-  end
-
-  defp activity_authority_unchanged?(%{activity_agent_id: nil}, _snapshot), do: true
-  defp activity_authority_unchanged?(%{policy: nil}, _snapshot), do: false
-
-  defp activity_authority_unchanged?(state, snapshot) do
-    source = state.identity.participant_id
-    agent = state.activity_agent_id
-    activity_authority(state.policy, source, agent) == activity_authority(snapshot, source, agent)
-  end
-
-  defp activity_authority(snapshot, source, agent) do
-    {
-      MapSet.member?(snapshot.present_participant_ids, agent),
-      Effective.audio_route_permitted?(snapshot.effective, source, agent),
-      Effective.audio_route_permitted?(snapshot.effective, agent, source)
-    }
   end
 
   def prepared(%{pending_policy: %{state: session} = pending} = state, allocation, descriptor) do
@@ -343,7 +331,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
     cond do
       state.policy_revision ==
         Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) and
-          current_demand?(state) == demanded?(state, snapshot) ->
+        current_demand?(state) == demanded?(state, snapshot) and
+          not SpeechToTextDemand.activity_authority_changed?(
+            state.policy,
+            snapshot,
+            state.identity.participant_id,
+            state.activity_agent_id
+          ) ->
         :retain
 
       demanded?(state, snapshot) ->

@@ -344,6 +344,35 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     refute_receive {:vxpipe_stt_signal, ^capability, _, %Signal{provider_sequence: 4}}
   end
 
+  test "selected activity STT resets its provider on audio-route loss despite transcript demand" do
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+
+    capability =
+      start_capability_process(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert_receive {:test_stt_transport_started, first, _connection}
+    assert :ok = Enforcer.apply(capability, active, 500)
+
+    denied = %{active | revision: 1, effective: %{active.effective | audio_routes: %{}}}
+    assert :ok = Enforcer.apply(capability, denied, 500)
+    assert_receive {:test_stt_transport_started, second, _connection}, 1_000
+    assert second != first
+
+    restored = %{active | revision: 2}
+    assert :ok = Enforcer.apply(capability, restored, 500)
+    assert_receive {:test_stt_transport_started, third, _connection}, 1_000
+    assert third != second
+
+    unrelated = %{
+      restored
+      | revision: 3,
+        effective: %{restored.effective | record_audio: false}
+    }
+
+    assert :ok = Enforcer.apply(capability, unrelated, 500)
+    refute_receive {:test_stt_transport_started, _, _}
+  end
+
   test "pins each demanded provider session to its transcript permission interval" do
     identity = [
       tenant_id: "tenant-demo",

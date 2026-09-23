@@ -172,6 +172,12 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
         state =
           if state.policy != nil and state.policy_demand? == demand? and
+               not SpeechToTextDemand.activity_authority_changed?(
+                 state.policy,
+                 snapshot,
+                 state.identity.participant_id,
+                 state.activity_agent_id
+               ) and
                Snapshot.interval(state.policy, :speech_to_text, state.identity.participant_id) ==
                  Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) do
             %{state | policy: snapshot}

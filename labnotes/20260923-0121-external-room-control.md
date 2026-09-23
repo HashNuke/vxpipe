@@ -172,3 +172,43 @@ unrelated membership/recording changes retain token/generation/readiness, and
 transfer refresh avoids the old conflict. The six-file group passes 88/0 on
 seeds 0 and 1. The broader room-controller, provenance and hold gates remain
 open.
+
+Producer-provenance research for the next checkpoint: `SpeechToText.handle_signal/2`
+currently sets only the STT transcript `policy_revision` on the outgoing
+`Signal`, then sends it asynchronously to the room. `State.event/2` rejects
+events from a closed/stale semantic session, but the STS input epoch is owned
+by `RoomAuthority.SpeechToSpeech` and is not present in the signal. Audio-only
+route revoke/regrant can leave STT running when transcript demand remains;
+therefore stamping audio intervals on a late event alone would not prove the
+audio that caused it was admitted in that interval. The milestone now splits
+this open prerequisite into producer stamping, session/ingress fencing on
+audio-authority change, and hold/release lifecycle coordination. This is a
+design investigation, not implementation or acceptance evidence.
+
+Astra xhigh read-only provenance design review found that native STT events
+already carry allocation generation and turn reference but `Signal` drops them.
+It also traced the ingress-to-capability PCM envelope: it has no allocation
+generation, so an already-sent old frame can reach a new provider after queue
+clear. The reviewer did not run tests; these are source-backed design gaps,
+not independently reproduced runtime defect claims. The chosen candidate is
+an immutable activity binding per native allocation, acknowledged ingress
+cutover, checked provider retirement before new control input, and exact room
+matching; see `docs/sts-activity-provenance.md` for tradeoffs and gates.
+
+Focused provider-retention red: with selected activity STT and transcript
+retention still on, an audio-only route denial left the old STT provider alive
+and started no replacement (one test, one expected failure). The scoped change
+uses the selected source/agent presence and two route decisions—not a global
+policy revision—to trigger live-session replacement, prepared-policy
+replacement and ingress queue reset. The focused test and the adjacent 83-test
+STT/demand/ingress/readiness/room group pass (seed 0). This is not evidence for
+late-signal isolation, in-flight PCM fencing or hold/release safety; those
+remain open.
+
+Astra xhigh scoped code review of the route-reset diff found no concrete
+regression: 39 tests passed with seed 0 and eight additional in-memory probes
+covered both route directions, provider termination, unrelated policy rebase,
+prepared adoption and ingress queue clearing. The owning capability test also
+proves an unrelated recording-only revision does not restart the selected
+recognizer. This review explicitly did not claim generation-qualified PCM,
+emitted-signal provenance or hold safety.

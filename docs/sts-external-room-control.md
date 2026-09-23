@@ -73,6 +73,19 @@ lanes have no common source-frame watermark today. Late STT detection relative
 to already accepted later PCM needs explicit test evidence; message ordering
 alone does not solve it.
 
+Producer provenance remains unresolved. STT currently stamps a transcript
+policy interval when it emits a signal; it does not carry the audio interval or
+an STS lifecycle generation. A delayed signal cannot be assigned the room's
+current STS epoch on receipt. Moreover, if transcripts still demand STT,
+audio-route revocation may leave its provider session alive, allowing an old
+provider boundary to first surface after regrant. The next design proof must
+coordinate source-ingress admission, semantic-session retirement, frozen
+signal provenance, and room comparison. Hold/release requires an equivalent
+producer lifecycle fence before releasing the new STS epoch; a room-only
+watermark cannot classify provider evidence that has not surfaced yet.
+The [activity-provenance design](sts-activity-provenance.md) records the
+allocation-bound signal and acknowledged PCM cutover requirements in detail.
+
 The human-STT publication path remains the sole public caller-turn owner when
 human STT is selected. Forwarding activity may prompt or end an STS response,
 but cannot publish a second caller pair or trigger a second room interruption.

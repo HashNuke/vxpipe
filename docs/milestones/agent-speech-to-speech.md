@@ -671,6 +671,36 @@ the existing audio round trip. Record discoveries here before implementing.
         interval provenance. An end/start first handled after hold/release or
         audio-only revoke/regrant cannot be relabeled with the new STS epoch.
         Keep unrelated policy revisions from invalidating a valid interval.
+        See the [activity-provenance candidate](../sts-activity-provenance.md)
+        for the reviewed producer/ingress/room cutover contract; it is not yet
+        acceptance evidence.
+        - [ ] Stamp each STT activity signal at producer emission with an opaque
+          session/lifecycle generation and scoped caller audio-input/output
+          intervals. The room must compare that frozen evidence with the exact
+          active source/controller epoch; it must never stamp a delayed signal
+          with the epoch current at delivery.
+        - [ ] Reproduce and fence stale provider evidence when the selected
+          STS audio route changes but transcript demand keeps STT alive. A
+          retained recognizer could emit an old boundary after revoke/regrant;
+          define the provider-session reset and ingress admission barrier before
+          relying on interval stamps alone.
+          - [x] Reproduce the retained provider on audio-only route loss with
+            transcripts still demanded. The owning capability test failed 1/1:
+            no replacement started. A scoped session-reset change makes the
+            test and adjacent 83-test group pass, but this does not prove
+            late-evidence isolation or safe PCM cutover. Astra xhigh scoped
+            code review found no concrete regression after 39 tests and eight
+            in-memory probes covering both route directions, unrelated-policy
+            rebase, prepared adoption and ingress queue clearing.
+          - [ ] Qualify every STT ingress PCM envelope with its admitting
+            allocation/input generation and reject a stale envelope before
+            provider delivery; prove queued, in-flight, pre-reopen frames and
+            both policy-enforcer orders.
+        - [ ] On STS hold/release, establish a producer lifecycle boundary:
+          stop admitting old STT audio, retire old provider evidence, then bind
+          the fresh STT generation before releasing controller input. Verify a
+          boundary emitted before hold and one first produced after hold cannot
+          control the new epoch. Coordinate this with provider hold-state repair.
       - [ ] Prove hold/release retires provider-side external activity without
         treating a hold as an ordinary response-triggering end. A focused Morse
         observation found `external_started?` still true after capability hold;
