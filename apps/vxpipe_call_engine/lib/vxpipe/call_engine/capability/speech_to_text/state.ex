@@ -125,6 +125,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     end
   end
 
+  @spec audio_delivery_current?(t(), map() | nil) :: boolean()
+  def audio_delivery_current?(%__MODULE__{policy: nil, activity_agent_id: nil}, _intervals),
+    do: true
+
+  def audio_delivery_current?(
+        %__MODULE__{policy: %Snapshot{} = policy} = state,
+        %{speech_to_text: stt, input: input, output: output} = intervals
+      )
+      when is_integer(stt) and stt >= 0 and is_integer(input) and input >= 0 and
+             is_integer(output) and output >= 0 and map_size(intervals) == 3 do
+    source = state.identity.participant_id
+
+    stt == Snapshot.interval(policy, :speech_to_text, source) and
+      input == Snapshot.interval(policy, :audio_input, source) and
+      output == Snapshot.interval(policy, :audio_output, source)
+  end
+
+  def audio_delivery_current?(%__MODULE__{}, _intervals), do: false
+
   @spec install_policy(t(), Snapshot.t()) ::
           {:ok, t()} | {:error, term(), t()}
   def install_policy(%__MODULE__{} = state, %Snapshot{} = snapshot) do

@@ -373,6 +373,70 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     refute_receive {:test_stt_transport_started, _, _}
   end
 
+  test "an STT ingress envelope admitted before route loss cannot enter the replacement provider" do
+    identity = [
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-human",
+      connection_id: "conn-demo"
+    ]
+
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+
+    capability =
+      start_capability_process(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert_receive {:test_stt_transport_started, first, _connection}
+    assert :ok = Enforcer.apply(capability, active, 500)
+
+    frame = audio_frame(identity)
+
+    ingress =
+      start_supervised!(
+        {Ingress,
+         identity ++
+           [
+             capability: self(),
+             owner: self(),
+             activity_agent_id: "part-agent",
+             maximum_age_ms: 1_000,
+             maximum_bytes: 32,
+             maximum_frames: 2,
+             maximum_consecutive_overflows: 2,
+             clock: fn -> frame.received_at end
+           ]}
+      )
+
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    assert :ok = Ingress.push(ingress, frame)
+    assert_receive {:vxpipe_stt_audio, ^ingress, reference, ^frame, intervals}
+    assert intervals == %{speech_to_text: 0, input: 0, output: 0}
+
+    denied = %{active | revision: 1, effective: %{active.effective | audio_routes: %{}}}
+    assert :ok = Enforcer.apply(capability, denied, 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    assert replacement != first
+    TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    send(capability, {:vxpipe_stt_audio, ingress, reference, frame, intervals})
+    _ = :sys.get_state(capability)
+    refute_receive {:test_stt_audio, ^replacement, _payload}
+
+    send(capability, {:vxpipe_stt_audio, ingress, make_ref(), frame, nil})
+    _ = :sys.get_state(capability)
+    refute_receive {:test_stt_audio, ^replacement, _payload}
+
+    assert :ok = Enforcer.apply(ingress, denied, 500)
+    fresh = audio_frame(identity, sequence_number: 13, payload: <<4, 5, 6>>)
+    assert :ok = Ingress.push(ingress, fresh)
+    assert_receive {:vxpipe_stt_audio, ^ingress, fresh_reference, ^fresh, fresh_intervals}
+    assert fresh_intervals == %{speech_to_text: 0, input: 1, output: 1}
+    send(capability, {:vxpipe_stt_audio, ingress, fresh_reference, fresh, fresh_intervals})
+    assert_receive {:test_stt_audio, ^replacement, <<4, 5, 6>>}
+  end
+
   test "pins each demanded provider session to its transcript permission interval" do
     identity = [
       tenant_id: "tenant-demo",

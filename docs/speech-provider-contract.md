@@ -381,10 +381,13 @@ bidirectional source/agent audio route remains permitted. The room controller
 must still retire an active pair if that demand disappears. Source activity
 requires producer-side lifecycle/audio provenance and delivery-side authority
 rechecks. The bound STS ingress/capability path now serializes and rechecks
-controls, but current STT signals lack that provenance and the room does not
-yet supply them. This is a design candidate with open prerequisites, not a claim of
-room-level implementation; see the
-[external room-control decision](sts-external-room-control.md).
+controls. STT PCM delivery now checks captured transcript and source audio
+intervals at the capability, but still lacks native allocation-generation and
+hold/reopen cutover proof. Current STT signals likewise lack that frozen
+provenance, and the room does not yet supply turn controls. This is a design
+candidate with open prerequisites, not room-level implementation; see the
+[external room-control decision](sts-external-room-control.md) and
+[activity-provenance design](sts-activity-provenance.md).
 
 Pin one transcript source for the caller and one for the agent before admission. Selected
 human STT supplies caller text; otherwise require STS input transcription. The agent uses STS

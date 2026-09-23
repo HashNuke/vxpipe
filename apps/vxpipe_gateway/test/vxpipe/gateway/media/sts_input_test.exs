@@ -284,7 +284,7 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
       deliver = delivery(unquote(transport), attachment, identity, track, payload)
       assert {:ok, prepared} = deliver.(1, prepared)
       assert_receive {:vxpipe_sts_input, ^sts, sts_ref, %{sequence_number: 1}, 0}
-      assert_receive {:vxpipe_stt_audio, ^stt, stt_ref, %{sequence_number: 1}}
+      assert_receive {:vxpipe_stt_audio, ^stt, stt_ref, %{sequence_number: 1}, nil}
 
       case unquote(blocked) do
         :stt ->
@@ -292,13 +292,13 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
           assert {:ok, _prepared} = deliver.(2, prepared)
           assert_receive {:vxpipe_sts_input, ^sts, sts_ref, %{sequence_number: 2}, 0}
           ack(sts, sts_ref)
-          refute_received {:vxpipe_stt_audio, ^stt, _, %{sequence_number: 2}}
+          refute_received {:vxpipe_stt_audio, ^stt, _, %{sequence_number: 2}, _}
 
         :sts ->
           send(stt, {:vxpipe_stt_audio_result, self(), stt_ref, 1, :ok})
           _ = :sys.get_state(stt)
           assert {:ok, _prepared} = deliver.(2, prepared)
-          assert_receive {:vxpipe_stt_audio, ^stt, _, %{sequence_number: 2}}
+          assert_receive {:vxpipe_stt_audio, ^stt, _, %{sequence_number: 2}, nil}
           assert %{dropped: 1, in_flight?: true} = STSIngress.stats(sts)
           ack(sts, sts_ref)
           refute_received {:vxpipe_sts_input, ^sts, _, %{sequence_number: 2}, _}

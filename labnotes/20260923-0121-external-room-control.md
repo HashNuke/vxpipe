@@ -212,3 +212,32 @@ prepared adoption and ingress queue clearing. The owning capability test also
 proves an unrelated recording-only revision does not restart the selected
 recognizer. This review explicitly did not claim generation-qualified PCM,
 emitted-signal provenance or hold safety.
+
+Ingress-to-capability PCM cutover red: a focused STT capability test captured
+the actual `Media.Ingress` delivery envelope before selected audio-route loss,
+replaced the STT provider while transcripts still demanded recognition, then
+delivered that old envelope. The old PCM reached the replacement provider
+(focused 1/1 expected failure). The provisional interval proof now captures
+the ingress policy's STT, source audio-input and source audio-output intervals
+with each asynchronous envelope; the capability compares them to its current
+snapshot before provider delivery and acknowledges stale work as policy-denied.
+The test also verifies a fresh envelope in the new interval still reaches the
+provider. The adjacent ingress/capability/room group passes 57/0 (seed 0).
+This is policy-interval proof only: allocation-generation qualification,
+pre-reopen frame cutoffs, coordinated hold and frozen STT signal provenance
+remain open. Astra xhigh review of this scoped change is pending.
+
+The scoped Astra xhigh review reproduced an integration-test mismatch:
+`apps/vxpipe_gateway/test/vxpipe/gateway/media/sts_input_test.exs` still
+expected the four-field STT audio envelope. A parent rerun confirmed four
+failures in 11 tests before changing the assertions. The three Gateway
+patterns now account for the interval field, including the negative
+credit-isolation assertion; the 11-test file passes with seed 0. The Call
+Engine ingress/capability/room group passes 57/0 on seeds 0 and 1. The
+reviewer separately ran 37 tests and seven in-memory probes of missing,
+malformed and stale proof, both enforcer orders, route directions and fresh
+delivery without reproducing a runtime bypass. Gateway also passes 11/0 on
+seed 1. Astra xhigh re-reviewed the Gateway repair and cleared the scoped
+change with no remaining reproduced actionable issue: Gateway 11/0 and STT
+ingress/capability 30/0, both seed 0. The parent generation/hold cutoff
+remains open.

@@ -696,6 +696,23 @@ the existing audio round trip. Record discoveries here before implementing.
             allocation/input generation and reject a stale envelope before
             provider delivery; prove queued, in-flight, pre-reopen frames and
             both policy-enforcer orders.
+            - [x] First reject policy-stale, already-sent PCM with captured
+              STT and source audio-input/output intervals at capability
+              delivery. A focused owning test captured a real ingress envelope
+              before route loss and delivered it after replacement; it failed
+              because the old audio reached the new provider. Fresh delivery
+              and malformed/missing proof are covered; the adjacent 57-test
+              group passes on seeds 0 and 1. Astra xhigh independently cleared
+              this scope after 30 ingress/capability tests and seven probes,
+              including both policy-enforcer orders. This interval proof is
+              not a substitute for allocation generation or hold/reopen cutoff.
+              - [x] Update Gateway's WebRTC/telephony credit-isolation tests to
+                match the interval-qualified STT envelope, including the
+                no-delivery assertion. Astra xhigh reproduced four failures in
+                the 11-test Gateway STS input file; the parent rerun reproduced
+                the same four before changing the test. The updated 11-test
+                file passes with seeds 0 and 1; the adjacent Call Engine ingress,
+                capability and room group passes 57/0 with seeds 0 and 1.
         - [ ] On STS hold/release, establish a producer lifecycle boundary:
           stop admitting old STT audio, retire old provider evidence, then bind
           the fresh STT generation before releasing controller input. Verify a

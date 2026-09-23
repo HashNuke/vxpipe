@@ -32,6 +32,14 @@ existing `AudioFrame.received_at` is a possible seam only if every source
 preserves its original timestamp; a source-issued generation is stronger. Both
 policy-enforcer application orders need focused proof.
 
+An enabling interval-proof slice now captures the ingress snapshot's STT,
+audio-input and audio-output intervals in each asynchronous PCM envelope and
+rejects a mismatch at capability delivery. A focused test first reproduced an
+old envelope reaching a replacement provider, then proved old rejection and
+fresh delivery. This does not yet qualify the native allocation generation,
+fence pre-reopen frames, or coordinate hold; it must not be treated as the
+completed cutover contract above.
+
 Hold, route loss, source replacement and transfer retire the room controller
 association before a new interval opens. Under the current STT provider
 contract, an allocation that consumed old or held audio must be retired and a

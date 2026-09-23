@@ -69,10 +69,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     GenServer.call(capability, {:push_audio, frame}, @call_timeout)
   end
 
-  @spec deliver_audio(pid(), pid(), reference(), AudioFrame.t()) :: :ok
-  def deliver_audio(capability, ingress, reference, %AudioFrame{} = frame)
+  @spec deliver_audio(pid(), pid(), reference(), AudioFrame.t(), map() | nil) :: :ok
+  def deliver_audio(capability, ingress, reference, %AudioFrame{} = frame, intervals)
       when is_pid(ingress) and is_reference(reference) do
-    send(capability, {:vxpipe_stt_audio, ingress, reference, frame})
+    send(capability, {:vxpipe_stt_audio, ingress, reference, frame, intervals})
     :ok
   end
 
@@ -217,9 +217,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def handle_info({:stt_policy_expired, token}, %{pending_policy: %{token: token}} = state),
     do: {:noreply, PolicyPreparation.fail(state)}
 
-  def handle_info({:vxpipe_stt_audio, ingress, reference, frame}, state)
+  def handle_info({:vxpipe_stt_audio, ingress, reference, frame, intervals}, state)
       when is_pid(ingress) and is_reference(reference) do
-    case State.send_audio(state, frame) do
+    result =
+      if State.audio_delivery_current?(state, intervals),
+        do: State.send_audio(state, frame),
+        else: {:error, :policy_denied}
+
+    case result do
       {:error, :unsupported_audio} ->
         acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unsupported_audio})
         stop_unavailable(:unsupported_audio, state)

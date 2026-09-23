@@ -247,7 +247,16 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
            }}
         else
           reference = make_ref()
-          :ok = SpeechToText.deliver_audio(state.capability, self(), reference, frame)
+
+          :ok =
+            SpeechToText.deliver_audio(
+              state.capability,
+              self(),
+              reference,
+              frame,
+              delivery_intervals(state)
+            )
+
           forward_sts_audio(state, frame)
 
           in_flight = %{
@@ -350,6 +359,18 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   defp input_open?(state) do
     state.opening_input_admission == :open and state.policy_demand?
+  end
+
+  defp delivery_intervals(%{policy: nil}), do: nil
+
+  defp delivery_intervals(state) do
+    source = state.identity.participant_id
+
+    %{
+      speech_to_text: Snapshot.interval(state.policy, :speech_to_text, source),
+      input: Snapshot.interval(state.policy, :audio_input, source),
+      output: Snapshot.interval(state.policy, :audio_output, source)
+    }
   end
 
   defp install_policy(state, snapshot, demand?) do
