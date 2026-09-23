@@ -41,3 +41,91 @@ tasks and the decision/provider contract now explicitly keep these open.
 Second red: compiled-room external and hybrid tests fail 2/2 with no sink
 reply. The ingress-ordering contract test fails as expected because
 `STSIngress.activity/4` does not yet exist; the child test exits 2, 1/1.
+
+Ordered-control prerequisite: added `STSIngress.activity/4` with a bounded
+single-credit queue shared with PCM. It carries the supplied room epoch and scoped
+caller input/output audio intervals, preserves valid controls across unrelated
+transcript policy changes, retires queued controls on hold/revocation, and
+counts only audio in dropped-frame metrics. A rejected delivered control ends
+the ingress, whose monitored owner then fails closed. Capability delivery now
+rechecks bound ingress, epoch, snapshot, presence and both audio routes even
+for Morse descriptors without response-start context. Direct activity also
+rejects hold and egress denial. The direct hold test first failed with `:ok`
+instead of `{:error, :held}` and now passes.
+
+Current focused evidence: Call Engine ingress/capability/origins group passes
+80/0 (seed 0) before the final direct-activity additions; the complete
+capability file then passes 42/0. Child warnings-as-errors compile passes.
+Independent code review is pending. This does not yet select/demand human STT,
+stamp STT producer provenance, or wire room activity. The compiled-room reds
+therefore remain expected and are not part of this prerequisite's green claim.
+
+The direct hold red was accompanied by a direct egress-denial regression; both
+now pass. After moving the cohesive activity submission path into
+`Capability.SpeechToSpeech.Input` to retain the strict module-size boundary,
+the ingress/capability/origins group passes 82/0 (seed 0). The capability file
+is 781 lines, below the strict 800-line limit. Runtime code review is still
+pending; no broader acceptance claim yet.
+
+While proving bound-ingress delivery, inspection of Morse's provider state
+after `SpeechToSpeech.hold/1` showed `external_started?` still true. This is a
+reproducible internal observation, not yet proof of a user-visible wrong reply.
+The milestone now asks for a public consequence test and a provider-side
+retirement decision before any hold/release acceptance claim.
+
+Independent Astra xhigh code review reproduced four issues in the provisional
+ordered seam: hold/in-flight activity rejection terminates the ingress and
+capability; direct capability activity bypasses bound ingress ordering; a nil
+ingress envelope reaches `send(nil, ...)`; and a malformed internal activity
+call reaches map field access. The milestone records each before fixes. Their
+focused reds and repair evidence follow in this labnote.
+
+Reproduced all four locally before changing handlers: malformed internal
+activity raised `KeyError` in `STSIngress.current_activity_intervals?/2`;
+direct activity returned `:ok` with a bound, suspended ingress; a nil ingress
+activity envelope raised `send(nil, ...)` in the capability; and hold queued
+before activity caused `SpeechToSpeech.release/2` to return `{:error,
+:unavailable}` after ingress/capability termination. The four focused tests
+failed 1/1 and 3/3 respectively. The repair validates internal payload shape,
+blocks direct activity when an ingress owns input, guards the reply destination,
+and treats an activity rejection as benign only after its exact epoch/interval/
+route authority was retired. A rejection while current still fails closed.
+Four focused tests now pass 4/0; the ingress/capability/origins group passes
+86/0 (seed 0). A second independent review of the updated diff is pending.
+
+Second Astra xhigh pass cleared the original four but reproduced a capability-
+first policy-revocation ordering race. A queued control rejected by the
+capability's newer snapshot arrives at an ingress still on the old policy, so
+`current_activity?/2` treats it as a fatal current rejection. The milestone
+records this before a focused red/fix. Reviewer saw one origins-test failure
+in a broad 86-test run that passed on isolated same-seed rerun; attribution is
+not established and it is not counted as a finding for this change.
+
+Formal capability-first revocation red: suspend the capability, queue external
+start/end in the ingress, then apply output-denial revision 1 to the capability
+before ingress receives it. After resuming and draining the acknowledged first
+control, `:sys.get_state(ingress)` exits `:activity_rejected` (focused 1/1
+failure). The capability now includes its applied policy revision on stale/
+denied activity acknowledgements. The ingress treats an error as retired when
+its own authority already retired the control or the capability has a strictly
+newer policy; same-revision current rejection still terminates the input owner.
+The focused red is green, the owning group passes 87/0 (seed 0), and child
+warnings-as-errors compile passes. Final review is pending.
+
+Next prerequisite traced without edits: `Readiness.Inventory.connection_demands/4`
+uses `SpeechToTextDemand.required?/2` to omit selected STT when there is no
+transcript demand. `Capability.SpeechToText.State.initial_demand/2` and
+`demanded?/2`, plus `Media.Ingress` policy handling, use the same transcript-only
+predicate. `PlanStartup.connection_speech_to_text/3` builds a
+`SpeechToTextRuntime` which `RoomSupervisor` passes to
+`RoomCapabilitySupervisor.start_speech_to_text/7`. An explicit controller-agent
+identity needs to flow through these boundaries so readiness, provider session
+and ingress agree; changing only the inventory would advertise a dormant
+recognizer as ready. This remains an open next checkpoint, not part of the
+ordered-control commit.
+
+Final scoped Astra xhigh review found no remaining concrete defect in the
+ordered ingress/capability seam after eight in-memory probes. The owning
+ingress/capability/origins group passed 87/0 with seeds 0 and 1. The milestone
+now marks only this prerequisite complete; room wiring, STT activity demand,
+producer provenance, and provider hold retirement remain open.

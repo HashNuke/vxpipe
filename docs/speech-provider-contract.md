@@ -378,8 +378,9 @@ or hybrid control without human STT must fail startup until another activity
 source is explicitly designed and proven. Selection must also keep that STT
 active as an activity demand when transcript demand is absent. Source activity
 requires producer-side lifecycle/audio provenance and delivery-side authority
-rechecks; the current STT signal and room wiring do not yet satisfy these
-conditions. This is a design candidate with open prerequisites, not a claim of
+rechecks. The bound STS ingress/capability path now serializes and rechecks
+controls, but current STT signals lack that provenance and the room does not
+yet supply them. This is a design candidate with open prerequisites, not a claim of
 room-level implementation; see the
 [external room-control decision](sts-external-room-control.md).
 

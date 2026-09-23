@@ -60,6 +60,110 @@ defmodule Vxpipe.CallEngine.Media.STSIngressTest do
     assert_receive {:vxpipe_sts_input, ^ingress, _, %AudioFrame{sequence_number: 7}, 2}
   end
 
+  test "activity boundaries wait behind accepted PCM and keep their input epoch" do
+    ingress = ready_ingress()
+    epoch = make_ref()
+    assert :ok = STSIngress.open(ingress, epoch)
+    assert :ok = STSIngress.push(ingress, frame(1))
+    assert_receive {:vxpipe_sts_input, ^ingress, first, _, 0, ^epoch}
+
+    intervals = %{input: 0, output: 0}
+    assert :ok = STSIngress.activity(ingress, :started, epoch, intervals)
+    assert :ok = STSIngress.activity(ingress, :ended, epoch, intervals)
+    refute_received {:vxpipe_sts_activity, _, _, _, _, _}
+
+    acknowledge(ingress, first)
+    assert_receive {:vxpipe_sts_activity, ^ingress, started, :started, ^intervals, ^epoch}
+    refute_received {:vxpipe_sts_activity, _, _, :ended, _, _}
+
+    send(ingress, {:vxpipe_sts_activity_result, self(), started, :ok})
+    assert_receive {:vxpipe_sts_activity, ^ingress, ended, :ended, ^intervals, ^epoch}
+    send(ingress, {:vxpipe_sts_activity_result, self(), ended, :ok})
+    assert %{queued: 0, in_flight?: false} = STSIngress.stats(ingress)
+  end
+
+  test "hold and policy changes retire queued activity before delivery" do
+    ingress = ready_ingress()
+    epoch = make_ref()
+    assert :ok = STSIngress.open(ingress, epoch)
+    assert :ok = STSIngress.push(ingress, frame(1))
+    assert_receive {:vxpipe_sts_input, ^ingress, first, _, 0, ^epoch}
+    intervals = %{input: 0, output: 0}
+    assert :ok = STSIngress.activity(ingress, :ended, epoch, intervals)
+
+    assert :ok = STSIngress.hold(ingress)
+    acknowledge(ingress, first)
+    refute_received {:vxpipe_sts_activity, _, _, _, _, _}
+    assert %{dropped: 0} = STSIngress.stats(ingress)
+    assert {:error, :held} = STSIngress.activity(ingress, :started, epoch, intervals)
+
+    next_epoch = make_ref()
+    assert :ok = STSIngress.open(ingress, next_epoch)
+    assert {:error, :stale_epoch} = STSIngress.activity(ingress, :ended, epoch, intervals)
+    assert :ok = STSIngress.push(ingress, frame(2))
+    assert_receive {:vxpipe_sts_input, ^ingress, second, _, 0, ^next_epoch}
+    assert :ok = STSIngress.activity(ingress, :ended, next_epoch, intervals)
+    assert :ok = Enforcer.apply(ingress, policy(1, %{}), 500)
+    acknowledge(ingress, second)
+    refute_received {:vxpipe_sts_activity, _, _, _, _, _}
+
+    assert {:error, :stale_policy} =
+             STSIngress.activity(ingress, :ended, next_epoch, intervals)
+  end
+
+  test "rejected activity terminates the ingress instead of admitting later audio" do
+    ingress = ready_ingress()
+    epoch = make_ref()
+    assert :ok = STSIngress.open(ingress, epoch)
+    monitor = Process.monitor(ingress)
+    intervals = %{input: 0, output: 0}
+    assert :ok = STSIngress.activity(ingress, :ended, epoch, intervals)
+    assert_receive {:vxpipe_sts_activity, ^ingress, reference, :ended, ^intervals, ^epoch}
+    assert :ok = STSIngress.push(ingress, frame(1))
+    send(ingress, {:vxpipe_sts_activity_result, self(), reference, {:error, :policy_denied, 0}})
+    assert_receive {:DOWN, ^monitor, :process, ^ingress, :activity_rejected}, 1_000
+    refute_received {:vxpipe_sts_input, _, _, _, _, _}
+  end
+
+  test "unrelated transcript policy changes preserve a queued audio-scoped boundary" do
+    ingress = ready_ingress()
+    epoch = make_ref()
+    assert :ok = STSIngress.open(ingress, epoch)
+    current = :sys.get_state(ingress).policy
+
+    intervals = %{
+      input: Snapshot.interval(current, :audio_input, @identity.participant_id),
+      output: Snapshot.interval(current, :audio_output, @identity.participant_id)
+    }
+
+    assert :ok = STSIngress.push(ingress, frame(1))
+    assert_receive {:vxpipe_sts_input, ^ingress, first, _, 0, ^epoch}
+    assert :ok = STSIngress.activity(ingress, :ended, epoch, intervals)
+
+    unrelated = policy(1)
+    unrelated = %{unrelated | effective: %{unrelated.effective | save_transcripts: true}}
+    assert :ok = Enforcer.apply(ingress, unrelated, 500)
+    revised = :sys.get_state(ingress).policy
+    assert Snapshot.interval(revised, :audio_input, @identity.participant_id) == intervals.input
+    assert Snapshot.interval(revised, :audio_output, @identity.participant_id) == intervals.output
+
+    acknowledge(ingress, first)
+    assert_receive {:vxpipe_sts_activity, ^ingress, reference, :ended, ^intervals, ^epoch}
+    send(ingress, {:vxpipe_sts_activity_result, self(), reference, :ok})
+    assert %{queued: 0, in_flight?: false} = STSIngress.stats(ingress)
+  end
+
+  test "malformed internal activity calls are rejected without ending the ingress" do
+    ingress = ready_ingress()
+    epoch = make_ref()
+    assert :ok = STSIngress.open(ingress, epoch)
+
+    assert {:error, :invalid_activity} =
+             GenServer.call(ingress, {:activity, :started, epoch, %{}})
+
+    assert %{queued: 0, in_flight?: false} = STSIngress.stats(ingress)
+  end
+
   test "rejects wrong identity, format, track, stale age and duplicate sequences before delivery" do
     ingress = ready_ingress()
 

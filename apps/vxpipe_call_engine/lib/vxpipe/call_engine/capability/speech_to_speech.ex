@@ -296,41 +296,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     end
   end
 
+  def handle_call({:input_activity, _boundary}, _from, %{input: ingress} = state)
+      when is_pid(ingress),
+      do: {:reply, {:error, :input_owned_by_ingress}, state}
+
   def handle_call({:input_activity, boundary}, _from, state) do
-    {result, state} = ResponseOrigins.submit(state, {:activity, boundary})
-
-    case result do
-      :ok ->
-        state =
-          case {state.descriptor.response_start?, boundary} do
-            {true, :started} ->
-              {:ok, fingerprint} =
-                ResponseOrigins.accepted_fingerprint(state, state.response_origins.current)
-
-              %{state | external_activity_origin: fingerprint}
-
-            {true, :ended} ->
-              {:ok, fingerprint} =
-                ResponseOrigins.accepted_fingerprint(state, state.response_origins.current)
-
-              if fingerprint == state.external_activity_origin,
-                do: %{state | external_activity_origin: nil},
-                else: state
-
-            _other ->
-              state
-          end
-
-        {:noreply, state} =
-          if boundary == :ended and state.descriptor.response_start?,
-            do: admit_next_pending(state),
-            else: {:noreply, state}
-
-        {:reply, :ok, state}
-
-      {:error, _reason} = error ->
-        {:reply, error, state}
-    end
+    {result, state} = Input.submit_activity(state, boundary)
+    {:reply, result, state}
   end
 
   def handle_call(:interrupt, _from, state) do
@@ -490,6 +462,26 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   def handle_info({:vxpipe_sts_input, ingress, reference, frame, revision, epoch}, state),
     do: Input.deliver(state, ingress, reference, frame, revision, epoch)
+
+  def handle_info(
+        {:vxpipe_sts_activity, ingress, reference, boundary, intervals, epoch},
+        state
+      ) do
+    {result, state} =
+      case Input.validate_activity(state, ingress, boundary, intervals, epoch) do
+        :ok -> Input.submit_activity(state, boundary)
+        error -> {error, state}
+      end
+
+    if is_pid(ingress) and ingress == state.input,
+      do:
+        send(
+          ingress,
+          {:vxpipe_sts_activity_result, self(), reference, Input.activity_ack(state, result)}
+        )
+
+    {:noreply, state}
+  end
 
   def handle_info({:DOWN, monitor, :process, _input, _reason}, %{input_monitor: monitor} = state),
     do: stop_unavailable(:input_unavailable, state)

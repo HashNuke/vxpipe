@@ -1,15 +1,18 @@
 # Room-owned STS external and hybrid turn control
 
-Status: design candidate with three unresolved prerequisites from independent
-review. This is not approved implementation or acceptance evidence. The
-milestone tracks those separately.
+Status: design candidate. Ordered ingress and capability authority have focused
+local proof; STT activity demand, producer provenance and provider hold-state
+retirement remain open. This is not room-level implementation or acceptance
+evidence. The milestone tracks those separately.
 
 ## Decision
 
 The selected human STT stream is the first candidate room activity source for
 external and hybrid STS. Its `turn_started`/`turn_ended` signals are activity
-evidence, not response text. The room must forward admitted external starts and
-ends in order through the existing capability `input_activity/2` path. Hybrid
+evidence, not response text. The room must enqueue admitted external starts and
+ends through `STSIngress.activity/4`, which shares ordered credit with PCM and
+delivers them to the capability's validated submission path. Direct
+`input_activity/2` is rejected once a room ingress owns input. Hybrid
 uses provider speech onset and human-STT end; it must not send a second start.
 Provider-controlled mode must receive no external activity commands even when
 human STT supplies caller text. Transcript-source choice remains independent of
@@ -43,8 +46,9 @@ the STS capability in signal order. STS PCM and controls share one
 channel input slot; route controls through a bounded ordered admission/barrier
 with the STS ingress rather than racing a direct capability call against
 in-flight PCM. Revalidate source, epoch and policy at capability delivery;
-`ResponseOrigins.prepare/1` currently skips those checks for descriptors
-without response-start context support. A busy or rejected boundary does not
+`ResponseOrigins.prepare/1` by itself skips those checks for descriptors
+without response-start context support; the new bound-ingress delivery path
+therefore performs them before submission. A busy or rejected boundary does not
 count as delivered and must not unlock a response. Separate STT/STS ingress
 lanes have no common source-frame watermark today. Late STT detection relative
 to already accepted later PCM needs explicit test evidence; message ordering
@@ -74,10 +78,18 @@ policy-interval, STT signal and STS capability paths. It found three unresolved
 dependencies, not reproduced runtime defects: transcript demand may leave the
 selected activity source dormant; an already-emitted STT signal lacks the
 source-audio/lifecycle provenance needed after audio-only revocation or hold;
-and direct `input_activity/2` does not revalidate authority for descriptors
-without response-start context support. The milestone records these as open
-prerequisites. The controller design is not approved until they are resolved
-with focused evidence.
+and the original direct `input_activity/2` did not revalidate authority for
+descriptors without response-start context support. The ordered ingress and
+capability-delivery prerequisite has focused local proof, but selected STT
+demand and producer provenance remain open. Provider-side activity state after
+hold also needs an observable-consequence test. The controller design is not
+approved until these are resolved with focused evidence.
+
+Final scoped Astra xhigh review of the ordered ingress/capability seam found no
+remaining concrete defect after the five reproduced review findings were fixed.
+The owning ingress/capability/origins group passed 87 tests on seeds 0 and 1,
+and the reviewer ran eight additional in-memory probes. This clears only that
+prerequisite, not the room controller or its remaining dependencies.
 
 ## Implications and verification
 

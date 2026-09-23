@@ -653,9 +653,28 @@ the existing audio round trip. Record discoveries here before implementing.
         interval provenance. An end/start first handled after hold/release or
         audio-only revoke/regrant cannot be relabeled with the new STS epoch.
         Keep unrelated policy revisions from invalidating a valid interval.
-      - [ ] Recheck exact epoch, source, policy and route when queued controls
+      - [ ] Prove hold/release retires provider-side external activity without
+        treating a hold as an ordinary response-triggering end. A focused Morse
+        observation found `external_started?` still true after capability hold;
+        determine the public consequence, reproduce it, then reset or fail the
+        owned session without replaying the old turn in the new epoch.
+      - [x] Recheck exact epoch, source, policy and route when queued controls
         reach the STS capability, including Morse/legacy descriptors without
         response-start context support. Ordering alone is not authorization.
+        Independent code review reproduced four seam defects; prove each with
+        an owning focused red before changing behavior: hold racing in-flight
+        activity must retire it without killing the capability; direct activity
+        must not bypass a bound ingress's credit/epoch; nil ingress envelopes
+        must not crash an unbound capability; malformed internal activity calls
+        must not crash the ingress. A second review reproduced capability-first
+        policy revocation: the capability rejects a queued activity under its
+        newer snapshot while the ingress still sees the old route, and the
+        ingress treats this expected retirement as fatal. Prove and fix that
+        ordering without masking a rejection under still-current authority.
+        Evidence: all five independently reproduced seam defects have focused
+        reds and fixes. The owning ingress/capability/origins group passes 87
+        tests with seeds 0 and 1; final Astra xhigh review found no remaining
+        concrete defect in this scoped seam after eight in-memory probes.
     - [ ] Reproduce the missing room-to-capability activity boundary with a
       real compiled Morse external call and selected human STT. Require one
       response only after the authorized end, with one human-STT-owned public

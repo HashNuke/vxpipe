@@ -814,6 +814,251 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_input_event, ^capability, %{epoch: ^second}}
   end
 
+  test "queued external activity reaches the capability through its bound ingress" do
+    %{capability: capability, ingress: ingress, epoch: epoch, provider: provider} =
+      bound_external_capability()
+
+    assert :ok =
+             Vxpipe.CallEngine.Media.STSIngress.activity(
+               ingress,
+               :started,
+               epoch,
+               %{input: 0, output: 0}
+             )
+
+    _ = :sys.get_state(capability)
+    assert %{queued: 0, in_flight?: false} = Vxpipe.CallEngine.Media.STSIngress.stats(ingress)
+    assert :sys.get_state(provider).external_started?
+  end
+
+  test "old-epoch activity cannot start a new external controller interval" do
+    %{capability: capability, ingress: ingress, epoch: old_epoch, provider: provider} =
+      bound_external_capability()
+
+    assert :ok = SpeechToSpeech.hold(capability)
+    new_epoch = make_ref()
+    assert :ok = SpeechToSpeech.release(capability, new_epoch)
+    old = make_ref()
+
+    send(
+      capability,
+      {:vxpipe_sts_activity, ingress, old, :started, %{input: 0, output: 0}, old_epoch}
+    )
+
+    _ = :sys.get_state(capability)
+    refute :sys.get_state(provider).external_started?
+
+    assert :ok =
+             Vxpipe.CallEngine.Media.STSIngress.activity(
+               ingress,
+               :started,
+               new_epoch,
+               %{input: 0, output: 0}
+             )
+
+    _ = :sys.get_state(capability)
+    assert :sys.get_state(provider).external_started?
+  end
+
+  test "old audio interval cannot start external control after revoke and regrant" do
+    %{capability: capability, ingress: ingress, epoch: epoch, provider: provider} =
+      bound_external_capability()
+
+    old_intervals = %{input: 0, output: 0}
+
+    denied = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 1,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: deny_audio(@human, @agent)
+    }
+
+    granted = %{denied | revision: 2, effective: unrestricted()}
+
+    for policy <- [denied, granted] do
+      assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(capability, policy, 500)
+      assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, policy, 500)
+    end
+
+    old = make_ref()
+    send(capability, {:vxpipe_sts_activity, ingress, old, :started, old_intervals, epoch})
+    _ = :sys.get_state(capability)
+    refute :sys.get_state(provider).external_started?
+
+    current = :sys.get_state(capability).input_policy
+
+    intervals = %{
+      input: Vxpipe.CallEngine.MediaPolicy.Snapshot.interval(current, :audio_input, @human),
+      output: Vxpipe.CallEngine.MediaPolicy.Snapshot.interval(current, :audio_output, @human)
+    }
+
+    assert intervals.input != old_intervals.input
+    assert :ok = Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :started, epoch, intervals)
+    _ = :sys.get_state(capability)
+    assert :sys.get_state(provider).external_started?
+  end
+
+  test "direct external activity cannot end a turn after capability hold" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "external"]}
+      )
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert {:error, :held} = SpeechToSpeech.input_activity(capability, :ended)
+  end
+
+  test "direct external activity is denied when caller output is revoked" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "external"]}
+      )
+
+    assert :ok = SpeechToSpeech.apply_policy(capability, deny_egress())
+    assert {:error, :policy_denied} = SpeechToSpeech.input_activity(capability, :ended)
+  end
+
+  test "direct activity cannot bypass a bound ingress" do
+    %{capability: capability, ingress: ingress} = bound_external_capability()
+    assert :ok = :sys.suspend(ingress)
+
+    try do
+      assert {:error, :input_owned_by_ingress} =
+               SpeechToSpeech.input_activity(capability, :started)
+    after
+      :sys.resume(ingress)
+    end
+  end
+
+  test "a nil ingress activity envelope cannot crash an unbound capability" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "external"]}
+      )
+
+    send(
+      capability,
+      {:vxpipe_sts_activity, nil, make_ref(), :started, %{input: 0, output: 0}, make_ref()}
+    )
+
+    assert %{input: nil} = :sys.get_state(capability)
+  end
+
+  test "hold racing delivered activity retires the control without killing the capability" do
+    %{capability: capability, ingress: ingress, epoch: epoch} = bound_external_capability()
+    assert :ok = :sys.suspend(capability)
+    call = make_ref()
+
+    try do
+      send(capability, {:"$gen_call", {self(), call}, :hold})
+
+      assert :ok =
+               Vxpipe.CallEngine.Media.STSIngress.activity(
+                 ingress,
+                 :started,
+                 epoch,
+                 %{input: 0, output: 0}
+               )
+    after
+      :sys.resume(capability)
+    end
+
+    assert_receive {^call, :ok}
+    _ = :sys.get_state(capability)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+  end
+
+  test "capability-first output revocation retires a queued activity without killing input" do
+    %{capability: capability, ingress: ingress, epoch: epoch} = bound_external_capability()
+
+    denied = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 1,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: deny_egress()
+    }
+
+    assert :ok = :sys.suspend(capability)
+    policy_call = make_ref()
+
+    try do
+      intervals = %{input: 0, output: 0}
+
+      assert :ok =
+               Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :started, epoch, intervals)
+
+      assert :ok = Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :ended, epoch, intervals)
+
+      send(
+        capability,
+        {:"$gen_call", {self(), policy_call}, {:vxpipe_apply_media_policy, denied}}
+      )
+    after
+      :sys.resume(capability)
+    end
+
+    assert_receive {^policy_call, :ok}
+    _ = :sys.get_state(ingress)
+    _ = :sys.get_state(capability)
+
+    assert %{queued: 0, in_flight?: false} =
+             Vxpipe.CallEngine.Media.STSIngress.stats(ingress)
+
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, denied, 500)
+    _ = :sys.get_state(capability)
+  end
+
+  defp bound_external_capability do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "external"]}
+      )
+
+    identity = %{
+      tenant_id: "sts-tenant",
+      room_id: "sts-room",
+      incarnation_id: "sts-incarnation",
+      participant_id: @human,
+      connection_id: "source"
+    }
+
+    assert {:ok, format} = SpeechToSpeech.input_format(capability)
+
+    assert {:ok, ingress} =
+             SpeechToSpeech.Tree.start_input(capability,
+               source_connection: self(),
+               identity: identity,
+               agent_id: @agent,
+               format: format,
+               delivery_timeout_ms: 100
+             )
+
+    assert :ok = SpeechToSpeech.bind_input(capability, ingress)
+
+    snapshot = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: unrestricted()
+    }
+
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(capability, snapshot, 500)
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, snapshot, 500)
+
+    assert :ok =
+             Vxpipe.CallEngine.Media.STSIngress.prepare_track(
+               ingress,
+               Map.put(format, :track_id, "microphone")
+             )
+
+    epoch = make_ref()
+    assert :ok = SpeechToSpeech.release(capability, epoch)
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    %{capability: capability, ingress: ingress, epoch: epoch, provider: provider}
+  end
+
   defp start_capability(options) do
     alias Vxpipe.CallEngine.Speech.PrivateInit
 

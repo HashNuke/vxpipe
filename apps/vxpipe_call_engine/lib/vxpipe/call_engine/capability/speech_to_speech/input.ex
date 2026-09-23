@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, STSIngress}
-  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
+  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins
 
@@ -73,6 +73,104 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
        do: %{state | input_sequence: frame.sequence_number},
        else: %{state | dropped_ingress_chunks: state.dropped_ingress_chunks + 1}
      )}
+  end
+
+  def validate_activity(
+        state,
+        ingress,
+        boundary,
+        %{input: input, output: output} = intervals,
+        epoch
+      )
+      when boundary in [:started, :ended] and is_integer(input) and input >= 0 and
+             is_integer(output) and output >= 0 and map_size(intervals) == 2 do
+    policy = state.input_policy
+
+    cond do
+      ingress != state.input or state.input == nil ->
+        {:error, :wrong_connection}
+
+      state.held? or not is_reference(epoch) or epoch != state.input_epoch ->
+        {:error, :held}
+
+      not Snapshot.valid?(policy) ->
+        {:error, :policy_denied}
+
+      input != Snapshot.interval(policy, :audio_input, state.human_id) or
+          output != Snapshot.interval(policy, :audio_output, state.human_id) ->
+        {:error, :stale_policy}
+
+      not MapSet.member?(policy.present_participant_ids, state.human_id) or
+          not MapSet.member?(policy.present_participant_ids, state.agent_id) ->
+        {:error, :policy_denied}
+
+      not Effective.audio_route_permitted?(policy.effective, state.human_id, state.agent_id) or
+          not Effective.audio_route_permitted?(policy.effective, state.agent_id, state.human_id) ->
+        {:error, :policy_denied}
+
+      state.descriptor == nil or state.descriptor.turn_control == "provider" ->
+        {:error, :unsupported_operation}
+
+      true ->
+        :ok
+    end
+  end
+
+  def validate_activity(_state, _ingress, _boundary, _intervals, _epoch),
+    do: {:error, :invalid_activity}
+
+  def activity_ack(%{input_policy: %Snapshot{revision: revision}}, {:error, reason})
+      when reason in [:stale_policy, :policy_denied],
+      do: {:error, reason, revision}
+
+  def activity_ack(_state, result), do: result
+
+  def submit_activity(%{held?: true} = state, _boundary), do: {{:error, :held}, state}
+
+  def submit_activity(state, boundary) do
+    if Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
+         Output.audio_route_permitted?(state, state.agent_id, state.human_id) do
+      submit_permitted_activity(state, boundary)
+    else
+      {{:error, :policy_denied}, state}
+    end
+  end
+
+  defp submit_permitted_activity(state, boundary) do
+    {result, state} = ResponseOrigins.submit(state, {:activity, boundary})
+
+    case result do
+      :ok ->
+        state =
+          case {state.descriptor.response_start?, boundary} do
+            {true, :started} ->
+              {:ok, fingerprint} =
+                ResponseOrigins.accepted_fingerprint(state, state.response_origins.current)
+
+              %{state | external_activity_origin: fingerprint}
+
+            {true, :ended} ->
+              {:ok, fingerprint} =
+                ResponseOrigins.accepted_fingerprint(state, state.response_origins.current)
+
+              if fingerprint == state.external_activity_origin,
+                do: %{state | external_activity_origin: nil},
+                else: state
+
+            _other ->
+              state
+          end
+
+        {:noreply, state} =
+          if boundary == :ended and state.descriptor.response_start?,
+            do: Output.admit_next_pending(state),
+            else: {:noreply, state}
+
+        {:ok, state}
+
+      {:error, _reason} = error ->
+        {error, state}
+    end
   end
 
   defp validate(state, ingress, %AudioFrame{} = frame, revision, epoch) do
