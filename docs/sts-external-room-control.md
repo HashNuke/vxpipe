@@ -92,6 +92,32 @@ but cannot publish a second caller pair or trigger a second room interruption.
 STS response and playback stay under the existing authorization and egress
 fences. A delayed human-STT onset must not cancel a newer STS reply.
 
+## Hold of provider-owned external activity
+
+A focused Morse capability test now proves a caller-visible stale reply: after
+an accepted external start and `HI` PCM, capability hold/release blocks the old
+end while held but an end after release prompts an old-input reply.
+The provider retained its decoder, input turn and external-start state. This
+red is not a completed hold fix.
+
+The next safety gate is to close input admission and fence playback, then fail
+the owned STS allocation closed whenever accepted external/hybrid input remains
+dirty and a quiescent provider/native-event boundary cannot be proven. A
+completed external end by itself is insufficient: an old native end can still
+be queued behind hold and first handled after release. Track accepted PCM as
+well as explicit starts so hybrid PCM-only input is covered. A settled-idle
+Google session should remain reusable only when its provider-owned quiescence
+and outstanding native-event state both prove the old origin retired. No
+billable hosted check is implied by this local decision.
+
+Reusable hold/release needs a later acknowledged input discard/reset plus a
+barrier for already-emitted native events. Merely clearing Morse decoder
+fields would leave an old end in the channel/capability queue; sending the
+ordinary external `:ended` boundary would instead trigger the old response.
+Fail-closed retirement sacrifices that interrupted STS allocation but prevents
+relabeling its input into a new room epoch. The milestone keeps successful
+hold/release acceptance open until reusable semantics are proven.
+
 ## Rejected alternatives
 
 - Inferring external end from a final transcript conflates recognition latency

@@ -395,6 +395,14 @@ implementation; see the
 [external room-control decision](sts-external-room-control.md) and
 [activity-provenance design](sts-activity-provenance.md).
 
+An active external/hybrid input must not survive a hold as an unfinished
+provider-side turn. Safe reuse requires acknowledged input discard and
+retirement of native events already emitted toward the consumer; otherwise
+the owned STS allocation must fail closed before release. A normal external
+`:ended` is not a discard operation because it can prompt a response. The
+current Morse hold path demonstrably replays old input after release, so this
+contract remains an open implementation gate rather than a claimed guarantee.
+
 Pin one transcript source for the caller and one for the agent before admission. Selected
 human STT supplies caller text; otherwise require STS input transcription. The agent uses STS
 output transcription, or explicit `output_speech_to_text` when that coverage is absent. That

@@ -275,3 +275,19 @@ prepared recording-policy replacement/rebase/adoption, intervening interval
 invalidation, ingress queue clearing, stale envelopes/acknowledgements and
 legacy non-selected behavior. It did not claim native PCM generation/cutoff,
 checked retirement, hold or room-control acceptance.
+
+Morse external hold consequence red: a real external `:started` boundary and
+encoded `HI` PCM left provider input pending; capability hold/release blocked
+the old end while held but did not retire provider-side activity. An `:ended`
+boundary after release emitted `{:test_audio_output_finish, sink, turn}` for
+the old reply (focused 1/1 expected failure). This is a caller-visible leak,
+not merely `external_started?` introspection. The milestone records an
+acknowledged cancel-or-fail requirement before implementation. Astra xhigh
+design review found that resetting Morse fields alone is insufficient because
+a native end may already be queued. It recommended the smaller interim safety
+contract: close admission, fence playback, then retire a dirty external/hybrid
+STS allocation unless both provider quiescence and native-event retirement
+are proven. An accepted end does not by itself clear dirtiness; idle Google
+reuse needs more than no active output. Reusable cancellation requires an
+acknowledged provider discard and native-event barrier as a later gate. No
+implementation or green hold claim exists yet.

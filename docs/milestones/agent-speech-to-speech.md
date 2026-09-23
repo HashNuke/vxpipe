@@ -752,6 +752,23 @@ the existing audio round trip. Record discoveries here before implementing.
         observation found `external_started?` still true after capability hold;
         determine the public consequence, reproduce it, then reset or fail the
         owned session without replaying the old turn in the new epoch.
+        - [x] The public consequence is reproduced with real Morse PCM: an
+          external start and accepted `HI` followed by hold/release and an end
+          boundary emits an old reply to the sink (focused 1/1 expected
+          failure). The red test remains intentionally unstaged until a safe
+          implementation is green.
+        - [ ] First fail the owned STS allocation closed on dirty external or
+          hybrid hold after input admission closes and playback is fenced.
+          Track accepted PCM and activity starts; an accepted end alone does
+          not prove native events have drained. Preserve settled-idle Google
+          reuse only with provider-owned quiescence and no outstanding native
+          input evidence. Prove external replay, hybrid PCM-only replay,
+          queued end→hold→release, active Google fail-closed and idle Google
+          reuse. This is an interim safety gate, not successful hold/release.
+        - [ ] For reusable hold/release, add an acknowledged provider input
+          discard/reset and a native-event retirement barrier. Morse decoder
+          clearing alone cannot fence an already-emitted turn end; Google must
+          prove equivalent history-safe semantics or remain fail-closed.
       - [x] Recheck exact epoch, source, policy and route when queued controls
         reach the STS capability, including Morse/legacy descriptors without
         response-start context support. Ordering alone is not authorization.
