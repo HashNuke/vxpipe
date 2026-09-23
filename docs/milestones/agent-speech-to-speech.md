@@ -2753,6 +2753,13 @@ zero failures, 42 excluded, seed 0. See
   `labnotes/20260922-1941-google-caller-renewal.md`. Newly recorded interaction-
   profile regressions are the next checkpoint, not evidence covered by this run.
 
+  Selected-STT audio-origin checkpoint `a50b78bc` passes post-commit root
+  format, warnings-as-errors compile, strict Credo and unused-dependency
+  checks. Root `mix test` stops before tests at the local PostgreSQL SCRAM
+  password requirement. Focused Call Engine owners pass 76/0 on seeds 0 and 1;
+  the external/hybrid room-control reds remain open, so this is not final
+  milestone acceptance.
+
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 
 Suggestions only; normative behavior stays in the checkpoints above. Paths

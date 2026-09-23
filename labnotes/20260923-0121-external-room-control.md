@@ -464,3 +464,11 @@ after 47 focused tests/probes and eight edge checks, including route direction,
 enforcer order, malformed proof, prepared-origin privacy and stale
 acknowledgements.
 Full hold/reopen source-time fencing remains open.
+
+Post-commit `a50b78bc` umbrella checks: `mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix credo --strict` (1,097 files, no
+issues), and `mix deps.unlock --check-unused` all exit 0. Root `mix test`
+stops before tests while creating the Persistence test database: local
+PostgreSQL SCRAM authentication has no configured password. No credential was
+added or logged. The two external/hybrid compiled-room tests remain separate
+deliberate reds, unstaged from this checkpoint.
