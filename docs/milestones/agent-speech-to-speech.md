@@ -639,6 +639,42 @@ the existing audio round trip. Record discoveries here before implementing.
     control and provider-level late evidence first arriving after hold/release
     or source-policy revoke/regrant. The owner-message epoch fence alone does
     not prove that old upstream speech cannot be relabeled into a new interval.
+    - [ ] Review the room-controller design separately from implementation:
+      identify the selected activity source, exact connection/epoch/policy
+      authority, ordered start/end ownership, and the unsupported-without-source
+      admission case. Keep response control independent of transcript selection.
+      Resolve the three design-review prerequisites below before claiming the
+      design approved or implementing the controller.
+      - [ ] Make selected external/hybrid STT an explicit activity demand even
+        when transcription retention and live transcript routes are off; or
+        reject/retire such selections before readiness. Cover demand removal
+        mid-call without silently losing the end controller.
+      - [ ] Give already-emitted STT activity producer-side lifecycle and audio
+        interval provenance. An end/start first handled after hold/release or
+        audio-only revoke/regrant cannot be relabeled with the new STS epoch.
+        Keep unrelated policy revisions from invalidating a valid interval.
+      - [ ] Recheck exact epoch, source, policy and route when queued controls
+        reach the STS capability, including Morse/legacy descriptors without
+        response-start context support. Ordering alone is not authorization.
+    - [ ] Reproduce the missing room-to-capability activity boundary with a
+      real compiled Morse external call and selected human STT. Require one
+      response only after the authorized end, with one human-STT-owned public
+      caller pair and no text-model dispatch.
+    - [ ] Wire selected, authorized human-STT activity to external start/end and
+      hybrid end, without a second interruption or duplicate caller turn.
+      Reject mismatched, duplicate, stale, held or revoked boundaries and fail
+      closed on capability rejection; cover provider-controlled coexistence.
+      Serialize controls with admitted STS PCM through the same bounded input
+      path; a transient busy input slot must not silently drop an end boundary.
+    - [ ] Prove external/hybrid source admission, held/replaced-source and
+      policy revoke/regrant behavior in focused room tests. Keep upstream
+      provider late-evidence isolation and transfer lifecycle as separate gates.
+      The independent design review found that selected STT can be dormant
+      without transcript demand, STT signals currently lack STS-epoch/audio
+      provenance, and `input_activity/2` bypasses authority rechecks for
+      descriptors without response-start support. See
+      [room-control decision](../sts-external-room-control.md); these are
+      unimplemented prerequisites, not reproduced runtime defect claims.
 
   Evidence: the embedded matrix first failed both STS-caller modes (five tests,
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,

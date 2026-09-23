@@ -370,6 +370,18 @@ control requires explicit consumer activity boundaries. Configuration fails if t
 disagree. One exact permitted caller connection feeds each STS allocation, never mixed room
 audio. Human STT and STS have independent bounded input delivery. Policy, source replacement,
 hold and handoff must fence the old allocation's authority before new input is accepted.
+For room calls, selected human STT is the first candidate external activity source:
+external mode forwards its admitted start/end, while hybrid takes provider onset
+and forwards its admitted end. Provider-controlled mode receives no external
+boundaries even when human STT supplies caller text. A room selection of external
+or hybrid control without human STT must fail startup until another activity
+source is explicitly designed and proven. Selection must also keep that STT
+active as an activity demand when transcript demand is absent. Source activity
+requires producer-side lifecycle/audio provenance and delivery-side authority
+rechecks; the current STT signal and room wiring do not yet satisfy these
+conditions. This is a design candidate with open prerequisites, not a claim of
+room-level implementation; see the
+[external room-control decision](sts-external-room-control.md).
 
 Pin one transcript source for the caller and one for the agent before admission. Selected
 human STT supplies caller text; otherwise require STS input transcription. The agent uses STS
