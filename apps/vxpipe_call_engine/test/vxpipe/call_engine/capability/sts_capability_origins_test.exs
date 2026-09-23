@@ -193,6 +193,45 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
       assert_receive {:context_response_discarded, ^turn}
       refute_received {:context_output_granted, ^turn, _}
     end
+
+    test "#{mode} direct origin survives an unrelated agent recipient" do
+      capability = capability(provider: {SpeechContextProbe, [turn_control: unquote(mode)]})
+      provider = Session.provider(:sys.get_state(capability).session)
+      turn = make_ref()
+
+      base = %Snapshot{
+        revision: 0,
+        present_participant_ids: MapSet.new(["caller", "agent", "support"]),
+        effective: restricted_both()
+      }
+
+      assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, base})
+      previous = :sys.get_state(capability).input_policy
+      assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+      assert_receive {:context_input, context, {:audio, <<0, 0>>}, _}
+
+      routes = %{
+        "caller" => MapSet.new(["agent"]),
+        "agent" => MapSet.new(["caller", "support"])
+      }
+
+      expanded = %{base | revision: 1, effective: %{base.effective | audio_routes: routes}}
+      assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, expanded})
+      current = :sys.get_state(capability).input_policy
+
+      assert Snapshot.interval(current, :audio_input, "caller") ==
+               Snapshot.interval(previous, :audio_input, "caller")
+
+      assert Snapshot.interval(current, :audio_output, "caller") ==
+               Snapshot.interval(previous, :audio_output, "caller")
+
+      assert Snapshot.interval(current, :audio_input, "agent") !=
+               Snapshot.interval(previous, :audio_input, "agent")
+
+      assert :ok = GenServer.call(provider, {:emit_response, context, turn, 1})
+      assert_receive {:context_output_granted, ^turn, _}
+      refute_received {:context_response_discarded, ^turn}
+    end
   end
 
   test "held direct opted-in activity cannot create an accepted origin" do

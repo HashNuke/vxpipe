@@ -1130,6 +1130,22 @@ the existing audio round trip. Record discoveries here before implementing.
         accepted while absent; old response granted after regrant) and pass
         4/4 after. The adjacent six-file group passes 135/0 on seeds 0 and 1.
         Independent re-review and post-commit root gates remain separate.
+        - [x] Narrow the agent-presence fingerprint after independent review:
+          adding an unrelated agent-to-support audio recipient changes the
+          agent audio-input interval and currently discards an accepted caller
+          response, despite unchanged agent presence and caller↔agent routes.
+          Reproduce external/hybrid false retirement in owning tests, then
+          advance only a selected-agent presence-specific origin revision on
+          leave/regrant. Preserve absent-agent denial, fresh origin and late
+          response discard; verify focused origin/room cases on two seeds.
+          Astra xhigh's two in-memory probes failed on seeds 0 and 1. Two
+          owning reds failed at old-context discard. The capability now
+          increments its origin-policy revision only on selected-agent
+          presence transitions between snapshots, so unrelated recipient
+          changes keep the context. The initial snapshot does not count as a
+          leave/regrant; an existing origin test caught that edge. The
+          adjacent six-file group passes 137/0 on seeds 0 and 1. Independent
+          re-review and post-commit root gates remain separate.
 
   Evidence: the embedded matrix first failed both STS-caller modes (five tests,
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,

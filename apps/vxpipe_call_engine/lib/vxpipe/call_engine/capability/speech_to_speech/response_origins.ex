@@ -63,10 +63,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
            source: {state.caller_source, state.human_id, state.frame_identity},
            epoch: epoch,
            lifecycle_revision: state.origin_lifecycle_revision,
-           direct_policy_revision: state.origin_policy_revision,
+           origin_policy_revision: state.origin_policy_revision,
            input_interval: interval(state, :audio_input, state.human_id),
-           output_interval: interval(state, :audio_output, state.human_id),
-           agent_input_interval: interval(state, :audio_input, state.agent_id)
+           output_interval: interval(state, :audio_output, state.human_id)
          }}
     end
   end
