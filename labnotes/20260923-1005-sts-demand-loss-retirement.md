@@ -42,4 +42,9 @@ confirmed both former false positives are fixed: before demand loss, the new
 exact end closes the pair and yields 64,640 bytes of `RECEIVED NO`; under the
 300-ms delayed-finish injection, both revised tests now fail on the unexpected
 audio frame. Ordinary focused cases pass 2/0. No production retirement defect
-was found. Post-commit root gates remain pending.
+was found. Post-commit root format, warnings-as-errors compile, strict Credo
+(1,102 files, no issues), unused-lock and socket-backed test gates all exit 0.
+The root test run with `PGHOST=/var/run/postgresql` and seed 0 reports 2,671
+tests, zero failures, 58 excluded, including Call Engine 1,503/0, Gateway
+500/0 and Persistence 186/0. This does not close the remaining milestone
+native/hosted/lifecycle/final acceptance gates.

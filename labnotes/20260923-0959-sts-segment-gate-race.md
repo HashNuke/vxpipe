@@ -17,6 +17,8 @@ group (`speech_to_speech_output_stt_test`, `speech_to_speech_test`,
 repetitions. This is an intermittent root-context failure, not yet a verified
 runtime defect. No runtime or timeout change is justified by these results.
 A subsequent complete Call Engine child run passed 1,501/0 (30 excluded), seed
-0, with two schedulers. Next reproduce with captured full assertion output and
-a controlled ordering before deciding whether the test or implementation needs
-repair.
+0, with two schedulers. The later post-`7c1d9b61` full root run exits 0 with
+2,671 tests, zero failures and 58 exclusions; its Call Engine portion passes
+1,503/0. The bounded investigation has no repeatable runtime issue. No runtime
+or test timeout was changed; reopen only if a repeat captures the actual
+unmatched result.

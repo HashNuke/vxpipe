@@ -3,6 +3,15 @@
 Status: checkpoint A is implemented; B–E have focused implementation evidence
 but the integrated room path and lifecycle work remain incomplete. Checkpoint F
 is partially complete (service gating tests and documentation are in place).
+At `7c1d9b61`, the latest post-commit root static gates and socket-backed
+`mix test --seed 0` pass (2,671 tests, zero failures, 58 excluded); this is a
+checkpoint gate, not the final acceptance pass after remaining B–E changes.
+The current finish line is unchanged: complete real-room/native and lifecycle
+acceptance, agent-output STT and Google local gates, then the coordinated UI,
+load, review and root pass. Hosted Google acceptance remains opt-in and billable;
+its production badge stays gated. The detailed A–F boundary below, not new
+nested audit notes, defines the milestone's product scope.
+
 The milestones index entry stays unchecked until the coordinated final
 acceptance pass (tagged hosted check with explicit billable authorization,
 bounded synthetic load, rendered UI pass, independent review, full root
@@ -757,13 +766,19 @@ the existing audio round trip. Record discoveries here before implementing.
             15 probes covering both enforcer orders, prepared rebase/adoption,
             stale ingress envelopes and unrelated membership retention. This
             does not prove checked retirement, hold/reopen or native PCM cutoff.
-          - [ ] Expose the selected STT capability's current native allocation
+          - [x] Expose the selected STT capability's current native allocation
             generation and source-audio intervals through a bounded engine
             input-binding query. The room must compare a frozen private signal
             with this current origin before binding an STS controller pair;
             unrelated policy rebases preserve the origin, while scoped audio
             changes rotate it. This is a room-validation prerequisite, not
             ingress PCM generation/cutoff or hold/reopen acceptance.
+            The five-second query returns the current valid generation and
+            intervals; room `ActivityControl.current/3` compares them with
+            producer-frozen signal fields. Capability and compiled-room
+            replacement tests cover unrelated rebases, prepared/canceled
+            origin privacy, old-signal rejection and fresh reply. Independent
+            read-only audit reran the relevant focused checks (part of 16/0).
             - [x] A ready prepared replacement must not advertise its candidate
               generation as the current activity origin before adoption. Prove
               the prepared-resource query stays distinct from the live binding,
@@ -814,11 +829,16 @@ the existing audio round trip. Record discoveries here before implementing.
                   matching audio intervals alone cannot keep readiness `:ready`
                   after a same-interval replacement whose connected signal is
                   delayed at the room.
-              - [ ] Keep native audio origin distinct from activity authority.
+              - [x] Keep native audio origin distinct from activity authority.
                 If transcript demand survives a directional audio-route denial,
                 the selected recognizer must still receive caller PCM with the
                 exact current allocation generation while STS activity remains
                 unauthorized. Reproduce both delivery and no controller grant.
+                Ingress-level directional-denial proof delivers PCM to the new
+                exact generation with `activity_origin: nil`; compiled
+                external/hybrid rooms publish final caller `HI` after audio
+                denial without STS control. The same independent audit reran
+                these focused boundaries; native hold/reopen remains open.
             - [ ] Capture the generation and ingress lifecycle at frame
               admission, not when an old queued frame is dispatched. Recheck
               both before provider delivery and fence upstream pre-reopen
@@ -3005,10 +3025,13 @@ zero failures, 42 excluded, seed 0. See
     integration exclusions), seed 0, with local PostgreSQL socket access.
   - [x] Rerun the exact case and full Persistence child suite after the test
     repair with local PostgreSQL socket access. Both pass, seed 0.
-  - [ ] Complete the post-commit root rerun for this repair and record the
+  - [x] Complete the post-commit root rerun for this repair and record the
     actual final summary; do not infer a passing umbrella gate from the green
-    Persistence child suite.
-  - [ ] Investigate the separate post-`dc394717` Call Engine root failure in
+    Persistence child suite. After `7c1d9b61`, all four root static gates
+    pass and the socket-backed root suite exits 0: 2,671 tests, zero failures,
+    58 excluded, seed 0 (Call Engine 1,503/0; Gateway 500/0;
+    Persistence 186/0; Console 191/0). No credential was added.
+  - [x] Investigate the separate post-`dc394717` Call Engine root failure in
     `SpeechToSpeechOutputSTTTest`'s multi-segment finite-input case (1 failure
     among 1,501 tests). Its isolated case, whole file and 30 focused repeats
     pass; the root run was stopped during Gateway after the failing Call Engine
@@ -3019,7 +3042,10 @@ zero failures, 42 excluded, seed 0. See
     capability/speech group passes ten consecutive seed-0 repetitions; this
     does not explain the root-only failure. The complete Call Engine child
     suite then passes 1,501/0 (30 excluded), seed 0; its one root-context
-    failure remains intermittent and unclaimed as a code defect.
+    failure remains intermittent and unclaimed as a code defect. The next full
+    root run passes the same Call Engine file and all apps (2,671/0); bounded
+    investigation found no repeatable runtime issue, so no timeout or behavior
+    change was made. Reopen only on a captured repeat with its actual result.
 
   Google interruption checkpoint `d400edfa` passes post-commit root format,
   warnings-as-errors compile, strict Credo, and unused-dependency checks. The
