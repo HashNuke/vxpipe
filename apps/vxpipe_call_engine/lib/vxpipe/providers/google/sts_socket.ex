@@ -34,11 +34,6 @@ defmodule Vxpipe.Providers.Google.STSSocket do
          do: Socket.send_frame(socket, {:text, payload})
   end
 
-  def send_interrupt(socket) do
-    with {:ok, payload} <- STS.encode_interrupt(),
-         do: Socket.send_frame(socket, {:text, payload})
-  end
-
   def send_tool_result(socket, call_id, name, result) do
     with {:ok, payload} <- STS.encode_tool_result(call_id, name, result),
          do: Socket.send_frame(socket, {:text, payload})

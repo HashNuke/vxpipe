@@ -34,6 +34,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       handle_output_stt_event: 2,
       handle_output_stt_failure: 1,
       fence_output: 1,
+      fence_output: 2,
       finish_output_stt_input: 1,
       settle_fenced_output: 2,
       interrupt_provider: 2,
@@ -712,7 +713,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       else
         case state.active_output do
           %{provider_turn: turn} when turn == event.turn_ref ->
-            {_played, state} = fence_output(state)
+            {_played, state} = fence_output(state, :provider_reported)
             {:noreply, state}
 
           _other ->

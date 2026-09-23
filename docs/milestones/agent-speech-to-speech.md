@@ -2071,11 +2071,58 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       wire and engine admission boundaries. Keep raw server activity/model end
       from becoming external caller control, and do not turn partial caller
       transcription into final text at external end.
-    - [ ] Complete the separate interruption wire/history audit: current
-      `encode_interrupt` still sends client activity end in provider mode,
-      where automatic detection is enabled. Routine boundary idempotence does
-      not prove that path valid. Use supported provider semantics or explicit
-      session failure, and prove history isolation before hosted advertisement.
+    - [ ] Complete the separate interruption wire/history audit. The old
+      `encode_interrupt` sent client activity end in provider mode while
+      automatic detection was enabled; the local invalid-wire path is removed.
+      Routine boundary idempotence and fake-wire teardown still do not prove
+      hosted history isolation or post-interruption response attribution.
+      - [x] Reproduce an engine-requested current-response interrupt emitting
+        `activityEnd` under automatic VAD and an external-mode idle end being
+        misused as output cancellation. Remove that unsupported command; fail
+        the affected allocation explicitly when no supported standalone cancel
+        exists, while preserving server-origin interruption and response-specific
+        discard of an older nonwire response. Fake-wire tests prove no client
+        activity is sent and the old allocation closes before late output can
+        publish. Replacement-allocation and hosted history proof remain below.
+        - [x] Reproduce server-origin `interrupted` while an STS output slot is
+          credited: do not echo a client interrupt, terminalize only that
+          generation after any outstanding credit, and release its shared
+          playback slot so a subsequent genuine caller response can start.
+          Local fake-wire checks drop old audio/text before the next genuine
+          caller continuation; unlabelled content after a new caller begins is
+          still an unresolved attribution gate.
+        - [x] Reproduce an old legacy output grant arriving after the provider
+          has processed an interruption and retired that turn. Do not silently
+          ignore the grant while the shared channel slot remains occupied;
+          fail the allocation or settle the exact grant safely. The focused
+          session red failed because the provider stayed alive with no output;
+          it now fails closed.
+        - [x] Reproduce interrupted A with an outstanding local PCM credit,
+          then a genuine B caller and B text/audio before A's credit returns.
+          Keep B's bounded pre-admission text/PCM separate from A, terminalize
+          A after its credit, and deliver B under B's own grant instead of
+          dropping audio or publishing text under A. Include B's generation
+          boundary before A settlement in the focused proof. Astra xhigh found
+          this race; the focused red published B text too early, and the
+          repaired session test proves both turns settle without mixing. The
+          198-test Google/shared-origin group passes (no hosted calls).
+        - [x] While interrupted A still lacks a model completion boundary,
+          reproduce a competing B caller and unlabelled output transcript, PCM,
+          and generation completion. Keep the post-interruption fence on all
+          three; none may be retained for B solely because B's caller reference
+          is current. The focused red assigned `generationComplete` to B despite
+          the fence; the repaired test confirms all three stay unassigned.
+        - [x] Reproduce interrupted A after its output terminal but before A's
+          settlement, then begin genuine B and buffer B transcript. Settling A
+          must not erase B's pre-admission text before B receives its own output
+          grant. Verify this no-outstanding-credit branch independently of the
+          delayed-A-credit branch. Astra xhigh found this path; the focused red
+          lost B text at A settlement, and the repaired session test passes.
+      - [ ] Prove that an old wire generation cannot publish into a real
+        replacement allocation, and establish safe attribution of unlabelled
+        post-interruption output after a new caller begins. Fake-wire local
+        fencing and allocation teardown alone do not prove this or hosted
+        interrupted-history reconciliation.
 
     Profile follow-up: 72 focused Google/controller/shared-settlement tests pass;
     independent xhigh source review found no actionable defect. Tampered private

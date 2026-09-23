@@ -17,11 +17,6 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
          do: GenServer.call(socket, {:control, payload})
   end
 
-  def send_interrupt(socket) do
-    with {:ok, payload} <- Vxpipe.Providers.Google.STS.encode_interrupt(),
-         do: GenServer.call(socket, {:control, payload})
-  end
-
   def send_tool_result(socket, call_id, name, result) do
     with {:ok, payload} <- Vxpipe.Providers.Google.STS.encode_tool_result(call_id, name, result),
          do: GenServer.call(socket, {:control, payload})

@@ -547,7 +547,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  def fence_output(state) do
+  def fence_output(state), do: fence_output(state, :request_interrupt)
+
+  def fence_output(state, source) when source in [:request_interrupt, :provider_reported] do
     case state.active_output do
       nil ->
         {0, state}
@@ -560,7 +562,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
           end
 
         _ = clear_sink(state)
-        _ = interrupt_provider(state, provider_turn)
+        if source == :request_interrupt, do: interrupt_provider(state, provider_turn)
         _ = settle_fenced_generation(state, output, played_ms)
         _ = emit_turn_usage(state, provider_turn, :cancelled, played_ms, output)
         state = cancel_text_deadline(state)

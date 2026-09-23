@@ -366,21 +366,339 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert :ok = Session.settle_output(session, output, 0)
   end
 
-  test "interruption before first audio fences the turn without output" do
+  test "server interruption before first audio fences the turn without output" do
     {session, wire} = start_session()
 
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
 
-    provider = Session.provider(session)
-    assert :ok = STSSession.interrupt(provider, started.turn_ref)
-    assert_receive {:test_google_sts_control, ^wire, _interrupt}
-
     deliver(wire, %{"serverContent" => %{"interrupted" => true}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
     assert :ok = Session.ack(session, interrupted)
     refute_received {:vxpipe_speech_audio, _}
+  end
+
+  test "provider-mode manual interrupt fails rather than sending client activity end" do
+    {session, wire} = start_session()
+    assert_receive {:test_google_sts_control, ^wire, _setup}
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
+    assert :ok = Session.ack(session, started)
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+
+    assert {:error, :session_failed} = STSSession.interrupt(provider, started.turn_ref)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+    refute_received {:test_google_sts_control, ^wire, _}
+  end
+
+  test "external-mode manual interrupt does not misuse idle activity end" do
+    {session, wire} = start_session(turn_control: "external")
+    assert_receive {:test_google_sts_control, ^wire, _setup}
+    assert :ok = Session.input_activity(session, :started)
+    assert_receive {:test_google_sts_control, ^wire, started}
+    assert JSON.decode!(started) == %{"realtimeInput" => %{"activityStart" => %{}}}
+    assert :ok = Session.input_activity(session, :ended)
+    assert_receive {:test_google_sts_control, ^wire, ended}
+    assert JSON.decode!(ended) == %{"realtimeInput" => %{"activityEnd" => %{}}}
+    provider = Session.provider(session)
+    turn = :sys.get_state(provider).input_turn
+    assert is_reference(turn)
+    monitor = Process.monitor(provider)
+
+    assert {:error, :session_failed} = STSSession.interrupt(provider, turn)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+    refute_received {:test_google_sts_control, ^wire, _}
+  end
+
+  test "opted-in current-wire interrupt fails without sending activity control" do
+    {session, wire} = start_session(response_start?: true)
+    assert_receive {:test_google_sts_control, ^wire, _setup}
+    assert :ok = Session.push_audio(session, <<1, 0>>, response_context: make_ref())
+    assert_receive {:test_google_sts_audio, ^wire, <<1, 0>>}
+
+    deliver(wire, %{
+      "serverContent" => %{
+        "modelTurn" => %{
+          "parts" => [
+            %{
+              "inlineData" => %{
+                "mimeType" => "audio/pcm;rate=24000",
+                "data" => Base.encode64(:binary.copy(<<5, 0>>, 200))
+              }
+            }
+          ]
+        }
+      }
+    })
+
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :response_started} = response}
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+    assert {:error, :session_failed} = STSSession.interrupt(provider, response.turn_ref)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+    refute_received {:test_google_sts_control, ^wire, _}
+  end
+
+  test "server interruption waits for an outstanding audio credit before terminal settlement" do
+    {session, wire} = start_session()
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
+    assert :ok = Session.ack(session, started)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
+    assert :ok = Session.ack(session, ended)
+    caller_final(session, wire, "CALLER")
+    assert {:ok, output} = Session.admit_output(session, ended.turn_ref)
+
+    deliver(wire, %{
+      "serverContent" => %{
+        "modelTurn" => %{
+          "parts" => [
+            %{
+              "inlineData" => %{
+                "mimeType" => "audio/pcm;rate=24000",
+                "data" => Base.encode64(:binary.copy(<<5, 0>>, 200))
+              }
+            }
+          ]
+        }
+      }
+    })
+
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert :ok = Session.ack(session, interrupted)
+    refute_received {:vxpipe_speech, %Event{kind: :output_completed}}
+    assert :ok = Session.validate_audio(session, audio)
+    assert :ok = Session.ack_audio(session, audio)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_completed, request_ref: reference} =
+                      completed}
+
+    assert reference == output.ref
+    assert :ok = Session.ack(session, completed)
+    assert :ok = Session.settle_output(session, output, 0)
+  end
+
+  test "opted-in server interruption terminalizes only its credited response" do
+    {session, wire} = start_session(response_start?: true)
+    assert :ok = Session.push_audio(session, <<1, 0>>, response_context: make_ref())
+    assert_receive {:test_google_sts_audio, ^wire, <<1, 0>>}
+
+    deliver(wire, %{
+      "serverContent" => %{
+        "modelTurn" => %{
+          "parts" => [
+            %{
+              "inlineData" => %{
+                "mimeType" => "audio/pcm;rate=24000",
+                "data" => Base.encode64(:binary.copy(<<5, 0>>, 200))
+              }
+            }
+          ]
+        }
+      }
+    })
+
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :response_started} = started}
+    assert :ok = Session.ack(session, started)
+    assert {:ok, output} = Session.admit_output(session, started.turn_ref)
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert interrupted.turn_ref == started.turn_ref
+    assert :ok = Session.ack(session, interrupted)
+    refute_received {:vxpipe_speech, %Event{kind: :output_completed}}
+    assert :ok = Session.validate_audio(session, audio)
+    assert :ok = Session.ack_audio(session, audio)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_completed, request_ref: reference} =
+                      completed}
+
+    assert reference == output.ref
+    assert :ok = Session.ack(session, completed)
+    assert :ok = Session.settle_output(session, output, 0)
+    provider = Session.provider(session)
+    _ = :sys.get_state(provider)
+    assert :sys.get_state(provider).responses.records == %{}
+  end
+
+  test "a late output grant after an interrupted caller cannot strand the shared slot" do
+    {session, wire} = start_session()
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
+    assert :ok = Session.ack(session, started)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = ended}
+    assert :ok = Session.ack(session, ended)
+    caller_final(session, wire, "CALLER")
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert :ok = Session.ack(session, interrupted)
+
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+    assert {:ok, _output} = Session.admit_output(session, ended.turn_ref)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+    refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+  end
+
+  test "delayed interrupted A credit cannot drop or relabel B text and PCM" do
+    {session, wire} = start_session()
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = a_start}
+    assert :ok = Session.ack(session, a_start)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = a_end}
+    assert :ok = Session.ack(session, a_end)
+    caller_final(session, wire, "A CALLER")
+    assert {:ok, a_output} = Session.admit_output(session, a_end.turn_ref)
+    deliver(wire, audio_message(1))
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = a_audio}
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert :ok = Session.ack(session, interrupted)
+    deliver(wire, %{"serverContent" => %{"turnComplete" => true, "interactionStatus" => "IDLE"}})
+
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = b_start}
+    assert :ok = Session.ack(session, b_start)
+    assert b_start.turn_ref != a_start.turn_ref
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = b_end}
+    assert :ok = Session.ack(session, b_end)
+    caller_final(session, wire, "B CALLER")
+    deliver(wire, %{"serverContent" => %{"outputTranscription" => %{"text" => "B SPOKEN"}}})
+    deliver(wire, audio_message(2))
+    deliver(wire, %{"serverContent" => %{"generationComplete" => true}})
+    _ = :sys.get_state(Session.provider(session))
+    refute_received {:vxpipe_speech, %Event{kind: :output_transcript}}
+    refute_received {:vxpipe_speech_audio, %Audio{payload: <<2, 0>>}}
+
+    assert :ok = Session.validate_audio(session, a_audio)
+    assert :ok = Session.ack_audio(session, a_audio)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = a_done}
+    assert a_done.turn_ref == a_start.turn_ref
+    assert :ok = Session.ack(session, a_done)
+    assert :ok = Session.settle_output(session, a_output, 0)
+    assert {:ok, b_output} = Session.admit_output(session, b_end.turn_ref)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{
+                      session: ^session,
+                      kind: :output_transcript,
+                      turn_ref: b_turn,
+                      text: "B SPOKEN"
+                    } = b_text}
+
+    assert b_turn == b_start.turn_ref
+    assert :ok = Session.ack(session, b_text)
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session, payload: <<2, 0>>} = b_audio}
+    assert :ok = Session.validate_audio(session, b_audio)
+    assert :ok = Session.ack_audio(session, b_audio)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = b_done}
+    assert b_done.turn_ref == b_start.turn_ref
+    assert :ok = Session.ack(session, b_done)
+    assert :ok = Session.settle_output(session, b_output, 0)
+  end
+
+  test "competing caller cannot borrow output before interrupted model completion" do
+    {session, wire} = start_session()
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = a_start}
+    assert :ok = Session.ack(session, a_start)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = a_end}
+    assert :ok = Session.ack(session, a_end)
+    caller_final(session, wire, "A CALLER")
+    assert {:ok, _output} = Session.admit_output(session, a_end.turn_ref)
+    deliver(wire, audio_message(1))
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session}}
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert :ok = Session.ack(session, interrupted)
+
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = b_start}
+    assert :ok = Session.ack(session, b_start)
+
+    pre_output = :sys.get_state(Session.provider(session))
+    assert pre_output.input_turn == b_start.turn_ref
+    assert %{interrupted?: true, turn_ref: a_turn} = pre_output.output
+    assert a_turn == a_start.turn_ref
+    assert b_start.turn_ref != a_turn
+    assert pre_output.audio_fenced?
+
+    deliver_sync(session, wire, %{
+      "serverContent" => %{"outputTranscription" => %{"text" => "AMBIGUOUS"}}
+    })
+
+    deliver_sync(session, wire, audio_message(2))
+    deliver_sync(session, wire, %{"serverContent" => %{"generationComplete" => true}})
+
+    deliver(wire, %{
+      "serverContent" => %{"interimInputTranscription" => %{"text" => "B STILL SPEAKING"}}
+    })
+
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript} = barrier}
+    assert :ok = Session.ack(session, barrier)
+
+    provider_state = :sys.get_state(Session.provider(session))
+    assert provider_state.output_text == nil
+    assert provider_state.audio_buffer == []
+    refute provider_state.generation_pending_done?
+    refute_received {:vxpipe_speech, %Event{kind: :output_transcript}}
+    refute_received {:vxpipe_speech_audio, %Audio{payload: <<2, 0>>}}
+  end
+
+  test "settling interrupted A cannot erase B transcript buffered before B grant" do
+    {session, wire} = start_session()
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = a_start}
+    assert :ok = Session.ack(session, a_start)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = a_end}
+    assert :ok = Session.ack(session, a_end)
+    caller_final(session, wire, "A CALLER")
+    assert {:ok, a_output} = Session.admit_output(session, a_end.turn_ref)
+
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert :ok = Session.ack(session, interrupted)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = a_done}
+    assert a_done.turn_ref == a_start.turn_ref
+    assert :ok = Session.ack(session, a_done)
+    deliver(wire, %{"serverContent" => %{"turnComplete" => true, "interactionStatus" => "IDLE"}})
+
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = b_start}
+    assert :ok = Session.ack(session, b_start)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended} = b_end}
+    assert :ok = Session.ack(session, b_end)
+    caller_final(session, wire, "B CALLER")
+    deliver(wire, %{"serverContent" => %{"outputTranscription" => %{"text" => "B SPOKEN"}}})
+    deliver(wire, %{"serverContent" => %{"generationComplete" => true}})
+    _ = :sys.get_state(Session.provider(session))
+    refute_received {:vxpipe_speech, %Event{kind: :output_transcript}}
+
+    assert :ok = Session.settle_output(session, a_output, 0)
+    assert {:ok, b_output} = Session.admit_output(session, b_end.turn_ref)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_transcript, text: "B SPOKEN"} = b_text}
+
+    assert b_text.turn_ref == b_start.turn_ref
+    assert :ok = Session.ack(session, b_text)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = b_done}
+    assert b_done.turn_ref == b_start.turn_ref
+    assert :ok = Session.ack(session, b_done)
+    assert :ok = Session.settle_output(session, b_output, 0)
   end
 
   test "external turn control ignores wire activity and uses explicit boundaries" do
@@ -433,7 +751,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     refute_received {:vxpipe_speech, %Event{session: ^session, kind: :tool_cancelled}}
   end
 
-  test "sent-ahead audio during the fence window is dropped before the next turn" do
+  test "audio after server interruption is dropped before the next turn" do
     {session, wire} = start_session()
 
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
@@ -445,8 +763,9 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert :ok = Session.ack(session, caller_end)
     caller_final(session, wire, "FIRST CALLER")
 
-    provider = Session.provider(session)
-    assert :ok = STSSession.interrupt(provider, started.turn_ref)
+    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
+    assert :ok = Session.ack(session, interrupted)
 
     deliver(wire, %{
       "serverContent" => %{
@@ -463,10 +782,6 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
         "generationComplete" => true
       }
     })
-
-    deliver(wire, %{"serverContent" => %{"interrupted" => true}})
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :interrupted} = interrupted}
-    assert :ok = Session.ack(session, interrupted)
 
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = next}

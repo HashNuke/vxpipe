@@ -590,7 +590,14 @@ records sequential fake-wire proof and the remaining correlation limits.
 Google's local descriptor accepts provider and external control, not hybrid;
 client activity controls require disabled automatic detection. External idle ends
 and repeated boundaries do not send duplicate wire controls or reopen output.
-These routine boundary checks do not establish interruption/history support.
+Google has no supported history-neutral standalone client response-cancel command
+in the inspected Live profile. Engine-requested interruption of its current
+wire response fails the allocation without sending `activityEnd`; a stale
+nonwire response can be discarded locally without touching a newer generation.
+Server-reported `interrupted` remains separate: it fences local playback and
+retires the exact output slot after outstanding credit. This local fake-wire
+behavior does not prove hosted interrupted-history reconciliation or safe
+attribution of unlabelled post-interruption content.
 
 For the pinned Gemini 3.x profile, `interimInputTranscription` is provisional and
 `inputTranscription` is one final caller snapshot. Retain caller identity until

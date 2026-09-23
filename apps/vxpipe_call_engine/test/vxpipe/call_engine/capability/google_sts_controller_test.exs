@@ -551,6 +551,31 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     refute_received {:test_google_sts_control, ^wire, _}
   end
 
+  test "manual interruption of the current Google response closes its allocation without old history" do
+    context = start_controller()
+    capability = context.capability
+    wire = context.wire
+    turn = begin_reply(context, :provider)
+    deliver(context, content(%{"outputTranscription" => %{"text" => "UNPLAYED OLD"}}))
+    deliver(context, audio_message(1))
+    assert_audio(context, 1)
+    provider_monitor = Process.monitor(context.provider)
+    capability_monitor = Process.monitor(capability)
+
+    assert {:ok, 0} = SpeechToSpeech.interrupt(capability)
+    assert_receive {:DOWN, ^provider_monitor, :process, _, _}, 1_000
+    assert_receive {:DOWN, ^capability_monitor, :process, _, _}, 1_000
+    refute_received {:test_google_sts_control, ^wire, _}
+
+    TestGoogleSTSTransport.deliver(
+      wire,
+      JSON.encode!(content(%{"outputTranscription" => %{"text" => "LATE OLD"}}))
+    )
+
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, ^turn, _, _, _}
+    refute_received {:vxpipe_sts_turn_completed, ^capability, _, ^turn, _}
+  end
+
   test "opted-in tool call cannot strand a response behind its caller end" do
     context = start_controller("provider", response_start?: true)
     capability = context.capability
@@ -1230,9 +1255,8 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_started(context, old_turn)
     deliver(context, audio_message(1))
     assert_audio(context, 1)
-    assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
-    deliver(context, content(%{"outputTranscription" => %{"text" => "LATE"}}))
     deliver(context, content(%{"interrupted" => true}))
+    deliver(context, content(%{"outputTranscription" => %{"text" => "LATE"}}))
     deliver(context, interaction_end("IDLE"))
     turn = start_caller(context)
     assert turn != old_turn

@@ -261,8 +261,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   def handle_call({:interrupt, turn_ref}, _from, state) when is_reference(turn_ref) do
-    if state.wire, do: state.wire_module.send_interrupt(state.wire)
-    {:reply, :ok, fence_local_output(STSResumption.invalidate(state), turn_ref)}
+    if current_legacy_turn?(state, turn_ref),
+      do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state},
+      else: {:reply, :ok, state}
   end
 
   def handle_call({:send_tool_result, call_ref, result}, _from, state)
@@ -479,15 +480,20 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
   def handle_info({:vxpipe_speech_output, channel, turn_ref, output_ref}, state)
       when is_reference(turn_ref) and is_reference(output_ref) do
-    if channel == state.channel and turn_ref == state.input_turn do
-      with {:ok, state} <- publish_transcript(open_output(state, turn_ref, output_ref)),
-           {:ok, state} <- drain_output(state) do
+    cond do
+      channel != state.channel ->
         {:noreply, state}
-      else
-        {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
-      end
-    else
-      {:noreply, state}
+
+      turn_ref != state.input_turn ->
+        {:stop, {:shutdown, :session_failed}, state}
+
+      true ->
+        with {:ok, state} <- publish_transcript(open_output(state, turn_ref, output_ref)),
+             {:ok, state} <- drain_output(state) do
+          {:noreply, state}
+        else
+          {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
+        end
     end
   end
 
@@ -540,7 +546,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
         {:vxpipe_speech_output_settled, channel, turn, ref, _played_ms},
         %{channel: channel, output: %{turn_ref: turn, output_ref: ref}} = state
       ) do
-    state = %{state | output: nil, output_text: nil}
+    output_text = if state.input_turn == turn, do: nil, else: state.output_text
+    state = %{state | output: nil, output_text: output_text}
 
     state =
       if state.input_turn == turn,
@@ -636,6 +643,16 @@ defmodule Vxpipe.Providers.Google.STSSession do
     {:ok, state}
   end
 
+  defp apply_wire_event(
+         {:audio, pcm},
+         %{output: %{interrupted?: true, turn_ref: old}, input_turn: turn} = state
+       )
+       when is_reference(turn) and turn != old do
+    if byte_size(pcm) > 0 and rem(byte_size(pcm), 2) == 0,
+      do: buffer_audio(state, pcm),
+      else: {:error, :session_failed}
+  end
+
   defp apply_wire_event({:audio, pcm}, %{output: %{interrupted?: true}} = state) do
     _ = pcm
     {:ok, state}
@@ -691,8 +708,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
     turn = state.input_turn
 
     case Event.emit(state.channel, :interrupted, turn_ref: turn) do
-      :ok -> {:ok, full_fence(state)}
-      :discarded -> {:ok, full_fence(state)}
+      :ok -> full_fence(state)
+      :discarded -> full_fence(state)
       _failure -> {:error, :session_failed}
     end
   end
@@ -716,38 +733,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp apply_wire_event({:usage, metadata}, state) when is_map(metadata),
     do: {:ok, %{state | usage: metadata}}
 
-  defp fence_turn(state, turn_ref) do
-    output =
-      case state.output do
-        %{turn_ref: ^turn_ref} -> nil
-        other -> other
-      end
-
-    %{state | output: output, output_text: nil, audio_buffer: [], audio_fenced?: true}
-  end
-
-  defp fence_local_output(state, turn_ref) do
-    case state.output do
-      %{turn_ref: ^turn_ref} = output ->
-        output = %{output | queue: [], interrupted?: true}
-        state = %{state | output: output, output_text: nil, audio_buffer: [], audio_fenced?: true}
-
-        if not output.completed_emitted? and is_nil(output.awaiting) do
-          _ =
-            Event.emit(state.channel, :output_completed,
-              turn_ref: turn_ref,
-              request_ref: output.output_ref
-            )
-
-          %{state | output: nil}
-        else
-          state
-        end
-
-      _other ->
-        fence_turn(state, turn_ref)
-    end
-  end
+  defp current_legacy_turn?(%{input_turn: turn}, turn) when is_reference(turn), do: true
+  defp current_legacy_turn?(%{output: %{turn_ref: turn}}, turn) when is_reference(turn), do: true
+  defp current_legacy_turn?(_state, _turn), do: false
 
   defp full_fence(state) do
     state = STSInput.interrupt_model(state)
@@ -758,18 +746,41 @@ defmodule Vxpipe.Providers.Google.STSSession do
         _finished -> nil
       end
 
-    %{
-      state
-      | output: nil,
-        output_text: nil,
-        audio_buffer: [],
-        audio_fenced?: false,
-        input_turn: caller_turn,
-        input_text: nil,
-        input_ended?: false,
-        generation_pending_done?: false
-    }
+    with {:ok, output} <- interrupted_output(state) do
+      {:ok,
+       %{
+         state
+         | output: output,
+           output_text: nil,
+           audio_buffer: [],
+           audio_fenced?: true,
+           input_turn: caller_turn,
+           input_text: nil,
+           input_ended?: false,
+           generation_pending_done?: false
+       }}
+    end
   end
+
+  defp interrupted_output(%{output: nil}), do: {:ok, nil}
+  defp interrupted_output(%{output: %{completed_emitted?: true} = output}), do: {:ok, output}
+
+  defp interrupted_output(%{output: %{awaiting: nil} = output} = state) do
+    case Event.emit(state.channel, :output_completed,
+           turn_ref: output.turn_ref,
+           request_ref: output.output_ref
+         ) do
+      :ok ->
+        {:ok,
+         %{output | queue: [], interrupted?: true, completed_emitted?: true, awaiting: :completed}}
+
+      _failure ->
+        {:error, :session_failed}
+    end
+  end
+
+  defp interrupted_output(%{output: output}),
+    do: {:ok, %{output | queue: [], interrupted?: true}}
 
   defp send_tool_response(state, id, name, result) do
     with {:ok, payload} <- STS.encode_tool_result(id, name, result),

@@ -7,7 +7,7 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
   """
 
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
-  alias Vxpipe.Providers.Google.{STSInput, STSResponses, STSResumption}
+  alias Vxpipe.Providers.Google.{STSInput, STSResponses}
 
   def transcript(%{interaction_context: nil} = state, _text), do: {:ok, state}
 
@@ -72,17 +72,10 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
     end
   end
 
-  def interrupt(state, turn) do
-    state =
-      if state.responses.wire == turn do
-        if state.wire, do: state.wire_module.send_interrupt(state.wire)
-        STSResumption.invalidate(state)
-      else
-        state
-      end
+  def interrupt(state, turn) when state.responses.wire == turn,
+    do: {:error, :unsupported_interrupt}
 
-    discard(state, turn)
-  end
+  def interrupt(state, turn), do: discard(state, turn)
 
   def grant(state, turn, output) do
     with {:ok, owner} <- STSResponses.grant(state.responses, turn, output),

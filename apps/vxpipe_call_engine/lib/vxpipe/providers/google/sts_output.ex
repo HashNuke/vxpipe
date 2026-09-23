@@ -6,6 +6,19 @@ defmodule Vxpipe.Providers.Google.STSOutput do
   @maximum_pending_audio 16
   @maximum_text_bytes 65_536
 
+  def buffer_transcript(
+        %{audio_fenced?: false, output: %{interrupted?: true, turn_ref: old}, input_turn: turn} =
+          state,
+        text
+      )
+      when is_reference(turn) and turn != old do
+    accumulated = (state.output_text || "") <> text
+
+    if byte_size(accumulated) <= @maximum_text_bytes,
+      do: {:ok, %{state | output_text: accumulated}},
+      else: {:error, :session_failed}
+  end
+
   def buffer_transcript(%{audio_fenced?: true} = state, _text), do: {:ok, state}
   def buffer_transcript(%{generation_pending_done?: true} = state, _text), do: {:ok, state}
 
@@ -35,6 +48,10 @@ defmodule Vxpipe.Providers.Google.STSOutput do
 
   def buffer_audio(state, pcm) do
     case state.output do
+      %{interrupted?: true, turn_ref: old}
+      when is_reference(state.input_turn) and state.input_turn != old ->
+        buffer_pending_audio(state, pcm)
+
       %{queue: queue} = output when length(queue) < @maximum_pending_audio ->
         {:ok, %{state | output: %{output | queue: queue ++ [pcm]}}}
 
@@ -42,11 +59,15 @@ defmodule Vxpipe.Providers.Google.STSOutput do
         {:error, :session_failed}
 
       nil ->
-        if length(state.audio_buffer) < @maximum_pending_audio do
-          {:ok, %{state | audio_buffer: state.audio_buffer ++ [pcm]}}
-        else
-          {:error, :session_failed}
-        end
+        buffer_pending_audio(state, pcm)
+    end
+  end
+
+  defp buffer_pending_audio(state, pcm) do
+    if length(state.audio_buffer) < @maximum_pending_audio do
+      {:ok, %{state | audio_buffer: state.audio_buffer ++ [pcm]}}
+    else
+      {:error, :session_failed}
     end
   end
 
@@ -67,8 +88,16 @@ defmodule Vxpipe.Providers.Google.STSOutput do
     }
   end
 
+  def mark_generation_done(%{audio_fenced?: true} = state), do: state
+
   def mark_generation_done(%{output: nil} = state),
     do: %{state | generation_pending_done?: true}
+
+  def mark_generation_done(
+        %{output: %{interrupted?: true, turn_ref: old}, input_turn: turn} = state
+      )
+      when is_reference(turn) and turn != old,
+      do: %{state | generation_pending_done?: true}
 
   def mark_generation_done(state),
     do: %{state | output: %{state.output | generation_done?: true}}

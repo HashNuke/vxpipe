@@ -138,10 +138,6 @@ defmodule Vxpipe.Providers.Google.STS do
 
   def encode_activity(_boundary), do: {:error, :invalid_activity}
 
-  def encode_interrupt do
-    {:ok, JSON.encode!(%{"realtimeInput" => %{"activityEnd" => %{}}})}
-  end
-
   def encode_tool_result(call_id, name, result)
       when is_binary(call_id) and is_binary(name) and is_map(result) do
     if byte_size(call_id) in 1..256 and byte_size(name) in 1..256 and

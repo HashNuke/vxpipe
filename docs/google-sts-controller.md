@@ -62,9 +62,49 @@ tampered private setup. Shared hybrid support for other providers is unchanged.
 Provider mode accepts only raw server activity for routine turn control; external
 mode disables automatic detection and sends one client start/end per logical
 activity. Idle ends and duplicates are no-ops on both wire and engine admission.
-External end does not promote partial input text to final. These local profile
-checks do not validate the separate interruption command or history contract:
-the current interrupt encoder still requires that explicit milestone repair.
+External end does not promote partial input text to final. The separate
+engine-requested interruption and provider-history limits are below.
+
+## Engine-requested and server-reported interruption
+
+The [Live WebSocket reference](https://ai.google.dev/api/live) restricts client
+`activityStart`/`activityEnd` to sessions with automatic activity detection
+disabled, and defines `activityEnd` as the end of **user** activity. The
+[capabilities guide](https://ai.google.dev/gemini-api/docs/live-api/capabilities)
+describes interruption through real user activity, with `interrupted` reported
+by the server. This inspected profile has no history-neutral standalone
+response-cancel command. Sending `activityEnd` in provider mode was invalid;
+sending an idle end in external mode would not cancel output. Synthetic caller
+activity or client content would modify conversational history, so neither is
+an acceptable replacement.
+
+An engine-requested interruption of the current Google wire response therefore
+returns a failure and terminates that allocation. It does not claim successful
+same-socket barge-in or truncated provider history. A local discard of an older
+response already off the wire remains response-specific and does not interrupt
+the newer wire generation. By contrast, a genuine server `interrupted` event
+fences local output without echoing another client interrupt; the exact shared
+output slot retires after its outstanding audio credit and terminal event.
+An old legacy output grant arriving after its interrupted turn has retired fails
+the allocation instead of silently occupying the channel slot.
+If a genuine B caller starts after A's model boundary while A's local PCM
+credit is still pending, legacy adapter state retains B's bounded text, PCM
+and generation completion separately from A. B is published only after A's
+credit/terminal settles and the engine grants B's own output reference. This
+also holds when A's terminal already exists but its settlement is delayed:
+settling A does not erase B's buffered transcript. Until A's model boundary,
+the local fence drops unlabelled text, PCM and generation completion even if B
+has begun speaking. This handling does not infer an origin for unlabelled wire
+content without a distinguishing model/caller boundary.
+
+Rejected alternatives: retaining the unsupported `activityEnd` encoder,
+manufacturing `activityStart` or `clientContent` to provoke a barge-in, and
+assuming sink interruption alone proves upstream history reconciliation. The
+local fake-wire tests cover both VAD profiles, opted-in and legacy response
+owners, credit ordering (including delayed A credit with B already generating),
+stale grants, and next-reply isolation. They do not
+prove hosted behavior or attribution of unlabelled content that could arrive
+after a new caller begins; those remain open milestone gates.
 
 ## Verification
 

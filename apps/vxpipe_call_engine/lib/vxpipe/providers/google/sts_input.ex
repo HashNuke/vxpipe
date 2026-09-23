@@ -64,6 +64,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
 
   def start(state) do
     turn = make_ref()
+    audio_fenced? = state.audio_fenced? and not state.model_turn_complete?
 
     result =
       if state.config.turn_control == "external",
@@ -78,7 +79,8 @@ defmodule Vxpipe.Providers.Google.STSInput do
            | caller: %{turn_ref: turn, ended?: false, final?: false, model_interrupted?: false},
              input_turn: turn,
              input_text: nil,
-             input_ended?: false
+             input_ended?: false,
+             audio_fenced?: audio_fenced?
          })}
 
       :discarded ->
@@ -113,6 +115,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
           | input_ended?: true,
             model_turn_complete?: false,
             interaction_status: :unknown,
+            audio_fenced?: false,
             resumption_ambiguous?: state.resumption_ambiguous? or ambiguous?
         }
 
