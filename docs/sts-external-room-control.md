@@ -125,8 +125,12 @@ notification, retires the allocation, waits for a fresh selected-STT activity
 origin, and starts a fresh allocation with the same prepared track and a new
 input epoch. A source-time transport hold/fence and native reopen remain
 separate acceptance gates; this compiled-room proof does not establish them.
-The replacement trigger observes the selected STT transcript interval as well
-as both source audio intervals. If a route change removes activity demand,
+The replacement trigger observes the selected STT transcript interval, both
+source audio intervals, and selected-agent presence. Agent leave/regrant can
+rotate the selected STT allocation while all caller intervals remain stable;
+the same old-input retirement and fresh-origin recovery are required. Focused
+external/hybrid room regressions prime an old `NO` pair and require a fresh
+`RECEIVED HI` reply after regrant. If a route change removes activity demand,
 the current origin is nil and delayed old signals are ignored without
 publishing a new caller turn or crashing the room.
 That nil activity origin does not revoke independently permitted human STT

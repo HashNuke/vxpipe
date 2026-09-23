@@ -1057,8 +1057,16 @@ the existing audio round trip. Record discoveries here before implementing.
           seeds 0 and 1. Two owning room reds failed on seed 0 with no fresh
           STS allocation; adding selected-agent presence to the rotation
           predicate makes both pass, and the adjacent five-file group passes
-          106/0 on seeds 0 and 1. Independent re-review and post-commit gates
-          remain separate.
+          106/0 on seeds 0 and 1. Post-commit `5d37ca5a` root format,
+          warnings-as-errors compile, strict Credo and unused-lock pass;
+          default root `mix test` stops before suites on local PostgreSQL
+          SCRAM password configuration. A peer-authenticated local socket
+          allows it to enter suites; that run exposed the direct-input
+          failures tracked below and was stopped after focused reproduction.
+          Astra xhigh re-review loaded pre-fix
+          input code in memory and reproduced both failures, then passed four
+          delayed-room/settled-absence probes and the 26-case room file on
+          seeds 0 and 1 with no verified scoped defect.
       - [x] Reproduce a delayed stale STT start handled after its native
         allocation rotates but before a fresh start. Prevent stale evidence
         from occupying the room's public caller-turn slot or suppressing fresh
@@ -1096,6 +1104,19 @@ the existing audio round trip. Record discoveries here before implementing.
       format, warnings-as-errors compile, strict Credo (1,102 files, no issues)
       and unused-lock checks exit 0. Root `mix test` still stops before suites
       at local PostgreSQL SCRAM password configuration; it is not green.
+    - [x] Repair the post-`5d37ca5a` root-suite direct-input regression:
+      two `STSCapabilityOriginsTest` cases expect policy-denied input during
+      output-route revocation, but receive `:held` because external/hybrid
+      room-origin rotation also holds a capability with no bound room ingress.
+      Reproduce both with owning-child tests; keep room-bound input retirement
+      on scoped rotation, while direct opted-in input must remain policy-gated
+      and gain a fresh response origin after regrant. Run the focused origin
+      suite and adjacent room/capability checks before a separate repair commit.
+      The two existing owning tests failed 2/2 before the guard and pass 2/2
+      after it. The adjacent 131-case group passes seeds 0 and 1 on serial
+      rerun; an initial concurrent seed-0 overflow-test teardown failure
+      passed in isolation and did not reproduce on rerun. Independent review
+      and post-commit root gates remain separate.
 
   Evidence: the embedded matrix first failed both STS-caller modes (five tests,
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,

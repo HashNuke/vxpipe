@@ -66,7 +66,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   end
 
   def activity_origin_rotated?(%{input_policy: %Snapshot{} = previous} = before, updated) do
-    before.descriptor != nil and before.descriptor.turn_control in ["external", "hybrid"] and
+    is_pid(before.input) and before.descriptor != nil and
+      before.descriptor.turn_control in ["external", "hybrid"] and
       (Snapshot.interval(previous, :audio_input, before.human_id) !=
          Snapshot.interval(updated.input_policy, :audio_input, before.human_id) or
          Snapshot.interval(previous, :audio_output, before.human_id) !=
