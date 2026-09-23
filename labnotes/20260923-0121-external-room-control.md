@@ -357,5 +357,10 @@ separate mechanical repair moves the new Channel input-idle predicate into
 STSInput and Google's bounded reusable-input predicate into STSResumption.
 Channel is now 798 lines, Google STS session 799, and the ten-file adjacent
 group including Google fake-wire provider tests passes 251/0 on seeds 0 and 1.
-Scoped review and post-repair root gates remain pending. The two deliberately
-red compiled-room external/hybrid tests remain outside this checkpoint.
+Astra xhigh cleared the predicate move after 175 scoped checks on both seeds,
+including equivalence probes. Post-commit `816fba9a` root format,
+warnings-as-errors compile, strict Credo (1,095 source files, no issues) and
+unused-lock checks pass. Root `mix test` still stops before Persistence at
+the same local PostgreSQL SCRAM password configuration, not a passing suite.
+The two deliberately red compiled-room external/hybrid tests remain outside
+this checkpoint.

@@ -789,15 +789,19 @@ the existing audio round trip. Record discoveries here before implementing.
             gate for still-unacknowledged events. The original focused test
             failed immediately; after the test-only synchronization it passes
             30 repeats on seed 0 and 50 on seed 1.
-          - [ ] Post-commit size-gate repair after `a540af9c`: strict Credo
+          - [x] Post-commit size-gate repair after `a540af9c`: strict Credo
             reports Channel at 803 and Google STS session at 805 lines against
             the 800-line limit. Move the new native idle predicate to the
             owning STS input module and the Google reusable-input predicate
             to its resumption module without changing behavior. Channel is
             now 798 lines and Google STS session 799; the ten-file adjacent
-            group passes 251/0 on seeds 0 and 1. Scoped review and root gates
-            remain pending. Commit this separate mechanical checkpoint before
-            rerunning root gates.
+            group passes 251/0 on seeds 0 and 1. Astra xhigh cleared the
+            mechanical move after 175 scoped checks on both seeds. Commit
+            `816fba9a` passes post-commit format, warnings-as-errors compile,
+            strict Credo (1,095 source files, no issues) and unused-lock
+            checks. Root `mix test` cannot start the Persistence suite here
+            because local PostgreSQL SCRAM has no password configured; that
+            environmental gate remains open.
         - [ ] For reusable hold/release, add an acknowledged provider input
           discard/reset and a native-event retirement barrier. Morse decoder
           clearing alone cannot fence an already-emitted turn end; Google must
