@@ -2408,6 +2408,12 @@ zero failures, 42 excluded, seed 0. See
   and all three two-call modes against the latest tool, recognizer and egress
   fixes. Root static gates pass; full umbrella remains pending. Review/integration evidence:
   `labnotes/20260922-1650-sts-load-integration.md`.
+  Post-commit `d7027d46` egress-queue recheck runs the measured lane again in a
+  quiet window: all three ten-call modes pass (three tests, zero failures), each
+  with 29 completed turns, ten interruptions, nine healthy survivors and all
+  ten calls cleaned. Exact `CALL_LOAD_JSON` lines and machine limits are in
+  `labnotes/20260923-0059-sts-egress-retirement.md`. This is a local synthetic
+  recheck, not hosted or native audio capacity proof.
 - [ ] Run focused child suites and root format, warnings-as-errors compile,
   strict Credo, full tests and unused-lock gates. Verify no real-key fixtures,
   no credential/database migration loss, provider tag accuracy, and a clean
@@ -2426,6 +2432,14 @@ zero failures, 42 excluded, seed 0. See
   environmental, not a passing root test gate; no credentials were added or
   logged. Independent Astra xhigh re-review found no actionable issue in the
   interruption diff. Hosted history and unlabelled attribution remain open.
+
+  Egress-queue checkpoint `d7027d46` also passes post-commit root format,
+  warnings-as-errors compile, strict Credo and unused-dependency checks. The
+  Call Engine child suite passes 1,435 tests, zero failures, 30 tagged
+  integration exclusions (seed 473663). Root `mix test` still stops before
+  tests at the same missing local PostgreSQL SCRAM password. The separate
+  measured ten-call lane passes all three fixture modes; final acceptance
+  remains open for root, room lifecycle, hosted and attribution gates.
 
   Latest pre-caller-correlation integration baseline `ebf11332` passes all five
   root gates: 2,363 tests, zero failures, 45 excluded (seed 0, two schedulers),

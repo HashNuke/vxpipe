@@ -126,6 +126,18 @@ costs in the first mode's startup; do not attribute that difference solely to
 the speech architecture. With ten calls, p99 admission/startup is the maximum
 sample, not an estimate of a production tail distribution.
 
+## Measured local recheck — 2026-09-23
+
+The 2026-09-23 post-`d7027d46` egress-queue recheck repeats the measured lane
+in a quiet window. All three ten-call modes pass (three tests, zero failures);
+each completes 29 turns and ten interruptions, retains nine healthy post-fault
+survivors, cleans all ten calls and reports no errors. The run used two BEAM
+schedulers on a four-logical-CPU x86_64 host with 7,750 MiB RAM. Exact
+`CALL_LOAD_JSON` reports and post-commit gate evidence are in
+[`sts-egress-retirement` labnotes](../labnotes/20260923-0059-sts-egress-retirement.md).
+This remains synthetic local playback evidence, not remote hearing or hosted
+capacity.
+
 ## Measured local baseline — 2026-09-22
 
 `bin/sts-call-load measured` at `5792d797bf0439a81dbb8dfc4f960376cdb3659c`
