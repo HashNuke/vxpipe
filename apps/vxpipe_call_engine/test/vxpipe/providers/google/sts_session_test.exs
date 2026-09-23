@@ -69,6 +69,25 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     refute_received {:test_google_sts_audio, ^wire, _rejected_audio}
   end
 
+  test "opted-in Google tool calls carry the bound interaction origin" do
+    {session, wire} = start_session(response_start?: true)
+    context = make_ref()
+    pcm = <<1, 0>>
+    assert :ok = Session.push_audio(session, pcm, response_context: context)
+    assert_receive {:test_google_sts_audio, ^wire, ^pcm}
+
+    deliver(wire, %{
+      "toolCall" => %{
+        "functionCalls" => [%{"id" => "origin-call", "name" => "echo", "args" => %{}}]
+      }
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :tool_call, response_context: ^context} = call}
+
+    assert :ok = Session.ack(session, call)
+  end
+
   test "opted-in Google input cannot bypass context through legacy provider callbacks" do
     {session, wire} = start_session(response_start?: true, turn_control: "external")
     assert_receive {:test_google_sts_control, ^wire, _setup}

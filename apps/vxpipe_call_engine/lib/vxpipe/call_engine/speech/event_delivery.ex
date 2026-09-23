@@ -55,7 +55,7 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
     do: result != :ok and staged_context_input?(state) and input.unsafe_events?
 
   def note_early_event(event, state) do
-    if staged_context_input?(state) and not accepted_prior_response?(event, state) do
+    if staged_context_input?(state) and not accepted_prior_origin?(event, state) do
       %{state | input: Map.put(state.input, :unsafe_events?, true)}
     else
       state
@@ -81,6 +81,27 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
 
       :unknown ->
         {:error, :stale_response}
+    end
+  end
+
+  def accept_tool_call(%Event{response_context: context} = event, state) do
+    case ResponseContexts.status(state.response_contexts, context) do
+      :accepted ->
+        {:ok, event, state}
+
+      :staged ->
+        case {state.response_contexts.pending, state.input} do
+          {{reference, ^context}, %{command: %{ref: reference, response_context: ^context}}} ->
+            {:ok, event, state}
+
+          _other ->
+            {:error, :stale_response}
+        end
+
+      :unknown ->
+        if is_reference(context),
+          do: {:error, :stale_response},
+          else: {:error, :invalid_event}
     end
   end
 
@@ -111,13 +132,14 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
     end
   end
 
-  defp accepted_prior_response?(
-         %Event{kind: :response_started, response_context: context},
+  defp accepted_prior_origin?(
+         %Event{kind: kind, response_context: context},
          state
-       ) do
+       )
+       when kind in [:response_started, :tool_call] do
     context != state.input.command.response_context and
       ResponseContexts.status(state.response_contexts, context) == :accepted
   end
 
-  defp accepted_prior_response?(_event, _state), do: false
+  defp accepted_prior_origin?(_event, _state), do: false
 end

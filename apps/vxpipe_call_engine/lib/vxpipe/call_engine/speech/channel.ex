@@ -693,6 +693,12 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   defp accept_event(%Event{kind: :response_started} = event, state),
     do: EventDelivery.accept_response_start(event, state)
 
+  defp accept_event(
+         %Event{kind: :tool_call} = event,
+         %{descriptor: %{response_start?: true}} = state
+       ),
+       do: EventDelivery.accept_tool_call(event, state)
+
   defp accept_event(%Event{kind: :output_completed} = event, state),
     do: STSOutput.complete(event, state)
 

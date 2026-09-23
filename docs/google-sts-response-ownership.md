@@ -2,7 +2,9 @@
 
 Status: the bounded response-state owner, shared exact-start admission queue
 and local opted-in Google controller adoption are implemented and verified with
-fake transport. Google remains unadvertised. Successful cross-origin cutover,
+fake transport. Opted-in tool calls carry the bound interaction context through
+the channel and capability, while legacy calls remain context-free. Google
+remains unadvertised. Successful cross-origin cutover,
 interruption-history reconciliation, resumption watermark, hosted acceptance
 and full milestone acceptance remain open.
 

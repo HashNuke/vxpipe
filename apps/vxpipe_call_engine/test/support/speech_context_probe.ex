@@ -40,7 +40,8 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
        result: :ok,
        held: nil,
        hold?: false,
-       early_response: nil
+       early_response: nil,
+       early_tool: nil
      }}
   end
 
@@ -52,6 +53,9 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
 
   def handle_call({:configure_early_response, turn, index, context}, _, state),
     do: {:reply, :ok, %{state | early_response: {turn, index, context}}}
+
+  def handle_call({:configure_early_tool, call, turn, context}, _, state),
+    do: {:reply, :ok, %{state | early_tool: {call, turn, context}}}
 
   def handle_call({:emit_response, context, turn, index}, _, state) do
     result =
@@ -100,6 +104,21 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
         )
 
       send(state.observer, {:early_response, result})
+    end
+
+    if state.early_tool do
+      {call, turn, response_context} = state.early_tool
+
+      result =
+        Event.emit(state.channel, :tool_call,
+          call_ref: call,
+          turn_ref: turn,
+          tool_name: "echo",
+          arguments: %{},
+          response_context: response_context || context
+        )
+
+      send(state.observer, {:early_tool, result})
     end
 
     case operation do

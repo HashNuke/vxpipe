@@ -97,8 +97,14 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :response_started}, %{kind: :sts, response_start?: true}),
     do: true
 
+  def supported?(
+        %__MODULE__{kind: :tool_call, response_context: context},
+        %{kind: :sts} = descriptor
+      ),
+      do: if(descriptor.response_start?, do: is_reference(context), else: is_nil(context))
+
   def supported?(%__MODULE__{kind: kind}, %{kind: :sts})
-      when kind in [:tool_call, :tool_cancelled, :interrupted, :output_completed],
+      when kind in [:tool_cancelled, :interrupted, :output_completed],
       do: true
 
   def supported?(
@@ -130,7 +136,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     do: [:turn_ref, :response_index, :response_context]
 
   defp allowed_fields(:tool_call),
-    do: [:call_ref, :turn_ref, :tool_name, :arguments, :provider_request_id]
+    do: [:call_ref, :turn_ref, :tool_name, :arguments, :provider_request_id, :response_context]
 
   defp allowed_fields(:tool_cancelled), do: [:call_ref, :provider_request_id]
   defp allowed_fields(:interrupted), do: [:turn_ref, :provider_request_id]
@@ -219,11 +225,13 @@ defmodule Vxpipe.CallEngine.Speech.Event do
          call_ref: reference,
          turn_ref: turn,
          tool_name: name,
-         arguments: arguments
+         arguments: arguments,
+         response_context: context
        }),
        do:
          is_reference(reference) and is_reference(turn) and is_binary(name) and
-           byte_size(name) in 1..256 and String.valid?(name) and ToolArguments.valid?(arguments)
+           byte_size(name) in 1..256 and String.valid?(name) and ToolArguments.valid?(arguments) and
+           (is_nil(context) or is_reference(context))
 
   defp valid_kind?(%__MODULE__{kind: :tool_cancelled, call_ref: reference}),
     do: is_reference(reference)

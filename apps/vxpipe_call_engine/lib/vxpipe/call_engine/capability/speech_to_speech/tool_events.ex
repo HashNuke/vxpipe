@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Input, Output}
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Input, Output, ResponseOrigins}
   alias Vxpipe.CallEngine.Speech.Event
 
   @maximum_pending 16
@@ -11,6 +11,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
       not permitted?(state) ->
         {:ok, state}
 
+      not origin_current?(state, event.response_context) ->
+        {:error, :stale_tool_origin}
+
       Map.has_key?(state.tool_calls, call) ->
         {:ok, state}
 
@@ -18,7 +21,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
         {:error, :pending_tool_overflow}
 
       true ->
-        pending = %{turn_ref: event.turn_ref, evidence: evidence(state)}
+        pending = %{
+          turn_ref: event.turn_ref,
+          evidence: evidence(state),
+          response_context: event.response_context
+        }
+
         send_event(state, pending.evidence, event)
 
         {:ok,
@@ -43,8 +51,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   def current?(state, call) do
     case Map.fetch(state.tool_calls, call) do
-      {:ok, pending} -> permitted?(state) and pending.evidence == evidence(state)
-      :error -> false
+      {:ok, pending} ->
+        permitted?(state) and pending.evidence == evidence(state) and
+          origin_current?(state, pending.response_context)
+
+      :error ->
+        false
     end
   end
 
@@ -67,6 +79,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   defp permitted?(state),
     do: not state.held? and Output.audio_route_permitted?(state, state.human_id, state.agent_id)
+
+  defp origin_current?(%{descriptor: %{response_start?: false}}, _context), do: true
+
+  defp origin_current?(state, context) do
+    case ResponseOrigins.accepted_fingerprint(state, context) do
+      {:ok, fingerprint} -> ResponseOrigins.current?(state, fingerprint)
+      :error -> false
+    end
+  end
 
   defp evidence(state) do
     %{

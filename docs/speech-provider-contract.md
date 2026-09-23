@@ -130,6 +130,15 @@ bound to a different, previously accepted context survives that rejection and
 is delivered in order. Input acceptance and event validity are not output
 authorization. Accepted origins currently have an interim 16-context allocation
 bound; exact response/tool holds and authorized origin retirement remain open.
+For `response_start?: true`, each `tool_call` also carries the exact
+`response_context` of its model interaction. The channel rejects a missing,
+unknown or unrelated staged context before consumer delivery, and withholds a
+matching staged call until its input is accepted. The capability checks that
+the accepted context still matches its current immutable authorization origin;
+a delayed call from an older origin fails the allocation rather than borrowing
+the new epoch. Legacy STS tool calls remain context-free. This correlation does
+not yet retire tool-origin holds, reconcile rejected tool invocations upstream,
+or prove that unlabelled Google wire content belongs to a new interaction.
 The STS capability proposes one opaque context before opted-in audio, typed
 text or activity input. It commits the context only after that input accepts
 and reuses it only while allocation, source, input epoch and both directional

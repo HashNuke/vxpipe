@@ -69,6 +69,21 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
     refute_received {:context_input, _, _, _}
   end
 
+  test "legacy STS tool calls remain context-free" do
+    session = session(options: [response_start?: false, turn_control: "hybrid"])
+    provider = Session.provider(session)
+    fields = [call_ref: make_ref(), turn_ref: make_ref(), tool_name: "echo", arguments: %{}]
+    assert :ok = GenServer.call(provider, {:emit, :tool_call, fields})
+    assert_receive {:vxpipe_speech, %Event{kind: :tool_call, response_context: nil} = event}
+    assert :ok = Session.ack(session, event)
+
+    assert {:error, :invalid_event} =
+             GenServer.call(
+               provider,
+               {:emit, :tool_call, fields ++ [response_context: make_ref()]}
+             )
+  end
+
   test "failed first use rolls back and failed reuse preserves acceptance" do
     session = session()
     provider = Session.provider(session)
@@ -172,6 +187,102 @@ defmodule Vxpipe.CallEngine.Speech.STSInputContextTest do
                    1_000
 
     assert :ok = Session.ack(session, event)
+  end
+
+  test "opted-in tool calls require an accepted origin before delivery" do
+    session = session()
+    provider = Session.provider(session)
+    context = make_ref()
+    call = make_ref()
+    turn = make_ref()
+    fields = [call_ref: call, turn_ref: turn, tool_name: "echo", arguments: %{}]
+
+    assert {:error, :invalid_event} = GenServer.call(provider, {:emit, :tool_call, fields})
+
+    assert {:error, :stale_response} =
+             GenServer.call(provider, {:emit, :tool_call, fields ++ [response_context: context]})
+
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: context)
+
+    assert :ok =
+             GenServer.call(provider, {:emit, :tool_call, fields ++ [response_context: context]})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{kind: :tool_call, call_ref: ^call, response_context: ^context} = event}
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "staged tool calls wait for acceptance and cannot borrow another staged context" do
+    session = session()
+    provider = Session.provider(session)
+    staged = make_ref()
+    call = make_ref()
+    turn = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, :ok, true})
+    :ok = GenServer.call(provider, {:configure_early_tool, call, turn, nil})
+    request = submit_async(session, staged)
+    assert_receive {:early_tool, :ok}
+    assert status(session, staged) == :staged
+    refute_received {:vxpipe_speech, %Event{kind: :tool_call}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, :ok} = :gen.wait_response(request, 1_000)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{kind: :tool_call, call_ref: ^call, response_context: ^staged} = event}
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "tool call cannot borrow a different staged context" do
+    session = session()
+    provider = Session.provider(session)
+    staged = make_ref()
+    forged = make_ref()
+    :ok = GenServer.call(provider, {:configure_result, :ok, true})
+    :ok = GenServer.call(provider, {:configure_early_tool, make_ref(), make_ref(), forged})
+    request = submit_async(session, staged)
+    assert_receive {:early_tool, {:error, :stale_response}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, :ok} = :gen.wait_response(request, 1_000)
+    refute_received {:vxpipe_speech, %Event{kind: :tool_call}}
+  end
+
+  test "rejected staged input preserves a tool call from a previously accepted origin" do
+    session = session()
+    provider = Session.provider(session)
+    accepted = make_ref()
+    rejected = make_ref()
+    call = make_ref()
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: accepted)
+    :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, true})
+    :ok = GenServer.call(provider, {:configure_early_tool, call, make_ref(), accepted})
+    request = submit_async(session, rejected)
+    assert_receive {:early_tool, :ok}
+    refute_received {:vxpipe_speech, %Event{kind: :tool_call}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, {:error, :busy}} = :gen.wait_response(request, 1_000)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{kind: :tool_call, call_ref: ^call, response_context: ^accepted} = event}
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "rejected first use cannot deliver its staged tool call" do
+    session = session()
+    provider = Session.provider(session)
+    channel = GenServer.whereis(Channel.address(session))
+    monitor = Process.monitor(channel)
+    :ok = GenServer.call(provider, {:configure_result, {:error, :busy}, true})
+    :ok = GenServer.call(provider, {:configure_early_tool, make_ref(), make_ref(), nil})
+    request = submit_async(session, make_ref())
+    assert_receive {:early_tool, :ok}
+    refute_received {:vxpipe_speech, %Event{kind: :tool_call}}
+    :ok = GenServer.call(provider, :release)
+    assert {:reply, {:error, :session_failed}} = :gen.wait_response(request, 1_000)
+    assert_receive {:DOWN, ^monitor, :process, ^channel, _}, 1_000
+    refute_received {:vxpipe_speech, %Event{kind: :tool_call}}
   end
 
   test "a response start cannot borrow a different staged input context" do

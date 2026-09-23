@@ -187,6 +187,57 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     refute_received {:context_output_granted, ^turn, _}
   end
 
+  test "late old-origin tool calls cannot inherit a new capability origin" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, old_context, {:audio, <<0, 0>>}, _}
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, current_context, {:audio, <<0, 0>>}, _}
+    assert current_context != old_context
+
+    current_call = make_ref()
+    current_turn = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :tool_call,
+                call_ref: current_call,
+                turn_ref: current_turn,
+                tool_name: "echo",
+                arguments: %{},
+                response_context: current_context}
+             )
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent",
+                    %{event: %{call_ref: ^current_call}}}
+
+    old_call = make_ref()
+    old_turn = make_ref()
+    monitor = Process.monitor(capability)
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :tool_call,
+                call_ref: old_call,
+                turn_ref: old_turn,
+                tool_name: "echo",
+                arguments: %{},
+                response_context: old_context}
+             )
+
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :stale_tool_origin}, 1_000
+
+    refute_received {:vxpipe_sts_tool_event, ^capability, "agent",
+                     %{event: %{call_ref: ^old_call}}}
+
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :stale_tool_origin}, 1_000
+  end
+
   test "external caller activity gates an opted-in response until accepted end" do
     capability = capability()
     provider = Session.provider(:sys.get_state(capability).session)

@@ -2000,6 +2000,23 @@ Submitted invocation outcomes must still survive privately for later reasoning.
             root retirement before final acceptance. The input-only interim
             16-lifetime-origin bound is not this proof; exercise more than 16
             sequential fully retired rotations without evicting live obligations.
+            - [x] Bind opted-in tool-call evidence to its accepted input origin
+              before delivery; reject absent/unknown or mismatched staged
+              contexts, and prevent delayed old-origin calls from acquiring a
+              newly current capability fingerprint. Keep legacy tool calls
+              unchanged and prove current-origin calls still reach the room.
+              Focused reds reproduced contextless opted-in admission and
+              rejection of any context-bearing tool event at the shared shape.
+              The channel now gates accepted/exactly staged context evidence;
+              rejected first use cannot publish its early tool call, while a
+              prior accepted call survives an unrelated staged rejection.
+              Capability admission checks the immutable accepted origin and
+              fails a delayed old-origin call rather than assigning it the new
+              epoch. Google emits its bound context in the local opted-in
+              profile. The 89-test focused group and 212-test broader
+              channel/controller/room tool group pass. Independent Astra
+              xhigh source review found no actionable issue. This is not exact tool
+              hold retirement or successful cross-origin wire attribution.
         - [x] Correct first-response reds to deliver content before expecting
           admission; caller end and transcription alone must not admit output,
           and first response identity must differ from caller identity. Check

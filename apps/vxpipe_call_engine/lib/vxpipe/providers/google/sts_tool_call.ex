@@ -11,12 +11,14 @@ defmodule Vxpipe.Providers.Google.STSToolCall do
     else
       call_ref = make_ref()
 
-      case Event.emit(state.channel, :tool_call,
-             call_ref: call_ref,
-             turn_ref: turn,
-             tool_name: name,
-             arguments: args
-           ) do
+      fields = [call_ref: call_ref, turn_ref: turn, tool_name: name, arguments: args]
+
+      fields =
+        if state.response_start?,
+          do: Keyword.put(fields, :response_context, state.interaction_context),
+          else: fields
+
+      case Event.emit(state.channel, :tool_call, fields) do
         :ok ->
           {:ok,
            %{
