@@ -731,7 +731,7 @@ the existing audio round trip. Record discoveries here before implementing.
       Hold retires provider associations without claiming to cancel submitted
       engine workers. Provider events first observed after a new epoch still
       require the separate upstream late-evidence isolation gate.
-    - [ ] Replace unowned `Task.start` execution with the existing supervised
+    - [x] Replace unowned `Task.start` execution with the existing supervised
       invocation machinery under the agent-owned STS lifecycle. Distinguish
       provider association cancellation from submitted invocation lifetime:
       ordinary speech interruption fences unsent work and old provider speech,
@@ -741,6 +741,13 @@ the existing audio round trip. Record discoveries here before implementing.
       not remote rollback. Retain the existing five-second execution budget
       unless measured evidence requires a different contract. Test worker
       survival across ordinary interruption and `DOWN` on actual owner loss.
+      The tree owns `InvocationSupervisor`, `InvocationRegistry` and a private
+      completion bridge; compiled-room lifecycle tests cover ancestry,
+      interruption survival, five-second unknown timeout, activation/owner and
+      child loss, bounded capacity and retained completion leases. The selected
+      tool lifecycle, identity and embedded transcript group passes 51/0
+      (seed 0). This closes worker ownership only, not the separate running-
+      acknowledgement/private-completion or binding adoption gates below.
     - [ ] Complete runtime schema/permission checks and supported host, variable,
       platform and MCP binding adoption. Unsupported bindings must fail explicitly,
       not wait indefinitely for a result no executor will produce. Preserve
