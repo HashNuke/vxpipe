@@ -73,16 +73,18 @@ lanes have no common source-frame watermark today. Late STT detection relative
 to already accepted later PCM needs explicit test evidence; message ordering
 alone does not solve it.
 
-Producer provenance remains unresolved. STT currently stamps a transcript
-policy interval when it emits a signal; it does not carry the audio interval or
-an STS lifecycle generation. A delayed signal cannot be assigned the room's
-current STS epoch on receipt. Moreover, if transcripts still demand STT,
-audio-route revocation may leave its provider session alive, allowing an old
-provider boundary to first surface after regrant. The next design proof must
-coordinate source-ingress admission, semantic-session retirement, frozen
-signal provenance, and room comparison. Hold/release requires an equivalent
-producer lifecycle fence before releasing the new STS epoch; a room-only
-watermark cannot classify provider evidence that has not surfaced yet.
+Producer provenance remains unresolved. Private STT signals now preserve
+native allocation generation, turn reference and source audio intervals at
+capability emission, but they do not carry an STS lifecycle binding. A delayed
+signal cannot be assigned the room's current STS epoch on receipt. Selected
+STT now rotates its native provider on scoped audio-route changes even when
+transcripts remain demanded, and selected ingress PCM checks that generation;
+neither establishes a source-time hold/reopen fence for evidence first surfaced
+after a new epoch. The remaining proof must coordinate source-ingress
+admission, semantic-session retirement, frozen signal provenance, and room
+comparison. Hold/release requires an equivalent producer lifecycle fence
+before releasing the new STS epoch; a room-only watermark cannot classify
+provider evidence that has not surfaced yet.
 The [activity-provenance design](sts-activity-provenance.md) records the
 allocation-bound signal and acknowledged PCM cutover requirements in detail.
 

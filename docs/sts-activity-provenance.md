@@ -1,11 +1,11 @@
 # STT-owned activity provenance for room STS
 
 Status: reviewed design candidate, not implemented room control. Selected-STT
-demand, audio-route provider reset, and the ingress policy-interval proof are
-committed enabling slices. Native allocation/input cutover, hold/release and
-room acceptance remain open. Scoped capability-emission signal metadata and
-recording-only retirement checks pass, but they are not a room controller
-binding.
+demand, audio-route provider reset, and ingress policy-interval plus native
+allocation-generation checks are committed enabling slices. Source-time input
+cutover, hold/release and room acceptance remain open. Scoped capability-emission
+signal metadata and recording-only retirement checks pass, but they are not a
+room controller binding.
 
 ## Decision
 
@@ -58,15 +58,17 @@ its pre-replacement origin, then accepted when a post-replacement query labeled
 it with the fresh generation and intervals. This is design evidence, not
 implemented cutover acceptance.
 
-An enabling interval-proof slice now captures the ingress snapshot's STT,
+An enabling interval-proof slice captures the ingress snapshot's STT,
 audio-input and audio-output intervals in each asynchronous PCM envelope and
-rejects a mismatch at capability delivery. A focused test first reproduced an
-old envelope reaching a replacement provider, then proved old rejection and
-fresh delivery. This does not yet qualify the native allocation generation,
-fence pre-reopen frames, or coordinate hold; it must not be treated as the
-completed cutover contract above.
+rejects a mismatch at capability delivery. A later selected-STT slice binds
+the ready native audio origin to ingress, freezes its generation at enqueue,
+and rejects missing or stale generations at capability delivery. Ingress
+readiness also compares the bound generation with the provider's current one;
+transcription audio origin remains distinct from STS activity authority. These
+checks do not fence pre-reopen source frames or coordinate hold, so they are
+not the completed cutover contract above.
 
-The next producer-side slice preserves the native STT event's allocation
+The producer-side slice preserves the native STT event's allocation
 generation and turn reference plus the source's audio-input/output intervals
 in each private signal at capability emission. This is immutable evidence for
 later room comparison; it does not itself authorize external activity or bind
