@@ -389,3 +389,10 @@ the four-file adjacent group passes 64/0 on seeds 0 and 1. Astra xhigh scoped
 re-review found no remaining concrete defect after 71/0 checks on both seeds
 and seven in-memory probes, including prepared/adopted and canceled query
 forms. This clearance does not cover PCM cutover, hold or room control.
+
+Commit `711b863d` contains this query checkpoint and its tests/docs. Post-commit
+root format, warnings-as-errors compile, strict Credo (1,095 files, no issues)
+and unused-lock checks pass. Root `mix test` again stops before the Persistence
+suite because PostgreSQL SCRAM requires a local password that is not configured;
+do not count this as a passing umbrella test gate. The intentionally red
+compiled-room external/hybrid tests remain unstaged for the next slice.
