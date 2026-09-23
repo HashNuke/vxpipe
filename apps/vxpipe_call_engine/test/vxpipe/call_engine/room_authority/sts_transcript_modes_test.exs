@@ -398,6 +398,68 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   end
 
   for mode <- ["external", "hybrid"] do
+    test "#{mode} retires an active controller when activity demand disappears" do
+      context = room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      stt = connection.speech_to_text.capability
+
+      assert {:ok, %{activity_origin: origin, identity: identity}} =
+               SpeechToText.input_binding(stt)
+
+      assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")
+      caller = context.caller
+
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_sts(%{context | pcm: old_pcm})
+      assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller}}, 1_000
+
+      active = :sys.get_state(context.authority)
+      assert %{activity_turn: turn} = active.speech_to_speech_capability
+
+      caller_turn =
+        Map.fetch!(active.connections, context.command.connection_id).speech_to_text.turn
+
+      assert is_reference(turn.turn_ref)
+      assert turn.turn_ref == caller_turn.turn_ref
+      assert turn.generation == origin.allocation_generation
+      assert turn.source == context.command.connection_id
+
+      monitor = Process.monitor(context.capability)
+      privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+      assert {:ok, _policy} =
+               MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+      assert_receive {:DOWN, ^monitor, :process, _, _}, 5_000
+      assert %{speech_to_speech_capability: nil} = :sys.get_state(context.authority)
+      assert {:ok, %{activity_origin: nil}} = SpeechToText.input_binding(stt)
+
+      old_end = %Signal{
+        kind: :turn_ended,
+        provider_sequence: 99,
+        allocation_generation: origin.allocation_generation,
+        turn_ref: turn.turn_ref,
+        audio_input_interval: origin.audio_input_interval,
+        audio_output_interval: origin.audio_output_interval,
+        policy_revision: caller_turn.policy_revision,
+        provider_turn_index: caller_turn.provider_turn_index,
+        text: "NO"
+      }
+
+      send(context.authority, {:vxpipe_stt_signal, stt, identity, old_end})
+      assert %{speech_to_speech_capability: nil} = :sys.get_state(context.authority)
+      _ = :sys.get_state(context.sink)
+      _ = :sys.get_state(context.authority)
+      sink = context.sink
+      refute_received {:test_audio_output, ^sink, _}
+      refute_received {:test_audio_output_finish, ^sink, _}
+      refute_received {:vxpipe_event, %AgentSpeechStarted{}}
+      refute_received {:vxpipe_event, %AgentTurnCompleted{}}
+    end
+  end
+
+  for mode <- ["external", "hybrid"] do
     test "#{mode} replaces an active pair after transcript-only STT rotation" do
       context = room(true, false, %{}, :morse, unquote(mode), :no_transcripts)
       assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")

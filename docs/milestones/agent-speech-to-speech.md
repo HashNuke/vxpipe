@@ -694,8 +694,28 @@ the existing audio round trip. Record discoveries here before implementing.
             independently verified the original race, regrant and transfer
             refresh with no remaining reproduced defect. The six-file group
             passes 88/0 on seeds 0 and 1.
-        - [ ] Complete room controller retirement when activity demand disappears
+        - [x] Complete room controller retirement when activity demand disappears
           mid-turn; a closed recognizer will not necessarily emit an end.
+          Compiled external/hybrid room tests now establish an active selected
+          STT pair and accepted old `NO` PCM, deny the audio route without a
+          recognizer end, observe exact old-capability teardown and nil activity
+          origin, then reject a previously valid delayed end without agent
+          audio/start/completion. This closes room retirement only, not native
+          source-time cutover or reusable hold/release.
+          - [x] Use the selected STT caller turn's actual policy revision and
+            provider turn index for a delayed old end. Astra xhigh reproduced
+            that a hardcoded revision 0 is rejected even before demand loss,
+            whereas the real revision 1 closes the pre-loss pair and produces
+            `RECEIVED NO` in both modes. Revised-test counterfactual controls
+            reproduce valid pre-loss response in both modes (64,640 decoded
+            audio bytes), while the post-loss end stays fenced.
+          - [x] Synchronize sink and room forwarding before asserting no stale
+            reply. Astra xhigh injected an old ingress end plus a 300-ms
+            finish-notification delay: old audio decoded to `RECEIVED NO` while
+            immediate finish/completion refutations passed. The revised tests
+            fail on the injected audio frame and pass normally; the adjacent
+            three-file room group passes 52/0 on seeds 0 and 1. Preserve the
+            separate native source-time gate.
       - [ ] Give already-emitted STT activity producer-side lifecycle and audio
         interval provenance. An end/start first handled after hold/release or
         audio-only revoke/regrant cannot be relabeled with the new STS epoch.
