@@ -2812,6 +2812,14 @@ zero failures, 42 excluded, seed 0. See
   upstream Gateway mailbox bypass and room-coordinated hold cutover remain
   unchecked.
 
+  Telephony source-evidence enabler `efb63f66` passes post-commit root format,
+  warnings-as-errors compile, strict Credo (1,097 files, no issues) and
+  unused-dependency checks. Focused Twilio/Telnyx/STS-input tests pass 28/0 on
+  seeds 0 and 1, with 30/0 adjacent Gateway checks. Root `mix test` again
+  stops before its suite because local PostgreSQL SCRAM authentication has no
+  password configured. Socket metadata preservation is not source hold/reopen
+  acceptance; the upstream fence and room-controller tasks remain unchecked.
+
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 
 Suggestions only; normative behavior stays in the checkpoints above. Paths

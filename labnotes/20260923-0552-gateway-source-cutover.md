@@ -113,3 +113,11 @@ defect was reproduced. Review found two inaccurate documentation phrases
 about the current telephony stamp point and which committed provider test
 suspends Leg; those were corrected. This review does not satisfy the open
 hold/reopen or native-socket acceptance tasks.
+
+Post-commit gates for `efb63f66`: root `mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix credo --strict` (1,097 source files,
+no issues) and `mix deps.unlock --check-unused` all exit successfully.
+Root `mix test` stops before tests while creating the Persistence test database:
+PostgreSQL SCRAM requires a password absent from local test configuration.
+No credential was added, printed or inferred. This is an environment blocker
+for that gate, not a passing umbrella test result.
