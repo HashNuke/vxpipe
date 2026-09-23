@@ -917,6 +917,15 @@ the existing audio round trip. Record discoveries here before implementing.
           the fresh STT generation before releasing controller input. Verify a
           boundary emitted before hold and one first produced after hold cannot
           control the new epoch. Coordinate this with provider hold-state repair.
+          - [x] Interim room fail-close while that cutover is absent: an
+            external/hybrid room hold must retire its STS allocation even if
+            the provider currently appears idle. Reproduce a selected STT
+            allocation surviving hold/release, and prove a delayed boundary
+            from it cannot acquire a fresh STS input epoch. This teardown is
+            not successful reusable hold/release acceptance.
+            A compiled-room test with the real supervised STS capability
+            proves allocation retirement and no new epoch for the delayed
+            selected-STT signal; native producer hold/reopen stays open.
       - [ ] Prove hold/release retires provider-side external activity without
         treating a hold as an ordinary response-triggering end. A focused Morse
         observation found `external_started?` still true after capability hold;
@@ -998,16 +1007,65 @@ the existing audio round trip. Record discoveries here before implementing.
           reported cyclomatic complexity 21 (limit 20) in
           `validate_activity/5`; after the split it passes, as do 87 focused
           ingress/capability/origins tests.
-    - [ ] Reproduce the missing room-to-capability activity boundary with a
+    - [x] Reproduce the missing room-to-capability activity boundary with a
       real compiled Morse external call and selected human STT. Require one
       response only after the authorized end, with one human-STT-owned public
-      caller pair and no text-model dispatch.
+      caller pair and no text-model dispatch. Both original compiled-room
+      external/hybrid reds failed without sink output and now pass with ordered
+      ingress control; the adjacent focused group passes 104/0 seeds 0/1.
     - [ ] Wire selected, authorized human-STT activity to external start/end and
       hybrid end, without a second interruption or duplicate caller turn.
       Reject mismatched, duplicate, stale, held or revoked boundaries and fail
       closed on capability rejection; cover provider-controlled coexistence.
       Serialize controls with admitted STS PCM through the same bounded input
       path; a transient busy input slot must not silently drop an end boundary.
+      - [x] Reproduce selected-STT allocation rotation with an active external/
+        hybrid controller pair (including a recording-only source interval
+        change). Retire the old pair and provider input safely before a fresh
+        pair may drive another response; an old end must not settle the new
+        pair or leave it blocked indefinitely. Independent Astra review reports
+        a bounded external/hybrid no-reply reproduction; formalize it locally
+        before the runtime repair. Prime distinguishable old STS PCM, not only
+        old STT onset, and prove the fresh reply contains no old input.
+        - [x] Close the external/hybrid ingress and notify the room on a
+          selected source audio-input/output interval change before the
+          policy enforcer acknowledges it. Do not close provider-controlled
+          sessions or treat unrelated policy revisions as a new origin.
+        - [x] Retire the old STS allocation and pair, wait for the replacement
+          selected-STT activity origin, then bind a fresh STS ingress/epoch
+          and reopen. A stale capability notification or unready recognizer
+          must not reopen old input; queued old end cannot complete new input.
+          The compiled room proves fresh allocation, queued-old-end fencing,
+          stale old-capability notification rejection and no recovery while
+          the selected activity origin is unavailable. Native source-time
+          cutover remains a separate unchecked acceptance item.
+        - [x] Prove the compiled-room old-PCM/fresh-PCM matrix on seeds 0/1
+          and the adjacent room/capability group before closing this task.
+          Wait for asynchronous selected-STT replacement within its owned
+          startup budget; a fixed short query-count is not readiness evidence.
+        - [x] Reproduce selected STT generation rotation caused by a transcript-
+          only policy interval change with unchanged audio intervals. Retire
+          the old external/hybrid provider pair and input before the fresh
+          selected STT turn; do not require an audio-interval change.
+      - [x] Reproduce a delayed stale STT start handled after its native
+        allocation rotates but before a fresh start. Prevent stale evidence
+        from occupying the room's public caller-turn slot or suppressing fresh
+        activity, while preserving authorized human-STT transcript publication
+        and exactly one public pair. Independent Astra review reports the same
+        no-reply outcome in both modes; add an owning regression before fixing.
+        - [x] Reproduce a delayed old STT onset after an audio-route denial
+          makes the current activity origin unavailable. Ignore it without
+          dereferencing nil or terminating RoomAuthority; input stays closed.
+        - [x] Preserve independently permitted human-STT transcription when
+          agent audio routes are denied and STS has retired. Rebind the fresh
+          selected recognizer's audio origin without requiring a live STS
+          allocation; validate public STT signals against that transcription
+          origin, while keeping STS activity control closed. Astra xhigh
+          reproduced missing final `HI` in external/hybrid rooms even after
+          explicitly isolating the two failure paths. Add owning reds before
+          the repair; no text-model response may be dispatched. Two owning
+          room reds failed at missing final `HI` and now pass; the adjacent
+          five-file group passes 104/0 on seeds 0 and 1.
     - [ ] Prove external/hybrid source admission, held/replaced-source and
       policy revoke/regrant behavior in focused room tests. Keep upstream
       provider late-evidence isolation and transfer lifecycle as separate gates.
@@ -1601,6 +1659,15 @@ tool continuation, or Google cross-origin handoff.
     alter runtime deadlines or infer readiness from process liveness. The
     helper now uses 5,000-ms exact-session/owner assertions; the same 213-test
     group passes on seeds 0 and 1, and Astra xhigh cleared the test-only fix.
+  - [x] Repair the same 100-ms async-ready assumption in
+    `STSTurnControlTest.start_session/1` without changing runtime timeouts.
+    The 93-test room/capability/turn-control group reproduced one missing
+    `:ready` event on seed 0 and a different case on seed 1; the isolated
+    four-test file passed. Bound its exact-session wait to `Session.start/2`'s
+    documented five-second startup budget, then rerun the focused file and
+    the same concurrent group on both seeds in a separate test-only commit.
+    The four-test file passes 4/0; the 93-test group passes seeds 0 and 1.
+    Scoped Astra xhigh review found no issue; committed as `bcdbe43d`.
 
 - [x] Morse session/capability tests for human speech onset handling,
   queued playback, zero-playback interruption (`:no_prefix`), late

@@ -12,7 +12,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   }
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.{Id, TurnInterrupter}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ActivityControl
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
@@ -67,7 +70,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   def speech_to_text(capability, identity, %Signal{} = signal, %State{} = state) do
     case ConnectionLifecycle.authorized_speech_to_text(capability, identity, state) do
       {:ok, connection_id, connection} ->
-        apply_speech_to_text_signal(signal, connection_id, connection, state)
+        if current_native_signal?(signal, connection, state),
+          do: apply_speech_to_text_signal(signal, connection_id, connection, state),
+          else: state
 
       :error ->
         state
@@ -81,7 +86,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
          state
        ) do
     _ = STTAudioAdmission.synchronize(state, connection_id)
-    state
+    SpeechToSpeech.recover(state)
   end
 
   defp apply_speech_to_text_signal(
@@ -123,7 +128,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
         id: Id.generate(:turn),
         last_text: signal.text,
         policy_revision: signal.policy_revision,
-        provider_turn_index: signal.provider_turn_index
+        provider_turn_index: signal.provider_turn_index,
+        allocation_generation: signal.allocation_generation,
+        turn_ref: signal.turn_ref
       }
 
       case AgentOutput.interrupt(audio_turn_interrupter(turn, connection_id, connection), state) do
@@ -148,6 +155,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
             state
             |> put_connection_turn(connection_id, turn)
             |> Map.update!(:next_sequence, &(&1 + 1))
+            |> ActivityControl.start(connection_id, signal)
 
           if signal.text == "" do
             state
@@ -200,6 +208,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
         |> then(&emit_participant_transcription(connection_id, turn, signal.text, true, &1))
         |> emit_participant_audio_turn_completed(connection_id, turn)
         |> put_connection_turn(connection_id, nil)
+        |> ActivityControl.finish(connection_id, signal)
 
       dispatch_committed_audio_turn(connection_id, connection, turn, signal.text, state)
     else
@@ -331,14 +340,42 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
   defp matching_active_turn?(turn, signal) do
     turn.policy_revision == signal.policy_revision and
-      turn.provider_turn_index == signal.provider_turn_index
+      turn.provider_turn_index == signal.provider_turn_index and
+      turn.allocation_generation == signal.allocation_generation and
+      turn.turn_ref == signal.turn_ref
   end
 
   defp new_policy_session?(nil, _signal), do: true
 
   defp new_policy_session?(turn, signal) do
-    turn.policy_revision != signal.policy_revision
+    turn.policy_revision != signal.policy_revision or
+      turn.allocation_generation != signal.allocation_generation or
+      turn.turn_ref != signal.turn_ref
   end
+
+  defp current_native_signal?(%Signal{kind: kind} = signal, connection, state)
+       when kind in [:turn_started, :transcript_updated, :turn_ended] do
+    if ActivityControl.mode(state) in ["external", "hybrid"] and
+         state.speech_to_speech_runtime != nil do
+      case SpeechToText.input_binding(connection.speech_to_text.capability) do
+        {:ok, %{audio_origin: origin}} when is_map(origin) ->
+          is_reference(signal.allocation_generation) and
+            is_reference(signal.turn_ref) and
+            signal.allocation_generation == origin.allocation_generation and
+            signal.audio_input_interval == origin.audio_input_interval and
+            signal.audio_output_interval == origin.audio_output_interval
+
+        _unavailable ->
+          false
+      end
+    else
+      true
+    end
+  catch
+    :exit, _reason -> false
+  end
+
+  defp current_native_signal?(_signal, _connection, _state), do: true
 
   defp transcript_source_policy(state, participant_id, nil) do
     EventPublisher.transcript_source_policy(state, participant_id)

@@ -48,6 +48,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 speech_to_speech_monitor: nil,
                 speech_to_speech_runtime: nil,
                 speech_to_speech_ready?: false,
+                speech_to_speech_recovery: nil,
                 speech_to_speech_policy_revision: 0,
                 sts_turns: %{},
                 sts_output_sequence: 0,
@@ -98,6 +99,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           speech_to_speech_monitor: nil | reference(),
           speech_to_speech_runtime: nil | Vxpipe.CallEngine.SpeechToSpeechRuntime.t(),
           speech_to_speech_ready?: boolean(),
+          speech_to_speech_recovery:
+            nil | %{connection_id: String.t(), connection: pid(), track: map()},
           speech_to_speech_policy_revision: non_neg_integer(),
           sts_turns: map(),
           sts_output_sequence: non_neg_integer(),

@@ -892,7 +892,38 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     }
 
     assert intervals.input != old_intervals.input
-    assert :ok = Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :started, epoch, intervals)
+    assert_receive {:vxpipe_sts_activity_origin_changed, ^capability, 1}
+    assert_receive {:vxpipe_sts_activity_origin_changed, ^capability, 2}
+
+    assert {:error, :held} =
+             Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :started, epoch, intervals)
+
+    _ = :sys.get_state(capability)
+    refute :sys.get_state(provider).external_started?
+  end
+
+  test "unrelated policy revision preserves external input origin" do
+    %{capability: capability, ingress: ingress, epoch: epoch, provider: provider} =
+      bound_external_capability()
+
+    unchanged = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 1,
+      present_participant_ids: MapSet.new([@human, @agent]),
+      effective: unrestricted()
+    }
+
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(capability, unchanged, 500)
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, unchanged, 500)
+    refute_received {:vxpipe_sts_activity_origin_changed, ^capability, _revision}
+
+    assert :ok =
+             Vxpipe.CallEngine.Media.STSIngress.activity(
+               ingress,
+               :started,
+               epoch,
+               %{input: 0, output: 0}
+             )
+
     _ = :sys.get_state(capability)
     assert :sys.get_state(provider).external_started?
   end

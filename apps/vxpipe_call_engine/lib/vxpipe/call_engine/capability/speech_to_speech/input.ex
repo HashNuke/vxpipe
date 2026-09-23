@@ -65,6 +65,28 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
             }}
   end
 
+  def activity_origin_rotated?(%{input_policy: %Snapshot{} = previous} = before, updated) do
+    before.descriptor != nil and before.descriptor.turn_control in ["external", "hybrid"] and
+      (Snapshot.interval(previous, :audio_input, before.human_id) !=
+         Snapshot.interval(updated.input_policy, :audio_input, before.human_id) or
+         Snapshot.interval(previous, :audio_output, before.human_id) !=
+           Snapshot.interval(updated.input_policy, :audio_output, before.human_id) or
+         Snapshot.interval(previous, :speech_to_text, before.human_id) !=
+           Snapshot.interval(updated.input_policy, :speech_to_text, before.human_id))
+  end
+
+  def activity_origin_rotated?(_before, _updated), do: false
+
+  def close_rotated_origin(%{input: ingress} = state) when is_pid(ingress) do
+    case STSIngress.hold(ingress) do
+      :ok -> {:ok, %{state | held?: true, input_epoch: nil, caller_turns: %{}}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def close_rotated_origin(state),
+    do: {:ok, %{state | held?: true, input_epoch: nil, caller_turns: %{}}}
+
   def deliver(state, ingress, reference, frame, revision, epoch) do
     {result, state} =
       case validate(state, ingress, frame, revision, epoch) do

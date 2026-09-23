@@ -380,19 +380,28 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
     case Input.apply_policy(state, snapshot) do
-      {:ok, state} ->
-        case retire_stale_pending(state) do
-          {:ok, state} ->
-            {_played, state} =
-              if audio_route_permitted?(state, state.human_id, state.agent_id) and
-                   audio_route_permitted?(state, state.agent_id, state.human_id),
-                 do: {0, state},
-                 else: fence_output(state)
+      {:ok, updated} ->
+        rotated? = Input.activity_origin_rotated?(state, updated)
 
-            {:reply, :ok, state}
+        with {:ok, updated} <- maybe_close_rotated_origin(updated, rotated?),
+             {:ok, updated} <- retire_stale_pending(updated) do
+          {_played, updated} =
+            if rotated? or
+                 not (audio_route_permitted?(updated, updated.human_id, updated.agent_id) and
+                        audio_route_permitted?(updated, updated.agent_id, updated.human_id)),
+               do: fence_output(updated),
+               else: {0, updated}
 
-          {:error, _reason} ->
-            stop_unavailable(:provider_failed, state)
+          if rotated?,
+            do:
+              send(
+                updated.owner,
+                {:vxpipe_sts_activity_origin_changed, self(), snapshot.revision}
+              )
+
+          {:reply, :ok, updated}
+        else
+          {:error, _reason} -> stop_unavailable(:provider_failed, updated)
         end
 
       {:error, _reason} = error ->
@@ -767,6 +776,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     Enum.each(state.tool_turns, &interrupt_provider(state, &1))
     state
   end
+
+  defp maybe_close_rotated_origin(state, true), do: Input.close_rotated_origin(state)
+  defp maybe_close_rotated_origin(state, false), do: {:ok, state}
 
   defp normalize_usage_context(nil, _identity), do: nil
 

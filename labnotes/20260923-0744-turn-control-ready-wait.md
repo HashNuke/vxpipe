@@ -13,6 +13,6 @@ before editing the test helper.
 The helper now waits at most 5,000 ms for the exact allocation's `:ready`
 event; it leaves the runtime budget and subsequent self-requeued acknowledgement
 unchanged. The four-test file passes 4/0, and the same 93-test concurrent group
-passes on seeds 0 and 1. This repair is test-only; an independent scoped
-review and separate commit remain pending. A scoped Astra xhigh review found the
-one-line test-boundary repair sound; it changes no runtime timeout or protocol.
+passes on seeds 0 and 1. This repair is test-only. A scoped Astra xhigh review
+found the one-line test-boundary repair sound; it changes no runtime timeout or
+protocol. Committed separately as `bcdbe43d`.

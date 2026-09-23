@@ -11,6 +11,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
     end
   end
 
+  def handle({:vxpipe_sts_activity_origin_changed, capability, revision}, state) do
+    {:noreply, SpeechToSpeech.handle_activity_origin_changed(state, capability, revision)}
+  end
+
   def handle({:vxpipe_sts_speech_started, capability, agent_id, turn}, state) do
     {:noreply, SpeechToSpeech.handle_speech_started(state, capability, agent_id, turn)}
   end

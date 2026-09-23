@@ -11,7 +11,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   """
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
+  alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
+  alias Vxpipe.CallEngine.Media.STSIngress
   alias Vxpipe.CallEngine.STSInputHandle
 
   alias Vxpipe.CallEngine.Event.{
@@ -21,7 +23,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     TextOutput
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{CallerTurns, Evidence, ToolEvents, Tools}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{
+    ActivityControl,
+    CallerTurns,
+    Evidence,
+    ToolEvents,
+    Tools
+  }
 
   import Evidence,
     only: [
@@ -32,7 +40,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     ]
 
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, SpeechToSpeechRuntime}
-  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State, STTAudioAdmission}
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
@@ -49,6 +57,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           participant_id: agent_id,
           activation_id: activation_id,
           input_epoch: nil,
+          activity_turn: nil,
           monitor: nil
         },
         speech_to_speech_monitor: nil,
@@ -72,10 +81,83 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   def handle_ready(%State{} = state, capability) do
     if current?(state, capability) and not state.speech_to_speech_ready? and
          Map.has_key?(state.speech_to_speech_capability, :input_handle) do
-      prepare_input(state, capability)
+      state = prepare_input(state, capability)
+
+      case state.speech_to_speech_recovery do
+        %{track: track} ->
+          with %{ingress: ingress} <- state.speech_to_speech_capability,
+               :ok <- STSIngress.prepare_track(ingress, track),
+               %{speech_to_speech_capability: %{input_epoch: epoch}} = state <- release(state),
+               true <- is_reference(epoch) do
+            %{state | speech_to_speech_recovery: nil}
+          else
+            _failed -> stop(state)
+          end
+
+        nil ->
+          state
+      end
     else
       state
     end
+  end
+
+  @doc "Retires provider input from an old selected activity origin before reopening."
+  def handle_activity_origin_changed(%State{} = state, capability, revision)
+      when is_pid(capability) and is_integer(revision) do
+    with true <- current?(state, capability),
+         mode when mode in ["external", "hybrid"] <- ActivityControl.mode(state),
+         %{connection_id: connection_id, connection: connection} <-
+           state.speech_to_speech_capability,
+         %{ingress: old_ingress} <- state.speech_to_speech_capability,
+         {:ok, %{track: track}} <- STSIngress.input_contract(old_ingress),
+         %Snapshot{revision: current_revision} <- Evidence.policy_snapshot(state),
+         true <- current_revision >= revision do
+      state
+      |> stop()
+      |> Map.put(:speech_to_speech_recovery, %{
+        connection_id: connection_id,
+        connection: connection,
+        track: track
+      })
+      |> recover()
+    else
+      _stale -> state
+    end
+  end
+
+  def handle_activity_origin_changed(%State{} = state, _capability, _revision), do: state
+
+  @doc "Reopens a retired external/hybrid allocation only for the fresh STT origin."
+  def recover(%State{speech_to_speech_recovery: nil} = state), do: state
+
+  def recover(%State{speech_to_speech_recovery: recovery} = state) do
+    with %{pid: owner, speech_to_text: %{capability: stt}} = connection <-
+           Map.get(state.connections, recovery.connection_id),
+         true <- owner == recovery.connection and connection.admission == :main,
+         false <- MapSet.member?(state.held_participant_ids, connection.participant_id),
+         {:ok, %{activity_origin: %{agent_id: agent} = origin, identity: identity}} <-
+           SpeechToText.input_binding(stt),
+         true <- agent == state.speech_to_speech_runtime.participant_id,
+         true <- identity == Map.take(connection.attach_command, Map.keys(identity)),
+         %Snapshot{} = policy <- Evidence.policy_snapshot(state),
+         true <- recoverable_origin?(policy, connection.participant_id, agent, origin) do
+      maybe_start(state, connection)
+    else
+      _not_ready -> state
+    end
+  catch
+    :exit, _reason -> state
+  end
+
+  defp recoverable_origin?(policy, source, agent, origin) do
+    Snapshot.valid?(policy) and
+      MapSet.member?(policy.present_participant_ids, source) and
+      MapSet.member?(policy.present_participant_ids, agent) and
+      Effective.audio_route_permitted?(policy.effective, source, agent) and
+      Effective.audio_route_permitted?(policy.effective, agent, source) and
+      origin.audio_input_interval == Snapshot.interval(policy, :audio_input, source) and
+      origin.audio_output_interval == Snapshot.interval(policy, :audio_output, source)
   end
 
   @type turn_ref :: String.t() | reference()
@@ -392,9 +474,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   def hold(%State{} = state) do
     _ = Capability.hold(state.speech_to_speech_capability.pid)
-    state |> cancel_pending_tools() |> retire_caller_epoch()
+
+    if ActivityControl.mode(state) in ["external", "hybrid"],
+      do: stop(state),
+      else: state |> cancel_pending_tools() |> retire_caller_epoch()
   catch
-    :exit, _reason -> state |> cancel_pending_tools() |> retire_caller_epoch()
+    :exit, _reason ->
+      if ActivityControl.mode(state) in ["external", "hybrid"],
+        do: stop(state),
+        else: state |> cancel_pending_tools() |> retire_caller_epoch()
   end
 
   @spec release(State.t()) :: State.t()
@@ -425,13 +513,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     %{
       state
       | speech_to_speech_capability:
-          Map.put(state.speech_to_speech_capability, :input_epoch, nil),
+          state.speech_to_speech_capability
+          |> Map.put(:input_epoch, nil)
+          |> Map.put(:activity_turn, nil),
         sts_caller_turns: %{}
     }
   end
 
   @spec stop(State.t()) :: State.t()
-  def stop(%State{speech_to_speech_capability: nil} = state), do: state
+  def stop(%State{speech_to_speech_capability: nil} = state),
+    do: %{state | speech_to_speech_recovery: nil}
 
   def stop(%State{} = state) do
     state = cancel_pending_tools(state)
@@ -451,6 +542,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
       | speech_to_speech_capability: nil,
         speech_to_speech_monitor: nil,
         speech_to_speech_ready?: false,
+        speech_to_speech_recovery: nil,
         sts_turns: %{},
         sts_output_sequence: 0,
         sts_caller_turns: %{},
@@ -465,6 +557,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         | speech_to_speech_capability: nil,
           speech_to_speech_monitor: nil,
           speech_to_speech_ready?: false,
+          speech_to_speech_recovery: nil,
           sts_turns: %{},
           sts_output_sequence: 0,
           sts_caller_turns: %{},
@@ -479,6 +572,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         connection_id
       ),
       do: stop(state)
+
+  def source_disconnected(
+        %State{speech_to_speech_recovery: %{connection_id: connection_id}} = state,
+        connection_id
+      ),
+      do: %{state | speech_to_speech_recovery: nil}
 
   def source_disconnected(%State{} = state, _connection_id), do: state
 

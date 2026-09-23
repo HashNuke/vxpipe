@@ -18,7 +18,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   }
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, STSIngress}
+  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
+  alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
+  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ActivityControl
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestCallStartup, TestTransferConnection}
   alias Vxpipe.Providers.MorseCode.{STSSession, STTSession}
   alias Vxpipe.Providers.Google.STSSession, as: GoogleSTS
@@ -88,6 +93,387 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     refute_received {:test_audio_output_interrupt, _, _, _}
     refute_received {:vxpipe_event, %AgentTurnInterrupted{}}
     settle_and_assert_reply(context, output)
+  end
+
+  test "external room control waits for the selected human-STT end boundary" do
+    context = room(true, false, %{}, :morse, "external")
+
+    push_sts(context)
+    refute_received {:test_audio_output_finish, _, _}
+
+    push_human_stt(context)
+    assert_caller_text(context)
+    output = collect_output(context.sink, [])
+    settle_and_assert_reply(context, output)
+  end
+
+  test "hybrid room control uses provider onset and the selected human-STT end" do
+    context = room(true, false, %{}, :morse, "hybrid")
+
+    push_sts(context)
+    refute_received {:test_audio_output_finish, _, _}
+
+    push_human_stt(context)
+    assert_caller_text(context)
+    output = collect_output(context.sink, [])
+    settle_and_assert_reply(context, output)
+  end
+
+  test "external room hold retires an idle STS allocation before old STT evidence can control a new epoch" do
+    context = room(true, false, %{}, :morse, "external")
+    before_hold = :sys.get_state(context.authority)
+    connection = Map.fetch!(before_hold.connections, context.command.connection_id)
+    stt = connection.speech_to_text.capability
+
+    assert {:ok, %{activity_origin: %{allocation_generation: generation} = origin}} =
+             SpeechToText.input_binding(stt)
+
+    monitor = Process.monitor(context.capability)
+    held = :sys.replace_state(context.authority, &SpeechToSpeech.hold/1)
+    assert held.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^monitor, :process, _, _reason}
+
+    assert {:ok, %{activity_origin: %{allocation_generation: ^generation}}} =
+             SpeechToText.input_binding(stt)
+
+    released = :sys.replace_state(context.authority, &SpeechToSpeech.release/1)
+    assert released.speech_to_speech_capability == nil
+
+    delayed = %Signal{
+      kind: :turn_started,
+      provider_sequence: 1,
+      allocation_generation: generation,
+      turn_ref: make_ref(),
+      audio_input_interval: origin.audio_input_interval,
+      audio_output_interval: origin.audio_output_interval
+    }
+
+    assert ActivityControl.start(released, context.command.connection_id, delayed) == released
+  end
+
+  test "external room control rejects a stale STT allocation generation" do
+    context = room(true, false, %{}, :morse, "external")
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+
+    assert {:ok, %{activity_origin: origin}} =
+             SpeechToText.input_binding(connection.speech_to_text.capability)
+
+    signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: 1,
+      allocation_generation: make_ref(),
+      turn_ref: make_ref(),
+      audio_input_interval: origin.audio_input_interval,
+      audio_output_interval: origin.audio_output_interval
+    }
+
+    assert ActivityControl.start(state, context.command.connection_id, signal) == state
+    assert :sys.get_state(context.provider).external_started? == false
+  end
+
+  test "a rejected current external boundary fails its STS allocation closed" do
+    context = room(true, false, %{}, :morse, "external")
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+
+    assert {:ok, %{activity_origin: origin}} =
+             SpeechToText.input_binding(connection.speech_to_text.capability)
+
+    signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: 1,
+      allocation_generation: origin.allocation_generation,
+      turn_ref: make_ref(),
+      audio_input_interval: origin.audio_input_interval,
+      audio_output_interval: origin.audio_output_interval
+    }
+
+    assert :ok = STSIngress.hold(context.ingress)
+    monitor = Process.monitor(context.capability)
+    next = ActivityControl.start(state, context.command.connection_id, signal)
+    assert next.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^monitor, :process, _, _reason}
+  end
+
+  test "a rejected matching external end fails its STS allocation closed" do
+    context = room(true, false, %{}, :morse, "external")
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+
+    assert {:ok, %{activity_origin: origin}} =
+             SpeechToText.input_binding(connection.speech_to_text.capability)
+
+    signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: 1,
+      allocation_generation: origin.allocation_generation,
+      turn_ref: make_ref(),
+      audio_input_interval: origin.audio_input_interval,
+      audio_output_interval: origin.audio_output_interval
+    }
+
+    started = ActivityControl.start(state, context.command.connection_id, signal)
+    assert %{activity_turn: %{turn_ref: turn_ref}} = started.speech_to_speech_capability
+    assert turn_ref == signal.turn_ref
+    _ = :sys.get_state(context.capability)
+
+    assert :ok = STSIngress.hold(context.ingress)
+    monitor = Process.monitor(context.capability)
+    finished = ActivityControl.finish(started, context.command.connection_id, signal)
+    assert finished.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^monitor, :process, _, _reason}
+  end
+
+  for mode <- ["external", "hybrid"], delayed? <- [false, true] do
+    test "#{mode} activity survives STT replacement with delayed onset #{delayed?}" do
+      context = room(true, false, %{}, :morse, unquote(mode), true)
+      assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      stt = connection.speech_to_text.capability
+
+      assert {:ok, %{activity_origin: before, identity: identity}} =
+               SpeechToText.input_binding(stt)
+
+      if unquote(delayed?), do: :sys.suspend(context.authority)
+
+      old_turn_ref =
+        try do
+          push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+          push_sts(%{context | pcm: old_pcm})
+          _ = :sys.get_state(context.attachment.media_ingress)
+          _ = :sys.get_state(stt)
+          _ = :sys.get_state(Session.provider(:sys.get_state(stt).session))
+          _ = :sys.get_state(stt)
+          old_turn_ref = :sys.get_state(Session.provider(:sys.get_state(stt).session)).turn_ref
+          assert is_reference(old_turn_ref)
+
+          if unquote(delayed?) do
+            {:messages, messages} = Process.info(context.authority, :messages)
+
+            assert Enum.any?(messages, fn
+                     {:vxpipe_stt_signal, ^stt, _, %Signal{kind: :turn_started}} -> true
+                     _ -> false
+                   end)
+          else
+            assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}, 1_000
+
+            assert is_map(
+                     :sys.get_state(context.authority).speech_to_speech_capability.activity_turn
+                   )
+          end
+
+          privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+          assert {:ok, policy} =
+                   MediaPolicyAuthority.admit(
+                     state.media_policy_authority,
+                     privacy.participant_id
+                   )
+
+          refute policy.effective.record_audio
+          assert MapSet.member?(policy.present_participant_ids, context.agent)
+          assert MapSet.member?(policy.present_participant_ids, context.caller)
+
+          fresh = await_new_stt_origin(stt, before.allocation_generation)
+          assert is_map(fresh)
+          old_turn_ref
+        after
+          if unquote(delayed?), do: :sys.resume(context.authority)
+        end
+
+      _ = :sys.get_state(context.authority)
+      if unquote(delayed?), do: refute_received({:vxpipe_event, %ParticipantTurnStarted{}})
+
+      rebound =
+        Enum.reduce_while(1..200, nil, fn _, _ ->
+          state = :sys.get_state(context.authority)
+
+          case state.speech_to_speech_capability do
+            %{pid: capability, ingress: ingress, input_epoch: epoch}
+            when capability != context.capability and is_pid(ingress) and is_reference(epoch) ->
+              {:halt, %{context | capability: capability, ingress: ingress}}
+
+            _pending ->
+              {:cont, nil}
+          end
+        end)
+
+      assert is_map(rebound),
+             inspect(
+               Map.take(:sys.get_state(context.authority), [
+                 :speech_to_speech_recovery,
+                 :speech_to_speech_capability,
+                 :speech_to_speech_ready?,
+                 :startup_ready?
+               ])
+             )
+
+      send(context.authority, {:vxpipe_sts_activity_origin_changed, context.capability, 999})
+
+      assert :sys.get_state(context.authority).speech_to_speech_capability.pid ==
+               rebound.capability
+
+      push_sts(rebound)
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+
+      fresh_turn =
+        Enum.reduce_while(1..200, nil, fn _, _ ->
+          turn = :sys.get_state(context.authority).speech_to_speech_capability.activity_turn
+          if is_map(turn), do: {:halt, turn}, else: {:cont, nil}
+        end)
+
+      assert is_map(fresh_turn)
+
+      old_end = %Signal{
+        kind: :turn_ended,
+        provider_sequence: 99,
+        allocation_generation: before.allocation_generation,
+        turn_ref: old_turn_ref,
+        audio_input_interval: before.audio_input_interval,
+        audio_output_interval: before.audio_output_interval,
+        policy_revision: 0,
+        provider_turn_index: 0,
+        text: "NO"
+      }
+
+      send(context.authority, {:vxpipe_stt_signal, stt, identity, old_end})
+
+      assert :sys.get_state(context.authority).speech_to_speech_capability.activity_turn ==
+               fresh_turn
+
+      refute_received {:vxpipe_event, %ParticipantTurnCompleted{}}
+
+      push_selected_stt(
+        %{context | pcm: binary_part(context.pcm, 640, byte_size(context.pcm) - 640)},
+        1
+      )
+
+      assert_caller_text(context)
+      output = collect_output(rebound.sink, [])
+      settle_and_assert_reply(rebound, output)
+    end
+  end
+
+  for mode <- ["external", "hybrid"] do
+    test "#{mode} ignores a queued old STT onset after activity demand disappears" do
+      context = room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      stt = connection.speech_to_text.capability
+      monitor = Process.monitor(context.authority)
+      assert :ok = :sys.suspend(context.authority)
+
+      try do
+        push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+        _ = :sys.get_state(context.attachment.media_ingress)
+        _ = :sys.get_state(stt)
+        _ = :sys.get_state(Session.provider(:sys.get_state(stt).session))
+        _ = :sys.get_state(stt)
+
+        {:messages, messages} = Process.info(context.authority, :messages)
+
+        assert Enum.any?(messages, fn
+                 {:vxpipe_stt_signal, ^stt, _, %Signal{kind: :turn_started}} -> true
+                 _ -> false
+               end)
+
+        privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+        assert {:ok, _policy} =
+                 MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+        assert {:ok, %{activity_origin: nil}} = SpeechToText.input_binding(stt)
+      after
+        :sys.resume(context.authority)
+      end
+
+      assert %{speech_to_speech_capability: nil} = closed = :sys.get_state(context.authority)
+      assert SpeechToSpeech.recover(closed) == closed
+      refute_received {:DOWN, ^monitor, :process, _, _reason}
+      refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+    end
+  end
+
+  for mode <- ["external", "hybrid"] do
+    test "#{mode} replaces an active pair after transcript-only STT rotation" do
+      context = room(true, false, %{}, :morse, unquote(mode), :no_transcripts)
+      assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      stt = connection.speech_to_text.capability
+      assert {:ok, %{activity_origin: before}} = SpeechToText.input_binding(stt)
+
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_sts(%{context | pcm: old_pcm})
+      assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}, 1_000
+      assert is_map(:sys.get_state(context.authority).speech_to_speech_capability.activity_turn)
+
+      privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+      assert {:ok, policy} =
+               MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+      refute policy.effective.save_transcripts
+
+      fresh = await_new_stt_origin(stt, before.allocation_generation)
+      assert is_map(fresh)
+      assert fresh.audio_input_interval == before.audio_input_interval
+      assert fresh.audio_output_interval == before.audio_output_interval
+
+      rebound =
+        Enum.reduce_while(1..200, nil, fn _, _ ->
+          case :sys.get_state(context.authority).speech_to_speech_capability do
+            %{pid: capability, ingress: ingress, input_epoch: epoch}
+            when capability != context.capability and is_pid(ingress) and is_reference(epoch) ->
+              {:halt, %{context | capability: capability, ingress: ingress}}
+
+            _pending ->
+              {:cont, nil}
+          end
+        end)
+
+      assert is_map(rebound)
+      push_sts(rebound)
+      push_selected_stt(context)
+      assert_caller_text(context)
+      output = collect_output(rebound.sink, [])
+      settle_and_assert_reply(rebound, output)
+    end
+  end
+
+  for mode <- ["external", "hybrid"] do
+    test "#{mode} keeps permitted human transcription after STS audio is denied" do
+      context = room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      stt = connection.speech_to_text.capability
+      assert {:ok, %{audio_origin: before}} = SpeechToText.input_binding(stt)
+      privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+      assert {:ok, policy} =
+               MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+      assert policy.effective.transcript_routes == :unrestricted
+
+      assert %{allocation_generation: generation} =
+               await_new_stt_origin(stt, before.allocation_generation, :audio_origin)
+
+      assert generation != before.allocation_generation
+      assert {:ok, %{activity_origin: nil}} = SpeechToText.input_binding(stt)
+      assert %{speech_to_speech_capability: nil} = :sys.get_state(context.authority)
+
+      push_selected_stt(context)
+      caller = context.caller
+
+      assert_receive {:vxpipe_event,
+                      %ParticipantTranscription{participant_id: ^caller, text: "HI", final: true}},
+                     1_000
+
+      refute_received {:test_audio_output_finish, _, _}
+      refute_received {:vxpipe_event, %AgentTurnCompleted{}}
+    end
   end
 
   test "reopening already-open room input preserves its caller publication epoch" do
@@ -199,8 +585,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     refute_received {:vxpipe_event, %ToolCallCompleted{}}
   end
 
-  defp room(human_stt?, output_stt?, tools \\ %{}, provider \\ :morse) do
-    plan = compile_plan(human_stt?, output_stt?, tools)
+  defp room(
+         human_stt?,
+         output_stt?,
+         tools \\ %{},
+         provider \\ :morse,
+         turn_control \\ "provider",
+         recording_toggle? \\ false
+       ) do
+    plan = compile_plan(human_stt?, output_stt?, tools, turn_control, recording_toggle?)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     agent = Map.fetch!(plan.participants, plan.entry_receiver)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -301,9 +694,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
              end)
   end
 
-  defp push_sts(context) do
+  defp push_selected_stt(context, sequence \\ 0) do
+    result =
+      Enum.reduce_while(1..100, nil, fn _, _ ->
+        result =
+          TestTransferConnection.run(context.command, fn ->
+            CallEngine.push_audio(context.attachment, frame(context, context.pcm, sequence))
+          end)
+
+        if result == {:error, :stale_frame}, do: {:cont, result}, else: {:halt, result}
+      end)
+
+    assert result == :ok
+  end
+
+  defp push_sts(context, sequence_offset \\ 0) do
     for {chunk, sequence} <-
-          Enum.with_index(for <<chunk::binary-size(320) <- context.pcm>>, do: chunk) do
+          Enum.with_index(
+            for(<<chunk::binary-size(320) <- context.pcm>>, do: chunk),
+            sequence_offset
+          ) do
       assert :ok =
                TestTransferConnection.run(context.command, fn ->
                  CallEngine.push_speech_to_speech_audio(
@@ -312,8 +722,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
                  )
                end)
 
-      _ = :sys.get_state(context.capability)
-      assert %{queued: 0, in_flight?: false, dropped: 0} = STSIngress.stats(context.ingress)
+      settled =
+        Enum.reduce_while(1..100, nil, fn _, _ ->
+          _ = :sys.get_state(context.capability)
+          stats = STSIngress.stats(context.ingress)
+
+          if stats.queued == 0 and not stats.in_flight?,
+            do: {:halt, stats},
+            else: {:cont, stats}
+        end)
+
+      assert %{queued: 0, in_flight?: false, dropped: 0} = settled
     end
   end
 
@@ -420,10 +839,47 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     refute_received {:vxpipe_event, %AgentTurnInterrupted{}}
   end
 
-  defp compile_plan(human_stt?, output_stt?, tools) do
+  defp compile_plan(human_stt?, output_stt?, tools, turn_control, recording_toggle?) do
     speech = %{provider: "morse", model: "morse", options: Map.new(@morse)}
-    agent = %{speech_to_speech: put_in(speech.options[:output_transcript], not output_stt?)}
+
+    agent = %{
+      speech_to_speech:
+        speech
+        |> put_in([:options, :output_transcript], not output_stt?)
+        |> put_in([:options, :turn_control], turn_control)
+    }
+
     agent = if output_stt?, do: Map.put(agent, :output_speech_to_text, speech), else: agent
+
+    participants = %{
+      "caller" => %{
+        type: "human",
+        connection: %{service: "web", mode: "receive", admission: "start_call"},
+        capabilities: if(human_stt?, do: %{speech_to_text: speech}, else: %{})
+      },
+      "assistant" => %{
+        type: "agent",
+        prompt: "Reply in Morse.",
+        tools: tools,
+        transfers: [],
+        first_message: %{mode: "wait_for_input"},
+        capabilities: agent
+      }
+    }
+
+    privacy_settings = privacy_settings(recording_toggle?)
+
+    participants =
+      if privacy_settings != nil do
+        Map.put(participants, "privacy", %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"},
+          capabilities: %{},
+          while_present: privacy_settings
+        })
+      else
+        participants
+      end
 
     source = %{
       schema_version: CallSpec.schema_version(),
@@ -431,21 +887,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{capabilities: %{}},
-      participants: %{
-        "caller" => %{
-          type: "human",
-          connection: %{service: "web", mode: "receive", admission: "start_call"},
-          capabilities: if(human_stt?, do: %{speech_to_text: speech}, else: %{})
-        },
-        "assistant" => %{
-          type: "agent",
-          prompt: "Reply in Morse.",
-          tools: tools,
-          transfers: [],
-          first_message: %{mode: "wait_for_input"},
-          capabilities: agent
-        }
-      }
+      participants: participants
     }
 
     assert {:ok, spec} = CallSpec.new(source, resource_id: "sts-modes", revision: 1)
@@ -463,5 +905,42 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
              })
 
     plan
+  end
+
+  defp privacy_settings(false), do: nil
+  defp privacy_settings(true), do: %{record_audio: false}
+  defp privacy_settings(:deny_audio), do: %{audio_routes: %{}}
+  defp privacy_settings(:no_transcripts), do: %{save_transcripts: false}
+
+  defp await_new_stt_origin(stt, old_generation, field \\ :activity_origin) do
+    deadline = System.monotonic_time(:millisecond) + 5_000
+    poll_stt_origin(stt, old_generation, field, deadline)
+  end
+
+  defp poll_stt_origin(stt, old_generation, field, deadline) do
+    case SpeechToText.input_binding(stt) do
+      {:ok, binding} ->
+        case Map.get(binding, field) do
+          %{allocation_generation: generation} = origin when generation != old_generation ->
+            origin
+
+          _pending ->
+            wait_stt_origin(stt, old_generation, field, deadline)
+        end
+
+      _pending ->
+        wait_stt_origin(stt, old_generation, field, deadline)
+    end
+  end
+
+  defp wait_stt_origin(stt, old_generation, field, deadline) do
+    if System.monotonic_time(:millisecond) >= deadline do
+      flunk("selected STT did not replace its native allocation within startup budget")
+    else
+      receive do
+      after
+        10 -> poll_stt_origin(stt, old_generation, field, deadline)
+      end
+    end
   end
 end
