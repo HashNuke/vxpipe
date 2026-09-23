@@ -198,7 +198,7 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     assert_receive {:test_audio_output_finish, ^sink, _}, 5_000
     :ok = TestAudioOutputSink.playback_progress(sink, 20, 1_020)
     :ok = TestAudioOutputSink.playback_completed(sink)
-    assert_receive {:vxpipe_sts_turn_completed, ^capability, _, _}, 2_000
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, "participant-agent", _, _}, 2_000
     assert_receive {:vxpipe_usage_observations, ^capability, observations}
 
     for {observation, sequence} <- Enum.with_index(observations, 1) do

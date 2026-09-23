@@ -2971,6 +2971,24 @@ zero failures, 42 excluded, seed 0. See
   hosted/load/UI/review gates. Mark the index complete only after all
   applicable acceptance gates.
 
+  Root-gate usage-test repair (2026-09-23): the socket-backed root run exited 2;
+  a failed-test rerun and full Persistence child suite exposed a Persistence
+  STS usage assertion failure (186 tests, one failure). The test's mailbox
+  already contained the completion event: its assertion matched a four-field
+  tuple while the current capability contract sends five fields, including
+  owner sequence. An attempted 10-second wait also failed with that same event
+  in the mailbox; this is a stale test pattern, not a timeout or runtime fault.
+  - [x] Match the current five-field STS completion event in the Persistence
+    usage test while preserving its original 2-second bound. Verify the event's
+    capability and participant identity, not just its presence. The focused
+    case passes 1/0 and the full Persistence child suite passes 186/0 (12
+    integration exclusions), seed 0, with local PostgreSQL socket access.
+  - [x] Rerun the exact case and full Persistence child suite after the test
+    repair with local PostgreSQL socket access. Both pass, seed 0.
+  - [ ] Complete the post-commit root rerun for this repair and record the
+    actual final summary; do not infer a passing umbrella gate from the green
+    Persistence child suite.
+
   Google interruption checkpoint `d400edfa` passes post-commit root format,
   warnings-as-errors compile, strict Credo, and unused-dependency checks. The
   Call Engine child suite passes 1,432 tests with zero failures and 30 tagged
