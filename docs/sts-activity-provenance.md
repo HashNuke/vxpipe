@@ -143,6 +143,89 @@ timeout. The caller must keep downstream admission closed on an ambiguous
 reply, and room/source coordination remains unimplemented. This local
 protocol alone does not authorize rotating a live source during a call.
 
+## WebRTC caller-side cutover contract (design, not implemented)
+
+The missing live caller is the room, through one private source-control
+boundary on the exact attached Gateway Connection. Extend the internal
+`ConnectionAttachment` with the owning RoomAuthority PID; this is not a public
+call-spec or client handle. Connection accepts a cutover command only from that
+PID for its current main attachment, with a fresh room-issued operation token.
+An old or overlapping token cannot arm a later interval. The Gateway owns its
+current `source_receiver` and epoch; the room must not rotate them directly.
+
+For selected external/hybrid STT, rotate this boundary whenever the selected
+native allocation changes, including transcript-only replacement or a
+hold/release interval—not just on audio-route changes. The room first closes
+its STT and STS ingress admissions and retires the old controller association.
+Because policy enforcers can run in either order, selected STT ingress must
+also close locally when its current allocation/policy origin is invalidated,
+before acknowledging that transition; a later connected signal may bind the
+candidate origin but cannot reopen admission on its own. Room close is the
+coordinating acknowledgement, not the only safety fence.
+RoomAuthority must send correlated, asynchronous GenServer requests **from its
+own PID** and handle their replies in a later message. That preserves the
+Connection caller check without blocking the room in a possible synchronous
+Connection→RoomAuthority call cycle. The hold request carries an absolute
+deadline, exact attachment and fresh room token; its receipt records the
+receiver plus old and held epochs. Arm requests must match that receipt and
+carry their own bounded absolute deadlines. Connection checks expiry both when
+a queued request starts and before any state transition;
+expired tokens are terminal. The receiver's fixed five-second peer call needs
+a compatible outer budget for peer wait, mailbox marker and reply, with a
+separate bounded room response budget. A missing room reply closes room ingress;
+a late success cannot authorize it.
+
+Connection uses **two** receiver-owned barriers. On hold, its source gate closes
+before rotating the old epoch to a private held epoch. Old RTP queued before
+that marker keeps the old stamp; RTP accumulating during the hold has the held
+stamp. After native STT retirement and fresh readiness, the room chooses an
+active epoch. Connection rotates held→active under a second receiver-owned peer
+barrier when it handles the room's arm request. RTP queued during the hold must
+leave with the held stamp, even if Receiver first handles it
+after the arm request; it cannot acquire the active epoch. A single rotation
+at hold followed by opening that same epoch is rejected: a focused reviewer
+probe suspended Receiver, queued RTP during hold and observed it emerge with
+the fresh epoch and a post-cutoff timestamp after resume.
+
+After native STT retirement and fresh readiness, the room binds the exact new
+allocation origin **and** the proposed active source epoch to the closed STT
+ingress. Ingress must compare that epoch on every selected `AudioFrame`, in addition to
+its current generation, policy intervals and receive-time cutoff. The room
+then sends one exact arm request. Connection checks expiry, attachment,
+receiver, held/active epochs and independent transfer hold; within that same
+blocked Connection callback it performs the second receiver barrier, updates
+its expected epoch and opens its source gate, then acknowledges. There is no
+gap in which Receiver stamps active-epoch RTP while Connection remains held
+awaiting a separate release. The room reopens each input lane still authorized
+by current policy only after the arm receipt. If that reply is late or
+ambiguous, room ingress stays closed even if Connection opened; a subsequent
+cancel re-holds it. A dead RoomAuthority ends its monitored Connection, not
+an unowned media stream.
+If transcription demand survives an STS route denial, STT input may reopen
+while STS activity/input stays closed. RTP handled by ingress while it remains
+closed is dropped. RTP delivered by the peer after the arm barrier but queued
+in Receiver until ingress reopens may carry the active epoch and be admitted:
+arm, not room-ingress reopen, is the source-time boundary. The room must
+recheck current authorization before reopening ingress; a revoked interval
+stays closed. `SourceAudio` must check both this source gate and the independent
+transfer hold; STT release cannot clear a transfer hold.
+Any uncertainty at any step leaves effective room admission closed and the
+selected STS allocation unavailable. This protocol fences project-observable
+queues, not remote microphone capture or ICE/DTLS buffering.
+
+The first implementation slice is the Gateway-side caller boundary and its
+controlled delayed-peer, old/held/active RTP, timeout and transfer-overlap tests.
+Room-driven close/retire/bind/arm/open and telephony callback/Leg cutover are
+separate dependencies of the same existing milestone gate; the Gateway slice
+alone cannot be reported as successful hold/reopen.
+The integrated proof must run both policy-enforcer orders, a transcript-only
+native replacement with unchanged audio intervals, same-peer queued RTP across
+hold and reopen, a packet queued after arm but before ingress reopen, a
+genuinely fresh packet, unrelated policy rebase, missing or late
+acknowledgements, owner death, and transcription-only operation while STS
+audio is denied. Use observable acknowledgements, not sleeps or an unqualified
+fixed delay. Keep effective room admission closed after any uncertain result.
+
 The first telephony enabler now stamps decoded media with a monotonic time
 and private socket-lifetime epoch before SocketDispatch; Leg preserves the
 packet and MediaSession carries that evidence into the input `AudioFrame`.
@@ -209,6 +292,13 @@ an end that prompts an old reply.
   may still be waiting in Leg's asynchronous mailbox.
 - Rotate a generation while keeping the same provider session. A provider
   event first surfaced after reopen could still describe audio from before it.
+- Let Connection call the peer first and ask Receiver to rotate afterward.
+  The peer reply and RTP go to different destinations, so that sequence can
+  relabel old RTP despite both calls returning successfully.
+- Treat a successful receiver rotation as permission to reopen STT ingress.
+  The selected recognizer and source-side admission must be rebound separately;
+  an ambiguous caller reply must leave effective room ingress closed, even if
+  Connection has opened locally after an unobserved arm acknowledgement.
 - Clear only the ingress queue. One PCM envelope may already be in the STT
   capability mailbox and can otherwise reach a replacement provider.
 - Send `:ended` on hold. Morse can treat it as a normal response-triggering end.

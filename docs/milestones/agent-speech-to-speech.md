@@ -913,6 +913,20 @@ the existing audio round trip. Record discoveries here before implementing.
                         after a shorter caller deadline; live coordination
                         must use a compatible budget and stay closed on
                         uncertainty. This is not a room hold/reopen cutover.
+                      - [ ] Add a room-authorized, exact-token WebRTC Connection
+                        hold/cutover/arm boundary around the receiver protocol.
+                        RoomAuthority must use correlated asynchronous requests
+                        from its own PID to avoid a synchronous call cycle while
+                        Connection verifies the exact attachment and token.
+                        Close Connection admission, rotate old→held at hold and
+                        held→active at arm with separate receiver-owned barriers;
+                        only the exact, unexpired arm acknowledgement opens
+                        source RTP in the same blocked Connection callback.
+                        Prove old and during-hold queued RTP cannot acquire
+                        the active epoch, including a suspended receiver;
+                        timeout, caller/peer/receiver death, late replies and
+                        transfer overlap leave effective room admission closed.
+                        Budgets must cover the peer API's fixed five-second call.
                   - [ ] Red-test Twilio and Telnyx raw media queued at their
                     WebSock callbacks before cutover, including a separately
                     delayed Leg dispatch. Stamp one immutable source epoch
@@ -935,6 +949,14 @@ the existing audio round trip. Record discoveries here before implementing.
                     which local queues are fenced. Do not claim remote capture,
                     ICE/DTLS buffering or TCP receipt-time guarantees from
                     these local tests.
+                    - [ ] Keep independent caller transcription usable while
+                      STS activity/input is closed or its allocation retired.
+                      Astra xhigh reproduced a WebRTC callback stopping its
+                      Connection after successful STT delivery because the
+                      missing STS handle was classified as fatal. Add a focused
+                      Gateway regression and distinguish policy-held/retired
+                      STS from a genuinely failed required STS input; no stale
+                      reply or bypass of current room authority is permitted.
             - [x] First reject policy-stale, already-sent PCM with captured
               STT and source audio-input/output intervals at capability
               delivery. A focused owning test captured a real ingress envelope
