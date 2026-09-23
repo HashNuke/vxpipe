@@ -274,6 +274,14 @@ Receiver processing blocked until that peer call returns, even though the
 absolute deadline prevents a late epoch commit. This is a remaining caller-
 side timing/availability contract, not evidence of a completed room release.
 
+Post-commit root gates for `eae445ae`: `mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix credo --strict` (1,099 source files,
+no issues) and `mix deps.unlock --check-unused` exit 0. Root `mix test`
+exits 1 before tests while creating the Persistence database because local
+PostgreSQL SCRAM authentication has no configured password. No credential
+was added, logged or inferred. This is an environment acceptance blocker,
+not a passing umbrella result.
+
 An explicit Codex Astra xhigh read-only review independently reran the
 20-test Gateway receiver/STS-input/HTTP group, 100/100 actual-peer off-heap
 trials and six lifecycle/timeout diagnostics; it reproduced no defect in the

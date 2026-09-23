@@ -2866,6 +2866,16 @@ zero failures, 42 excluded, seed 0. See
   SCRAM password. A live peer owner switch, source drain and room-coordinated
   STT hold/reopen are still unchecked.
 
+  Receiver-owned WebRTC barrier `eae445ae` passes post-commit root format,
+  warnings-as-errors compile, strict Credo (1,099 files, no issues) and
+  unused-dependency checks. The focused Gateway receiver/STS-input/HTTP
+  group passes 20/0 on seeds 0 and 1; independent Astra xhigh review
+  challenged actual ExWebRTC peer ordering in 100/100 off-heap trials without
+  reproducing a defect. Root `mix test` stops before tests on the same
+  missing local PostgreSQL SCRAM password. The separate external/hybrid
+  room-control reds remain uncommitted and open; this commit does not close
+  native hold/reopen or the milestone acceptance gate.
+
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 
 Suggestions only; normative behavior stays in the checkpoints above. Paths
