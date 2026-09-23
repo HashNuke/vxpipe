@@ -2017,6 +2017,10 @@ Submitted invocation outcomes must still survive privately for later reasoning.
               channel/controller/room tool group pass. Independent Astra
               xhigh source review found no actionable issue. This is not exact tool
               hold retirement or successful cross-origin wire attribution.
+              Post-commit `3c87928a` static root gates pass and the Call Engine
+              child suite passes 1,422/0 (30 integration exclusions). Root
+              `mix test` remains blocked before tests by local PostgreSQL
+              SCRAM configuration without a password.
         - [x] Correct first-response reds to deliver content before expecting
           admission; caller end and transcription alone must not admit output,
           and first response identity must differ from caller identity. Check
