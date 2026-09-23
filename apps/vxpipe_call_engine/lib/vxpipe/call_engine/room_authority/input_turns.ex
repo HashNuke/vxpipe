@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     EventPublisher,
     SpokenHistory,
     State,
+    STTAudioAdmission,
     TextCapability,
     TurnState
   }
@@ -71,6 +72,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       :error ->
         state
     end
+  end
+
+  defp apply_speech_to_text_signal(
+         %Signal{kind: :connected},
+         connection_id,
+         _connection,
+         state
+       ) do
+    _ = STTAudioAdmission.synchronize(state, connection_id)
+    state
   end
 
   defp apply_speech_to_text_signal(

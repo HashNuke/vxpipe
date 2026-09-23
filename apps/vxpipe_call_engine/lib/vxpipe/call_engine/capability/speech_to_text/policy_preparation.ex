@@ -149,6 +149,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
          | resource: expected,
            status: status,
            policy_intervals: intervals,
+           audio_origin: if(current?, do: binding.audio_origin, else: nil),
            activity_origin: if(current?, do: binding.activity_origin, else: nil)
        }}
     else

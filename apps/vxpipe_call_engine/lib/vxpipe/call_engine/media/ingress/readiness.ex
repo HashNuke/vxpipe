@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
+  alias Vxpipe.CallEngine.Media.Ingress.AudioOrigin
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Readiness.Resource
 
@@ -67,15 +68,26 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
         :queue.len(state.queue) + if(state.in_flight == nil, do: 0, else: 1) <
           state.maximum_frames
 
+    origin_ready? =
+      AudioOrigin.current?(
+        state.audio_origin,
+        state.policy,
+        state.identity.participant_id,
+        state.activity_agent_id
+      )
+
     %{
       resource: resource,
       identity: state.identity,
       capability: state.capability,
+      activity_agent_id: state.activity_agent_id,
+      audio_origin: state.audio_origin,
       prepared_track: state.prepared_track,
       track_id: state.track_id,
       capacity?: capacity?,
       available?:
-        interval != nil and state.policy_demand? and state.prepared_track != nil and capacity?
+        interval != nil and state.policy_demand? and state.prepared_track != nil and capacity? and
+          origin_ready?
     }
   end
 
@@ -157,6 +169,9 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
         not binding.available? ->
           :preparing
 
+        not native_origin_current?(binding, provider) ->
+          :preparing
+
         resource.policy_interval != provider.resource.policy_interval ->
           :preparing
 
@@ -166,6 +181,17 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
 
     {:ok, resource, status, [provider.resource]}
   end
+
+  defp native_origin_current?(%{activity_agent_id: nil}, _provider), do: true
+
+  defp native_origin_current?(%{resource: %{binding: {_id, :prepared_speech, _provider}}}, _),
+    do: true
+
+  defp native_origin_current?(%{audio_origin: origin}, %{audio_origin: origin})
+       when is_map(origin),
+       do: true
+
+  defp native_origin_current?(_binding, _provider), do: false
 
   defp validate_provider(binding, %{identity: identity, resource: %Resource{} = resource}) do
     if identity == binding.identity and resource.kind == :speech_to_text and

@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   alias Vxpipe.CallEngine.RoomAuthority.{
     OpeningAudio,
     SpeechToSpeech,
+    STTAudioAdmission,
     StartupReadiness,
     State,
     TextCapability
@@ -245,7 +246,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   @spec open_inputs(State.t()) :: State.t()
   def open_inputs(%State{} = state) do
-    Enum.each(state.connections, fn {_connection_id, connection} ->
+    Enum.each(state.connections, fn {connection_id, connection} ->
+      _ = STTAudioAdmission.synchronize(state, connection_id)
       open_connection_input(connection)
     end)
 
@@ -507,6 +509,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       | connections: Map.put(state.connections, command.connection_id, connection),
         speech_to_text_monitors: speech_to_text_monitors
     }
+
+    _ = STTAudioAdmission.synchronize(state, command.connection_id)
 
     if connection.admission == :main and OpeningAudio.admission(state.opening_audio) == :open and
          (state.startup == nil or state.startup_ready?) do

@@ -114,25 +114,165 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
   end
 
   test "keeps activity-only microphone demand and removes it on audio-route revocation" do
-    {capability, transport} = start_capability()
-    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    ingress = start_ingress(self(), activity_agent_id: "part-agent")
     active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+    first_generation = make_ref()
+
+    first_origin = %{
+      allocation_generation: first_generation,
+      audio_input_interval: 0,
+      audio_output_interval: 0,
+      agent_id: "part-agent"
+    }
 
     assert :ok = Enforcer.apply(ingress, active, 500)
-    connect_transport(capability, transport)
-    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert :ok = Ingress.bind_audio_origin(ingress, first_origin)
     assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
-    assert_receive {:test_stt_audio, ^transport, <<1>>}
+
+    assert_receive {:vxpipe_stt_audio, ^ingress, _, _,
+                    %{allocation_generation: ^first_generation, input: 0, output: 0}}
 
     denied = %{active | revision: 1, effective: %{active.effective | audio_routes: %{}}}
     assert :ok = Enforcer.apply(ingress, denied, 500)
     assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>))
-    refute_receive {:test_stt_audio, ^transport, <<2>>}
+    refute_receive {:vxpipe_stt_audio, ^ingress, _, _, _}
 
     restored = %{active | revision: 2}
     assert :ok = Enforcer.apply(ingress, restored, 500)
+    next_generation = make_ref()
+    policy = :sys.get_state(ingress).policy
+    next_input = Snapshot.interval(policy, :audio_input, "part-human")
+    next_output = Snapshot.interval(policy, :audio_output, "part-human")
+
+    assert :ok =
+             Ingress.bind_audio_origin(ingress, %{
+               first_origin
+               | allocation_generation: next_generation,
+                 audio_input_interval: next_input,
+                 audio_output_interval: next_output
+             })
+
     assert :ok = Ingress.push(ingress, audio_frame(3, <<3>>))
-    assert_receive {:test_stt_audio, ^transport, <<3>>}
+
+    assert_receive {:vxpipe_stt_audio, ^ingress, _, _,
+                    %{
+                      allocation_generation: ^next_generation,
+                      input: ^next_input,
+                      output: ^next_output
+                    }}
+  end
+
+  test "selected activity ingress remains closed without a bound native origin" do
+    ingress = start_ingress(self(), activity_agent_id: "part-agent")
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+    assert :ok = Enforcer.apply(ingress, active, 500)
+
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
+    refute_receive {:vxpipe_stt_audio, ^ingress, _, _, _}
+  end
+
+  test "selected ingress readiness waits for its bound current audio origin" do
+    {capability, transport} = start_capability([], "part-agent")
+    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+
+    assert {:ok, _resource, :preparing} = Ingress.readiness(ingress)
+
+    assert {:ok, %{activity_origin: origin}} = SpeechToText.input_binding(capability)
+    assert is_reference(origin.allocation_generation)
+    assert :ok = Ingress.bind_audio_origin(ingress, origin)
+    assert {:ok, _resource, :ready} = Ingress.readiness(ingress)
+  end
+
+  test "selected ingress readiness detects stale native generation with unchanged intervals" do
+    {capability, transport} = start_capability([], "part-agent")
+    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert {:ok, %{activity_origin: first}} = SpeechToText.input_binding(capability)
+    assert :ok = Ingress.bind_audio_origin(ingress, first)
+    assert {:ok, _resource, :ready} = Ingress.readiness(ingress)
+
+    stale = %{first | allocation_generation: make_ref()}
+    assert :ok = Ingress.bind_audio_origin(ingress, stale)
+    assert {:ok, _resource, :preparing} = Ingress.readiness(ingress)
+  end
+
+  test "selected ingress stays preparing until a same-interval replacement is rebound" do
+    {capability, transport} = start_capability([], "part-agent")
+    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    active = snapshot(0, ["part-human", "part-agent"], %{}, true)
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert {:ok, %{audio_origin: first}} = SpeechToText.input_binding(capability)
+    assert :ok = Ingress.bind_audio_origin(ingress, first)
+    assert {:ok, _resource, :ready} = Ingress.readiness(ingress)
+
+    changed = %{active | revision: 1, present_participant_ids: MapSet.new(["part-human"])}
+    assert :ok = Enforcer.apply(capability, changed, 500)
+    assert :ok = Enforcer.apply(ingress, changed, 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    connect_transport(capability, replacement)
+
+    assert {:ok, %{activity_origin: nil, audio_origin: second}} =
+             SpeechToText.input_binding(capability)
+
+    assert first.allocation_generation != second.allocation_generation
+    assert first.audio_input_interval == second.audio_input_interval
+    assert first.audio_output_interval == second.audio_output_interval
+    assert {:ok, _resource, :preparing} = Ingress.readiness(ingress)
+
+    assert :ok = Ingress.bind_audio_origin(ingress, second)
+    assert {:ok, _resource, :ready} = Ingress.readiness(ingress)
+  end
+
+  test "selected ingress keeps transcription audio after reverse route denial" do
+    {capability, transport} = start_capability([], "part-agent")
+    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    active = snapshot(0, ["part-human", "part-agent"], %{}, true)
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert {:ok, %{activity_origin: first}} = SpeechToText.input_binding(capability)
+    assert :ok = Ingress.bind_audio_origin(ingress, first)
+
+    caller_only = %{
+      active
+      | revision: 1,
+        effective: %{
+          active.effective
+          | audio_routes: %{"part-human" => MapSet.new(["part-agent"])}
+        }
+    }
+
+    assert :ok = Enforcer.apply(capability, caller_only, 500)
+    assert :ok = Enforcer.apply(ingress, caller_only, 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    connect_transport(capability, replacement)
+
+    assert {:ok, %{activity_origin: nil, audio_origin: audio_origin}} =
+             SpeechToText.input_binding(capability)
+
+    assert is_reference(audio_origin.allocation_generation)
+    assert :ok = Ingress.bind_audio_origin(ingress, audio_origin)
+    assert {:ok, _resource, :ready} = Ingress.readiness(ingress)
+    assert :ok = Ingress.push(ingress, audio_frame(22, <<22>>))
+    assert_receive {:test_stt_audio, ^replacement, <<22>>}
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 22}}
   end
 
   test "bounds queued audio while preserving accepted frame order" do
@@ -379,7 +519,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert_receive {:vxpipe_stt_signal, ^capability, _identity, %{kind: :connected}}
   end
 
-  defp start_capability(transport_options \\ []) do
+  defp start_capability(transport_options \\ [], activity_agent_id \\ nil) do
     assert {:ok, provider} =
              Flux.new(
                api_key: "runtime-secret",
@@ -402,6 +542,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
          @identity ++
            [
              owner: self(),
+             activity_agent_id: activity_agent_id,
              speech_scope: CapabilityTree.scope(tree),
              provider: {FluxSession, provider_options},
              provider_private: [

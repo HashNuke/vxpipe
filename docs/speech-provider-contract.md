@@ -381,10 +381,17 @@ bidirectional source/agent audio route remains permitted. The room controller
 must still retire an active pair if that demand disappears. Source activity
 requires producer-side lifecycle/audio provenance and delivery-side authority
 rechecks. The bound STS ingress/capability path now serializes and rechecks
-controls. STT PCM delivery now checks captured transcript and source audio
-intervals at the capability, but still lacks native allocation-generation and
-hold/reopen cutover proof. Private STT signals now preserve native allocation
-generation, turn reference and source audio intervals at capability emission;
+controls. Selected STT PCM delivery now requires the exact current native
+allocation generation as well as captured transcript and source audio
+intervals; room-validated input binding freezes that origin when ingress
+enqueues a frame. Native audio origin is distinct from STS activity authority:
+transcript demand can retain selected-STT microphone delivery after a
+directional route denial while the activity origin remains absent. Ingress
+readiness compares the bound native generation with the provider's current
+generation, including same-interval replacements. The producer-side
+hold/reopen and pre-reopen source-frame fence are still unproven. Private STT
+signals now preserve native allocation generation, turn reference and source
+audio intervals at capability emission;
 the room does not yet bind that evidence to an STS epoch or supply turn
 controls. Selected activity STT is retired when either scoped source audio
 interval changes, including a recording-only input-interval change, to avoid

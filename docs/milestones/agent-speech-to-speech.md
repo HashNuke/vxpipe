@@ -745,10 +745,31 @@ the existing audio round trip. Record discoveries here before implementing.
             allocation/input generation and reject a stale envelope before
             provider delivery; prove queued, in-flight, pre-reopen frames and
             both policy-enforcer orders.
-            - [ ] Require a selected-activity PCM envelope to carry the exact
+            - [x] Require a selected-activity PCM envelope to carry the exact
               current native allocation generation at capability delivery;
               missing or stale generations fail closed even when policy
               intervals still match. Preserve transcript-only compatibility.
+              - [x] Bind the selected ingress to a room-validated, ready STT
+                origin at attachment or connected notification. Freeze the
+                origin with each admitted frame, permit capability delivery
+                only for the exact current allocation, and leave selected
+                input closed when no origin is bound. This enables the
+                generation check but does not complete hold/reopen fencing.
+              - [ ] Report selected ingress readiness truthfully: a prepared
+                track and ready provider are not sufficient while its exact
+                current native audio origin is unbound. Prove the room's startup
+                and connected-signal order can install that origin without a
+                readiness cycle before making this an acceptance gate.
+                - [x] Compare the bound native audio generation with the
+                  provider's current generation during readiness observation;
+                  matching audio intervals alone cannot keep readiness `:ready`
+                  after a same-interval replacement whose connected signal is
+                  delayed at the room.
+              - [ ] Keep native audio origin distinct from activity authority.
+                If transcript demand survives a directional audio-route denial,
+                the selected recognizer must still receive caller PCM with the
+                exact current allocation generation while STS activity remains
+                unauthorized. Reproduce both delivery and no controller grant.
             - [ ] Capture the generation and ingress lifecycle at frame
               admission, not when an old queued frame is dispatched. Recheck
               both before provider delivery and fence upstream pre-reopen

@@ -130,19 +130,46 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     do: true
 
   def audio_delivery_current?(
-        %__MODULE__{policy: %Snapshot{} = policy} = state,
+        %__MODULE__{
+          policy: %Snapshot{} = policy,
+          session: %Allocation{generation: generation} = session,
+          activity_agent_id: agent
+        } = state,
+        %{
+          speech_to_text: stt,
+          input: input,
+          output: output,
+          allocation_generation: origin_generation
+        } = intervals
+      )
+      when is_binary(agent) and is_integer(stt) and stt >= 0 and
+             is_integer(input) and input >= 0 and is_integer(output) and output >= 0 and
+             map_size(intervals) == 4 do
+    source = state.identity.participant_id
+
+    origin_generation == generation and Allocation.valid?(session) and
+      SpeechToTextDemand.required?(policy, source, agent) and
+      delivery_intervals_current?(policy, source, stt, input, output)
+  end
+
+  def audio_delivery_current?(
+        %__MODULE__{policy: %Snapshot{} = policy, activity_agent_id: nil} = state,
         %{speech_to_text: stt, input: input, output: output} = intervals
       )
       when is_integer(stt) and stt >= 0 and is_integer(input) and input >= 0 and
              is_integer(output) and output >= 0 and map_size(intervals) == 3 do
     source = state.identity.participant_id
 
+    delivery_intervals_current?(policy, source, stt, input, output)
+  end
+
+  def audio_delivery_current?(%__MODULE__{}, _intervals), do: false
+
+  defp delivery_intervals_current?(policy, source, stt, input, output) do
     stt == Snapshot.interval(policy, :speech_to_text, source) and
       input == Snapshot.interval(policy, :audio_input, source) and
       output == Snapshot.interval(policy, :audio_output, source)
   end
-
-  def audio_delivery_current?(%__MODULE__{}, _intervals), do: false
 
   @spec install_policy(t(), Snapshot.t()) ::
           {:ok, t()} | {:error, term(), t()}
@@ -163,12 +190,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
        media_format: Map.take(state.media_format, [:codec, :sample_rate, :channels]),
        resource: resource,
        status: status,
+       audio_origin: audio_origin(state, status),
        activity_origin: activity_origin(state, status),
        policy_intervals: [state.policy_revision]
      }}
   end
 
-  defp activity_origin(
+  defp audio_origin(
          %__MODULE__{session: session, policy: %Snapshot{} = policy} = state,
          :ready
        )
@@ -176,7 +204,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     source = state.identity.participant_id
     agent = state.activity_agent_id
 
-    if Allocation.valid?(session) and SpeechToTextDemand.activity_required?(policy, source, agent) do
+    if is_binary(agent) and Allocation.valid?(session) and
+         SpeechToTextDemand.required?(policy, source, agent) do
       %{
         allocation_generation: session.generation,
         audio_input_interval: Snapshot.interval(policy, :audio_input, source),
@@ -184,6 +213,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         agent_id: agent
       }
     end
+  end
+
+  defp audio_origin(_state, _status), do: nil
+
+  defp activity_origin(%__MODULE__{policy: %Snapshot{} = policy} = state, status) do
+    source = state.identity.participant_id
+
+    if SpeechToTextDemand.activity_required?(policy, source, state.activity_agent_id),
+      do: audio_origin(state, status)
   end
 
   defp activity_origin(_state, _status), do: nil

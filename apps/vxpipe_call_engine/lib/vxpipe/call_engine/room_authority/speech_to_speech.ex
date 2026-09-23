@@ -33,7 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, SpeechToSpeechRuntime}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
-  alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State, STTAudioAdmission}
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
   @spec bind_capability(State.t(), pid(), String.t(), String.t() | nil) :: State.t()
@@ -608,13 +608,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
              binding.connection
            ),
          true <- Snapshot.valid?(snapshot) do
-      %{
+      state = %{
         state
         | speech_to_speech_monitor: Process.monitor(capability),
           speech_to_speech_ready?: true,
           speech_to_speech_policy_revision: snapshot.revision,
           speech_to_speech_capability: Map.put(binding, :ingress, ingress)
       }
+
+      _ = STTAudioAdmission.synchronize(state, binding.connection_id)
+      state
     else
       _rejected -> stop(state)
     end

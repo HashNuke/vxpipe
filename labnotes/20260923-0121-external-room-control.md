@@ -415,3 +415,52 @@ and an upstream received-before-open fence. Per-frame origin queries are not
 cutover proof and can block a media caller. This design review is separate
 from implementation acceptance; both enforcer orders and hold/reopen remain
 unproven.
+
+Generation-bound PCM checkpoint in progress: focused capability red accepted
+selected activity audio with current policy intervals but no native generation
+and forwarded it to the fake provider. A focused ingress red dispatched selected
+audio before any origin was bound. Capability now requires an exact valid native
+allocation generation for selected activity while preserving transcript-only
+envelopes. RoomAuthority synchronizes the selected STT capability's current
+origin to ingress at connection binding, connected notification and STS input
+readiness; ingress freezes origin plus intervals when enqueueing and stays
+closed without an origin. A policy change preserves only an origin whose
+source audio intervals and selected native-audio demand remain current. The
+four-file Call Engine adjacent group passes 66/0 on seeds 0 and 1;
+provider-controlled compiled-room modes pass 4/0, and Gateway's STS input
+file passes 11/0. The
+external/hybrid compiled-room tests still fail 2/2 at missing STT→STS turn
+control. Initial scoped review findings are below; no hold/reopen or
+source-time fence is claimed.
+
+Readiness follow-up: selected ingress reported `:ready` while origin was
+unbound and `push` silently stayed closed. A focused red proved that mismatch;
+readiness and admission now share the same native-audio-origin policy check.
+The focused test passes and compiled external/hybrid calls still reach their
+original missing-reply assertion, so this did not create a startup deadlock in
+that path. The five-file adjacent group passed 92/0 on seed 1. A concurrent
+seed-0 group run hit the existing test helper's default 100-ms fake transport
+start assertion while another Mix process held the build lock; the isolated
+test passed on seed 0. The later uncontended owner groups below pass on seeds
+0 and 1; the exact five-file seed-0 command was not repeated.
+
+Scoped Astra xhigh review reproduced two remaining P2 gaps: ingress readiness
+could stay `:ready` with a stale bound native generation after same-interval
+replacement, and conflating native PCM demand with STS activity demand stopped
+selected-STT transcription after agent-to-human route denial. Before repair,
+focused reds failed at the intended assertions: stale origin reported `:ready`,
+and the current STT binding lacked an `audio_origin` despite continued transcript
+demand. The implementation now exposes distinct `audio_origin` and
+`activity_origin` (the latter stays nil without bidirectional authority), binds
+the former to ingress, and compares its generation to the current provider
+binding during readiness observation. Both focused reds pass; an additional
+actual same-interval replacement test passes before and after rebinding. The
+adjacent ingress/capability/readiness/room-identity group passes 76/0 on seed
+0 and seed 1. Another media-policy/room/STT-ingress group passes 46/0 on seed
+0. The combined group including compiled-room external/hybrid tests passes
+73/75; those same two pre-existing red room tests still stop at missing STS
+reply. Scoped Astra xhigh re-review found no reproduced actionable defect
+after 47 focused tests/probes and eight edge checks, including route direction,
+enforcer order, malformed proof, prepared-origin privacy and stale
+acknowledgements.
+Full hold/reopen source-time fencing remains open.

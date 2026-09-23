@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Media.Ingress.AudioOrigin
   alias Vxpipe.CallEngine.Media.Ingress.Readiness
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
   alias Vxpipe.CallEngine.Readiness.Resource
@@ -82,6 +83,16 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     end
   end
 
+  @spec bind_audio_origin(pid(), map() | nil) ::
+          :ok | {:error, :invalid_audio_origin | :unavailable}
+  def bind_audio_origin(ingress, origin) when is_pid(ingress) do
+    try do
+      GenServer.call(ingress, {:bind_audio_origin, origin}, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
   @impl true
   def init(options) do
     capability = Keyword.fetch!(options, :capability)
@@ -132,7 +143,8 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
        track_id: nil,
        total_bytes: 0,
        sts_target: Keyword.get(options, :sts_target),
-       activity_agent_id: Keyword.get(options, :activity_agent_id)
+       activity_agent_id: Keyword.get(options, :activity_agent_id),
+       audio_origin: nil
      }}
   end
 
@@ -153,6 +165,21 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   def handle_call(:open, _from, state) do
     {:reply, :ok, %{state | opening_input_admission: :open}}
+  end
+
+  def handle_call({:bind_audio_origin, origin}, _from, state) do
+    if AudioOrigin.valid?(origin, state.activity_agent_id) do
+      state =
+        if state.audio_origin == origin do
+          state
+        else
+          %{state | audio_origin: origin, queue: :queue.new(), in_flight: nil, total_bytes: 0}
+        end
+
+      {:reply, :ok, state}
+    else
+      {:reply, {:error, :invalid_audio_origin}, state}
+    end
   end
 
   def handle_call({:set_sts_target, target}, _from, state)
@@ -217,7 +244,8 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
         handle_overflow(state)
 
       true ->
-        queue = :queue.in(frame, state.queue)
+        envelope = {frame, delivery_intervals(state), state.audio_origin}
+        queue = :queue.in(envelope, state.queue)
 
         state = %{
           state
@@ -234,7 +262,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   @impl true
   def handle_info(:dispatch, %{in_flight: nil} = state) do
     case :queue.out(state.queue) do
-      {{:value, frame}, queue} ->
+      {{:value, {frame, intervals, origin}}, queue} ->
         if stale?(frame, state) do
           notify_owner(state.owner, {:dropped, :stale, frame.sequence_number})
           send(self(), :dispatch)
@@ -254,7 +282,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
               self(),
               reference,
               frame,
-              delivery_intervals(state)
+              AudioOrigin.delivery_intervals(intervals, origin)
             )
 
           forward_sts_audio(state, frame)
@@ -358,7 +386,13 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   defp input_open?(state) do
-    state.opening_input_admission == :open and state.policy_demand?
+    state.opening_input_admission == :open and state.policy_demand? and
+      AudioOrigin.current?(
+        state.audio_origin,
+        state.policy,
+        state.identity.participant_id,
+        state.activity_agent_id
+      )
   end
 
   defp delivery_intervals(%{policy: nil}), do: nil
@@ -374,6 +408,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   defp install_policy(state, snapshot, demand?) do
+    origin =
+      if AudioOrigin.current?(
+           state.audio_origin,
+           snapshot,
+           state.identity.participant_id,
+           state.activity_agent_id
+         ),
+         do: state.audio_origin
+
     %{
       state
       | consecutive_overflows: 0,
@@ -381,7 +424,8 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
         policy: snapshot,
         policy_demand?: demand?,
         queue: :queue.new(),
-        total_bytes: 0
+        total_bytes: 0,
+        audio_origin: origin
     }
   end
 

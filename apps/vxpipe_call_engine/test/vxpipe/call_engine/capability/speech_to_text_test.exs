@@ -660,6 +660,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
     assert_receive {:test_stt_transport_started, first, _connection}
     assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(first, connected_message("first", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, %{activity_origin: first_origin}} = SpeechToText.input_binding(capability)
+    assert is_reference(first_origin.allocation_generation)
 
     frame = audio_frame(identity)
 
@@ -680,9 +684,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       )
 
     assert :ok = Enforcer.apply(ingress, active, 500)
+    assert :ok = Ingress.bind_audio_origin(ingress, first_origin)
     assert :ok = Ingress.push(ingress, frame)
     assert_receive {:vxpipe_stt_audio, ^ingress, reference, ^frame, intervals}
-    assert intervals == %{speech_to_text: 0, input: 0, output: 0}
+
+    assert intervals == %{
+             speech_to_text: 0,
+             input: 0,
+             output: 0,
+             allocation_generation: first_origin.allocation_generation
+           }
 
     denied = %{active | revision: 1, effective: %{active.effective | audio_routes: %{}}}
     assert :ok = Enforcer.apply(capability, denied, 500)
@@ -700,12 +711,95 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     refute_receive {:test_stt_audio, ^replacement, _payload}
 
     assert :ok = Enforcer.apply(ingress, denied, 500)
+    assert :ok = Ingress.push(ingress, audio_frame(identity, sequence_number: 13))
+    refute_receive {:vxpipe_stt_audio, ^ingress, _, _, _}
+
+    restored = %{active | revision: 2}
+    assert :ok = Enforcer.apply(capability, restored, 500)
+    assert_receive {:test_stt_transport_started, current, _connection}
+    assert current != replacement
+    TestSpeechToTextTransport.deliver(current, connected_message("current", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, %{activity_origin: current_origin}} = SpeechToText.input_binding(capability)
+    assert current_origin.allocation_generation != first_origin.allocation_generation
+
+    assert :ok = Enforcer.apply(ingress, restored, 500)
+    assert :ok = Ingress.bind_audio_origin(ingress, current_origin)
     fresh = audio_frame(identity, sequence_number: 13, payload: <<4, 5, 6>>)
     assert :ok = Ingress.push(ingress, fresh)
     assert_receive {:vxpipe_stt_audio, ^ingress, fresh_reference, ^fresh, fresh_intervals}
-    assert fresh_intervals == %{speech_to_text: 0, input: 1, output: 1}
+
+    assert fresh_intervals == %{
+             speech_to_text: 0,
+             input: current_origin.audio_input_interval,
+             output: current_origin.audio_output_interval,
+             allocation_generation: current_origin.allocation_generation
+           }
+
     send(capability, {:vxpipe_stt_audio, ingress, fresh_reference, fresh, fresh_intervals})
-    assert_receive {:test_stt_audio, ^replacement, <<4, 5, 6>>}
+    assert_receive {:test_stt_audio, ^current, <<4, 5, 6>>}
+  end
+
+  test "selected STT accepts only its current native generation on PCM envelopes" do
+    identity = [
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-human",
+      connection_id: "conn-demo"
+    ]
+
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+
+    {capability, transport} =
+      start_capability(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("generation-required", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    frame = audio_frame(identity)
+    reference = make_ref()
+    intervals = %{speech_to_text: 0, input: 0, output: 0}
+    assert :ok = SpeechToText.deliver_audio(capability, self(), reference, frame, intervals)
+
+    assert_receive {:vxpipe_stt_audio_result, ^capability, ^reference, 12,
+                    {:error, :policy_denied}}
+
+    refute_receive {:test_stt_audio, ^transport, _payload}
+
+    stale_reference = make_ref()
+
+    assert :ok =
+             SpeechToText.deliver_audio(
+               capability,
+               self(),
+               stale_reference,
+               frame,
+               Map.put(intervals, :allocation_generation, make_ref())
+             )
+
+    assert_receive {:vxpipe_stt_audio_result, ^capability, ^stale_reference, 12,
+                    {:error, :policy_denied}}
+
+    refute_receive {:test_stt_audio, ^transport, _payload}
+
+    assert {:ok, %{activity_origin: %{allocation_generation: generation}}} =
+             SpeechToText.input_binding(capability)
+
+    accepted_reference = make_ref()
+
+    assert :ok =
+             SpeechToText.deliver_audio(
+               capability,
+               self(),
+               accepted_reference,
+               frame,
+               Map.put(intervals, :allocation_generation, generation)
+             )
+
+    assert_receive {:test_stt_audio, ^transport, <<1, 2, 3>>}
+    assert_receive {:vxpipe_stt_audio_result, ^capability, ^accepted_reference, 12, :ok}
   end
 
   test "pins each demanded provider session to its transcript permission interval" do
