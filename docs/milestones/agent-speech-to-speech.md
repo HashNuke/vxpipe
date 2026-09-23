@@ -393,6 +393,35 @@ the extra STT session as a separate usage source when that mode is selected.
    sends a bounded result to that same model session. On leave or transfer,
    stopping the agent capability tree closes its socket and any output STT.
 
+## Milestone boundary and exit rule
+
+This milestone ends when the existing A–F outcome works through real room
+ownership: the three selected agent response/transcript modes, Morse and the
+gated Google Live adapter, one active human source, policy-safe native input
+and output, room-owned public events, interruption, tools, hold/transfer and
+cleanup. The final pass must also cover the Console/service gate, provider
+contract and author documentation, rendered UI, bounded ten-call local load,
+independent review and all root checks. Focused capability or fake-wire proof
+alone does not close a corresponding room, native, lifecycle or hosted gate.
+
+An unchecked acceptance item is not silently waived because a lower-level
+primitive passes. In particular, the WebRTC receiver barrier is not the
+room-coordinated STT hold/reopen; the external/hybrid room reds are not native
+source-cutover proof; and Google fixture tests are not hosted interruption or
+history acceptance. The hosted check requires explicit billable authorization.
+Until then, keep production Google STS selection and its service badge gated
+and leave the index entry unchecked. A local database-configuration failure
+also leaves the root test gate open rather than counting as a pass.
+
+The nested audit tasks below are repairs or proofs needed for those existing
+outcomes, not invitations to add new product modes. Add a newly discovered
+task here only with concrete evidence that it blocks an approved contract or
+acceptance check; reproduce a claimed runtime defect with a focused test or
+probe before treating it as valid. Record unrelated improvements in a
+follow-up milestone. OpenAI Realtime/GPT-Live, ElevenLabs, multiple concurrent
+human sources, and speculative fresh-session history replay are outside this
+milestone. Do not promise proof of remote hearing from locally paced egress.
+
 ## Vertical checkpoints
 
 Implement the **full milestone**, including all three response/transcript modes,
