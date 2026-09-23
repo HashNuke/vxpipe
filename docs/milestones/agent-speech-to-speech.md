@@ -2409,6 +2409,15 @@ zero failures, 42 excluded, seed 0. See
   hosted/load/UI/review gates. Mark the index complete only after all
   applicable acceptance gates.
 
+  Google interruption checkpoint `d400edfa` passes post-commit root format,
+  warnings-as-errors compile, strict Credo, and unused-dependency checks. The
+  Call Engine child suite passes 1,432 tests with zero failures and 30 tagged
+  integration exclusions (seed 473663). Root `mix test` stops before tests:
+  local PostgreSQL SCRAM authentication lacks a configured password. This is
+  environmental, not a passing root test gate; no credentials were added or
+  logged. Independent Astra xhigh re-review found no actionable issue in the
+  interruption diff. Hosted history and unlabelled attribution remain open.
+
   Latest pre-caller-correlation integration baseline `ebf11332` passes all five
   root gates: 2,363 tests, zero failures, 45 excluded (seed 0, two schedulers),
   including 1,203 Call Engine and 492 Gateway tests. The controlled handoff
