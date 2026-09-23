@@ -11,9 +11,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   """
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
-  alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
-  alias Vxpipe.CallEngine.Media.STSIngress
   alias Vxpipe.CallEngine.STSInputHandle
 
   alias Vxpipe.CallEngine.Event.{
@@ -27,6 +25,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     ActivityControl,
     CallerTurns,
     Evidence,
+    OriginRecovery,
     ToolEvents,
     Tools
   }
@@ -40,7 +39,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     ]
 
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, SpeechToSpeechRuntime}
-  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State, STTAudioAdmission}
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
@@ -81,84 +80,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   def handle_ready(%State{} = state, capability) do
     if current?(state, capability) and not state.speech_to_speech_ready? and
          Map.has_key?(state.speech_to_speech_capability, :input_handle) do
-      state = prepare_input(state, capability)
-
-      case state.speech_to_speech_recovery do
-        %{track: track} ->
-          with %{ingress: ingress} <- state.speech_to_speech_capability,
-               :ok <- STSIngress.prepare_track(ingress, track),
-               %{speech_to_speech_capability: %{input_epoch: epoch}} = state <- release(state),
-               true <- is_reference(epoch) do
-            %{state | speech_to_speech_recovery: nil}
-          else
-            _failed -> stop(state)
-          end
-
-        nil ->
-          state
-      end
+      state |> prepare_input(capability) |> OriginRecovery.restore_ready()
     else
       state
     end
   end
 
-  @doc "Retires provider input from an old selected activity origin before reopening."
-  def handle_activity_origin_changed(%State{} = state, capability, revision)
-      when is_pid(capability) and is_integer(revision) do
-    with true <- current?(state, capability),
-         mode when mode in ["external", "hybrid"] <- ActivityControl.mode(state),
-         %{connection_id: connection_id, connection: connection} <-
-           state.speech_to_speech_capability,
-         %{ingress: old_ingress} <- state.speech_to_speech_capability,
-         {:ok, %{track: track}} <- STSIngress.input_contract(old_ingress),
-         %Snapshot{revision: current_revision} <- Evidence.policy_snapshot(state),
-         true <- current_revision >= revision do
-      state
-      |> stop()
-      |> Map.put(:speech_to_speech_recovery, %{
-        connection_id: connection_id,
-        connection: connection,
-        track: track
-      })
-      |> recover()
-    else
-      _stale -> state
-    end
-  end
-
-  def handle_activity_origin_changed(%State{} = state, _capability, _revision), do: state
-
-  @doc "Reopens a retired external/hybrid allocation only for the fresh STT origin."
-  def recover(%State{speech_to_speech_recovery: nil} = state), do: state
-
-  def recover(%State{speech_to_speech_recovery: recovery} = state) do
-    with %{pid: owner, speech_to_text: %{capability: stt}} = connection <-
-           Map.get(state.connections, recovery.connection_id),
-         true <- owner == recovery.connection and connection.admission == :main,
-         false <- MapSet.member?(state.held_participant_ids, connection.participant_id),
-         {:ok, %{activity_origin: %{agent_id: agent} = origin, identity: identity}} <-
-           SpeechToText.input_binding(stt),
-         true <- agent == state.speech_to_speech_runtime.participant_id,
-         true <- identity == Map.take(connection.attach_command, Map.keys(identity)),
-         %Snapshot{} = policy <- Evidence.policy_snapshot(state),
-         true <- recoverable_origin?(policy, connection.participant_id, agent, origin) do
-      maybe_start(state, connection)
-    else
-      _not_ready -> state
-    end
-  catch
-    :exit, _reason -> state
-  end
-
-  defp recoverable_origin?(policy, source, agent, origin) do
-    Snapshot.valid?(policy) and
-      MapSet.member?(policy.present_participant_ids, source) and
-      MapSet.member?(policy.present_participant_ids, agent) and
-      Effective.audio_route_permitted?(policy.effective, source, agent) and
-      Effective.audio_route_permitted?(policy.effective, agent, source) and
-      origin.audio_input_interval == Snapshot.interval(policy, :audio_input, source) and
-      origin.audio_output_interval == Snapshot.interval(policy, :audio_output, source)
-  end
+  defdelegate handle_activity_origin_changed(state, capability, revision), to: OriginRecovery
+  defdelegate recover(state), to: OriginRecovery
 
   @type turn_ref :: String.t() | reference()
 

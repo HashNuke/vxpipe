@@ -1075,6 +1075,13 @@ the existing audio round trip. Record discoveries here before implementing.
       descriptors without response-start support. See
       [room-control decision](../sts-external-room-control.md); these are
       unimplemented prerequisites, not reproduced runtime defect claims.
+    - [ ] Separate post-`4f375877` strict-Credo gate repair: extract cohesive
+      room origin recovery and capability policy transition ownership from the
+      two STS modules that grew to 810 and 806 lines (800-line limit).
+      Preserve protocol behavior and the 104-test focused group, commit the
+      mechanical split separately, then rerun root static gates. Root
+      `mix test` currently stops before suites at local PostgreSQL SCRAM
+      password configuration; do not count that environment failure as green.
 
   Evidence: the embedded matrix first failed both STS-caller modes (five tests,
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,
