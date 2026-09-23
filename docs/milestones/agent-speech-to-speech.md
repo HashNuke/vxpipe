@@ -2828,6 +2828,14 @@ zero failures, 42 excluded, seed 0. See
   password configured. Socket metadata preservation is not source hold/reopen
   acceptance; the upstream fence and room-controller tasks remain unchecked.
 
+  WebRTC source-receiver enabler `5c956f59` passes post-commit root format,
+  warnings-as-errors compile, strict Credo (1,099 files, no issues) and
+  unused-dependency checks. Source/connection/STS focused tests pass 16/0
+  on seeds 0 and 1; local HTTP WebRTC tests exit 0 on both seeds. Root
+  `mix test` again exits before tests at the same missing local PostgreSQL
+  SCRAM password. A live peer owner switch, source drain and room-coordinated
+  STT hold/reopen are still unchecked.
+
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 
 Suggestions only; normative behavior stays in the checkpoints above. Paths

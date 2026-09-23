@@ -159,3 +159,10 @@ and STS evidence preservation. No actionable defect was reproduced. The
 monotonic timestamp is SourceReceiver **handling** time, not peer emission or
 network arrival time. The immutable epoch is what preserves old-receiver
 identity when that handling is delayed; no switch/drain guarantee is claimed.
+
+Post-commit gates for `5c956f59`: root format, warnings-as-errors compile,
+strict Credo (1,099 source files, no issues) and unused-dependency checks
+exit 0. Root `mix test` exits 1 before tests during Persistence test-database
+creation because local PostgreSQL SCRAM authentication lacks a configured
+password. No credential was changed or logged. This remains an environment
+blocker for the umbrella test gate, not a runtime regression attribution.
