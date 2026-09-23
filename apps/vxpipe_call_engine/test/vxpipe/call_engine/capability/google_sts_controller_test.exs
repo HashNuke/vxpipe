@@ -475,7 +475,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert :sys.get_state(context.provider).responses.records == %{}
   end
 
-  test "opted-in hold discards only its pending response without wire interruption" do
+  test "opted-in active external hold fails closed without sending an ordinary end" do
     context = start_controller("external", response_start?: true)
     capability = context.capability
     wire = context.wire
@@ -483,16 +483,25 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_receive {:test_google_sts_control, ^wire, _activity_start}, 1_000
     deliver(context, audio_message(1))
     refute_received {:vxpipe_sts_turn_started, ^capability, _, _, _}
-    assert :ok = SpeechToSpeech.hold(capability)
-    owner = :sys.get_state(context.provider).responses
-
-    assert %{records: 1, pending_chunks: 0, text_bytes: 0} =
-             Vxpipe.Providers.Google.STSResponses.counts(owner)
-
-    assert Enum.all?(Map.values(owner.records), & &1.discarded?)
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = SpeechToSpeech.hold(capability)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
     refute_received {:test_google_sts_control, ^wire, _}
-    deliver(context, interaction_end("IDLE"))
-    assert :sys.get_state(context.provider).responses.records == %{}
+  end
+
+  test "active external caller activity cannot survive hold without a reset proof" do
+    context = start_controller("external", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _activity_start}, 1_000
+
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = SpeechToSpeech.hold(capability)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    assert {:error, :unavailable} = SpeechToSpeech.release(capability, make_ref())
   end
 
   test "opted-in response drains PCM arriving after its first playback credit" do

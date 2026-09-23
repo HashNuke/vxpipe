@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins
+  alias Vxpipe.CallEngine.Speech.Session
 
   def format(%{descriptor: %{input_format: format}}) do
     {:ok, %{codec: format.encoding, sample_rate: format.sample_rate, channels: format.channels}}
@@ -34,6 +35,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
     _ = STSIngress.hold(state.input)
     %{state | held?: true, input_epoch: nil, caller_turns: %{}}
   end
+
+  def input_quiescent?(%{descriptor: %{turn_control: mode}, session: session})
+      when mode in ["external", "hybrid"],
+      do: Session.input_quiescent?(session)
+
+  def input_quiescent?(_state), do: true
 
   def release(%{input: nil, input_required?: true}, _epoch), do: {:error, :not_ready}
 

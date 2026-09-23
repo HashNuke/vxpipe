@@ -150,6 +150,30 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert :sys.get_state(capability).response_origins.accepted == %{}
   end
 
+  test "a queued native input event defeats a provider's idle claim at hold" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    monitor = Process.monitor(capability)
+    call = make_ref()
+    assert :ok = :sys.suspend(capability)
+
+    try do
+      send(capability, {:"$gen_call", {self(), call}, :hold})
+
+      assert :ok =
+               GenServer.call(provider, {:emit, :speech_started, turn_ref: make_ref()})
+
+      channel = :sys.get_state(capability).session |> Vxpipe.CallEngine.Speech.Channel.address()
+      refute Vxpipe.CallEngine.Speech.EventQueue.idle?(:sys.get_state(channel).events)
+    after
+      :sys.resume(capability)
+    end
+
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    refute_receive {^call, :ok}
+  end
+
   test "an acknowledged response start, not caller turn end, grants opted-in output" do
     capability = capability()
     provider = Session.provider(:sys.get_state(capability).session)
@@ -336,6 +360,13 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", ^first, first_sequence}
     assert :ok = GenServer.call(provider, {:emit_response, context, second, 2})
     assert :ok = GenServer.call(provider, {:emit_response, context, third, 3})
+    channel = :sys.get_state(provider).channel
+
+    for _response <- [second, third] do
+      _ = :sys.get_state(channel)
+      _ = :sys.get_state(capability)
+    end
+
     pending = :sys.get_state(capability).pending_turns
 
     assert [
@@ -413,6 +444,15 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
         turn
       end)
 
+    channel = :sys.get_state(provider).channel
+
+    # Native events advance one at a time after the capability acknowledges each one.
+    Enum.each(turns, fn _turn ->
+      _ = :sys.get_state(channel)
+      _ = :sys.get_state(capability)
+    end)
+
+    assert Enum.map(:sys.get_state(capability).pending_turns, &elem(&1, 1)) == turns
     assert :ok = SpeechToSpeech.hold(capability)
 
     Enum.each(turns, fn turn ->
@@ -539,7 +579,12 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
              )
 
     rejected = make_ref()
-    assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: rejected})
+
+    send(
+      provider,
+      {:"$gen_call", {self(), make_ref()}, {:emit, :speech_started, turn_ref: rejected}}
+    )
+
     assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_caller_overflow}, 1_000
     refute_received {:vxpipe_sts_input_event, ^capability, %{event: %{turn_ref: ^rejected}}}
     assert_receive {:DOWN, ^monitor, :process, ^capability, :pending_caller_overflow}, 1_000

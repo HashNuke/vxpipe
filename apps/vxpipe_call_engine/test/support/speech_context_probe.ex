@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
   def push_audio(pid, pcm), do: GenServer.call(pid, {:legacy, {:audio, pcm}})
   def push_text(pid, ref, text), do: GenServer.call(pid, {:legacy, {:text, ref, text}})
   def input_activity(pid, boundary), do: GenServer.call(pid, {:legacy, {:activity, boundary}})
+  def input_quiescent?(pid), do: GenServer.call(pid, :input_quiescent?, 1_000)
   def interrupt(_, _), do: {:error, :unsupported_operation}
   def send_tool_result(_, _, _), do: {:error, :unsupported_operation}
   def close(pid), do: GenServer.stop(pid)
@@ -47,6 +48,9 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
 
   def handle_call({:configure_result, result, hold?}, _, state),
     do: {:reply, :ok, %{state | result: result, hold?: hold?}}
+
+  def handle_call(:input_quiescent?, _, state),
+    do: {:reply, is_nil(state.held), state}
 
   def handle_call({:configure_early_response, turn, index}, _, state),
     do: {:reply, :ok, %{state | early_response: {turn, index}}}

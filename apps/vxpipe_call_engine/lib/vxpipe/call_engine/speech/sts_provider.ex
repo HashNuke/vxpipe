@@ -46,7 +46,10 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   @optional_callbacks submit_input: 3
   @callback push_text(pid(), reference(), String.t()) :: :ok | {:error, atom()}
   @callback input_activity(pid(), :started | :ended) :: :ok | {:error, atom()}
+  @doc "A bounded, provider-owned proof that no prior input can produce later native evidence."
+  @callback input_quiescent?(pid()) :: boolean()
   @callback interrupt(pid(), reference()) :: :ok | {:error, atom()}
   @callback send_tool_result(pid(), reference(), term()) :: :ok | {:error, atom()}
   @callback close(pid()) :: :ok | {:error, atom()}
+  @optional_callbacks input_quiescent?: 1
 end

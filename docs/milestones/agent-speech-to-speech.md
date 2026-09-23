@@ -755,16 +755,40 @@ the existing audio round trip. Record discoveries here before implementing.
         - [x] The public consequence is reproduced with real Morse PCM: an
           external start and accepted `HI` followed by hold/release and an end
           boundary emits an old reply to the sink (focused 1/1 expected
-          failure). The red test remains intentionally unstaged until a safe
-          implementation is green.
-        - [ ] First fail the owned STS allocation closed on dirty external or
+          failure). The capability test now asserts fail-closed retirement;
+          reusable hold/release remains a separate unchecked gate.
+        - [x] First fail the owned STS allocation closed on dirty external or
           hybrid hold after input admission closes and playback is fenced.
           Track accepted PCM and activity starts; an accepted end alone does
           not prove native events have drained. Preserve settled-idle Google
           reuse only with provider-owned quiescence and no outstanding native
           input evidence. Prove external replay, hybrid PCM-only replay,
           queued end→hold→release, active Google fail-closed and idle Google
-          reuse. This is an interim safety gate, not successful hold/release.
+          reuse. An enabling implementation now asks the provider for bounded
+          quiescence and independently checks the native channel's unacked
+          event queue from the owning consumer; any missing/negative proof
+          stops the capability as `:unsafe_hold`. Morse tracks accepted PCM
+          and external starts, while Google uses its existing settled-idle
+          resumption predicate. The nine-file adjacent STS group passes
+          213/0 on seeds 0 and 1, including a queued end behind hold.
+          Astra xhigh re-review cleared both Morse fixes and the test-only
+          response-capacity synchronization. This is an interim safety gate,
+          not successful hold/release.
+          - [x] Reproduce hybrid buffered-audio replay when an unrelated text
+            tool turn completes before hold. Keep PCM dirtiness scoped to the
+            decoder's actual input lifecycle; a text completion cannot prove
+            that prior audio was discarded. Require hold to fail closed and no
+            old audio reply after attempted release.
+          - [x] Reproduce false rejection of a fully settled Morse output on
+            otherwise idle external input. Retire only the exact output after
+            the channel's playback-settled acknowledgement, then prove idle
+            hold/release works without relaxing checks for live output.
+          - [x] Reproduce the response-capacity test's hold-before-ack race.
+            Synchronize that test on all 16 accepted native responses before
+            expecting idle hold to succeed; do not weaken the runtime idle
+            gate for still-unacknowledged events. The original focused test
+            failed immediately; after the test-only synchronization it passes
+            30 repeats on seed 0 and 50 on seed 1.
         - [ ] For reusable hold/release, add an acknowledged provider input
           discard/reset and a native-event retirement barrier. Morse decoder
           clearing alone cannot fence an already-emitted turn end; Google must
@@ -1370,6 +1394,30 @@ tool continuation, or Google cross-origin handoff.
     204/0 and post-commit format, warnings-as-errors compile, strict Credo and
     unused-dependency checks exit 0. The five Google controller reds remain
     separate and the full umbrella suite was not used for this TDD checkpoint.
+  - [x] Stabilize the queued-response retry test's assertion after two native
+    response starts. A repeated origin-file run observed only the second turn
+    in `pending_turns` before the third native event was acknowledged; a
+    single `:sys.get_state(capability)` is not a two-event barrier. Prove both
+    acknowledgements before asserting ordering, without changing runtime
+    response admission. After a repeated full-file failure, two explicit
+    Channel/Capability barriers pass 100 focused and 20 full-file repeats;
+    Astra xhigh forced-backlog review cleared this test-only change.
+  - [x] Reproduce the caller-overflow test's producer-call teardown race under
+    concurrent STS tests. Overflow intentionally stops the owned capability
+    tree, which can kill the probe before its synchronous `GenServer.call`
+    replies. Assert the observable overflow and rejected-room evidence without
+    requiring a reply from the process being terminated; preserve the strict
+    no-forwarding assertion. The failure recurred in the 213-test concurrent
+    group; the asynchronous emit preserves overflow and no-forwarding proof.
+    The group passes 213/0 on seeds 0 and 1, and Astra xhigh cleared the
+    test-boundary change.
+  - [x] Align the STS session test helper's ready-event wait with the owned
+    startup budget. A concurrent nine-file run missed the async `:ready`
+    event at ExUnit's 100-ms default although `Session.start/2` permits a
+    5-second startup budget. Keep the assertion bounded by that budget; do not
+    alter runtime deadlines or infer readiness from process liveness. The
+    helper now uses 5,000-ms exact-session/owner assertions; the same 213-test
+    group passes on seeds 0 and 1, and Astra xhigh cleared the test-only fix.
 
 - [x] Morse session/capability tests for human speech onset handling,
   queued playback, zero-playback interruption (`:no_prefix`), late

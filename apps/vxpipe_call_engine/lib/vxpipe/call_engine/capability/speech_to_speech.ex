@@ -320,12 +320,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       {:ok, state} ->
         {_played, state} = fence_output(state)
 
-        {:noreply, state} =
-          if state.descriptor.response_start?,
-            do: admit_next_pending(state),
-            else: {:noreply, state}
+        if Input.input_quiescent?(state) do
+          {:noreply, state} =
+            if state.descriptor.response_start?,
+              do: admit_next_pending(state),
+              else: {:noreply, state}
 
-        {:reply, :ok, %{state | external_activity_origin: nil}}
+          {:reply, :ok, %{state | external_activity_origin: nil}}
+        else
+          stop_unavailable(:unsafe_hold, state)
+        end
 
       {:error, _reason} ->
         stop_unavailable(:provider_failed, state)

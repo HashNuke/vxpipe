@@ -146,6 +146,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
     do: GenServer.call(pid, {:input_activity, boundary}, 5_000)
 
   @impl true
+  def input_quiescent?(pid), do: GenServer.call(pid, :input_quiescent?, 1_000)
+
+  @impl true
   def submit_input(pid, context, operation) when is_reference(context),
     do: GenServer.call(pid, {:submit_input, context, operation}, 5_000)
 
@@ -244,6 +247,14 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
   def handle_call({:submit_input, _context, _operation}, _from, state),
     do: {:reply, {:error, :unsupported_operation}, state}
+
+  def handle_call(:input_quiescent?, _from, state) do
+    quiescent? =
+      state.ready? and is_pid(state.wire) and not state.resuming? and
+        STSResumption.quiescent?(state)
+
+    {:reply, quiescent?, state}
+  end
 
   def handle_call(command, _from, state)
       when is_tuple(command) and elem(command, 0) in [:push_audio, :push_text, :input_activity] do

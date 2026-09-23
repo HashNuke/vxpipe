@@ -88,11 +88,12 @@ defmodule Vxpipe.CallEngine.Speech.STSSessionTest do
     owner = Keyword.get(options, :owner, self())
 
     if owner == self() do
-      assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message
+      assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message, 5_000
       send(self(), message)
     else
       assert_receive {:speech_owner, ^owner,
-                      {:vxpipe_speech, %Event{session: ^session, kind: :ready}}}
+                      {:vxpipe_speech, %Event{session: ^session, kind: :ready}}},
+                     5_000
     end
 
     session

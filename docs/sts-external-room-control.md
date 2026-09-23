@@ -94,13 +94,14 @@ fences. A delayed human-STT onset must not cancel a newer STS reply.
 
 ## Hold of provider-owned external activity
 
-A focused Morse capability test now proves a caller-visible stale reply: after
-an accepted external start and `HI` PCM, capability hold/release blocks the old
-end while held but an end after release prompts an old-input reply.
-The provider retained its decoder, input turn and external-start state. This
-red is not a completed hold fix.
+A focused Morse capability test reproduced a caller-visible stale reply:
+after an accepted external start and `HI` PCM, the former capability
+hold/release path blocked the old end while held but an end after release
+prompted an old-input reply. The provider had retained its decoder, input turn
+and external-start state. The interim fail-closed gate below now prevents that
+reuse; it does not implement reusable active-turn hold.
 
-The next safety gate is to close input admission and fence playback, then fail
+The interim safety gate closes input admission and fences playback, then fails
 the owned STS allocation closed whenever accepted external/hybrid input remains
 dirty and a quiescent provider/native-event boundary cannot be proven. A
 completed external end by itself is insufficient: an old native end can still
@@ -117,6 +118,20 @@ ordinary external `:ended` boundary would instead trigger the old response.
 Fail-closed retirement sacrifices that interrupted STS allocation but prevents
 relabeling its input into a new room epoch. The milestone keeps successful
 hold/release acceptance open until reusable semantics are proven.
+
+The interim local implementation performs that fail-closed check after ingress
+hold and output fencing. A provider must synchronously report quiescence, and
+the owning capability then asks the native channel to prove its event queue
+has neither awaiting nor pending evidence and no input command in flight.
+Morse regards accepted PCM or an external start as dirty until the matching
+audio turn completes; unrelated text-tool completion cannot clear buffered
+audio. A completed Morse output is retired only after exact local playback
+settlement, so genuinely idle external input can hold and release. Google
+reuses its settled-idle resumption predicate. A missing callback,
+negative result, or unacknowledged native event ends the capability with
+`:unsafe_hold`; a genuinely idle provider can still release. Focused Morse,
+hybrid, Google fake-wire and queued-native-event tests pass locally. This
+does not add reusable active-turn hold or hosted Google proof.
 
 ## Rejected alternatives
 

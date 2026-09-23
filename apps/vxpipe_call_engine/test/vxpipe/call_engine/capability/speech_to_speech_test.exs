@@ -897,7 +897,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert :sys.get_state(provider).external_started?
   end
 
-  test "direct external activity cannot end a turn after capability hold" do
+  test "direct external activity start cannot survive capability hold" do
     {_tree, capability, _sink} =
       start_capability(
         policy: unrestricted(),
@@ -905,8 +905,105 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
       )
 
     assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = SpeechToSpeech.hold(capability)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    assert {:error, :unavailable} = SpeechToSpeech.input_activity(capability, :ended)
+  end
+
+  test "dirty external activity fails the STS allocation closed on hold" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "external"]}
+      )
+
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    push_morse(capability, "HI")
+    assert :sys.get_state(provider).decoder_final == "HI"
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = SpeechToSpeech.hold(capability)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    assert {:error, :unavailable} = SpeechToSpeech.release(capability, make_ref())
+    refute_receive {:test_audio_output_finish, ^sink, _turn}, 500
+  end
+
+  test "hybrid PCM without an external start also fails closed on hold" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "hybrid"]}
+      )
+
+    push_morse(capability, "HI")
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = SpeechToSpeech.hold(capability)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    refute_receive {:test_audio_output_finish, ^sink, _turn}, 500
+  end
+
+  test "text tool completion cannot make buffered hybrid PCM safe to hold" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "hybrid"]}
+      )
+
+    {:ok, pcm} = encode("E")
+    assert :ok = SpeechToSpeech.push_audio(capability, @human, binary_part(pcm, 0, 1_920))
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {}")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}}
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
+    monitor = Process.monitor(capability)
+    assert {:error, :unavailable} = SpeechToSpeech.hold(capability)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    assert {:error, :unavailable} = SpeechToSpeech.release(capability, make_ref())
+    refute_receive {:test_audio_output_finish, ^sink, _turn}, 500
+  end
+
+  test "settled external Morse output permits an idle hold and release" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {Vxpipe.Providers.MorseCode.STSSession, [turn_control: "external"]}
+      )
+
+    assert :ok = SpeechToSpeech.input_activity(capability, :started)
+    push_morse(capability, "HI")
+    assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    sink_turn = :sys.get_state(capability).active_output.sink_turn
+    assert_receive {:test_audio_output_finish, ^sink, ^sink_turn}, 5_000
+    %{output: %{turn_ref: native_turn, output_ref: output_ref}} = :sys.get_state(provider)
+
+    send(provider, {:vxpipe_speech_output_settled, self(), native_turn, make_ref(), 0})
+    assert %{output: %{output_ref: ^output_ref}} = :sys.get_state(provider)
+
+    TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn, _}
+
+    assert %{
+             input_dirty?: false,
+             external_started?: false,
+             input_turn: nil,
+             decoder_final: nil,
+             pending_replies: %{},
+             pending_tools: %{},
+             output: nil
+           } = :sys.get_state(provider)
+
     assert :ok = SpeechToSpeech.hold(capability)
-    assert {:error, :held} = SpeechToSpeech.input_activity(capability, :ended)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
   end
 
   test "direct external activity is denied when caller output is revoked" do
@@ -969,6 +1066,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {^call, :ok}
     _ = :sys.get_state(capability)
     assert :ok = SpeechToSpeech.release(capability, make_ref())
+  end
+
+  test "queued external end cannot reopen old input after hold" do
+    %{capability: capability, ingress: ingress, epoch: epoch, provider: provider} =
+      bound_external_capability()
+
+    intervals = %{input: 0, output: 0}
+    assert :ok = Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :started, epoch, intervals)
+    _ = :sys.get_state(capability)
+    assert :sys.get_state(provider).external_started?
+
+    assert :ok = :sys.suspend(capability)
+    monitor = Process.monitor(capability)
+
+    try do
+      send(capability, {:"$gen_call", {self(), make_ref()}, :hold})
+      assert :ok = Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :ended, epoch, intervals)
+    after
+      :sys.resume(capability)
+    end
+
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :unsafe_hold}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :unsafe_hold}
+    assert {:error, :unavailable} = SpeechToSpeech.release(capability, make_ref())
   end
 
   test "capability-first output revocation retires a queued activity without killing input" do

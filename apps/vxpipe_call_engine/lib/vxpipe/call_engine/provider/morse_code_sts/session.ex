@@ -77,6 +77,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
     do: GenServer.call(pid, {:input_activity, boundary}, 5_000)
 
   @impl true
+  def input_quiescent?(pid), do: GenServer.call(pid, :input_quiescent?, 1_000)
+
+  @impl true
   def interrupt(pid, turn_ref) when is_reference(turn_ref),
     do: GenServer.call(pid, {:interrupt, turn_ref}, 5_000)
 
@@ -108,6 +111,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
          config: config,
          decoder: decoder,
          input_turn: nil,
+         input_dirty?: false,
          external_started?: false,
          decoder_final: nil,
          pending_replies: %{},
@@ -123,7 +127,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
   def handle_call({:push_audio, audio}, _from, state) when is_binary(audio) do
     case Decoder.push(state.decoder, audio) do
       {:ok, decoder, events} ->
-        publish_decoder_events(events, %{state | decoder: decoder})
+        publish_decoder_events(events, %{state | decoder: decoder, input_dirty?: true})
 
       {:error, _reason} ->
         {:ok, decoder} = Decoder.new(state.config)
@@ -151,7 +155,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
                  tool_name: name,
                  arguments: arguments
                ),
-             {:ok, state} <- close_input_turn(state, turn, text) do
+             {:ok, state} <- close_input_turn(state, turn, text, :text) do
           state = %{
             state
             | pending_tools: Map.put(state.pending_tools, call_ref, %{turn_ref: turn, name: name})
@@ -171,7 +175,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
                  provenance: :locally_measured
                ),
              :ok <- emit_input_transcript(state, turn, text, true),
-             {:ok, state} <- close_input_turn(state, turn, text) do
+             {:ok, state} <- close_input_turn(state, turn, text, :text) do
           {:reply, :ok, put_pending_reply(state, turn, reply)}
         else
           _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -192,7 +196,22 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
   end
 
   def handle_call({:input_activity, :started}, _from, state) do
-    {:reply, :ok, %{state | external_started?: true, input_turn: state.input_turn || make_ref()}}
+    {:reply, :ok,
+     %{
+       state
+       | external_started?: true,
+         input_dirty?: true,
+         input_turn: state.input_turn || make_ref()
+     }}
+  end
+
+  def handle_call(:input_quiescent?, _from, state) do
+    quiescent? =
+      not state.input_dirty? and not state.external_started? and is_nil(state.input_turn) and
+        is_nil(state.decoder_final) and state.pending_replies == %{} and
+        state.pending_tools == %{} and is_nil(state.output)
+
+    {:reply, quiescent?, state}
   end
 
   def handle_call({:input_activity, :ended}, _from, state) do
@@ -272,6 +291,19 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
 
   def handle_info({:vxpipe_speech_credit, _channel, _output_ref, _credit, :ok}, state) do
     {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_speech_output_settled, _channel, turn_ref, output_ref, _played_ms},
+        %{
+          output: %{
+            turn_ref: turn_ref,
+            output_ref: output_ref,
+            completed_emitted?: true
+          }
+        } = state
+      ) do
+    {:noreply, %{state | output: nil}}
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -378,7 +410,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
                  tool_name: name,
                  arguments: arguments
                ),
-             {:ok, state} <- close_input_turn(state, turn, text) do
+             {:ok, state} <- close_input_turn(state, turn, text, :audio) do
           {:ok,
            %{
              state
@@ -390,7 +422,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
         end
 
       {:reply, reply} ->
-        with {:ok, state} <- close_input_turn(state, turn, text) do
+        with {:ok, state} <- close_input_turn(state, turn, text, :audio) do
           {:ok, put_pending_reply(state, turn, reply)}
         end
 
@@ -406,7 +438,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
     Event.emit(state.channel, :input_transcript, turn_ref: turn, text: text, final: final)
   end
 
-  defp close_input_turn(state, turn, text) do
+  defp close_input_turn(state, turn, text, source) do
     endpointing = state.descriptor.endpointing
 
     case Event.emit(state.channel, :turn_ended,
@@ -414,7 +446,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
            text: text,
            endpointing: endpointing
          ) do
-      :ok -> {:ok, %{state | input_turn: nil, decoder_final: nil}}
+      :ok when source == :text -> {:ok, state}
+      :ok -> {:ok, %{state | input_turn: nil, input_dirty?: false, decoder_final: nil}}
       _failure -> {:error, :session_failed}
     end
   end

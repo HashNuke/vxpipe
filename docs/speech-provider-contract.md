@@ -400,8 +400,13 @@ provider-side turn. Safe reuse requires acknowledged input discard and
 retirement of native events already emitted toward the consumer; otherwise
 the owned STS allocation must fail closed before release. A normal external
 `:ended` is not a discard operation because it can prompt a response. The
-current Morse hold path demonstrably replays old input after release, so this
-contract remains an open implementation gate rather than a claimed guarantee.
+Morse's prior hold path demonstrably replayed old input after release. The
+interim local implementation now fails an external/hybrid STS allocation
+closed unless both bounded provider quiescence and an empty native event/input
+queue are proven. In Morse, a text-tool completion cannot clear accepted PCM
+state; exact output settlement retires a completed output before idle reuse.
+It preserves only proven idle reuse; acknowledged active-
+input discard and successful hold/release remain open implementation gates.
 
 Pin one transcript source for the caller and one for the agent before admission. Selected
 human STT supplies caller text; otherwise require STS input transcription. The agent uses STS

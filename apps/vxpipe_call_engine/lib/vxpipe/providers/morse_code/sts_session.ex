@@ -21,6 +21,9 @@ defmodule Vxpipe.Providers.MorseCode.STSSession do
   defdelegate input_activity(pid, boundary), to: Native
 
   @impl true
+  defdelegate input_quiescent?(pid), to: Native
+
+  @impl true
   defdelegate interrupt(pid, turn_ref), to: Native
 
   @impl true

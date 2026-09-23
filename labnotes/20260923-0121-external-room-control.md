@@ -291,3 +291,59 @@ are proven. An accepted end does not by itself clear dirtiness; idle Google
 reuse needs more than no active output. Reusable cancellation requires an
 acknowledged provider discard and native-event barrier as a later gate. No
 implementation or green hold claim exists yet.
+
+Fail-closed hold red/green: focused Morse external, Morse hybrid PCM-only and
+Google fake-wire active-external tests each failed because `hold/1` still
+returned `:ok`, then passed after a bounded provider-plus-channel quiescence
+check. The owning capability holds STS ingress and fences output first; the
+provider reports whether it can emit future old-input evidence; the native
+channel independently requires no awaiting/pending event or input command.
+Any missing/negative proof stops the capability as `:unsafe_hold`, so release
+cannot replay old input. Morse's public provider wrapper now delegates its
+native quiescence check; Google uses its existing settled-idle resumption
+predicate. A synthetic context probe reports quiescence only when it has no
+autonomous held command, preserving origin-fence tests without pretending
+real active audio is safe. A focused suspended-capability test confirms an
+unacknowledged native input event overrides that provider's idle claim. The
+seven-file STS capability/ingress/room-adjacent group initially passed 203/0
+on seeds 0 and 1. Astra xhigh review then reproduced two failures: text-tool
+completion cleared a buffered hybrid PCM decoder's `input_dirty?`, allowing
+hold/release to replay old audio, and a fully settled Morse output record
+remained in `output`, rejecting otherwise safe idle hold. Two focused tests
+failed 2/2 for those reasons. Text completion now leaves audio decoder,
+input-turn and dirtiness state untouched; only audio completion retires those
+fields. Morse retires a completed output only on the matching turn/output
+settlement notice, including a test that a wrong output reference does not
+retire it. A bound-ingress test also queues an external end behind hold and
+confirms the dirty capability closes before a new epoch can release. The
+nine-file adjacent group passes 213/0 on seeds 0 and 1. Astra xhigh re-review
+cleared both Morse fixes but reproduced the response-capacity test's
+hold-before-ack race: one focused run failed because the newly correct native
+idle gate rejected hold while 16 response events were still being delivered.
+The test now synchronizes Channel and Capability after each native event and
+asserts all 16 responses are pending before expecting hold to retire them.
+The original focused test failed immediately; the test-only repair passed 30
+repetitions on seed 0 and 50 on seed 1, and the nine-file group again passed
+213/0 on both seeds. Astra xhigh cleared the scoped hold and capacity-test
+changes (21/0 additional checks, including forced backlog). Its separate
+broader-file run saw `EXIT killed` in an unchanged overflow test; I could not
+reproduce that with 20 focused repetitions or full-file seeds 0 and 1. My
+repeated full-file run did reproduce a different old test-ordering assertion:
+the queued-response retry test inspected two pending turns before the third
+native event had been acknowledged. A test-only two-event Channel/Capability
+barrier now passes 100 focused repetitions and 20 full-file repetitions on
+seed 1. Astra xhigh forced-backlog review cleared that test-only barrier.
+
+The reviewer's `EXIT killed` later recurred in a concurrent nine-file run:
+the test synchronously called a probe on the same tree it intentionally
+stopped at caller-overflow, so it sometimes died before replying. The test
+now sends the emit request without awaiting that doomed reply and still
+requires `:pending_caller_overflow`, no rejected caller event forwarded to
+the room owner, and the monitored capability DOWN. A separate nine-file run
+missed the STS session helper's `:ready` event at ExUnit's 100-ms default;
+`Session.start/2` allows 5 seconds, so the helper's exact-session/owner ready
+assertions now use that existing bounded startup budget. No runtime timeout
+changed. The nine-file group passes 213/0 on seeds 0 and 1 after both test
+changes, and Astra xhigh cleared their scoped review, including simulated
+suppressed terminal probe replies. Active-turn reuse, hosted Google, full
+room lifecycle and final gates remain open.

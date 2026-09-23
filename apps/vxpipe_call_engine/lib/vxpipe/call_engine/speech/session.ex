@@ -387,6 +387,25 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     end
   end
 
+  @doc false
+  def input_quiescent?(allocation) do
+    with {:ok, %{producer: producer, module: module, descriptor: %{kind: :sts}}} <-
+           metadata(allocation),
+         true <- is_pid(producer) and function_exported?(module, :input_quiescent?, 1),
+         true <- provider_input_quiescent?(module, producer),
+         true <- call(allocation, :input_evidence_idle?) do
+      true
+    else
+      _unproven -> false
+    end
+  end
+
+  defp provider_input_quiescent?(module, provider) do
+    apply(module, :input_quiescent?, [provider]) == true
+  catch
+    _, _ -> false
+  end
+
   defp metadata(allocation), do: call(allocation, :metadata)
 
   defp call(allocation, message) do
