@@ -1117,6 +1117,19 @@ the existing audio round trip. Record discoveries here before implementing.
       rerun; an initial concurrent seed-0 overflow-test teardown failure
       passed in isolation and did not reproduce on rerun. Independent review
       and post-commit root gates remain separate.
+      - [x] Repair the independently reproduced direct-origin presence leak:
+        for external/hybrid `SpeechContextProbe` input with no room ingress,
+        selected-agent leave/regrant keeps caller intervals stable and currently
+        reuses the old response context; a delayed old response is granted.
+        Add owning reds for denied input while the agent is absent, a fresh
+        context after regrant, and old-response discard in both modes. Bind
+        direct response-origin validity to selected-agent presence generation
+        without imposing a room hold or weakening bound-ingress retirement.
+        Recheck the origin file and adjacent compiled-room cases on two seeds.
+        Four owning cases failed 4/4 before the response-origin change (input
+        accepted while absent; old response granted after regrant) and pass
+        4/4 after. The adjacent six-file group passes 135/0 on seeds 0 and 1.
+        Independent re-review and post-commit root gates remain separate.
 
   Evidence: the embedded matrix first failed both STS-caller modes (five tests,
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,

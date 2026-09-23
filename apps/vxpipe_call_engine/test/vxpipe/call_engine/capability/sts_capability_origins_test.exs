@@ -141,6 +141,60 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert second != first
   end
 
+  for mode <- ["external", "hybrid"] do
+    test "#{mode} direct origin denies an absent agent and changes after regrant" do
+      capability = capability(provider: {SpeechContextProbe, [turn_control: unquote(mode)]})
+
+      base = %Snapshot{
+        revision: 0,
+        present_participant_ids: MapSet.new(["caller", "agent"]),
+        effective: unrestricted()
+      }
+
+      assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, base})
+      assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+      assert_receive {:context_input, first, {:audio, <<0, 0>>}, _}
+
+      absent = %{base | revision: 1, present_participant_ids: MapSet.new(["caller"])}
+      assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, absent})
+      assert {:error, :policy_denied} = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+      refute_received {:context_input, _, {:audio, <<0, 0>>}, _}
+
+      assert :ok =
+               GenServer.call(capability, {:vxpipe_apply_media_policy, %{base | revision: 2}})
+
+      assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+      assert_receive {:context_input, second, {:audio, <<0, 0>>}, _}
+      assert second != first
+    end
+
+    test "#{mode} direct origin discards an old response after agent regrant" do
+      capability = capability(provider: {SpeechContextProbe, [turn_control: unquote(mode)]})
+      provider = Session.provider(:sys.get_state(capability).session)
+      turn = make_ref()
+
+      base = %Snapshot{
+        revision: 0,
+        present_participant_ids: MapSet.new(["caller", "agent"]),
+        effective: unrestricted()
+      }
+
+      assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, base})
+      assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+      assert_receive {:context_input, old, {:audio, <<0, 0>>}, _}
+
+      absent = %{base | revision: 1, present_participant_ids: MapSet.new(["caller"])}
+      assert :ok = GenServer.call(capability, {:vxpipe_apply_media_policy, absent})
+
+      assert :ok =
+               GenServer.call(capability, {:vxpipe_apply_media_policy, %{base | revision: 2}})
+
+      assert :ok = GenServer.call(provider, {:emit_response, old, turn, 1})
+      assert_receive {:context_response_discarded, ^turn}
+      refute_received {:context_output_granted, ^turn, _}
+    end
+  end
+
   test "held direct opted-in activity cannot create an accepted origin" do
     capability = capability()
     assert :ok = SpeechToSpeech.hold(capability)

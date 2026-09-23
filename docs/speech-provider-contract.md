@@ -141,9 +141,11 @@ not yet retire tool-origin holds, reconcile rejected tool invocations upstream,
 or prove that unlabelled Google wire content belongs to a new interaction.
 The STS capability proposes one opaque context before opted-in audio, typed
 text or activity input. It commits the context only after that input accepts
-and reuses it only while allocation, source, input epoch and both directional
-audio-policy intervals remain unchanged: input is the sending human's outgoing
-interval, output is the receiving human's incoming interval. Direct policy
+and reuses it only while allocation, source, input epoch, selected-agent
+presence generation and both directional audio-policy intervals remain
+unchanged: input is the sending human's outgoing interval, output is the
+receiving human's incoming interval. When a policy snapshot is present, both
+caller and selected agent must be present at input acceptance. Direct policy
 revocations also advance a separate origin policy revision, so a later regrant
 cannot inherit an older snapshot's context. Framed microphone input carries
 its release epoch through the same path. Both audio directions must be

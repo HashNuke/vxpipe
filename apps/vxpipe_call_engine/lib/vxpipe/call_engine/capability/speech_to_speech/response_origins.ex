@@ -49,6 +49,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
       state.held? or not is_reference(epoch) ->
         {:error, :held}
 
+      not present?(state, state.human_id) or not present?(state, state.agent_id) ->
+        {:error, :policy_denied}
+
       not Output.audio_route_permitted?(state, state.human_id, state.agent_id) or
           not Output.audio_route_permitted?(state, state.agent_id, state.human_id) ->
         {:error, :policy_denied}
@@ -62,7 +65,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
            lifecycle_revision: state.origin_lifecycle_revision,
            direct_policy_revision: state.origin_policy_revision,
            input_interval: interval(state, :audio_input, state.human_id),
-           output_interval: interval(state, :audio_output, state.human_id)
+           output_interval: interval(state, :audio_output, state.human_id),
+           agent_input_interval: interval(state, :audio_input, state.agent_id)
          }}
     end
   end
@@ -112,6 +116,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
 
   defp direct_epoch(%{input_required?: false, session: session}), do: session.generation
   defp direct_epoch(_state), do: nil
+
+  defp present?(%{input_policy: nil}, _participant), do: true
+
+  defp present?(%{input_policy: %Snapshot{} = policy}, participant),
+    do: MapSet.member?(policy.present_participant_ids, participant)
 
   defp interval(%{input_policy: nil, policy_revision: revision}, _scope, _participant),
     do: revision
