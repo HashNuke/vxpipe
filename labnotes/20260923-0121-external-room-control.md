@@ -495,3 +495,8 @@ and dispatch the old payload; supplying its original timestamp instead causes
 or complete producer provenance. The Gateway source-time fence is now an
 explicit unchecked subtask in the milestone, not a regression attributed to
 the ingress primitive.
+
+Post-commit `05b02718` root format, warnings-as-errors compile, strict Credo
+(1,097 files, no issues) and unused-dependency checks exit 0. Root `mix test`
+again stops before tests while creating the Persistence test database because
+local PostgreSQL SCRAM has no configured password. No credential was changed.

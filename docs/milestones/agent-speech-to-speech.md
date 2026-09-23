@@ -2776,6 +2776,13 @@ zero failures, 42 excluded, seed 0. See
   the external/hybrid room-control reds remain open, so this is not final
   milestone acceptance.
 
+  Selected-ingress source-cutoff checkpoint `05b02718` passes post-commit root
+  format, warnings-as-errors compile, strict Credo and unused-dependency
+  checks. Root `mix test` still stops before tests on the same local PostgreSQL
+  password requirement. The ingress primitive is reviewed, but the reproduced
+  upstream Gateway mailbox bypass and room-coordinated hold cutover remain
+  unchecked.
+
 ## Suggested code-change mapping (non-normative, 2026-09-22 review)
 
 Suggestions only; normative behavior stays in the checkpoints above. Paths
