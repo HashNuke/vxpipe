@@ -1047,6 +1047,18 @@ the existing audio round trip. Record discoveries here before implementing.
           only policy interval change with unchanged audio intervals. Retire
           the old external/hybrid provider pair and input before the fresh
           selected STT turn; do not require an audio-interval change.
+        - [x] Reproduce selected-agent presence loss/regrant with unchanged
+          caller audio/transcription intervals. The selected STT allocation
+          rotates, but the old external/hybrid STS activity pair previously
+          blocked a fresh reply. For both modes, prove the old `NO` pair is
+          retired, fresh selected STT and STS allocations bind, and a new
+          `HI` caller turn produces `RECEIVED HI` through the room sink.
+          Independent Astra in-memory compiled-room probes failed 2/2 on
+          seeds 0 and 1. Two owning room reds failed on seed 0 with no fresh
+          STS allocation; adding selected-agent presence to the rotation
+          predicate makes both pass, and the adjacent five-file group passes
+          106/0 on seeds 0 and 1. Independent re-review and post-commit gates
+          remain separate.
       - [x] Reproduce a delayed stale STT start handled after its native
         allocation rotates but before a fresh start. Prevent stale evidence
         from occupying the room's public caller-turn slot or suppressing fresh
@@ -1075,13 +1087,15 @@ the existing audio round trip. Record discoveries here before implementing.
       descriptors without response-start support. See
       [room-control decision](../sts-external-room-control.md); these are
       unimplemented prerequisites, not reproduced runtime defect claims.
-    - [ ] Separate post-`4f375877` strict-Credo gate repair: extract cohesive
+    - [x] Separate post-`4f375877` strict-Credo gate repair: extract cohesive
       room origin recovery and capability policy transition ownership from the
       two STS modules that grew to 810 and 806 lines (800-line limit).
       Preserve protocol behavior and the 104-test focused group, commit the
-      mechanical split separately, then rerun root static gates. Root
-      `mix test` currently stops before suites at local PostgreSQL SCRAM
-      password configuration; do not count that environment failure as green.
+      mechanical split separately, then rerun root static gates. Commit
+      `6752771e` passes the 104-test group on seeds 0 and 1; post-commit root
+      format, warnings-as-errors compile, strict Credo (1,102 files, no issues)
+      and unused-lock checks exit 0. Root `mix test` still stops before suites
+      at local PostgreSQL SCRAM password configuration; it is not green.
 
   Evidence: the embedded matrix first failed both STS-caller modes (five tests,
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,

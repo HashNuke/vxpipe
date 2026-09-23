@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, STSIngress}
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -421,6 +422,64 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       assert is_map(fresh)
       assert fresh.audio_input_interval == before.audio_input_interval
       assert fresh.audio_output_interval == before.audio_output_interval
+
+      rebound =
+        Enum.reduce_while(1..200, nil, fn _, _ ->
+          case :sys.get_state(context.authority).speech_to_speech_capability do
+            %{pid: capability, ingress: ingress, input_epoch: epoch}
+            when capability != context.capability and is_pid(ingress) and is_reference(epoch) ->
+              {:halt, %{context | capability: capability, ingress: ingress}}
+
+            _pending ->
+              {:cont, nil}
+          end
+        end)
+
+      assert is_map(rebound)
+      push_sts(rebound)
+      push_selected_stt(context)
+      assert_caller_text(context)
+      output = collect_output(rebound.sink, [])
+      settle_and_assert_reply(rebound, output)
+    end
+  end
+
+  for mode <- ["external", "hybrid"] do
+    test "#{mode} replaces an active pair after selected agent presence loss and regrant" do
+      context = room(true, false, %{}, :morse, unquote(mode))
+      assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      stt = connection.speech_to_text.capability
+      policy_before = MediaPolicyAuthority.snapshot(state.media_policy_authority)
+      assert {:ok, %{activity_origin: before}} = SpeechToText.input_binding(stt)
+
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_sts(%{context | pcm: old_pcm})
+      assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}, 1_000
+      assert is_map(:sys.get_state(context.authority).speech_to_speech_capability.activity_turn)
+
+      assert {:ok, absent} =
+               MediaPolicyAuthority.leave(state.media_policy_authority, context.agent)
+
+      refute MapSet.member?(absent.present_participant_ids, context.agent)
+
+      assert {:ok, restored} =
+               MediaPolicyAuthority.admit(state.media_policy_authority, context.agent)
+
+      assert MapSet.member?(restored.present_participant_ids, context.agent)
+
+      assert Snapshot.interval(restored, :audio_input, context.caller) ==
+               before.audio_input_interval
+
+      assert Snapshot.interval(restored, :audio_output, context.caller) ==
+               before.audio_output_interval
+
+      assert Snapshot.interval(restored, :speech_to_text, context.caller) ==
+               Snapshot.interval(policy_before, :speech_to_text, context.caller)
+
+      fresh = await_new_stt_origin(stt, before.allocation_generation)
+      assert is_map(fresh)
 
       rebound =
         Enum.reduce_while(1..200, nil, fn _, _ ->

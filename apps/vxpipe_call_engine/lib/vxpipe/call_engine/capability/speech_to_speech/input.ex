@@ -72,7 +72,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
          Snapshot.interval(previous, :audio_output, before.human_id) !=
            Snapshot.interval(updated.input_policy, :audio_output, before.human_id) or
          Snapshot.interval(previous, :speech_to_text, before.human_id) !=
-           Snapshot.interval(updated.input_policy, :speech_to_text, before.human_id))
+           Snapshot.interval(updated.input_policy, :speech_to_text, before.human_id) or
+         MapSet.member?(previous.present_participant_ids, before.agent_id) !=
+           MapSet.member?(updated.input_policy.present_participant_ids, before.agent_id))
   end
 
   def activity_origin_rotated?(_before, _updated), do: false

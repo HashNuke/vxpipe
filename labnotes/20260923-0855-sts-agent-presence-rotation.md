@@ -1,0 +1,9 @@
+# STS agent presence rotation
+
+An independent Astra xhigh review of `4f375877` reproduced a compiled-room defect in external and hybrid modes. It primed selected human STT onset plus old STS `NO` PCM, called `MediaPolicyAuthority.leave/2` and `admit/2` for the selected agent, awaited a fresh selected-STT allocation, and then sent `HI`. The human final `HI` published, but the old STS capability/activity pair remained and no reply reached the room sink. Both modes failed on seeds 0 and 1 (2/2 each). No hosted service was used.
+
+The approved fix stays within the existing B room-control policy revoke/regrant gate. The selected STT origin can rotate when agent presence changes without changing caller audio/transcription intervals; STS must retire the old input/pair and reopen only against the fresh selected activity origin. Write focused room reds before changing runtime; preserve unrelated policy-rebase behavior and independent human transcription.
+
+Owning red: two cases generated from `sts_transcript_modes_test.exs:448` (external and hybrid), seed 0, failed at `assert is_map(rebound)` after agent leave/regrant. The test primed the old `NO` pair, verified that caller audio intervals did not change, awaited a fresh selected-STT allocation, and required a fresh STS capability before sending `HI`. The policy rotation predicate watched caller input/output/transcription intervals but not selected-agent presence.
+
+Green: include the selected agent's presence transition in `Input.activity_origin_rotated?/2`; this invokes the existing ingress close, output fence, room notice, old allocation retirement and fresh-origin recovery path. The same two cases pass on seed 0. The adjacent five-file room/capability/turn-control group passes 106/0 on seeds 0 and 1. No hosted service was used. The broader B room/native and C lifecycle exits remain open.
