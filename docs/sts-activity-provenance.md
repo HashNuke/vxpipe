@@ -67,8 +67,9 @@ readiness also compares the bound generation with the provider's current one;
 transcription audio origin remains distinct from STS activity authority. These
 checks now include an ingress-only close/reopen and receive-time cutoff: a
 selected frame stamped at or before fresh origin binding or explicit reopen is
-rejected before queueing. WebRTC still assigns `received_at` when its
-connection handler builds the frame. Telephony now stamps decoded media in
+rejected before queueing. WebRTC now stamps peer notifications in a dedicated
+initial receiver before forwarding them to Connection; the legacy direct
+callback path retains its handler-time fallback. Telephony stamps decoded media in
 the WebSock callback before Leg dispatch, but raw messages queued before
 that callback remain unclassified until a source hold/fence is acknowledged;
 legacy unstamped media still gets a MediaSession handler-time fallback. Astra
@@ -102,6 +103,17 @@ dispatch acknowledgement, but marks, readiness and lifecycle messages must
 continue. An acknowledgement at the socket alone does not drain already
 queued Leg events. Synchronous nested calls can form a Leg/MediaSession cycle;
 the implementation must prove its ordering without such a cycle.
+
+An initial WebRTC `SourceReceiver` now owns peer notifications from startup.
+It stamps RTP with its fixed epoch and monotonic receiver-handling time before
+forwarding. The Connection admits only RTP from its exact current
+receiver/epoch and carries that evidence through STS conversion. Non-media
+notifications retain their
+original shape. A focused suspended-old-receiver test proves its queued RTP
+cannot be relabeled by starting a successor; a connection test proves stale
+envelopes are dropped. This is not yet an acknowledged owner switch, old
+receiver drain, or room-coordinated hold/reopen. The same peer identity and
+non-media order across an actual switch remain acceptance work.
 
 The first telephony enabler now stamps decoded media with a monotonic time
 and private socket-lifetime epoch before SocketDispatch; Leg preserves the

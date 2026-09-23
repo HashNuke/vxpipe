@@ -5,7 +5,6 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
-  alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, MediaStreamTrack, PeerConnection, SessionDescription}
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
@@ -14,6 +13,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.Gateway.Media.STSInput
   alias Vxpipe.Gateway.WebRTC.Connection.Readiness
+  alias Vxpipe.Gateway.WebRTC.Connection.SourceAudio
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -35,7 +35,6 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   alias Vxpipe.Gateway.WebRTC.{
     ConnectionPeerSupervisor,
-    IncomingAudio,
     SmallWebRTCSignalling,
     SpeechInput,
     TransferSideband
@@ -105,12 +104,15 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     connection_id = Keyword.fetch!(options, :connection_id)
     session = Keyword.fetch!(options, :session)
     admission_monitor = if session.admission_owner, do: Process.monitor(session.admission_owner)
+    source_epoch = make_ref()
 
     with {:ok, attach_command} <- attach_command(connection_id, session),
+         {:ok, source_receiver} <-
+           ConnectionPeerSupervisor.start_source_receiver(connection_id, self(), source_epoch),
          {:ok, peer_connection} <-
            ConnectionPeerSupervisor.start_peer(
              connection_id,
-             self(),
+             source_receiver,
              Keyword.fetch!(options, :ice_servers)
            ),
          {:ok, output_track} <- add_output_track(peer_connection),
@@ -175,6 +177,9 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          negotiation_revision: 0,
          output_track_id: output_track.id,
          peer_connection: peer_connection,
+         source_receiver: source_receiver,
+         source_epoch: source_epoch,
+         source_monitor: Process.monitor(source_receiver),
          peer_monitor: Process.monitor(peer_connection),
          room_monitor: attachment.room_monitor,
          room_audio_egress: room_audio_egress,
@@ -286,15 +291,17 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:ex_webrtc, peer_connection, {:track, %MediaStreamTrack{kind: :audio} = track}},
         %{peer_connection: peer_connection} = state
       ) do
-    audio_tracks = Map.put(state.audio_tracks, track.id, track_codecs(peer_connection, track.id))
+    audio_tracks =
+      Map.put(state.audio_tracks, track.id, SourceAudio.track_codecs(peer_connection, track.id))
+
     {:noreply, %{state | audio_tracks: audio_tracks}}
   end
 
-  def handle_info(
-        {:ex_webrtc, _peer, {:rtp, _track, _rid, _packet}},
-        %{handoff_gate: %{held?: true}} = state
-      ),
-      do: {:noreply, state}
+  def handle_info({:vxpipe_webrtc_source, _receiver, _epoch, _at, _raw} = message, state),
+    do: SourceAudio.source(message, state)
+
+  def handle_info({:ex_webrtc, _peer, {:rtp, _track, _rid, _packet}} = message, state),
+    do: SourceAudio.peer(message, state)
 
   def handle_info(
         {:DOWN, monitor, :process, _pid, _reason},
@@ -303,17 +310,10 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
       do: {:stop, :shutdown, state}
 
   def handle_info(
-        {:ex_webrtc, peer_connection, {:rtp, track_id, _rid, %Packet{} = packet}},
-        %{peer_connection: peer_connection} = state
-      ) do
-    state = ensure_track_codecs(track_id, state)
-    codec = state.audio_tracks |> Map.get(track_id, %{}) |> Map.get(packet.payload_type)
-
-    case IncomingAudio.forward_connection(codec, track_id, packet, state) do
-      {result, state} when result in [:ok, :drop] -> {:noreply, state}
-      {:unavailable, state} -> {:stop, :shutdown, state}
-    end
-  end
+        {:DOWN, monitor, :process, receiver, _reason},
+        %{source_monitor: monitor, source_receiver: receiver} = state
+      ),
+      do: {:stop, :shutdown, state}
 
   def handle_info({:ex_webrtc, peer_connection, {:data_channel, %DataChannel{} = channel}}, state)
       when peer_connection == state.peer_connection do
@@ -613,28 +613,6 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     with channel_ref when not is_nil(channel_ref) <- state.rtvi_channel_ref,
          {:ok, message} <- encoded do
       :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
-    end
-  end
-
-  defp ensure_track_codecs(track_id, state) do
-    if Map.has_key?(state.audio_tracks, track_id) do
-      state
-    else
-      %{
-        state
-        | audio_tracks:
-            Map.put(state.audio_tracks, track_id, track_codecs(state.peer_connection, track_id))
-      }
-    end
-  end
-
-  defp track_codecs(peer_connection, track_id) do
-    peer_connection
-    |> PeerConnection.get_transceivers()
-    |> Enum.find(fn transceiver -> transceiver.receiver.track.id == track_id end)
-    |> case do
-      nil -> %{}
-      transceiver -> Map.new(transceiver.codecs, &{&1.payload_type, &1})
     end
   end
 

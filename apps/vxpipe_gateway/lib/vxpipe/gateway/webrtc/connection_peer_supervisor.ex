@@ -16,7 +16,8 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
   alias Vxpipe.Gateway.WebRTC.{
     AudioEgress,
     AudioPipeline,
-    RoomAudioOutputPipeline
+    RoomAudioOutputPipeline,
+    SourceReceiver
   }
 
   def start_link(options) do
@@ -37,6 +38,13 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
 
   def start_child(connection_id, spec),
     do: DynamicSupervisor.start_child(via(connection_id), spec)
+
+  def start_source_receiver(connection_id, owner, epoch) do
+    DynamicSupervisor.start_child(
+      via(connection_id),
+      {SourceReceiver, owner: owner, epoch: epoch}
+    )
+  end
 
   def start_peer(connection_id, controlling_process, ice_servers) do
     child_spec = %{

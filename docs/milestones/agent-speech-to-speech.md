@@ -806,6 +806,14 @@ the existing audio round trip. Record discoveries here before implementing.
                     and prove old packets cannot acquire the fresh STT origin
                     while a genuinely fresh packet still reaches it. Test the
                     same peer identity across hold, adoption and release.
+                    - [x] Install an initial peer notification receiver with an
+                      immutable private epoch and monotonic source stamp.
+                      Preserve non-media notifications, admit only the exact
+                      current receiver/epoch at Connection, and retain that
+                      evidence through STS conversion. A suspended old receiver
+                      keeps its old epoch after a successor starts. This does
+                      not yet switch receivers on hold/reopen or prove drain
+                      ordering with a live peer.
                   - [ ] Red-test Twilio and Telnyx raw media queued at their
                     WebSock callbacks before cutover, including a separately
                     delayed Leg dispatch. Stamp one immutable source epoch

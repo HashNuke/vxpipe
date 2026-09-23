@@ -121,3 +121,41 @@ Root `mix test` stops before tests while creating the Persistence test database:
 PostgreSQL SCRAM requires a password absent from local test configuration.
 No credential was added, printed or inferred. This is an environment blocker
 for that gate, not a passing umbrella test result.
+
+## WebRTC notification provenance enabler
+
+ExWebRTC `PeerConnection` sends all notifications to one controlling process
+and exposes `controlling_process/2` as a synchronous owner change. A new
+per-connection `SourceReceiver` is installed before the peer starts. It owns
+one immutable private epoch, stamps RTP with monotonic time, and forwards
+non-media notifications unchanged. The Connection accepts only an exact
+receiver/epoch envelope when that receiver is installed; the legacy direct
+RTP handler remains for isolated callback fixtures but is closed in production.
+The stamped evidence reaches the STS input frame.
+
+Red evidence: two focused tests failed because `SourceReceiver` was absent;
+after adding it they pass. Reworking the existing STS-only Connection test
+to use receiver envelopes then failed at the missing Connection callback
+clause; it now passes with stale-old-epoch rejection and fresh sequence
+continuation. The SourceReceiver test suspends the old owner, queues RTP,
+starts a successor, observes the successor event, then resumes the old owner
+and verifies its event still carries the old epoch. The source/connection/STS
+group passes 16/0 (seed 0). The two existing HTTP WebRTC files exit 0 on
+seeds 0 and 1 with actual local peers. These tests do not execute a peer
+owner switch across STT hold/reopen, prove a drain/barrier, or classify media
+buffered below ExWebRTC; the parent task remains unchecked.
+
+After the first green run, Connection reached 815 lines, beyond the strict
+module-size boundary. RTP source validation, track lookup and forwarding were
+extracted into the cohesive `Connection.SourceAudio` module; Connection is
+745 lines and the same 16 focused checks remain green. The separate receiver
+process remains an owner-lifetime component, not a transfer cutover protocol.
+
+Astra xhigh read-only review cleared the latest extracted diff after 16/0
+focused tests and eight additional in-memory probes: actual peer startup
+notifications, mixed notification ordering, owner/receiver/peer teardown,
+raw-RTP rejection, wrong receiver/epoch/peer rejection, held-input rejection,
+and STS evidence preservation. No actionable defect was reproduced. The
+monotonic timestamp is SourceReceiver **handling** time, not peer emission or
+network arrival time. The immutable epoch is what preserves old-receiver
+identity when that handling is delayed; no switch/drain guarantee is claimed.

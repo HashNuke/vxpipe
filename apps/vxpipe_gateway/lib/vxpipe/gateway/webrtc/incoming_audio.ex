@@ -8,13 +8,15 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   alias Vxpipe.Gateway.Media.{RoomAudioIngress, STSInput}
   alias Vxpipe.Gateway.WebRTC.{AudioFrame, OpusInput, SpeechInput}
 
-  def forward_connection(nil, _track_id, _packet, state), do: {:drop, state}
+  def forward_connection(codec, track_id, packet, state, options \\ [])
 
-  def forward_connection(codec, track_id, packet, state) do
+  def forward_connection(nil, _track_id, _packet, state, _options), do: {:drop, state}
+
+  def forward_connection(codec, track_id, packet, state, options) do
     if receive_only?(state.attachment) do
       {:drop, state}
     else
-      prepare_and_deliver_audio(codec, track_id, packet, state)
+      prepare_and_deliver_audio(codec, track_id, packet, state, options)
     end
   end
 
@@ -44,6 +46,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
                  packet,
                  Keyword.fetch!(options, :received_at)
                ) do
+          frame = %{frame | source_epoch: Keyword.get(options, :source_epoch)}
           deliver(frame, options)
         else
           error -> {error, input}
@@ -62,7 +65,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
 
   def receive_only?(%ConnectionAttachment{}), do: false
 
-  defp prepare_and_deliver_audio(codec, track_id, packet, state) do
+  defp prepare_and_deliver_audio(codec, track_id, packet, state, options) do
     with {:ok, channels} <- OpusInput.track_channels(codec) do
       track = %{
         track_id: to_string(track_id),
@@ -74,7 +77,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
       case SpeechInput.prepare(state.attachment, track, state.speech_input) do
         {:ok, _output, input} ->
           state = %{state | speech_input: input}
-          deliver_audio(codec, track_id, packet, state)
+          deliver_audio(codec, track_id, packet, state, options)
 
         {:error, _reason} ->
           {:unavailable, state}
@@ -84,7 +87,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
     end
   end
 
-  defp deliver_audio(codec, track_id, packet, state) do
+  defp deliver_audio(codec, track_id, packet, state, options) do
     {result, input} =
       forward(codec, track_id, packet,
         session: state.session,
@@ -93,7 +96,8 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
         room_audio_ingress: state.room_audio_ingress,
         speech_input: state.speech_input,
         sts_input: state.sts_input,
-        received_at: System.monotonic_time(:millisecond)
+        received_at: Keyword.get(options, :received_at, System.monotonic_time(:millisecond)),
+        source_epoch: Keyword.get(options, :source_epoch)
       )
 
     {result, %{state | sts_input: input}}

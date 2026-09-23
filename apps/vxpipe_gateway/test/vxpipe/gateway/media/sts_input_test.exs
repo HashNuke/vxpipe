@@ -120,6 +120,8 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
              Connection.handle_call({:speech_to_speech_track, track}, {self(), make_ref()}, state)
 
     assert :ok = STSIngress.open(ingress)
+    source_epoch = make_ref()
+    state = Map.merge(state, %{source_receiver: self(), source_epoch: source_epoch})
     encoder = Membrane.Opus.Encoder.Native.create(48_000, 2, 2_048, 64_000, 3_001)
     pcm = :binary.copy(<<1_000::little-signed-16, -500::little-signed-16>>, 960)
     assert {:ok, payload} = Membrane.Opus.Encoder.Native.encode_packet(encoder, pcm, 960)
@@ -132,18 +134,36 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
       payload: payload
     }
 
+    admitted_at = System.monotonic_time(:millisecond)
+
     assert {:noreply, state} =
              Connection.handle_info(
-               {:ex_webrtc, self(), {:rtp, "microphone", nil, packet}},
+               {:vxpipe_webrtc_source, self(), source_epoch, admitted_at,
+                {:ex_webrtc, self(), {:rtp, "microphone", nil, packet}}},
                state
              )
 
-    assert_receive {:vxpipe_sts_input, ^ingress, ref, %{sequence_number: 65_535}, 0}
+    assert_receive {:vxpipe_sts_input, ^ingress, ref, first, 0}
+    assert first.sequence_number == 65_535
+    assert first.received_at == admitted_at
+    assert first.source_epoch == source_epoch
     ack(ingress, ref)
+
+    stale = make_ref()
+
+    assert {:noreply, ^state} =
+             Connection.handle_info(
+               {:vxpipe_webrtc_source, self(), stale, admitted_at,
+                {:ex_webrtc, self(), {:rtp, "microphone", nil, %{packet | sequence_number: 0}}}},
+               state
+             )
+
+    refute_received {:vxpipe_sts_input, _, _, _, _}
 
     assert {:noreply, _state} =
              Connection.handle_info(
-               {:ex_webrtc, self(), {:rtp, "microphone", nil, %{packet | sequence_number: 0}}},
+               {:vxpipe_webrtc_source, self(), source_epoch, admitted_at,
+                {:ex_webrtc, self(), {:rtp, "microphone", nil, %{packet | sequence_number: 0}}}},
                state
              )
 
