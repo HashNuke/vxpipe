@@ -140,9 +140,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
 
   def input_binding(state, %Resource{binding: {_connection, :prepared_policy, token}} = expected) do
     with {:ok, ^expected, status} <- readiness(state, token) do
-      {session, intervals} = input_session(state, token)
+      {session, intervals, current?} = input_session(state, token)
       {:ok, binding} = State.input_binding(session)
-      {:ok, %{binding | resource: expected, status: status, policy_intervals: intervals}}
+
+      {:ok,
+       %{
+         binding
+         | resource: expected,
+           status: status,
+           policy_intervals: intervals,
+           activity_origin: if(current?, do: binding.activity_origin, else: nil)
+       }}
     else
       _stale_or_changed -> {:error, :unavailable}
     end
@@ -158,10 +166,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
   def input_binding(_state, _expected), do: {:error, :unavailable}
 
   defp input_session(%{pending_policy: %{token: token} = pending} = state, token) do
-    {pending.state, Enum.uniq([state.policy_revision, pending.state.policy_revision])}
+    {pending.state, Enum.uniq([state.policy_revision, pending.state.policy_revision]), false}
   end
 
-  defp input_session(state, _adopted_token), do: {state, [state.policy_revision]}
+  defp input_session(state, _adopted_token), do: {state, [state.policy_revision], true}
 
   def install(%{pending_policy: nil} = state, snapshot), do: install_live(state, snapshot)
 

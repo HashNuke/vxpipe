@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Readiness.Resource
-  alias Vxpipe.CallEngine.Speech.{Descriptor, Event, Session}
+  alias Vxpipe.CallEngine.Speech.{Allocation, Descriptor, Event, Session}
 
   @maximum_audio_bytes 131_072
 
@@ -163,9 +163,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
        media_format: Map.take(state.media_format, [:codec, :sample_rate, :channels]),
        resource: resource,
        status: status,
+       activity_origin: activity_origin(state, status),
        policy_intervals: [state.policy_revision]
      }}
   end
+
+  defp activity_origin(
+         %__MODULE__{session: session, policy: %Snapshot{} = policy} = state,
+         :ready
+       )
+       when not is_nil(session) do
+    source = state.identity.participant_id
+    agent = state.activity_agent_id
+
+    if Allocation.valid?(session) and SpeechToTextDemand.activity_required?(policy, source, agent) do
+      %{
+        allocation_generation: session.generation,
+        audio_input_interval: Snapshot.interval(policy, :audio_input, source),
+        audio_output_interval: Snapshot.interval(policy, :audio_output, source),
+        agent_id: agent
+      }
+    end
+  end
+
+  defp activity_origin(_state, _status), do: nil
 
   @doc false
   def prepare_session(%__MODULE__{} = state, snapshot, deadline) do

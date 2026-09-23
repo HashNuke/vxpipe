@@ -364,3 +364,28 @@ unused-lock checks pass. Root `mix test` still stops before Persistence at
 the same local PostgreSQL SCRAM password configuration, not a passing suite.
 The two deliberately red compiled-room external/hybrid tests remain outside
 this checkpoint.
+
+The next room-control prerequisite is a bounded current-origin input-binding
+query on selected STT. A focused red failed because `activity_origin` was
+absent; the capability now exposes its ready native allocation generation,
+source audio-input/output intervals and selected agent only while activity
+is demanded. An unrelated policy rebase retains the origin; audio-route
+denial removes it; regrant creates a new generation/interval. A ready
+transcript-only recognizer has no origin. The four-file adjacent group passed
+63/0 on seeds 0 and 1 before the review follow-ups below.
+
+Astra xhigh reproduced two scoped query defects: a ready prepared replacement
+advertised its candidate generation before adoption, and a canceled native
+allocation remained visible while capability closure was delayed. I added
+the prepared regression to the existing policy-preparation test and confirmed
+it failed on the candidate generation, then cleared `activity_origin` only
+for pending preparation; an adopted resource still exposes the current
+generation. The cancellation regression suspends ScopeControl, disconnects
+the fake transport, waits for native Channel DOWN and confirms the allocation
+token is invalid before querying. It failed with the canceled generation,
+then passed after the query checked `Allocation.valid?/1`. Neither case is
+yet room acceptance or ingress PCM cutover. The prepared-adoption check passes;
+the four-file adjacent group passes 64/0 on seeds 0 and 1. Astra xhigh scoped
+re-review found no remaining concrete defect after 71/0 checks on both seeds
+and seven in-memory probes, including prepared/adopted and canceled query
+forms. This clearance does not cover PCM cutover, hold or room control.

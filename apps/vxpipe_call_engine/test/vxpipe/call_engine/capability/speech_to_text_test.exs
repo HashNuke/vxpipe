@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.Usage.ProviderContext
-  alias Vxpipe.CallEngine.Speech.CapabilityTree
+  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
@@ -63,7 +63,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert replacement != transport
   end
 
-  test "audio-only demand loss discards a prepared activity session before refresh" do
+  test "prepared activity origin stays private until adoption and demand loss discards it" do
     alias Vxpipe.CallEngine.ResolvedCallPlan
     alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
     alias Vxpipe.CallEngine.MediaPolicy.Authority
@@ -114,11 +114,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                MapSet.put(base.present_participant_ids, "part-agent")
              )
 
-    assert {:ok, %{change: :replace, resources: [_resource]} = prepared} =
+    assert {:ok, %{change: :replace, resources: [resource]} = prepared} =
              SpeechToText.prepare_policy(capability, candidate, options)
 
     assert_receive {:test_stt_transport_started, transport, _connection}
     monitor = Process.monitor(transport)
+    TestSpeechToTextTransport.deliver(transport, connected_message("prepared", 0))
+    channel = :sys.get_state(transport).owner
+    _ = :sys.get_state(channel)
+    _ = :sys.get_state(capability)
+
+    assert {:ok, %{status: :ready, activity_origin: nil}} =
+             SpeechToText.input_binding(capability, resource)
 
     assert {:ok, before_denial} = Authority.admit(authority, "observer")
 
@@ -146,6 +153,48 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
              SpeechToText.prepare_policy(capability, refreshed, options)
 
     assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+
+    assert {:ok, reallowed} = Authority.leave(authority, "restrictor")
+
+    assert {:ok, next_candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(reallowed.present_participant_ids, "part-agent")
+             )
+
+    next_options = [
+      owner: self(),
+      attempt_id: "activity-adoption",
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+
+    assert {:ok, %{resources: [next_resource]}} =
+             SpeechToText.prepare_policy(capability, next_candidate, next_options)
+
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    TestSpeechToTextTransport.deliver(replacement, connected_message("adopted", 0))
+    replacement_channel = :sys.get_state(replacement).owner
+    _ = :sys.get_state(replacement_channel)
+    _ = :sys.get_state(capability)
+
+    assert {:ok, %{status: :ready, activity_origin: nil}} =
+             SpeechToText.input_binding(capability, next_resource)
+
+    assert {:ok, _adopted} =
+             Authority.commit_candidate(
+               authority,
+               next_candidate,
+               Keyword.fetch!(next_options, :deadline_ms),
+               [capability]
+             )
+
+    assert {:ok, %{activity_origin: %{allocation_generation: generation}}} =
+             SpeechToText.input_binding(capability)
+
+    assert is_reference(generation)
+
+    assert {:ok, %{activity_origin: %{allocation_generation: ^generation}}} =
+             SpeechToText.input_binding(capability, next_resource)
   end
 
   test "readiness requires the provider acknowledgement and preserves unchanged session evidence" do
@@ -442,6 +491,103 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert fresh.audio_output_interval > 0
     assert old_start.audio_input_interval == 0
     assert old_start.audio_output_interval == 0
+  end
+
+  test "selected STT input binding exposes only its current authorized activity origin" do
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+    capability = start_capability_process(initial_policy: active, activity_agent_id: "part-agent")
+    assert_receive {:test_stt_transport_started, first, _connection}
+    assert :ok = Enforcer.apply(capability, active, 500)
+    assert {:ok, %{activity_origin: nil}} = SpeechToText.input_binding(capability)
+    TestSpeechToTextTransport.deliver(first, connected_message("first", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    assert {:ok,
+            %{
+              activity_origin: %{
+                allocation_generation: first_generation,
+                audio_input_interval: 0,
+                audio_output_interval: 0,
+                agent_id: "part-agent"
+              }
+            }} = SpeechToText.input_binding(capability)
+
+    assert is_reference(first_generation)
+
+    unrelated = %{
+      active
+      | revision: 1,
+        present_participant_ids: MapSet.new(["part-human", "part-agent", "part-support"])
+    }
+
+    assert :ok = Enforcer.apply(capability, unrelated, 500)
+
+    assert {:ok, %{activity_origin: %{allocation_generation: ^first_generation}}} =
+             SpeechToText.input_binding(capability)
+
+    denied = %{unrelated | revision: 2, effective: %{unrelated.effective | audio_routes: %{}}}
+    assert :ok = Enforcer.apply(capability, denied, 500)
+    assert {:ok, %{activity_origin: nil}} = SpeechToText.input_binding(capability)
+
+    restored = %{unrelated | revision: 3}
+    assert :ok = Enforcer.apply(capability, restored, 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    assert {:ok,
+            %{
+              activity_origin: %{
+                allocation_generation: next_generation,
+                audio_input_interval: input_interval,
+                audio_output_interval: output_interval
+              }
+            }} =
+             SpeechToText.input_binding(capability)
+
+    assert is_reference(next_generation) and next_generation != first_generation
+    assert input_interval > 0 and output_interval > 0
+  end
+
+  test "ready transcript-only STT has no activity controller origin" do
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+    capability = start_capability_process(initial_policy: active)
+    assert_receive {:test_stt_transport_started, transport, _connection}
+    assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("transcript-only", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    assert {:ok, %{status: :ready, activity_origin: nil}} =
+             SpeechToText.input_binding(capability)
+  end
+
+  test "canceled native STT allocation cannot remain the current activity origin" do
+    active = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+
+    {capability, transport} =
+      start_capability(initial_policy: active, activity_agent_id: "part-agent")
+
+    assert :ok = Enforcer.apply(capability, active, 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("canceled-origin", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+
+    session = :sys.get_state(capability).session
+    control = session.scope.control
+    channel = GenServer.whereis(Channel.address(session))
+    monitor = Process.monitor(channel)
+
+    assert :ok = :sys.suspend(control)
+
+    try do
+      TestSpeechToTextTransport.disconnect(transport, :closed)
+      assert_receive {:DOWN, ^monitor, :process, ^channel, _reason}, 1_000
+      refute Allocation.valid?(session)
+
+      assert {:ok, %{status: :ready, activity_origin: nil}} =
+               SpeechToText.input_binding(capability)
+    after
+      assert :ok = :sys.resume(control)
+    end
   end
 
   test "a selected STT native end queued before an audio-interval change cannot inherit the new interval" do

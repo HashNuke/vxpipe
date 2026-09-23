@@ -15,9 +15,10 @@ defmodule Vxpipe.CallEngine.MediaPolicy.SpeechToTextDemand do
          activity_required?(snapshot, source_participant_id, activity_agent_id))
   end
 
-  defp activity_required?(_snapshot, _source, nil), do: false
+  @spec activity_required?(Snapshot.t(), String.t(), String.t() | nil) :: boolean()
+  def activity_required?(_snapshot, _source, nil), do: false
 
-  defp activity_required?(snapshot, source, agent) when is_binary(agent) do
+  def activity_required?(snapshot, source, agent) when is_binary(agent) do
     {true, true, true, true} == activity_authority(snapshot, source, agent)
   end
 

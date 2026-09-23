@@ -23,6 +23,19 @@ not rotate the binding. The existing STS input queue receives captured epoch
 and intervals only after this room check; queue admission is not proof of
 completed provider delivery.
 
+The current-origin side of this comparison belongs to the STT capability:
+extend its bounded engine input-binding query with the selected native
+allocation generation and scoped source-audio intervals. The room compares
+that result with the signal's frozen generation/intervals before binding the
+STS input epoch. The query must not mint an origin or infer one from a late
+signal, and a non-selected or unready recognizer supplies no activity origin.
+The current-origin query must also return no origin for a canceled native
+allocation, even before the capability consumes its closure notification.
+A ready prepared-policy replacement is a candidate, not the live origin:
+its resource-scoped query returns no origin until adoption, after which the
+adopted session may expose the same generation as the current binding.
+This is a room-validation seam, not the separate ingress PCM cutover proof.
+
 The STT ingress needs an acknowledged cutover, not merely queue clearing. It
 must close admission, purge queued PCM and qualify each asynchronous delivery
 with the allocation/input generation that admitted it. STT must reject an old

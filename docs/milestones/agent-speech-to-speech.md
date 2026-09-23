@@ -708,6 +708,26 @@ the existing audio round trip. Record discoveries here before implementing.
             15 probes covering both enforcer orders, prepared rebase/adoption,
             stale ingress envelopes and unrelated membership retention. This
             does not prove checked retirement, hold/reopen or native PCM cutoff.
+          - [ ] Expose the selected STT capability's current native allocation
+            generation and source-audio intervals through a bounded engine
+            input-binding query. The room must compare a frozen private signal
+            with this current origin before binding an STS controller pair;
+            unrelated policy rebases preserve the origin, while scoped audio
+            changes rotate it. This is a room-validation prerequisite, not
+            ingress PCM generation/cutoff or hold/reopen acceptance.
+            - [x] A ready prepared replacement must not advertise its candidate
+              generation as the current activity origin before adoption. Prove
+              the prepared-resource query stays distinct from the live binding,
+              while the adopted replacement exposes its origin normally.
+              Focused red failed with the candidate generation; the adopted
+              resource exposes the same generation as the current binding.
+            - [x] A canceled native allocation must stop advertising its
+              generation immediately, even if capability readiness has not yet
+              consumed the provider failure. Reproduce the cancellation/
+              capability-message race and fail the origin query closed. The
+              focused red returned the canceled generation after native Channel
+              DOWN; the query now checks the allocation token before exposing
+              it. The four-file adjacent group passes 64/0 on seeds 0 and 1.
         - [ ] Reproduce and fence stale provider evidence when the selected
           STS audio route changes but transcript demand keeps STT alive. A
           retained recognizer could emit an old boundary after revoke/regrant;
