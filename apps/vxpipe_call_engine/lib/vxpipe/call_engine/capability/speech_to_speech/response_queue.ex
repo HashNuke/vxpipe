@@ -48,6 +48,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
 
   defp admit_reply(turn_ref, state, entry, position) do
     cond do
+      state.held? or not Output.audio_route_permitted?(state, state.human_id, state.agent_id) or
+          not Output.audio_route_permitted?(state, state.agent_id, state.human_id) ->
+        reject_entry(entry, state)
+
       not is_nil(state.active_output) ->
         queue_turn(state, entry, position)
 
@@ -124,6 +128,33 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
     end
   end
 
+  defp reject_entry({:response, turn, _context, _fingerprint, _sequence}, state),
+    do: reject_response(turn, state)
+
+  defp reject_entry({:legacy, turn, _sequence}, state) do
+    case interrupt_legacy(state, turn) do
+      {:ok, state} -> {:noreply, state}
+      {:error, _reason} -> Output.stop_unavailable(:provider_failed, state)
+    end
+  end
+
+  defp interrupt_legacy(state, turn) do
+    provider = Session.provider(state.session)
+
+    if is_pid(provider) do
+      try do
+        case apply(state.provider, :interrupt, [provider, turn]) do
+          :ok -> {:ok, %{state | fenced_turns: MapSet.put(state.fenced_turns, turn)}}
+          _failure -> {:error, :provider_failed}
+        end
+      catch
+        _, _ -> {:error, :provider_failed}
+      end
+    else
+      {:error, :provider_failed}
+    end
+  end
+
   defp response_entry?({:response, _turn, _context, _fingerprint, _sequence}), do: true
   defp response_entry?(_entry), do: false
 
@@ -141,20 +172,36 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
          else: state
 
     result =
-      Enum.reduce_while(state.pending_turns, [], fn entry, kept ->
-        if response_entry?(entry) and not ResponseOrigins.current?(state, elem(entry, 3)) do
-          case Session.reject_response(state.session, entry_turn(entry)) do
-            :ok -> {:cont, kept}
-            {:error, _reason} = error -> {:halt, error}
-          end
-        else
-          {:cont, [entry | kept]}
+      Enum.reduce_while(state.pending_turns, {:ok, [], state}, fn entry, {:ok, kept, state} ->
+        case retire_entry(entry, state) do
+          {:keep, state} -> {:cont, {:ok, [entry | kept], state}}
+          {:retired, state} -> {:cont, {:ok, kept, state}}
+          {:error, _reason} = error -> {:halt, error}
         end
       end)
 
-    if is_list(result),
-      do: {:ok, %{state | pending_turns: Enum.reverse(result)}},
-      else: result
+    case result do
+      {:ok, kept, state} -> {:ok, %{state | pending_turns: Enum.reverse(kept)}}
+      error -> error
+    end
+  end
+
+  defp retire_entry({:legacy, turn, _sequence}, state) do
+    case interrupt_legacy(state, turn) do
+      {:ok, state} -> {:retired, state}
+      error -> error
+    end
+  end
+
+  defp retire_entry({:response, turn, _context, fingerprint, _sequence}, state) do
+    if ResponseOrigins.current?(state, fingerprint) do
+      {:keep, state}
+    else
+      case Session.reject_response(state.session, turn) do
+        :ok -> {:retired, state}
+        error -> error
+      end
+    end
   end
 
   def admit_next_pending(%{active_output: nil, pending_turns: [entry | rest]} = state) do
@@ -195,7 +242,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
   def admit_next_pending(state), do: {:noreply, state}
 
   defp gated_admit(entry, state) do
-    if Output.audio_route_permitted?(state, state.human_id, state.agent_id) and not state.held? do
+    if Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
+         Output.audio_route_permitted?(state, state.agent_id, state.human_id) and not state.held? do
       admit_reply(entry_turn(entry), state, entry, :front)
     else
       {:noreply, state}

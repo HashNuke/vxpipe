@@ -1289,6 +1289,15 @@ No new provider advertisement or billable call is authorized by these tasks.
   - [ ] Complete authorization of not-yet-admitted and queued provider replies
     across egress revoke/regrant, with bounded retirement and no later replay.
     Active-output fencing alone does not establish this separate admission gate.
+    - [x] Reproduce legacy Morse reply admission after output-only denial and
+      a second reply queued behind an active one across revoke/regrant. Retire
+      denied pending provider work without borrowing a later permissive interval;
+      keep permitted human input available and prove no old grant/audio replays.
+      The two initial Morse reds admitted a denied reply and retained a queued
+      one. Direct-policy and authority-snapshot regressions now prove retirement,
+      no second-turn replay or fabricated interruption, and a healthy third
+      reply; 69 relevant capability/Morse/room tests pass (seed 0). Independent
+      Astra xhigh source review found no reproducible defect in this diff.
 - [ ] Reproduce recognizer cross-turn contamination with the stalling output-STT
   fixture: time out ONE, begin TWO, then deliver ONE's delayed final. Retire or
   correlate recognizer generations after timeout and finalization failure so

@@ -223,6 +223,65 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     end
   end
 
+  test "output-only denial retires a new Morse reply without denying human input" do
+    {_tree, capability, _sink} = start_capability(policy: deny_egress())
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+
+    assert :ok = SpeechToSpeech.push_text(capability, "DENIED")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "DENIED"}}}
+
+    state = :sys.get_state(capability)
+    assert state.active_output == nil
+    assert state.pending_turns == []
+    assert :sys.get_state(provider).pending_replies == %{}
+    assert :ok = SpeechToSpeech.push_audio(capability, @human, <<0, 0>>)
+
+    assert :ok = SpeechToSpeech.apply_policy(capability, unrestricted())
+    assert :ok = SpeechToSpeech.push_text(capability, "FRESH")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, fresh, _}
+    assert Map.has_key?(:sys.get_state(provider).pending_replies, fresh) == false
+  end
+
+  for api <- [:direct, :authority] do
+    test "#{api} output-only revoke retires a queued Morse reply before regrant" do
+      {_tree, capability, sink} = start_capability(policy: unrestricted())
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+
+      assert :ok = SpeechToSpeech.push_text(capability, "FIRST")
+
+      assert_receive {:vxpipe_sts_input_event, ^capability,
+                      %{event: %{kind: :input_transcript, text: "FIRST"}}}
+
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first, _}
+      assert :ok = SpeechToSpeech.push_text(capability, "SECOND")
+
+      assert_receive {:vxpipe_sts_input_event, ^capability,
+                      %{event: %{kind: :input_transcript, text: "SECOND"}}}
+
+      assert [{:legacy, second, _}] = :sys.get_state(capability).pending_turns
+      assert second != first
+      assert Map.has_key?(:sys.get_state(provider).pending_replies, second)
+
+      assert :ok = apply_directional_policy(capability, unquote(api), deny_egress())
+      assert_receive {:test_audio_output_interrupt, ^sink, _, 0}
+      assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^first, 0, :no_prefix, _}
+      assert :sys.get_state(capability).pending_turns == []
+      refute Map.has_key?(:sys.get_state(provider).pending_replies, second)
+      assert :ok = SpeechToSpeech.push_audio(capability, @human, <<0, 0>>)
+
+      assert :ok = apply_directional_policy(capability, unquote(api), unrestricted(), 1)
+      refute_received {:vxpipe_sts_turn_started, ^capability, @agent, ^second, _}
+      refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^second, _, _, _}
+
+      assert :ok = SpeechToSpeech.push_text(capability, "THIRD")
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, third, _}, 5_000
+      assert third != first and third != second
+      refute_received {:vxpipe_sts_turn_started, ^capability, @agent, ^second, _}
+    end
+  end
+
   test "a denied credited chunk is discarded without stranding its output slot" do
     alias Vxpipe.CallEngine.SpeechProviderContract, as: Contract
     alias Vxpipe.CallEngine.SpeechSTSContractProvider, as: Provider
@@ -242,6 +301,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
       output_stt: nil,
       active_output: nil,
       pending_turns: [],
+      held?: false,
       policy: unrestricted(),
       input_policy: nil,
       policy_revision: 0,

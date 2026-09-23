@@ -632,8 +632,11 @@ acknowledged and discarded with terminal cleanup, not left holding provider
 credit. Delayed generation completion releases the old slot with zero additional
 egress, and delayed playback completion cannot publish another terminal outcome.
 The direct-policy and authority-snapshot paths have generation/drain regression
-coverage. Authorization and bounded retirement of not-yet-admitted/queued replies
-across revoke/regrant remain separate milestone gates.
+coverage. Opted-in queued responses retain immutable origin evidence; a legacy
+Morse reply not yet granted is now cancelled under output denial or a changed
+policy/lifecycle interval, not carried into a later permissive interval. If a
+legacy provider cannot cancel that pending reply, its allocation fails closed.
+Full queued-response and room acceptance remain separate milestone gates.
 
 After policy checks, the consumer calls `Session.admit_output/2` with the private provider turn
 reference. For an opted-in response-start descriptor, the exact start must first be
