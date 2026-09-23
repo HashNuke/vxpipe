@@ -472,3 +472,26 @@ stops before tests while creating the Persistence test database: local
 PostgreSQL SCRAM authentication has no configured password. No credential was
 added or logged. The two external/hybrid compiled-room tests remain separate
 deliberate reds, unstaged from this checkpoint.
+
+Next ingress-cutover primitive (uncommitted): focused red for missing
+`Ingress.close/1` failed at the undefined function; a second red reproduced
+pre-binding source audio being accepted with a newly bound generation. Ingress
+now clears selected origin, queued PCM and in-flight credit on close, sets an
+inclusive monotonic-ms receive-time cutoff on fresh origin binding or explicit
+reopen, and rejects older/equal `AudioFrame.received_at` before queueing.
+Repeated `open/1` while already open preserves the cutoff; a stale pre-close
+acknowledgement cannot release new in-flight credit. The Call Engine
+ingress/capability/readiness group passes 68/0 on seeds 0 and 1; room STS call
+and ingress tests pass 24/0 on seed 0; Gateway STS input passes 11/0 on seed 0.
+WebRTC and telephony Gateway paths preserve `received_at` after frame
+construction; Gateway room-audio ingress already uses the same inclusive
+cutoff convention. Astra xhigh scoped review cleared the ingress primitive
+after 43 focused tests, four probes and 18 Gateway checks. It separately
+reproduced the upstream limitation: suspend a callback-delegating process,
+queue raw WebRTC/telephony media before reopen, close/rebind/open ingress,
+then resume the process. Both handlers assign `received_at` after the cutoff
+and dispatch the old payload; supplying its original timestamp instead causes
+`{:error, :stale_frame}`. This is not room-coordinated hold/release admission
+or complete producer provenance. The Gateway source-time fence is now an
+explicit unchecked subtask in the milestone, not a regression attributed to
+the ingress primitive.

@@ -275,6 +275,97 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 22}}
   end
 
+  test "selected ingress rejects a frame received before its close and reopen cutover" do
+    clock = :atomics.new(1, [])
+    :ok = :atomics.put(clock, 1, 1_000)
+
+    ingress =
+      start_ingress(self(),
+        activity_agent_id: "part-agent",
+        maximum_frames: 1,
+        clock: fn -> :atomics.get(clock, 1) end
+      )
+
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+
+    first = %{
+      allocation_generation: make_ref(),
+      audio_input_interval: 0,
+      audio_output_interval: 0,
+      agent_id: "part-agent"
+    }
+
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    assert :ok = Ingress.bind_audio_origin(ingress, first)
+    :ok = :atomics.put(clock, 1, 1_001)
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>, received_at: 1_001))
+    assert_receive {:vxpipe_stt_audio, ^ingress, old_reference, _, _}
+
+    assert :ok = Ingress.close(ingress)
+    assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>, received_at: 1_000))
+    refute_receive {:vxpipe_stt_audio, ^ingress, _, _, _}
+
+    :ok = :atomics.put(clock, 1, 1_002)
+    second = %{first | allocation_generation: make_ref()}
+    assert :ok = Ingress.bind_audio_origin(ingress, second)
+    assert :ok = Ingress.open(ingress)
+
+    assert {:error, :stale_frame} =
+             Ingress.push(ingress, audio_frame(3, <<3>>, received_at: 1_000))
+
+    :ok = :atomics.put(clock, 1, 1_003)
+    assert :ok = Ingress.open(ingress)
+    assert :ok = Ingress.push(ingress, audio_frame(4, <<4>>, received_at: 1_003))
+
+    assert_receive {:vxpipe_stt_audio, ^ingress, current_reference, _,
+                    %{allocation_generation: generation}}
+
+    assert generation == second.allocation_generation
+
+    send(ingress, {:vxpipe_stt_audio_result, self(), old_reference, 1, :ok})
+    _ = :sys.get_state(ingress)
+    refute_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 1}}
+
+    assert {:error, :queue_full} =
+             Ingress.push(ingress, audio_frame(5, <<5>>, received_at: 1_003))
+
+    send(ingress, {:vxpipe_stt_audio_result, self(), current_reference, 4, :ok})
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 4}}
+  end
+
+  test "selected ingress cannot label pre-binding source audio with a fresh origin" do
+    clock = :atomics.new(1, [])
+    :ok = :atomics.put(clock, 1, 1_002)
+
+    ingress =
+      start_ingress(self(),
+        activity_agent_id: "part-agent",
+        clock: fn -> :atomics.get(clock, 1) end
+      )
+
+    active = snapshot(0, ["part-human", "part-agent"], %{}, false)
+
+    origin = %{
+      allocation_generation: make_ref(),
+      audio_input_interval: 0,
+      audio_output_interval: 0,
+      agent_id: "part-agent"
+    }
+
+    assert :ok = Enforcer.apply(ingress, active, 500)
+    assert :ok = Ingress.bind_audio_origin(ingress, origin)
+
+    assert {:error, :stale_frame} =
+             Ingress.push(ingress, audio_frame(1, <<1>>, received_at: 1_000))
+
+    :ok = :atomics.put(clock, 1, 1_003)
+    assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>, received_at: 1_003))
+
+    assert_receive {:vxpipe_stt_audio, ^ingress, _, _, %{allocation_generation: generation}}
+
+    assert generation == origin.allocation_generation
+  end
+
   test "bounds queued audio while preserving accepted frame order" do
     {capability, transport} = start_capability(send_mode: :manual)
 
@@ -492,6 +583,11 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
   end
 
   defp start_ingress(capability, options \\ []) do
+    clock =
+      if is_binary(Keyword.get(options, :activity_agent_id)),
+        do: fn -> 999 end,
+        else: fn -> 1_000 end
+
     start_supervised!(
       {Ingress,
        Keyword.merge(
@@ -503,7 +599,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
              maximum_bytes: 32,
              maximum_age_ms: 1_000,
              maximum_consecutive_overflows: 3,
-             clock: fn -> 1_000 end
+             clock: clock
            ],
          options
        )}

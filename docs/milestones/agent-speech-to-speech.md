@@ -783,6 +783,22 @@ the existing audio round trip. Record discoveries here before implementing.
                 Separate Astra xhigh design review reproduced the old-frame
                 relabel caused by querying after replacement; this is not
                 implementation or hold/reopen acceptance evidence.
+                An ingress-only primitive now closes/clears its queue and
+                in-flight credit, freezes a receive-time cutoff on fresh
+                selected-origin binding and explicit reopen, and rejects
+                frames stamped at or before it. Focused reds proved missing
+                close and pre-binding old-frame relabel; room sequencing,
+                native retirement and complete source provenance remain open.
+                - [ ] Fence raw Gateway media that enters a WebRTC or telephony
+                  callback mailbox before reopen but is first handled afterward.
+                  Handler-time `received_at` stamps can label that old payload
+                  as new; prove both transports with a suspended callback and
+                  use an enqueue-time/source-issued generation or an
+                  acknowledged upstream drain before claiming full cutover.
+                  Scoped Astra xhigh reproduced this bypass with queued raw
+                  messages; an old frame carrying its original timestamp was
+                  correctly rejected by ingress. This is part of the existing
+                  source-time fence, not a new product feature.
             - [x] First reject policy-stale, already-sent PCM with captured
               STT and source audio-input/output intervals at capability
               delivery. A focused owning test captured a real ingress envelope

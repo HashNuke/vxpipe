@@ -679,7 +679,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
              maximum_bytes: 32,
              maximum_frames: 2,
              maximum_consecutive_overflows: 2,
-             clock: fn -> frame.received_at end
+             clock: fn -> frame.received_at - 1 end
            ]}
       )
 

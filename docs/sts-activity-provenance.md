@@ -65,8 +65,17 @@ the ready native audio origin to ingress, freezes its generation at enqueue,
 and rejects missing or stale generations at capability delivery. Ingress
 readiness also compares the bound generation with the provider's current one;
 transcription audio origin remains distinct from STS activity authority. These
-checks do not fence pre-reopen source frames or coordinate hold, so they are
-not the completed cutover contract above.
+checks now include an ingress-only close/reopen and receive-time cutoff: a
+selected frame stamped at or before fresh origin binding or explicit reopen is
+rejected before queueing. Current WebRTC and telephony Gateway paths preserve
+`received_at` through normalization, but assign it when their handler builds
+the frame, not when raw media enters the callback mailbox. Astra xhigh
+reproduced pre-reopen raw messages first handled afterward receiving a fresh
+timestamp and bypassing the cutoff. The cutoff conservatively rejects
+equal-millisecond frames; a source-issued generation, enqueue-time stamp or
+acknowledged upstream drain remains necessary. Room-owned ordering of close,
+native retirement, fresh readiness and release also remains unproven, so this
+is not the completed cutover contract above.
 
 The producer-side slice preserves the native STT event's allocation
 generation and turn reference plus the source's audio-input/output intervals

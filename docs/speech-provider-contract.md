@@ -388,12 +388,15 @@ enqueues a frame. Native audio origin is distinct from STS activity authority:
 transcript demand can retain selected-STT microphone delivery after a
 directional route denial while the activity origin remains absent. Ingress
 readiness compares the bound native generation with the provider's current
-generation, including same-interval replacements. The producer-side
-hold/reopen and pre-reopen source-frame fence are still unproven. Private STT
-signals now preserve native allocation generation, turn reference and source
-audio intervals at capability emission;
-the room does not yet bind that evidence to an STS epoch or supply turn
-controls. Selected activity STT is retired when either scoped source audio
+generation, including same-interval replacements. Selected ingress can close
+and clear queued/in-flight PCM; a fresh origin binding or explicit reopen
+rejects frames received at or before its monotonic-millisecond cutoff. This
+ingress primitive does not establish the room-owned close/retire/ready/reopen
+sequence or full upstream source provenance; hold/reopen remains unproven.
+Private STT signals now preserve native allocation generation, turn reference
+and source audio intervals at capability emission; the room does not yet bind
+that evidence to an STS epoch or supply turn controls. Selected activity STT is
+retired when either scoped source audio
 interval changes, including a recording-only input-interval change, to avoid
 relabeling queued native events under the new interval. Checked retirement,
 hold/reopen cutover and room acceptance remain open. This is a design candidate

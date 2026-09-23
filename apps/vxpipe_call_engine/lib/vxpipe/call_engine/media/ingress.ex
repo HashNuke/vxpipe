@@ -83,6 +83,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     end
   end
 
+  @spec close(pid()) :: :ok | {:error, :unavailable}
+  def close(ingress) when is_pid(ingress) do
+    try do
+      GenServer.call(ingress, :close, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
   @spec bind_audio_origin(pid(), map() | nil) ::
           :ok | {:error, :invalid_audio_origin | :unavailable}
   def bind_audio_origin(ingress, origin) when is_pid(ingress) do
@@ -111,6 +120,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
          connection_id: Keyword.fetch!(options, :connection_id)
        },
        opening_input_admission: Keyword.get(options, :input_admission, :open),
+       source_cutoff_at: nil,
        in_flight: nil,
        maximum_age_ms: Keyword.fetch!(options, :maximum_age_ms),
        maximum_bytes: Keyword.fetch!(options, :maximum_bytes),
@@ -163,8 +173,29 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     end
   end
 
+  def handle_call(:open, _from, %{opening_input_admission: :open} = state),
+    do: {:reply, :ok, state}
+
   def handle_call(:open, _from, state) do
-    {:reply, :ok, %{state | opening_input_admission: :open}}
+    cutoff =
+      if is_binary(state.activity_agent_id),
+        do: later_cutoff(state.source_cutoff_at, state.clock.()),
+        else: nil
+
+    {:reply, :ok, %{state | opening_input_admission: :open, source_cutoff_at: cutoff}}
+  end
+
+  def handle_call(:close, _from, state) do
+    {:reply, :ok,
+     %{
+       state
+       | opening_input_admission: :closed,
+         audio_origin: nil,
+         queue: :queue.new(),
+         in_flight: nil,
+         total_bytes: 0,
+         source_cutoff_at: nil
+     }}
   end
 
   def handle_call({:bind_audio_origin, origin}, _from, state) do
@@ -173,7 +204,19 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
         if state.audio_origin == origin do
           state
         else
-          %{state | audio_origin: origin, queue: :queue.new(), in_flight: nil, total_bytes: 0}
+          cutoff =
+            if is_map(origin),
+              do: later_cutoff(state.source_cutoff_at, state.clock.()),
+              else: state.source_cutoff_at
+
+          %{
+            state
+            | audio_origin: origin,
+              queue: :queue.new(),
+              in_flight: nil,
+              total_bytes: 0,
+              source_cutoff_at: cutoff
+          }
         end
 
       {:reply, :ok, state}
@@ -382,8 +425,12 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   defp stale?(frame, state) do
-    state.clock.() - frame.received_at > state.maximum_age_ms
+    state.clock.() - frame.received_at > state.maximum_age_ms or
+      (state.source_cutoff_at != nil and frame.received_at <= state.source_cutoff_at)
   end
+
+  defp later_cutoff(nil, current), do: current
+  defp later_cutoff(previous, current), do: max(previous, current)
 
   defp input_open?(state) do
     state.opening_input_admission == :open and state.policy_demand? and
