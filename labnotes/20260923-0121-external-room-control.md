@@ -129,3 +129,9 @@ ordered ingress/capability seam after eight in-memory probes. The owning
 ingress/capability/origins group passed 87/0 with seeds 0 and 1. The milestone
 now marks only this prerequisite complete; room wiring, STT activity demand,
 producer provenance, and provider hold retirement remain open.
+
+Post-commit root `mix credo --strict` found `validate_activity/5` complexity 21
+against limit 20. Recorded a milestone cleanup task, split participant-presence
+and bidirectional-route predicates without changing check order or error
+results, then reran the owning 87 tests (seed 0, 0 failures) and root Credo
+(no issues). This is a follow-up checkpoint to `a224ccfe`.

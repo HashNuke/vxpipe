@@ -100,12 +100,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
           output != Snapshot.interval(policy, :audio_output, state.human_id) ->
         {:error, :stale_policy}
 
-      not MapSet.member?(policy.present_participant_ids, state.human_id) or
-          not MapSet.member?(policy.present_participant_ids, state.agent_id) ->
+      not activity_participants_present?(state, policy) ->
         {:error, :policy_denied}
 
-      not Effective.audio_route_permitted?(policy.effective, state.human_id, state.agent_id) or
-          not Effective.audio_route_permitted?(policy.effective, state.agent_id, state.human_id) ->
+      not activity_routes_permitted?(state, policy) ->
         {:error, :policy_denied}
 
       state.descriptor == nil or state.descriptor.turn_control == "provider" ->
@@ -118,6 +116,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
 
   def validate_activity(_state, _ingress, _boundary, _intervals, _epoch),
     do: {:error, :invalid_activity}
+
+  defp activity_participants_present?(state, policy) do
+    MapSet.member?(policy.present_participant_ids, state.human_id) and
+      MapSet.member?(policy.present_participant_ids, state.agent_id)
+  end
+
+  defp activity_routes_permitted?(state, policy) do
+    Effective.audio_route_permitted?(policy.effective, state.human_id, state.agent_id) and
+      Effective.audio_route_permitted?(policy.effective, state.agent_id, state.human_id)
+  end
 
   def activity_ack(%{input_policy: %Snapshot{revision: revision}}, {:error, reason})
       when reason in [:stale_policy, :policy_denied],

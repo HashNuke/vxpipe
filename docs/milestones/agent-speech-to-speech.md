@@ -675,6 +675,11 @@ the existing audio round trip. Record discoveries here before implementing.
         reds and fixes. The owning ingress/capability/origins group passes 87
         tests with seeds 0 and 1; final Astra xhigh review found no remaining
         concrete defect in this scoped seam after eight in-memory probes.
+        - [x] Split activity validation into cohesive checks without changing
+          its authorization behavior. Root `mix credo --strict` originally
+          reported cyclomatic complexity 21 (limit 20) in
+          `validate_activity/5`; after the split it passes, as do 87 focused
+          ingress/capability/origins tests.
     - [ ] Reproduce the missing room-to-capability activity boundary with a
       real compiled Morse external call and selected human STT. Require one
       response only after the authorized end, with one human-STT-owned public
