@@ -11,12 +11,14 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
   alias Vxpipe.Providers.Telnyx.MediaDecoder
 
   @impl true
-  def init(%{binding: %MediaBinding{} = binding}) do
+  def init(%{binding: %MediaBinding{} = binding} = options) do
     monitor = Process.monitor(binding.leg)
 
     {:ok,
      %{
        binding: binding,
+       media_clock: Map.get(options, :media_clock, fn -> System.monotonic_time(:millisecond) end),
+       source_epoch: make_ref(),
        readiness_resource: SocketReadiness.new(binding),
        decoder_options: decoder_options(binding),
        leg_monitor: monitor,
@@ -34,6 +36,9 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
 
       {:ok, %Event{kind: :media_started, stream_id: stream_id} = event} ->
         dispatch(event, %{state | stream_id: stream_id})
+
+      {:ok, %Event{kind: :media} = event} ->
+        dispatch(stamp_media(event, state), state)
 
       {:ok, %Event{} = event} ->
         dispatch(event, state)
@@ -89,6 +94,13 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
 
   defp dispatch(event, state) do
     dispatch_result(SocketDispatch.submit(state.dispatch, state.binding.leg, event), state)
+  end
+
+  defp stamp_media(%Event{media: media} = event, state) do
+    %{
+      event
+      | media: %{media | received_at: state.media_clock.(), source_epoch: state.source_epoch}
+    }
   end
 
   defp dispatch_result(result, state) do

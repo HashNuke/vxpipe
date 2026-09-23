@@ -9,12 +9,15 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
   alias Vxpipe.Providers.Twilio.MediaDecoder
 
   @impl true
-  def init(%{binding: %MediaBinding{} = binding, clock: clock}) when is_function(clock, 0) do
+  def init(%{binding: %MediaBinding{} = binding, clock: clock} = options)
+      when is_function(clock, 0) do
     {:ok,
      %{
        binding: binding,
        readiness_resource: SocketReadiness.new(binding),
        clock: clock,
+       media_clock: Map.get(options, :media_clock, fn -> System.monotonic_time(:millisecond) end),
+       source_epoch: make_ref(),
        leg_monitor: Process.monitor(binding.leg),
        playback_marks: %PlaybackMarks{},
        dispatch: SocketDispatch.new(),
@@ -34,6 +37,9 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
 
       {:ok, %Event{kind: :media_started}} ->
         invalid_message(state)
+
+      {:ok, %Event{kind: :media} = event} ->
+        dispatch(stamp_media(event, state), state)
 
       {:ok, %Event{} = event} ->
         dispatch(event, state)
@@ -93,6 +99,13 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
 
   defp dispatch(event, state) do
     dispatch_result(SocketDispatch.submit(state.dispatch, state.binding.leg, event), state)
+  end
+
+  defp stamp_media(%Event{media: media} = event, state) do
+    %{
+      event
+      | media: %{media | received_at: state.media_clock.(), source_epoch: state.source_epoch}
+    }
   end
 
   defp dispatch_result(result, state) do

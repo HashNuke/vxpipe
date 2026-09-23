@@ -151,6 +151,36 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocketTest do
     :ok = :sys.resume(context.leg)
   end
 
+  test "media keeps its socket admission evidence while Leg is stalled", context do
+    clock = fn -> DateTime.to_unix(~U[2026-09-11 18:00:00Z]) end
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.init(%{
+               binding: context.binding,
+               clock: clock,
+               media_clock: fn -> 1_000 end
+             })
+
+    :ok = :sys.suspend(context.leg)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(context.leg)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+    assert {:ok, socket} = TelephonyMediaSocket.handle_in(text(start_message()), socket)
+    assert {:ok, _socket} = TelephonyMediaSocket.handle_in(text(media_message()), socket)
+    :ok = :sys.resume(context.leg)
+
+    assert_receive {:test_media_event, %Event{kind: :media_started}, _source}
+    assert_receive {:test_media_event, %Event{kind: :media} = event, _source}
+    assert Map.fetch!(event.media, :received_at) == 1_000
+    assert Map.fetch!(event.media, :source_epoch) == socket.source_epoch
+  end
+
   test "attests only the validated stream without waiting on the leg dispatcher", context do
     tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
     socket_pid = self()

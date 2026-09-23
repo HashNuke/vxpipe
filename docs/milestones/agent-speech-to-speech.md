@@ -813,6 +813,12 @@ the existing audio round trip. Record discoveries here before implementing.
                     Leg to MediaSession; stale media drops successfully without
                     killing the socket, while marks and lifecycle events remain
                     responsive during the hold.
+                    - [x] Capture monotonic source time and an initial private
+                      socket epoch on decoded media before SocketDispatch;
+                      carry both through a stalled Leg and MediaSession into
+                      the STS input frame. This enabler does not rotate epochs,
+                      reject stale events or prove raw WebSock mailbox cutover.
+                      The focused Twilio/Telnyx/STS-input group passes 28/0.
                   - [ ] Coordinate close, source hold/fence acknowledgement,
                     native STT retirement, fresh origin binding, source arm
                     acknowledgement and ingress reopen. Fail closed on source

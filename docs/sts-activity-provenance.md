@@ -67,14 +67,16 @@ readiness also compares the bound generation with the provider's current one;
 transcription audio origin remains distinct from STS activity authority. These
 checks now include an ingress-only close/reopen and receive-time cutoff: a
 selected frame stamped at or before fresh origin binding or explicit reopen is
-rejected before queueing. Current WebRTC and telephony Gateway paths preserve
-`received_at` through normalization, but assign it when their handler builds
-the frame, not when raw media enters the callback mailbox. Astra xhigh
-reproduced pre-reopen raw messages first handled afterward receiving a fresh
-timestamp and bypassing the cutoff. The cutoff conservatively rejects
-equal-millisecond frames. Room-owned ordering of close, native retirement,
-fresh readiness and release also remains unproven, so this is not the
-completed cutover contract above.
+rejected before queueing. WebRTC still assigns `received_at` when its
+connection handler builds the frame. Telephony now stamps decoded media in
+the WebSock callback before Leg dispatch, but raw messages queued before
+that callback remain unclassified until a source hold/fence is acknowledged;
+legacy unstamped media still gets a MediaSession handler-time fallback. Astra
+xhigh reproduced pre-reopen raw messages first handled afterward receiving
+a fresh timestamp and bypassing the cutoff before the telephony enabler.
+The cutoff conservatively rejects equal-millisecond frames. Room-owned
+ordering of close, native retirement, fresh readiness and release also
+remains unproven. This is not the completed cutover contract above.
 
 The reviewed next boundary is an acknowledged **source-admission epoch**,
 separate from the STT native allocation generation and transfer generation.
@@ -100,6 +102,15 @@ dispatch acknowledgement, but marks, readiness and lifecycle messages must
 continue. An acknowledgement at the socket alone does not drain already
 queued Leg events. Synchronous nested calls can form a Leg/MediaSession cycle;
 the implementation must prove its ordering without such a cycle.
+
+The first telephony enabler now stamps decoded media with a monotonic time
+and private socket-lifetime epoch before SocketDispatch; Leg preserves the
+packet and MediaSession carries that evidence into the input `AudioFrame`.
+The Twilio test stalls Leg; both provider tests verify retained metadata,
+and a MediaSession test verifies it does not restamp a delayed packet. This
+does **not** rotate or revoke the socket epoch, reject stale epochs, drain a
+raw WebSock mailbox, or coordinate STT hold/reopen; those remain the actual
+source-cutover gate.
 
 This is a reviewed design candidate, not implemented acceptance. It fences
 project-observable queues at the stated admission boundary; it does not prove

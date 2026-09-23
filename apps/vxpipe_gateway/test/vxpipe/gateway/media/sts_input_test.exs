@@ -193,6 +193,8 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
 
     assert :ok = STSIngress.open(ingress)
     assert {:ok, payload} = Codec.encode(:binary.copy(<<1_000::little-signed-16>>, 160))
+    admitted_at = System.monotonic_time(:millisecond) - 10
+    source_epoch = make_ref()
 
     event =
       struct!(Vxpipe.CallEngine.Telephony.Event, %{
@@ -206,12 +208,17 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
           channels: 1,
           sequence_number: 1,
           timestamp: 160,
-          payload: payload
+          payload: payload,
+          received_at: admitted_at,
+          source_epoch: source_epoch
         }
       })
 
     assert {:reply, :ok, state} = MediaSession.handle_call({:event, self(), event}, nil, state)
-    assert_receive {:vxpipe_sts_input, ^ingress, ref, %{sample_rate: 16_000}, 0}
+    assert_receive {:vxpipe_sts_input, ^ingress, ref, converted, 0}
+    assert converted.sample_rate == 16_000
+    assert converted.received_at == admitted_at
+    assert converted.source_epoch == source_epoch
     ack(ingress, ref)
 
     denied = %Snapshot{

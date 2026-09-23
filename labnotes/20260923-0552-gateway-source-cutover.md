@@ -83,3 +83,33 @@ capture, ICE/DTLS buffering or TCP receipt-time semantics. The milestone now
 breaks the work into WebRTC, telephony and coordinated ordering/failure tests
 under its existing source-time task. The next step is focused red tests at
 each owning callback boundary; no hosted provider is involved.
+
+## Telephony provenance enabler
+
+Focused Twilio and Telnyx socket tests sent decoded media through the actual
+asynchronous Leg dispatch, with Twilio's Leg suspended until both start and
+media requests were queued. Both initially failed on missing `received_at` in
+the media packet. A Gateway MediaSession/STS-input test then failed because
+the delivered frame's `received_at` was assigned during MediaSession handling,
+not retained from its packet (observed values differed by 12 ms in the first
+red run). These are local callback/queue reproductions, not live WebSocket
+arrival proofs.
+
+`MediaPacket` now carries optional paired, validated monotonic `received_at`
+and private `source_epoch` evidence. Both WebSock callbacks stamp the pair
+before SocketDispatch; MediaSession preserves it in `AudioFrame`, including
+through telephony STS conversion. Direct project-owned events without the
+socket provenance retain the previous handler-time compatibility path.
+The focused Twilio/Telnyx/STS-input group passes 28/0 (seed 0). No source
+hold/arm API, raw-mailbox fence, stale-epoch rejection or room coordination
+exists yet; the milestone parent task stays unchecked.
+
+Astra xhigh read-only review reran the 28-test focused group and 13 in-memory
+probes (all green). The probes covered wire-field spoofing, paired packet/event
+validation, negative/zero monotonic times, default timebase, distinct socket
+epochs, stalled Leg delivery for both providers, wrong-owner rejection,
+PCMU/Opus conversion and legacy unstamped events. No actionable runtime
+defect was reproduced. Review found two inaccurate documentation phrases
+about the current telephony stamp point and which committed provider test
+suspends Leg; those were corrected. This review does not satisfy the open
+hold/reopen or native-socket acceptance tasks.

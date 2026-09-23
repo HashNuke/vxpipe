@@ -349,7 +349,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       sequence_number: media.sequence_number,
       timestamp: media.timestamp,
       payload: media.payload,
-      received_at: System.monotonic_time(:millisecond)
+      received_at: media.received_at || System.monotonic_time(:millisecond),
+      source_epoch: media.source_epoch
     }
   end
 

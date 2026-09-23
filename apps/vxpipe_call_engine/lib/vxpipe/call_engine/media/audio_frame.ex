@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.Media.AudioFrame do
     :payload,
     :received_at
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [source_epoch: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.Media.AudioFrame do
           sequence_number: non_neg_integer(),
           timestamp: non_neg_integer(),
           payload: binary(),
-          received_at: integer()
+          received_at: integer(),
+          source_epoch: nil | reference()
         }
 end

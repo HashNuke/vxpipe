@@ -55,6 +55,32 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocketTest do
                     }, ^source}
   end
 
+  test "media carries socket admission evidence through the Leg dispatcher", context do
+    assert {:ok, socket} =
+             TelephonyMediaSocket.init(%{
+               binding: context.binding,
+               media_clock: fn -> 2_000 end
+             })
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(start_message()), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media_started}, _source}
+
+    assert {:ok, _socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(media_message()), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media} = event, _source}
+    assert Map.fetch!(event.media, :received_at) == 2_000
+    assert Map.fetch!(event.media, :source_epoch) == socket.source_epoch
+  end
+
   test "closes on a frame that does not belong to the pinned call", context do
     invalid = put_in(start_message(), ["start", "call_control_id"], "call-control-other")
 
