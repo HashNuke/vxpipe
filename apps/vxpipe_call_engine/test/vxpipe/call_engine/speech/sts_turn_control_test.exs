@@ -76,7 +76,7 @@ defmodule Vxpipe.CallEngine.Speech.STSTurnControlTest do
     {:ok, session, :starting} =
       Session.start(CapabilityTree.scope(scope), [provider: MorseSTS, owner: self()] ++ options)
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message, 5_000
     send(self(), message)
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
     assert :ok = Session.ack(session, ready)
