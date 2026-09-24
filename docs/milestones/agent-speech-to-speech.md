@@ -979,11 +979,13 @@ the existing audio round trip. Record discoveries here before implementing.
                           own cutover deadline all fail closed and retire the
                           allocation. Evidence: the compiled-room cases in
                           `sts_transcript_modes_test.exs`.
-                        - [ ] Cover overlapping transfer hold in the compiled
+                        - [x] Cover overlapping transfer hold in the compiled
                           room: a transfer hold taken during a policy cutover
-                          must prevent arm until the transfer releases, and a
-                          transfer release must not clear an independent policy
-                          hold.
+                          prevents arm until the transfer releases, and the
+                          transfer release lets the same cutover arm and reopen.
+                          An overlapping transfer hold no longer overwrites the
+                          in-flight cutover reason. Evidence: the compiled-room
+                          case in `sts_transcript_modes_test.exs`.
                           - [x] For provider-controlled caller STT, red-test a
                             delayed old-generation onset/final arriving after a
                             same-capability provider session rotates. The room

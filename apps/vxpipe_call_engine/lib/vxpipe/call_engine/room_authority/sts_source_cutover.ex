@@ -22,8 +22,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSSourceCutover do
         else: cutover
 
     if reason == :transfer do
+      # An overlapping transfer hold blocks arm without discarding the reason
+      # of the cutover already in flight.
       holds = MapSet.put(cutover.holds, :transfer)
-      cutover = %{cutover | holds: holds, release_requested?: false, reason: :transfer}
+      cutover = %{cutover | holds: holds, release_requested?: false}
       state = %{state | source_cutover: cutover}
 
       if cutover.phase == :held,

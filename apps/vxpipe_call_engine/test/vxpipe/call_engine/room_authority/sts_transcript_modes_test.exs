@@ -382,6 +382,74 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert :sys.get_state(context.authority).speech_to_speech_capability == nil
   end
 
+  test "provider-controlled room defers arm while an overlapping transfer holds" do
+    context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    fixture = connection.pid
+
+    privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+    assert {:ok, _policy} =
+             MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+    assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
+
+    # A transfer takes an independent hold while the policy cutover is in flight.
+    :sys.replace_state(context.authority, &SpeechToSpeech.hold(&1, :transfer))
+
+    receipt = %{
+      attachment: hold_scope.attachment,
+      token: hold_scope.token,
+      receiver: self(),
+      old_epoch: make_ref(),
+      held_epoch: make_ref()
+    }
+
+    assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, receipt})
+
+    # The fresh STT generation becomes ready, but arm waits for the transfer.
+    ready = await_cutover_held(context.authority)
+    assert ready.source_cutover.phase == :held
+    assert MapSet.member?(ready.source_cutover.holds, :transfer)
+    assert ready.source_cutover.stt_ready?
+    refute_receive {:test_sts_source_arm, ^fixture, _}, 300
+    assert :sys.get_state(context.ingress).open? == false
+
+    # Releasing the transfer lets the exact arm acknowledgement reopen input.
+    :sys.replace_state(context.authority, &SpeechToSpeech.release/1)
+
+    assert_receive {:test_sts_source_arm, ^fixture, arm_scope}, 5_000
+
+    assert :ok =
+             TestTransferConnection.complete_source_arm(fixture, {:ok, arm_scope.active_epoch})
+
+    reopened =
+      Enum.reduce_while(1..200, nil, fn _, _ ->
+        state = :sys.get_state(context.authority)
+
+        if state.source_cutover == nil,
+          do: {:halt, state},
+          else: {:cont, nil}
+      end)
+
+    assert is_map(reopened)
+    assert :sys.get_state(context.ingress).open? == true
+  end
+
+  defp await_cutover_held(authority) do
+    Enum.reduce_while(1..200, nil, fn _, _ ->
+      case :sys.get_state(authority).source_cutover do
+        %{phase: :held, stt_ready?: true} = _cutover -> {:halt, :sys.get_state(authority)}
+        _pending -> {:cont, nil}
+      end
+    end)
+    |> case do
+      %{source_cutover: %{phase: :held, stt_ready?: true}} = state -> state
+      _pending -> flunk("source cutover did not reach a ready held state")
+    end
+  end
+
   defp await_failed_cutover(authority) do
     Enum.reduce_while(1..200, nil, fn _, _ ->
       case :sys.get_state(authority).source_cutover do

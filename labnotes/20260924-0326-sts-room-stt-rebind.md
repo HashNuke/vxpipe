@@ -84,5 +84,11 @@ separate unfinished items.
   ingress files pass 55/0 on seeds 0 and 1; the full Call Engine child suite
   passes 1,511/0 (30 excluded, seed 0). The ten-call measured lane passes in
   25.3s across `llm_tts`, `sts_provider` and `sts_output_stt`.
-- [ ] Overlapping transfer hold, external/hybrid transfer overlap, telephony
-  cutover, independent review and final umbrella gates remain open.
+- [x] Overlapping transfer hold: a `SpeechToSpeech.hold(state, :transfer)`
+  taken while a policy cutover is in flight adds a hold without overwriting the
+  cutover reason, blocks arm even after the fresh STT generation is ready, and
+  arms only when the transfer releases. Transcript-mode plus ingress files pass
+  56/0 on seeds 0 and 1; the full Call Engine child suite passes 1,512/0 (30
+  excluded, seed 0). The ten-call measured lane passes in 25.3s.
+- [ ] External/hybrid transfer overlap, telephony cutover, independent review
+  and final umbrella gates remain open.
