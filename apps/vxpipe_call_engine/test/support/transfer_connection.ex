@@ -17,7 +17,7 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
       ExUnit.Callbacks.start_supervised!(
         {__MODULE__,
          [command: command, output: output, observer: self()] ++
-           Keyword.take(options, [:input_track])},
+           Keyword.take(options, [:input_track, :source_control?])},
         id: {__MODULE__, command.connection_id}
       )
 
@@ -25,6 +25,12 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   end
 
   def run(command, callback), do: GenServer.call(name(command), {:run, callback})
+
+  def complete_source_hold(connection, result),
+    do: GenServer.call(connection, {:complete_source_hold, result})
+
+  def complete_source_arm(connection, result),
+    do: GenServer.call(connection, {:complete_source_arm, result})
 
   def attachment(command), do: GenServer.call(name(command), :attachment)
 
@@ -136,6 +142,9 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
      %{
        command: command,
        observer: Keyword.fetch!(options, :observer),
+       source_control?: Keyword.get(options, :source_control?, false),
+       source_hold_from: nil,
+       source_arm_from: nil,
        defer_readiness?: false,
        pending_readiness: nil,
        defer_adoption?: false,
@@ -166,13 +175,37 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
 
   @impl true
   def handle_call(:attach, _from, state) do
-    case CallEngine.attach_connection(state.command, state.binding.output) do
+    case CallEngine.attach_connection(
+           state.command,
+           state.binding.output,
+           state.source_control?
+         ) do
       {:ok, attachment} ->
         {:reply, {:ok, attachment}, put_in(state.binding.attachment, attachment)}
 
       error ->
         {:reply, error, state}
     end
+  end
+
+  def handle_call({:vxpipe_sts_source_hold, scope}, from, state) do
+    send(state.observer, {:test_sts_source_hold, self(), scope})
+    {:noreply, %{state | source_hold_from: from}}
+  end
+
+  def handle_call({:vxpipe_sts_source_arm, scope}, from, state) do
+    send(state.observer, {:test_sts_source_arm, self(), scope})
+    {:noreply, %{state | source_arm_from: from}}
+  end
+
+  def handle_call({:complete_source_hold, result}, _from, state) do
+    if state.source_hold_from, do: GenServer.reply(state.source_hold_from, result)
+    {:reply, :ok, %{state | source_hold_from: nil}}
+  end
+
+  def handle_call({:complete_source_arm, result}, _from, state) do
+    if state.source_arm_from, do: GenServer.reply(state.source_arm_from, result)
+    {:reply, :ok, %{state | source_arm_from: nil}}
   end
 
   def handle_call({:run, callback}, _from, state), do: {:reply, callback.(), state}

@@ -986,15 +986,25 @@ the existing audio round trip. Record discoveries here before implementing.
                             published `ParticipantTurnStarted` for the stale
                             signal; the generation fence now rejects it. The
                             29-test transcript-mode room file passes seeds 0 and 1.
-                          - [ ] Add a compiled provider-controlled room case
+                          - [x] Add a compiled provider-controlled room case
                             with selected caller STT and an exact room-owned
-                            WebRTC source-control peer. Invalidate its captured
-                            native generation; prove hold request, both input
-                            closures, old STT retirement, fresh provider
-                            readiness/origin binding, arm acknowledgement,
-                            exact source epoch reopen, old-signal rejection and
-                            a fresh caller transcript. Test wrong and delayed
-                            acknowledgements without sleeping.
+                            source-control peer. Invalidate its captured native
+                            generation; prove the hold request, both input
+                            closures, in-place provider session replacement,
+                            fresh allocation-generation binding, arm
+                            acknowledgement, exact source-epoch reopen,
+                            old-signal rejection and a fresh caller
+                            transcript. The embedded `TestTransferConnection`
+                            now exposes the hold/arm acknowledgement barrier.
+                            Evidence: `sts_transcript_modes_test.exs`
+                            (29 tests, seeds 0 and 1) and the full Call Engine
+                            child suite (1,507/0, 30 excluded, seed 0).
+                          - [ ] Cover wrong/stale and delayed source hold/arm
+                            acknowledgements in the compiled room without
+                            sleeping: a mismatched receipt/token, an expired
+                            arm and a reply arriving after the room has failed
+                            closed must leave both input lanes closed and the
+                            STS allocation unavailable.
                         - [ ] Implement one bounded, room-owned source-cutover
                           state machine. Preserve current policy checks and
                           selected caller transcription when STS itself is

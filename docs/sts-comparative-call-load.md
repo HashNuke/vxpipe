@@ -141,7 +141,8 @@ capacity.
 ## Source-cutover checkpoint recheck — 2026-09-24
 
 After the RoomAuthority/Gateway source-control changes, `bin/sts-call-load
-measured` passes all three modes (three tests, zero failures) in 25.4 seconds.
+measured` passes all three modes (three tests, zero failures) in 25.4 seconds;
+a later selected-STT generation-fence rerun passes in 25.2 seconds.
 Each mode holds ten ready calls, completes 29 turns, interrupts ten, retains
 nine healthy post-fault survivors, cleans all ten calls, and reports no errors.
 The host is x86-64 with four logical CPUs and 7,750 MiB RAM; the lane uses two

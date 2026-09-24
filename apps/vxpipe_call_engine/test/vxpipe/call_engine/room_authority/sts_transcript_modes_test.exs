@@ -119,6 +119,123 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
            |> Map.fetch!(:turn) == nil
   end
 
+  test "provider-controlled room retires and rebinds selected caller STT across a source cutover" do
+    context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    old_capability = connection.speech_to_text.capability
+    old_ingress = connection.speech_to_text.ingress
+    fixture = connection.pid
+
+    assert {:ok, %{allocation_generation: old_generation}} =
+             SpeechToText.input_binding(old_capability)
+
+    privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+    # A transcript-interval change rotates the selected STT origin and asks the
+    # room to cut its exact source connection over.
+    assert {:ok, _policy} =
+             MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+    assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
+    assert hold_scope.attachment == connection.room_monitor
+
+    # Both input lanes are closed before the recognizer is retired.
+    assert :closed == :sys.get_state(old_ingress).opening_input_admission
+    assert :sys.get_state(context.ingress).open? == false
+
+    receipt = %{
+      attachment: hold_scope.attachment,
+      token: hold_scope.token,
+      receiver: self(),
+      old_epoch: make_ref(),
+      held_epoch: make_ref()
+    }
+
+    assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, receipt})
+
+    # The room retires the old recognizer, waits for the fresh ready generation,
+    # and only then asks the source to arm.
+    assert_receive {:test_sts_source_arm, ^fixture, arm_scope}, 5_000
+    assert arm_scope.attachment == hold_scope.attachment
+    assert arm_scope.token == hold_scope.token
+    assert arm_scope.receipt == receipt
+    assert is_reference(arm_scope.active_epoch)
+
+    assert :ok =
+             TestTransferConnection.complete_source_arm(fixture, {:ok, arm_scope.active_epoch})
+
+    reopened =
+      Enum.reduce_while(1..200, nil, fn _, _ ->
+        state = :sys.get_state(context.authority)
+
+        case state.speech_to_speech_capability do
+          %{ingress: ingress, input_epoch: epoch}
+          when is_pid(ingress) and is_reference(epoch) ->
+            if state.source_cutover == nil,
+              do: {:halt, state},
+              else: {:cont, nil}
+
+          _pending ->
+            {:cont, nil}
+        end
+      end)
+
+    assert is_map(reopened)
+
+    fresh_connection = Map.fetch!(reopened.connections, context.command.connection_id)
+    fresh_capability = fresh_connection.speech_to_text.capability
+    fresh_ingress = fresh_connection.speech_to_text.ingress
+
+    # A transcript-interval policy change replaces the capability's provider
+    # session in place; the room waits for that fresh allocation before arming.
+    assert fresh_ingress == old_ingress
+
+    assert {:ok, %{allocation_generation: fresh_generation}} =
+             SpeechToText.input_binding(fresh_capability)
+
+    assert fresh_generation != old_generation
+    assert :open == :sys.get_state(fresh_ingress).opening_input_admission
+    assert :sys.get_state(fresh_ingress).source_epoch == arm_scope.active_epoch
+    assert :sys.get_state(context.ingress).open? == true
+
+    # A delayed signal from the retired generation cannot open a caller turn.
+    old_signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: 200,
+      allocation_generation: old_generation,
+      turn_ref: make_ref(),
+      provider_turn_index: 0,
+      policy_revision: :sys.get_state(old_capability).policy_revision,
+      text: "OLD"
+    }
+
+    identity =
+      Map.take(fresh_connection.attach_command, [
+        :tenant_id,
+        :room_id,
+        :incarnation_id,
+        :participant_id,
+        :connection_id
+      ])
+
+    send(context.authority, {:vxpipe_stt_signal, old_capability, identity, old_signal})
+    _ = :sys.get_state(context.authority)
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+
+    # A fresh caller turn publishes exactly one caller pair and one agent reply.
+    fresh =
+      context
+      |> Map.put(:attachment, TestTransferConnection.attachment(context.command))
+      |> Map.put(:source_epoch, arm_scope.active_epoch)
+
+    push_sts(fresh)
+    push_selected_stt(fresh)
+    assert_caller_text(context)
+    output = collect_output(context.sink, [])
+    settle_and_assert_reply(context, output)
+  end
+
   test "delayed human recognition onset cannot interrupt a newer provider-driven reply" do
     context = room(true, false)
     assert :ok = :sys.suspend(context.authority)
@@ -755,7 +872,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
          tools \\ %{},
          provider \\ :morse,
          turn_control \\ "provider",
-         recording_toggle? \\ false
+         recording_toggle? \\ false,
+         source_control? \\ false
        ) do
     plan = compile_plan(human_stt?, output_stt?, tools, turn_control, recording_toggle?)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -776,7 +894,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink, input_track: @track)
+    assert {:ok, _attachment} =
+             TestTransferConnection.attach(command, sink,
+               input_track: @track,
+               source_control?: source_control?
+             )
+
     wire = google_ready(provider)
     TestCallStartup.await_ready(plan.room_id)
     attachment = TestTransferConnection.attachment(command)
@@ -854,7 +977,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
     assert :ok =
              TestTransferConnection.run(context.command, fn ->
-               CallEngine.push_audio(context.attachment, frame(context, context.pcm, 0))
+               CallEngine.push_audio(context.attachment, stt_frame(context, context.pcm, 0))
              end)
   end
 
@@ -863,7 +986,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       Enum.reduce_while(1..100, nil, fn _, _ ->
         result =
           TestTransferConnection.run(context.command, fn ->
-            CallEngine.push_audio(context.attachment, frame(context, context.pcm, sequence))
+            CallEngine.push_audio(context.attachment, stt_frame(context, context.pcm, sequence))
           end)
 
         if result == {:error, :stale_frame}, do: {:cont, result}, else: {:halt, result}
@@ -871,6 +994,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
     assert result == :ok
   end
+
+  defp stt_frame(context, pcm, sequence),
+    do: frame(context, pcm, sequence, Map.get(context, :source_epoch))
 
   defp push_sts(context, sequence_offset \\ 0) do
     for {chunk, sequence} <-
@@ -900,7 +1026,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     end
   end
 
-  defp frame(context, pcm, sequence) do
+  defp frame(context, pcm, sequence, source_epoch \\ nil) do
     identity =
       Map.take(context.command, [
         :tenant_id,
@@ -918,6 +1044,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
           payload: pcm,
           sequence_number: sequence,
           timestamp: sequence * 160,
+          source_epoch: source_epoch,
           received_at: System.monotonic_time(:millisecond)
         })
       )

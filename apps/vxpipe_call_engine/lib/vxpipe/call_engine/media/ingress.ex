@@ -184,6 +184,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
        total_bytes: 0,
        sts_target: Keyword.get(options, :sts_target),
        activity_agent_id: Keyword.get(options, :activity_agent_id),
+       origin_notifier: Keyword.get(options, :origin_notifier, Keyword.get(options, :owner)),
        audio_origin: nil
      }}
   end
@@ -221,7 +222,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   def handle_call(
         {:open_source_epoch, epoch},
         _from,
-        %{source_cutover?: true, source_cutover_pending?: true} = state
+        %{source_cutover?: true} = state
       ) do
     cutoff = if state.activity_agent_id, do: later_cutoff(state.source_cutoff_at, state.clock.())
 
@@ -236,7 +237,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   def handle_call({:open_source_epoch, _epoch}, _from, state),
-    do: {:reply, {:error, :source_cutover_not_pending}, state}
+    do: {:reply, {:error, :source_cutover_disabled}, state}
 
   def handle_call(:enable_source_cutover, _from, state),
     do: {:reply, :ok, %{state | source_cutover?: true}}
@@ -324,8 +325,8 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
           end
 
         if source_origin_changed? do
-          send(
-            state.owner,
+          notify_origin(
+            state.origin_notifier,
             {:vxpipe_stt_source_origin_invalidated, self(), state.identity, previous_origin,
              snapshot.revision, previous_generation}
           )
@@ -631,6 +632,9 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   defp notify_owner(_owner, _message), do: :ok
+
+  defp notify_origin(notifier, message) when is_pid(notifier), do: send(notifier, message)
+  defp notify_origin(_notifier, _message), do: :ok
 
   defp forward_sts_audio(%{sts_target: nil}, _frame), do: :ok
 

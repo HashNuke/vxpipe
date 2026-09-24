@@ -198,7 +198,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         incarnation_id: incarnation_id,
         connection_id: command.connection_id,
         capability_options: capability_options,
-        ingress_options: identity ++ media_ingress_options
+        ingress_options: identity ++ [origin_notifier: room_authority] ++ media_ingress_options
       ]
 
       result =

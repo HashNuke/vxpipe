@@ -43,12 +43,33 @@ separate unfinished items.
   The 29-test transcript-mode room file passes on seeds 0 and 1. A delayed
   same-capability STT event can no longer create a public caller turn after
   session replacement.
-- [ ] Red/green compiled-room hold, fresh native binding and source-arm sequence
-  with selected caller STT; prove rebind and fresh PCM under the acknowledged
-  source epoch while preserving caller transcripts when STS is unavailable.
-- [x] Re-run the ten-call measured lane after this runtime change. All three
-  modes pass (3 tests, 0 failures) in 25.4 seconds; each records 29 turns, ten
-  interruptions, nine healthy survivors, and cleanup of all ten calls. Updated
-  reports are in `20260924-0219-room-source-cutover-load.jsonl`. The embedded
-  lane does not exercise this human-STT generation fence or WebRTC source cutover.
-- [ ] Commit this focused STT evidence slice after root static checks.
+- [x] Compiled-room hold, fresh native binding and source-arm sequence with
+  selected caller STT. A transcript-interval policy change rotates the source
+  origin; the room closes both input lanes, sends a correlated hold to the exact
+  source-control peer, waits for the fresh provider allocation generation,
+  validates the receipt/token/attachment, arms, and reopens both lanes under the
+  acknowledged source epoch. A delayed old-generation signal cannot open a
+  caller turn, and a fresh caller turn still publishes exactly one caller pair
+  and one `RECEIVED HI` reply.
+- [x] The embedded `TestTransferConnection` now exposes a real hold/arm
+  acknowledgement barrier (`complete_source_hold/2`, `complete_source_arm/2`)
+  and threads `source_control?: true` into `CallEngine.attach_connection/3`.
+  `Ingress` gained an explicit `:origin_notifier` (defaulting to `:owner` for
+  test compatibility) so the source-origin invalidation reaches RoomAuthority
+  instead of the media-drop observer. `Ingress.open/2` now accepts an explicit
+  source epoch whenever source cutover is enabled, which a freshly created
+  selected ingress needs.
+- [x] Focused evidence: transcript-mode room file plus ingress file pass 51/0 on
+  seeds 0 and 1; full Call Engine child suite passes 1,507/0 (30 excluded,
+  seed 0). Full Gateway child run is not claimed here.
+- [x] Re-run the ten-call measured lane after the rebind runtime change. All
+  three modes pass (3 tests, 0 failures) in 25.2 seconds; each records 29 turns,
+  ten interruptions, nine healthy survivors, and cleanup of all ten calls.
+  Updated reports are in `20260924-0219-room-source-cutover-load.jsonl`. The
+  embedded lane does not exercise this human-STT generation fence or WebRTC
+  source cutover.
+- [x] Root format check, warnings-as-errors compile, strict Credo (1,105 source
+  files, no issues) and unused-dependency check pass.
+- [ ] Wrong/stale and delayed hold/arm acknowledgements in the compiled room
+  remain open, along with external/hybrid transfer overlap, telephony cutover,
+  independent review and final umbrella gates.
