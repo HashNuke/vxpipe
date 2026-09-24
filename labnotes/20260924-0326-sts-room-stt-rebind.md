@@ -77,5 +77,12 @@ separate unfinished items.
   53/0 on seeds 0 and 1, and the full Call Engine child suite passes 1,509/0
   (30 excluded, seed 0). A `nil` `policy_from` reply crash found by the first
   red is fixed with a pid guard. The ten-call measured lane passes in 25.4s.
-- [ ] External/hybrid transfer overlap, telephony cutover, independent review
-  and final umbrella gates remain open.
+- [x] Source loss and deadline fail closed: killing the source connection
+  during the hold and injecting the room's own cutover deadline both retire the
+  STS allocation, tear down the owning ingress tree (connection loss) or keep
+  it closed (deadline), and reject a late acknowledgement. Transcript-mode plus
+  ingress files pass 55/0 on seeds 0 and 1; the full Call Engine child suite
+  passes 1,511/0 (30 excluded, seed 0). The ten-call measured lane passes in
+  25.3s across `llm_tts`, `sts_provider` and `sts_output_stt`.
+- [ ] Overlapping transfer hold, external/hybrid transfer overlap, telephony
+  cutover, independent review and final umbrella gates remain open.

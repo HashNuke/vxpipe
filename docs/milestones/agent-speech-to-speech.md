@@ -969,13 +969,21 @@ the existing audio round trip. Record discoveries here before implementing.
                           Gateway tests prove the actual receiver barriers.
                           Real RoomAuthority-owner, timeout, stale/late reply
                           and connection-loss integration reds remain open below.
-                        - [ ] Red-test real RoomAuthority coordination for
+                        - [x] Red-test real RoomAuthority coordination for
                           correlated asynchronous hold/arm, ingress close,
                           old-allocation retirement, fresh-generation binding,
                           and reopen only after exact arm acknowledgement.
                           Use barriers and fake source acknowledgements, not
-                          sleeps. Include wrong/late replies, Connection DOWN,
-                          deadlines and overlapping transfer hold.
+                          sleeps. Wrong/stale replies, a rejected arm,
+                          source-connection loss during the hold and the room's
+                          own cutover deadline all fail closed and retire the
+                          allocation. Evidence: the compiled-room cases in
+                          `sts_transcript_modes_test.exs`.
+                        - [ ] Cover overlapping transfer hold in the compiled
+                          room: a transfer hold taken during a policy cutover
+                          must prevent arm until the transfer releases, and a
+                          transfer release must not clear an independent policy
+                          hold.
                           - [x] For provider-controlled caller STT, red-test a
                             delayed old-generation onset/final arriving after a
                             same-capability provider session rotates. The room

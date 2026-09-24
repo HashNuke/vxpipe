@@ -314,6 +314,74 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert_receive {:DOWN, ^capability_monitor, :process, _, _}, 2_000
   end
 
+  test "provider-controlled room fails closed when the source connection dies during cutover" do
+    context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    old_ingress = connection.speech_to_text.ingress
+    fixture = connection.pid
+    capability_monitor = Process.monitor(context.capability)
+    ingress_monitor = Process.monitor(old_ingress)
+
+    privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+    assert {:ok, _policy} =
+             MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+    assert_receive {:test_sts_source_hold, ^fixture, _hold_scope}, 5_000
+
+    # The source dies before it acknowledges the hold; the owning tree tears
+    # down and the cutover retires the allocation.
+    Process.exit(fixture, :kill)
+
+    failed = await_failed_cutover(context.authority)
+
+    assert failed.source_cutover.failure == :connection_unavailable
+    assert failed.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^capability_monitor, :process, _, _}, 2_000
+    assert_receive {:DOWN, ^ingress_monitor, :process, _, _}, 2_000
+  end
+
+  test "provider-controlled room fails closed when the source hold deadline elapses" do
+    context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    old_ingress = connection.speech_to_text.ingress
+    fixture = connection.pid
+    capability_monitor = Process.monitor(context.capability)
+
+    privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+    assert {:ok, _policy} =
+             MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+    assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
+
+    # Deliver the room's own cutover deadline instead of waiting it out.
+    send(context.authority, {:vxpipe_sts_source_cutover_timeout, hold_scope.token})
+
+    failed = await_failed_cutover(context.authority)
+
+    assert failed.source_cutover.failure == :deadline_elapsed
+    assert failed.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^capability_monitor, :process, _, _}, 2_000
+    assert :closed == :sys.get_state(old_ingress).opening_input_admission
+
+    # A late acknowledgement cannot reopen the closed lanes.
+    receipt = %{
+      attachment: hold_scope.attachment,
+      token: hold_scope.token,
+      receiver: self(),
+      old_epoch: make_ref(),
+      held_epoch: make_ref()
+    }
+
+    assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, receipt})
+    _ = :sys.get_state(context.authority)
+    assert :closed == :sys.get_state(old_ingress).opening_input_admission
+    assert :sys.get_state(context.authority).speech_to_speech_capability == nil
+  end
+
   defp await_failed_cutover(authority) do
     Enum.reduce_while(1..200, nil, fn _, _ ->
       case :sys.get_state(authority).source_cutover do
