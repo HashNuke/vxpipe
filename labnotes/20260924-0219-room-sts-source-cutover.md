@@ -59,8 +59,9 @@ room reds.
   two BEAM schedulers. Full machine-readable `CALL_LOAD_JSON` records are in
   `20260924-0219-room-source-cutover-load.jsonl`. This fixture load exercises
   embedded room calls, not Gateway WebRTC source cutover.
-- [ ] Commit this vertical slice. Continue the remaining room acceptance as a
-  separate checkpoint: prove transfer/policy overlap, native STT retirement and
-  fresh ready-generation binding through the real RoomAuthority lifecycle,
-  transcription-only recovery while STS is retired, stale/late evidence and
-  owner/timeout failure cases. Telephony cutover remains separate.
+- [x] Commit this vertical slice as `b9075c39`. Continue the remaining room
+  acceptance as a separate checkpoint: prove transfer/policy overlap, native
+  STT retirement and fresh ready-generation binding through the real
+  RoomAuthority lifecycle, transcription-only recovery while STS is retired,
+  stale/late evidence and owner/timeout failure cases. Telephony cutover remains
+  separate.

@@ -48,6 +48,7 @@ remains open.
 2026-09-24 source-cutover checkpoint: the room-owned async hold/arm protocol,
 selected STT origin invalidation, and exact source-epoch ingress admission now
 have focused evidence; the ten-call local measured lane passes all three modes.
+This vertical slice is committed as `b9075c39`.
 Room lifecycle proof for selected-STT retirement and fresh-generation release,
 policy/transfer overlap acceptance, telephony source cutover, rendered UI,
 independent review, and final root gates remain open. The milestone index stays
