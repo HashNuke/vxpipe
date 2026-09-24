@@ -1032,6 +1032,22 @@ the existing audio round trip. Record discoveries here before implementing.
                           across both barriers, policy enforcer ordering and
                           transcription-only recovery. Leave telephony raw
                           source cutover and full milestone acceptance open.
+                          - [ ] Reconcile external/hybrid `OriginRecovery` with
+                            the room source cutover. A read-only probe on a
+                            source-control external-mode room showed that a
+                            policy rotation runs `OriginRecovery`, which stops
+                            the STS capability (`speech_to_speech_capability:
+                            nil`, `speech_to_speech_recovery` set) while
+                            `STSSourceCutover` is still `:holding`; the cutover
+                            then cannot reach a ready `:held` state or arm.
+                            Make the two paths one owner: when a source cutover
+                            is active, `OriginRecovery` must not independently
+                            stop/recover the allocation, and the cutover must
+                            drive the external/hybrid recovery after the fresh
+                            STT origin and arm acknowledgement. Add a compiled
+                            external/hybrid + source-control red before the
+                            repair. This is a design/implementation task, not
+                            yet reproduced as a committed regression.
                         - [x] Run the existing ten-concurrent-call local
                           measured lane after the runtime change; retain its
                           reports with the checkpoint evidence. The embedded

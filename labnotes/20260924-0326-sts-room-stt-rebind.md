@@ -90,5 +90,13 @@ separate unfinished items.
   arms only when the transfer releases. Transcript-mode plus ingress files pass
   56/0 on seeds 0 and 1; the full Call Engine child suite passes 1,512/0 (30
   excluded, seed 0). The ten-call measured lane passes in 25.3s.
+- [ ] External/hybrid + source-control interaction (discovered, not yet a
+  committed regression). A read-only probe of an external-mode source-control
+  room after a transcript-interval rotation showed `source_cutover` still
+  `:holding` with `speech_to_speech_capability: nil` and
+  `speech_to_speech_recovery` set: `OriginRecovery` independently stopped the
+  STS capability, so the source cutover can never reach a ready `:held` state or
+  arm. Recorded in the milestone as a design/implementation task. Provider-mode
+  source cutover is unaffected and covered above.
 - [ ] External/hybrid transfer overlap, telephony cutover, independent review
   and final umbrella gates remain open.
