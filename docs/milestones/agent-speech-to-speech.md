@@ -1032,22 +1032,28 @@ the existing audio round trip. Record discoveries here before implementing.
                           across both barriers, policy enforcer ordering and
                           transcription-only recovery. Leave telephony raw
                           source cutover and full milestone acceptance open.
-                          - [ ] Reconcile external/hybrid `OriginRecovery` with
-                            the room source cutover. A read-only probe on a
-                            source-control external-mode room showed that a
-                            policy rotation runs `OriginRecovery`, which stops
-                            the STS capability (`speech_to_speech_capability:
-                            nil`, `speech_to_speech_recovery` set) while
-                            `STSSourceCutover` is still `:holding`; the cutover
-                            then cannot reach a ready `:held` state or arm.
-                            Make the two paths one owner: when a source cutover
-                            is active, `OriginRecovery` must not independently
-                            stop/recover the allocation, and the cutover must
-                            drive the external/hybrid recovery after the fresh
-                            STT origin and arm acknowledgement. Add a compiled
-                            external/hybrid + source-control red before the
-                            repair. This is a design/implementation task, not
-                            yet reproduced as a committed regression.
+                          - [x] Repair the external/hybrid source-control
+                            cutover. The compiled red showed the hold was
+                            acknowledged but no arm ever arrived. Root cause was
+                            not an ownership conflict: when a cutover already
+                            existed and the reason was not `:transfer`,
+                            `STSSourceCutover.hold/3` computed the refreshed
+                            `old_stt_generation` from the ingress invalidation
+                            but returned the unchanged state, dropping it. The
+                            STS capability's `OriginRecovery` had already
+                            created the cutover with the post-rotation
+                            generation, so the fresh `:connected` was rejected
+                            as stale and the cutover stalled at `:held`. The
+                            `else` branch now persists the refreshed cutover.
+                            External and hybrid source-control rooms complete
+                            the full hold → reclaim/recreate STS capability →
+                            fresh STT generation → arm → reopen sequence and
+                            publish one caller pair and one `RECEIVED HI`
+                            reply. Evidence: two compiled cases in
+                            `sts_transcript_modes_test.exs`, 58 focused tests
+                            with the ingress file on seeds 0 and 1, and the
+                            full Call Engine child suite 1,514/0 (30 excluded,
+                            seed 0).
                         - [x] Run the existing ten-concurrent-call local
                           measured lane after the runtime change; retain its
                           reports with the checkpoint evidence. The embedded

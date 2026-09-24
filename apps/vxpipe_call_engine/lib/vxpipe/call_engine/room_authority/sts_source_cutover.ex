@@ -32,7 +32,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSSourceCutover do
         do: NativeInput.retire(cutover.connection_id, state),
         else: state
     else
-      state
+      # The ingress invalidation is authoritative for the retired generation;
+      # keep the refreshed cutover instead of dropping the update.
+      %{state | source_cutover: cutover}
     end
   end
 

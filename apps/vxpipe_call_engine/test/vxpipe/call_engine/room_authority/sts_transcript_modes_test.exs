@@ -236,6 +236,81 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     settle_and_assert_reply(context, output)
   end
 
+  for mode <- ["external", "hybrid"] do
+    test "#{mode} source-control room completes a policy cutover through to a fresh reply" do
+      context =
+        room(true, false, %{}, :morse, unquote(mode), :no_transcripts, true)
+
+      state = :sys.get_state(context.authority)
+      connection = Map.fetch!(state.connections, context.command.connection_id)
+      fixture = connection.pid
+
+      old_generation =
+        case SpeechToText.input_binding(connection.speech_to_text.capability) do
+          {:ok, %{allocation_generation: generation}} -> generation
+        end
+
+      privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+      assert {:ok, _policy} =
+               MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+      assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
+
+      # The ingress invalidation must win the retired-generation race even if
+      # the STS capability reports its own rotation first.
+      held = :sys.get_state(context.authority)
+      assert held.source_cutover.old_stt_generation == old_generation
+
+      receipt = %{
+        attachment: hold_scope.attachment,
+        token: hold_scope.token,
+        receiver: self(),
+        old_epoch: make_ref(),
+        held_epoch: make_ref()
+      }
+
+      assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, receipt})
+
+      assert_receive {:test_sts_source_arm, ^fixture, arm_scope}, 10_000
+
+      assert :ok =
+               TestTransferConnection.complete_source_arm(fixture, {:ok, arm_scope.active_epoch})
+
+      reopened =
+        Enum.reduce_while(1..400, nil, fn _, _ ->
+          s = :sys.get_state(context.authority)
+          if s.source_cutover == nil, do: {:halt, s}, else: {:cont, nil}
+        end)
+
+      assert is_map(reopened), "#{unquote(mode)} cutover did not reopen"
+
+      # External/hybrid retires and recreates the STS capability, so refresh
+      # the capability and ingress handles before exercising the fresh reply.
+      fresh_binding = reopened.speech_to_speech_capability
+
+      refute fresh_binding.pid == context.capability
+
+      assert {:ok, %{allocation_generation: fresh_generation}} =
+               SpeechToText.input_binding(connection.speech_to_text.capability)
+
+      assert fresh_generation != old_generation
+
+      fresh =
+        context
+        |> Map.put(:attachment, TestTransferConnection.attachment(context.command))
+        |> Map.put(:source_epoch, arm_scope.active_epoch)
+        |> Map.put(:capability, fresh_binding.pid)
+        |> Map.put(:ingress, fresh_binding.ingress)
+
+      push_sts(fresh)
+      push_selected_stt(fresh)
+      assert_caller_text(context)
+      output = collect_output(context.sink, [])
+      settle_and_assert_reply(%{context | capability: fresh.capability}, output)
+    end
+  end
+
   test "provider-controlled room fails closed on a mismatched source receipt" do
     context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
     state = :sys.get_state(context.authority)

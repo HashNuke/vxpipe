@@ -90,13 +90,18 @@ separate unfinished items.
   arms only when the transfer releases. Transcript-mode plus ingress files pass
   56/0 on seeds 0 and 1; the full Call Engine child suite passes 1,512/0 (30
   excluded, seed 0). The ten-call measured lane passes in 25.3s.
-- [ ] External/hybrid + source-control interaction (discovered, not yet a
-  committed regression). A read-only probe of an external-mode source-control
-  room after a transcript-interval rotation showed `source_cutover` still
-  `:holding` with `speech_to_speech_capability: nil` and
-  `speech_to_speech_recovery` set: `OriginRecovery` independently stopped the
-  STS capability, so the source cutover can never reach a ready `:held` state or
-  arm. Recorded in the milestone as a design/implementation task. Provider-mode
-  source cutover is unaffected and covered above.
+- [x] External/hybrid source-control cutover repaired. The initial diagnosis of
+  an `OriginRecovery` ownership conflict was wrong: the compiled red showed the
+  hold was acknowledged but no arm ever arrived. Root cause was
+  `STSSourceCutover.hold/3` dropping the refreshed `old_stt_generation` on the
+  non-`:transfer` existing-cutover branch. `OriginRecovery` had already created
+  the cutover with the post-rotation generation, so the fresh STT `:connected`
+  was rejected as stale and the cutover stalled at `:held`. The naive probe was
+  also misleading because it never acknowledged the source hold. Fix: return
+  `%{state | source_cutover: cutover}` in that branch. External and hybrid rooms
+  now complete hold → retire/recreate the STS capability → fresh STT generation
+  → arm → reopen and publish one caller pair and one `RECEIVED HI`. Focused
+  files pass 58/0 on seeds 0 and 1; full Call Engine child suite 1,514/0 (30
+  excluded, seed 0); ten-call measured lane passes in 25.4s.
 - [ ] External/hybrid transfer overlap, telephony cutover, independent review
   and final umbrella gates remain open.
