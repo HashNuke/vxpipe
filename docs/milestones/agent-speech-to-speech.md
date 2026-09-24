@@ -976,6 +976,25 @@ the existing audio round trip. Record discoveries here before implementing.
                           Use barriers and fake source acknowledgements, not
                           sleeps. Include wrong/late replies, Connection DOWN,
                           deadlines and overlapping transfer hold.
+                          - [x] For provider-controlled caller STT, red-test a
+                            delayed old-generation onset/final arriving after a
+                            same-capability provider session rotates. The room
+                            must validate `Signal.allocation_generation` against
+                            the current private STT binding in every transcript
+                            mode, without letting stale evidence open a caller
+                            turn or dispatch text. The compiled-room red first
+                            published `ParticipantTurnStarted` for the stale
+                            signal; the generation fence now rejects it. The
+                            29-test transcript-mode room file passes seeds 0 and 1.
+                          - [ ] Add a compiled provider-controlled room case
+                            with selected caller STT and an exact room-owned
+                            WebRTC source-control peer. Invalidate its captured
+                            native generation; prove hold request, both input
+                            closures, old STT retirement, fresh provider
+                            readiness/origin binding, arm acknowledgement,
+                            exact source epoch reopen, old-signal rejection and
+                            a fresh caller transcript. Test wrong and delayed
+                            acknowledgements without sleeping.
                         - [ ] Implement one bounded, room-owned source-cutover
                           state machine. Preserve current policy checks and
                           selected caller transcription when STS itself is

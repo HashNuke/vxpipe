@@ -368,27 +368,34 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
   defp current_native_signal?(%Signal{kind: kind} = signal, connection, state)
        when kind in [:turn_started, :transcript_updated, :turn_ended] do
-    if ActivityControl.mode(state) in ["external", "hybrid"] and
-         state.speech_to_speech_runtime != nil do
-      case SpeechToText.input_binding(connection.speech_to_text.capability) do
-        {:ok, %{audio_origin: origin}} when is_map(origin) ->
-          is_reference(signal.allocation_generation) and
-            is_reference(signal.turn_ref) and
-            signal.allocation_generation == origin.allocation_generation and
-            signal.audio_input_interval == origin.audio_input_interval and
-            signal.audio_output_interval == origin.audio_output_interval
-
-        _unavailable ->
-          false
-      end
-    else
+    if state.speech_to_speech_runtime == nil do
       true
+    else
+      with true <- is_reference(signal.allocation_generation),
+           {:ok, %{allocation_generation: generation, audio_origin: origin}} <-
+             SpeechToText.input_binding(connection.speech_to_text.capability),
+           true <- generation == signal.allocation_generation do
+        valid_activity_signal?(ActivityControl.mode(state), origin, signal)
+      else
+        _stale_or_unavailable -> false
+      end
     end
   catch
     :exit, _reason -> false
   end
 
   defp current_native_signal?(_signal, _connection, _state), do: true
+
+  defp valid_activity_signal?("provider", _origin, _signal), do: true
+
+  defp valid_activity_signal?(mode, origin, signal) when mode in ["external", "hybrid"] do
+    is_map(origin) and is_reference(signal.turn_ref) and
+      signal.allocation_generation == origin.allocation_generation and
+      signal.audio_input_interval == origin.audio_input_interval and
+      signal.audio_output_interval == origin.audio_output_interval
+  end
+
+  defp valid_activity_signal?(_mode, _origin, _signal), do: false
 
   defp transcript_source_policy(state, participant_id, nil) do
     EventPublisher.transcript_source_policy(state, participant_id)

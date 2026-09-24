@@ -76,6 +76,49 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     end
   end
 
+  test "provider-controlled room ignores a delayed caller signal from an old STT allocation" do
+    context = room(true, false)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    stt = connection.speech_to_text.capability
+
+    assert {:ok, %{allocation_generation: current_generation}} =
+             SpeechToText.input_binding(stt)
+
+    old_signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: 100,
+      allocation_generation: make_ref(),
+      turn_ref: make_ref(),
+      provider_turn_index: 0,
+      policy_revision: :sys.get_state(stt).policy_revision,
+      text: "OLD"
+    }
+
+    refute old_signal.allocation_generation == current_generation
+
+    identity =
+      Map.take(connection.attach_command, [
+        :tenant_id,
+        :room_id,
+        :incarnation_id,
+        :participant_id,
+        :connection_id
+      ])
+
+    send(context.authority, {:vxpipe_stt_signal, stt, identity, old_signal})
+    _ = :sys.get_state(context.authority)
+
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{}}
+    refute_received {:vxpipe_event, %ParticipantTranscription{}}
+
+    assert :sys.get_state(context.authority)
+           |> Map.fetch!(:connections)
+           |> Map.fetch!(context.command.connection_id)
+           |> Map.fetch!(:speech_to_text)
+           |> Map.fetch!(:turn) == nil
+  end
+
   test "delayed human recognition onset cannot interrupt a newer provider-driven reply" do
     context = room(true, false)
     assert :ok = :sys.suspend(context.authority)
