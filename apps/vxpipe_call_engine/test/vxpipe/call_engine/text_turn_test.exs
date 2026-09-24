@@ -67,6 +67,7 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
              CallEngine.attach_connection(attach_command)
 
     assert is_reference(room_monitor)
+    assert is_pid(attachment.room_authority)
     assert :disabled = CallEngine.room_audio_configuration(attachment)
 
     assert {:ok, send_command} =

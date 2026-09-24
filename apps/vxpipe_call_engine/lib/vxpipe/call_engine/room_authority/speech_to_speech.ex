@@ -41,6 +41,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, SpeechToSpeechRuntime}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State, STTAudioAdmission}
+  alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
   @spec bind_capability(State.t(), pid(), String.t(), String.t() | nil) :: State.t()
@@ -399,9 +400,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   end
 
   @spec hold(State.t()) :: State.t()
-  def hold(%State{speech_to_speech_capability: nil} = state), do: state
+  def hold(%State{} = state), do: hold(state, :transfer)
 
-  def hold(%State{} = state) do
+  def hold(%State{speech_to_speech_capability: nil} = state, reason),
+    do: STSSourceCutover.hold(state, reason)
+
+  def hold(%State{} = state, reason) when reason in [:transfer, :policy] do
+    state = STSSourceCutover.hold(state, reason)
     _ = Capability.hold(state.speech_to_speech_capability.pid)
 
     if ActivityControl.mode(state) in ["external", "hybrid"],
@@ -415,12 +420,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   end
 
   @spec release(State.t()) :: State.t()
-  def release(%State{speech_to_speech_capability: nil} = state), do: state
+  def release(%State{speech_to_speech_capability: nil, source_cutover: nil} = state),
+    do: state
 
-  def release(%State{speech_to_speech_capability: %{input_epoch: epoch}} = state)
+  def release(
+        %State{
+          speech_to_speech_capability: %{input_epoch: epoch},
+          source_cutover: nil
+        } = state
+      )
       when is_reference(epoch), do: state
 
   def release(%State{} = state) do
+    case STSSourceCutover.release(state) do
+      :not_applicable -> release_capability(state)
+      state -> state
+    end
+  end
+
+  defp release_capability(state) do
     epoch = make_ref()
 
     case Capability.release(state.speech_to_speech_capability.pid, epoch) do

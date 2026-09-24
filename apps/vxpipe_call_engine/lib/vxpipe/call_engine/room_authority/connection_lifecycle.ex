@@ -16,12 +16,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
+  alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
 
-  @spec attach(struct(), pid(), pid(), pid() | nil, reference(), State.t()) ::
+  @spec attach(struct(), pid(), pid(), pid() | nil, reference(), boolean(), State.t()) ::
           {:reply, {:ok, atom(), term()} | {:error, Error.t()}, State.t()}
-  def attach(command, caller, subscriber, output_sink, room_monitor, %State{} = state) do
+  def attach(
+        command,
+        caller,
+        subscriber,
+        output_sink,
+        room_monitor,
+        source_control?,
+        %State{} = state
+      ) do
     case authorize_attachment(command, caller, subscriber, state) do
-      :ok -> put(command, subscriber, output_sink, room_monitor, state)
+      :ok -> put(command, subscriber, output_sink, room_monitor, source_control?, state)
       {:error, error} -> {:reply, {:error, error}, state}
     end
   end
@@ -32,6 +41,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
           pid(),
           pid() | nil,
           reference(),
+          boolean(),
           String.t(),
           State.t()
         ) :: {:reply, tuple() | {:error, Error.t()}, State.t()}
@@ -41,6 +51,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         subscriber,
         output_sink,
         room_monitor,
+        source_control?,
         attempt_id,
         %State{} = state
       ) do
@@ -51,6 +62,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
           subscriber,
           output_sink,
           room_monitor,
+          source_control?,
           attempt_id,
           state
         )
@@ -219,6 +231,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     end
   end
 
+  def clear_speech_to_text_for_cutover(connection_id, %State{} = state),
+    do: clear_speech_to_text(connection_id, false, state)
+
   @spec authorized_speech_to_text(pid(), map(), State.t()) ::
           {:ok, String.t(), map()} | :error
   def authorized_speech_to_text(capability, identity, %State{} = state) do
@@ -248,7 +263,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   def open_inputs(%State{} = state) do
     Enum.each(state.connections, fn {connection_id, connection} ->
       _ = STTAudioAdmission.synchronize(state, connection_id)
-      open_connection_input(connection)
+
+      if not STSSourceCutover.private_input_held?(state, connection_id),
+        do: open_connection_input(connection)
     end)
 
     SpeechToSpeech.release(state)
@@ -286,14 +303,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
-  defp put(command, subscriber, output_sink, room_monitor, state) do
+  defp put(command, subscriber, output_sink, room_monitor, source_control?, state) do
     case bind_recording_egress(command.connection_id, output_sink, state.room_mixer) do
-      :ok -> put_bound(command, subscriber, output_sink, room_monitor, state)
+      :ok -> put_bound(command, subscriber, output_sink, room_monitor, source_control?, state)
       {:error, _reason} -> {:reply, {:error, recording_unavailable()}, state}
     end
   end
 
-  defp put_bound(command, subscriber, output_sink, room_monitor, state) do
+  defp put_bound(command, subscriber, output_sink, room_monitor, source_control?, state) do
     monitor = Process.monitor(subscriber)
     role = Map.fetch!(state.participant_roles, command.participant_id)
 
@@ -306,6 +323,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       output_sink: output_sink,
       role: role,
       room_monitor: room_monitor,
+      source_control?: source_control?,
       transfer_attempt_id: nil,
       speech_to_text: nil
     }
@@ -362,6 +380,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
          subscriber,
          output_sink,
          room_monitor,
+         source_control?,
          attempt_id,
          state
        ) do
@@ -376,6 +395,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       output_sink: output_sink,
       role: :human,
       room_monitor: room_monitor,
+      source_control?: source_control?,
       speech_to_text: nil,
       transfer_attempt_id: attempt_id
     }
@@ -485,6 +505,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   end
 
   defp bind(command, capability, ingress, state) do
+    case STTAudioAdmission.enable_source_cutover(state, command.connection_id, ingress) do
+      :ok -> bind_enabled(command, capability, ingress, state)
+      {:error, _reason} -> {:reply, {:error, speech_to_text_policy_unavailable()}, state}
+    end
+  end
+
+  defp bind_enabled(command, capability, ingress, state) do
     capability_monitor = Process.monitor(capability)
     ingress_monitor = Process.monitor(ingress)
     connection = Map.fetch!(state.connections, command.connection_id)
@@ -513,7 +540,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     _ = STTAudioAdmission.synchronize(state, command.connection_id)
 
     if connection.admission == :main and OpeningAudio.admission(state.opening_audio) == :open and
-         (state.startup == nil or state.startup_ready?) do
+         (state.startup == nil or state.startup_ready?) and
+         not STSSourceCutover.private_input_held?(state, command.connection_id) do
       :ok = Ingress.open(ingress)
     end
 

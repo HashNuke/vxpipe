@@ -183,6 +183,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @doc false
   def input_binding(state) do
     {:ok, resource, status} = readiness(state)
+    allocation_generation = allocation_generation(state.session, status)
 
     {:ok,
      %{
@@ -190,11 +191,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
        media_format: Map.take(state.media_format, [:codec, :sample_rate, :channels]),
        resource: resource,
        status: status,
+       allocation_generation: allocation_generation,
        audio_origin: audio_origin(state, status),
        activity_origin: activity_origin(state, status),
        policy_intervals: [state.policy_revision]
      }}
   end
+
+  defp allocation_generation(%Allocation{generation: generation} = allocation, :ready) do
+    if Allocation.valid?(allocation), do: generation
+  end
+
+  defp allocation_generation(_allocation, _status), do: nil
 
   defp audio_origin(
          %__MODULE__{session: session, policy: %Snapshot{} = policy} = state,

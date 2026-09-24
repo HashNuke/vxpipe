@@ -49,7 +49,10 @@ defmodule Vxpipe.Gateway.WebRTC.Connection.SourceAudio do
     end
   end
 
-  defp held?(state), do: match?(%{held?: true}, Map.get(state, :handoff_gate))
+  defp held?(state) do
+    match?(%{held?: true}, Map.get(state, :handoff_gate)) or
+      match?(%{held?: true}, Map.get(state, :source_gate))
+  end
 
   defp forward(track_id, packet, received_at, epoch, state) do
     state = ensure_track_codecs(track_id, state)

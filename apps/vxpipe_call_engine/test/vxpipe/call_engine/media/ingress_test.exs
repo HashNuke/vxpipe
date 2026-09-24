@@ -113,6 +113,62 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert changed_resource.generation == resource.generation
   end
 
+  test "closes selected activity ingress before a transcript-origin allocation rotates" do
+    {capability, transport} = start_capability([], "part-agent")
+    ingress = start_ingress(capability, activity_agent_id: "part-agent")
+    first_policy = snapshot(0, ["part-human", "part-agent"], :unrestricted, true)
+    next_policy = snapshot(1, ["part-human", "part-agent"], %{}, true)
+
+    assert :ok = Enforcer.apply(capability, first_policy, 500)
+    assert :ok = Enforcer.apply(ingress, first_policy, 500)
+    assert :ok = Ingress.enable_source_cutover(ingress)
+    connect_transport(capability, transport)
+    assert {:ok, %{audio_origin: origin}} = SpeechToText.input_binding(capability)
+    generation = origin.allocation_generation
+    assert :ok = Ingress.bind_audio_origin(ingress, origin)
+    assert :ok = Ingress.bind_native_generation(ingress, generation)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert :ok = Ingress.open(ingress)
+
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
+    assert_receive {:test_stt_audio, ^transport, <<1>>}
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 1}}
+
+    assert Snapshot.interval(first_policy, :speech_to_text, "part-human") !=
+             Snapshot.interval(next_policy, :speech_to_text, "part-human")
+
+    assert :ok = Enforcer.apply(ingress, next_policy, 500)
+    assert :closed == :sys.get_state(ingress).opening_input_admission
+    assert nil == :sys.get_state(ingress).audio_origin
+    assert {:ok, _resource, :preparing} = Ingress.readiness(ingress)
+
+    assert_receive {:vxpipe_stt_source_origin_invalidated, ^ingress,
+                    %{participant_id: "part-human"}, ^origin, 1, ^generation}
+
+    assert :ok = Enforcer.apply(capability, next_policy, 500)
+
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    refute replacement == transport
+    assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>))
+    refute_receive {:test_stt_audio, ^replacement, <<2>>}
+
+    connect_transport(capability, replacement)
+    assert {:ok, %{audio_origin: next_origin}} = SpeechToText.input_binding(capability)
+    assert next_origin.allocation_generation != origin.allocation_generation
+    assert :ok = Ingress.bind_audio_origin(ingress, next_origin)
+    active_source_epoch = make_ref()
+    assert {:error, :source_epoch_required} = Ingress.open(ingress)
+    assert :ok = Ingress.open(ingress, active_source_epoch)
+
+    assert {:error, :stale_source_epoch} =
+             Ingress.push(ingress, audio_frame(3, <<3>>, source_epoch: make_ref()))
+
+    assert :ok =
+             Ingress.push(ingress, audio_frame(4, <<4>>, source_epoch: active_source_epoch))
+
+    assert_receive {:test_stt_audio, ^replacement, <<4>>}
+  end
+
   test "keeps activity-only microphone demand and removes it on audio-route revocation" do
     ingress = start_ingress(self(), activity_agent_id: "part-agent")
     active = snapshot(0, ["part-human", "part-agent"], %{}, false)

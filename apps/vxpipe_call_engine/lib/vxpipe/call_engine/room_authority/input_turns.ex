@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.{Id, TurnInterrupter}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech
+  alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ActivityControl
 
   alias Vxpipe.CallEngine.RoomAuthority.{
@@ -70,9 +71,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   def speech_to_text(capability, identity, %Signal{} = signal, %State{} = state) do
     case ConnectionLifecycle.authorized_speech_to_text(capability, identity, state) do
       {:ok, connection_id, connection} ->
-        if current_native_signal?(signal, connection, state),
-          do: apply_speech_to_text_signal(signal, connection_id, connection, state),
-          else: state
+        if STSSourceCutover.private_input_held?(state, connection_id) and
+             signal.kind != :connected do
+          state
+        else
+          if current_native_signal?(signal, connection, state),
+            do: apply_speech_to_text_signal(signal, connection_id, connection, state),
+            else: state
+        end
 
       :error ->
         state
@@ -80,13 +86,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   end
 
   defp apply_speech_to_text_signal(
-         %Signal{kind: :connected},
+         %Signal{kind: :connected} = signal,
          connection_id,
-         _connection,
+         %{speech_to_text: %{capability: capability}},
          state
        ) do
-    _ = STTAudioAdmission.synchronize(state, connection_id)
-    SpeechToSpeech.recover(state)
+    case STSSourceCutover.active?(state) do
+      true ->
+        state = STSSourceCutover.connected(state, connection_id, capability, signal)
+        if STSSourceCutover.native_ready?(state), do: SpeechToSpeech.recover(state), else: state
+
+      false ->
+        _ = STTAudioAdmission.synchronize(state, connection_id)
+        SpeechToSpeech.recover(state)
+    end
   end
 
   defp apply_speech_to_text_signal(

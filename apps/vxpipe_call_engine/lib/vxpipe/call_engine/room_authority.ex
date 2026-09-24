@@ -48,6 +48,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     UsageObservations
   }
 
+  alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
+
   import Vxpipe.CallEngine.RoomAuthority.Playback,
     only: [handle_text_to_speech_playback: 4, handle_asset_opening_audio_playback: 4]
 
@@ -82,12 +84,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         %AttachConnection{} = command,
         subscriber,
         output_sink,
-        room_monitor
+        room_monitor,
+        source_control? \\ false
       )
-      when is_pid(subscriber) and is_reference(room_monitor) do
+      when is_pid(subscriber) and is_reference(room_monitor) and is_boolean(source_control?) do
     GenServer.call(
       room_authority,
-      {:attach_connection, command, subscriber, output_sink, room_monitor},
+      {:attach_connection, command, subscriber, output_sink, room_monitor, source_control?},
       @call_timeout
     )
   end
@@ -216,7 +219,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_call(
-        {:attach_connection, command, subscriber, output_sink, room_monitor},
+        {:attach_connection, command, subscriber, output_sink, room_monitor, source_control?},
         {caller, _tag},
         state
       ) do
@@ -226,6 +229,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
            subscriber,
            output_sink,
            room_monitor,
+           source_control?,
            state
          ) do
       {:handled, reply} ->
@@ -238,6 +242,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
                subscriber,
                output_sink,
                room_monitor,
+               source_control?,
                state
              ) do
           {:reply, {:ok, _role, _runtime, :main, _input_mode, _output_mode, nil} = reply, state} ->
@@ -314,6 +319,41 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
+  def handle_info(
+        {[:alias | response_ref], _response} = message,
+        %State{source_cutover: %{request_id: request_id}} = state
+      )
+      when response_ref == request_id,
+      do: {:noreply, STSSourceCutover.handle_response(message, state)}
+
+  def handle_info(
+        {[:alias | response_ref], _response} = message,
+        %State{source_cutover: %{late_request_id: request_id, phase: :failed}} = state
+      )
+      when response_ref == request_id,
+      do: {:noreply, STSSourceCutover.handle_response(message, state)}
+
+  def handle_info({:vxpipe_sts_source_cutover_timeout, token}, state) do
+    {:noreply, STSSourceCutover.timeout(token, state)}
+  end
+
+  def handle_info(
+        {:vxpipe_stt_source_origin_invalidated, ingress, identity, origin, _revision,
+         producer_generation},
+        state
+      ) do
+    if current_source_ingress?(state, ingress, identity) do
+      old_generation =
+        if is_reference(producer_generation),
+          do: producer_generation,
+          else: if(is_map(origin), do: Map.get(origin, :allocation_generation))
+
+      {:noreply, STSSourceCutover.hold(state, :policy, old_generation)}
+    else
+      {:noreply, state}
+    end
+  end
+
   def handle_info(
         {ref, {:startup_prepared, result}},
         %{startup: %{task: %Task{ref: ref}}} = state
@@ -630,6 +670,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state),
     do: Vxpipe.CallEngine.RoomAuthority.ProcessDown.handle(monitor, reason, state)
+
+  defp current_source_ingress?(state, ingress, identity) do
+    connection = Map.get(state.connections, Map.get(identity, :connection_id))
+
+    is_map(connection) and Map.get(connection, :source_control?, false) and
+      Map.get(connection, :participant_id) == Map.get(identity, :participant_id) and
+      Map.get(connection, :speech_to_text) != nil and
+      Map.get(connection.speech_to_text, :ingress) == ingress and
+      state.snapshot.tenant_id == Map.get(identity, :tenant_id) and
+      state.snapshot.room_id == Map.get(identity, :room_id) and
+      state.snapshot.incarnation_id == Map.get(identity, :incarnation_id)
+  end
 
   defp room_source(options) do
     case Keyword.fetch(options, :plan) do

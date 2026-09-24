@@ -381,6 +381,159 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert %_{} = SpeechToSpeech.release(%{state | speech_to_speech_capability: nil})
   end
 
+  test "room hold requests the attached WebRTC source cutover asynchronously" do
+    {_tree, capability} = start_real_capability()
+    peer = start_supervised!({Vxpipe.CallEngine.TestSTSSourceControlPeer, observer: self()})
+    attachment = make_ref()
+    state = state()
+    source = Map.fetch!(state.connections, @human_connection)
+
+    state = %{
+      state
+      | connections:
+          Map.put(
+            state.connections,
+            @human_connection,
+            Map.merge(source, %{
+              pid: peer,
+              source_control?: true,
+              room_monitor: attachment
+            })
+          )
+    }
+
+    state =
+      state
+      |> bind_capability(capability, @agent)
+      |> Map.put(:speech_to_speech_ready?, true)
+
+    held = SpeechToSpeech.hold(state)
+
+    assert_receive {:sts_source_control_request, ^peer, :hold,
+                    %{attachment: ^attachment, token: token, deadline_ms: deadline}}
+
+    assert is_reference(token)
+    assert deadline > System.monotonic_time(:millisecond)
+    assert :sys.get_state(capability).held?
+    assert %{token: ^token, phase: :holding} = held.source_cutover
+
+    receipt = %{
+      attachment: attachment,
+      token: token,
+      receiver: self(),
+      old_epoch: make_ref(),
+      held_epoch: make_ref()
+    }
+
+    assert :ok = Vxpipe.CallEngine.TestSTSSourceControlPeer.complete(peer, :hold, {:ok, receipt})
+    assert_receive {hold_tag, {:ok, ^receipt}}
+
+    assert {:reply, {:ok, ^receipt}} =
+             :gen_server.check_response(
+               {hold_tag, {:ok, receipt}},
+               held.source_cutover.request_id
+             )
+
+    assert {:noreply, held_after} =
+             Vxpipe.CallEngine.RoomAuthority.handle_info(
+               {hold_tag, {:ok, receipt}},
+               held
+             )
+
+    assert %{phase: :held, receipt: ^receipt} = held_after.source_cutover
+    released = SpeechToSpeech.release(held_after)
+
+    assert_receive {:sts_source_control_request, ^peer, :arm,
+                    %{
+                      attachment: ^attachment,
+                      token: ^token,
+                      receipt: ^receipt,
+                      active_epoch: active_epoch,
+                      deadline_ms: arm_deadline
+                    }}
+
+    assert is_reference(active_epoch)
+    assert arm_deadline > System.monotonic_time(:millisecond)
+
+    transfer_held = SpeechToSpeech.hold(released, :transfer)
+
+    assert :ok =
+             Vxpipe.CallEngine.TestSTSSourceControlPeer.complete(
+               peer,
+               :arm,
+               {:ok, active_epoch}
+             )
+
+    assert_receive {arm_tag, {:ok, ^active_epoch}}
+
+    assert {:noreply, after_arm} =
+             Vxpipe.CallEngine.RoomAuthority.handle_info(
+               {arm_tag, {:ok, active_epoch}},
+               transfer_held
+             )
+
+    assert %{phase: :holding, token: next_token} = after_arm.source_cutover
+    refute next_token == token
+    assert :sys.get_state(capability).held?
+
+    assert_receive {:sts_source_control_request, ^peer, :hold,
+                    %{
+                      attachment: ^attachment,
+                      token: ^next_token,
+                      deadline_ms: next_deadline
+                    }}
+
+    assert next_deadline > System.monotonic_time(:millisecond)
+
+    next_receipt = %{
+      attachment: attachment,
+      token: next_token,
+      receiver: self(),
+      old_epoch: active_epoch,
+      held_epoch: make_ref()
+    }
+
+    assert :ok =
+             Vxpipe.CallEngine.TestSTSSourceControlPeer.complete(
+               peer,
+               :hold,
+               {:ok, next_receipt}
+             )
+
+    assert_receive {next_hold_tag, {:ok, ^next_receipt}}
+
+    assert {:noreply, held_again} =
+             Vxpipe.CallEngine.RoomAuthority.handle_info(
+               {next_hold_tag, {:ok, next_receipt}},
+               after_arm
+             )
+
+    reopened = SpeechToSpeech.release(held_again)
+
+    assert_receive {:sts_source_control_request, ^peer, :arm,
+                    %{
+                      attachment: ^attachment,
+                      token: ^next_token,
+                      receipt: ^next_receipt,
+                      active_epoch: final_epoch
+                    }}
+
+    assert :ok =
+             Vxpipe.CallEngine.TestSTSSourceControlPeer.complete(peer, :arm, {:ok, final_epoch})
+
+    assert_receive {final_arm_tag, {:ok, ^final_epoch}}
+
+    assert {:noreply, completed} =
+             Vxpipe.CallEngine.RoomAuthority.handle_info(
+               {final_arm_tag, {:ok, final_epoch}},
+               reopened
+             )
+
+    assert completed.source_cutover == nil
+    assert is_reference(completed.speech_to_speech_capability.input_epoch)
+    assert :sys.get_state(capability).held? == false
+  end
+
   test "STS hold, interrupt and stop are safe with no allocation and usage resolves the STS source" do
     state = state()
     capability = self()

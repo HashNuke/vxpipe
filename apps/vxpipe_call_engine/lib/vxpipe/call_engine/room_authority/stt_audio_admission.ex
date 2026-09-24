@@ -5,6 +5,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STTAudioAdmission do
   alias Vxpipe.CallEngine.Media.Ingress
   alias Vxpipe.CallEngine.RoomAuthority.State
 
+  @spec enable_source_cutover(State.t(), String.t(), pid()) :: :ok | {:error, :unavailable}
+  def enable_source_cutover(%State{} = state, connection_id, ingress)
+      when is_binary(connection_id) and is_pid(ingress) do
+    case selected_source(state, connection_id) do
+      {:ok, %{source_control?: true}, _agent} -> Ingress.enable_source_cutover(ingress)
+      _not_selected -> :ok
+    end
+  end
+
   @spec synchronize(State.t(), String.t()) :: :ok | {:error, term()}
   def synchronize(%State{} = state, connection_id) do
     case selected_source(state, connection_id) do
@@ -44,15 +53,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STTAudioAdmission do
       connection_id: connection_id
     }
 
-    origin =
+    binding =
       case SpeechToText.input_binding(capability) do
-        {:ok, %{identity: ^expected_identity, audio_origin: %{agent_id: ^agent} = origin}} ->
-          origin
+        {:ok,
+         %{
+           identity: ^expected_identity,
+           allocation_generation: generation,
+           audio_origin: origin
+         }} ->
+          {:ok, generation, origin}
 
         _unready_or_changed ->
-          nil
+          {:error, :source_origin_unavailable}
       end
 
-    Ingress.bind_audio_origin(ingress, origin)
+    with {:ok, generation, origin} <- binding,
+         :ok <- Ingress.bind_native_generation(ingress, generation) do
+      origin = if is_map(origin) and Map.get(origin, :agent_id) == agent, do: origin
+      Ingress.bind_audio_origin(ingress, origin)
+    end
   end
 end

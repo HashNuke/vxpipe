@@ -12,6 +12,8 @@ defmodule Vxpipe.CallEngine.ConnectionAttachment do
               [
                 admission: :main,
                 connection: nil,
+                room_authority: nil,
+                source_control?: false,
                 speech_to_speech_input: nil,
                 room_audio: nil,
                 room_audio_input_mode: :disabled,
@@ -24,6 +26,8 @@ defmodule Vxpipe.CallEngine.ConnectionAttachment do
           media_ingress: pid() | nil,
           admission: :main | :transfer_preparation,
           connection: pid() | nil,
+          room_authority: pid() | nil,
+          source_control?: boolean(),
           speech_to_speech_input: Vxpipe.CallEngine.STSInputHandle.t() | nil,
           room_audio: RoomAudioHandle.t() | nil,
           room_audio_input_mode: :disabled | :enabled,

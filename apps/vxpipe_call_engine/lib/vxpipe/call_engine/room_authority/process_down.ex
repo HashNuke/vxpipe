@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
     OpeningAudio,
     ParticipantLifecycle,
     ParticipantTransfer,
+    STSSourceCutover,
     StartupReadiness
   }
 
@@ -44,6 +45,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
               Map.has_key?(state.connection_monitors, monitor) ->
                 connection_id = Map.fetch!(state.connection_monitors, monitor)
                 state = ConnectionLifecycle.remove(monitor, reason, state)
+                state = STSSourceCutover.connection_down(connection_id, state)
 
                 case ParticipantTransfer.connection_down(connection_id, state) do
                   {:handled, state} -> state

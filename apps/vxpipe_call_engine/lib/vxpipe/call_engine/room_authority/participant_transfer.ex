@@ -132,17 +132,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
           pid(),
           pid() | nil,
           reference(),
+          boolean(),
           State.t()
         ) ::
           :unhandled
           | {:handled, {:reply, tuple() | {:error, Vxpipe.CallEngine.Error.t()}, State.t()}}
-  def attach_connection(command, caller, subscriber, output_sink, room_monitor, %State{} = state) do
+  def attach_connection(
+        command,
+        caller,
+        subscriber,
+        output_sink,
+        room_monitor,
+        source_control?,
+        %State{} = state
+      ) do
     HumanHandoff.attach_connection(
       command,
       caller,
       subscriber,
       output_sink,
       room_monitor,
+      source_control?,
       state
     )
   end

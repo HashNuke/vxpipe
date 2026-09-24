@@ -160,7 +160,7 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
 
     refute_received {:vxpipe_sts_input, _, _, _, _}
 
-    assert {:noreply, _state} =
+    assert {:noreply, state} =
              Connection.handle_info(
                {:vxpipe_webrtc_source, self(), source_epoch, admitted_at,
                 {:ex_webrtc, self(), {:rtp, "microphone", nil, %{packet | sequence_number: 0}}}},
@@ -169,6 +169,17 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
 
     assert_receive {:vxpipe_sts_input, ^ingress, ref, %{sequence_number: 65_536}, 0}
     ack(ingress, ref)
+
+    held_state = Map.put(state, :source_gate, %{held?: true})
+
+    assert {:noreply, ^held_state} =
+             Connection.handle_info(
+               {:vxpipe_webrtc_source, self(), source_epoch, admitted_at,
+                {:ex_webrtc, self(), {:rtp, "microphone", nil, %{packet | sequence_number: 1}}}},
+               held_state
+             )
+
+    refute_received {:vxpipe_sts_input, ^ingress, _, _, _}
   end
 
   test "telephony session keeps STS-only delivery live across policy denial" do

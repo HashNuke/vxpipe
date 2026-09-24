@@ -82,12 +82,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
       capability: state.capability,
       activity_agent_id: state.activity_agent_id,
       audio_origin: state.audio_origin,
+      native_generation: state.native_generation,
+      source_epoch: state.source_epoch,
+      source_cutover_pending?: state.source_cutover_pending?,
       prepared_track: state.prepared_track,
       track_id: state.track_id,
       capacity?: capacity?,
       available?:
         interval != nil and state.policy_demand? and state.prepared_track != nil and capacity? and
-          origin_ready?
+          origin_ready? and not state.source_cutover_pending?
     }
   end
 

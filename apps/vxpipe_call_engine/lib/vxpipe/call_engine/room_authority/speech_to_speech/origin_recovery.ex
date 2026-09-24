@@ -6,17 +6,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.OriginRecovery do
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{ActivityControl, Evidence}
+  alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
   alias Vxpipe.CallEngine.RoomAuthority.State
 
   def restore_ready(%State{speech_to_speech_recovery: %{track: track}} = state) do
-    with %{ingress: ingress} <- state.speech_to_speech_capability,
-         :ok <- STSIngress.prepare_track(ingress, track),
-         %{speech_to_speech_capability: %{input_epoch: epoch}} = state <-
-           SpeechToSpeech.release(state),
-         true <- is_reference(epoch) do
-      %{state | speech_to_speech_recovery: nil}
-    else
-      _failed -> SpeechToSpeech.stop(state)
+    case state.speech_to_speech_capability do
+      %{ingress: ingress} ->
+        case STSIngress.prepare_track(ingress, track) do
+          :ok ->
+            case STSSourceCutover.active?(state) do
+              true ->
+                state = SpeechToSpeech.release(state)
+                %{state | speech_to_speech_recovery: nil}
+
+              false ->
+                release_immediately(state)
+            end
+
+          _failed ->
+            SpeechToSpeech.stop(state)
+        end
+
+      _not_ready ->
+        SpeechToSpeech.stop(state)
     end
   end
 
@@ -32,13 +44,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.OriginRecovery do
          %Snapshot{revision: current_revision} <- Evidence.policy_snapshot(state),
          true <- current_revision >= revision do
       state
+      |> SpeechToSpeech.hold(:policy)
       |> SpeechToSpeech.stop()
       |> Map.put(:speech_to_speech_recovery, %{
         connection_id: connection_id,
         connection: connection,
         track: track
       })
-      |> recover()
+      |> defer_recovery_until_source_ready()
     else
       _stale -> state
     end
@@ -75,5 +88,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.OriginRecovery do
       Effective.audio_route_permitted?(policy.effective, agent, source) and
       origin.audio_input_interval == Snapshot.interval(policy, :audio_input, source) and
       origin.audio_output_interval == Snapshot.interval(policy, :audio_output, source)
+  end
+
+  defp defer_recovery_until_source_ready(%State{} = state) do
+    if STSSourceCutover.active?(state),
+      do: put_in(state.source_cutover.sts_ready?, false),
+      else: recover(state)
+  end
+
+  defp release_immediately(state) do
+    case SpeechToSpeech.release(state) do
+      %{speech_to_speech_capability: %{input_epoch: epoch}} = released
+      when is_reference(epoch) ->
+        %{released | speech_to_speech_recovery: nil}
+
+      _failed ->
+        SpeechToSpeech.stop(state)
+    end
   end
 end

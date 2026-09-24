@@ -45,6 +45,14 @@ reproduced two additional tool/interruption failures before the repair and
 reran the three focused regressions green. The PostgreSQL-backed umbrella gate
 remains open.
 
+2026-09-24 source-cutover checkpoint: the room-owned async hold/arm protocol,
+selected STT origin invalidation, and exact source-epoch ingress admission now
+have focused evidence; the ten-call local measured lane passes all three modes.
+Room lifecycle proof for selected-STT retirement and fresh-generation release,
+policy/transfer overlap acceptance, telephony source cutover, rendered UI,
+independent review, and final root gates remain open. The milestone index stays
+unchecked.
+
 Controller renewal proof `081a8508` adds fake-wire tool-only and overlapping
 A/B response cases; the controller passes 60 tests and the relevant STS group
 passes 212. Independent review reran both new cases and found no reproduced
@@ -927,6 +935,65 @@ the existing audio round trip. Record discoveries here before implementing.
                         timeout, caller/peer/receiver death, late replies and
                         transfer overlap leave effective room admission closed.
                         Budgets must cover the peer API's fixed five-second call.
+                        Gateway caller-boundary checkpoint: the exact main
+                        attachment now carries its owning room PID and monitor;
+                        Connection accepts hold/arm only from that PID with a
+                        matching attachment receipt, fresh token and bounded
+                        absolute deadline. Two receiver barriers and a local
+                        source gate are covered by focused old/held/active RTP,
+                        delayed peer, receiver-loss, replay, expiry and transfer
+                        tests (Gateway 23/0 on seeds 0 and 1; Call Engine
+                        attachment test 4/0). RoomAuthority now sends correlated
+                        asynchronous requests; the room/native fresh-STT
+                        lifecycle and integrated acceptance remain open.
+                        Room-coordinator checkpoint tasks (2026-09-24):
+                        - [x] Review ownership and sequencing against
+                          `docs/sts-activity-provenance.md`: RoomAuthority owns
+                          the transition; it closes both STS and selected STT
+                          ingress before requesting source hold; it must not
+                          synchronously call its monitored Connection; old
+                          selected STT is retired only after the hold receipt;
+                          a fresh ready allocation/origin is bound while closed;
+                          source arm acknowledgement precedes any reopen. A
+                          transfer hold remains independent and cannot be
+                          cleared by STT readiness. An ambiguous result leaves
+                          room ingress closed. This checkpoint is WebRTC-only;
+                          telephony callback/Leg fencing remains the separate
+                          unchecked task below.
+                        - [x] Complete the async hold/arm request protocol
+                          state path: close input lanes before issuing the
+                          correlated hold, validate its exact receipt, and send
+                          arm only after release readiness. A controlled room
+                          callback test proves the hold/receipt/arm/ack sequence;
+                          Gateway tests prove the actual receiver barriers.
+                          Real RoomAuthority-owner, timeout, stale/late reply
+                          and connection-loss integration reds remain open below.
+                        - [ ] Red-test real RoomAuthority coordination for
+                          correlated asynchronous hold/arm, ingress close,
+                          old-allocation retirement, fresh-generation binding,
+                          and reopen only after exact arm acknowledgement.
+                          Use barriers and fake source acknowledgements, not
+                          sleeps. Include wrong/late replies, Connection DOWN,
+                          deadlines and overlapping transfer hold.
+                        - [ ] Implement one bounded, room-owned source-cutover
+                          state machine. Preserve current policy checks and
+                          selected caller transcription when STS itself is
+                          retired or denied; never let an STS-only hold close
+                          an otherwise authorized STT route after fresh arm.
+                        - [ ] Prove completed hold/reopen through compiled
+                          external/hybrid/provider-controlled WebRTC room calls,
+                          including old delayed STT evidence, source RTP queued
+                          across both barriers, policy enforcer ordering and
+                          transcription-only recovery. Leave telephony raw
+                          source cutover and full milestone acceptance open.
+                        - [x] Run the existing ten-concurrent-call local
+                          measured lane after the runtime change; retain its
+                          reports with the checkpoint evidence. The embedded
+                          load does not substitute for WebRTC barrier proofs.
+                          All three local modes pass in 25.4 seconds: 29 turns,
+                          ten interruptions, nine healthy survivors, all ten
+                          calls cleaned and zero errors. Reports are in
+                          `labnotes/20260924-0219-room-source-cutover-load.jsonl`.
                   - [ ] Red-test Twilio and Telnyx raw media queued at their
                     WebSock callbacks before cutover, including a separately
                     delayed Leg dispatch. Stamp one immutable source epoch

@@ -138,6 +138,18 @@ schedulers on a four-logical-CPU x86_64 host with 7,750 MiB RAM. Exact
 This remains synthetic local playback evidence, not remote hearing or hosted
 capacity.
 
+## Source-cutover checkpoint recheck — 2026-09-24
+
+After the RoomAuthority/Gateway source-control changes, `bin/sts-call-load
+measured` passes all three modes (three tests, zero failures) in 25.4 seconds.
+Each mode holds ten ready calls, completes 29 turns, interrupts ten, retains
+nine healthy post-fault survivors, cleans all ten calls, and reports no errors.
+The host is x86-64 with four logical CPUs and 7,750 MiB RAM; the lane uses two
+BEAM schedulers. Exact machine-readable reports are in
+[`20260924-0219-room-source-cutover-load.jsonl`](../labnotes/20260924-0219-room-source-cutover-load.jsonl).
+This local embedded-call load is a regression check, not WebRTC source-barrier,
+telephony, hosted-provider or remote-hearing evidence.
+
 ## Measured local baseline — 2026-09-22
 
 `bin/sts-call-load measured` at `5792d797bf0439a81dbb8dfc4f960376cdb3659c`

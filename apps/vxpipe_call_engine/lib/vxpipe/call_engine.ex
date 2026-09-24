@@ -126,10 +126,15 @@ defmodule Vxpipe.CallEngine do
 
   @spec attach_connection(AttachConnection.t()) ::
           {:ok, ConnectionAttachment.t()} | {:error, Error.t()}
-  def attach_connection(%AttachConnection{} = command, output_sink \\ nil) do
+  def attach_connection(
+        %AttachConnection{} = command,
+        output_sink \\ nil,
+        source_control? \\ false
+      )
+      when is_boolean(source_control?) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
-      case RoomSupervisor.attach_connection(command, output_sink) do
-        {:ok, _room_authority, room_monitor, media_ingress, admission, room_audio_input_mode,
+      case RoomSupervisor.attach_connection(command, output_sink, source_control?) do
+        {:ok, room_authority, room_monitor, media_ingress, admission, room_audio_input_mode,
          room_audio_output_mode, transfer_attempt_id} ->
           case RoomAudioHandle.resolve(command.incarnation_id) do
             {:ok, room_audio} ->
@@ -137,6 +142,8 @@ defmodule Vxpipe.CallEngine do
                %ConnectionAttachment{
                  admission: admission,
                  connection: self(),
+                 room_authority: room_authority,
+                 source_control?: source_control?,
                  speech_to_speech_input: Vxpipe.CallEngine.STSInputHandle.new(command, self()),
                  room_monitor: room_monitor,
                  media_ingress: media_ingress,

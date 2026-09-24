@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.Gateway.Media.STSInput
   alias Vxpipe.Gateway.WebRTC.Connection.Readiness
   alias Vxpipe.Gateway.WebRTC.Connection.SourceAudio
+  alias Vxpipe.Gateway.WebRTC.Connection.SourceCutover
   alias Vxpipe.Gateway.WebRTC.SourceReceiver
 
   alias Vxpipe.CallEngine.Event.{
@@ -130,7 +131,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
              participant_id: session.participant_id
            ),
          {:ok, %ConnectionAttachment{} = attachment} <-
-           CallEngine.attach_connection(attach_command, audio_egress),
+           CallEngine.attach_connection(attach_command, audio_egress, true),
          {:ok, room_audio_ingress} <-
            ConnectionPeerSupervisor.start_room_audio_ingress(
              connection_id,
@@ -181,6 +182,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          peer_connection: peer_connection,
          source_receiver: source_receiver,
          source_epoch: source_epoch,
+         source_gate: nil,
          source_monitor: Process.monitor(source_receiver),
          peer_monitor: Process.monitor(peer_connection),
          room_monitor: attachment.room_monitor,
@@ -221,6 +223,20 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     case Vxpipe.Gateway.Media.HandoffGate.control(action, scope, caller, state) do
       {:ok, state} -> {:reply, :ok, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:vxpipe_sts_source_hold, scope}, {caller, _}, state) do
+    case SourceCutover.hold(scope, caller, state) do
+      {:ok, receipt, state} -> {:reply, {:ok, receipt}, state}
+      {:error, reason, state} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:vxpipe_sts_source_arm, scope}, {caller, _}, state) do
+    case SourceCutover.arm(scope, caller, state) do
+      {:ok, epoch, state} -> {:reply, {:ok, epoch}, state}
+      {:error, reason, state} -> {:reply, {:error, reason}, state}
     end
   end
 

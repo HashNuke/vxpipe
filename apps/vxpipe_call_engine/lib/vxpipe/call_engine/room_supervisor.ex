@@ -142,7 +142,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   def record_telephony_usage(_observations), do: {:error, :invalid_telephony_usage}
 
-  def attach_connection(%AttachConnection{} = command, output_sink) do
+  def attach_connection(%AttachConnection{} = command, output_sink, source_control? \\ false)
+      when is_boolean(source_control?) do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
         room_monitor = Process.monitor(room_authority)
@@ -152,7 +153,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
                command,
                self(),
                output_sink,
-               room_monitor
+               room_monitor,
+               source_control?
              ) do
           {:ok, role, selected_runtime, admission, input_mode, output_mode, attempt_id} ->
             result =

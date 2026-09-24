@@ -57,6 +57,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           pid(),
           pid() | nil,
           reference(),
+          boolean(),
           State.t()
         ) :: :unhandled | {:handled, {:reply, tuple() | {:error, Error.t()}, State.t()}}
   def attach_connection(
@@ -65,6 +66,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         subscriber,
         output_sink,
         room_monitor,
+        source_control?,
         %State{pending_participant_transfer: %Pending{} = pending} = state
       ) do
     if human_pending?(pending, state) do
@@ -76,6 +78,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
             subscriber,
             output_sink,
             room_monitor,
+            source_control?,
             pending.attempt_id,
             state
           )
@@ -109,6 +112,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         _subscriber,
         _output_sink,
         _room_monitor,
+        _source_control?,
         %State{}
       ),
       do: :unhandled

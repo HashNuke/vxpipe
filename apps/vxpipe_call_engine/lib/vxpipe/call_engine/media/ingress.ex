@@ -83,6 +83,32 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     end
   end
 
+  def open(ingress, source_epoch)
+      when is_pid(ingress) and is_reference(source_epoch) do
+    try do
+      GenServer.call(ingress, {:open_source_epoch, source_epoch}, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
+  def enable_source_cutover(ingress) when is_pid(ingress) do
+    try do
+      GenServer.call(ingress, :enable_source_cutover, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
+  def bind_native_generation(ingress, generation)
+      when is_pid(ingress) and (is_reference(generation) or is_nil(generation)) do
+    try do
+      GenServer.call(ingress, {:bind_native_generation, generation}, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
   @spec close(pid()) :: :ok | {:error, :unavailable}
   def close(ingress) when is_pid(ingress) do
     try do
@@ -121,6 +147,10 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
        },
        opening_input_admission: Keyword.get(options, :input_admission, :open),
        source_cutoff_at: nil,
+       source_cutover?: false,
+       source_cutover_pending?: false,
+       source_epoch: nil,
+       native_generation: nil,
        in_flight: nil,
        maximum_age_ms: Keyword.fetch!(options, :maximum_age_ms),
        maximum_bytes: Keyword.fetch!(options, :maximum_bytes),
@@ -176,6 +206,9 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   def handle_call(:open, _from, %{opening_input_admission: :open} = state),
     do: {:reply, :ok, state}
 
+  def handle_call(:open, _from, %{source_cutover_pending?: true} = state),
+    do: {:reply, {:error, :source_epoch_required}, state}
+
   def handle_call(:open, _from, state) do
     cutoff =
       if is_binary(state.activity_agent_id),
@@ -184,6 +217,29 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
     {:reply, :ok, %{state | opening_input_admission: :open, source_cutoff_at: cutoff}}
   end
+
+  def handle_call(
+        {:open_source_epoch, epoch},
+        _from,
+        %{source_cutover?: true, source_cutover_pending?: true} = state
+      ) do
+    cutoff = if state.activity_agent_id, do: later_cutoff(state.source_cutoff_at, state.clock.())
+
+    {:reply, :ok,
+     %{
+       state
+       | opening_input_admission: :open,
+         source_cutover_pending?: false,
+         source_epoch: epoch,
+         source_cutoff_at: cutoff
+     }}
+  end
+
+  def handle_call({:open_source_epoch, _epoch}, _from, state),
+    do: {:reply, {:error, :source_cutover_not_pending}, state}
+
+  def handle_call(:enable_source_cutover, _from, state),
+    do: {:reply, :ok, %{state | source_cutover?: true}}
 
   def handle_call(:close, _from, state) do
     {:reply, :ok,
@@ -194,8 +250,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
          queue: :queue.new(),
          in_flight: nil,
          total_bytes: 0,
-         source_cutoff_at: nil
+         source_cutoff_at: nil,
+         source_cutover_pending?: state.source_cutover?,
+         source_epoch: nil,
+         native_generation: nil
      }}
+  end
+
+  def handle_call({:bind_native_generation, generation}, _from, state) do
+    {:reply, :ok, %{state | native_generation: generation}}
   end
 
   def handle_call({:bind_audio_origin, origin}, _from, state) do
@@ -240,6 +303,10 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
             state.activity_agent_id
           )
 
+        source_origin_changed? = source_origin_changed?(state, snapshot, demand?)
+        previous_origin = state.audio_origin
+        previous_generation = state.native_generation
+
         state =
           if state.policy != nil and state.policy_demand? == demand? and
                not SpeechToTextDemand.activity_authority_changed?(
@@ -249,11 +316,20 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
                  state.activity_agent_id
                ) and
                Snapshot.interval(state.policy, :speech_to_text, state.identity.participant_id) ==
-                 Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) do
+                 Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) and
+               not source_origin_changed? do
             %{state | policy: snapshot}
           else
-            install_policy(state, snapshot, demand?)
+            install_policy(state, snapshot, demand?, source_origin_changed?)
           end
+
+        if source_origin_changed? do
+          send(
+            state.owner,
+            {:vxpipe_stt_source_origin_invalidated, self(), state.identity, previous_origin,
+             snapshot.revision, previous_generation}
+          )
+        end
 
         {:reply, :ok, state}
 
@@ -273,6 +349,9 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
       not input_open?(state) ->
         {:reply, :ok, state}
+
+      not source_epoch_current?(frame, state) ->
+        {:reply, {:error, :stale_source_epoch}, state}
 
       not accepted_track?(frame, state.track_id) ->
         {:reply, {:error, :wrong_track}, state}
@@ -454,14 +533,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     }
   end
 
-  defp install_policy(state, snapshot, demand?) do
+  defp install_policy(state, snapshot, demand?, source_origin_changed?) do
     origin =
-      if AudioOrigin.current?(
-           state.audio_origin,
-           snapshot,
-           state.identity.participant_id,
-           state.activity_agent_id
-         ),
+      if not source_origin_changed? and
+           AudioOrigin.current?(
+             state.audio_origin,
+             snapshot,
+             state.identity.participant_id,
+             state.activity_agent_id
+           ),
          do: state.audio_origin
 
     %{
@@ -472,9 +552,59 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
         policy_demand?: demand?,
         queue: :queue.new(),
         total_bytes: 0,
-        audio_origin: origin
+        audio_origin: origin,
+        opening_input_admission:
+          if(source_origin_changed? and state.source_cutover?,
+            do: :closed,
+            else: state.opening_input_admission
+          ),
+        source_cutover_pending?:
+          (source_origin_changed? and state.source_cutover?) or state.source_cutover_pending?,
+        source_epoch:
+          if(source_origin_changed? and state.source_cutover?, do: nil, else: state.source_epoch),
+        native_generation:
+          if(source_origin_changed? and state.source_cutover?,
+            do: nil,
+            else: state.native_generation
+          ),
+        source_cutoff_at:
+          if(source_origin_changed? and state.source_cutover?,
+            do: nil,
+            else: state.source_cutoff_at
+          )
     }
   end
+
+  defp source_origin_changed?(
+         %{source_cutover?: true, policy: %Snapshot{} = previous, activity_agent_id: agent} =
+           state,
+         %Snapshot{} = current,
+         demand?
+       ) do
+    source = state.identity.participant_id
+
+    state.policy_demand? != demand? or
+      Snapshot.interval(previous, :speech_to_text, source) !=
+        Snapshot.interval(current, :speech_to_text, source) or
+      Snapshot.interval(previous, :audio_input, source) !=
+        Snapshot.interval(current, :audio_input, source) or
+      Snapshot.interval(previous, :audio_output, source) !=
+        Snapshot.interval(current, :audio_output, source) or
+      activity_authority_changed?(previous, current, source, agent)
+  end
+
+  defp source_origin_changed?(_state, _snapshot, _demand?), do: false
+
+  defp activity_authority_changed?(previous, current, source, agent) when is_binary(agent),
+    do: SpeechToTextDemand.activity_authority_changed?(previous, current, source, agent)
+
+  defp activity_authority_changed?(_previous, _current, _source, _agent), do: false
+
+  defp source_epoch_current?(_frame, %{source_cutover?: false}), do: true
+  defp source_epoch_current?(_frame, %{source_epoch: nil}), do: true
+
+  defp source_epoch_current?(frame, %{source_epoch: epoch}),
+    do: frame.source_epoch == epoch
 
   defp same_connection?(frame, identity) do
     frame.tenant_id == identity.tenant_id and
