@@ -70,6 +70,12 @@ separate unfinished items.
   source cutover.
 - [x] Root format check, warnings-as-errors compile, strict Credo (1,105 source
   files, no issues) and unused-dependency check pass.
-- [ ] Wrong/stale and delayed hold/arm acknowledgements in the compiled room
-  remain open, along with external/hybrid transfer overlap, telephony cutover,
-  independent review and final umbrella gates.
+- [x] Fail-closed source acknowledgements: a mismatched receipt and a
+  source-rejected arm now retire the STS allocation (`SpeechToSpeech.stop`)
+  while both input lanes stay closed, and a late arm cannot reopen them. Two
+  compiled-room regressions pass; the transcript-mode plus ingress files pass
+  53/0 on seeds 0 and 1, and the full Call Engine child suite passes 1,509/0
+  (30 excluded, seed 0). A `nil` `policy_from` reply crash found by the first
+  red is fixed with a pid guard. The ten-call measured lane passes in 25.4s.
+- [ ] External/hybrid transfer overlap, telephony cutover, independent review
+  and final umbrella gates remain open.

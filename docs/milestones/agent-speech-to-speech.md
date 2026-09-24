@@ -999,12 +999,18 @@ the existing audio round trip. Record discoveries here before implementing.
                             Evidence: `sts_transcript_modes_test.exs`
                             (29 tests, seeds 0 and 1) and the full Call Engine
                             child suite (1,507/0, 30 excluded, seed 0).
-                          - [ ] Cover wrong/stale and delayed source hold/arm
+                          - [x] Cover wrong/stale and delayed source hold/arm
                             acknowledgements in the compiled room without
                             sleeping: a mismatched receipt/token, an expired
                             arm and a reply arriving after the room has failed
                             closed must leave both input lanes closed and the
-                            STS allocation unavailable.
+                            STS allocation unavailable. A failed cutover now
+                            retires the STS allocation and keeps the selected
+                            STT ingress closed; a late arm cannot reopen it.
+                            Evidence: `sts_transcript_modes_test.exs`
+                            (53 tests with the ingress file, seeds 0 and 1) and
+                            the full Call Engine child suite (1,509/0, 30
+                            excluded, seed 0).
                         - [ ] Implement one bounded, room-owned source-cutover
                           state machine. Preserve current policy checks and
                           selected caller transcription when STS itself is

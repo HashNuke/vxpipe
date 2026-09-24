@@ -448,9 +448,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSSourceCutover do
        ) do
     Process.cancel_timer(timer)
 
-    if Map.has_key?(cutover, :policy_from) do
+    if is_pid(Map.get(cutover, :policy_from)) do
       GenServer.reply(cutover.policy_from, {:error, reason})
     end
+
+    # An ambiguous source result keeps both input lanes closed and retires the
+    # STS allocation so no stale or unqualified audio can reach it.
+    state = SpeechToSpeech.stop(state)
 
     %{
       state

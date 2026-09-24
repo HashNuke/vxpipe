@@ -236,6 +236,97 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     settle_and_assert_reply(context, output)
   end
 
+  test "provider-controlled room fails closed on a mismatched source receipt" do
+    context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    old_ingress = connection.speech_to_text.ingress
+    fixture = connection.pid
+    capability_monitor = Process.monitor(context.capability)
+
+    privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+    assert {:ok, _policy} =
+             MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+    assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
+
+    mismatched = %{
+      attachment: hold_scope.attachment,
+      token: make_ref(),
+      receiver: self(),
+      old_epoch: make_ref(),
+      held_epoch: make_ref()
+    }
+
+    assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, mismatched})
+
+    failed = await_failed_cutover(context.authority)
+
+    assert failed.source_cutover.phase == :failed
+    assert failed.source_cutover.failure == :invalid_source_receipt
+    assert failed.speech_to_speech_capability == nil
+    assert :closed == :sys.get_state(old_ingress).opening_input_admission
+    assert_receive {:DOWN, ^capability_monitor, :process, _, _}, 2_000
+
+    # A late arm cannot reopen the closed lanes.
+    refute_receive {:test_sts_source_arm, ^fixture, _}, 200
+    assert :closed == :sys.get_state(old_ingress).opening_input_admission
+  end
+
+  test "provider-controlled room fails closed when the source rejects an arm" do
+    context = room(true, false, %{}, :morse, "provider", :no_transcripts, true)
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+    old_ingress = connection.speech_to_text.ingress
+    fixture = connection.pid
+    capability_monitor = Process.monitor(context.capability)
+
+    privacy = Map.fetch!(state.participant_transfer_runtime.plan.participants, "privacy")
+
+    assert {:ok, _policy} =
+             MediaPolicyAuthority.admit(state.media_policy_authority, privacy.participant_id)
+
+    assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
+
+    receipt = %{
+      attachment: hold_scope.attachment,
+      token: hold_scope.token,
+      receiver: self(),
+      old_epoch: make_ref(),
+      held_epoch: make_ref()
+    }
+
+    assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, receipt})
+
+    assert_receive {:test_sts_source_arm, ^fixture, arm_scope}, 5_000
+    assert arm_scope.receipt == receipt
+
+    assert :ok =
+             TestTransferConnection.complete_source_arm(fixture, {:error, :deadline_elapsed})
+
+    failed = await_failed_cutover(context.authority)
+
+    assert failed.source_cutover.phase == :failed
+    assert failed.source_cutover.failure == {:source_rejected, :deadline_elapsed}
+    assert failed.speech_to_speech_capability == nil
+    assert :closed == :sys.get_state(old_ingress).opening_input_admission
+    assert_receive {:DOWN, ^capability_monitor, :process, _, _}, 2_000
+  end
+
+  defp await_failed_cutover(authority) do
+    Enum.reduce_while(1..200, nil, fn _, _ ->
+      case :sys.get_state(authority).source_cutover do
+        %{phase: :failed} = _cutover -> {:halt, :sys.get_state(authority)}
+        _pending -> {:cont, nil}
+      end
+    end)
+    |> case do
+      %{source_cutover: %{phase: :failed}} = state -> state
+      _pending -> flunk("source cutover did not fail closed")
+    end
+  end
+
   test "delayed human recognition onset cannot interrupt a newer provider-driven reply" do
     context = room(true, false)
     assert :ok = :sys.suspend(context.authority)
