@@ -23,6 +23,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   }
 
   @call_timeout 5_000
+  @source_request_timeout 5_000
 
   def start_link(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
@@ -103,6 +104,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
            private_media: nil,
            speech_normalizer: nil,
            source_gate: SourceGate.new(),
+           source_request: nil,
            sts_input: nil,
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
@@ -177,6 +179,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       ])}, state}
   end
 
+  def handle_call({:vxpipe_sts_source_hold, scope}, from, state) do
+    source_request(:hold, scope, from, state)
+  end
+
+  def handle_call({:vxpipe_sts_source_arm, scope}, from, state) do
+    source_request(:arm, scope, from, state)
+  end
+
   def handle_call({:event, source, _event}, _from, %{socket_owner: socket_owner} = state)
       when source != socket_owner do
     {:reply, {:error, :wrong_media_source}, state}
@@ -245,6 +255,26 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_sts_source_hold_ack, token, result},
+        %{source_request: %{kind: :hold, token: token} = request} = state
+      ),
+      do: settle_source_request(result, request, state)
+
+  def handle_info(
+        {:vxpipe_sts_source_arm_ack, token, result},
+        %{source_request: %{kind: :arm, token: token} = request} = state
+      ),
+      do: settle_source_request(result, request, state)
+
+  def handle_info(
+        {:vxpipe_sts_source_timeout, token},
+        %{source_request: %{token: token} = request} = state
+      ) do
+    GenServer.reply(request.from, {:error, :source_unavailable})
+    {:noreply, %{state | source_request: nil}}
+  end
+
   def handle_info(
         {:vxpipe_transfer_acceptance_ready, attempt_id},
         %{
@@ -340,6 +370,106 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
   def handle_info({:vxpipe_event, _event}, state), do: {:noreply, state}
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp source_request(kind, scope, from, %{source_request: nil} = state) do
+    with :ok <- authorize_source_request(scope, from, state),
+         :ok <- valid_source_scope(kind, scope) do
+      token = scope.token
+      send(state.socket_owner, source_request_message(kind, scope))
+
+      timer =
+        Process.send_after(
+          self(),
+          {:vxpipe_sts_source_timeout, token},
+          @source_request_timeout
+        )
+
+      gate = if kind == :hold, do: SourceGate.hold(state.source_gate), else: state.source_gate
+      request = %{kind: kind, from: from, token: token, timer: timer}
+
+      {:noreply, %{state | source_gate: gate, source_request: request}}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp source_request(_kind, _scope, _from, state),
+    do: {:reply, {:error, :source_busy}, state}
+
+  defp authorize_source_request(
+         %{attachment: attachment},
+         {caller, _},
+         %{
+           attachment: %ConnectionAttachment{
+             admission: :main,
+             room_authority: authority,
+             room_monitor: monitor
+           }
+         }
+       )
+       when is_pid(authority) and caller == authority and attachment == monitor,
+       do: :ok
+
+  defp authorize_source_request(_scope, _from, _state), do: {:error, :unauthorized}
+
+  defp valid_source_scope(:hold, %{token: token, deadline_ms: deadline})
+       when is_reference(token) and is_integer(deadline),
+       do: :ok
+
+  defp valid_source_scope(:arm, %{token: token, active_epoch: epoch, deadline_ms: deadline})
+       when is_reference(token) and is_reference(epoch) and is_integer(deadline),
+       do: :ok
+
+  defp valid_source_scope(_kind, _scope), do: {:error, :invalid_source_request}
+
+  defp source_request_message(:hold, %{token: token, deadline_ms: deadline_ms}) do
+    {:vxpipe_sts_source_hold, %{reply_to: self(), token: token, deadline_ms: deadline_ms}}
+  end
+
+  defp source_request_message(:arm, %{token: token, active_epoch: epoch, deadline_ms: deadline_ms}) do
+    {:vxpipe_sts_source_arm,
+     %{reply_to: self(), token: token, active_epoch: epoch, deadline_ms: deadline_ms}}
+  end
+
+  defp settle_source_request(
+         {:ok, %{old_epoch: old_epoch, held_epoch: held_epoch}},
+         %{kind: :hold} = request,
+         state
+       )
+       when is_reference(old_epoch) and is_reference(held_epoch) do
+    Process.cancel_timer(request.timer)
+
+    receipt = %{
+      attachment: state.attachment.room_monitor,
+      token: request.token,
+      receiver: state.socket_owner,
+      old_epoch: old_epoch,
+      held_epoch: held_epoch
+    }
+
+    GenServer.reply(request.from, {:ok, receipt})
+    {:noreply, %{state | source_gate: {:held, old_epoch}, source_request: nil}}
+  end
+
+  defp settle_source_request({:ok, epoch}, %{kind: :arm} = request, state)
+       when is_reference(epoch) do
+    Process.cancel_timer(request.timer)
+    GenServer.reply(request.from, {:ok, epoch})
+    {:noreply, %{state | source_gate: {:active, epoch}, source_request: nil}}
+  end
+
+  defp settle_source_request({:error, reason}, request, state) do
+    Process.cancel_timer(request.timer)
+    GenServer.reply(request.from, {:error, reason})
+    # A failed or ambiguous request leaves the source gate held.
+    {:noreply, %{state | source_request: nil}}
+  end
+
+  defp settle_source_request(_unexpected, request, state) do
+    Process.cancel_timer(request.timer)
+    GenServer.reply(request.from, {:error, :invalid_source_response})
+    {:noreply, %{state | source_request: nil}}
+  end
 
   defp audio_frame(%MediaBinding{} = binding, %Event{media: %MediaPacket{} = media} = event) do
     %AudioFrame{

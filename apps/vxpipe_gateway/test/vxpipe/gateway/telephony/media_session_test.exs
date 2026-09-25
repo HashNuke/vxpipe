@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
   alias Membrane.Opus.Encoder.Native
   alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.ConnectionAttachment
 
   alias Vxpipe.CallEngine.{
     CallSpec,
@@ -374,6 +375,126 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
     assert {:reply, :ok, ^active_state} =
              MediaSession.handle_call({:event, self(), event}, self(), active_state)
+  end
+
+  test "authorizes, forwards and settles a room source hold then arm" do
+    room = self()
+    token = make_ref()
+    deadline_ms = System.monotonic_time(:millisecond) + 5_000
+    monitor = make_ref()
+
+    state = %{
+      socket_owner: self(),
+      attachment: %ConnectionAttachment{
+        admission: :main,
+        room_monitor: monitor,
+        media_ingress: nil,
+        room_authority: room
+      },
+      source_gate: nil,
+      source_request: nil
+    }
+
+    from = {self(), make_ref()}
+
+    assert {:noreply, holding_state} =
+             MediaSession.handle_call(
+               {:vxpipe_sts_source_hold,
+                %{attachment: monitor, token: token, deadline_ms: deadline_ms}},
+               from,
+               state
+             )
+
+    assert_receive {:vxpipe_sts_source_hold,
+                    %{reply_to: reply_to, token: ^token, deadline_ms: ^deadline_ms}}
+
+    assert reply_to == self()
+    assert holding_state.source_gate == {:held, nil}
+
+    old_epoch = make_ref()
+    held_epoch = make_ref()
+
+    assert {:noreply, held_state} =
+             MediaSession.handle_info(
+               {:vxpipe_sts_source_hold_ack, token,
+                {:ok, %{socket: self(), old_epoch: old_epoch, held_epoch: held_epoch}}},
+               holding_state
+             )
+
+    assert_receive {tag, {:ok, receipt}}
+    assert tag == elem(from, 1)
+
+    assert receipt == %{
+             attachment: monitor,
+             token: token,
+             receiver: self(),
+             old_epoch: old_epoch,
+             held_epoch: held_epoch
+           }
+
+    assert held_state.source_gate == {:held, old_epoch}
+    assert held_state.source_request == nil
+
+    active_epoch = make_ref()
+
+    assert {:noreply, arming_state} =
+             MediaSession.handle_call(
+               {:vxpipe_sts_source_arm,
+                %{
+                  attachment: monitor,
+                  token: token,
+                  receipt: receipt,
+                  active_epoch: active_epoch,
+                  deadline_ms: deadline_ms
+                }},
+               from,
+               held_state
+             )
+
+    assert_receive {:vxpipe_sts_source_arm,
+                    %{reply_to: reply_to2, token: ^token, active_epoch: ^active_epoch}}
+
+    assert reply_to2 == self()
+    assert arming_state.source_gate == {:held, old_epoch}
+
+    assert {:noreply, armed_state} =
+             MediaSession.handle_info(
+               {:vxpipe_sts_source_arm_ack, token, {:ok, active_epoch}},
+               arming_state
+             )
+
+    assert_receive {_tag2, {:ok, ^active_epoch}}
+    assert armed_state.source_gate == {:active, active_epoch}
+    assert armed_state.source_request == nil
+  end
+
+  test "rejects a source hold from a caller that is not the room authority" do
+    monitor = make_ref()
+
+    state = %{
+      socket_owner: self(),
+      attachment: %ConnectionAttachment{
+        admission: :main,
+        room_monitor: monitor,
+        media_ingress: nil,
+        room_authority: self()
+      },
+      source_gate: nil,
+      source_request: nil
+    }
+
+    scope = %{
+      attachment: monitor,
+      token: make_ref(),
+      deadline_ms: System.monotonic_time(:millisecond) + 1_000
+    }
+
+    assert {:reply, {:error, :unauthorized}, ^state} =
+             MediaSession.handle_call(
+               {:vxpipe_sts_source_hold, scope},
+               {make_ref(), make_ref()},
+               state
+             )
   end
 
   defp compile_plan(options \\ []) do

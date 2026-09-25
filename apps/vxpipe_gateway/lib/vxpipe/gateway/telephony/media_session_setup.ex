@@ -39,7 +39,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
            ),
          {:ok, command} <- attach_command(actor_id, binding),
          {:ok, %ConnectionAttachment{} = attachment} <-
-           engine.attach_connection(command, output),
+           engine.attach_connection(command, output, true),
          {:ok, routing} <-
            MediaRouting.start(attachment, routing_options(options, identity, output)) do
       {:ok,

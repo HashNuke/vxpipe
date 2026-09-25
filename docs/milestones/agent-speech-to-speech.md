@@ -1113,6 +1113,19 @@ the existing audio round trip. Record discoveries here before implementing.
                     which local queues are fenced. Do not claim remote capture,
                     ICE/DTLS buffering or TCP receipt-time guarantees from
                     these local tests.
+                    - [x] Give the telephony `MediaSession` the room-facing
+                      source hold/arm boundary and attach telephony media
+                      sessions with `source_control?: true`. Authorize the exact
+                      room authority and room monitor, forward hold/arm to the
+                      socket owner, settle the room only on the socket ack, and
+                      fail closed on timeout with the gate left held. Focused
+                      handler tests pass and the adjacent
+                      `sts_input`/telephony/provider group passes 190/0 on seed 0.
+                    - [ ] Prove completed telephony hold/reopen through a
+                      compiled selected-STS telephony room: a frame queued before
+                      the hold is dropped, a fresh frame is delivered, and marks
+                      stay responsive. Separate from the WebRTC source RTP
+                      barriers and from remote/ICE guarantees.
                     - [x] Keep independent caller transcription usable while
                       STS activity/input is closed or its allocation retired.
                       Astra xhigh reproduced a WebRTC callback stopping its

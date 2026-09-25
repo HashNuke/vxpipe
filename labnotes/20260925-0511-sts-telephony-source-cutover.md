@@ -113,6 +113,40 @@ clearing only the ingress queue; sending `:ended` on hold.
 - `mix compile --warnings-as-errors` and `mix credo --strict` (1,107 files, no
   issues) pass.
 
+## T4 design (room wiring, not yet implemented)
+
+Room-facing boundary: the telephony `MediaSession` is the analogue of the
+WebRTC `Connection`. `RoomAuthority.STSSourceCutover` already sends
+`{:vxpipe_sts_source_hold, %{attachment, token, deadline_ms}}` and
+`{:vxpipe_sts_source_arm, %{..., active_epoch, ...}}` to a connection whose
+room map has `source_control?: true`, and expects a
+`{attachment, token, receiver, old_epoch, held_epoch}` receipt / active-epoch
+reply.
+
+- `MediaSessionSetup.run/1` attaches the main telephony connection with
+  `source_control?: true` (WebRTC already does this) so the room selects it.
+- The MediaSession authorizes `caller == state.attachment.room_authority` and
+  `scope.attachment == state.attachment.room_monitor`, then forwards the
+  request to `state.socket_owner` with `reply_to: self()`. It replies to the
+  room only after the socket ack, mapping the socket receipt's `socket` pid to
+  the room `receiver` field and setting `source_gate` on hold/arm. A bounded
+  timer fails the request closed and leaves the gate held.
+- The socket's `old_epoch`/`held_epoch` and the room-chosen `active_epoch` are
+  the same values `SourceEpoch` already handles, so no new epoch protocol is
+  needed.
+- Verification: a compiled telephony room with selected STS completes
+  hold → retire STT → fresh origin → arm → reopen; a frame queued before the
+  hold is dropped by the `SourceGate`, a fresh frame is delivered, and marks
+  stay responsive. Telephony raw source cutover acceptance remains separate.
+
+Implementation status: `MediaSession` now authorizes the room authority and
+exact room monitor, forwards hold/arm to the socket owner, settles only on the
+socket ack, and times out to `{:error, :source_unavailable}` with the gate left
+held; `MediaSessionSetup` attaches telephony media with `source_control?: true`.
+Focused direct-handler tests cover the authorized hold→arm sequence and an
+unauthorized caller; the adjacent 190-test group passes seed 0. The compiled
+telephony room hold/reopen test remains the next step.
+
 ## Limits
 
 T1-T3 are enabling primitives. The MediaSession gate stays `nil` until T4 wires
