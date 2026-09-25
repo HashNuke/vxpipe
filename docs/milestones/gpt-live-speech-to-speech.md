@@ -1,8 +1,8 @@
 # GPT-Live speech-to-speech
 
-Status: specification frozen on 2026-09-25; checkpoints A and B are implemented
-and verified. Checkpoint C is partially implemented: the capability's
-provider-owned barge-in branch and the room's `:overlapped` outcome are in
+Status: specification frozen on 2026-09-25; checkpoint A is implemented and
+verified; checkpoint B is reopened (see below). Checkpoint C is partially
+implemented: the capability's provider-owned barge-in branch and the room's `:overlapped` outcome are in
 place, while the compiled-room duplex proof and the remaining C fixtures,
 checkpoint D (OpenAI package and GPT-Live adapter), checkpoint E (session
 continuity) and checkpoint F (docs, Console gating, hosted check, load, review)
@@ -10,6 +10,21 @@ are not started. Change the specification only through a recorded amendment in
 this section, with its reason; for example, a checkpoint A finding that
 contradicts an assumption below. The milestones index entry stays unchecked
 until the acceptance checks below pass.
+
+Checkpoint B was reopened by [review 3](#review-3--2026-09-25-response-to-review-2)
+finding R3-1: the Morse duplex provider does not yet stream clock-paced output
+with silence.
+
+Amendments:
+
+- **Amendment 1 (2026-09-25), from R2-2 and review 3.** The duplex descriptor
+  facts apply to STS descriptors only; STT and TTS descriptors do not carry
+  them. Every STS provider declares each fact explicitly rather than inheriting
+  a default. Existing values: Google STS declares `continuity:
+  :resumption_handle`; Morse STS declares `continuity: :none`. Both keep
+  `output_shape: :turns`, `barge_in: :room`, `tool_cancellation?: true` and
+  `hold: :stop`. Reason: the original "existing providers declare the first
+  value" rule claimed a resumption handle for Morse STS, which has none.
 
 Prerequisites: [Agent speech-to-speech](agent-speech-to-speech.md) (the
 provider-controlled STS contract, room publication and Morse STS) and
@@ -93,7 +108,8 @@ judged against how a person behaves on a phone call:
 ### Descriptor facts
 
 Closed admission facts on the STS descriptor, validated with the existing
-descriptor rules. Existing STS providers declare the first value in each row.
+descriptor rules. Existing STS providers declare the first value in each row,
+except as corrected by Amendment 1 (Morse STS declares `continuity: :none`).
 
 | Fact | Values | GPT-Live |
 | --- | --- | --- |
@@ -336,7 +352,7 @@ the pre-existing load-sensitive STT timing behavior, not this contract change.
   (9 tests, red then green) covers every listed fixture against
   `lib/vxpipe/call_engine/speech/duplex/output_segmenter.ex`, including the
   pre-admission receive-buffer overflow and the quiet-onset pre-roll.
-- [x] Implement `MorseCode.DuplexSTSSession` and prove it through the STS
+- [ ] Implement `MorseCode.DuplexSTSSession` and prove it through the STS
   capability: one caller turn, one aligned agent reply, self-yield on caller
   tone, delegated tool call and result, and a usage report.
   Evidence: `Vxpipe.Providers.MorseCode.DuplexSTSSession` over
@@ -350,7 +366,11 @@ the pre-existing load-sensitive STT timing behavior, not this contract change.
   provider self-yield deterministically: while one output credit is held,
   caller tone makes the provider finish the interrupted reply (its
   `:output_completed` follows the released credit) without any engine fence.
-- [x] Exit: capability-level tests pass without any provider socket.
+  Reopened by R3-1: output is credit-driven, not clock-paced, and no silence is
+  streamed between replies, so the provider does not yet meet the Morse duplex
+  provider specification above.
+- [ ] Exit: capability-level tests pass without any provider socket.
+  Reopened with the task above (R3-1).
   `capability` + `speech` suites pass 504 tests, 0 failures (seed 0). The
   `barge_in: :provider` capability branch (caller onset leaves output playing)
   is implemented here and proven by checkpoint C below.
@@ -543,3 +563,136 @@ Open findings: R1-1, R1-3, R1-4. R1-2 needs no code change.
 
 Next work, in order: the R1-1 test; the remaining C tasks; C's exit;
 then D. Pause only at the hosted check or for a recorded blocker.
+
+### Review 2 — 2026-09-25 (implementation response)
+
+This is the implementation run's response to Review 1, not independent
+verification. A later independent Review 3 should assess it as such.
+
+Reviewed state: base `3b1f7147` on `sts2`; this response is appended to the
+milestone doc, and the worktree otherwise contains only a pre-existing
+`apps/vxpipe_gateway` telephony test change that predates this milestone and is
+not part of its commits.
+
+Response to Review 1:
+
+- R1-1 — **still open; confirmed empirically.** Removing the
+  `barge_in: :provider` branch from `Capability.SpeechToSpeech.handle_event/2`
+  leaves the relevant duplex, contract, capability and room suites green (75
+  tests, zero failures), so nothing currently covers it. The branch is still
+  required: without it the capability cuts local playback on caller onset
+  regardless of the provider descriptor. Test-seam correction for the fix: the
+  capability auto-acknowledges PCM credits as the sink accepts, so a
+  capability-boundary test cannot naturally hold a burst open. Pin the behavior
+  with a capability unit test (stubbed active output plus a `barge_in:
+  :provider` descriptor) or a compiled-room test whose provider withholds one
+  credit, and assert that policy denial, hold and teardown still fence.
+- R1-2 — **acknowledged; no code change.** C, D and E are local work; only the
+  checkpoint F hosted carrier check needs outside authorization. Corrected
+  wording: the pause was a conservative choice, not a hard blocker.
+- R1-3 — **agreed.** Finish C before D.
+- R1-4 — **valid caution, narrowed.** The milestone's prerequisite line scopes
+  the dependency to the provider-controlled STS contract, room publication and
+  Morse STS, all of which have focused evidence. The parent
+  [Agent speech-to-speech](agent-speech-to-speech.md) milestone is globally
+  unchecked, and the index calls its order conservative "even where independent
+  work is possible"; the user has directed continued work. Not a hard blocker,
+  but keep it recorded.
+
+Additional findings raised by this response:
+
+- R2-1 — **Public event schema.** `AgentTurnCompleted.outcome` and
+  `ParticipantTurnCompleted.endpointing` are additive fields on structs and on
+  archive payloads for already-persisted events. The umbrella suite passes, but
+  consumer coverage and persisted-event versioning were not reviewed; add a
+  versioning note before publication.
+- R2-2 — **Continuity default is semantically loose.** `continuity:
+  :resumption_handle` is the default for existing STS descriptors only to
+  satisfy the frozen table's "existing providers declare the first value" rule,
+  but Morse STS has no resumption handle. Record an amendment that either gives
+  local providers `:none` or states the fact is advisory for them.
+- R2-3 — **Segmenter tuning is provisional.** The output gap (1 s), pre-roll
+  (300 ms) and receive buffer (2 s) were chosen so the Morse provider yields one
+  burst per reply. The real adapter may need different values; treat them as
+  tunable, not settled.
+- R2-4 — **Review evidence mechanics.** A later review should report added and
+  changed test counts separately, and should repeat the umbrella run rather
+  than cite it, since that run is the milestone's acceptance evidence.
+
+Next work, in order: the R1-1 focused test and fence confirmations; the
+remaining C tasks; C's exit; then D, then E and F.
+
+### Review 3 — 2026-09-25 (response to review 2)
+
+Independent review of the implementation run's review 2 response.
+
+Reviewed state: base `3b1f7147` on `sts2`, with review 2 uncommitted in this
+file and the unrelated `apps/vxpipe_gateway` telephony test change. No code
+changed since review 1; this review re-read the committed `a2a7043a` code.
+
+Status of earlier findings:
+
+- R1-1 — **still open.** Review 2's proof that removing the branch leaves 75
+  tests green confirms nothing covers it. Its claim that a capability-boundary
+  test cannot hold output open is overstated: existing capability tests hold
+  processes with `:sys.suspend/1`, a stub provider can leave its output
+  uncompleted, and `duplex_sts_conversation_test.exs` already holds an output
+  credit to prove self-yield. Either proposed test design is acceptable. The
+  test is still unwritten.
+- R1-2 — **closed.** Review 2's corrected wording is accepted.
+- R1-3 — **closed as agreed.** The order stands: C before D.
+- R1-4 — **still open, as a caution.** Review 2 says the prerequisite parts
+  "all have focused evidence". That is generous: room publication and
+  lifecycle tasks remain unchecked in the parent milestone. Only the user can
+  confirm the direction to continue in parallel.
+- R2-1 — **accepted.** Archived `agent_turn_completed` payloads now always
+  include `"outcome"` and `participant_turn_completed` payloads may include
+  `"endpointing"`, but `schema_version` was not bumped. Old events decode
+  through the struct defaults, so nothing breaks now. Decide and record the
+  versioning rule before any consumer reads the new fields.
+- R2-2 — **accepted; the specification error was review 1's author's.**
+  Recorded as Amendment 1 in the status section. The code has a second part:
+  `Descriptor.default_duplex_facts?/1` makes STT descriptors carry STS-only
+  facts, including `continuity: :resumption_handle`. Remove the facts from
+  non-STS descriptors and make each STS provider declare them explicitly.
+- R2-3 — **accepted, with corrections.** The drift is larger than stated:
+  - `OutputSegmenter` defaults its gap to 400 ms (`output_segmenter.ex:25`);
+    the Morse duplex provider overrides it to 1 s; the specification says
+    800 ms.
+  - The Morse duplex receive buffer is 60 s (`morse_code_duplex/session.ex:27`),
+    not 2 s as review 2 states.
+  These are changes to a frozen specification and need amendments or
+  reverting. Do not tune the shared module to make the fake yield one burst per
+  reply. Fit the fake to the specification instead, for example by using a Morse
+  speed whose word gaps stay under 800 ms.
+- R2-4 — **partly accepted.** Report added and changed test counts separately.
+  Do not repeat the umbrella run in every review; that contradicts the
+  project's cadence of full gates at checkpoint commits and in the final pass.
+  A review cites the gate run tied to the commit it reviews, and repeats it
+  only when reviewing acceptance.
+
+New findings:
+
+- R3-1 — **The Morse duplex provider does not behave like GPT-Live output.**
+  The specification requires continuous, clock-paced PCM including silence.
+  The implementation sends output only as sink credit arrives
+  (`handle_info/2` on `:vxpipe_speech_credit`), has no pacing timer and
+  streams no silence between replies. The segmenter paths specific to GPT-Live
+  therefore never run in the local suite: discarding silence between bursts, a
+  provider with no flow control, receive-buffer overflow, and pre-roll taken
+  from real sub-threshold audio. The 60 s buffer hides this. Checkpoint B is
+  reopened: add clock-paced output with silence, return the buffer to the
+  specified 2 s, and prove silence discarding, overflow and pre-roll through
+  the Morse duplex provider.
+- R3-2 — **Label responses separately from reviews.** Review 2 is an
+  implementation response and raises findings from the implementer's view. It
+  says so, which is correct. From now on, label an implementer reply "Response
+  to review N" with findings prefixed `P<N>-`, so review numbers stay for
+  independent reviews. Existing labels stay as they are, since reviews are
+  append-only.
+
+Open findings: R1-1, R1-4, R2-1, R2-2, R2-3, R3-1.
+
+Next work, in order: R2-2 and R2-3 corrections with Amendment 1 applied; R3-1
+(reopened B); the R1-1 test; the remaining C tasks and C's exit; then D.
+R2-1's versioning rule is needed before any consumer reads the new fields.
