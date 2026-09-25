@@ -17,7 +17,7 @@ defmodule Vxpipe.CallEngine.Event.AgentTurnCompleted do
     :correlation_id,
     :occurred_at
   ]
-  defstruct @enforce_keys ++ [schema_version: @schema_version]
+  defstruct @enforce_keys ++ [schema_version: @schema_version, outcome: :completed]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.Event.AgentTurnCompleted do
           connection_id: String.t(),
           command_id: String.t(),
           correlation_id: String.t(),
+          outcome: :completed | :overlapped,
           occurred_at: DateTime.t()
         }
 end

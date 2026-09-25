@@ -120,7 +120,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
     end
   end
 
-  defp update_turn(state, %{ended?: false} = turn, %Event{kind: :turn_ended, text: text}) do
+  defp update_turn(state, %{ended?: false} = turn, %Event{kind: :turn_ended, text: text} = event) do
     {state, turn} =
       cond do
         not turn.text_allowed? ->
@@ -133,7 +133,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
           {state, turn}
       end
 
-    {publish(state, ParticipantTurnCompleted, turn, modality: :audio), %{turn | ended?: true}}
+    {publish(state, ParticipantTurnCompleted, turn,
+       modality: :audio,
+       endpointing: event.endpointing
+     ), %{turn | ended?: true}}
   end
 
   defp update_turn(state, turn, _event), do: {state, turn}

@@ -1,0 +1,201 @@
+# GPT-Live duplex contract
+
+## Task
+
+Implement the [GPT-Live speech-to-speech
+milestone](../docs/milestones/gpt-live-speech-to-speech.md) beyond its frozen
+specification. This labnote covers checkpoint A; later checkpoints get their own
+sections or notes.
+
+## Checkpoint A — verified API profile and contract facts
+
+### API profile
+
+Fetched OpenAI's published GPT-Live guides (getting started, WebSockets,
+managing sessions, delegation, server-side controls, prompting) plus the model
+card. Recorded the documented facts and the residual unknowns in
+`docs/sts-duplex-profile.md`. Key verified points:
+
+- Primary URL `wss://api.openai.com/v1/live/sessions`, bearer API key, send
+  `session.start` first and wait for `session.started`.
+- WebSocket formats: PCM16 24 kHz (default) / 16 kHz, G.711 μ-law 8 kHz, G.711
+  A-law 8 kHz; one format for input and output.
+- Startup history up to 128 messages / 8,192 tokens; `instructions` up to
+  16,384 tokens; appends capped at 500 tokens each.
+- Primary WebSocket output audio has **no timing fields**; only sideband
+  reflection carries `start_ms`/`end_ms`. The adapter must gate/segment audio
+  itself.
+- `session.input_audio.mute`/`unmute` plus `session.thinking.append` give the
+  hold semantics the milestone needs (session and backend work continue).
+- Delegation: read `function_call` from nested `response.output_item.done`;
+  return `response.item.create` then one `response.create`. `response.completed`
+  carries an empty output array.
+- Usage `usage.seconds` is cumulative; `session.closed.reason` is
+  `close_requested | expired | content | remote_hangup | connection_lost`.
+- Talk-over is full duplex and the prompt tells the model to yield on a real
+  interruption; backchannels are separate. No yield event exists, so the
+  adapter infers it from output audio stopping.
+
+Six items remain unverified and are checkpoint F hosted-check items: extra
+connection headers, nonstandard `audio.format`, talk-over/echo on a carrier,
+continuous output silence, any numeric duration limit, and 24 kHz
+down-conversion. Because no duration limit is documented, checkpoint E's
+"renew before the documented limit" task has no numeric target yet.
+
+### Contract changes
+
+`Speech.Descriptor` (new closed facts, defaults = existing room-owned
+behavior): `output_shape: :turns | :continuous`, `barge_in: :room | :provider`,
+`continuity: :resumption_handle | :history_reseed | :none`,
+`tool_cancellation?`, `hold: :stop | :mute`, and `endpointing: :inferred_gap`.
+Validation: `:inferred_gap` only for `turn_control: "provider"` with
+`speech_start?`; `barge_in: :provider` requires `history_reconciliation?:
+false`; non-STS descriptors must keep the defaults. Gemini and Morse STS
+descriptors keep the defaults and still validate.
+
+`Speech.Event`: `:turn_ended`/`:eager_turn_ended` accept `:inferred_gap`;
+`:output_transcript` accepts an optional complete
+`output_ref`/`audio_start_ms`/`audio_end_ms` span. `AgentTurnCompleted` gains
+`outcome` (`:completed | :overlapped`); `ParticipantTurnCompleted` gains
+optional `endpointing`. Both project into the archive payload.
+
+### Red-green evidence
+
+- Wrote `test/vxpipe/call_engine/speech/sts_duplex_contract_test.exs` first;
+  it failed with `KeyError :barge_in`, `Event.build` rejecting `:inferred_gap`,
+  and the public-projection assertion failing. After implementation all 9 pass.
+- Full `vxpipe_call_engine` suite: 1,523 tests, 0 failures, 30 excluded
+  (seed 0). Gateway `turn_state`: 5 tests, 0 failures.
+- `mix compile --warnings-as-errors` clean after formatting.
+- One combined focused run had a single `speech_to_text_test.exs:496` timing
+  failure that passes in isolation; pre-existing load sensitivity, not this
+  change.
+
+## Checkpoint B — shared duplex modules (partial)
+
+Implemented the two provider-neutral pure modules that the Morse duplex provider
+and the GPT-Live adapter share.
+
+### `Speech.Duplex.TurnInference`
+
+Opens a caller turn on the first non-empty input fragment (emitting
+`:speech_started` then a partial `:input_transcript`), accumulates fragment text
+exactly, closes on pushed caller audio reaching the gap or on a timeline gap
+larger than the gap, ignores empty fragments, and closes on `finish/1` at
+session end. All durations are audio time; no timers. Emits
+`{kind, fields}` tuples carrying the generated `turn_ref`, ready for
+`Event.emit/3`, with `endpointing: :inferred_gap` on `:turn_ended`.
+
+Tests: `test/.../duplex/turn_inference_test.exs`, 7 tests red then green
+(quiet-audio close, timeline-gap close and reopen, overlapping, empty, session
+end, malformed input).
+
+### `Speech.Duplex.OutputSegmenter`
+
+Frame-based energy gate with hysteresis over PCM. Opens a burst on an active
+frame, replays a bounded pre-roll so quiet onsets survive, keeps pauses shorter
+than the gap inside the burst, forwards burst audio and closes after the gap.
+`{:open, ref}` asks the adapter to admit an output; while awaiting admission it
+buffers burst audio up to `buffer_ms` and returns `{:error, :buffer_overflow,
+state}` rather than blocking. Fragment alignment keys the first fragment to the
+burst (fixing the provider-to-output offset), reports later fragments with
+`audio_start_ms`/`audio_end_ms` relative to the output, attaches late fragments
+to the earlier output, and drops/counts fragments with no matching audio after
+`fragment_timeout_ms`.
+
+Tests: `test/.../duplex/output_segmenter_test.exs`, 9 tests red then green
+(burst open/close, short pauses, pre-roll-only silence, quiet onset, overflow,
+first-fragment offset, late attachment, unmatched drop, bad config).
+
+### Evidence and state
+
+- Both duplex test files pass 16 tests, 0 failures (seed 0).
+- `mix compile --warnings-as-errors` and `mix credo --strict` (1,109 files, no
+  issues) are clean.
+- Full umbrella gate `PGHOST=/var/run/postgresql mix test --seed 0` passes
+  2,726 tests, 0 failures; `mix format --check-formatted` and
+  `mix deps.unlock --check-unused` also pass.
+- Not done: wiring either module into `MorseCode.DuplexSTSSession` (checkpoint
+  B tasks 3–4), so the module boxes are checked but the checkpoint exit stays
+  open. An unreferenced module plus tests keeps the umbrella usable.
+
+## Checkpoint B — complete
+
+Wired the shared modules into a local provider.
+
+- `Provider.MorseCodeDuplex.Session` + `Providers.MorseCode.DuplexSTSSession`
+  reuse the Morse codec, `TurnInference` and `OutputSegmenter`, declare the
+  duplex descriptor facts, and use the legacy `:turn_ended` → `admit_output`
+  path (no response contexts). Output is segmented; each burst is admitted once
+  and submitted under one outstanding credit.
+- Reply generation is queued behind a draining interrupted output. An admit
+  that arrives while the previous output drains is stashed and replayed when the
+  queued reply starts.
+- Capability proof `capability/speech_to_speech_duplex_test.exs` (3 tests): one
+  caller turn → one segmented reply with playback-settled `"RECEIVED HI"`
+  transcript and a `:milliseconds` `:speech_to_speech` usage observation; and
+  `TOOL echo {...}` → result → `"RECEIVED ok"` reply.
+- Self-yield proof `speech/duplex_sts_conversation_test.exs`: while one output
+  credit is held, caller tone makes the provider finish the interrupted reply
+  (its `:output_completed` follows the released credit) with no engine fence.
+  The eager provider cannot overlap through the capability because generation
+  completes as fast as credits return; the direct-session test uses credit
+  backpressure instead, deterministically and without sleeps.
+
+Evidence: `capability` + `speech` suites pass 504 tests, 0 failures (seed 0).
+
+## Checkpoint C — partial
+
+- `Capability.SpeechToSpeech.handle_event/2`: caller onset with an active
+  output no longer fences when the descriptor declares `barge_in: :provider`.
+  Existing barge-in-room behavior is unchanged.
+- `RoomAuthority.SpeechToSpeech`: an overlapping caller onset marks the open
+  agent turn, and `handle_turn_completed/5` publishes
+  `AgentTurnCompleted.outcome` as `:overlapped` (default `:completed`).
+- `CallerTurns` carries the inferred boundary evidence onto the public
+  `ParticipantTurnCompleted.endpointing`.
+- Focused room unit tests prove both outcomes (`speech_to_speech_test.exs`, 20
+  tests, 0 failures).
+
+Still open: the compiled-room duplex proof, per-fragment playback truncation,
+pre-roll soft onset at the room, `hold: :mute`, room-fence prefix, and tool
+survival across overlap.
+
+## Full gate evidence
+
+All five root completion gates pass on the A + B + C-partial worktree
+(`GATES_EXIT=0`): `mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix credo --strict` (12,512 mods/funs, no
+issues), `PGHOST=/var/run/postgresql mix test --seed 0` (2,731 tests, 0
+failures across all children), and `mix deps.unlock --check-unused`.
+
+## Remaining work (not started)
+
+- **C remainder:** compiled-room duplex proof, per-fragment playback
+  truncation, room-level pre-roll soft onset, `hold: :mute`, room-fence
+  prefix, tool survival across overlap.
+- **D:** `Vxpipe.Providers.OpenAI` package + tenant API-key reader,
+  `GPTLiveSession` + private socket, fake-socket fixture matrix, redaction
+  proof.
+- **E:** reseed/renewal/lifecycle with both local providers.
+- **F:** provider/author docs, Console gated option, hosted carrier check
+  (needs explicit billable authorization), ten-call load lane, rendered-browser
+  inspection, independent review.
+
+## Decisions and barriers
+
+- Followed the milestone literally that existing STS providers declare the first
+  value in each new fact row, so the new struct defaults reproduce current
+  behavior without editing Gemini or Morse STS `configure/1`.
+- Kept the new public-event field additions optional and only added
+  `endpointing` to the archive payload when present, to avoid perturbing every
+  existing participant-turn fact.
+- Barrier: the milestone's checkpoint A named an unverified API surface; the
+  official pages are reachable, so verification succeeded. The remaining
+  unknowns are genuinely undocumented on the pages checked.
+
+## Next
+
+Checkpoint B: pure `Speech.Duplex.TurnInference` and
+`Speech.Duplex.OutputSegmenter` modules with PCM fixtures, then
+`MorseCode.DuplexSTSSession` through the real capability.

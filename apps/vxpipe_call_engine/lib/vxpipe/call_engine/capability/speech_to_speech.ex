@@ -582,6 +582,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         nil ->
           {:noreply, state}
 
+        _active when is_map(state.descriptor) and state.descriptor.barge_in == :provider ->
+          # The provider owns barge-in: caller onset opens the caller turn but
+          # leaves output playing. The provider yields if it chooses to.
+          {:noreply, state}
+
         _active ->
           {_played, state} = fence_output(state)
           {:noreply, state}

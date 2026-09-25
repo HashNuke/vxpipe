@@ -17,7 +17,7 @@ defmodule Vxpipe.CallEngine.Event.ParticipantTurnCompleted do
     :modality,
     :occurred_at
   ]
-  defstruct @enforce_keys ++ [schema_version: @schema_version]
+  defstruct @enforce_keys ++ [schema_version: @schema_version, endpointing: nil]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.Event.ParticipantTurnCompleted do
           command_id: String.t(),
           correlation_id: String.t(),
           modality: :audio | :text,
+          endpointing: atom() | nil,
           occurred_at: DateTime.t()
         }
 end

@@ -34,7 +34,10 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     :call_ref,
     :tool_name,
     :arguments,
-    :final
+    :final,
+    :output_ref,
+    :audio_start_ms,
+    :audio_end_ms
   ]
 
   @type t :: %__MODULE__{}
@@ -130,7 +133,17 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   defp allowed_fields(:turn_resumed), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:transcript), do: [:turn_ref, :text, :provider_request_id]
   defp allowed_fields(:input_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
-  defp allowed_fields(:output_transcript), do: [:turn_ref, :text, :final, :provider_request_id]
+
+  defp allowed_fields(:output_transcript),
+    do: [
+      :turn_ref,
+      :text,
+      :final,
+      :provider_request_id,
+      :output_ref,
+      :audio_start_ms,
+      :audio_end_ms
+    ]
 
   defp allowed_fields(:response_started),
     do: [:turn_ref, :response_index, :response_context]
@@ -206,7 +219,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
        do:
          is_reference(reference) and is_binary(text) and
            (kind == :transcript or
-              event.endpointing in [:provider_semantic, :provider_gap, :external])
+              event.endpointing in [:provider_semantic, :provider_gap, :inferred_gap, :external])
 
   defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text} = event)
        when kind in [:input_transcript],
@@ -218,7 +231,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
        when kind in [:output_transcript],
        do:
          is_reference(reference) and is_binary(text) and
-           (is_nil(event.final) or is_boolean(event.final))
+           (is_nil(event.final) or is_boolean(event.final)) and valid_output_alignment?(event)
 
   defp valid_kind?(%__MODULE__{
          kind: :tool_call,
@@ -243,4 +256,22 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     do: is_reference(reference) and is_reference(turn)
 
   defp valid_kind?(_event), do: false
+
+  defp valid_output_alignment?(%__MODULE__{
+         output_ref: nil,
+         audio_start_ms: nil,
+         audio_end_ms: nil
+       }),
+       do: true
+
+  defp valid_output_alignment?(%__MODULE__{
+         output_ref: output_ref,
+         audio_start_ms: start_ms,
+         audio_end_ms: end_ms
+       }),
+       do:
+         is_reference(output_ref) and is_integer(start_ms) and start_ms >= 0 and
+           is_integer(end_ms) and end_ms >= start_ms
+
+  defp valid_output_alignment?(_event), do: false
 end

@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     assert_receive {:vxpipe_event, %TextOutput{text: "RECEIVED HELLO", participant_id: @agent}}
 
-    state = SpeechToSpeech.handle_turn_completed(state, capability, @agent, "turn-1")
+    _state = SpeechToSpeech.handle_turn_completed(state, capability, @agent, "turn-1")
 
     assert_receive {:vxpipe_event, %AgentTurnCompleted{participant_id: @agent}}
     assert state.next_sequence > 1
@@ -74,6 +74,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     state = SpeechToSpeech.handle_turn_completed(state, capability, @agent, turn)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{participant_id: @agent}}
     assert state.next_sequence > 1
+  end
+
+  test "an overlapping caller onset marks the active agent turn :overlapped when it completes" do
+    state = state()
+    capability = self()
+
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-1")
+    state = SpeechToSpeech.handle_speech_started(state, capability, @agent, "turn-2")
+    _state = SpeechToSpeech.handle_turn_completed(state, capability, @agent, "turn-1")
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnCompleted{participant_id: @agent, outcome: :overlapped}}
+  end
+
+  test "a non-overlapped agent turn completes as :completed" do
+    state = state()
+    capability = self()
+
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-1")
+    _state = SpeechToSpeech.handle_turn_completed(state, capability, @agent, "turn-1")
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnCompleted{participant_id: @agent, outcome: :completed}}
   end
 
   test "STS interruption publishes an agent turn interruption with the local egress estimate" do

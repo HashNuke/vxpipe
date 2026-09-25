@@ -30,13 +30,20 @@ defmodule Vxpipe.CallEngine.Archive.EventProjection do
   end
 
   def project(%ParticipantTurnCompleted{} = event) do
+    payload =
+      if is_nil(event.endpointing) do
+        %{"modality" => event.modality}
+      else
+        %{"modality" => event.modality, "endpointing" => Atom.to_string(event.endpointing)}
+      end
+
     {:participant_turn_completed,
      common(event,
        participant_id: event.participant_id,
        connection_id: event.connection_id,
        command_id: event.command_id,
        correlation_id: event.correlation_id,
-       payload: %{"modality" => event.modality}
+       payload: payload
      )}
   end
 
@@ -113,7 +120,8 @@ defmodule Vxpipe.CallEngine.Archive.EventProjection do
   end
 
   def project(%AgentTurnCompleted{} = event) do
-    {:agent_turn_completed, agent_common(event, payload: %{})}
+    {:agent_turn_completed,
+     agent_common(event, payload: %{"outcome" => Atom.to_string(event.outcome)})}
   end
 
   def project(%AgentTurnFailed{} = event) do

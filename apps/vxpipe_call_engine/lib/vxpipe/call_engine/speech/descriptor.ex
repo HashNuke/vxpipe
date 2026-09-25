@@ -18,7 +18,12 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
                 input_transcript?: false,
                 output_transcript?: false,
                 output_settlement: nil,
-                history_reconciliation?: false
+                history_reconciliation?: false,
+                output_shape: :turns,
+                barge_in: :room,
+                continuity: :resumption_handle,
+                tool_cancellation?: true,
+                hold: :stop
               ]
 
   @fields @enforce_keys ++
@@ -35,7 +40,12 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
               :input_transcript?,
               :output_transcript?,
               :output_settlement,
-              :history_reconciliation?
+              :history_reconciliation?,
+              :output_shape,
+              :barge_in,
+              :continuity,
+              :tool_cancellation?,
+              :hold
             ]
   @identity_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/
 
@@ -47,7 +57,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           finite_input?: boolean(),
           usage_identity: map(),
           readiness: :initialized | :provider_acknowledged,
-          endpointing: :provider_semantic | :provider_gap | :external | :none,
+          endpointing: :provider_semantic | :provider_gap | :inferred_gap | :external | :none,
           speech_start?: boolean(),
           response_start?: boolean(),
           eager_end?: boolean(),
@@ -58,7 +68,12 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           input_transcript?: boolean(),
           output_transcript?: boolean(),
           output_settlement: nil | :transcript_end | :generation_boundary,
-          history_reconciliation?: boolean()
+          history_reconciliation?: boolean(),
+          output_shape: :turns | :continuous,
+          barge_in: :room | :provider,
+          continuity: :resumption_handle | :history_reseed | :none,
+          tool_cancellation?: boolean(),
+          hold: :stop | :mute
         }
 
   @doc "Build public metadata. Provider-specific settings remain the provider's validation responsibility."
@@ -80,7 +95,13 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          is_map(descriptor.settings) and
          valid_format?(descriptor.format) and valid_identity?(descriptor.usage_identity) and
          descriptor.readiness in [:initialized, :provider_acknowledged] and
-         descriptor.endpointing in [:provider_semantic, :provider_gap, :external, :none] and
+         descriptor.endpointing in [
+           :provider_semantic,
+           :provider_gap,
+           :inferred_gap,
+           :external,
+           :none
+         ] and
          is_boolean(descriptor.speech_start?) and is_boolean(descriptor.eager_end?) and
          is_boolean(descriptor.response_start?) and
          (not descriptor.response_start? or descriptor.kind == :sts) and
@@ -89,6 +110,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          (not descriptor.finite_input? or descriptor.kind == :stt) and
          (not descriptor.eager_end? or
             descriptor.endpointing in [:provider_semantic, :provider_gap]) and
+         valid_duplex_facts?(descriptor) and
          valid_kind?(descriptor) do
       :ok
     else
@@ -112,7 +134,26 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
 
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
 
-  defp valid_kind?(%{kind: :stt, cache_identity: nil, input_format: nil}), do: true
+  defp valid_duplex_facts?(descriptor) do
+    descriptor.output_shape in [:turns, :continuous] and
+      descriptor.barge_in in [:room, :provider] and
+      descriptor.continuity in [:resumption_handle, :history_reseed, :none] and
+      is_boolean(descriptor.tool_cancellation?) and
+      descriptor.hold in [:stop, :mute] and
+      (descriptor.endpointing != :inferred_gap or
+         (descriptor.kind == :sts and descriptor.turn_control == "provider" and
+            descriptor.speech_start?)) and
+      (descriptor.barge_in != :provider or not descriptor.history_reconciliation?)
+  end
+
+  defp default_duplex_facts?(descriptor) do
+    descriptor.output_shape == :turns and descriptor.barge_in == :room and
+      descriptor.continuity == :resumption_handle and descriptor.tool_cancellation? == true and
+      descriptor.hold == :stop
+  end
+
+  defp valid_kind?(%{kind: :stt, cache_identity: nil, input_format: nil} = descriptor),
+    do: default_duplex_facts?(descriptor)
 
   defp valid_kind?(%{kind: :sts, cache_identity: nil} = descriptor),
     do:
@@ -133,11 +174,19 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
     do:
       is_binary(identity) and byte_size(identity) == 32 and
         descriptor.format.encoding == :linear16 and descriptor.endpointing == :none and
-        not descriptor.speech_start? and not descriptor.eager_end? and not descriptor.resume?
+        not descriptor.speech_start? and not descriptor.eager_end? and not descriptor.resume? and
+        default_duplex_facts?(descriptor)
 
   defp valid_kind?(_descriptor), do: false
 
   defp valid_sts_controller?(%{turn_control: "external", endpointing: :external}), do: true
+
+  defp valid_sts_controller?(%{
+         turn_control: "provider",
+         endpointing: :inferred_gap,
+         speech_start?: true
+       }),
+       do: true
 
   defp valid_sts_controller?(%{turn_control: mode, endpointing: evidence, speech_start?: true})
        when mode in ["provider", "hybrid"] and evidence in [:provider_gap, :provider_semantic],

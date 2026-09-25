@@ -129,7 +129,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
             connection: connection.pid,
             command_id: Id.generate(:command),
             correlation_id: Id.generate(:turn),
-            text_published?: false
+            text_published?: false,
+            overlapped?: false
           }
 
           state = %{state | sts_turns: Map.put(state.sts_turns, turn_key, turn)}
@@ -240,7 +241,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     if Evidence.current_agent?(state, capability, agent_id) do
       case Map.fetch(state.sts_turns, turn_key(provider_turn)) do
         {:ok, %{source_sequence: ^sequence} = turn} ->
-          state = publish_terminal(state, turn, AgentTurnCompleted, %{})
+          outcome = if turn.overlapped?, do: :overlapped, else: :completed
+          state = publish_terminal(state, turn, AgentTurnCompleted, %{outcome: outcome})
           retire_output(state, provider_turn, sequence)
 
         _unknown_or_stale ->
@@ -368,8 +370,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   """
   @spec handle_speech_started(State.t(), pid(), String.t(), turn_ref()) :: State.t()
   def handle_speech_started(%State{} = state, capability, _agent_id, _provider_turn)
-      when is_pid(capability),
-      do: state
+      when is_pid(capability) do
+    # A caller onset during an agent output is an overlap. With provider-owned
+    # barge-in the output keeps playing and is labelled `:overlapped` when it
+    # ends; with room-owned barge-in the capability fences it first and the
+    # interruption event settles the turn instead.
+    if current?(state, capability) do
+      turns =
+        Map.new(state.sts_turns, fn {key, turn} -> {key, %{turn | overlapped?: true}} end)
+
+      %{state | sts_turns: turns}
+    else
+      state
+    end
+  end
 
   @spec offer_audio(State.t(), String.t(), binary()) :: :ok | {:error, term()}
   def offer_audio(%State{} = state, connection_id, pcm)
