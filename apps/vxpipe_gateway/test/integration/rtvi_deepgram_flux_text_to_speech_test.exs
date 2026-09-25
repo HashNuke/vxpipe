@@ -7,10 +7,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
   alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
 
-  alias Vxpipe.Providers.Deepgram.{
-    FluxTextToSpeech,
-    TTSSocket
-  }
+  alias Vxpipe.Providers.Deepgram.TTSSocket
 
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTenantCredentialSource, TestTurnCall}
   alias Vxpipe.Gateway.HTTP.Endpoint

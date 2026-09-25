@@ -16,11 +16,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
   alias ExWebRTC.Media.Ogg.Reader
 
-  alias Vxpipe.Providers.Deepgram.{
-    Flux,
-    FluxTextToSpeech,
-    TTSSocket
-  }
+  alias Vxpipe.Providers.Deepgram.TTSSocket
 
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTenantCredentialSource, TestTurnCall}
   alias Vxpipe.Gateway.HTTP.Endpoint
