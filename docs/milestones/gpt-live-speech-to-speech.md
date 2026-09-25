@@ -884,3 +884,117 @@ Open findings: R1-4, R4-1, R4-2 (unchanged from review 4).
 Next work, in order: implement R4-1 as proposed; apply R4-2 and the R2-3
 wording; then the remaining C tasks, starting with the compiled-room duplex
 proof under `clock: :realtime`; C's exit; then D.
+
+### Review 6 — 2026-09-25 (code review)
+
+Independent code review of the milestone's code so far.
+
+Reviewed state: `9ad1b79a..a00bd7a0` on `sts2`, plus the uncommitted R4-1/R4-2
+work in the worktree (the Morse duplex real-time clock). Method: a code
+review of that diff and worktree, with each finding below confirmed by reading
+the code. No tests were run for this review. Line numbers refer to the worktree.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R4-1, R4-2 and the R2-3 wording — **reported resolved by the response to
+  review 4; not verified here.** That work is uncommitted; verify it once it is
+  committed.
+
+New findings, most severe first. Findings R6-3 and R6-4 break the output
+admission contract (the room waits for a completion that never comes); R6-1
+and R6-6 are places where the Morse duplex provider does not behave like
+GPT-Live. All six affect checkpoint C's compiled-room proof.
+
+- R6-1 — **High: a reply with a pause longer than the gap loses its later
+  audio** (`morse_code_duplex/session.ex:533`, `open_burst/2`). A Morse word
+  gap is 7 units: 420 ms at the default 60 ms unit, but the configuration
+  allows units up to 200 ms, and from 115 ms the gap reaches the 800 ms
+  segmenter gap, so `"RECEIVED HI"` becomes two bursts. The second burst hits
+  the `admitted?: true` clause, which returns without calling
+  `OutputSegmenter.admitted/2`; its audio stays buffered and is never played,
+  while the published transcript still claims the whole reply. A long enough
+  word overflows the 2 s buffer and stops the session. GPT-Live pauses
+  mid-answer, so this path matters beyond Morse.
+
+  Proposed fix: implement the specification's output segmentation as written:
+  each burst is its own admitted output, completed when the gate closes, and
+  the agent turn spans its bursts until the reply ends. First check whether the
+  room's admission protocol allows more than one output per provider turn; if
+  it does not, record that as a contract gap and decide it (amend to
+  per-burst outputs within one turn) before implementing. Tests: at
+  `unit_duration_ms: 150`, both words play as two outputs in order, the
+  transcript is aligned per output, and a long word does not overflow.
+
+- R6-2 — **Medium: a low `amplitude` means the reply is never played**
+  (`session.ex:189`, `segmenter_options/1`). Only `sample_rate` reaches the
+  segmenter, so the gate opens above a fixed energy of 1000, while the
+  configuration accepts amplitudes from 1. At `amplitude: 800` no burst opens,
+  the output never completes, and every later reply queues behind it.
+
+  Proposed fix: derive the activation and deactivation thresholds from
+  `config.amplitude`, and have `configure/1` reject an amplitude whose tone
+  energy cannot open the gate. Test: a low but accepted amplitude plays its
+  reply; an undetectable one is rejected at configuration.
+
+- R6-3 — **Medium: yielding before the room admits the output leaves the
+  room's output slot stuck** (`finish_if_ready/1`, `handle_admit/3`). If
+  caller tone starts after `turn_ended` but before the room's
+  `{:vxpipe_speech_output, ...}` admission arrives, the output is dropped with
+  no event. The admission then matches nothing and is ignored, and the room
+  waits for an `output_completed` that never arrives; later admissions return
+  `:busy`.
+
+  Proposed fix: remember a reply that yielded before admission. When its
+  admission arrives, complete that output at once as interrupted with nothing
+  played, so the room settles the slot. Test with the manual clock and a held
+  admission message: yield first, deliver the admission, and assert the room
+  receives the completion and admits the next reply.
+
+- R6-4 — **Medium: a second queued reply silently replaces the first**
+  (`start_reply/3`). `queued_reply` holds one reply and is overwritten without
+  a check. With `yield?: false`, or while a yielded output waits for credit,
+  two caller turns (or a caller turn and a tool result) ending during one
+  output drop the first queued reply, including an admission the room may
+  already have sent, so the room waits for its completion forever.
+
+  Proposed fix: replace `queued_reply` with a bounded FIFO of pending replies,
+  each keeping its own admission reference; overflow fails the session with an
+  explicit reason rather than dropping a reply. Test: two turns during one
+  output play both replies in order and complete both admissions; overflow
+  fails explicitly.
+
+- R6-5 — **Medium: a tool result can end the turn with no reply and no
+  error** (`publish_tool_reply/2`, `start_reply/3`). `turn_ended` is emitted
+  before the reply is encoded. A string result near 256 bytes plus the
+  `"RECEIVED "` prefix exceeds `maximum_text_bytes`, and a map result rendered
+  with `inspect/1` contains characters Morse cannot encode. `start_reply/3`
+  swallows the encoding error.
+
+  Proposed fix: build a Morse-encodable summary first (truncated to fit the
+  prefix within `maximum_text_bytes`, limited to the encodable character set),
+  encode it, and only then emit `turn_ended`. If encoding still fails, fail
+  with an explicit reason instead of returning the unchanged state. Tests: a
+  250-character string and a map result each produce a spoken reply; a forced
+  encoding failure is reported, not silent.
+
+- R6-6 — **Low/medium: the `:overlapped` outcome almost never fires**
+  (`room_authority/speech_to_speech.ex:372`; `session.ex:334-336`). The Morse
+  duplex provider yields as soon as caller tone starts, but emits its first
+  input fragment, and so `speech_started`, only when the utterance is fully
+  decoded (`:partial` is ignored). By then the agent turn has already completed
+  as `:completed`. GPT-Live sends input fragments roughly every 200 ms while
+  the caller speaks.
+
+  Proposed fix: emit an input fragment on decoder `:started` and on each
+  `:partial`, so caller onset reaches the room while the agent output is still
+  open, as it does with GPT-Live. Test: a barge-in that the provider yields to
+  is published with outcome `:overlapped`.
+
+Open findings: R1-4, R6-1, R6-2, R6-3, R6-4, R6-5, R6-6. R4-1 and R4-2 await
+verification.
+
+Next work, in order: commit the in-progress R4-1/R4-2 work; R6-3 and R6-4 (the
+admission contract); R6-1, starting with the one-output-per-turn check; R6-6;
+R6-5 and R6-2; then the remaining C tasks, starting with the compiled-room
+duplex proof.
