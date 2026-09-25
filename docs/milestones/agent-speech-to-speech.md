@@ -3,9 +3,13 @@
 Status: checkpoint A is implemented; B–E have focused implementation evidence
 but the integrated room path and lifecycle work remain incomplete. Checkpoint F
 is partially complete (service gating tests and documentation are in place).
-At `7c1d9b61`, the latest post-commit root static gates and socket-backed
-`mix test --seed 0` pass (2,671 tests, zero failures, 58 excluded); this is a
-checkpoint gate, not the final acceptance pass after remaining B–E changes.
+At `a626b162`, the post-commit root static gates and the socket-backed
+`PGHOST=/var/run/postgresql mix test --seed 0` pass (2,690 tests, zero failures,
+58 excluded; Call Engine 1,514/0, Gateway 508/0, Persistence 186/0, Console
+191/0). The earlier comment that root `mix test` "stops before tests" only
+applies to runs without `PGHOST` set; the peer-auth socket runs the whole suite.
+This supersedes the earlier `7c1d9b61` checkpoint run and is still a checkpoint
+gate, not the final acceptance pass after remaining B–E changes.
 The current finish line is unchanged: complete real-room/native and lifecycle
 acceptance, agent-output STT and Google local gates, then the coordinated UI,
 load, review and root pass. Hosted Google acceptance remains opt-in and billable;
