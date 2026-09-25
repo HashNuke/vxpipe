@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeTTS.Session do
 
   @impl true
   def configure(options) do
-    allowed = Map.keys(Config.__struct__()) -- [:__struct__]
+    allowed = Config.option_keys()
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),

@@ -2,15 +2,17 @@
 
 Status: specification frozen on 2026-09-25; checkpoints A and B are implemented
 and verified. Checkpoint B was reopened by review 3 and is closed again after
-the clock-paced output rework. Checkpoint C is partially implemented: the
-capability's provider-owned barge-in branch is now covered by a red-green test
-and the room's `:overlapped` outcome is in place, while the compiled-room duplex
-proof and the remaining C fixtures, checkpoint D (OpenAI package and GPT-Live
-adapter), checkpoint E (session continuity) and checkpoint F (docs, Console
-gating, hosted check, load, review) are not started. Change the specification
-only through a recorded amendment in this section, with its reason; for example,
-a checkpoint A finding that contradicts an assumption below. The milestones
-index entry stays unchecked until the acceptance checks below pass.
+the clock-paced output rework; review 4's R4-1 is resolved by giving the Morse
+duplex provider its own real-time clock (`clock: :realtime`, the default) with a
+manual test mode. Checkpoint C is partially implemented: the capability's
+provider-owned barge-in branch is covered by a red-green test and the room's
+`:overlapped` outcome is in place, while the compiled-room duplex proof and the
+remaining C fixtures, checkpoint D (OpenAI package and GPT-Live adapter),
+checkpoint E (session continuity) and checkpoint F (docs, Console gating,
+hosted check, load, review) are not started. Change the specification only
+through a recorded amendment in this section, with its reason; for example, a
+checkpoint A finding that contradicts an assumption below. The milestones index
+entry stays unchecked until the acceptance checks below pass.
 
 Post-review decisions recorded with the amendments:
 
@@ -20,8 +22,9 @@ Post-review decisions recorded with the amendments:
   `nil`; no version bump is required because old payloads decode through the
   struct defaults. Any consumer that reads either field must apply that rule
   before relying on it.
-- R2-3: `OutputSegmenter` keeps its 800 ms default gap, and the Morse duplex
-  provider uses the shared defaults with no overrides (2 s receive buffer).
+- R2-3: `OutputSegmenter` now defaults to the specified 800 ms gap (raised
+  from 400 ms), and the Morse duplex provider uses the shared defaults with no
+  overrides (2 s receive buffer).
 
 Amendments:
 
@@ -374,11 +377,18 @@ the pre-existing load-sensitive STT timing behavior, not this contract change.
   fences it. `test/vxpipe/call_engine/speech/duplex_sts_conversation_test.exs`
   proves self-yield, clock-paced silence discarding, pre-roll and explicit
   receive-buffer overflow at the provider boundary.
-  Review-3 rework (R2-3, R3-1): output is now a continuous, clock-paced stream
-  (leading silence, reply, trailing silence) driven by `advance/2`; the shared
-  `OutputSegmenter` defaults are used unchanged (800 ms gap, 2 s buffer) and no
-  provider override tunes the module to the fake. The adapter owns the timer in
-  production; tests tick explicitly so no test sleeps.
+  Review-3 rework (R2-3, R3-1): output is a continuous, clock-paced stream
+  (leading silence, reply, trailing silence); the shared `OutputSegmenter`
+  defaults are used unchanged (800 ms gap, 2 s buffer) and no provider override
+  tunes the module to the fake.
+  Review-4 rework (R4-1, R4-2): the provider owns its clock. `clock: :realtime`
+  (the default) records a monotonic origin and schedules its own 20 ms ticks
+  with drift correction and bounded catch-up, so a compiled room or the load
+  lane drives it without external pacing; `advance/2` is rejected under the
+  realtime clock. `clock: :manual` and `yield?` are documented test options.
+  The pure `MorseCodeDuplex.Clock.frames_due/5` scheduler is unit-tested for
+  ordinary, late and stalled ticks; a capability test runs under the realtime
+  clock with no external tick and no sleep.
 - [x] Exit: capability-level tests pass without any provider socket.
   `capability` + `speech` suites pass with no provider socket. The
   `barge_in: :provider` capability branch is covered by the red-green test above
@@ -885,116 +895,32 @@ Next work, in order: implement R4-1 as proposed; apply R4-2 and the R2-3
 wording; then the remaining C tasks, starting with the compiled-room duplex
 proof under `clock: :realtime`; C's exit; then D.
 
-### Review 6 — 2026-09-25 (code review)
+### Response to review 4 — 2026-09-25
 
-Independent code review of the milestone's code so far.
-
-Reviewed state: `9ad1b79a..a00bd7a0` on `sts2`, plus the uncommitted R4-1/R4-2
-work in the worktree (the Morse duplex real-time clock). Method: a code
-review of that diff and worktree, with each finding below confirmed by reading
-the code. No tests were run for this review. Line numbers refer to the worktree.
-
-Status of earlier findings:
-
-- R1-4 — **still open, as a caution.**
-- R4-1, R4-2 and the R2-3 wording — **reported resolved by the response to
-  review 4; not verified here.** That work is uncommitted; verify it once it is
-  committed.
-
-New findings, most severe first. Findings R6-3 and R6-4 break the output
-admission contract (the room waits for a completion that never comes); R6-1
-and R6-6 are places where the Morse duplex provider does not behave like
-GPT-Live. All six affect checkpoint C's compiled-room proof.
-
-- R6-1 — **High: a reply with a pause longer than the gap loses its later
-  audio** (`morse_code_duplex/session.ex:533`, `open_burst/2`). A Morse word
-  gap is 7 units: 420 ms at the default 60 ms unit, but the configuration
-  allows units up to 200 ms, and from 115 ms the gap reaches the 800 ms
-  segmenter gap, so `"RECEIVED HI"` becomes two bursts. The second burst hits
-  the `admitted?: true` clause, which returns without calling
-  `OutputSegmenter.admitted/2`; its audio stays buffered and is never played,
-  while the published transcript still claims the whole reply. A long enough
-  word overflows the 2 s buffer and stops the session. GPT-Live pauses
-  mid-answer, so this path matters beyond Morse.
-
-  Proposed fix: implement the specification's output segmentation as written:
-  each burst is its own admitted output, completed when the gate closes, and
-  the agent turn spans its bursts until the reply ends. First check whether the
-  room's admission protocol allows more than one output per provider turn; if
-  it does not, record that as a contract gap and decide it (amend to
-  per-burst outputs within one turn) before implementing. Tests: at
-  `unit_duration_ms: 150`, both words play as two outputs in order, the
-  transcript is aligned per output, and a long word does not overflow.
-
-- R6-2 — **Medium: a low `amplitude` means the reply is never played**
-  (`session.ex:189`, `segmenter_options/1`). Only `sample_rate` reaches the
-  segmenter, so the gate opens above a fixed energy of 1000, while the
-  configuration accepts amplitudes from 1. At `amplitude: 800` no burst opens,
-  the output never completes, and every later reply queues behind it.
-
-  Proposed fix: derive the activation and deactivation thresholds from
-  `config.amplitude`, and have `configure/1` reject an amplitude whose tone
-  energy cannot open the gate. Test: a low but accepted amplitude plays its
-  reply; an undetectable one is rejected at configuration.
-
-- R6-3 — **Medium: yielding before the room admits the output leaves the
-  room's output slot stuck** (`finish_if_ready/1`, `handle_admit/3`). If
-  caller tone starts after `turn_ended` but before the room's
-  `{:vxpipe_speech_output, ...}` admission arrives, the output is dropped with
-  no event. The admission then matches nothing and is ignored, and the room
-  waits for an `output_completed` that never arrives; later admissions return
-  `:busy`.
-
-  Proposed fix: remember a reply that yielded before admission. When its
-  admission arrives, complete that output at once as interrupted with nothing
-  played, so the room settles the slot. Test with the manual clock and a held
-  admission message: yield first, deliver the admission, and assert the room
-  receives the completion and admits the next reply.
-
-- R6-4 — **Medium: a second queued reply silently replaces the first**
-  (`start_reply/3`). `queued_reply` holds one reply and is overwritten without
-  a check. With `yield?: false`, or while a yielded output waits for credit,
-  two caller turns (or a caller turn and a tool result) ending during one
-  output drop the first queued reply, including an admission the room may
-  already have sent, so the room waits for its completion forever.
-
-  Proposed fix: replace `queued_reply` with a bounded FIFO of pending replies,
-  each keeping its own admission reference; overflow fails the session with an
-  explicit reason rather than dropping a reply. Test: two turns during one
-  output play both replies in order and complete both admissions; overflow
-  fails explicitly.
-
-- R6-5 — **Medium: a tool result can end the turn with no reply and no
-  error** (`publish_tool_reply/2`, `start_reply/3`). `turn_ended` is emitted
-  before the reply is encoded. A string result near 256 bytes plus the
-  `"RECEIVED "` prefix exceeds `maximum_text_bytes`, and a map result rendered
-  with `inspect/1` contains characters Morse cannot encode. `start_reply/3`
-  swallows the encoding error.
-
-  Proposed fix: build a Morse-encodable summary first (truncated to fit the
-  prefix within `maximum_text_bytes`, limited to the encodable character set),
-  encode it, and only then emit `turn_ended`. If encoding still fails, fail
-  with an explicit reason instead of returning the unchanged state. Tests: a
-  250-character string and a map result each produce a spoken reply; a forced
-  encoding failure is reported, not silent.
-
-- R6-6 — **Low/medium: the `:overlapped` outcome almost never fires**
-  (`room_authority/speech_to_speech.ex:372`; `session.ex:334-336`). The Morse
-  duplex provider yields as soon as caller tone starts, but emits its first
-  input fragment, and so `speech_started`, only when the utterance is fully
-  decoded (`:partial` is ignored). By then the agent turn has already completed
-  as `:completed`. GPT-Live sends input fragments roughly every 200 ms while
-  the caller speaks.
-
-  Proposed fix: emit an input fragment on decoder `:started` and on each
-  `:partial`, so caller onset reaches the room while the agent output is still
-  open, as it does with GPT-Live. Test: a barge-in that the provider yields to
-  is published with outcome `:overlapped`.
-
-Open findings: R1-4, R6-1, R6-2, R6-3, R6-4, R6-5, R6-6. R4-1 and R4-2 await
+Implementation response to reviews 4 and 5, labelled per R3-2. Not independent
 verification.
 
-Next work, in order: commit the in-progress R4-1/R4-2 work; R6-3 and R6-4 (the
-admission contract); R6-1, starting with the one-output-per-turn check; R6-6;
-R6-5 and R6-2; then the remaining C tasks, starting with the compiled-room
-duplex proof.
+- P4-R4-1 — **resolved as proposed.** `configure/1` accepts `clock: :realtime`
+  (default) or `:manual` and rejects any other value. Under `:realtime` the
+  session records a monotonic origin and schedules its own 20 ms ticks, emitting
+  the frames now due with drift correction and a bounded catch-up; a longer
+  backlog moves the origin and counts a late clock. `advance/2` returns
+  `{:error, :unsupported_operation}` under `:realtime`. Both clocks share the
+  same frame-emission path. `close/1` cancels the timer. The pure
+  `MorseCodeDuplex.Clock.frames_due/5` scheduler is unit-tested (ordinary, late,
+  stalled, negative elapsed). A capability test runs under `:realtime` and
+  receives the reply and settled transcript with no external tick and no sleep.
+- P4-R4-2 — **resolved.** The module doc now has a "Test options" section
+  documenting `clock: :manual` and `yield?: false`, and states that GPT-Live
+  always decides whether to yield.
+- P4-R2-3 — **wording fixed.** The status note now says the segmenter "now
+  defaults to the specified 800 ms gap (raised from 400 ms)".
+- P4-R1-4 — **still open as a caution.** The user has directed continued work.
+
+Also normalized the provider-option key lookup: `MorseCode.Config.option_keys/0`
+replaces the runtime `Map.keys(Config.__struct__()) -- [:__struct__]` idiom in
+all four Morse sessions.
+
+Next work, in order: the remaining C tasks, starting with the compiled-room
+duplex proof under `clock: :realtime`; C's exit; then D; then E and F.
+

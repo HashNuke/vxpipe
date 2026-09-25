@@ -200,6 +200,31 @@ The explicit Google STS facts pushed `Google.STSSession` past Credo's 800-line
 limit, so its two identical PCM format maps moved to `Google.STS.pcm_format/1`
 (790 lines now). No behavior change.
 
+## Review-4 response (R4-1, R4-2, R2-3)
+
+Review 4 confirmed the earlier fixes and found that the Morse duplex provider
+had no clock of its own: only tests called `advance/2`, so a compiled room or
+the load lane would never tick it. Review 5 proposed a validated
+`:realtime`/`:manual` clock.
+
+- `MorseCodeDuplex.Clock.frames_due/5` is a pure drift-corrected scheduler.
+  Frames come from a monotonic origin, not a tick count, with a bounded
+  catch-up; a longer backlog moves the origin and reports a stall.
+- The provider defaults to `clock: :realtime`: it owns a 20 ms `send_after`
+  timer with a clock generation, cancels it on close, and rejects `advance/2`
+  under realtime. `clock: :manual` keeps the deterministic test clock. Both
+  share the same frame-emission path.
+- `yield?: false` and `clock: :manual` are documented under a "Test options"
+  heading; GPT-Live always decides whether to yield.
+- Normalized the provider-option key lookup as `MorseCode.Config.option_keys/0`
+  across all four Morse sessions, replacing the runtime
+  `Map.keys(Config.__struct__()) -- [:__struct__]` idiom.
+
+Added tests: `clock_test.exs` (4), plus two provider-level clock tests and one
+realtime capability test. Changed: the duplex provider, its capability and
+provider tests to opt into `clock: :manual`. The full call-engine suite passes
+1,554 tests, 0 failures (seed 0).
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree

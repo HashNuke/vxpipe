@@ -8,6 +8,20 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
 
   @sample_rate 16_000
 
+  test "clock defaults to realtime, manual is opt-in and an unknown clock is rejected" do
+    assert {:ok, descriptor} = DuplexSTS.configure([])
+    assert Map.fetch!(descriptor.settings, :clock) == :realtime
+    assert {:ok, manual} = DuplexSTS.configure(clock: :manual)
+    assert Map.fetch!(manual.settings, :clock) == :manual
+    assert {:error, :invalid_configuration} = DuplexSTS.configure(clock: :fast)
+  end
+
+  test "advance is rejected while the realtime clock owns the session" do
+    %{session: session, provider: provider} = start_session(clock: :realtime)
+    assert {:error, :unsupported_operation} = DuplexSTS.advance(provider, 20)
+    assert :ok = Session.close(session)
+  end
+
   test "keeps the reply open and yields when caller tone arrives while a credit is held" do
     %{session: session, provider: provider} = start_session()
     push_chunks(session, "HI")
@@ -89,11 +103,11 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
 
   # Helpers ------------------------------------------------------------------
 
-  defp start_session do
+  defp start_session(provider_options \\ [clock: :manual]) do
     scope =
       start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
 
-    options = [provider: DuplexSTS, owner: self()]
+    options = [provider: DuplexSTS, options: provider_options, owner: self()]
     {:ok, session, :starting} = Session.start(CapabilityTree.scope(scope), options)
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}, 1_000
     assert :ok = Session.ack(session, ready)

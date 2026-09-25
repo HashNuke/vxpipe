@@ -11,8 +11,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
 
   @impl true
   def configure(options) do
-    allowed =
-      (Map.keys(Config.__struct__()) -- [:__struct__]) ++ [:turn_control, :output_transcript]
+    allowed = Config.option_keys() ++ [:turn_control, :output_transcript]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),

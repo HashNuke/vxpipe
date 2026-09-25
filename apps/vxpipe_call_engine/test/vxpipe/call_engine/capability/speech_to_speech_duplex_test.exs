@@ -39,6 +39,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     refute_received {:vxpipe_send_text, _, _, _}
   end
 
+  test "the realtime clock speaks without any external ticks" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :realtime, unit_duration_ms: 20]}
+      )
+
+    push_morse(capability, "HI", unit_duration_ms: 20)
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", final: true}}},
+                   5_000
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}, 5_000
+    assert_receive {:test_audio_output, sink, _frame}, 5_000
+    assert_receive {:test_audio_output_finish, ^sink, _turn}, 10_000
+    TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+    TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20,
+                    _, _},
+                   5_000
+  end
+
   test "a delegated tool call result reopens a spoken reply" do
     {_tree, capability, _sink} = start_capability(policy: unrestricted())
 
@@ -123,7 +147,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
                Keyword.get(
                  options,
                  :provider,
-                 {Vxpipe.Providers.MorseCode.DuplexSTSSession, []}
+                 {Vxpipe.Providers.MorseCode.DuplexSTSSession, [clock: :manual]}
                ),
              provider_private: private_init,
              sink: sink,
@@ -146,8 +170,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     {tree, capability, sink}
   end
 
-  defp push_morse(capability, text) do
-    {:ok, pcm} = encode(text)
+  defp push_morse(capability, text, encode_options \\ []) do
+    {:ok, pcm} = encode(text, encode_options)
 
     for <<chunk::binary-size(320) <- pcm>> do
       assert :ok = SpeechToSpeech.push_audio(capability, @human, chunk)
@@ -161,8 +185,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     end
   end
 
-  defp encode(text) do
-    {:ok, config} = Config.new([])
+  defp encode(text, options) do
+    {:ok, config} = Config.new(options)
     Encoder.encode(config, text)
   end
 

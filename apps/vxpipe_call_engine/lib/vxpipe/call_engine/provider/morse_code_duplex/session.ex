@@ -15,15 +15,27 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   - Caller text `TOOL <name> <json>` raises a delegated tool call whose result
     reopens a reply.
 
-  The adapter drives the clock. `advance/2` emits the next audio-time slice;
-  production drives it from a timer or socket reader, while tests call it
-  explicitly so no test depends on wall-clock sleeps.
+  The provider owns its clock. By default (`clock: :realtime`) it records a
+  monotonic origin and schedules its own 20 ms ticks, emitting the frames that
+  are due with bounded catch-up; `advance/2` is rejected. A compiled room, the
+  load lane and any other host run the real-time clock, so the provider speaks
+  without external pacing.
+
+  Test options (credential-free local provider only; never used by the GPT-Live
+  adapter):
+
+  - `clock: :manual` disables the timer and makes `advance/2` the only clock, so
+    tests can drive deterministic audio time without sleeps.
+  - `yield?: false` keeps a reply open when caller tone arrives, so a barge-in
+    test can observe caller onset while output stays active. GPT-Live always
+    decides for itself whether to yield.
   """
 
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STSProvider
 
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Clock
   alias Vxpipe.CallEngine.Speech.Duplex.{OutputSegmenter, TurnInference}
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event}
 
@@ -35,8 +47,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   @impl true
   def configure(options) do
-    allowed =
-      (Map.keys(Config.__struct__()) -- [:__struct__]) ++ [:output_transcript, :yield?]
+    allowed = Config.option_keys() ++ [:output_transcript, :yield?, :clock]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
@@ -45,10 +56,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
          true <- is_boolean(output_transcript),
          {yield?, rest} = Keyword.pop(rest, :yield?, true),
          true <- is_boolean(yield?),
+         {clock, rest} = Keyword.pop(rest, :clock, :realtime),
+         true <- clock in [:realtime, :manual],
          {:ok, config} <- Config.new(rest) do
       Descriptor.new(
         kind: :sts,
-        settings: Map.put(Map.from_struct(config), :yield?, yield?),
+        settings:
+          config
+          |> Map.from_struct()
+          |> Map.put(:yield?, yield?)
+          |> Map.put(:clock, clock),
         input_format: format(config),
         format: format(config),
         usage_identity: %{
@@ -121,7 +138,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     :exit, {:normal, _call} -> :ok
   end
 
-  @doc "Emit the next `ms` of audio-time output. The adapter owns the clock."
+  @doc "Emit the next `ms` of audio-time output under the `clock: :manual` test mode."
   def advance(pid, ms) when is_integer(ms) and ms > 0,
     do: GenServer.call(pid, {:advance, ms}, 5_000)
 
@@ -131,33 +148,52 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     channel = Keyword.fetch!(options, :channel)
 
     with {:ok, config} <-
-           descriptor.settings |> Map.delete(:yield?) |> Map.to_list() |> Config.new(),
+           descriptor.settings
+           |> Map.drop([:yield?, :clock])
+           |> Map.to_list()
+           |> Config.new(),
          {:ok, decoder} <- Decoder.new(config),
          {:ok, inference} <- TurnInference.new(gap_ms: @default_input_gap_ms),
          {:ok, segmenter} <- OutputSegmenter.new(segmenter_options(config)),
          :ok <- Channel.bind(channel),
          :ok <- Event.emit(channel, :ready, readiness: descriptor.readiness) do
-      {:ok,
-       %{
-         channel: channel,
-         descriptor: descriptor,
-         config: config,
-         decoder: decoder,
-         inference: inference,
-         segmenter: segmenter,
-         frame_bytes: div(config.sample_rate * @frame_ms, 1_000) * 2,
-         input_ms: 0,
-         output: nil,
-         queued_reply: nil,
-         yield?: Map.get(descriptor.settings, :yield?, true),
-         pending_tools: %{}
-       }}
+      clock = Map.get(descriptor.settings, :clock, :realtime)
+
+      state = %{
+        channel: channel,
+        descriptor: descriptor,
+        config: config,
+        decoder: decoder,
+        inference: inference,
+        segmenter: segmenter,
+        frame_bytes: div(config.sample_rate * @frame_ms, 1_000) * 2,
+        input_ms: 0,
+        output: nil,
+        queued_reply: nil,
+        yield?: Map.get(descriptor.settings, :yield?, true),
+        clock: clock,
+        clock_origin_ms: System.monotonic_time(:millisecond),
+        emitted_frames: 0,
+        clock_generation: make_ref(),
+        clock_timer: nil,
+        late_clocks: 0,
+        pending_tools: %{}
+      }
+
+      if clock == :realtime, do: {:ok, schedule_tick(state)}, else: {:ok, state}
     else
       _error -> {:stop, :initialization_failed}
     end
   end
 
   defp segmenter_options(config), do: [sample_rate: config.sample_rate]
+
+  defp schedule_tick(state) do
+    %{state | clock_timer: Process.send_after(self(), {:tick, state.clock_generation}, @frame_ms)}
+  end
+
+  defp cancel_clock(%{clock_timer: nil}), do: :ok
+  defp cancel_clock(%{clock_timer: timer}), do: Process.cancel_timer(timer)
 
   @impl true
   def handle_call({:push_audio, audio}, _from, state) when is_binary(audio),
@@ -203,6 +239,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
+  def handle_call({:advance, _ms}, _from, %{clock: :realtime} = state),
+    do: {:reply, {:error, :unsupported_operation}, state}
+
   def handle_call({:advance, ms}, _from, state) when is_integer(ms) and ms > 0 do
     case advance_clock(state, ms) do
       {:ok, state} ->
@@ -213,9 +252,31 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
-  def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
+  def handle_call(:close, _from, state) do
+    _ = cancel_clock(state)
+    {:stop, :normal, :ok, state}
+  end
 
   @impl true
+  def handle_info({:tick, generation}, %{clock: :realtime, clock_generation: generation} = state) do
+    now = System.monotonic_time(:millisecond)
+
+    {due, origin, emitted, stalled?} =
+      Clock.frames_due(state.clock_origin_ms, now, state.emitted_frames)
+
+    state = %{
+      state
+      | clock_origin_ms: origin,
+        emitted_frames: emitted,
+        late_clocks: state.late_clocks + if(stalled?, do: 1, else: 0)
+    }
+
+    case emit_frames(state, due) do
+      {:ok, state} -> {:noreply, schedule_tick(state)}
+      {:error, :buffer_overflow, state} -> {:stop, {:shutdown, :buffer_overflow}, state}
+    end
+  end
+
   def handle_info({:vxpipe_speech_output, _channel, turn_ref, output_ref}, state)
       when is_reference(turn_ref) and is_reference(output_ref) do
     handle_admit(state, turn_ref, output_ref)
@@ -397,7 +458,12 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   defp advance_clock(state, ms) do
     frames = max(div(ms, @frame_ms), 1)
+    emit_frames(state, frames)
+  end
 
+  defp emit_frames(state, 0), do: {:ok, state}
+
+  defp emit_frames(state, frames) do
     Enum.reduce_while(1..frames, {:ok, state}, fn _, {:ok, state} ->
       case emit_frame(state) do
         {:ok, state} -> {:cont, {:ok, state}}

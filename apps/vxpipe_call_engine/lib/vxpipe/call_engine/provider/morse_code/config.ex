@@ -62,6 +62,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.Config do
 
   def new(_options), do: {:error, :invalid_configuration}
 
+  @doc "The configuration option keys this provider accepts."
+  def option_keys, do: Map.keys(Map.from_struct(__MODULE__.__struct__()))
+
   defp valid?(config) do
     config.sample_rate in @sample_rates and
       integer_between?(config.unit_duration_ms, 20, 200) and
