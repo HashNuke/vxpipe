@@ -18,7 +18,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
     IncomingAudio,
     MediaBinding,
     MediaRouting,
-    MediaSessionSetup
+    MediaSessionSetup,
+    SourceGate
   }
 
   @call_timeout 5_000
@@ -101,6 +102,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
            connection_id: Keyword.fetch!(options, :connection_id),
            private_media: nil,
            speech_normalizer: nil,
+           source_gate: SourceGate.new(),
            sts_input: nil,
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
@@ -213,24 +215,28 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         _from,
         %{socket_owner: source, stream_id: stream_id} = state
       ) do
-    frame = audio_frame(state.binding, event)
+    if SourceGate.admitted?(state.source_gate, event.media.source_epoch) do
+      frame = audio_frame(state.binding, event)
 
-    case normalizer(state, frame) do
-      {:ok, speech_normalizer, state} ->
-        {result, input} =
-          state.engine
-          |> IncomingAudio.deliver(
-            state.attachment,
-            state.room_audio_ingress,
-            frame,
-            speech_normalizer,
-            state.sts_input
-          )
+      case normalizer(state, frame) do
+        {:ok, speech_normalizer, state} ->
+          {result, input} =
+            state.engine
+            |> IncomingAudio.deliver(
+              state.attachment,
+              state.room_audio_ingress,
+              frame,
+              speech_normalizer,
+              state.sts_input
+            )
 
-        {:reply, normalize_delivery(result), %{state | sts_input: input}}
+          {:reply, normalize_delivery(result), %{state | sts_input: input}}
 
-      _failure ->
-        {:reply, {:error, :media_unavailable}, state}
+        _failure ->
+          {:reply, {:error, :media_unavailable}, state}
+      end
+    else
+      {:reply, :ok, state}
     end
   end
 

@@ -208,6 +208,7 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
       attachment: attachment,
       binding: binding,
       speech_normalizer: nil,
+      source_gate: nil,
       sts_input: nil,
       room_audio_ingress: nil,
       engine: Vxpipe.CallEngine,

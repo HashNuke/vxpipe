@@ -81,6 +81,154 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocketTest do
     assert Map.fetch!(event.media, :source_epoch) == socket.source_epoch
   end
 
+  test "rotates its source epoch across hold and arm with marks live", context do
+    assert {:ok, socket} =
+             TelephonyMediaSocket.init(%{binding: context.binding, media_clock: fn -> 3_000 end})
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(start_message()), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media_started}, source}
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(media_message()), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media, media: old_media}, ^source}
+    old_epoch = old_media.source_epoch
+    assert is_reference(old_epoch)
+
+    token = make_ref()
+    deadline_ms = System.monotonic_time(:millisecond) + 5_000
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_info(
+               {:vxpipe_sts_source_hold,
+                %{reply_to: self(), token: token, deadline_ms: deadline_ms}},
+               socket
+             )
+
+    assert_receive {:vxpipe_sts_source_hold_ack, ^token, {:ok, receipt}}
+    assert receipt.old_epoch == old_epoch
+    held_epoch = receipt.held_epoch
+    assert is_reference(held_epoch)
+    assert held_epoch != old_epoch
+    assert socket.source_epoch == held_epoch
+
+    request = make_ref()
+
+    assert {:push, [{:text, _mark}], socket} =
+             TelephonyMediaSocket.handle_info(
+               {:vxpipe_playback_command, "stream-1", :drain, self(), request},
+               socket
+             )
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(media_message(2, 160)), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media, media: held_media}, ^source}
+    assert held_media.source_epoch == held_epoch
+
+    active_epoch = make_ref()
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_info(
+               {:vxpipe_sts_source_arm,
+                %{
+                  reply_to: self(),
+                  token: token,
+                  active_epoch: active_epoch,
+                  deadline_ms: deadline_ms
+                }},
+               socket
+             )
+
+    assert_receive {:vxpipe_sts_source_arm_ack, ^token, {:ok, ^active_epoch}}
+    assert socket.source_epoch == active_epoch
+  end
+
+  test "a frame dispatched before hold keeps its old epoch across a stalled Leg", context do
+    assert {:ok, socket} =
+             TelephonyMediaSocket.init(%{binding: context.binding, media_clock: fn -> 3_000 end})
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(start_message()), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media_started}, source}
+
+    :ok = :sys.suspend(context.binding.leg)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(context.binding.leg)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+    # Stamped and queued in the stalled Leg before the cutover request.
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(media_message()), opcode: :text},
+               socket
+             )
+
+    token = make_ref()
+    deadline_ms = System.monotonic_time(:millisecond) + 5_000
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_info(
+               {:vxpipe_sts_source_hold,
+                %{reply_to: self(), token: token, deadline_ms: deadline_ms}},
+               socket
+             )
+
+    assert_receive {:vxpipe_sts_source_hold_ack, ^token, {:ok, receipt}}
+
+    active_epoch = make_ref()
+
+    assert {:ok, socket} =
+             TelephonyMediaSocket.handle_info(
+               {:vxpipe_sts_source_arm,
+                %{
+                  reply_to: self(),
+                  token: token,
+                  active_epoch: active_epoch,
+                  deadline_ms: deadline_ms
+                }},
+               socket
+             )
+
+    assert_receive {:vxpipe_sts_source_arm_ack, ^token, {:ok, ^active_epoch}}
+
+    :ok = :sys.resume(context.binding.leg)
+
+    # The delayed Leg dispatch still carries the pre-hold epoch.
+    assert_receive {:test_live_telephony_event, %Event{kind: :media, media: stale_media}, ^source}
+    assert stale_media.source_epoch == receipt.old_epoch
+    refute stale_media.source_epoch == active_epoch
+
+    assert {:ok, _socket} =
+             TelephonyMediaSocket.handle_in(
+               {JSON.encode!(media_message(2, 160)), opcode: :text},
+               socket
+             )
+
+    assert_receive {:test_live_telephony_event, %Event{kind: :media, media: fresh_media}, ^source}
+    assert fresh_media.source_epoch == active_epoch
+  end
+
   test "closes on a frame that does not belong to the pinned call", context do
     invalid = put_in(start_message(), ["start", "call_control_id"], "call-control-other")
 
@@ -297,6 +445,13 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocketTest do
         "payload" => Base.encode64(<<1, 2, 3>>)
       }
     }
+  end
+
+  defp media_message(sequence, timestamp) do
+    media_message()
+    |> put_in(["sequence_number"], to_string(sequence))
+    |> put_in(["media", "chunk"], to_string(sequence))
+    |> put_in(["media", "timestamp"], to_string(timestamp))
   end
 
   defp media_binding(leg) do

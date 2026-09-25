@@ -19,6 +19,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   alias Vxpipe.Gateway.Telephony.{
     IncomingLegActivationResult,
     MediaBinding,
+    MediaSession,
     MediaSupervisor
   }
 
@@ -338,6 +339,41 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
                %{policy | revision: policy.revision + 1},
                demand
              )
+  end
+
+  test "drops stale-epoch media without attempting delivery" do
+    active_epoch = make_ref()
+    stale_epoch = make_ref()
+
+    event = %Event{
+      kind: :media,
+      provider: :telnyx,
+      provider_call_control_id: "call-control-1",
+      stream_id: "stream-1",
+      media: %MediaPacket{
+        codec: :opus,
+        sample_rate: 16_000,
+        channels: 1,
+        sequence_number: 1,
+        timestamp: 0,
+        payload: <<1, 2, 3>>,
+        source_epoch: stale_epoch
+      }
+    }
+
+    held_state = %{socket_owner: self(), stream_id: "stream-1", source_gate: {:held, stale_epoch}}
+
+    assert {:reply, :ok, ^held_state} =
+             MediaSession.handle_call({:event, self(), event}, self(), held_state)
+
+    active_state = %{
+      socket_owner: self(),
+      stream_id: "stream-1",
+      source_gate: {:active, active_epoch}
+    }
+
+    assert {:reply, :ok, ^active_state} =
+             MediaSession.handle_call({:event, self(), event}, self(), active_state)
   end
 
   defp compile_plan(options \\ []) do

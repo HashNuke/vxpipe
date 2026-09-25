@@ -1079,6 +1079,31 @@ the existing audio round trip. Record discoveries here before implementing.
                       the STS input frame. This enabler does not rotate epochs,
                       reject stale events or prove raw WebSock mailbox cutover.
                       The focused Twilio/Telnyx/STS-input group passes 28/0.
+                    - [x] T1: give Twilio and Telnyx a source-epoch hold/arm
+                      protocol. The socket rotates its epoch only in mailbox
+                      order, so raw frames queued before a hold keep the old
+                      stamp; marks, readiness and lifecycle stay responsive and
+                      the socket is not killed. Verify with focused provider
+                      tests on seeds 0 and 1.
+                    - [x] T2: hold the expected active source epoch in the
+                      telephony `MediaSession`, independent of the transfer
+                      `handoff_gate`. A media event whose epoch is not current
+                      is acknowledged `:ok` and dropped; a fresh-epoch frame is
+                      delivered, and non-media events are never epoch-gated.
+                    - [x] T3: prove the delayed-Leg backlog. A frame dispatched
+                      before a hold but handled after arm keeps its old epoch
+                      and is dropped, while a genuinely fresh frame is
+                      delivered. Use suspensions and acknowledgements, not
+                      sleeps.
+                    Design/dependency review for T1-T3, with ownership,
+                    rejected alternatives and limits:
+                    `labnotes/20260925-0511-sts-telephony-source-cutover.md`.
+                    Evidence: `Vxpipe.Gateway.Telephony.SourceEpoch` and
+                    `SourceGate`, the Twilio/Telnyx socket tests (12/9), the
+                    `SourceGate` test (3) and the MediaSession drop case. The
+                    broader `sts_input`/telephony/socket focused group passes
+                    134/0 on seed 0; compile warnings-as-errors and strict Credo
+                    (1,107 files, no issues) pass. T4 below remains open.
                   - [ ] Coordinate close, source hold/fence acknowledgement,
                     native STT retirement, fresh origin binding, source arm
                     acknowledgement and ingress reopen. Fail closed on source

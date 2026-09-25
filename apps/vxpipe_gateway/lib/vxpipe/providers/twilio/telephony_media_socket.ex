@@ -5,7 +5,7 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
 
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Gateway.Telephony.SocketReadiness
-  alias Vxpipe.Gateway.Telephony.{MediaBinding, PlaybackMarks, SocketDispatch}
+  alias Vxpipe.Gateway.Telephony.{MediaBinding, PlaybackMarks, SocketDispatch, SourceEpoch}
   alias Vxpipe.Providers.Twilio.MediaDecoder
 
   @impl true
@@ -18,6 +18,7 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
        clock: clock,
        media_clock: Map.get(options, :media_clock, fn -> System.monotonic_time(:millisecond) end),
        source_epoch: make_ref(),
+       source_gate: SourceEpoch.new(),
        leg_monitor: Process.monitor(binding.leg),
        playback_marks: %PlaybackMarks{},
        dispatch: SocketDispatch.new(),
@@ -86,6 +87,30 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
       )
       when is_binary(message) and is_binary(stream_id) do
     {:push, {:text, message}, state}
+  end
+
+  def handle_info({:vxpipe_sts_source_hold, scope}, state) do
+    case SourceEpoch.hold(state.source_epoch, state.source_gate, scope) do
+      {:ok, receipt, epoch, gate} ->
+        SourceEpoch.reply(scope, :vxpipe_sts_source_hold_ack, {:ok, receipt})
+        {:ok, %{state | source_epoch: epoch, source_gate: gate}}
+
+      {:error, reason} ->
+        SourceEpoch.reply(scope, :vxpipe_sts_source_hold_ack, {:error, reason})
+        {:ok, state}
+    end
+  end
+
+  def handle_info({:vxpipe_sts_source_arm, scope}, state) do
+    case SourceEpoch.arm(state.source_epoch, state.source_gate, scope) do
+      {:ok, epoch, gate} ->
+        SourceEpoch.reply(scope, :vxpipe_sts_source_arm_ack, {:ok, epoch})
+        {:ok, %{state | source_epoch: epoch, source_gate: gate}}
+
+      {:error, reason} ->
+        SourceEpoch.reply(scope, :vxpipe_sts_source_arm_ack, {:error, reason})
+        {:ok, state}
+    end
   end
 
   def handle_info({:DOWN, monitor, :process, leg, _reason}, state)
