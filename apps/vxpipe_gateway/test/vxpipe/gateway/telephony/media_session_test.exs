@@ -702,7 +702,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
          state = %{
            binding: binding,
            stream_id: "stream-1",
-           readiness_resource: Vxpipe.Gateway.Telephony.SocketReadiness.new(binding)
+           readiness_resource: Vxpipe.Gateway.Telephony.SocketReadiness.new(binding),
+           source_epoch: make_ref(),
+           source_gate: nil
          }
 
          socket_loop(observer, state)
@@ -738,12 +740,64 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
         Vxpipe.Gateway.Telephony.SocketReadiness.reply(state, receiver, reference)
         socket_loop(observer, state)
 
+      {:vxpipe_sts_source_hold, scope} ->
+        send(observer, {:test_source_hold, scope})
+        socket_loop(observer, handle_source_hold(scope, state))
+
+      {:vxpipe_sts_source_arm, scope} ->
+        send(observer, {:test_source_arm, scope})
+        socket_loop(observer, handle_source_arm(scope, state))
+
       {:test_stream, stream, sender} ->
         send(sender, :test_stream_changed)
         socket_loop(observer, %{state | stream_id: stream})
 
       :stop ->
         :ok
+    end
+  end
+
+  defp handle_source_hold(scope, state) do
+    case Vxpipe.Gateway.Telephony.SourceEpoch.hold(state.source_epoch, state.source_gate, scope) do
+      {:ok, receipt, epoch, gate} ->
+        Vxpipe.Gateway.Telephony.SourceEpoch.reply(
+          scope,
+          :vxpipe_sts_source_hold_ack,
+          {:ok, receipt}
+        )
+
+        %{state | source_epoch: epoch, source_gate: gate}
+
+      {:error, reason} ->
+        Vxpipe.Gateway.Telephony.SourceEpoch.reply(
+          scope,
+          :vxpipe_sts_source_hold_ack,
+          {:error, reason}
+        )
+
+        state
+    end
+  end
+
+  defp handle_source_arm(scope, state) do
+    case Vxpipe.Gateway.Telephony.SourceEpoch.arm(state.source_epoch, state.source_gate, scope) do
+      {:ok, epoch, gate} ->
+        Vxpipe.Gateway.Telephony.SourceEpoch.reply(
+          scope,
+          :vxpipe_sts_source_arm_ack,
+          {:ok, epoch}
+        )
+
+        %{state | source_epoch: epoch, source_gate: gate}
+
+      {:error, reason} ->
+        Vxpipe.Gateway.Telephony.SourceEpoch.reply(
+          scope,
+          :vxpipe_sts_source_arm_ack,
+          {:error, reason}
+        )
+
+        state
     end
   end
 
