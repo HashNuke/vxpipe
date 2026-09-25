@@ -5,7 +5,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
+  alias Vxpipe.CallEngine.Speech.Session
   alias Vxpipe.CallEngine.TestAudioOutputSink
+  alias Vxpipe.Providers.MorseCode.DuplexSTSSession, as: DuplexSTS
 
   @human "human1"
   @agent "agent1"
@@ -19,12 +21,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert_receive {:vxpipe_sts_input_event, ^capability,
                     %{
                       identity: %{participant_id: @human},
-                      event: %{kind: :input_transcript, text: "HI", final: true, endpointing: nil}
+                      event: %{kind: :input_transcript, text: "HI", final: true}
                     }}
 
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}
-    assert_receive {:test_audio_output, _sink, _frame}
-
+    advance_until_idle(capability)
     complete_playback(20)
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20,
@@ -60,9 +61,44 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
 
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, reply_turn, _}
     assert reply_turn != tool_turn
+    advance_until_idle(capability)
     complete_playback(20)
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED ok", _, _, _, _}
+  end
+
+  test "caller onset leaves a provider-owned output playing, but room fences still cut it" do
+    {_tree, capability, _sink} =
+      start_capability(policy: unrestricted(), provider: {DuplexSTS, [yield?: false]})
+
+    push_morse(capability, "HI")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}
+    assert :sys.get_state(capability).active_output != nil
+
+    # Caller onset during the reply must not fence a provider-owned output.
+    push_morse(capability, "NO")
+    refute_received {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _, _}
+    assert :sys.get_state(capability).active_output != nil
+
+    # A policy denial still fences the output.
+    assert :ok = SpeechToSpeech.apply_policy(capability, deny_audio(@agent, @human))
+    assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, _, _, _}
+  end
+
+  defp advance_until_idle(capability) do
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    Enum.reduce_while(1..2_000, :ok, fn _, :ok ->
+      # Let the capability process sink acknowledgements before the next frame.
+      _ = :sys.get_state(capability)
+
+      if :sys.get_state(provider).output == nil do
+        {:halt, :ok}
+      else
+        :ok = DuplexSTS.advance(provider, 20)
+        {:cont, :ok}
+      end
+    end)
   end
 
   defp start_capability(options) do
@@ -134,6 +170,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert_receive {:test_audio_output_finish, sink, _turn}, 5_000
     TestAudioOutputSink.playback_progress(sink, played_ms, played_ms + 1_000)
     TestAudioOutputSink.playback_completed(sink)
+  end
+
+  defp deny_audio(source, _recipient) do
+    %Effective{
+      audio_routes: %{source => MapSet.new([])},
+      transcript_routes: :unrestricted,
+      record_audio: true,
+      save_transcripts: true
+    }
   end
 
   defp unrestricted do

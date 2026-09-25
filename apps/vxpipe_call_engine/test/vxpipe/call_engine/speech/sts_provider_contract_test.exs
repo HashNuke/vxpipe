@@ -80,7 +80,12 @@ defmodule Vxpipe.CallEngine.Speech.STSProviderContractTest do
       input_transcript?: true,
       output_transcript?: true,
       output_settlement: :transcript_end,
-      history_reconciliation?: false
+      history_reconciliation?: false,
+      output_shape: :turns,
+      barge_in: :room,
+      continuity: :none,
+      tool_cancellation?: true,
+      hold: :stop
     ]
 
     assert {:ok, _} = Descriptor.new(base)
@@ -93,7 +98,14 @@ defmodule Vxpipe.CallEngine.Speech.STSProviderContractTest do
           [output_settlement: nil],
           [output_settlement: :audio_end],
           [endpointing: :none],
-          [endpointing: :provider_gap, speech_start?: false]
+          [endpointing: :provider_gap, speech_start?: false],
+          [output_shape: nil],
+          [barge_in: nil],
+          [continuity: nil],
+          [tool_cancellation?: nil],
+          [hold: nil],
+          [barge_in: :near],
+          [hold: :pause]
         ] do
       fields = Keyword.merge(base, override)
       assert {:error, :invalid_descriptor} = Descriptor.new(fields), inspect(override)

@@ -6,17 +6,17 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession, as: DuplexSTS
 
-  test "self-yields its reply when caller tone arrives while an output credit is held" do
-    session = start_session(provider: DuplexSTS, owner: self())
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
-    assert :ok = Session.ack(session, ready)
+  @sample_rate 16_000
 
+  test "keeps the reply open and yields when caller tone arrives while a credit is held" do
+    %{session: session, provider: provider} = start_session()
     push_chunks(session, "HI")
     turn = drain_until_turn_ended(session)
 
     assert {:ok, output} = Session.admit_output(session, turn)
+    advance(provider, 220)
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = held}
-    # Hold the credit so the reply stays open, then talk over it.
+
     push_chunks(session, "NO")
     drain_until_turn_ended(session)
 
@@ -31,23 +31,74 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert :ok = Session.ack(session, transcript)
 
     assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :output_completed, turn_ref: ^turn} = done},
-                   1_000
+                    %Event{session: ^session, kind: :output_completed, turn_ref: ^turn} = done}
 
     assert :ok = Session.ack(session, done)
     assert :ok = Session.settle_output(session, output, 0)
   end
 
-  defp start_session(options) do
+  test "discards clock-paced silence before the burst and replays the pre-roll" do
+    %{session: session, provider: provider} = start_session()
+    push_chunks(session, "HI")
+    turn = drain_until_turn_ended(session)
+
+    assert {:ok, _output} = Session.admit_output(session, turn)
+
+    # The 200 ms leading silence is below the activation gate: no burst opens.
+    advance(provider, 200)
+    refute_received {:vxpipe_speech_audio, %Audio{}}
+
+    until_audio(session, provider)
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = first}
+    pre_roll_bytes = div(200 * @sample_rate, 1_000) * 2
+    silence = :binary.copy(<<0, 0>>, div(pre_roll_bytes, 2))
+    assert :binary.part(first.payload, 0, pre_roll_bytes) == silence
+    assert :ok = Session.validate_audio(session, first)
+    assert :ok = Session.ack_audio(session, first)
+
+    drain_output(session, provider)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_transcript, turn_ref: ^turn} =
+                      transcript}
+
+    assert :ok = Session.ack(session, transcript)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_completed, turn_ref: ^turn} = done}
+
+    assert :ok = Session.ack(session, done)
+
+    # Silence after the reply is discarded: advancing further emits no new burst.
+    advance(provider, 2_000)
+    refute_received {:vxpipe_speech_audio, %Audio{}}
+    refute_received {:vxpipe_speech, %Event{kind: :output_completed}}
+  end
+
+  test "fails the session explicitly when pre-admission output overflows the receive buffer" do
+    %{session: session, provider: provider} = start_session()
+    push_chunks(session, "HI")
+    _turn = drain_until_turn_ended(session)
+
+    # Never admit the output; the provider keeps streaming with no flow control.
+    monitor = Process.monitor(provider)
+    assert {:error, :buffer_overflow} = DuplexSTS.advance(provider, 8_000)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :buffer_overflow}}
+    _ = session
+  end
+
+  # Helpers ------------------------------------------------------------------
+
+  defp start_session do
     scope =
       start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
 
+    options = [provider: DuplexSTS, owner: self()]
     {:ok, session, :starting} = Session.start(CapabilityTree.scope(scope), options)
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}, 1_000
+    assert :ok = Session.ack(session, ready)
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message, 1_000
-    send(self(), message)
-
-    session
+    %{session: session, provider: Session.provider(session)}
   end
 
   defp push_chunks(session, text) do
@@ -78,6 +129,46 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
       1_000 -> flunk("no turn_ended event")
     end
   end
+
+  defp until_audio(session, provider), do: until_audio(session, provider, 500)
+
+  defp until_audio(_session, _provider, 0), do: flunk("no output audio")
+
+  defp until_audio(session, provider, remaining) do
+    receive do
+      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
+        send(self(), {:vxpipe_speech_audio, audio})
+        :ok
+    after
+      0 ->
+        advance(provider, 20)
+        until_audio(session, provider, remaining - 1)
+    end
+  end
+
+  defp drain_output(session, provider, remaining \\ 1_000)
+
+  defp drain_output(_session, _provider, 0), do: flunk("output did not settle")
+
+  defp drain_output(session, provider, remaining) do
+    receive do
+      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
+        assert :ok = Session.validate_audio(session, audio)
+        assert :ok = Session.ack_audio(session, audio)
+        drain_output(session, provider, remaining)
+
+      {:vxpipe_speech, %Event{session: ^session, kind: kind} = event}
+      when kind in [:output_transcript, :output_completed] ->
+        send(self(), {:vxpipe_speech, event})
+        :ok
+    after
+      0 ->
+        advance(provider, 20)
+        drain_output(session, provider, remaining - 1)
+    end
+  end
+
+  defp advance(provider, ms), do: :ok = DuplexSTS.advance(provider, ms)
 
   defp encode(text) do
     {:ok, config} = Config.new([])

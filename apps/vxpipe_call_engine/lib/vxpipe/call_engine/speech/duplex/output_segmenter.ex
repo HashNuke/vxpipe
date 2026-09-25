@@ -22,7 +22,7 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
 
   @default_sample_rate 24_000
   @default_frame_ms 20
-  @default_gap_ms 400
+  @default_gap_ms 800
   @default_pre_roll_ms 300
   @default_buffer_ms 2_000
   @default_fragment_timeout_ms 3_000

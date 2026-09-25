@@ -19,11 +19,11 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
                 output_transcript?: false,
                 output_settlement: nil,
                 history_reconciliation?: false,
-                output_shape: :turns,
-                barge_in: :room,
-                continuity: :resumption_handle,
-                tool_cancellation?: true,
-                hold: :stop
+                output_shape: nil,
+                barge_in: nil,
+                continuity: nil,
+                tool_cancellation?: nil,
+                hold: nil
               ]
 
   @fields @enforce_keys ++
@@ -69,11 +69,11 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           output_transcript?: boolean(),
           output_settlement: nil | :transcript_end | :generation_boundary,
           history_reconciliation?: boolean(),
-          output_shape: :turns | :continuous,
-          barge_in: :room | :provider,
-          continuity: :resumption_handle | :history_reseed | :none,
-          tool_cancellation?: boolean(),
-          hold: :stop | :mute
+          output_shape: :turns | :continuous | nil,
+          barge_in: :room | :provider | nil,
+          continuity: :resumption_handle | :history_reseed | :none | nil,
+          tool_cancellation?: boolean() | nil,
+          hold: :stop | :mute | nil
         }
 
   @doc "Build public metadata. Provider-specific settings remain the provider's validation responsibility."
@@ -110,7 +110,6 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          (not descriptor.finite_input? or descriptor.kind == :stt) and
          (not descriptor.eager_end? or
             descriptor.endpointing in [:provider_semantic, :provider_gap]) and
-         valid_duplex_facts?(descriptor) and
          valid_kind?(descriptor) do
       :ok
     else
@@ -141,19 +140,20 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
       is_boolean(descriptor.tool_cancellation?) and
       descriptor.hold in [:stop, :mute] and
       (descriptor.endpointing != :inferred_gap or
-         (descriptor.kind == :sts and descriptor.turn_control == "provider" and
-            descriptor.speech_start?)) and
+         (descriptor.turn_control == "provider" and descriptor.speech_start?)) and
       (descriptor.barge_in != :provider or not descriptor.history_reconciliation?)
   end
 
-  defp default_duplex_facts?(descriptor) do
-    descriptor.output_shape == :turns and descriptor.barge_in == :room and
-      descriptor.continuity == :resumption_handle and descriptor.tool_cancellation? == true and
-      descriptor.hold == :stop
+  # Amendment 1: the duplex facts are STS-only. A non-STS descriptor must not
+  # declare any of them.
+  defp duplex_facts_declared?(descriptor) do
+    not is_nil(descriptor.output_shape) or not is_nil(descriptor.barge_in) or
+      not is_nil(descriptor.continuity) or not is_nil(descriptor.tool_cancellation?) or
+      not is_nil(descriptor.hold)
   end
 
   defp valid_kind?(%{kind: :stt, cache_identity: nil, input_format: nil} = descriptor),
-    do: default_duplex_facts?(descriptor)
+    do: not duplex_facts_declared?(descriptor)
 
   defp valid_kind?(%{kind: :sts, cache_identity: nil} = descriptor),
     do:
@@ -168,14 +168,15 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
         descriptor.turn_control in descriptor.turn_control_supported and
         is_boolean(descriptor.input_transcript?) and is_boolean(descriptor.output_transcript?) and
         descriptor.output_settlement in [:transcript_end, :generation_boundary] and
-        is_boolean(descriptor.history_reconciliation?) and valid_sts_controller?(descriptor)
+        is_boolean(descriptor.history_reconciliation?) and valid_duplex_facts?(descriptor) and
+        valid_sts_controller?(descriptor)
 
   defp valid_kind?(%{kind: :tts, cache_identity: identity, input_format: nil} = descriptor),
     do:
       is_binary(identity) and byte_size(identity) == 32 and
         descriptor.format.encoding == :linear16 and descriptor.endpointing == :none and
         not descriptor.speech_start? and not descriptor.eager_end? and not descriptor.resume? and
-        default_duplex_facts?(descriptor)
+        not duplex_facts_declared?(descriptor)
 
   defp valid_kind?(_descriptor), do: false
 

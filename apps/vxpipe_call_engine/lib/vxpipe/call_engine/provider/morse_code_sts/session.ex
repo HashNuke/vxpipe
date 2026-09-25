@@ -54,7 +54,12 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
         input_transcript?: true,
         output_transcript?: output_transcript,
         output_settlement: :transcript_end,
-        history_reconciliation?: false
+        history_reconciliation?: false,
+        output_shape: :turns,
+        barge_in: :room,
+        continuity: :none,
+        tool_cancellation?: true,
+        hold: :stop
       )
     else
       _invalid -> {:error, :invalid_configuration}

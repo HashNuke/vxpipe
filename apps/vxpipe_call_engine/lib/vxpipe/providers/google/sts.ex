@@ -82,6 +82,18 @@ defmodule Vxpipe.Providers.Google.STS do
 
   def public_options(_options), do: {:error, :invalid_configuration}
 
+  @doc "Raw mono linear16 format accepted and produced at the given rate."
+  def pcm_format(sample_rate) when is_integer(sample_rate) and sample_rate > 0 do
+    %{
+      encoding: :linear16,
+      container: :raw,
+      sample_rate: sample_rate,
+      channels: 1,
+      byte_order: :little,
+      signed?: true
+    }
+  end
+
   def connection_options(%__MODULE__{} = config),
     do: %{url: config.endpoint, headers: [{"x-goog-api-key", config.api_key}]}
 

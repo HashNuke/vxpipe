@@ -96,22 +96,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
         kind: :sts,
         response_start?: response_start?,
         settings: public,
-        input_format: %{
-          encoding: :linear16,
-          container: :raw,
-          sample_rate: public.input_sample_rate,
-          channels: 1,
-          byte_order: :little,
-          signed?: true
-        },
-        format: %{
-          encoding: :linear16,
-          container: :raw,
-          sample_rate: public.output_sample_rate,
-          channels: 1,
-          byte_order: :little,
-          signed?: true
-        },
+        input_format: STS.pcm_format(public.input_sample_rate),
+        format: STS.pcm_format(public.output_sample_rate),
         usage_identity: %{provider: :google, model: public.model, provenance: :provider_reported},
         readiness: :provider_acknowledged,
         endpointing:
@@ -122,7 +108,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
         input_transcript?: true,
         output_transcript?: true,
         output_settlement: :generation_boundary,
-        history_reconciliation?: false
+        history_reconciliation?: false,
+        output_shape: :turns,
+        barge_in: :room,
+        continuity: :resumption_handle,
+        tool_cancellation?: true,
+        hold: :stop
       )
     else
       _invalid -> {:error, :invalid_configuration}

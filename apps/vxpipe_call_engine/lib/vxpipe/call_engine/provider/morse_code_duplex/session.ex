@@ -8,10 +8,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   reuses the Morse tone codec:
 
   - Caller tone is decoded into text and grouped into inferred turns.
-  - A reply is Morse audio segmented by the output energy gate.
+  - Output is a continuous, clock-paced stream: leading silence, the Morse
+    reply, then trailing silence. Only the audio the output energy gate admits
+    is forwarded, so silence between bursts is discarded.
   - It yields its own reply when it decodes caller tone during output.
   - Caller text `TOOL <name> <json>` raises a delegated tool call whose result
     reopens a reply.
+
+  The adapter drives the clock. `advance/2` emits the next audio-time slice;
+  production drives it from a timer or socket reader, while tests call it
+  explicitly so no test depends on wall-clock sleeps.
   """
 
   use GenServer
@@ -23,23 +29,26 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   @reply_prefix "RECEIVED "
   @default_input_gap_ms 800
-  @default_output_gap_ms 1_000
-  @output_buffer_ms 60_000
-  @pre_roll_ms 300
+  @frame_ms 20
+  @leading_silence_frames 10
+  @trailing_silence_frames 60
 
   @impl true
   def configure(options) do
-    allowed = (Map.keys(Config.__struct__()) -- [:__struct__]) ++ [:output_transcript]
+    allowed =
+      (Map.keys(Config.__struct__()) -- [:__struct__]) ++ [:output_transcript, :yield?]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
          true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
          {output_transcript, rest} = Keyword.pop(options, :output_transcript, true),
          true <- is_boolean(output_transcript),
+         {yield?, rest} = Keyword.pop(rest, :yield?, true),
+         true <- is_boolean(yield?),
          {:ok, config} <- Config.new(rest) do
       Descriptor.new(
         kind: :sts,
-        settings: Map.from_struct(config),
+        settings: Map.put(Map.from_struct(config), :yield?, yield?),
         input_format: format(config),
         format: format(config),
         usage_identity: %{
@@ -112,14 +121,20 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     :exit, {:normal, _call} -> :ok
   end
 
+  @doc "Emit the next `ms` of audio-time output. The adapter owns the clock."
+  def advance(pid, ms) when is_integer(ms) and ms > 0,
+    do: GenServer.call(pid, {:advance, ms}, 5_000)
+
   @impl true
   def init(options) do
     descriptor = Keyword.fetch!(options, :descriptor)
     channel = Keyword.fetch!(options, :channel)
 
-    with {:ok, config} <- Config.new(Map.to_list(descriptor.settings)),
+    with {:ok, config} <-
+           descriptor.settings |> Map.delete(:yield?) |> Map.to_list() |> Config.new(),
          {:ok, decoder} <- Decoder.new(config),
          {:ok, inference} <- TurnInference.new(gap_ms: @default_input_gap_ms),
+         {:ok, segmenter} <- OutputSegmenter.new(segmenter_options(config)),
          :ok <- Channel.bind(channel),
          :ok <- Event.emit(channel, :ready, readiness: descriptor.readiness) do
       {:ok,
@@ -129,16 +144,20 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
          config: config,
          decoder: decoder,
          inference: inference,
-         frame_bytes: div(config.sample_rate * 20, 1_000) * 2,
+         segmenter: segmenter,
+         frame_bytes: div(config.sample_rate * @frame_ms, 1_000) * 2,
          input_ms: 0,
          output: nil,
          queued_reply: nil,
+         yield?: Map.get(descriptor.settings, :yield?, true),
          pending_tools: %{}
        }}
     else
       _error -> {:stop, :initialization_failed}
     end
   end
+
+  defp segmenter_options(config), do: [sample_rate: config.sample_rate]
 
   @impl true
   def handle_call({:push_audio, audio}, _from, state) when is_binary(audio),
@@ -184,6 +203,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
+  def handle_call({:advance, ms}, _from, state) when is_integer(ms) and ms > 0 do
+    case advance_clock(state, ms) do
+      {:ok, state} ->
+        {:reply, :ok, state}
+
+      {:error, :buffer_overflow, state} ->
+        {:stop, {:shutdown, :buffer_overflow}, {:error, :buffer_overflow}, state}
+    end
+  end
+
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 
   @impl true
@@ -195,7 +224,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   def handle_info({:vxpipe_speech_credit, _channel, output_ref, credit, :ok}, state) do
     case state.output do
       %{output_ref: ^output_ref, awaiting: ^credit} = output ->
-        pump(%{state | output: %{output | awaiting: nil}})
+        state = %{state | output: %{output | awaiting: nil}}
+        {:noreply, state |> drain_submit() |> then(&finish_if_ready(&1))}
 
       _other ->
         {:noreply, state}
@@ -240,8 +270,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end)
   end
 
+  defp apply_decoder_event(:started, %{yield?: false} = state), do: {:ok, state}
   defp apply_decoder_event(:started, state), do: {:ok, self_yield(state)}
-
   defp apply_decoder_event({:partial, _text}, state), do: {:ok, state}
 
   defp apply_decoder_event({:final, text}, state) do
@@ -294,7 +324,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
            text: "",
            endpointing: :inferred_gap
          ) do
-      :ok -> begin_reply(state, turn_ref, reply)
+      :ok -> start_reply(state, turn_ref, reply)
       _failure -> state
     end
   end
@@ -324,7 +354,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
       :not_a_tool ->
         reply = @reply_prefix <> String.slice(text, 0, truncate_limit(state.config))
-        begin_reply(state, turn_ref, reply)
+        start_reply(state, turn_ref, reply)
     end
   end
 
@@ -365,18 +395,175 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   # Output -----------------------------------------------------------------
 
+  defp advance_clock(state, ms) do
+    frames = max(div(ms, @frame_ms), 1)
+
+    Enum.reduce_while(1..frames, {:ok, state}, fn _, {:ok, state} ->
+      case emit_frame(state) do
+        {:ok, state} -> {:cont, {:ok, state}}
+        {:error, :buffer_overflow, state} -> {:halt, {:error, :buffer_overflow, state}}
+      end
+    end)
+  end
+
+  defp emit_frame(state) do
+    {frame, state} = next_frame(state)
+
+    case OutputSegmenter.push_pcm(state.segmenter, frame) do
+      {:error, :buffer_overflow, segmenter} ->
+        {:error, :buffer_overflow, %{state | segmenter: segmenter}}
+
+      {segmenter, events} ->
+        state = %{state | segmenter: segmenter}
+
+        case apply_segmenter_events(events, state) do
+          {:ok, state} -> {:ok, state |> drain_submit() |> then(&finish_if_ready(&1))}
+          {:error, :buffer_overflow, state} -> {:error, :buffer_overflow, state}
+        end
+    end
+  end
+
+  defp next_frame(%{output: nil} = state), do: {silence_frame(state), state}
+
+  defp next_frame(%{output: output} = state) do
+    if output.cursor < byte_size(output.stream) do
+      size = min(state.frame_bytes, byte_size(output.stream) - output.cursor)
+      frame = binary_part(output.stream, output.cursor, size)
+      {frame, %{state | output: %{output | cursor: output.cursor + size}}}
+    else
+      {silence_frame(state), state}
+    end
+  end
+
+  defp apply_segmenter_events(events, state) do
+    Enum.reduce_while(events, {:ok, state}, fn
+      {:open, seg_ref}, {:ok, state} ->
+        case open_burst(%{state | output: put_seg_ref(state.output, seg_ref)}, seg_ref) do
+          {:ok, state} -> {:cont, {:ok, state}}
+          {:error, _reason} = error -> {:halt, error}
+        end
+
+      {:audio, _seg_ref, pcm}, {:ok, state} ->
+        case enqueue_submit(state, pcm) do
+          {:ok, state} -> {:cont, {:ok, state}}
+          {:error, :buffer_overflow, state} -> {:halt, {:error, :buffer_overflow, state}}
+        end
+
+      {:close, _seg_ref}, {:ok, state} ->
+        {:cont, {:ok, mark_close(state)}}
+
+      _event, acc ->
+        {:cont, acc}
+    end)
+  end
+
+  defp put_seg_ref(nil, _seg_ref), do: nil
+  defp put_seg_ref(output, seg_ref), do: %{output | seg_ref: seg_ref}
+
+  defp open_burst(%{output: nil} = state, _seg_ref), do: {:ok, state}
+
+  defp open_burst(%{output: %{output_ref: nil}} = state, _seg_ref), do: {:ok, state}
+
+  defp open_burst(%{output: %{admitted?: true}} = state, _seg_ref), do: {:ok, state}
+
+  defp open_burst(%{output: %{seg_ref: seg_ref}} = state, seg_ref) do
+    {segmenter, events} = OutputSegmenter.admitted(state.segmenter, seg_ref)
+    state = %{state | segmenter: segmenter, output: %{state.output | admitted?: true}}
+
+    case apply_segmenter_events(events, state) do
+      {:ok, state} -> {:ok, state}
+      {:error, :buffer_overflow, state} -> {:error, :buffer_overflow, state}
+    end
+  end
+
+  defp open_burst(state, _seg_ref), do: {:ok, state}
+
+  defp mark_close(%{output: nil} = state), do: state
+
+  defp mark_close(%{output: output} = state),
+    do: %{state | output: %{output | close_pending?: true}}
+
+  defp enqueue_submit(%{output: nil} = state, _pcm), do: {:ok, state}
+
+  defp enqueue_submit(%{output: output} = state, pcm) do
+    queued = output.queue ++ [pcm]
+    bytes = output.queue_bytes + byte_size(pcm)
+
+    if bytes > buffer_bytes(state) do
+      {:error, :buffer_overflow, %{state | output: %{output | queue: queued, queue_bytes: bytes}}}
+    else
+      {:ok, %{state | output: %{output | queue: queued, queue_bytes: bytes}}}
+    end
+  end
+
+  defp drain_submit(%{output: %{awaiting: nil} = output} = state)
+       when output.output_ref != nil do
+    case output.queue do
+      [pcm | rest] ->
+        case Channel.submit(state.channel, output.output_ref, pcm) do
+          {:ok, credit} ->
+            %{
+              state
+              | output: %{
+                  output
+                  | queue: rest,
+                    queue_bytes: output.queue_bytes - byte_size(pcm),
+                    awaiting: credit
+                }
+            }
+
+          _failure ->
+            %{state | output: %{output | queue: [], queue_bytes: 0, interrupted?: true}}
+        end
+
+      [] ->
+        state
+    end
+  end
+
+  defp drain_submit(state), do: state
+
+  defp finish_if_ready(%{output: nil} = state), do: state
+
+  defp finish_if_ready(%{output: output} = state) do
+    cond do
+      output.interrupted? and output.awaiting != nil ->
+        state
+
+      output.interrupted? and output.output_ref == nil ->
+        start_queued(%{state | output: nil})
+
+      output.interrupted? ->
+        complete_output(state)
+
+      output.cursor >= byte_size(output.stream) and output.close_pending? and output.queue == [] and
+        output.awaiting == nil and output.admitted? ->
+        complete_output(state)
+
+      true ->
+        state
+    end
+  end
+
   defp handle_admit(state, turn_ref, output_ref) do
     case state.output do
       %{turn_ref: ^turn_ref} = output ->
-        {segmenter, events} = OutputSegmenter.admitted(output.segmenter, output.seg_ref)
+        state = %{state | output: %{output | output_ref: output_ref}}
 
-        state = %{
-          state
-          | output: %{output | segmenter: segmenter, output_ref: output_ref, admitted?: true}
-        }
+        state =
+          case state.output.seg_ref do
+            nil ->
+              state
 
-        {:noreply, state} = apply_segmenter_events(events, state)
-        pump(state)
+            seg_ref ->
+              case open_burst(state, seg_ref) do
+                {:ok, state} -> state
+                {:error, :buffer_overflow, state} -> state
+              end
+          end
+
+        state = state |> drain_submit() |> finish_if_ready()
+        {:noreply, state}
 
       _other ->
         case state.queued_reply do
@@ -389,186 +576,41 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
-  defp begin_reply(%{output: output} = state, turn_ref, text) when not is_nil(output) do
+  defp start_reply(%{output: output} = state, turn_ref, text) when not is_nil(output) do
     %{state | queued_reply: {turn_ref, text, nil}}
   end
 
-  defp begin_reply(state, turn_ref, text) do
-    with {:ok, pcm} <- Encoder.encode(state.config, text),
-         {:ok, segmenter} <- OutputSegmenter.new(segmenter_options(state.config)) do
-      state = %{
-        state
-        | output: %{
-            turn_ref: turn_ref,
-            text: text,
-            pcm: pcm,
-            cursor: 0,
-            segmenter: segmenter,
-            seg_ref: nil,
-            output_ref: nil,
-            admitted?: false,
-            awaiting: nil,
-            interrupted?: false,
-            complete_pending?: false,
-            finished?: false
-          }
+  defp start_reply(state, turn_ref, text) do
+    with {:ok, reply} <- Encoder.encode(state.config, text) do
+      stream =
+        silence(state, @leading_silence_frames) <>
+          reply <> silence(state, @trailing_silence_frames)
+
+      output = %{
+        turn_ref: turn_ref,
+        text: text,
+        output_ref: nil,
+        admitted?: false,
+        stream: stream,
+        cursor: 0,
+        seg_ref: nil,
+        close_pending?: false,
+        awaiting: nil,
+        queue: [],
+        queue_bytes: 0,
+        interrupted?: false
       }
 
-      pump(state) |> unwrap()
+      %{state | output: output}
     else
       _error -> state
     end
   end
 
-  defp unwrap({:noreply, state}), do: state
-
-  defp segmenter_options(config) do
-    [
-      sample_rate: config.sample_rate,
-      gap_ms: @default_output_gap_ms,
-      pre_roll_ms: @pre_roll_ms,
-      buffer_ms: @output_buffer_ms
-    ]
-  end
-
-  defp pump(%{output: nil} = state), do: {:noreply, start_queued(state)}
-
-  defp pump(%{output: %{interrupted?: true} = output} = state) do
-    cond do
-      output.awaiting != nil -> {:noreply, state}
-      output.output_ref == nil -> {:noreply, start_queued(%{state | output: nil})}
-      true -> complete_output(state)
-    end
-  end
-
-  defp pump(%{output: output} = state) do
-    cond do
-      output.seg_ref == nil and output.finished? ->
-        {:noreply, start_queued(%{state | output: nil})}
-
-      output.seg_ref == nil ->
-        feed_until_open(state)
-
-      not output.admitted? ->
-        {:noreply, state}
-
-      output.awaiting != nil ->
-        {:noreply, state}
-
-      output.cursor < byte_size(output.pcm) ->
-        feed_next(state)
-
-      not output.complete_pending? ->
-        close_segmenter(state)
-
-      true ->
-        complete_output(state)
-    end
-  end
-
-  defp feed_until_open(state) do
-    output = state.output
-
-    if output.cursor >= byte_size(output.pcm) do
-      {segmenter, events} = OutputSegmenter.finish(output.segmenter)
-
-      state = %{
-        state
-        | output: %{output | segmenter: segmenter, cursor: byte_size(output.pcm), finished?: true}
-      }
-
-      {:noreply, state} = apply_segmenter_events(events, state)
-      pump(state)
-    else
-      {frame, cursor} = next_frame(output, state.frame_bytes)
-      {segmenter, events} = OutputSegmenter.push_pcm(output.segmenter, frame)
-      state = %{state | output: %{output | segmenter: segmenter, cursor: cursor}}
-
-      {:noreply, state} = apply_segmenter_events(events, state)
-
-      if state.output.seg_ref == nil do
-        feed_until_open(state)
-      else
-        {:noreply, state}
-      end
-    end
-  end
-
-  defp close_segmenter(state) do
-    output = state.output
-    {segmenter, events} = OutputSegmenter.finish(output.segmenter)
-    state = %{state | output: %{output | segmenter: segmenter, complete_pending?: true}}
-
-    {:noreply, state} = apply_segmenter_events(events, state)
-    pump(state)
-  end
-
-  defp feed_next(state) do
-    output = state.output
-    {frame, cursor} = next_frame(output, state.frame_bytes)
-    {segmenter, events} = OutputSegmenter.push_pcm(output.segmenter, frame)
-    state = %{state | output: %{output | segmenter: segmenter, cursor: cursor}}
-
-    {:noreply, state} = apply_segmenter_events(events, state)
-    pump(state)
-  end
-
-  defp next_frame(output, frame_bytes) do
-    remaining = byte_size(output.pcm) - output.cursor
-    size = min(frame_bytes, remaining)
-    {binary_part(output.pcm, output.cursor, size), output.cursor + size}
-  end
-
-  defp apply_segmenter_events(events, state) do
-    Enum.reduce_while(events, {:noreply, state}, fn
-      {:open, seg_ref}, {:noreply, state} ->
-        {:cont, {:noreply, %{state | output: %{state.output | seg_ref: seg_ref}}}}
-
-      {:audio, _seg_ref, pcm},
-      {:noreply, %{output: %{admitted?: true, awaiting: nil} = output} = state} ->
-        case Channel.submit(state.channel, output.output_ref, pcm) do
-          {:ok, credit} ->
-            {:halt, {:noreply, %{state | output: %{output | awaiting: credit}}}}
-
-          _failure ->
-            {:halt, {:noreply, %{state | output: %{output | interrupted?: true}}}}
-        end
-
-      _event, {:noreply, state} ->
-        {:cont, {:noreply, state}}
-    end)
-  end
-
-  defp complete_output(state) do
-    output = state.output
-
-    result =
-      (
-        emitted =
-          Event.emit(state.channel, :output_transcript,
-            turn_ref: output.turn_ref,
-            text: output.text,
-            final: true
-          )
-
-        with :ok <- emitted,
-             :ok <-
-               Event.emit(state.channel, :output_completed,
-                 turn_ref: output.turn_ref,
-                 request_ref: output.output_ref
-               ) do
-          :ok
-        end
-      )
-
-    _ = result
-    {:noreply, start_queued(%{state | output: nil})}
-  end
-
   defp start_queued(%{queued_reply: nil} = state), do: state
 
   defp start_queued(%{queued_reply: {turn_ref, text, output_ref}} = state) do
-    state = begin_reply(%{state | queued_reply: nil}, turn_ref, text)
+    state = start_reply(%{state | queued_reply: nil}, turn_ref, text)
 
     if output_ref do
       {:noreply, state} = handle_admit(state, turn_ref, output_ref)
@@ -578,16 +620,55 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
+  defp complete_output(state) do
+    output = state.output
+
+    _ =
+      Event.emit(state.channel, :output_transcript,
+        turn_ref: output.turn_ref,
+        text: output.text,
+        final: true
+      )
+
+    _ =
+      Event.emit(state.channel, :output_completed,
+        turn_ref: output.turn_ref,
+        request_ref: output.output_ref
+      )
+
+    start_queued(%{state | output: nil})
+  end
+
   defp self_yield(%{output: nil} = state), do: state
 
   defp self_yield(%{output: output} = state) do
-    {segmenter, _events} = OutputSegmenter.finish(output.segmenter)
-    state = %{state | output: %{output | interrupted?: true, segmenter: segmenter}}
-    {:noreply, state} = pump(state)
-    state
+    {segmenter, _events} = OutputSegmenter.finish(state.segmenter)
+
+    state = %{
+      state
+      | segmenter: segmenter,
+        output: %{
+          output
+          | interrupted?: true,
+            seg_ref: nil,
+            cursor: byte_size(output.stream),
+            close_pending?: true,
+            queue: [],
+            queue_bytes: 0
+        }
+    }
+
+    finish_if_ready(state)
   end
 
-  # Helpers ----------------------------------------------------------------
+  # Pricing helpers --------------------------------------------------------
+
+  defp silence_frame(state),
+    do: :binary.copy(<<0, 0>>, div(state.config.sample_rate * @frame_ms, 1_000))
+
+  defp silence(state, frames), do: :binary.copy(silence_frame(state), frames)
+
+  defp buffer_bytes(state), do: div(2_000 * state.config.sample_rate, 1_000) * 2
 
   defp parse_tool_trigger(text) when is_binary(text) do
     case String.split(String.trim(text), ~r/\s+/, parts: 3) do

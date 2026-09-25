@@ -161,6 +161,45 @@ Still open: the compiled-room duplex proof, per-fragment playback truncation,
 pre-roll soft onset at the room, `hold: :mute`, room-fence prefix, and tool
 survival across overlap.
 
+## Review-response rework (R1-1, R2-1..R2-4, R3-1)
+
+Addressed the review-agent follow-up in order:
+
+- **R2-2 / Amendment 1** — the duplex descriptor facts are now STS-only. The
+  descriptor defaults them to `nil`, non-STS descriptors must not declare them,
+  and each STS provider declares them explicitly: Google STS
+  `continuity: :resumption_handle`; Morse STS `continuity: :none`; Morse duplex
+  keeps its duplex facts. `default_duplex_facts?/1` is gone.
+- **R2-3** — `OutputSegmenter` keeps the shared 800 ms gap; the Morse duplex
+  provider uses the shared defaults unchanged (2 s receive buffer, 300 ms
+  pre-roll) with no overrides. Morse word gaps stay under 800 ms, so a reply is
+  one burst without tuning the module.
+- **R3-1 (reopened B)** — the provider now emits a continuous, clock-paced
+  stream: leading silence, the Morse reply, trailing silence. `advance/2` drives
+  the clock. Silence before a burst is discarded; the pre-roll replays the real
+  sub-threshold leading silence; pre-admission output overflows the 2 s buffer
+  and fails the session explicitly. Provider-level tests cover self-yield,
+  silence discarding + pre-roll, and overflow.
+- **R1-1** — added a red-green capability test for `barge_in: :provider`: with
+  a fake that does not self-yield, caller onset leaves the output active (no
+  interruption) while a policy denial still fences it. Removing the branch makes
+  the test fail, confirmed by a temporary revert.
+- **R2-1** — recorded the schema versioning rule in the milestone status: the
+  additive `outcome`/`endpointing` fields stay in schema version 1; consumers
+  treat missing fields as `:completed`/`nil`.
+- **R2-4** — added and changed test counts are reported separately below.
+
+Evidence: affected `speech`, `capability`, `room_authority` and `providers`
+suites pass 806 tests, 0 failures (seed 0). Added tests this rework:
+`duplex_sts_conversation_test.exs` grows to 3, and
+`speech_to_speech_duplex_test.exs` grows to 3; changed:
+`sts_duplex_contract_test.exs`, `sts_provider_contract_test.exs`,
+`descriptor`/provider `configure` sites.
+
+The explicit Google STS facts pushed `Google.STSSession` past Credo's 800-line
+limit, so its two identical PCM format maps moved to `Google.STS.pcm_format/1`
+(790 lines now). No behavior change.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree

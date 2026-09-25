@@ -9,12 +9,12 @@ defmodule Vxpipe.CallEngine.Speech.STSDuplexContractTest do
   alias Vxpipe.CallEngine.Speech.{Descriptor, Event}
 
   describe "descriptor duplex facts" do
-    test "existing STS descriptors keep the room-owned defaults" do
+    test "existing STS descriptors declare the room-owned facts explicitly" do
       {:ok, descriptor} = MorseSTS.configure([])
 
       assert descriptor.output_shape == :turns
       assert descriptor.barge_in == :room
-      assert descriptor.continuity == :resumption_handle
+      assert descriptor.continuity == :none
       assert descriptor.tool_cancellation? == true
       assert descriptor.hold == :stop
       assert :ok = Descriptor.validate(descriptor)
