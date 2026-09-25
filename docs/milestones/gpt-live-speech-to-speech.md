@@ -492,3 +492,54 @@ documented API facts in `docs/sts-duplex-profile.md`; the remaining unverified
 items belong to the hosted check. This is a design review, not implementation
 or hosted evidence.
 
+## Implementation reviews
+
+Reviews are numbered and append-only. Each records the reviewed state (base
+commit plus whether the worktree was dirty), what was verified, findings with
+stable IDs, and the next order of work. A later review never edits an earlier
+one; it reports each earlier open finding as resolved (with evidence), still
+open, or withdrawn (with reason). Reviews are not acceptance evidence.
+
+### Review 1 — 2026-09-25
+
+Reviewed state: base `9ad1b79a` on `sts2` with uncommitted A, B and partial C
+work, after the implementation run paused.
+
+Verified:
+
+- The 48 new and changed duplex, contract, capability and room tests pass
+  (`speech/duplex/`, `duplex_sts_conversation_test.exs`,
+  `sts_duplex_contract_test.exs`, `speech_to_speech_duplex_test.exs`,
+  `room_authority/speech_to_speech_test.exs`; seed 0). The reported full
+  umbrella run (2,731 tests, zero failures) was not repeated in this review.
+- `docs/sts-duplex-profile.md` separates documented API facts from unverified
+  ones and moves the unverified items to the checkpoint F hosted check, as
+  checkpoint A requires. The frozen specification changed only in its status
+  and evidence notes.
+- The pause came at a green, honestly reported boundary.
+
+Findings:
+
+- R1-1 — **Untested behaviour change.** The `barge_in: :provider` branch in
+  `Capability.SpeechToSpeech.handle_event/2` was implemented before a failing
+  test existed, contrary to the project's red-green rule. Before any other C
+  work, write the focused test that holds an output open, injects caller onset
+  and fails without the branch; then confirm policy denial, hold and teardown
+  still fence the output.
+- R1-2 — **Stated reasons for pausing are not blockers.** The run cited remaining
+  budget and multi-day scope, but 42% of its context was used. Only the
+  checkpoint F hosted check needs outside authorization (billable use and
+  real carrier legs); C, D and E are local work.
+- R1-3 — **Checkpoint order.** Finish C before D. C is half done and carries the
+  untested change above; its compiled-room proofs with the Morse duplex
+  provider are the room behaviour every later checkpoint relies on. D (the
+  OpenAI package and adapter over a fake socket) follows C's exit.
+- R1-4 — **Prerequisite still open.** This milestone depends on
+  [Agent speech-to-speech](agent-speech-to-speech.md), which is unchecked and
+  awaiting scope decisions. Building GPT-Live ahead of it is out of index
+  order; the user decides whether to continue in parallel.
+
+Open findings: R1-1, R1-3, R1-4. R1-2 needs no code change.
+
+Next work, in order: the R1-1 test; the remaining C tasks; C's exit;
+then D. Pause only at the hosted check or for a recorded blocker.
