@@ -4,7 +4,8 @@ Status: specification frozen on 2026-09-25; checkpoints A and B are implemented
 and verified. Checkpoint B was reopened by review 3 and is closed again after
 the clock-paced output rework; review 4's R4-1 is resolved by giving the Morse
 duplex provider its own real-time clock (`clock: :realtime`, the default) with a
-manual test mode. Checkpoint C is partially implemented: the capability's
+manual test mode. Review 6's six code-review findings (R6-1..R6-6) are resolved
+(see the response to review 6). Checkpoint C is partially implemented: the capability's
 provider-owned barge-in branch is covered by a red-green test and the room's
 `:overlapped` outcome is in place, while the compiled-room duplex proof and the
 remaining C fixtures, checkpoint D (OpenAI package and GPT-Live adapter),
@@ -1037,3 +1038,49 @@ Next work, in order: commit the in-progress R4-1/R4-2 work; R6-3 and R6-4 (the
 admission contract); R6-1, starting with the one-output-per-turn check; R6-6;
 R6-5 and R6-2; then the remaining C tasks, starting with the compiled-room
 duplex proof.
+
+### Response to review 6 — 2026-09-25
+
+Implementation response to Review 6, labelled per R3-2. Not independent
+verification.
+
+- P6-R6-1 — **resolved by decision**, after the required check. The room's
+  admission protocol has one output slot per provider turn and does not re-admit
+  a second output for the same turn, so per-burst outputs would need a room
+  contract change. Instead the provider keeps one output per reply and treats a
+  later burst as a continuation: `open_burst/2` calls `OutputSegmenter.admitted/2`
+  for the new burst and flushes its buffered audio under the existing output
+  reference, dropping the inter-burst silence as the segmenter specification
+  requires. The agent turn therefore spans its bursts and no audio is lost.
+  Test: a reply whose inter-word gap (1050 ms at `unit_duration_ms: 150`)
+  exceeds the 800 ms segmenter gap plays every burst and completes.
+- P6-R6-2 — **resolved.** The segmenter thresholds derive from
+  `config.amplitude` (activation half, deactivation quarter), and `configure/1`
+  rejects an amplitude below 2 whose tone cannot open the gate. Test: an
+  amplitude of 1 is rejected; an accepted low amplitude plays its reply.
+- P6-R6-3 — **resolved.** A reply that yields before the room admits it is
+  remembered in `yielded_pending`; when its admission finally arrives the
+  provider emits `:interrupted` so the room settles the slot. Test: yield the
+  un-admitted reply, deliver the delayed admission, and observe the
+  interruption.
+- P6-R6-4 — **resolved.** `queued_replies` is a bounded FIFO (16) with each
+  entry keeping its own admission reference; overflow fails the session with
+  `:pending_reply_overflow` instead of dropping a reply. Test: two replies
+  queued behind one output play in order and both admissions complete.
+- P6-R6-5 — **resolved.** A tool result is summarised to a Morse-encodable,
+  length-bounded string and encoded before `turn_ended` is emitted; an encoding
+  failure stops the provider with an explicit reason. Tests: a map result
+  becomes `RECEIVED OK TRUE`; a 400-character result is truncated into a
+  bounded reply.
+- P6-R6-6 — **resolved.** Input fragments are fed on each decoder partial as
+  contiguous audio-time slices, so `speech_started` reaches the room while a
+  yielded reply is still open and the caller turn is not split by sparse
+  fragment timing. The room `:overlapped` outcome is proven by the existing
+  room unit test; the provider change is exercised by every caller-turn test.
+
+Also: `interrupt/2` now cancels a queued or yielded-pending reply and returns
+`:ok` rather than `:stale_request`, so a room fence of a pending turn does not
+fail the capability.
+
+Next work, in order: the remaining C tasks, starting with the compiled-room
+duplex proof; C's exit; then D; then E and F.

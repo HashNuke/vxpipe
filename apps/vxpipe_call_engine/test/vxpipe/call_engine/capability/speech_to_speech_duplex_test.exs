@@ -88,7 +88,49 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     advance_until_idle(capability)
     complete_playback(20)
 
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED ok", _, _, _, _}
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED OK", _, _, _, _}
+  end
+
+  test "a non-Morse-encodable tool result still produces a spoken reply" do
+    {_tree, capability, _sink} = start_capability(policy: unrestricted())
+
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref, turn_ref: tool_turn}}}
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, reply_turn, _}
+    assert reply_turn != tool_turn
+    advance_until_idle(capability)
+    complete_playback(20)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED OK TRUE", _, _,
+                    _, _}
+  end
+
+  test "a long tool result is truncated into a bounded Morse reply" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, maximum_text_bytes: 40]}
+      )
+
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}}
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, String.duplicate("Z", 400))
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn, _}
+    advance_until_idle(capability)
+    complete_playback(20)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, text, _, _, _, _}
+    assert String.starts_with?(text, "RECEIVED ")
+    assert byte_size(text) <= 40
   end
 
   test "caller onset leaves a provider-owned output playing, but room fences still cut it" do

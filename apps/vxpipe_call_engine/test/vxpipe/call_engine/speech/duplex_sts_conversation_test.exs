@@ -22,6 +22,69 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert :ok = Session.close(session)
   end
 
+  test "rejects an amplitude that cannot open the gate and plays a low accepted one" do
+    assert {:error, :invalid_configuration} = DuplexSTS.configure(amplitude: 1)
+
+    %{session: session, provider: provider} = start_session(clock: :manual, amplitude: 800)
+    push_chunks(session, "HI")
+    turn = drain_until_turn_ended(session)
+    assert {:ok, _output} = Session.admit_output(session, turn)
+    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+  end
+
+  test "plays every burst when an inter-word gap exceeds the segmenter gap" do
+    %{session: session, provider: provider} =
+      start_session(clock: :manual, unit_duration_ms: 150)
+
+    push_chunks(session, "AB", unit_duration_ms: 150)
+    turn = drain_until_turn_ended(session)
+    assert {:ok, _output} = Session.admit_output(session, turn)
+    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+  end
+
+  test "yielding before admission settles the room output when its admission arrives" do
+    %{session: session, provider: provider} = start_session(clock: :manual)
+    push_chunks(session, "HI")
+    turn = drain_until_turn_ended(session)
+
+    # Talk over the not-yet-admitted reply; the provider yields and remembers it.
+    push_chunks(session, "NO")
+    drain_until_turn_ended(session)
+    advance(provider, 40)
+
+    assert {:ok, _output} = Session.admit_output(session, turn)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :interrupted, turn_ref: ^turn} = event},
+                   500
+
+    assert :ok = Session.ack(session, event)
+  end
+
+  test "plays two replies queued behind one output, in order" do
+    %{session: session, provider: provider} = start_session(clock: :manual, yield?: false)
+    push_chunks(session, "HI")
+    first = drain_until_turn_ended(session)
+    assert {:ok, first_output} = Session.admit_output(session, first)
+
+    push_chunks(session, "NO")
+    second = drain_until_turn_ended(session)
+
+    push_chunks(session, "YES")
+    third = drain_until_turn_ended(session)
+
+    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+    assert :ok = Session.settle_output(session, first_output, 0)
+
+    assert {:ok, second_output} = Session.admit_output(session, second)
+    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+    assert :ok = Session.settle_output(session, second_output, 0)
+
+    assert {:ok, third_output} = Session.admit_output(session, third)
+    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+    assert :ok = Session.settle_output(session, third_output, 0)
+  end
+
   test "keeps the reply open and yields when caller tone arrives while a credit is held" do
     %{session: session, provider: provider} = start_session()
     push_chunks(session, "HI")
@@ -115,8 +178,8 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     %{session: session, provider: Session.provider(session)}
   end
 
-  defp push_chunks(session, text) do
-    {:ok, pcm} = encode(text)
+  defp push_chunks(session, text, encode_options \\ []) do
+    {:ok, pcm} = encode(text, encode_options)
 
     for <<chunk::binary-size(320) <- pcm>> do
       assert :ok = Session.push_audio(session, chunk)
@@ -184,8 +247,35 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
 
   defp advance(provider, ms), do: :ok = DuplexSTS.advance(provider, ms)
 
-  defp encode(text) do
-    {:ok, config} = Config.new([])
+  # Drive the manual clock, ack every chunk, and return the played payloads in
+  # order once the output completes.
+  defp play_reply(session, provider, collected \\ [], remaining \\ 2_000)
+
+  defp play_reply(_session, _provider, _collected, 0), do: flunk("output did not complete")
+
+  defp play_reply(session, provider, collected, remaining) do
+    receive do
+      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
+        assert :ok = Session.validate_audio(session, audio)
+        assert :ok = Session.ack_audio(session, audio)
+        play_reply(session, provider, [audio.payload | collected], remaining)
+
+      {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript} = event} ->
+        assert :ok = Session.ack(session, event)
+        play_reply(session, provider, collected, remaining)
+
+      {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = event} ->
+        assert :ok = Session.ack(session, event)
+        Enum.reverse(collected)
+    after
+      0 ->
+        advance(provider, 20)
+        play_reply(session, provider, collected, remaining - 1)
+    end
+  end
+
+  defp encode(text, options) do
+    {:ok, config} = Config.new(options)
     Encoder.encode(config, text)
   end
 end

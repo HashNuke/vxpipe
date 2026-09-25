@@ -35,74 +35,19 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   @behaviour Vxpipe.CallEngine.Speech.STSProvider
 
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
-  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Clock
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.{Clock, Profile, ToolReply}
   alias Vxpipe.CallEngine.Speech.Duplex.{OutputSegmenter, TurnInference}
-  alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event}
+  alias Vxpipe.CallEngine.Speech.{Channel, Event}
 
-  @reply_prefix "RECEIVED "
   @default_input_gap_ms 800
   @frame_ms 20
   @leading_silence_frames 10
   @trailing_silence_frames 60
+  @maximum_queued_replies 16
+  @maximum_yielded_pending 16
 
   @impl true
-  def configure(options) do
-    allowed = Config.option_keys() ++ [:output_transcript, :yield?, :clock]
-
-    with true <- is_list(options) and Keyword.keyword?(options),
-         true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
-         true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
-         {output_transcript, rest} = Keyword.pop(options, :output_transcript, true),
-         true <- is_boolean(output_transcript),
-         {yield?, rest} = Keyword.pop(rest, :yield?, true),
-         true <- is_boolean(yield?),
-         {clock, rest} = Keyword.pop(rest, :clock, :realtime),
-         true <- clock in [:realtime, :manual],
-         {:ok, config} <- Config.new(rest) do
-      Descriptor.new(
-        kind: :sts,
-        settings:
-          config
-          |> Map.from_struct()
-          |> Map.put(:yield?, yield?)
-          |> Map.put(:clock, clock),
-        input_format: format(config),
-        format: format(config),
-        usage_identity: %{
-          provider: :morse_code_duplex,
-          model: :morse_code,
-          provenance: :locally_measured
-        },
-        readiness: :initialized,
-        endpointing: :inferred_gap,
-        speech_start?: true,
-        turn_control: "provider",
-        turn_control_supported: ["provider"],
-        input_transcript?: true,
-        output_transcript?: output_transcript,
-        output_settlement: :transcript_end,
-        history_reconciliation?: false,
-        output_shape: :continuous,
-        barge_in: :provider,
-        continuity: :history_reseed,
-        tool_cancellation?: false,
-        hold: :mute
-      )
-    else
-      _invalid -> {:error, :invalid_configuration}
-    end
-  end
-
-  defp format(config) do
-    %{
-      encoding: :linear16,
-      container: :raw,
-      sample_rate: config.sample_rate,
-      channels: 1,
-      byte_order: :little,
-      signed?: true
-    }
-  end
+  def configure(options), do: Profile.configure(options)
 
   @impl true
   def start_link(options),
@@ -154,7 +99,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
            |> Config.new(),
          {:ok, decoder} <- Decoder.new(config),
          {:ok, inference} <- TurnInference.new(gap_ms: @default_input_gap_ms),
-         {:ok, segmenter} <- OutputSegmenter.new(segmenter_options(config)),
+         {:ok, segmenter} <- OutputSegmenter.new(Profile.segmenter_options(config)),
          :ok <- Channel.bind(channel),
          :ok <- Event.emit(channel, :ready, readiness: descriptor.readiness) do
       clock = Map.get(descriptor.settings, :clock, :realtime)
@@ -169,7 +114,11 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         frame_bytes: div(config.sample_rate * @frame_ms, 1_000) * 2,
         input_ms: 0,
         output: nil,
-        queued_reply: nil,
+        queued_replies: [],
+        yielded_pending: [],
+        last_partial: "",
+        last_fragment_end_ms: nil,
+        yield_deferred?: false,
         yield?: Map.get(descriptor.settings, :yield?, true),
         clock: clock,
         clock_origin_ms: System.monotonic_time(:millisecond),
@@ -185,8 +134,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
       _error -> {:stop, :initialization_failed}
     end
   end
-
-  defp segmenter_options(config), do: [sample_rate: config.sample_rate]
 
   defp schedule_tick(state) do
     %{state | clock_timer: Process.send_after(self(), {:tick, state.clock_generation}, @frame_ms)}
@@ -209,21 +156,32 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
          {:ok, state} <- publish_text_turn(state, text) do
       {:reply, :ok, state}
     else
-      _failure -> {:reply, {:error, :session_failed}, state}
+      {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
   end
 
   def handle_call(:input_quiescent?, _from, state) do
     quiescent? =
-      is_nil(state.output) and is_nil(state.queued_reply) and state.pending_tools == %{}
+      is_nil(state.output) and state.queued_replies == [] and state.pending_tools == %{}
 
     {:reply, quiescent?, state}
   end
 
   def handle_call({:interrupt, turn_ref}, _from, state) when is_reference(turn_ref) do
-    case state.output do
-      %{turn_ref: ^turn_ref} -> {:reply, :ok, self_yield(state)}
-      _other -> {:reply, {:error, :stale_request}, state}
+    cond do
+      match?(%{turn_ref: ^turn_ref}, state.output) ->
+        {:reply, :ok, self_yield(state, defer: false)}
+
+      Enum.any?(state.queued_replies, &(&1.turn_ref == turn_ref)) ->
+        queued = Enum.reject(state.queued_replies, &(&1.turn_ref == turn_ref))
+        {:reply, :ok, %{state | queued_replies: queued}}
+
+      turn_ref in state.yielded_pending ->
+        {:reply, :ok, %{state | yielded_pending: List.delete(state.yielded_pending, turn_ref)}}
+
+      true ->
+        {:reply, {:error, :stale_request}, state}
     end
   end
 
@@ -231,8 +189,11 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     case Map.fetch(state.pending_tools, call_ref) do
       {:ok, _tool} ->
         state = %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}
-        reply = @reply_prefix <> summarize(result)
-        {:reply, :ok, publish_tool_reply(state, reply)}
+
+        case publish_tool_reply(state, result) do
+          {:ok, state} -> {:reply, :ok, state}
+          {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
+        end
 
       :error ->
         {:reply, {:error, :stale_request}, state}
@@ -313,12 +274,14 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
       {:ok, decoder, events} ->
         case apply_decoder_events(events, %{state | decoder: decoder}) do
           {:ok, state} -> {:reply, :ok, state}
-          {:error, _reason} -> {:reply, {:error, :session_failed}, state}
+          {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
         end
 
       {:error, _reason} ->
         {:ok, decoder} = Decoder.new(state.config)
-        {:reply, {:error, :session_failed}, %{state | decoder: decoder}}
+
+        {:stop, {:shutdown, :session_failed}, {:error, :session_failed},
+         %{state | decoder: decoder}}
     end
   end
 
@@ -332,32 +295,75 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   end
 
   defp apply_decoder_event(:started, %{yield?: false} = state), do: {:ok, state}
-  defp apply_decoder_event(:started, state), do: {:ok, self_yield(state)}
-  defp apply_decoder_event({:partial, _text}, state), do: {:ok, state}
+  defp apply_decoder_event(:started, state), do: {:ok, self_yield(state, defer: true)}
+
+  defp apply_decoder_event({:partial, text}, state), do: feed_fragment(state, text)
 
   defp apply_decoder_event({:final, text}, state) do
-    case publish_audio_turn(state, text) do
-      {:ok, state} -> {:ok, state}
-      {:error, _reason} = error -> error
+    with {:ok, state} <- feed_fragment(state, text),
+         {:ok, state, close_events} <- close_input_turn(state) do
+      case last_turn_ref(close_events) do
+        {:ok, turn_ref} -> follow_up(state, turn_ref, text)
+        {:error, _reason} = error -> error
+      end
     end
   end
 
-  defp publish_audio_turn(state, text) do
-    end_ms = state.input_ms
-    start_ms = max(end_ms - tone_ms(state.config, text), 0)
-    fragment = %{text: text, start_ms: start_ms, end_ms: end_ms}
+  # GPT-Live sends input fragments while the caller speaks; feed each decoded
+  # delta so caller onset reaches the room before the reply has finished. The
+  # fragments are contiguous audio-time slices, so the caller turn is grouped by
+  # the utterance close rather than split by sparse fragment timing.
+  defp feed_fragment(state, full_text) do
+    delta = delta_since(state.last_partial, full_text)
+    state = %{state | last_partial: full_text}
 
-    {inference, events} = TurnInference.input_fragment(state.inference, fragment)
+    if delta == "" do
+      {:ok, state}
+    else
+      end_ms = state.input_ms
+      start_ms = min(state.last_fragment_end_ms || end_ms, end_ms)
+      fragment = %{text: delta, start_ms: start_ms, end_ms: end_ms}
+      {inference, events} = TurnInference.input_fragment(state.inference, fragment)
 
-    with :ok <- emit_events(events, state),
-         {:ok, turn_ref} <- first_turn_ref(events),
-         {:ok, state} <- maybe_emit_tool(state, turn_ref, text) do
-      {inference, close_events} = TurnInference.audio_pushed(inference, @default_input_gap_ms)
-      state = %{state | inference: inference}
+      state = %{
+        state
+        | inference: inference,
+          yield_deferred?: false,
+          last_fragment_end_ms: end_ms
+      }
 
-      with :ok <- emit_events(close_events, state) do
-        {:ok, follow_up(state, turn_ref, text)}
-      end
+      with :ok <- emit_events(events, state), do: {:ok, state}
+    end
+  end
+
+  defp close_input_turn(state) do
+    {inference, events} = TurnInference.audio_pushed(state.inference, @default_input_gap_ms)
+
+    state = %{
+      state
+      | inference: inference,
+        last_partial: "",
+        last_fragment_end_ms: nil,
+        yield_deferred?: false
+    }
+
+    with :ok <- emit_events(events, state), do: {:ok, state, events}
+  end
+
+  defp delta_since("", full), do: full
+
+  defp delta_since(last, full) do
+    if String.starts_with?(full, last) do
+      binary_part(full, byte_size(last), byte_size(full) - byte_size(last))
+    else
+      full
+    end
+  end
+
+  defp last_turn_ref(events) do
+    case Enum.find(events, fn {kind, _fields} -> kind == :turn_ended end) do
+      {:turn_ended, fields} -> {:ok, Keyword.fetch!(fields, :turn_ref)}
+      nil -> {:error, :session_failed}
     end
   end
 
@@ -373,20 +379,23 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
              text: text,
              endpointing: :inferred_gap
            ) do
-      {:ok, follow_up(state, turn_ref, text)}
+      follow_up(state, turn_ref, text)
     end
   end
 
-  defp publish_tool_reply(state, reply) do
-    turn_ref = make_ref()
+  defp publish_tool_reply(state, result) do
+    with {:ok, text} <- ToolReply.text(state.config, result),
+         {:ok, pcm} <- Encoder.encode(state.config, text) do
+      turn_ref = make_ref()
 
-    case Event.emit(state.channel, :turn_ended,
-           turn_ref: turn_ref,
-           text: "",
-           endpointing: :inferred_gap
-         ) do
-      :ok -> start_reply(state, turn_ref, reply)
-      _failure -> state
+      case Event.emit(state.channel, :turn_ended,
+             turn_ref: turn_ref,
+             text: text,
+             endpointing: :inferred_gap
+           ) do
+        :ok -> enqueue_reply(state, %{turn_ref: turn_ref, text: text, pcm: pcm, output_ref: nil})
+        _failure -> {:error, :session_failed}
+      end
     end
   end
 
@@ -399,28 +408,18 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end)
   end
 
-  defp first_turn_ref(events) do
-    case Enum.find(events, fn {kind, _fields} ->
-           kind in [:speech_started, :input_transcript, :turn_ended]
-         end) do
-      {_kind, fields} -> {:ok, Keyword.fetch!(fields, :turn_ref)}
-      nil -> {:error, :session_failed}
-    end
-  end
-
   defp follow_up(state, turn_ref, text) do
-    case tool_trigger(text) do
+    case ToolReply.trigger(text) do
       {:tool, _name, _arguments} ->
-        state
+        {:ok, state}
 
       :not_a_tool ->
-        reply = @reply_prefix <> String.slice(text, 0, truncate_limit(state.config))
-        start_reply(state, turn_ref, reply)
+        start_reply(state, turn_ref, ToolReply.reply(state.config, text))
     end
   end
 
   defp maybe_emit_tool(state, turn_ref, text) do
-    case tool_trigger(text) do
+    case ToolReply.trigger(text) do
       {:tool, name, arguments} ->
         call_ref = make_ref()
 
@@ -444,13 +443,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
       :not_a_tool ->
         {:ok, state}
-    end
-  end
-
-  defp tool_trigger(text) do
-    case parse_tool_trigger(text) do
-      {:tool, _name, _arguments} = tool -> tool
-      :not_a_tool -> :not_a_tool
     end
   end
 
@@ -526,23 +518,26 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   defp put_seg_ref(nil, _seg_ref), do: nil
   defp put_seg_ref(output, seg_ref), do: %{output | seg_ref: seg_ref}
 
-  defp open_burst(%{output: nil} = state, _seg_ref), do: {:ok, state}
+  defp open_burst(%{output: nil} = state, _seg_ref) do
+    {:ok, state}
+  end
 
-  defp open_burst(%{output: %{output_ref: nil}} = state, _seg_ref), do: {:ok, state}
+  defp open_burst(%{output: %{output_ref: nil}} = state, _seg_ref) do
+    {:ok, state}
+  end
 
-  defp open_burst(%{output: %{admitted?: true}} = state, _seg_ref), do: {:ok, state}
-
-  defp open_burst(%{output: %{seg_ref: seg_ref}} = state, seg_ref) do
+  defp open_burst(%{output: output} = state, seg_ref) do
+    # A later burst of the same reply continues the already-admitted output: its
+    # buffered audio is flushed under the existing output reference, so silence
+    # between bursts is dropped and the agent turn spans all its bursts.
     {segmenter, events} = OutputSegmenter.admitted(state.segmenter, seg_ref)
-    state = %{state | segmenter: segmenter, output: %{state.output | admitted?: true}}
+    state = %{state | segmenter: segmenter, output: %{output | seg_ref: seg_ref, admitted?: true}}
 
     case apply_segmenter_events(events, state) do
       {:ok, state} -> {:ok, state}
       {:error, :buffer_overflow, state} -> {:error, :buffer_overflow, state}
     end
   end
-
-  defp open_burst(state, _seg_ref), do: {:ok, state}
 
   defp mark_close(%{output: nil} = state), do: state
 
@@ -593,11 +588,14 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   defp finish_if_ready(%{output: output} = state) do
     cond do
+      output.interrupted? and state.yield_deferred? ->
+        state
+
       output.interrupted? and output.awaiting != nil ->
         state
 
       output.interrupted? and output.output_ref == nil ->
-        start_queued(%{state | output: nil})
+        start_queued(remember_yielded(%{state | output: nil}, output.turn_ref))
 
       output.interrupted? ->
         complete_output(state)
@@ -611,80 +609,109 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
+  defp remember_yielded(state, turn_ref) do
+    pending =
+      if turn_ref in state.yielded_pending do
+        state.yielded_pending
+      else
+        Enum.take([turn_ref | state.yielded_pending], @maximum_yielded_pending)
+      end
+
+    %{state | yielded_pending: pending}
+  end
+
   defp handle_admit(state, turn_ref, output_ref) do
-    case state.output do
-      %{turn_ref: ^turn_ref} = output ->
-        state = %{state | output: %{output | output_ref: output_ref}}
+    cond do
+      match?(%{turn_ref: ^turn_ref}, state.output) ->
+        admit_current(state, turn_ref, output_ref)
 
-        state =
-          case state.output.seg_ref do
-            nil ->
-              state
+      Enum.any?(state.queued_replies, &(&1.turn_ref == turn_ref)) ->
+        queued =
+          Enum.map(state.queued_replies, fn reply ->
+            if reply.turn_ref == turn_ref, do: %{reply | output_ref: output_ref}, else: reply
+          end)
 
-            seg_ref ->
-              case open_burst(state, seg_ref) do
-                {:ok, state} -> state
-                {:error, :buffer_overflow, state} -> state
-              end
-          end
+        {:noreply, %{state | queued_replies: queued}}
 
-        state = state |> drain_submit() |> finish_if_ready()
+      turn_ref in state.yielded_pending ->
+        _ = Event.emit(state.channel, :interrupted, turn_ref: turn_ref)
+        {:noreply, %{state | yielded_pending: List.delete(state.yielded_pending, turn_ref)}}
+
+      true ->
         {:noreply, state}
-
-      _other ->
-        case state.queued_reply do
-          {^turn_ref, text, _output_ref} ->
-            {:noreply, %{state | queued_reply: {turn_ref, text, output_ref}}}
-
-          _other ->
-            {:noreply, state}
-        end
     end
   end
 
-  defp start_reply(%{output: output} = state, turn_ref, text) when not is_nil(output) do
-    %{state | queued_reply: {turn_ref, text, nil}}
+  defp admit_current(state, _turn_ref, output_ref) do
+    state = %{state | output: %{state.output | output_ref: output_ref}}
+
+    state =
+      case state.output.seg_ref do
+        nil ->
+          state
+
+        seg_ref ->
+          case open_burst(state, seg_ref) do
+            {:ok, state} -> state
+            {:error, :buffer_overflow, state} -> state
+          end
+      end
+
+    state = state |> drain_submit() |> finish_if_ready()
+    {:noreply, state}
   end
 
   defp start_reply(state, turn_ref, text) do
-    with {:ok, reply} <- Encoder.encode(state.config, text) do
-      stream =
-        silence(state, @leading_silence_frames) <>
-          reply <> silence(state, @trailing_silence_frames)
-
-      output = %{
-        turn_ref: turn_ref,
-        text: text,
-        output_ref: nil,
-        admitted?: false,
-        stream: stream,
-        cursor: 0,
-        seg_ref: nil,
-        close_pending?: false,
-        awaiting: nil,
-        queue: [],
-        queue_bytes: 0,
-        interrupted?: false
-      }
-
-      %{state | output: output}
-    else
-      _error -> state
+    with {:ok, pcm} <- Encoder.encode(state.config, text) do
+      enqueue_reply(state, %{turn_ref: turn_ref, text: text, pcm: pcm, output_ref: nil})
     end
   end
 
-  defp start_queued(%{queued_reply: nil} = state), do: state
+  defp enqueue_reply(%{output: nil} = state, reply), do: {:ok, begin_output(state, reply)}
 
-  defp start_queued(%{queued_reply: {turn_ref, text, output_ref}} = state) do
-    state = start_reply(%{state | queued_reply: nil}, turn_ref, text)
+  defp enqueue_reply(state, reply) do
+    if length(state.queued_replies) >= @maximum_queued_replies do
+      {:error, :pending_reply_overflow}
+    else
+      {:ok, %{state | queued_replies: state.queued_replies ++ [reply]}}
+    end
+  end
 
-    if output_ref do
-      {:noreply, state} = handle_admit(state, turn_ref, output_ref)
+  defp begin_output(state, reply) do
+    stream =
+      silence(state, @leading_silence_frames) <>
+        reply.pcm <> silence(state, @trailing_silence_frames)
+
+    output = %{
+      turn_ref: reply.turn_ref,
+      text: reply.text,
+      output_ref: reply.output_ref,
+      admitted?: false,
+      stream: stream,
+      cursor: 0,
+      seg_ref: nil,
+      close_pending?: false,
+      awaiting: nil,
+      queue: [],
+      queue_bytes: 0,
+      interrupted?: false
+    }
+
+    %{state | output: output}
+  end
+
+  defp start_queued(%{output: nil, queued_replies: [reply | rest]} = state) do
+    state = begin_output(%{state | queued_replies: rest}, reply)
+
+    if reply.output_ref do
+      {:noreply, state} = admit_current(state, reply.turn_ref, reply.output_ref)
       state
     else
       state
     end
   end
+
+  defp start_queued(state), do: state
 
   defp complete_output(state) do
     output = state.output
@@ -705,14 +732,15 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     start_queued(%{state | output: nil})
   end
 
-  defp self_yield(%{output: nil} = state), do: state
+  defp self_yield(%{output: nil} = state, _opts), do: state
 
-  defp self_yield(%{output: output} = state) do
+  defp self_yield(%{output: output} = state, opts) do
     {segmenter, _events} = OutputSegmenter.finish(state.segmenter)
 
     state = %{
       state
       | segmenter: segmenter,
+        yield_deferred?: Keyword.get(opts, :defer, false),
         output: %{
           output
           | interrupted?: true,
@@ -736,43 +764,5 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   defp buffer_bytes(state), do: div(2_000 * state.config.sample_rate, 1_000) * 2
 
-  defp parse_tool_trigger(text) when is_binary(text) do
-    case String.split(String.trim(text), ~r/\s+/, parts: 3) do
-      [keyword, name, encoded] when byte_size(name) in 1..256 ->
-        if String.upcase(keyword) == "TOOL" and String.valid?(name) do
-          decode_tool(name, encoded)
-        else
-          :not_a_tool
-        end
-
-      _other ->
-        :not_a_tool
-    end
-  rescue
-    _exception -> :not_a_tool
-  end
-
-  defp parse_tool_trigger(_text), do: :not_a_tool
-
-  defp decode_tool(name, encoded) do
-    case JSON.decode(encoded) do
-      {:ok, arguments} ->
-        if Vxpipe.CallEngine.Speech.ToolArguments.valid?(arguments),
-          do: {:tool, name, arguments},
-          else: :not_a_tool
-
-      {:error, _reason} ->
-        :not_a_tool
-    end
-  end
-
-  defp summarize(result) when is_binary(result), do: String.slice(result, 0, 256)
-  defp summarize(result), do: inspect(result)
-
-  defp truncate_limit(config), do: max(config.maximum_text_bytes - byte_size(@reply_prefix), 0)
-
   defp duration_ms(config, bytes), do: div(bytes * 1_000, config.sample_rate * 2)
-
-  defp tone_ms(config, text),
-    do: max(byte_size(text) * config.unit_duration_ms, config.unit_duration_ms)
 end

@@ -225,6 +225,37 @@ realtime capability test. Changed: the duplex provider, its capability and
 provider tests to opt into `clock: :manual`. The full call-engine suite passes
 1,554 tests, 0 failures (seed 0).
 
+## Review-6 response (R6-1..R6-6)
+
+Fixed the six code-review findings in the Morse duplex provider:
+
+- R6-1: one output per reply, with later bursts continued under the same output
+  (the room has one output slot per turn). `open_burst/2` admits each new burst
+  and flushes its audio; inter-burst silence is dropped per the segmenter spec.
+- R6-2: segmenter thresholds derive from `config.amplitude`; amplitudes below 2
+  are rejected at configuration.
+- R6-3: a reply that yields before admission is remembered and completed as
+  `:interrupted` when its admission arrives.
+- R6-4: a bounded FIFO replaces the single queued reply; overflow fails the
+  session explicitly.
+- R6-5: tool replies are sanitised, length-bounded and encoded before
+  `turn_ended`; encoding failure stops the provider.
+- R6-6: input fragments are fed on partials as contiguous audio-time slices so
+  caller onset reaches the room while the reply is open and the caller turn is
+  not split by sparse timing.
+- `interrupt/2` also cancels queued/yielded-pending replies instead of
+  returning `:stale_request`.
+
+Added tests: two provider clock-adjacent amplitude/multi-burst/admission tests,
+two queued-reply and truncation capability tests, and the review-6 provider
+cases. The affected `speech`, `capability`, `room_authority` and `providers`
+suites pass 815 tests, 0 failures (seed 0).
+
+The provider grew past Credo's 800-line limit, so its pure configuration moved
+to `MorseCodeDuplex.Profile` (descriptor facts, PCM format, segmenter options)
+and its tool trigger/summary handling to `MorseCodeDuplex.ToolReply`. The
+session keeps the GenServer and the output state machine and is 769 lines.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree
