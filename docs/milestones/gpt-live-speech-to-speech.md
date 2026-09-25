@@ -739,3 +739,148 @@ telephony test change is untouched.
 Next work, in order: the remaining C tasks and C's exit; then D; then E and F.
 Pause only for the hosted check or a recorded blocker.
 
+### Review 4 — 2026-09-25 (response to the review 3 response)
+
+Independent review of commit `77bc64a3` and its "Response to review 3".
+
+Reviewed state: base `77bc64a3` on `sts2`; the worktree holds only the
+unrelated `apps/vxpipe_gateway` telephony test change.
+
+Verified:
+
+- 62 focused duplex, contract, provider-contract, capability and room tests
+  pass (seed 0). Per R2-4, the umbrella run reported in the commit (2,734
+  tests, zero failures) is cited, not repeated.
+- R1-1 mutation check: replacing the `barge_in: :provider` guard in
+  `Capability.SpeechToSpeech` with `false` makes "caller onset leaves a
+  provider-owned output playing, but room fences still cut it" fail (3 tests,
+  1 failure); restoring it passes.
+- Amendment 1 is applied as written: the duplex facts default to `nil`, STT
+  and TTS descriptors are rejected if they declare any, and Google STS
+  (`:resumption_handle`), Morse STS (`:none`) and the Morse duplex provider
+  declare every fact explicitly. The Google `pcm_format/1` extraction is
+  behaviour-preserving.
+- `OutputSegmenter` now defaults to the specified 800 ms gap, and the Morse
+  duplex provider no longer overrides the gap, buffer or pre-roll.
+- The Morse duplex provider emits leading silence, the reply and trailing
+  silence as fixed 20 ms frames, and its tests cover silence discarding,
+  pre-roll from real sub-threshold audio and receive-buffer overflow.
+
+Status of earlier findings:
+
+- R1-1 — **resolved** (mutation check above). The hold and teardown fences are
+  covered by existing tests with `barge_in: :room` providers. That is
+  acceptable because those paths do not pass through the branch; checkpoint
+  C's `hold: :mute` task must still prove hold with the duplex provider.
+- R1-4 — **still open, as a caution.**
+- R2-1 — **resolved by decision.** The rule (additive fields stay in schema
+  version 1; a missing field reads as `:completed` / `nil`) is accepted.
+- R2-2 — **resolved** (Amendment 1 applied).
+- R2-3 — **resolved.** Wording fix only: the status section says the segmenter
+  "keeps" its 800 ms gap; it was raised from 400 ms to 800 ms.
+- R2-4 — **resolved.**
+- R3-1 — **resolved at the provider boundary; see R4-1.**
+- R3-2 — **resolved.** The implementation reply is labelled as a response.
+
+New findings:
+
+- R4-1 — **The Morse duplex provider has no clock of its own.** Output advances
+  only when `advance/2` is called, and only tests call it
+  (`speech_to_speech_duplex_test.exs` looks up the provider process and ticks
+  it). The module doc says "production drives it from a timer or socket
+  reader", but no production path exists for this provider: in a compiled room
+  or the ten-call load lane nothing ticks it, so the agent would never speak.
+  The GPT-Live adapter will be driven by its socket; the Morse duplex provider
+  needs its own real-time timer, with the manual clock kept as an explicit test
+  option (for example `clock: :manual`) rather than the only mode. This blocks
+  checkpoint C's compiled-room proof and checkpoint F's load lane. Checkpoint B
+  stays closed: its capability-level proof is valid under a manual clock.
+- R4-2 — **Minor: the test-only `:yield?` option is part of the public Morse
+  duplex configuration.** Acceptable for a credential-free local provider, but
+  document it as a test fixture option in the provider's module doc so it is
+  not mistaken for a GPT-Live behaviour.
+
+Open findings: R1-4, R4-1, R4-2.
+
+Next work, in order: R4-1 (real-time clock with an explicit manual test mode);
+the R2-3 wording fix and R4-2 note; then the remaining C tasks, starting with
+the compiled-room duplex proof; C's exit; then D.
+
+### Review 5 — 2026-09-25 (proposed solutions for review 4)
+
+Proposed solutions for the open review 4 findings, from the same reviewer.
+Reviewed state is unchanged from review 4 (`77bc64a3`); no new findings.
+
+#### R4-1 — real-time clock for the Morse duplex provider
+
+1. Add a validated `clock` option to the Morse duplex configuration:
+   `:realtime` (the default) or `:manual`. `:manual` exists only for tests.
+   `advance/2` returns `{:error, :unsupported_operation}` under `:realtime`,
+   so a test cannot mix the two clocks by accident.
+2. Under `:realtime`, the session owns its clock. When the session starts,
+   it records a `System.monotonic_time/1` origin and schedules a 20 ms
+   tick with `Process.send_after/3`, carrying a clock generation so a stale
+   tick after close or restart is ignored. On each tick it emits the frames
+   now due: the elapsed audio time since the origin, minus the audio already
+   emitted, in whole 20 ms frames. Computing from the origin, not by counting
+   ticks, prevents drift when the scheduler delivers a tick late.
+3. Bound catch-up: a tick emits at most 100 ms of audio (five frames). If
+   the session falls further behind, it moves the origin forward and counts
+   the skipped audio as a late-clock observation instead of bursting. A real
+   provider that stalls resumes at real time; it does not replay the stall.
+4. Both clocks call the same frame-emission function (the existing
+   `advance_clock/2` path), so manual-clock tests keep covering the emission,
+   segmentation, pre-roll and overflow code that the real-time clock runs.
+5. The session is a supervised GenServer under the agent's STS tree; its
+   timer ends with it. `close/1` stops the clock before replying, and no
+   `terminate/2` cleanup is needed.
+6. Keep continuous silence while idle. At 50 ticks a second per session the
+   cost is small, and it is the shape the segmenter must handle.
+
+This mirrors production correctly: the GPT-Live adapter has no timer,
+because its socket delivers output deltas at real-time pace, and it feeds
+each delta to the same segmenter path. Only the local fake needs a clock.
+
+Rejected alternatives:
+
+- The capability or room calling `advance/2`: it would move a
+  provider-private clock into the room and make the room behave differently
+  for one provider.
+- Returning to credit-driven output: GPT-Live has no flow control, so the
+  fake would again skip the no-flow-control and overflow paths (R3-1).
+
+Acceptance:
+
+- Red-green: `configure/1` accepts `clock: :realtime` and `clock: :manual`,
+  rejects any other value, and defaults to `:realtime`; `advance/2` is
+  rejected under `:realtime`.
+- A pure frames-due function (origin, now, emitted) is unit-tested for
+  ordinary ticks, a late tick, and a stall beyond the catch-up bound.
+- A capability test under `:realtime` receives the reply's output events and
+  settled transcript with bounded `assert_receive` timeouts and no call to
+  `advance/2` and no `Process.sleep/1`. Use a short Morse unit duration so
+  the reply takes well under a second of audio.
+- Existing manual-clock tests pass unchanged apart from opting into
+  `clock: :manual`.
+- Checkpoint C's compiled-room duplex proof and checkpoint F's load lane run
+  under `:realtime`.
+
+#### R4-2 — the test-only `:yield?` option
+
+Document `:yield?` and `:clock` together in the Morse duplex module doc under
+a "Test options" heading. State that `yield?: false` exists only to hold an
+output open in barge-in tests, and that GPT-Live always decides for itself
+whether to yield. Keep both options validated by `configure/1`, and do not add
+either to the GPT-Live adapter's configuration.
+
+#### R2-3 wording
+
+Reword the status section's post-review note to say the segmenter "now
+defaults to the specified 800 ms gap (raised from 400 ms)" instead of "keeps"
+its 800 ms gap.
+
+Open findings: R1-4, R4-1, R4-2 (unchanged from review 4).
+
+Next work, in order: implement R4-1 as proposed; apply R4-2 and the R2-3
+wording; then the remaining C tasks, starting with the compiled-room duplex
+proof under `clock: :realtime`; C's exit; then D.
