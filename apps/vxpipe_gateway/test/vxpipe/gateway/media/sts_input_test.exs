@@ -344,6 +344,44 @@ defmodule Vxpipe.Gateway.Media.STSInputTest do
     end
   end
 
+  for transport <- [:webrtc, :telephony] do
+    test "#{transport} keeps caller transcription when the STS allocation is retired" do
+      {attachment, sts, identity} = input(16_000)
+
+      stt =
+        start_supervised!(
+          {Vxpipe.CallEngine.Media.Ingress,
+           Map.to_list(identity) ++
+             [
+               capability: self(),
+               maximum_age_ms: 1_000,
+               maximum_bytes: 4_096,
+               maximum_frames: 5,
+               maximum_consecutive_overflows: 3
+             ]}
+        )
+
+      attachment = %{attachment | media_ingress: stt}
+      {track, payload} = source_audio(unquote(transport))
+
+      assert {:ok, _output, prepared} =
+               STSInput.prepare(attachment, track, nil, unquote(transport))
+
+      assert :ok = STSIngress.open(sts)
+
+      # The room retires the STS allocation during a policy/transfer/recovery
+      # window; caller audio keeps arriving.
+      monitor = Process.monitor(sts)
+      stop_supervised!(STSIngress)
+      assert_receive {:DOWN, ^monitor, :process, ^sts, _reason}
+
+      deliver = delivery(unquote(transport), attachment, identity, track, payload)
+
+      assert {:ok, _prepared} = deliver.(1, prepared)
+      assert_receive {:vxpipe_stt_audio, ^stt, _ref, %{sequence_number: 1}, nil}
+    end
+  end
+
   defp delivery(:telephony, attachment, identity, track, payload) do
     fn sequence, input ->
       Vxpipe.Gateway.Telephony.IncomingAudio.deliver(

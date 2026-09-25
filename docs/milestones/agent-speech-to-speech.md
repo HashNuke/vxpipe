@@ -1084,7 +1084,7 @@ the existing audio round trip. Record discoveries here before implementing.
                     which local queues are fenced. Do not claim remote capture,
                     ICE/DTLS buffering or TCP receipt-time guarantees from
                     these local tests.
-                    - [ ] Keep independent caller transcription usable while
+                    - [x] Keep independent caller transcription usable while
                       STS activity/input is closed or its allocation retired.
                       Astra xhigh reproduced a WebRTC callback stopping its
                       Connection after successful STT delivery because the
@@ -1092,6 +1092,26 @@ the existing audio round trip. Record discoveries here before implementing.
                       Gateway regression and distinguish policy-held/retired
                       STS from a genuinely failed required STS input; no stale
                       reply or bypass of current room authority is permitted.
+                      - [x] Design review: the room owns the STS allocation
+                        lifecycle, so a per-frame STS push is best-effort and an
+                        absent/closed STS ingress is a drop, not a transport
+                        failure. Required STS failure stays fail-closed at
+                        admission: `ConnectionReadiness.prepare_binding/3`
+                        returns `:speech_to_speech_unavailable` for a selected
+                        but missing STS ingress and `:policy_not_prepared` for a
+                        stale interval (already covered in
+                        `telephony/media_session_test.exs`). Fix seam: add
+                        `:speech_to_speech_unavailable` to the per-frame drop
+                        reasons in both `IncomingAudio` classifiers; other STS
+                        errors stay fatal.
+                      - [x] Red/green the retired-STS transport regression for
+                        WebRTC and telephony. Both first returned `:unavailable`
+                        for a retired ingress; after the classifier change each
+                        drops the STS lane while the independent caller STT
+                        lane still receives the frame. `sts_input_test.exs`
+                        passes 13/0; the focused Gateway group passes 31/0 and
+                        the full Gateway child suite 508/0 (7 excluded, seed 0).
+                        The ten-call measured lane passes in 25.3s.
             - [x] First reject policy-stale, already-sent PCM with captured
               STT and source audio-input/output intervals at capability
               delivery. A focused owning test captured a real ingress envelope

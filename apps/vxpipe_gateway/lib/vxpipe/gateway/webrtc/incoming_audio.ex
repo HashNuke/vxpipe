@@ -156,6 +156,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
       :media_overloaded,
       :policy_denied,
       :queue_full,
+      :speech_to_speech_unavailable,
       :stale_frame,
       :stale_policy_interval,
       :stale_policy_revision,
