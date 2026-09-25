@@ -1,0 +1,9 @@
+name = "vxpipe_verification"
+defaultTargets = ["Verification"]
+
+[[lean_lib]]
+name = "Verification"
+
+[[lean_exe]]
+name = "oracle"
+root = "Oracle"

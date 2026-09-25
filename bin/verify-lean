@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Builds the Lean verification project, checks the oracle is not stale, and
+# replays it against the Elixir implementation.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -f "$HOME/.elan/env" ]]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.elan/env"
+fi
+
+if ! command -v lake >/dev/null 2>&1; then
+  echo "verify-lean: lake not found; install elan (https://lean-lang.org)" >&2
+  exit 1
+fi
+
+cd "$repo_root/verification"
+lake build
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+./.lake/build/bin/oracle > "$tmp"
+
+if ! diff -u oracle/source_gate.txt "$tmp"; then
+  echo "verify-lean: oracle drift; regenerate verification/oracle/source_gate.txt" >&2
+  exit 1
+fi
+
+cd "$repo_root/apps/vxpipe_gateway"
+mix test test/vxpipe/gateway/telephony/source_gate_conformance_test.exs

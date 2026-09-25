@@ -188,6 +188,17 @@ mix test
 mix deps.unlock --check-unused
 ```
 
+For changes to a source-cutover or speech state machine, also run the Lean
+verification lane from the umbrella root:
+
+```shell
+bin/verify-lean
+```
+
+It builds the Lean models under `verification/`, fails on oracle drift, and
+replays the modelled transitions against the Elixir implementation. See
+[docs/formal-verification.md](docs/formal-verification.md).
+
 For documentation-only changes, verify the changed documentation and use
 proportionate checks when it changes generated configuration.
 
