@@ -1462,3 +1462,192 @@ Open findings: R1-4, R7-1, R7-3, R9-1.
 Next work, in order: the R7-1/R7-3 `:response_started` per-burst redesign,
 which also lets R9-1's behaviour test run; then the remaining C tasks; C's
 exit; then D–F.
+
+### Review 10 — 2026-09-26 (response to the review 9 response, and the per-burst design)
+
+Independent review of commits `be26eb59` (R9-2, R9-3) and `0d18ff2c` (docs
+site landing page), plus a proposed design for the R7-1/R7-3 per-burst
+`:response_started` redesign.
+
+Reviewed state: `0d18ff2c` on `sts2`. The worktree also holds an uncommitted
+change to `labnotes/20260925-1240-gpt-live-duplex-contract.md` from the
+implementation run, which this review did not assess.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R7-1, R7-3 — **still open.** The design is proposed below.
+- R8-1 — **reopened; see R10-1.** The capability-side pruning is correct, but
+  the same cap exists in the speech channel, which has no retirement.
+- R9-1 — **still open; the deferral reason does not hold.** A
+  `response_start?: true` provider already exists: Google STS opts in, and
+  `capability/google_sts_controller_test.exs` drives it through the
+  capability with a fake socket. The behaviour test can be written now. With
+  `be26eb59` removing the unit tests, R8-1's pruning has no test at all. The
+  behaviour test would also fail today, because of R10-1, which is why it
+  matters.
+- R9-2 — **resolved.** The dead clause and the claim are gone.
+- R9-3 — **resolved.** Pruning runs only on the new-candidate path, and
+  `fingerprint/1` is private again.
+
+New findings:
+
+- R10-1 — **High, blocks R7-1: the speech channel never retires accepted
+  response contexts.** `Speech.ResponseContexts` (channel-side) stages each
+  new context on input submission and keeps it once accepted. Its own comment
+  says accepted origins "live until allocation teardown" and that retirement
+  is "a separate gate". `stage/3` returns `{:error, :busy}` once 16 contexts
+  are known. The capability mints a new context for every fingerprint change,
+  so after 16 holds, policy revisions or epoch changes, every input
+  submission fails at the channel, even though `ResponseOrigins` has pruned
+  its own copy. R8-1 fixed only the capability half.
+
+  Proposed fix: engine-authorized retirement. Contexts are engine-owned, so
+  the capability decides when one is retired and tells the channel:
+  1. Add a bounded `Session.retire_response_contexts(allocation, contexts)`
+     call. The channel removes each listed context that is `:accepted`,
+     ignores unknown ones, and never removes the currently staged one.
+  2. `ResponseOrigins` calls it with the contexts it prunes, in the same
+     step, so the two maps cannot drift apart.
+  3. An event that later carries a retired context (`:response_started`,
+     `:tool_call`) is treated like one carrying an unknown context: the
+     response is discarded and the tool call rejected, never granted.
+
+  Tests: the R9-1 behaviour test through the Google controller harness with
+  `response_start?: true`, running more than sixteen fingerprint changes and
+  then a caller turn whose reply is admitted and played; plus a channel test
+  that a retired context cannot start a response.
+
+- R10-2 — **Low, outside this milestone: the docs site test suite is red.**
+  Verified by running `homepage-structure.test.mjs` against archived trees of
+  both commits. At `be26eb59` it fails on a stale "Built on Elixir & OTP"
+  assertion, as the `0d18ff2c` commit message says, so the landing-page
+  commit did not cause it. At `0d18ff2c` it fails on the hero button count
+  (the new page has two buttons, the test expects three). The reworked test
+  that matched the new page was removed at the user's request. Proposed fix,
+  in a separate docs commit: update `homepage-structure.test.mjs` to the
+  current page's structure, keeping its checks minimal.
+
+#### Proposed design: per-burst `:response_started` (R7-1, R7-3)
+
+Goal: every audible burst of duplex output is admitted as its own output
+through the existing provider-initiated response path, exactly as the GPT-Live
+adapter will have to do it, with no knowledge of where a reply ends. The
+Morse duplex provider is the first user; the GPT-Live adapter reuses the same
+module.
+
+Existing contract this builds on (no amendment needed):
+
+- A descriptor with `response_start?: true` must take input through
+  `submit_input(pid, context, operation)`, where the engine issues `context`.
+- The provider announces a response with `:response_started` carrying a fresh
+  `turn_ref`, a strictly increasing `response_index`, and an accepted
+  `response_context`.
+- The capability admits it (`ResponseQueue.admit_response/4`) when its
+  context's fingerprint is still current, queuing it behind any active output
+  (at most 16 pending), or rejects it.
+- On admission the provider receives
+  `{:vxpipe_speech_output, channel, turn_ref, output_ref}`; on rejection
+  `{:vxpipe_speech_response_discard, channel, turn_ref}`; after local
+  playback `{:vxpipe_speech_output_settled, channel, turn_ref, output_ref,
+  played_ms}`.
+- With `response_start?: true`, the capability does not admit a reply on
+  `:turn_ended`; it only advances its pending queue. So caller turns no longer
+  create outputs.
+
+Shared module: add a pure `Speech.Duplex.BurstResponses` beside
+`TurnInference` and `OutputSegmenter`. It owns the burst-to-response mapping
+that both providers need, following the shape of the Google adapter's
+`STSResponses`:
+
+- the latest accepted input context;
+- the last `response_index`;
+- per burst: `turn_ref`, index, context, state (`:announced`, `:admitted`,
+  `:discarded`, `:completed`), output reference, and buffered byte count;
+- a bound on bursts that are announced but not yet admitted (4 is enough,
+  because bursts are at least one gap apart), failing explicitly beyond it.
+
+Burst lifecycle:
+
+1. **Input.** `submit_input/3` records the context of each accepted input as
+   the latest context. Audio goes to the decoder or the wire as today.
+2. **Gate opens.** `OutputSegmenter` reports `{:open, seg_ref}`. The provider
+   creates a burst with a fresh `turn_ref`, the next index and the latest
+   context, and emits `:response_started`. The burst's audio stays in the
+   segmenter's receive buffer (2 s bound) until admission. With no accepted
+   context yet, for example speech before any input, the burst is discarded
+   locally, because the room could not authorize it.
+3. **Admitted.** `{:vxpipe_speech_output, ...}` for that `turn_ref` calls
+   `OutputSegmenter.admitted/2` and forwards the buffered and later audio
+   through the existing credited path under that output reference. Output
+   transcript fragments are emitted with that `turn_ref` and aligned offsets.
+4. **Gate closes.** After the last credit, the provider emits
+   `:output_completed` for that `turn_ref` and output reference. The next
+   burst is a new response; nothing continues an earlier output.
+5. **Rejected.** `{:vxpipe_speech_response_discard, ...}` drops the burst's
+   buffered audio and discards the rest of it until the gate closes. No
+   completion is emitted, because nothing was admitted.
+6. **Yield.** An admitted burst that the provider stops early completes
+   normally after its last credit; the room labels the turn `:overlapped` from
+   caller onset. A burst that yields before admission completes with nothing
+   played when its admission arrives (the R7-2 behaviour, now per burst), or
+   is simply dropped if it is discarded instead.
+7. **Ordering and back-pressure.** The room plays one output at a time and
+   queues the rest. Bursts are at least one gap (800 ms) apart and arrive at
+   real-time pace, so the previous output normally settles before the next
+   admission. If it does not, audio waits in the 2 s receive buffer, and
+   overflow fails the session explicitly, as the specification requires.
+
+Morse duplex changes:
+
+- Declare `response_start?: true` and implement `submit_input/3`; keep
+  `push_audio/2` and `push_text/3` rejecting use under the opted-in
+  descriptor.
+- Keep the reply FIFO, but as a generation queue: replies are appended to the
+  provider's own continuous output timeline in order. It no longer holds
+  admission references.
+- Tool results append a reply to the timeline; its burst is announced like
+  any other. Remove the empty `:turn_ended` from `publish_tool_reply/2`
+  (R7-3). `:turn_ended` is emitted only for inferred caller turns.
+- Remove the continuation path in `open_burst/2`, `yielded_pending`, and the
+  per-reply output reference.
+
+Public turn semantics: each burst is one public agent turn. A pause longer
+than the gap splits one spoken answer into two agent turns in the transcript.
+The phone call behaviour section already accepts this: turn boundaries only
+label the record and never change when the agent speaks.
+
+Tests, all through the capability unless noted:
+
+- `BurstResponses` unit tests: index order, context capture, the announced
+  bound, and each state transition.
+- A reply whose word gap exceeds 800 ms (`unit_duration_ms: 150`) produces two
+  `:response_started` events, two outputs that complete and settle in order,
+  and transcript fragments attached to the right output.
+- A tool result's reply is admitted through `:response_started`, and no
+  `:turn_ended` is emitted for it.
+- A policy change between input and burst makes the room reject the burst:
+  its audio is never played, no completion is emitted, and the next burst
+  with a current context is admitted.
+- Yield before admission, then admission: the output completes with nothing
+  played and the next burst is admitted.
+- Speech before any accepted input is discarded locally and never announced.
+- Receive-buffer overflow while waiting for admission fails explicitly.
+- Under `clock: :realtime`, a compiled-room call carries all of the above
+  into checkpoint C's proof.
+
+Documentation: add the burst-to-response mapping to the speech provider
+contract's duplex section and the integration guide, so the GPT-Live adapter
+in checkpoint D implements the same lifecycle.
+
+Open findings: R1-4, R7-1, R7-3, R9-1, R10-1, R10-2.
+
+Next work, in order:
+
+1. R10-1, with the R9-1 behaviour test through the Google controller harness.
+2. R7-1 and R7-3, as designed above: `BurstResponses`, then the Morse duplex
+   changes and their tests.
+3. The remaining C tasks, starting with the compiled-room duplex proof under
+   `clock: :realtime`, including the `:overlapped` proof deferred from R7-4;
+   C's exit; then D.
+4. R10-2 in a separate docs commit, whenever convenient.
