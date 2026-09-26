@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
+  alias Vxpipe.Providers.MorseCode.DuplexSTSSession
 
   @morse_keys [
     :amplitude,
@@ -89,6 +90,13 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "rime"}),
     do: Registry.resolve_capability("rime", :sts)
 
+  def adapter(%CapabilitySelection{
+        kind: :speech_to_speech,
+        provider: "morse",
+        model: "morse-duplex"
+      }),
+      do: {:ok, DuplexSTSSession}
+
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "morse"}),
     do: Registry.resolve_capability("morse", :sts)
 
@@ -139,7 +147,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp speech_adapters(:speech_to_speech) do
     {:ok, morse} = Registry.fetch_capability("morse", :sts)
-    [morse]
+    [morse, DuplexSTSSession]
   end
 
   defp speech_adapters(_kind), do: []
@@ -214,6 +222,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
        ),
        do: Keyword.validate(settings, enabled: false)
 
+  defp validate_provider_settings(DuplexSTSSession, :speech_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false)
+
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
 
@@ -270,6 +281,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def speech_options(%CapabilitySelection{
         kind: :speech_to_speech,
         provider: "morse",
+        model: "morse-duplex",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, @morse_keys ++ [:output_transcript]),
+         :ok <- validate_output_transcript(options) do
+      {:ok, options}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        kind: :speech_to_speech,
+        provider: "morse",
         model: "morse",
         options: input
       }) do
@@ -309,6 +332,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp validate_speech(%{provider: "morse", credential_name: nil, kind: kind}, options)
        when kind in [:speech_to_text, :output_speech_to_text] do
     validate_provider(Vxpipe.Providers.MorseCode.STTSession, options)
+  end
+
+  defp validate_speech(
+         %{
+           provider: "morse",
+           credential_name: nil,
+           kind: :speech_to_speech,
+           model: "morse-duplex"
+         },
+         options
+       ) do
+    validate_provider(DuplexSTSSession, options)
   end
 
   defp validate_speech(

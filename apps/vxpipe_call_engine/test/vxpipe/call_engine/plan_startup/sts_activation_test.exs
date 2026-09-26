@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
 
   alias Vxpipe.CallEngine.{CallInvocation, CallSpec, CallSpecCompiler, PlanStartup}
   alias Vxpipe.Providers.MorseCode.{STSSession, STTSession}
+  alias Vxpipe.Providers.MorseCode.DuplexSTSSession
 
   test "morse STS resolves an agent runtime without a text model" do
     plan =
@@ -64,6 +65,44 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     refute inspect(startup) =~ "Answer briefly."
   end
 
+  test "the morse-duplex model resolves a duplex STS and declares its facts" do
+    plan =
+      compile_plan(%{
+        speech_to_speech: %{provider: "morse", model: "morse-duplex", options: %{}}
+      })
+
+    assert :ok = PlanStartup.validate(plan, options())
+    assert {:ok, startup} = PlanStartup.new(plan, options())
+    assert {DuplexSTSSession, public} = startup.speech_to_speech.provider
+
+    assert {:ok, descriptor} = DuplexSTSSession.configure(public)
+    assert descriptor.response_start?
+    assert descriptor.output_shape == :continuous
+    assert descriptor.barge_in == :provider
+    assert descriptor.continuity == :history_reseed
+    assert descriptor.hold == :mute
+  end
+
+  test "a morse-duplex call spec rejects test-only clock and yield options" do
+    for options <- [%{"clock" => "manual"}, %{"yield?" => false}] do
+      assert {:error, error} =
+               compile_result(%{
+                 speech_to_speech: %{provider: "morse", model: "morse-duplex", options: options}
+               })
+
+      assert error.code in [:invalid_call_spec, :unsupported_call_plan]
+    end
+  end
+
+  test "an unknown morse speech-to-speech model is rejected" do
+    assert {:error, error} =
+             compile_result(%{
+               speech_to_speech: %{provider: "morse", model: "morse-realtime", options: %{}}
+             })
+
+    assert error.code in [:invalid_call_spec, :unsupported_call_plan]
+  end
+
   test "agent-output recognition still requires its STT provider to be enabled" do
     plan =
       compile_plan(%{
@@ -90,6 +129,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
   end
 
   defp compile_plan(agent_caps, tools \\ %{}) do
+    case compile_result(agent_caps, tools) do
+      {:ok, plan} -> plan
+      {:error, error} -> flunk("plan failed: #{inspect(error)}")
+    end
+  end
+
+  defp compile_result(agent_caps, tools \\ %{}) do
     source = %{
       schema_version: "20260915.01",
       name: "STS activation",
@@ -127,9 +173,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
                "echo_context" => Vxpipe.CallEngine.STSContextTool
              }
            }) do
-      plan
-    else
-      {:error, error} -> flunk("plan failed: #{inspect(error)}")
+      {:ok, plan}
     end
   end
 
@@ -146,7 +190,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
       ],
       speech_to_speech: [
         providers: %{
-          STSSession => [enabled: true]
+          STSSession => [enabled: true],
+          DuplexSTSSession => [enabled: true]
         }
       ]
     ]

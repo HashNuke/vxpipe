@@ -373,7 +373,16 @@ failures across all children), and `mix deps.unlock --check-unused`.
 - Approximation: the Morse mock repeats the whole reply text per burst; the
   GPT-Live adapter aligns per-delta fragments in package 7.
 
+## Package 2: morse-duplex from a call spec
+
+- `CapabilityCatalog` resolves `model: "morse-duplex"` to
+  `MorseCode.DuplexSTSSession`, allows the Morse keys plus `:output_transcript`,
+  and rejects `:clock`, `:yield?` and unknown Morse models. The `MorseCode`
+  manifest is unchanged; routing is by model.
+- Evidence: call-engine child suite 1,580 tests, zero failures (seed 0); the
+  activation test asserts the resolved duplex descriptor facts.
+
 ## Next
 
-Package 2 (select the Morse duplex provider from a call spec), then package 3
-(aligned spoken prefix) and the remaining checkpoint-C proofs.
+Package 3 (aligned spoken prefix), then package 4 (hold by muting) and the
+remaining checkpoint-C proofs.

@@ -1954,3 +1954,25 @@ Not independent verification. Package 0 was already committed as `9700df3a`.
 
 Open findings: R1-4, R10-2. R7-1 and R7-3 are resolved for the provider.
 
+### Response to review 12 — 2026-09-26 (package 2)
+
+Implementation response to Review 12's package 2, labelled per R3-2. Not
+independent verification.
+
+- Package 2 (morse-duplex selection) — **implemented.** `CapabilityCatalog`
+  resolves `speech_to_speech: %{provider: "morse", model: "morse-duplex"}` to
+  `Vxpipe.Providers.MorseCode.DuplexSTSSession` through `adapter/1`,
+  `speech_options/1` and `validate_speech/2`; the duplex adapter is registered in
+  `speech_adapters(:speech_to_speech)` with its own settings clause. Allowed
+  options are the Morse keys plus `:output_transcript`; a call spec supplying
+  `:clock` or `:yield?` compiles as an unsupported selection, and an unknown
+  Morse model (for example `morse-realtime`) is rejected. The `MorseCode`
+  manifest is unchanged; the catalog routes by model.
+- Tests: `sts_activation_test.exs` resolves and configures `morse-duplex` and
+  asserts the duplex descriptor facts (`response_start?`, `output_shape`,
+  `barge_in`, `continuity`, `hold`), rejects test-only options, and rejects an
+  unknown Morse model.
+
+Open findings: R1-4, R10-2. Package 3 (aligned spoken prefix) is next.
+
+
