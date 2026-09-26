@@ -1245,3 +1245,94 @@ verification.
 
 Next work, in order: the R7-1/R7-3 `:response_started` per-burst redesign; the
 remaining C tasks, starting with the compiled-room duplex proof; C's exit; D.
+
+### Review 8 — 2026-09-26 (response to the review 7 response)
+
+Independent review of commit `33af06c3` and its "Response to review 7".
+
+Reviewed state: `33af06c3` on `sts2`, clean worktree.
+
+Verified:
+
+- 77 focused tests pass (seed 0), across the same files as review 7. Per
+  R2-4, the reported child-suite run (1,562 tests, zero failures) is cited,
+  not repeated.
+- The R7-1/R7-3 feasibility claim, by reading
+  `Capability.SpeechToSpeech.ResponseOrigins`. Input submitted with
+  `response_start?: true` records a response context with a fingerprint of
+  the allocation, source, epoch, lifecycle and policy revisions, and audio
+  intervals. A later `:response_started` with that context is admitted while
+  the fingerprint is still current. So one accepted context can authorize a
+  continuation burst or speech after a tool result, and no amendment is
+  needed.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R7-1, R7-3 — **still open; feasibility confirmed.** The redesign is not yet
+  implemented. See R8-1, which it depends on.
+- R7-2 — **resolved.** When a reply that yielded before admission is
+  admitted, the provider emits `:interrupted` and then `:output_completed`
+  with the admitted output reference. The test settles that output and then
+  admits the next reply, which is the proof review 7 asked for.
+- R7-4 — **resolved, with one deferral accepted.** Queue overflow fails with
+  `:pending_reply_overflow` and an unusable tool result fails with
+  `:empty_tool_reply`, both stopping the provider explicitly. The
+  `:overlapped` proof moves to checkpoint C's compiled-room overlap task,
+  which already requires it; it must not be dropped there.
+
+New findings:
+
+- R8-1 — **High, blocks R7-1: accepted response contexts are never pruned.**
+  `ResponseOrigins.accept/3` adds each new context with `Map.put_new/3`, and
+  nothing removes one until the capability restarts. At 16 contexts
+  `new_candidate/2` returns `{:error, :busy}`, so every later input
+  submission fails. Each hold, policy revision or epoch change produces a new
+  fingerprint and therefore a new context. This is latent today, because
+  Google STS defaults to `response_start?: false`. The R7-1 redesign makes
+  the Morse duplex provider (and later the GPT-Live adapter) use
+  `response_start?: true` for every burst, so a long phone call with enough
+  holds or policy changes would stop accepting caller audio.
+
+  The code belongs to the capability delivered by
+  [Agent speech-to-speech](agent-speech-to-speech.md), but this milestone is
+  the first to depend on it for every reply, so fix it here as a
+  prerequisite of R7-1.
+
+  Proposed fix: when a new context is accepted, drop accepted contexts whose
+  fingerprint is no longer current and that no queued, pending or active
+  response still references. Keep the 16-context bound for contexts that are
+  still referenced, and fail explicitly only when all 16 are live. Tests:
+  twenty hold and release cycles, then a caller turn whose reply is
+  admitted; a stale context still referenced by a queued response is kept
+  until that response settles or is rejected.
+
+- R8-2 — **Medium: an empty tool result ends the agent's speech for the rest
+  of the call.** `ToolReply.text/2` returns `{:error, :empty_tool_reply}` when
+  the sanitized summary is empty, for example for a `%{}` result, and the
+  provider stops. An empty map is an ordinary tool success, such as an action
+  that returns no data, and on a phone call stopping the provider silences
+  the agent. Review 6's R6-5 asked for an explicit failure when encoding still
+  fails; applying that to an empty summary is disproportionate, because a
+  spoken reply is still possible.
+
+  Proposed fix: when the summary is empty, speak a fixed acknowledgement
+  (`"RECEIVED OK"`). Keep the explicit failure only for a reply that cannot
+  be encoded at all. Update the test so `%{}` produces that acknowledgement.
+
+- R8-3 — **Low: one completion emit ignores failure.** The new R7-2 path
+  discards the result of `Event.emit(state.channel, :output_completed, ...)`
+  with `_ =`, while the provider's other emits stop the session on failure.
+  Proposed fix: handle a failed emit the same way as the others.
+
+Open findings: R1-4, R7-1, R7-3, R8-1, R8-2, R8-3.
+
+Next work, in order:
+
+1. R8-1: prune stale response contexts, with its tests.
+2. R7-1 and R7-3: the `:response_started` per-burst redesign, removing the
+   continuation and empty-`turn_ended` paths.
+3. R8-2 and R8-3.
+4. The remaining C tasks, starting with the compiled-room duplex proof under
+   `clock: :realtime`, including the `:overlapped` proof deferred from R7-4;
+   C's exit; then D.
