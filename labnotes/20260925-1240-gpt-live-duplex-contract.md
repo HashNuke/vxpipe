@@ -724,3 +724,26 @@ remaining checkpoint-C proofs.
   dependencies and Lean verification then passed. The full umbrella run passed
   2,834 tests, zero failures, with 58 integration exclusions. No hosted call
   was made.
+
+### Moderation close through the capability (2026-09-26)
+
+- A fake-socket capability test for `session.closed` with `reason: "content"`
+  failed red: the owner received `:provider_failed`, although the adapter
+  stopped with `{:shutdown, :moderation}`. The speech channel and STS capability
+  now forward `:moderation` alongside the already controlled `:reseed_failed`
+  reason for history-reseed STS providers. The focused test passed green.
+- The broader fake-socket close and overlap matrix remains open. This change
+  does not mark checkpoint D complete.
+- The broader focused run exposed a close-ordering race in the existing
+  final-usage test: `session.closed` emitted voice usage, then the provider
+  exited before the consumer could acknowledge it. Waiting for provider `:DOWN`
+  before acknowledging made the test fail deterministically. The speech
+  channel now uses its bounded producer-down drain for a pending STS usage
+  event, as it already did for a pending STT turn-end event. It retains the
+  controlled close reason until draining finishes. The focused GPT-Live and
+  STT files passed 47 tests after this change.
+- Credo's channel-size check prompted moving generic provider-down handling
+  into `Speech.ChannelFailure`, alongside the specialized moderation close.
+  Format, warnings-as-errors compile, strict Credo, unused dependencies and
+  Lean verification passed. The full umbrella suite then passed 2,835 tests,
+  zero failures, with 58 integration exclusions. No hosted call was made.

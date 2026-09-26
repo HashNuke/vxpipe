@@ -127,6 +127,18 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     assert_receive {:vxpipe_sts_unavailable, ^capability, :reseed_failed}, 6_000
   end
 
+  test "a content close reports moderation to the speech capability owner" do
+    {capability, wire} = start_ready_capability()
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.closed",
+      "reason" => "content",
+      "usage" => %{"seconds" => 0.5}
+    })
+
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :moderation}, 1_000
+  end
+
   test "a fake GPT-Live caller fragment and spoken burst pass through the real capability" do
     {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())

@@ -470,6 +470,15 @@ have entered the session, then captures an abnormal provider exit. None of the
 synthetic private markers appears in status or crash logs. The shared speech
 socket and scope redaction tests continue to cover their own process statuses.
 
+The fake-socket capability test now also proves that a GPT-Live `content`
+close reports `:moderation` to the capability owner. The provider already
+classified this close; the speech channel and capability now preserve that
+controlled reason. The channel drains a final voice usage event before retiring
+the allocation on a provider close. The remaining close-reason and overlap
+matrix is still open. Focused GPT-Live and STT files passed 47 tests; the
+umbrella suite passed 2,835 tests with zero failures and 58 integration
+exclusions, alongside format, compile, Credo, unused dependencies and Lean.
+
 ### E — Session continuity and lifecycle
 
 - [x] Red-green reseed on `expired` and `connection_lost`: seeded history comes

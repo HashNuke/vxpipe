@@ -324,12 +324,13 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
         "usage" => %{"seconds" => 0.5}
       })
 
+      assert_receive {:DOWN, ^monitor, :process, ^provider, ^expected}, 1_000
+
       assert_receive {:vxpipe_speech,
                       %Event{session: ^session, kind: :provider_usage, usage: usage} = report}
 
       assert usage == %{kind: :voice, milliseconds: 500}
       assert :ok = Session.ack(session, report)
-      assert_receive {:DOWN, ^monitor, :process, ^provider, ^expected}, 1_000
     end
   end
 

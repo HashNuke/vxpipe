@@ -59,6 +59,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
        producer_monitor: nil,
        producer_down?: false,
        producer_drain_timer: nil,
+       producer_down_reason: :session_failed,
        consumer: allocation.consumer,
        descriptor: nil,
        module: nil,
@@ -611,23 +612,16 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   def handle_info(
-        {:DOWN, monitor, :process, _pid, {:shutdown, :reseed_failed}},
+        {:DOWN, monitor, :process, _pid, {:shutdown, reason}},
         %{producer_monitor: monitor, descriptor: %{kind: :sts, continuity: :history_reseed}} =
           state
-      ),
-      do: ChannelFailure.reseed_failed(state)
+      )
+      when reason in [:reseed_failed, :moderation],
+      do: ChannelFailure.provider_shutdown(state, reason)
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
-      when monitor == state.producer_monitor do
-    state = %{state | producer: nil, producer_monitor: nil, producer_down?: true}
-
-    if ChannelFailure.drainable_stt_failure?(state) do
-      {:noreply, ChannelFailure.begin_producer_failure_drain(state)}
-    else
-      ChannelFailure.retire(state.allocation)
-      {:stop, :normal, state}
-    end
-  end
+      when monitor == state.producer_monitor,
+      do: ChannelFailure.producer_down(state)
 
   def handle_info(
         {:producer_drain_expired, generation},

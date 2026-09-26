@@ -31,7 +31,7 @@ defmodule Vxpipe.CallEngine.Speech.ChannelFailure do
 
   def reply_after_ack(state), do: {:reply, :ok, state}
 
-  def begin_producer_failure_drain(state) do
+  def begin_producer_failure_drain(state, reason \\ :session_failed) do
     if state.producer_monitor, do: Process.demonitor(state.producer_monitor, [:flush])
     if state.producer, do: Process.exit(state.producer, :kill)
 
@@ -50,19 +50,35 @@ defmodule Vxpipe.CallEngine.Speech.ChannelFailure do
       | producer: nil,
         producer_monitor: nil,
         producer_down?: true,
-        producer_drain_timer: timer
+        producer_drain_timer: timer,
+        producer_down_reason: reason
     }
   end
 
   def finish_producer_failure_drain(state) do
     if state.producer_drain_timer, do: Process.cancel_timer(state.producer_drain_timer)
     retire(state.allocation)
-    ScopeControl.failed(state.allocation, :session_failed)
+    ScopeControl.failed(state.allocation, state.producer_down_reason)
     :ok
   end
 
   def drainable_stt_failure?(state) do
     state.descriptor.kind == :stt and EventQueue.pending_kind?(state.events, :turn_ended)
+  end
+
+  def drainable_sts_usage?(state) do
+    state.descriptor.kind == :sts and EventQueue.pending_kind?(state.events, :provider_usage)
+  end
+
+  def producer_down(state) do
+    state = %{state | producer: nil, producer_monitor: nil, producer_down?: true}
+
+    if drainable_stt_failure?(state) or drainable_sts_usage?(state) do
+      {:noreply, begin_producer_failure_drain(state)}
+    else
+      retire(state.allocation)
+      {:stop, :normal, state}
+    end
   end
 
   def retire(allocation) do
@@ -80,10 +96,14 @@ defmodule Vxpipe.CallEngine.Speech.ChannelFailure do
     {:stop, :normal, {:error, reason}, state}
   end
 
-  def reseed_failed(state) do
-    retire(state.allocation)
-    ScopeControl.failed(state.allocation, :reseed_failed)
-    {:stop, :normal, state}
+  def provider_shutdown(state, reason) when reason in [:reseed_failed, :moderation] do
+    if drainable_sts_usage?(state) do
+      {:noreply, begin_producer_failure_drain(state, reason)}
+    else
+      retire(state.allocation)
+      ScopeControl.failed(state.allocation, reason)
+      {:stop, :normal, state}
+    end
   end
 
   defp settle_draining_input(%{input: nil} = state), do: state

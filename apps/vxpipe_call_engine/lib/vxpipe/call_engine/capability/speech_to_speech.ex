@@ -448,11 +448,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     do: stop_unavailable(:input_unavailable, state)
 
   def handle_info(
-        {:vxpipe_speech_closed, session, :reseed_failed},
+        {:vxpipe_speech_closed, session, reason},
         %{session: session, descriptor: %{continuity: :history_reseed}} = state
-      ) do
-    stop_unavailable(:reseed_failed, state)
-  end
+      )
+      when reason in [:reseed_failed, :moderation],
+      do: stop_unavailable(reason, state)
 
   def handle_info({:vxpipe_speech_closed, session, _reason}, %{session: session} = state) do
     stop_unavailable(:provider_failed, state)
