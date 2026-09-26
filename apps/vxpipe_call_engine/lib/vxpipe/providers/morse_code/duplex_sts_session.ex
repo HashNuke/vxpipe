@@ -23,6 +23,9 @@ defmodule Vxpipe.Providers.MorseCode.DuplexSTSSession do
   defdelegate push_text(pid, reference, text), to: Native
 
   @impl true
+  defdelegate submit_input(pid, context, operation), to: Native
+
+  @impl true
   defdelegate input_activity(pid, boundary), to: Native
 
   @impl true

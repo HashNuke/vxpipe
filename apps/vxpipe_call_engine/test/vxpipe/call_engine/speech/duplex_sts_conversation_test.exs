@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
   @moduletag :capture_log
 
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Output
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession, as: DuplexSTS
 
@@ -11,6 +12,7 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
   test "clock defaults to realtime, manual is opt-in and an unknown clock is rejected" do
     assert {:ok, descriptor} = DuplexSTS.configure([])
     assert Map.fetch!(descriptor.settings, :clock) == :realtime
+    assert descriptor.response_start?
     assert {:ok, manual} = DuplexSTS.configure(clock: :manual)
     assert Map.fetch!(manual.settings, :clock) == :manual
     assert {:error, :invalid_configuration} = DuplexSTS.configure(clock: :fast)
@@ -27,30 +29,29 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
 
     %{session: session, provider: provider} = start_session(clock: :manual, amplitude: 800)
     push_chunks(session, "HI")
-    turn = drain_until_turn_ended(session)
-    assert {:ok, _output} = Session.admit_output(session, turn)
-    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+    {payloads, _turns} = drive(session, provider)
+    assert IO.iodata_to_binary(payloads) != <<>>
   end
 
-  test "plays every burst when an inter-word gap exceeds the segmenter gap" do
-    %{session: session, provider: provider} =
-      start_session(clock: :manual, unit_duration_ms: 150)
+  test "plays every burst of one reply as its own admitted response" do
+    %{session: session, provider: provider} = start_session(clock: :manual, unit_duration_ms: 150)
 
     push_chunks(session, "AB", unit_duration_ms: 150)
-    turn = drain_until_turn_ended(session)
-    assert {:ok, _output} = Session.admit_output(session, turn)
-    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
+    {payloads, turns} = drive(session, provider)
+
+    assert length(turns) >= 2
+    assert length(Enum.uniq(turns)) == length(turns)
+    assert IO.iodata_to_binary(payloads) != <<>>
   end
 
-  test "yielding before admission settles the room output when its admission arrives" do
+  test "yielding an announced burst before admission completes it with nothing played" do
     %{session: session, provider: provider} = start_session(clock: :manual)
     push_chunks(session, "HI")
-    turn = drain_until_turn_ended(session)
+    turn = await_response_started(session, provider)
 
-    # Talk over the not-yet-admitted reply; the provider yields and remembers it.
+    # Caller tone arrives while the burst is announced but not yet admitted.
     push_chunks(session, "NO")
-    next_turn = drain_until_turn_ended(session)
-    advance(provider, 40)
+    drain_events(session)
 
     assert {:ok, output} = Session.admit_output(session, turn)
 
@@ -73,109 +74,39 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert :ok = Session.ack(session, completed)
     assert :ok = Session.settle_output(session, output, 0)
 
-    # The released slot admits the next reply.
-    assert {:ok, _next} = Session.admit_output(session, next_turn)
-  end
-
-  test "plays two replies queued behind one output, in order" do
-    %{session: session, provider: provider} = start_session(clock: :manual, yield?: false)
-    push_chunks(session, "HI")
-    first = drain_until_turn_ended(session)
-    assert {:ok, first_output} = Session.admit_output(session, first)
-
-    push_chunks(session, "NO")
-    second = drain_until_turn_ended(session)
-
+    # The next reply's burst is admitted and plays.
     push_chunks(session, "YES")
-    third = drain_until_turn_ended(session)
-
-    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
-    assert :ok = Session.settle_output(session, first_output, 0)
-
-    assert {:ok, second_output} = Session.admit_output(session, second)
-    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
-    assert :ok = Session.settle_output(session, second_output, 0)
-
-    assert {:ok, third_output} = Session.admit_output(session, third)
-    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
-    assert :ok = Session.settle_output(session, third_output, 0)
+    {payloads, _turns} = drive(session, provider)
+    assert IO.iodata_to_binary(payloads) != <<>>
   end
 
-  test "fails explicitly when more replies queue than the FIFO allows" do
-    %{session: session, provider: provider} = start_session(clock: :manual, yield?: false)
-    push_chunks(session, "HI")
-    first = drain_until_turn_ended(session)
-    assert {:ok, _} = Session.admit_output(session, first)
-    monitor = Process.monitor(provider)
-
-    result =
-      Enum.reduce_while(~c"ABCDEFGHIJKLMNOPQRSTUVWXYZ", :ok, fn char, :ok ->
-        case push_text_turn(session, <<char>>) do
-          :ok -> {:cont, :ok}
-          {:error, _reason} = error -> {:halt, error}
-        end
-      end)
-
-    assert result in [{:error, :pending_reply_overflow}, {:error, :closed}]
-    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :pending_reply_overflow}}
-  end
-
-  test "speaks an acknowledgement when a tool result sanitises to nothing" do
+  test "a tool result appends a reply to the output timeline without a turn_ended" do
     %{session: session, provider: provider} = start_session(clock: :manual)
-    assert :ok = Session.push_text(session, "TOOL echo {}")
+
+    assert :ok = Session.push_text(session, "TOOL echo {}", response_context: make_ref())
     call_ref = drain_until_tool_call(session)
-    drain_events(session)
 
     assert :ok = DuplexSTS.send_tool_result(provider, call_ref, %{})
 
-    assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :turn_ended, turn_ref: turn} = event},
-                   500
+    {payloads, turns} = drive(session, provider)
 
-    assert :ok = Session.ack(session, event)
-    assert {:ok, _output} = Session.admit_output(session, turn)
-    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
-  end
+    assert IO.iodata_to_binary(payloads) != <<>>
+    assert turns != []
 
-  test "keeps the reply open and yields when caller tone arrives while a credit is held" do
-    %{session: session, provider: provider} = start_session()
-    push_chunks(session, "HI")
-    turn = drain_until_turn_ended(session)
-
-    assert {:ok, output} = Session.admit_output(session, turn)
-    advance(provider, 220)
-    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = held}
-
-    push_chunks(session, "NO")
-    drain_until_turn_ended(session)
-
-    # The provider finishes the interrupted reply only after the held credit.
-    assert :ok = Session.validate_audio(session, held)
-    assert :ok = Session.ack_audio(session, held)
-
-    assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :output_transcript, turn_ref: ^turn} =
-                      transcript}
-
-    assert :ok = Session.ack(session, transcript)
-
-    assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :output_completed, turn_ref: ^turn} = done}
-
-    assert :ok = Session.ack(session, done)
-    assert :ok = Session.settle_output(session, output, 0)
+    # No reply announces its own turn_ended; only the caller text turn did.
+    receive do
+      {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended, turn_ref: turn}} ->
+        refute turn in turns
+    after
+      0 -> :ok
+    end
   end
 
   test "discards clock-paced silence before the burst and replays the pre-roll" do
-    %{session: session, provider: provider} = start_session()
+    %{session: session, provider: provider} = start_session(clock: :manual)
     push_chunks(session, "HI")
-    turn = drain_until_turn_ended(session)
-
-    assert {:ok, _output} = Session.admit_output(session, turn)
-
-    # The 200 ms leading silence is below the activation gate: no burst opens.
-    advance(provider, 200)
-    refute_received {:vxpipe_speech_audio, %Audio{}}
+    turn = await_response_started(session, provider)
+    assert {:ok, output} = Session.admit_output(session, turn)
 
     until_audio(session, provider)
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = first}
@@ -185,29 +116,19 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert :ok = Session.validate_audio(session, first)
     assert :ok = Session.ack_audio(session, first)
 
-    drain_output(session, provider)
-
-    assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :output_transcript, turn_ref: ^turn} =
-                      transcript}
-
-    assert :ok = Session.ack(session, transcript)
-
-    assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :output_completed, turn_ref: ^turn} = done}
-
-    assert :ok = Session.ack(session, done)
+    {_payloads, _turns} = drive(session, provider)
+    _ = output
 
     # Silence after the reply is discarded: advancing further emits no new burst.
     advance(provider, 2_000)
     refute_received {:vxpipe_speech_audio, %Audio{}}
-    refute_received {:vxpipe_speech, %Event{kind: :output_completed}}
+    refute_received {:vxpipe_speech, %Event{kind: :response_started}}
   end
 
   test "fails the session explicitly when pre-admission output overflows the receive buffer" do
-    %{session: session, provider: provider} = start_session()
+    %{session: session, provider: provider} = start_session(clock: :manual)
     push_chunks(session, "HI")
-    _turn = drain_until_turn_ended(session)
+    _turn = await_response_started(session, provider)
 
     # Never admit the output; the provider keeps streaming with no flow control.
     monitor = Process.monitor(provider)
@@ -216,9 +137,28 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     _ = session
   end
 
+  test "fails explicitly when more replies queue than the FIFO allows" do
+    %{session: session, provider: provider} = start_session(clock: :manual, yield?: false)
+    push_chunks(session, "HI")
+    _turn = await_response_started(session, provider)
+    monitor = Process.monitor(provider)
+    context = make_ref()
+
+    result =
+      Enum.reduce_while(~c"ABCDEFGHIJKLMNOPQRSTUVWXYZ", :ok, fn char, :ok ->
+        case submit_text_turn(session, <<char>>, context) do
+          :ok -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+      end)
+
+    assert result in [{:error, :pending_reply_overflow}, {:error, :closed}]
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :pending_reply_overflow}}
+  end
+
   # Helpers ------------------------------------------------------------------
 
-  defp start_session(provider_options \\ [clock: :manual]) do
+  defp start_session(provider_options) do
     scope =
       start_supervised!(Supervisor.child_spec({CapabilityTree, owner: self()}, id: make_ref()))
 
@@ -231,31 +171,107 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
   end
 
   defp push_chunks(session, text, encode_options \\ []) do
+    context = make_ref()
     {:ok, pcm} = encode(text, encode_options)
 
     for <<chunk::binary-size(320) <- pcm>> do
-      assert :ok = Session.push_audio(session, chunk)
+      assert :ok = Session.push_audio(session, chunk, response_context: context)
     end
 
     remainder = rem(byte_size(pcm), 320)
 
     if remainder > 0 do
       <<_::binary-size(byte_size(pcm) - remainder), tail::binary>> = pcm
-      assert :ok = Session.push_audio(session, tail)
+      assert :ok = Session.push_audio(session, tail, response_context: context)
     end
   end
 
-  defp drain_until_turn_ended(session) do
+  defp submit_text_turn(session, text, context) do
+    case Session.push_text(session, text, response_context: context) do
+      :ok ->
+        drain_events(session)
+        :ok
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp await_response_started(session, provider, remaining \\ 2_000)
+
+  defp await_response_started(_session, _provider, 0), do: flunk("no response_started event")
+
+  defp await_response_started(session, provider, remaining) do
     receive do
-      {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended, turn_ref: turn} = event} ->
+      {:vxpipe_speech, %Event{session: ^session, kind: :response_started, turn_ref: turn} = event} ->
         assert :ok = Session.ack(session, event)
         turn
 
       {:vxpipe_speech, %Event{session: ^session} = event} ->
         assert :ok = Session.ack(session, event)
-        drain_until_turn_ended(session)
+        await_response_started(session, provider, remaining)
     after
-      1_000 -> flunk("no turn_ended event")
+      0 ->
+        advance(provider, 20)
+        await_response_started(session, provider, remaining - 1)
+    end
+  end
+
+  # Admit every announced response, play its credited audio, settle each output,
+  # and stop when the provider has no reply timeline left and no open slot.
+  defp drive(session, provider, payloads \\ [], turns \\ [], outputs \\ %{}, remaining \\ 2_000)
+
+  defp drive(_session, _provider, payloads, turns, _outputs, 0),
+    do: {Enum.reverse(payloads), Enum.reverse(turns)}
+
+  defp drive(session, provider, payloads, turns, outputs, remaining) do
+    receive do
+      {:vxpipe_speech, %Event{session: ^session, kind: :response_started, turn_ref: turn} = event} ->
+        assert :ok = Session.ack(session, event)
+        assert {:ok, output} = Session.admit_output(session, turn)
+
+        drive(
+          session,
+          provider,
+          payloads,
+          [turn | turns],
+          Map.put(outputs, turn, output),
+          remaining
+        )
+
+      {:vxpipe_speech, %Event{session: ^session, kind: :output_completed, turn_ref: turn} = event} ->
+        assert :ok = Session.ack(session, event)
+
+        outputs =
+          case Map.pop(outputs, turn) do
+            {%{ref: reference} = output, rest} when reference == event.request_ref ->
+              assert :ok = Session.settle_output(session, output, 0)
+              rest
+
+            _other ->
+              outputs
+          end
+
+        drive(session, provider, payloads, turns, outputs, remaining)
+
+      {:vxpipe_speech, %Event{session: ^session} = event} ->
+        assert :ok = Session.ack(session, event)
+        drive(session, provider, payloads, turns, outputs, remaining)
+
+      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
+        assert :ok = Session.validate_audio(session, audio)
+        assert :ok = Session.ack_audio(session, audio)
+        drive(session, provider, [audio.payload | payloads], turns, outputs, remaining)
+    after
+      0 ->
+        state = :sys.get_state(provider)
+
+        if Output.idle?(state.timeline) and state.segments == %{} do
+          {Enum.reverse(payloads), Enum.reverse(turns)}
+        else
+          advance(provider, 20)
+          drive(session, provider, payloads, turns, outputs, remaining - 1)
+        end
     end
   end
 
@@ -270,17 +286,6 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
         drain_until_tool_call(session)
     after
       1_000 -> flunk("no tool_call event")
-    end
-  end
-
-  defp push_text_turn(session, text) do
-    case Session.push_text(session, text) do
-      :ok ->
-        drain_events(session)
-        :ok
-
-      {:error, _reason} = error ->
-        error
     end
   end
 
@@ -310,56 +315,7 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     end
   end
 
-  defp drain_output(session, provider, remaining \\ 1_000)
-
-  defp drain_output(_session, _provider, 0), do: flunk("output did not settle")
-
-  defp drain_output(session, provider, remaining) do
-    receive do
-      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
-        assert :ok = Session.validate_audio(session, audio)
-        assert :ok = Session.ack_audio(session, audio)
-        drain_output(session, provider, remaining)
-
-      {:vxpipe_speech, %Event{session: ^session, kind: kind} = event}
-      when kind in [:output_transcript, :output_completed] ->
-        send(self(), {:vxpipe_speech, event})
-        :ok
-    after
-      0 ->
-        advance(provider, 20)
-        drain_output(session, provider, remaining - 1)
-    end
-  end
-
   defp advance(provider, ms), do: :ok = DuplexSTS.advance(provider, ms)
-
-  # Drive the manual clock, ack every chunk, and return the played payloads in
-  # order once the output completes.
-  defp play_reply(session, provider, collected \\ [], remaining \\ 2_000)
-
-  defp play_reply(_session, _provider, _collected, 0), do: flunk("output did not complete")
-
-  defp play_reply(session, provider, collected, remaining) do
-    receive do
-      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
-        assert :ok = Session.validate_audio(session, audio)
-        assert :ok = Session.ack_audio(session, audio)
-        play_reply(session, provider, [audio.payload | collected], remaining)
-
-      {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript} = event} ->
-        assert :ok = Session.ack(session, event)
-        play_reply(session, provider, collected, remaining)
-
-      {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = event} ->
-        assert :ok = Session.ack(session, event)
-        Enum.reverse(collected)
-    after
-      0 ->
-        advance(provider, 20)
-        play_reply(session, provider, collected, remaining - 1)
-    end
-  end
 
   defp encode(text, options) do
     {:ok, config} = Config.new(options)

@@ -1918,3 +1918,39 @@ Open findings: R1-4, R7-1, R7-3, R10-2.
 Next work, in order: the completion plan's packages 1 to 9; package 10 in a
 separate docs commit whenever convenient. Pause only for the hosted check in
 package 9 or for a blocker recorded with evidence.
+
+### Response to review 12 — 2026-09-26 (package 1)
+
+Implementation response to Review 12 and its completion plan, labelled per R3-2.
+Not independent verification. Package 0 was already committed as `9700df3a`.
+
+- Package 1 (R7-1, R7-3) — **implemented.** Added the pure
+  `Speech.Duplex.BurstResponses` (`new/1`, `input_accepted/2`, `burst_opened/2`,
+  `admitted/3`, `discarded/2`, `burst_closed/2`, `yielded/1`,
+  `turn_for_segment/2`, `latest_context/1`) with unit tests for index order,
+  context capture, the unadmitted bound, close-before-admission,
+  yield-before-admission, discard and segment lookup.
+- The Morse duplex provider now declares `response_start?: true`, implements
+  `submit_input/3` (audio and text) and rejects `push_audio/2`/`push_text/3`.
+  Every audible burst is announced with its own `:response_started` (fresh
+  turn, increasing index, the latest accepted context) and admitted by the room.
+  The continuation path, `yielded_pending`, the per-reply output reference and
+  the empty `:turn_ended` in `publish_tool_reply/2` are gone; `:turn_ended` is
+  emitted only for inferred caller turns. A `{:vxpipe_speech_response_discard,
+  ...}` drops the burst through `BurstResponses.discarded/2`. The reply timeline
+  moved to the pure `MorseCodeDuplex.Output` module (Credo module size).
+- Acceptance: a `unit_duration_ms: 150` reply produces two admitted turns with
+  attached transcripts through the real capability; a tool result's reply is
+  admitted through `:response_started` and no `:turn_ended` is emitted for it; a
+  yielded announced burst completes empty on admission; pre-admission buffer
+  overflow and the queued-reply bound still fail explicitly.
+- Known approximation: the Morse mock emits the whole reply text on each burst's
+  completion, so a reply split across bursts repeats its transcript. The real
+  GPT-Live adapter aligns per-delta fragments through `OutputSegmenter` and
+  corrects this in package 7.
+- Not yet done: the remaining C tasks (compiled-room duplex proofs under
+  `clock: :realtime`, the `:overlapped` proof, room-fence prefix, `hold: :mute`,
+  tool survival, C's exit) and packages 2–10.
+
+Open findings: R1-4, R10-2. R7-1 and R7-3 are resolved for the provider.
+

@@ -358,8 +358,22 @@ failures across all children), and `mix deps.unlock --check-unused`.
   official pages are reachable, so verification succeeded. The remaining
   unknowns are genuinely undocumented on the pages checked.
 
+## Package 1: per-burst responses
+
+- Added pure `Speech.Duplex.BurstResponses` mapping each `OutputSegmenter` burst
+  to its own `:response_started` response, with unit tests for every state
+  transition.
+- The Morse duplex provider declares `response_start?: true`, implements
+  `submit_input/3`, announces one response per burst and drops rejected bursts
+  through `BurstResponses.discarded/2`. The continuation path and the reply-time
+  `:turn_ended` are gone. The reply timeline moved to `MorseCodeDuplex.Output`.
+- Evidence: call-engine child suite 1,576 tests, zero failures (seed 0); a
+  `unit_duration_ms: 150` reply produces two admitted turns through the real
+  capability; the pure module has 12 focused tests.
+- Approximation: the Morse mock repeats the whole reply text per burst; the
+  GPT-Live adapter aligns per-delta fragments in package 7.
+
 ## Next
 
-Checkpoint B: pure `Speech.Duplex.TurnInference` and
-`Speech.Duplex.OutputSegmenter` modules with PCM fixtures, then
-`MorseCode.DuplexSTSSession` through the real capability.
+Package 2 (select the Morse duplex provider from a call spec), then package 3
+(aligned spoken prefix) and the remaining checkpoint-C proofs.

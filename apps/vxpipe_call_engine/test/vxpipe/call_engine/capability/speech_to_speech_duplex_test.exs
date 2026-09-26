@@ -5,12 +5,32 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Output
   alias Vxpipe.CallEngine.Speech.Session
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession, as: DuplexSTS
 
   @human "human1"
   @agent "agent1"
+
+  test "a reply with an inter-word gap produces two admitted turns in order" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, unit_duration_ms: 150]}
+      )
+
+    push_morse(capability, "AB", unit_duration_ms: 150)
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "AB", final: true}}}
+
+    transcripts = collect_transcripts(capability, sink, 2)
+    turns = transcripts |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+
+    assert length(turns) == 2
+    assert Enum.all?(transcripts, fn {_turn, text} -> is_binary(text) end)
+  end
 
   test "one caller audio turn produces one segmented reply, transcript and usage" do
     {_tree, capability, _sink} =
@@ -24,7 +44,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
                       event: %{kind: :input_transcript, text: "HI", final: true}
                     }}
 
-    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}
+    turn = await_turn_started(capability)
     advance_until_idle(capability)
     complete_playback(20)
 
@@ -83,7 +103,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
 
     assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, "ok")
 
-    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, reply_turn, _}
+    reply_turn = await_turn_started(capability)
     assert reply_turn != tool_turn
     advance_until_idle(capability)
     complete_playback(20)
@@ -101,7 +121,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
 
     assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
 
-    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, reply_turn, _}
+    reply_turn = await_turn_started(capability)
     assert reply_turn != tool_turn
     advance_until_idle(capability)
     complete_playback(20)
@@ -124,7 +144,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
 
     assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, String.duplicate("Z", 400))
 
-    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn, _}
+    _turn = await_turn_started(capability)
     advance_until_idle(capability)
     complete_playback(20)
 
@@ -138,7 +158,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
       start_capability(policy: unrestricted(), provider: {DuplexSTS, [yield?: false]})
 
     push_morse(capability, "HI")
-    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}, 5_000
     assert :sys.get_state(capability).active_output != nil
 
     # Caller onset during the reply must not fence a provider-owned output.
@@ -157,14 +177,90 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     Enum.reduce_while(1..2_000, :ok, fn _, :ok ->
       # Let the capability process sink acknowledgements before the next frame.
       _ = :sys.get_state(capability)
+      drain_audio()
 
-      if :sys.get_state(provider).output == nil do
+      provider_state = :sys.get_state(provider)
+
+      if Output.idle?(provider_state.timeline) and provider_state.segments == %{} do
         {:halt, :ok}
       else
         :ok = DuplexSTS.advance(provider, 20)
         {:cont, :ok}
       end
     end)
+  end
+
+  defp await_turn_started(capability, remaining \\ 2_000)
+
+  defp await_turn_started(_capability, 0), do: flunk("no agent turn started")
+
+  defp await_turn_started(capability, remaining) do
+    receive do
+      {:vxpipe_sts_turn_started, ^capability, @agent, turn, _} ->
+        turn
+
+      {:vxpipe_sts_input_event, ^capability, _} ->
+        await_turn_started(capability, remaining)
+
+      {:vxpipe_sts_speech_started, ^capability, _, _} ->
+        await_turn_started(capability, remaining)
+
+      {:test_audio_output, _, _} ->
+        await_turn_started(capability, remaining)
+
+      {:vxpipe_sts_tool_event, ^capability, _, _} ->
+        await_turn_started(capability, remaining)
+    after
+      0 ->
+        provider = Session.provider(:sys.get_state(capability).session)
+        :ok = DuplexSTS.advance(provider, 20)
+        await_turn_started(capability, remaining - 1)
+    end
+  end
+
+  defp drain_audio do
+    receive do
+      {:test_audio_output, _, _} -> drain_audio()
+    after
+      0 -> :ok
+    end
+  end
+
+  # Drive the manual clock until `expected` agent transcripts arrive, completing
+  # each output's playback so the room admits the next queued burst.
+  defp collect_transcripts(capability, sink, expected, acc \\ [], remaining \\ 4_000)
+
+  defp collect_transcripts(_capability, _sink, _expected, acc, 0), do: Enum.reverse(acc)
+
+  defp collect_transcripts(capability, sink, expected, acc, remaining) do
+    if length(acc) >= expected do
+      Enum.reverse(acc)
+    else
+      provider = Session.provider(:sys.get_state(capability).session)
+
+      receive do
+        {:vxpipe_sts_agent_transcript, ^capability, @agent, text, turn, _played, _interval, _} ->
+          collect_transcripts(capability, sink, expected, [{turn, text} | acc], remaining)
+
+        {:test_audio_output_finish, ^sink, _turn} ->
+          TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+          TestAudioOutputSink.playback_completed(sink)
+          collect_transcripts(capability, sink, expected, acc, remaining)
+
+        {:test_audio_output, _, _} ->
+          collect_transcripts(capability, sink, expected, acc, remaining)
+
+        {:vxpipe_sts_turn_started, ^capability, @agent, _, _} ->
+          collect_transcripts(capability, sink, expected, acc, remaining)
+
+        {:vxpipe_sts_turn_completed, ^capability, @agent, _, _} ->
+          collect_transcripts(capability, sink, expected, acc, remaining)
+      after
+        0 ->
+          :ok = DuplexSTS.advance(provider, 20)
+          collect_transcripts(capability, sink, expected, acc, remaining - 1)
+      end
+    end
   end
 
   defp start_capability(options) do

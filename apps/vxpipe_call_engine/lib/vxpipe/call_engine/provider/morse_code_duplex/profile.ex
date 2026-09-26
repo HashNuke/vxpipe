@@ -39,6 +39,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Profile do
         readiness: :initialized,
         endpointing: :inferred_gap,
         speech_start?: true,
+        response_start?: true,
         turn_control: "provider",
         turn_control_supported: ["provider"],
         input_transcript?: true,
