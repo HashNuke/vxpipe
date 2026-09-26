@@ -518,6 +518,17 @@ unused-dependency and Lean checks passing. No hosted call was made.
   the fake socket.
 - [ ] Exit: lifecycle tests pass with both local providers.
 
+Transfer boundary evidence (2026-09-26): room-owned Morse duplex and fake
+GPT-Live trees now verify that transfer hold, recovery release, and
+`ParticipantTransfer.teardown_source/3` preserve the same provider during
+release and terminate both provider and capability on teardown. The fake
+socket acknowledges mute/unmute and accepts input on the original socket
+after release. Focused room authority tests passed 24 tests, zero failures.
+Compiled transfer orchestration with these providers remains open before the
+transfer task can be checked. The umbrella suite passed 2,845 tests, zero
+failures and 59 tagged exclusions; format, compile, Credo, unused-dependency
+and Lean checks passed.
+
 Post-reseed speech evidence (2026-09-26): the real STS capability and fake
 GPT-Live socket prove all three resume branches. A drop during an active agent
 burst settles the first heard transcript, prompts the replacement and plays a

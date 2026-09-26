@@ -12,7 +12,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools, as: STSTools
+  alias Vxpipe.CallEngine.Tool.Context
 
   @tenant "tenant-sts-room"
   @room "room-sts-room"
@@ -464,6 +466,73 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert %_{} = SpeechToSpeech.release(%{state | speech_to_speech_capability: nil})
   end
 
+  test "a failed Morse duplex transfer releases the same session and completion stops it" do
+    {state, capability, provider, _wire} = start_transfer_provider(:morse)
+    monitor = Process.monitor(provider)
+    capability_monitor = Process.monitor(capability)
+
+    held = SpeechToSpeech.hold(state)
+    assert held.speech_to_speech_capability.input_epoch == nil
+    assert :sys.get_state(provider).held?
+
+    released = SpeechToSpeech.release(held)
+    assert is_reference(released.speech_to_speech_capability.input_epoch)
+
+    assert Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session) ==
+             provider
+
+    refute :sys.get_state(provider).held?
+    refute_received {:DOWN, ^monitor, :process, ^provider, _}
+    assert :ok = Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(capability, "HI")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", final: true}}},
+                   1_000
+
+    held_again = SpeechToSpeech.hold(released)
+
+    completed =
+      ParticipantTransfer.teardown_source(held_again, capability, transfer_context(held_again))
+
+    assert completed.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, _}, 1_000
+  end
+
+  test "a failed GPT-Live transfer releases the same socket and completion stops it" do
+    {state, capability, provider, wire} = start_transfer_provider(:gpt_live)
+    monitor = Process.monitor(provider)
+    capability_monitor = Process.monitor(capability)
+
+    held = change_gpt_live_hold(state, wire, true)
+    assert held.speech_to_speech_capability.input_epoch == nil
+    assert :sys.get_state(provider).held?
+
+    released = change_gpt_live_hold(held, wire, false)
+    assert is_reference(released.speech_to_speech_capability.input_epoch)
+
+    assert Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session) ==
+             provider
+
+    refute :sys.get_state(provider).held?
+    refute_received {:DOWN, ^monitor, :process, ^provider, _}
+
+    assert :ok =
+             Vxpipe.CallEngine.Capability.SpeechToSpeech.push_audio(capability, @human, <<1, 0>>)
+
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    held_again = change_gpt_live_hold(released, wire, true)
+
+    completed =
+      ParticipantTransfer.teardown_source(held_again, capability, transfer_context(held_again))
+
+    assert completed.speech_to_speech_capability == nil
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _}, 1_000
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, _}, 1_000
+    refute_received {:test_gpt_live_started, _, _}
+  end
+
   test "room hold requests the attached WebRTC source cutover asynchronously" do
     {_tree, capability} = start_real_capability()
     peer = start_supervised!({Vxpipe.CallEngine.TestSTSSourceControlPeer, observer: self()})
@@ -640,13 +709,123 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
              Vxpipe.CallEngine.RoomAuthority.UsageSource.resolve(state, capability)
   end
 
-  defp state do
+  defp start_transfer_provider(kind) do
+    alias Vxpipe.CallEngine.RoomCapabilitySupervisor
+    alias Vxpipe.CallEngine.Speech.Session
+    alias Vxpipe.CallEngine.TestAudioOutputSink
+    alias Vxpipe.CallEngine.TestGPTLiveTransport
+    alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
+
+    incarnation = "sts-transfer-#{System.unique_integer([:positive])}"
+    start_supervised!({RoomCapabilitySupervisor, incarnation_id: incarnation}, id: make_ref())
+    sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
+
+    {provider_spec, provider_private} =
+      case kind do
+        :morse ->
+          {{Vxpipe.Providers.MorseCode.DuplexSTSSession, [clock: :manual]}, []}
+
+        :gpt_live ->
+          {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
+
+          {{GPTLiveSession, [backend_model: "gpt-5.6"]},
+           [config: config, wire_module: TestGPTLiveTransport, wire_options: [observer: self()]]}
+      end
+
+    assert {:ok, capability} =
+             RoomCapabilitySupervisor.start_speech_to_speech(
+               incarnation,
+               owner: self(),
+               agent_id: @agent,
+               human_id: @human,
+               provider: provider_spec,
+               provider_private: provider_private,
+               sink: sink,
+               frame_identity: %{},
+               caller_source: :sts,
+               policy: %Vxpipe.CallEngine.MediaPolicy.Effective{
+                 audio_routes: :unrestricted,
+                 transcript_routes: :unrestricted,
+                 record_audio: true,
+                 save_transcripts: true
+               }
+             )
+
+    wire =
+      case kind do
+        :morse ->
+          nil
+
+        :gpt_live ->
+          assert_receive {:test_gpt_live_started, wire, _connection}, 5_000
+          assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.start"}}
+
+          TestGPTLiveTransport.deliver_sync(wire, %{
+            "type" => "session.started",
+            "session" => %{"id" => "s"}
+          })
+
+          wire
+      end
+
+    assert_receive {:vxpipe_sts_ready, ^capability}, 5_000
+    provider = Session.provider(:sys.get_state(capability).session)
+    {state(incarnation) |> bind_capability(capability, @agent), capability, provider, wire}
+  end
+
+  defp change_gpt_live_hold(state, wire, held?) do
+    observer = self()
+
+    start_supervised!(
+      Supervisor.child_spec(
+        {Task,
+         fn ->
+           result =
+             if held?,
+               do: SpeechToSpeech.hold(state),
+               else: SpeechToSpeech.release(state)
+
+           send(observer, {:transfer_hold_result, result})
+         end},
+        id: make_ref()
+      )
+    )
+
+    command = if held?, do: "session.input_audio.mute", else: "session.input_audio.unmute"
+    event = if held?, do: "session.input_audio.muted", else: "session.input_audio.unmuted"
+
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => ^command, "event_id" => event_id}},
+                   1_000
+
+    Vxpipe.CallEngine.TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => event,
+      "client_event_id" => event_id
+    })
+
+    assert_receive {:transfer_hold_result, result}, 1_000
+    result
+  end
+
+  defp transfer_context(state) do
+    %Context{
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      agent_participant_id: @agent,
+      source_participant_id: @human,
+      connection_id: @human_connection,
+      command_id: "transfer-test",
+      correlation_id: "transfer-test"
+    }
+  end
+
+  defp state(incarnation \\ @incarnation) do
     recorder = %Recorder{port: nil, participant_activations: %{@agent => "activation-sts"}}
 
     snapshot = %RoomSnapshot{
       tenant_id: @tenant,
       room_id: @room,
-      incarnation_id: @incarnation,
+      incarnation_id: incarnation,
       lifecycle: :open,
       created_by_actor_id: "actor-sts",
       created_by_command_id: "command-sts"
@@ -659,7 +838,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         tenant_id: @tenant,
         actor_id: "actor-sts",
         room_id: @room,
-        incarnation_id: @incarnation,
+        incarnation_id: incarnation,
         participant_id: @human,
         connection_id: @human_connection,
         deadline: DateTime.add(DateTime.utc_now(), 5, :second)
