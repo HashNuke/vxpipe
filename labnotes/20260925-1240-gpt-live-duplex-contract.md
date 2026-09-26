@@ -287,6 +287,21 @@ session keeps the GenServer and the output state machine and is 769 lines.
 R7-1/R7-3 (`:response_started` per-burst redesign) remain and are the next step
 now that R8-1's prerequisite is fixed.
 
+## Review-9 response (R9-2, R9-3; R9-1 pending on R7-1)
+
+- R9-2: removed the dead external-activity retention clause from
+  `ResponseOrigins`; `Input` stores a fingerprint there, not a context
+  reference.
+- R9-3: pruning now runs only when a new candidate context is needed, not on
+  every frame; `fingerprint/1` is private again and the hand-built unit test
+  was removed.
+- R9-1: the requested behaviour test needs a `response_start?: true` provider,
+  which arrives with the R7-1 redesign, so it is deferred to that.
+
+Also committed the user's in-progress `vxpipe-docs` landing/visual refresh as
+its own commit; the separate homepage-structure test was already failing at the
+parent commit.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree
