@@ -316,7 +316,18 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
       {session, wire} = start_ready_session()
       provider = Session.provider(session)
       monitor = Process.monitor(provider)
-      TestGPTLiveTransport.deliver(wire, %{"type" => "session.closed", "reason" => reason})
+
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.closed",
+        "reason" => reason,
+        "usage" => %{"seconds" => 0.5}
+      })
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :provider_usage, usage: usage} = report}
+
+      assert usage == %{kind: :voice, milliseconds: 500}
+      assert :ok = Session.ack(session, report)
       assert_receive {:DOWN, ^monitor, :process, ^provider, ^expected}, 1_000
     end
   end
@@ -353,6 +364,51 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     })
 
     assert MapSet.member?(:sys.get_state(provider).usage.seen_responses, "r_usage")
+  end
+
+  test "closing usage emits the final voice delta and a replacement starts a new count" do
+    {session, wire} = start_ready_session()
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.usage.updated",
+      "usage" => %{"seconds" => 1.25}
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :provider_usage, usage: initial} = first}
+
+    assert initial == %{kind: :voice, milliseconds: 1_250}
+    assert :ok = Session.ack(session, first)
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.closed",
+      "reason" => "expired",
+      "usage" => %{"seconds" => 1.75}
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :provider_usage, usage: closing} = final}
+
+    assert closing == %{kind: :voice, milliseconds: 500}
+    assert :ok = Session.ack(session, final)
+    assert_receive {:test_gpt_live_started, replacement, _connection}
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
+
+    TestGPTLiveTransport.deliver(replacement, %{
+      "type" => "session.started",
+      "session" => %{"id" => "s2"}
+    })
+
+    TestGPTLiveTransport.deliver(replacement, %{
+      "type" => "session.usage.updated",
+      "usage" => %{"seconds" => 0.5}
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :provider_usage, usage: next} = new_session}
+
+    assert next == %{kind: :voice, milliseconds: 500}
+    assert :ok = Session.ack(session, new_session)
   end
 
   test "an output burst completes after the wire falls silent" do

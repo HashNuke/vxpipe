@@ -89,6 +89,8 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     assert [{authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
+    room_monitor = Process.monitor(authority)
+
     enforcer = start_supervised!({TestMediaPolicyEnforcer, owner: self(), mode: :ok})
 
     assert {:ok, %Snapshot{revision: 2}} =
@@ -141,7 +143,6 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     command = send_command(plan, room, caller, "conn-human-caller")
     assert {:error, %Error{code: :agent_not_ready}} = TestTransferConnection.send_text(command)
 
-    room_monitor = Process.monitor(authority)
     :ok = TestCallLifecycleTimer.fire(maximum_timer)
 
     assert_receive {:DOWN, ^room_monitor, :process, ^authority,

@@ -438,10 +438,12 @@ fixtures pass with the real-time Morse duplex provider.
   the existing tenant credential readers. The manifest advertises `:sts` for
   GPT-Live. The provider and registry suites pass 9 tests,
   including the fixed model-list probe and bounded credential shape.
-- [ ] Implement `Vxpipe.Providers.OpenAI.GPTLiveSession` and a private socket
+- [x] Implement `Vxpipe.Providers.OpenAI.GPTLiveSession` and a private socket
   under the agent capability tree: `session.start`, audio append and output
   decoding, fragment handling through the shared modules, and PCM format
-  negotiation or explicit rejection.
+  negotiation or explicit rejection. `gpt_live_test.exs` fixes the 24 kHz PCM
+  shape and rejects other rates; `gpt_live_session_test.exs` exercises scoped
+  socket startup, readiness, audio, fragments and admitted output.
 - [ ] Drive a fake GPT-Live socket from JSON fixtures through the real STS
   capability: caller and agent turns, overlap, delegated tools (including
   multiple pending calls, duplicates, and failed or incomplete responses),
@@ -452,9 +454,13 @@ fixtures pass with the real-time Morse duplex provider.
 
 ### E — Session continuity and lifecycle
 
-- [ ] Red-green reseed on `expired` and `connection_lost`: seeded history comes
+- [x] Red-green reseed on `expired` and `connection_lost`: seeded history comes
   from room-published, playback-fenced transcripts, is truncated to the
-  startup limits, and starts a new usage count.
+  startup limits, and starts a new usage count. `gpt_live_fake_socket_test.exs`
+  asserts a replacement seeded with the capability's published caller and
+  settled agent text; `gpt_live_session_test.exs` covers both close reasons,
+  the final close usage delta and a new session's fresh counter. The shared
+  `published_history_test.exs` proves both startup bounds.
 - [ ] Prove post-reseed speech: a drop mid-reply or after an unanswered caller
   turn makes the new session continue; a drop while idle leaves it waiting.
 - [ ] If a duration limit is documented, prove renewal at a quiet point before

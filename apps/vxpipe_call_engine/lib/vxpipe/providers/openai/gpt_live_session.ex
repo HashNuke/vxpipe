@@ -328,8 +328,8 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
       {:ok, {:started, id}} when not state.ready? ->
         started(state, id)
 
-      {:ok, {:closed, reason, _usage}} ->
-        closed(state, reason)
+      {:ok, {:closed, reason, usage}} ->
+        closed_with_usage(state, reason, usage)
 
       {:ok, {:voice_usage, seconds}} ->
         voice_usage(state, seconds)
@@ -605,6 +605,18 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
   end
 
   defp observe_backend_usage(state, _event), do: {:ok, state}
+
+  defp closed_with_usage(state, reason, nil), do: closed(state, reason)
+
+  defp closed_with_usage(state, reason, %{"seconds" => seconds}) do
+    case voice_usage(state, seconds) do
+      {:noreply, state} -> closed(state, reason)
+      {:stop, _reason, _state} = failed -> failed
+    end
+  end
+
+  defp closed_with_usage(state, _reason, _usage),
+    do: {:stop, {:shutdown, :invalid_usage}, state}
 
   defp closed(state, reason) when reason in ["close_requested", "remote_hangup"],
     do: {:stop, :normal, state}

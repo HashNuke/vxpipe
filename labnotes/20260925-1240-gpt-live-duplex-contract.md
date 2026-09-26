@@ -652,3 +652,26 @@ remaining checkpoint-C proofs.
   completion plan distinguishes its original planning snapshot from current
   progress. D/E acceptance, the ten-call lane, independent review and hosted
   phone interoperability remain open.
+
+### Closing usage and reseed accounting (2026-09-26)
+
+- `GPTLive.decode/1` already returned the final usage from `session.closed`,
+  but `GPTLiveSession` discarded it. A focused session test failed with no
+  final usage event after an `expired` close. The session now applies that
+  cumulative voice figure before closing or reseeding; the replacement starts
+  at zero. The focused test passed after the change.
+- The full GPT-Live session test file passed 19 tests, including final usage
+  on normal, moderation and expiry closes. The first adapter and continuity
+  checklist entries now have explicit code/test evidence. The other D/E
+  acceptance cases remain open.
+- Format, warnings-as-errors compile, strict Credo, unused dependencies and
+  Lean verification passed. The first full umbrella run failed three
+  unrelated load-sensitive tests; `mix test --failed` reran all three with
+  zero failures. A second full run failed only the human-only room lifecycle
+  test: its monitor was installed after the room could have already closed,
+  yielding `:noproc` despite the expected maximum-duration notification. The
+  test now monitors immediately after resolving the room PID, as its sibling
+  recording test already did. Its focused case passed with the full-run seed;
+  the final umbrella rerun passed all nine children: 2,826 tests, zero
+  failures, 58 integration exclusions. The final run included 1,635
+  CallEngine tests and 519 Gateway tests with zero failures.
