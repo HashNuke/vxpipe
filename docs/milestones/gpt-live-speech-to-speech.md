@@ -1084,3 +1084,133 @@ fail the capability.
 
 Next work, in order: the remaining C tasks, starting with the compiled-room
 duplex proof; C's exit; then D; then E and F.
+
+### Review 7 — 2026-09-26 (response to the review 6 response)
+
+Independent review of commits `480d481e` (real-time clock), `d3e66990`
+(review 6 record) and `1bc3227f` (review 6 fixes), and of the "Response to
+review 4" and "Response to review 6" sections.
+
+Reviewed state: `1bc3227f` on `sts2`, clean worktree.
+
+Verified:
+
+- 75 focused tests pass (seed 0): the duplex modules, Morse duplex clock and
+  conversation tests, the STS duplex and provider contracts, the duplex
+  capability tests and the room STS tests. Per R2-4, the umbrella run reported
+  in `1bc3227f` (2,747 tests, zero failures) is cited, not repeated.
+- Review 6's text in this file is unchanged from what was committed in
+  `f9ffc2cf`.
+- R6-3 was probed with two temporary tests (deleted afterwards). Both are
+  described under R6-3 below.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R4-1 — **resolved.** The Morse duplex provider defaults to `clock:
+  :realtime` with its own drift-corrected 20 ms timer; `clock: :manual` is
+  opt-in; `advance/2` is rejected under the real-time clock. The pure
+  `Clock.frames_due/5` scheduler is unit-tested, and a capability test speaks
+  with no external tick and no sleep.
+- R4-2 — **resolved.** The module doc has a "Test options" section for
+  `clock: :manual` and `yield?: false`, stating that GPT-Live always decides
+  whether to yield.
+- R6-1 — **not resolved; the decision is recorded as R7-1 below.**
+- R6-2 — **resolved.** Gate thresholds derive from `config.amplitude`, an
+  undetectable amplitude is rejected, and a low accepted one plays.
+- R6-3 — **not resolved.** See R7-2.
+- R6-4 — **mostly resolved.** Replies queue in a bounded FIFO (16) with their
+  own admission references, and two queued replies play in order. The
+  overflow path (`:pending_reply_overflow`) has no test; see R7-4.
+- R6-5 — **mostly resolved.** A map result and a 400-character result each
+  produce a spoken reply, encoded before `turn_ended`. The explicit failure
+  path when encoding still fails has no test; see R7-4.
+- R6-6 — **partly resolved.** Input fragments are now fed on each decoder
+  partial, which should bring caller onset forward. No test shows a yielded
+  barge-in published with outcome `:overlapped`, which was the requested
+  proof; see R7-4.
+
+New findings:
+
+- R7-1 — **High: the R6-1 fix relies on knowledge GPT-Live does not have.**
+  The response keeps one output per reply and treats every later burst as a
+  continuation of it. Morse can do that because it knows where its reply
+  ends. GPT-Live cannot: its output is one continuous stream, and a burst
+  after an 800 ms pause may continue the same answer, follow a tool result, or
+  be proactive speech. The adapter has only the gate to go on. So the fake now
+  tests a path the real adapter cannot take, and the path the adapter must
+  take (each burst admitted as its own output, as the specification's output
+  segmentation section says) is untested.
+
+  The response justifies this by saying per-burst outputs would need a room
+  contract change, because the room admits one output per provider turn. That
+  was not checked against the provider-initiated path that already exists:
+  a descriptor with `response_start?: true` emits `:response_started`, and the
+  capability admits a new output for it (`ResponseQueue.admit_response/4`,
+  used by the Google adapter in `sts_response_delivery.ex`). The change of
+  approach was also made without an amendment, although the specification is
+  frozen.
+
+  Proposed fix: have the Morse duplex provider admit each burst through
+  `:response_started` with its own provider turn, as the GPT-Live adapter
+  will have to, and drop the "continue the current output" path. First
+  confirm that `ResponseOrigins` can accept a response context for a
+  continuation burst and for speech after a tool result. If it cannot, record
+  the exact gap and propose an amendment before implementing. Tests: at
+  `unit_duration_ms: 150`, one reply produces two outputs that each complete
+  and settle, in order, with their transcript fragments aligned to the right
+  output; speech after a tool result is admitted the same way.
+
+- R7-2 — **High: yielding before admission still leaves the room's output
+  slot stuck.** When the delayed admission arrives, the provider emits
+  `:interrupted` but never `:output_completed` for that output. Only
+  `:output_completed` (plus settlement) releases the slot, so the slot stays
+  occupied. Two probes on `1bc3227f` show it:
+
+  - after the existing R6-3 test's steps, `Session.admit_output/2` for the
+    next caller turn returns `{:error, :busy}`;
+  - no `:output_completed` for the yielded turn arrives within 1 s, even after
+    advancing the clock 200 ms.
+
+  The committed test only asserts that `:interrupted` arrives, not that the
+  slot is released, which review 6 asked for.
+
+  Proposed fix: when a yielded-before-admission reply is admitted, emit
+  `:interrupted` and then `:output_completed` for that output reference with
+  nothing played, as the Morse STS provider already does for its interrupted
+  outputs. Extend the test to settle that output and then admit the next
+  reply successfully.
+
+- R7-3 — **Medium: the tool reply borrows a caller-turn event to get an
+  output.** `publish_tool_reply/2` emits `:turn_ended` with empty text and a
+  fresh turn reference, which the capability treats as a caller turn ending
+  and answers with `admit_reply/3`. No public caller turn is published,
+  because the reference matches no caller turn, but the output is authorized
+  through the caller-turn path rather than the provider-initiated response
+  path, and the event means something it is not. This is the same gap as
+  R7-1.
+
+  Proposed fix: admit the tool reply through `:response_started`, as in R7-1,
+  and stop emitting `:turn_ended` for anything but an inferred caller turn.
+
+- R7-4 — **Low: missing tests for three requested proofs.**
+  - R6-4: two more replies than the FIFO allows fail the session with
+    `:pending_reply_overflow`, and no queued reply is dropped silently.
+  - R6-5: a result that still cannot be encoded fails the provider with an
+    explicit reason.
+  - R6-6: a barge-in that the provider yields to is published with outcome
+    `:overlapped`, through the capability and the room event.
+
+Open findings: R1-4, R7-1, R7-2, R7-3, R7-4.
+
+Next work, in order:
+
+1. R7-2: emit `:output_completed` for a yielded-before-admission output, with
+   the extended test. This is a small fix to a stuck-slot bug.
+2. R7-1 and R7-3: check `ResponseOrigins` for continuation and tool-reply
+   bursts; record an amendment if needed; then admit each burst through
+   `:response_started` and remove the continuation and empty-`turn_ended`
+   paths.
+3. R7-4: the three missing tests.
+4. The remaining C tasks, starting with the compiled-room duplex proof under
+   `clock: :realtime`; C's exit; then D.
