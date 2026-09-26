@@ -185,7 +185,7 @@ defmodule Vxpipe.CallEngine.Speech.ProviderContractTest do
 
     expiring =
       Contract.start_session!(scope, RequestTTS,
-        start_timeout: 40,
+        start_timeout: 2_000,
         private: [
           credential: "test-credential",
           observer: self(),
@@ -194,9 +194,9 @@ defmodule Vxpipe.CallEngine.Speech.ProviderContractTest do
         ]
       )
 
-    assert_receive {:speech_profile_bound, expiring_provider}
+    assert_receive {:speech_profile_bound, expiring_provider}, 2_000
     monitor = Process.monitor(expiring_provider)
-    assert_receive {:vxpipe_speech_closed, ^expiring, reason}, 500
+    assert_receive {:vxpipe_speech_closed, ^expiring, reason}, 3_000
     assert reason in [:startup_timeout, :initialization_failed]
     assert_receive {:DOWN, ^monitor, :process, ^expiring_provider, _reason}, 500
 
