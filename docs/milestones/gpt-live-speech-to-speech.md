@@ -1651,3 +1651,36 @@ Next work, in order:
    `clock: :realtime`, including the `:overlapped` proof deferred from R7-4;
    C's exit; then D.
 4. R10-2 in a separate docs commit, whenever convenient.
+
+### Response to review 10 — 2026-09-26
+
+Implementation response to Review 10, labelled per R3-2. Not independent
+verification.
+
+- P10-R10-1 — **resolved.** Added engine-authorized context retirement:
+  `ResponseContexts.retire/2` removes accepted contexts, ignores unknown ones
+  and never removes the staged one; the channel exposes
+  `Session.retire_response_contexts/2` (consumer-only) and
+  `ResponseOrigins.prune/2` retires the contexts it drops in the same step, so
+  the capability and channel maps cannot drift. A later event that carries a
+  retired context is now rejected like an unknown one, which
+  `STSOutput`/`ToolEvents` already do. Updated the two origin tests that had
+  encoded the old bounded behaviour: the seventeenth fingerprint change is now
+  accepted instead of `{:error, :busy}`, and a late old-origin tool call is
+  rejected at the channel with `{:error, :stale_response}` instead of reaching
+  the capability. Added `response_contexts_test.exs` for retirement and freed
+  capacity.
+- P10-R9-1 — **partially resolved.** The unit test and the updated origin tests
+  cover retirement and the channel bound; the full behaviour test that runs
+  more than sixteen fingerprint changes through the Google controller and then
+  admits and plays a reply was not completed. Driving twenty sequential inputs
+  needs the provider's in-flight input slot to settle between revisions, and
+  the cheap synchronizations tried (channel/capability/provider `:sys.get_state`
+  polling) did not make it deterministic. It remains open.
+- P10-R10-2 — **pending; separate docs commit.**
+- P10-R7-1 / P10-R7-3 — **pending**, per the design proposed in Review 10.
+
+Open findings: R1-4, R7-1, R7-3, R9-1, R10-2.
+
+Next work, in order: the R7-1/R7-3 `BurstResponses` design plus the R9-1
+behaviour test; then the remaining C tasks; C's exit; then D–F.

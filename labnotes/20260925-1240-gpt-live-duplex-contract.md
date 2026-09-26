@@ -302,6 +302,17 @@ Also committed the user's in-progress `vxpipe-docs` landing/visual refresh as
 its own commit; the separate homepage-structure test was already failing at the
 parent commit.
 
+## Review-10 response (R10-1)
+
+Added channel-side response-context retirement: `ResponseContexts.retire/2`,
+`Session.retire_response_contexts/2`, and `ResponseOrigins.prune/2` retiring the
+contexts it drops. Updated the two capability-origin tests that had encoded the
+16-context `:busy` bug to the new behaviour (a seventeenth change is accepted; a
+late old-origin tool call is rejected at the channel), and added
+`response_contexts_test.exs`. The full R9-1 behaviour test through the Google
+controller is still open because deterministic settling of twenty sequential
+inputs needs the provider input slot.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree

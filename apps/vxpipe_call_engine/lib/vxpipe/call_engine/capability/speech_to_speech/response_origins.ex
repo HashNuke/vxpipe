@@ -68,12 +68,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
   defp prune(state, current) do
     origins = state.response_origins
 
-    accepted =
-      origins.accepted
-      |> Enum.filter(fn {_context, stored} -> stored == current end)
-      |> Map.new()
+    {kept, dropped} =
+      Enum.split_with(origins.accepted, fn {_context, stored} -> stored == current end)
 
-    %{state | response_origins: %{origins | accepted: accepted}}
+    if dropped != [] do
+      _ = Session.retire_response_contexts(state.session, Enum.map(dropped, &elem(&1, 0)))
+    end
+
+    %{state | response_origins: %{origins | accepted: Map.new(kept)}}
   end
 
   defp fingerprint(state) do

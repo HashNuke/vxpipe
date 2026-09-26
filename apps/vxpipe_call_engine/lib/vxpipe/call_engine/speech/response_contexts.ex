@@ -40,4 +40,20 @@ defmodule Vxpipe.CallEngine.Speech.ResponseContexts do
   end
 
   def rollback(owner, _command), do: owner
+
+  @doc """
+  Engine-authorized retirement of accepted contexts. Unknown contexts are
+  ignored and the currently staged context is never removed.
+  """
+  def retire(owner, contexts) when is_list(contexts) do
+    Enum.reduce(contexts, owner, fn context, owner ->
+      if status(owner, context) == :accepted do
+        %{owner | contexts: Map.delete(owner.contexts, context)}
+      else
+        owner
+      end
+    end)
+  end
+
+  def retire(owner, _contexts), do: owner
 end

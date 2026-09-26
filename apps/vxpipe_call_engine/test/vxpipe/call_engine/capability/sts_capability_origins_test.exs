@@ -73,7 +73,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert second != first
   end
 
-  test "interim origin retention is bounded without changing legacy input" do
+  test "interim origin retention does not exhaust the context bound" do
     capability = capability()
 
     contexts =
@@ -85,9 +85,13 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
       end)
 
     assert length(Enum.uniq(contexts)) == 16
+
+    # A seventeenth fingerprint change is still accepted: stale contexts are
+    # retired at the channel instead of exhausting the bound.
     assert :ok = SpeechToSpeech.release(capability, make_ref())
-    assert {:error, :busy} = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
-    refute_received {:context_input, _, {:audio, <<0, 0>>}, _}
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, seventeenth, {:audio, <<0, 0>>}, _}
+    refute seventeenth in contexts
   end
 
   test "a direct policy revoke and regrant cannot reuse an earlier snapshot origin" do
@@ -334,9 +338,8 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
 
     old_call = make_ref()
     old_turn = make_ref()
-    monitor = Process.monitor(capability)
 
-    assert :ok =
+    assert {:error, :stale_response} =
              GenServer.call(
                provider,
                {:emit, :tool_call,
@@ -347,12 +350,8 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
                 response_context: old_context}
              )
 
-    assert_receive {:vxpipe_sts_unavailable, ^capability, :stale_tool_origin}, 1_000
-
     refute_received {:vxpipe_sts_tool_event, ^capability, "agent",
                      %{event: %{call_ref: ^old_call}}}
-
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :stale_tool_origin}, 1_000
   end
 
   test "external caller activity gates an opted-in response until accepted end" do

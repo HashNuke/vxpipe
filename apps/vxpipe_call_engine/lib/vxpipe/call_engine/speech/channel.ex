@@ -18,8 +18,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     ScopeControl,
     STSInput,
     STSOutput,
-    TTSFlow,
-    TTSUsage
+    TTSFlow
   }
 
   @credit_timeout 15_000
@@ -371,6 +370,16 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   def handle_call({:reject_response, turn}, {caller, _tag}, state),
     do: STSOutput.reject(state, caller, turn)
 
+  def handle_call({:retire_response_contexts, contexts}, {caller, _tag}, state)
+      when is_list(contexts) do
+    if caller == state.consumer do
+      {:reply, :ok,
+       %{state | response_contexts: ResponseContexts.retire(state.response_contexts, contexts)}}
+    else
+      {:reply, {:error, :not_owner}, state}
+    end
+  end
+
   def handle_call({:settle_sts_output, handle, played}, {caller, _tag}, state),
     do: STSOutput.settle(state, caller, handle, played)
 
@@ -662,75 +671,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  defp accept_event(
-         %Event{kind: :cancelled, request_ref: reference} = event,
-         %{
-           output: %OutputState{
-             request: %{ref: reference, fenced?: true, terminal?: false}
-           },
-           cancellation: cancellation
-         } = state
-       )
-       when not is_nil(cancellation) do
-    if remaining(cancellation.ticket) > 0 and Allocation.valid?(state.allocation) do
-      case OutputState.mark_terminal(state.output, event) do
-        {:ok, output} ->
-          state = %{state | output: output}
-          event = attach_usage(event, state)
-
-          case TTSFlow.settle(state) do
-            {:ok, state} -> {:ok, event, state}
-            :failed -> :failed
-          end
-
-        _error ->
-          :failed
-      end
-    else
-      :failed
-    end
-  end
-
-  defp accept_event(%Event{kind: :input_submitted} = event, %{descriptor: %{kind: :sts}} = state),
-    do: STSInput.accept_submission(event, state)
-
-  defp accept_event(%Event{kind: :response_started} = event, state),
-    do: EventDelivery.accept_response_start(event, state)
-
-  defp accept_event(
-         %Event{kind: :tool_call} = event,
-         %{descriptor: %{response_start?: true}} = state
-       ),
-       do: EventDelivery.accept_tool_call(event, state)
-
-  defp accept_event(%Event{kind: :output_completed} = event, state),
-    do: STSOutput.complete(event, state)
-
-  defp accept_event(
-         %Event{kind: kind, request_ref: reference} = event,
-         %{output: %OutputState{request: %{ref: reference, terminal?: false}}} = state
-       )
-       when kind in [:input_submitted, :completed] do
-    result =
-      if kind == :input_submitted,
-        do: OutputState.mark_submitted(state.output, event),
-        else: OutputState.complete(state.output, event)
-
-    case result do
-      {:ok, output} ->
-        state = %{state | output: output}
-        {:ok, attach_usage(event, state), state}
-
-      error ->
-        error
-    end
-  end
-
-  defp accept_event(%Event{kind: kind}, _state)
-       when kind in [:input_submitted, :completed, :cancelled],
-       do: {:error, :stale_request}
-
-  defp accept_event(event, state), do: {:ok, event, state}
+  defp accept_event(event, state), do: EventDelivery.accept_event(event, state)
 
   defp dispatch_audio(
          %{
@@ -787,11 +728,6 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       :failed -> :failed
     end
   end
-
-  defp attach_usage(event, %{usage?: true, allocation: allocation, output: output}),
-    do: %{event | usage: TTSUsage.snapshot(allocation, output.request)}
-
-  defp attach_usage(event, _state), do: event
 
   defp remaining(command),
     do: max(command.deadline - System.monotonic_time(:millisecond), 0)

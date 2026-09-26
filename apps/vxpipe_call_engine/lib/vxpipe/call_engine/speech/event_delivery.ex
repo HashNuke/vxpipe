@@ -8,7 +8,10 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
     OutputState,
     ResponseContexts,
     ResponseStarts,
-    STSOutput
+    STSInput,
+    STSOutput,
+    TTSFlow,
+    TTSUsage
   }
 
   def dispatch(%{active?: true} = state) do
@@ -124,6 +127,84 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
       do: {:ok, %{state | output: OutputState.mark_submission_acked(state.output, reference)}}
 
   def acknowledge(_event, state), do: {:ok, state}
+
+  def accept_event(
+        %Event{kind: :cancelled, request_ref: reference} = event,
+        %{
+          output: %OutputState{
+            request: %{ref: reference, fenced?: true, terminal?: false}
+          },
+          cancellation: cancellation
+        } = state
+      )
+      when not is_nil(cancellation) do
+    if remaining(cancellation.ticket) > 0 and Allocation.valid?(state.allocation) do
+      case OutputState.mark_terminal(state.output, event) do
+        {:ok, output} ->
+          state = %{state | output: output}
+          event = attach_usage(event, state)
+
+          case TTSFlow.settle(state) do
+            {:ok, state} -> {:ok, event, state}
+            :failed -> :failed
+          end
+
+        _error ->
+          :failed
+      end
+    else
+      :failed
+    end
+  end
+
+  def accept_event(%Event{kind: :input_submitted} = event, %{descriptor: %{kind: :sts}} = state),
+    do: STSInput.accept_submission(event, state)
+
+  def accept_event(%Event{kind: :response_started} = event, state),
+    do: accept_response_start(event, state)
+
+  def accept_event(
+        %Event{kind: :tool_call} = event,
+        %{descriptor: %{response_start?: true}} = state
+      ),
+      do: accept_tool_call(event, state)
+
+  def accept_event(%Event{kind: :output_completed} = event, state),
+    do: STSOutput.complete(event, state)
+
+  def accept_event(
+        %Event{kind: kind, request_ref: reference} = event,
+        %{output: %OutputState{request: %{ref: reference, terminal?: false}}} = state
+      )
+      when kind in [:input_submitted, :completed] do
+    result =
+      if kind == :input_submitted,
+        do: OutputState.mark_submitted(state.output, event),
+        else: OutputState.complete(state.output, event)
+
+    case result do
+      {:ok, output} ->
+        state = %{state | output: output}
+        {:ok, attach_usage(event, state), state}
+
+      error ->
+        error
+    end
+  end
+
+  def accept_event(%Event{kind: kind}, _state)
+      when kind in [:input_submitted, :completed, :cancelled],
+      do: {:error, :stale_request}
+
+  def accept_event(event, state), do: {:ok, event, state}
+
+  defp attach_usage(event, %{usage?: true, allocation: allocation, output: output}),
+    do: %{event | usage: TTSUsage.snapshot(allocation, output.request)}
+
+  defp attach_usage(event, _state), do: event
+
+  defp remaining(command),
+    do: max(command.deadline - System.monotonic_time(:millisecond), 0)
 
   defp record_response_start(event, state) do
     case ResponseStarts.accept(state.response_starts, event) do

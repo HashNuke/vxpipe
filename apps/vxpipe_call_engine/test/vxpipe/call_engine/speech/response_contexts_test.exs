@@ -1,33 +1,44 @@
 defmodule Vxpipe.CallEngine.Speech.ResponseContextsTest do
   use ExUnit.Case, async: true
-  alias Vxpipe.CallEngine.Speech.ResponseContexts, as: Contexts
 
-  test "exact command settles staging and stale results cannot settle another reservation" do
-    context = make_ref()
-    command = make_ref()
-    {:ok, staged} = Contexts.stage(Contexts.new(), context, command)
-    assert Contexts.status(staged, context) == :staged
-    assert Contexts.accept(staged, make_ref()) == staged
-    assert Contexts.rollback(staged, make_ref()) == staged
-    assert {:error, :busy} = Contexts.stage(staged, context, make_ref())
-    assert Contexts.status(Contexts.rollback(staged, command), context) == :unknown
-    accepted = Contexts.accept(staged, command)
-    assert Contexts.status(accepted, context) == :accepted
-    next = make_ref()
-    {:ok, reused} = Contexts.stage(accepted, context, next)
-    assert Contexts.status(reused, context) == :accepted
-    assert Contexts.rollback(reused, next) == accepted
+  alias Vxpipe.CallEngine.Speech.ResponseContexts
+
+  test "retire removes accepted contexts, ignores unknown, and keeps the staged one" do
+    first = make_ref()
+    second = make_ref()
+    unknown = make_ref()
+    command1 = make_ref()
+    command2 = make_ref()
+
+    owner = ResponseContexts.new()
+    {:ok, owner} = ResponseContexts.stage(owner, first, command1)
+    owner = ResponseContexts.accept(owner, command1)
+    {:ok, owner} = ResponseContexts.stage(owner, second, command2)
+
+    owner = ResponseContexts.retire(owner, [first, unknown])
+
+    assert ResponseContexts.status(owner, first) == :unknown
+    assert ResponseContexts.status(owner, unknown) == :unknown
+    assert ResponseContexts.status(owner, second) == :staged
   end
 
-  test "rollback frees first-use capacity without tombstones" do
-    empty = Contexts.new()
+  test "retirement frees capacity at the context bound" do
+    owner = ResponseContexts.new()
 
-    for _ <- 1..32 do
-      command = make_ref()
-      {:ok, staged} = Contexts.stage(empty, make_ref(), command)
-      assert Contexts.rollback(staged, command) == empty
-    end
+    owner =
+      Enum.reduce(1..16, owner, fn _n, owner ->
+        context = make_ref()
+        command = make_ref()
+        {:ok, owner} = ResponseContexts.stage(owner, context, command)
+        ResponseContexts.accept(owner, command)
+      end)
 
-    assert {:error, :invalid_response_context} = Contexts.stage(empty, nil, make_ref())
+    assert {:error, :busy} = ResponseContexts.stage(owner, make_ref(), make_ref())
+
+    retired = owner.contexts |> Map.keys() |> Enum.take(4)
+    owner = ResponseContexts.retire(owner, retired)
+
+    assert {:ok, owner} = ResponseContexts.stage(owner, make_ref(), make_ref())
+    assert map_size(owner.contexts) <= 16
   end
 end

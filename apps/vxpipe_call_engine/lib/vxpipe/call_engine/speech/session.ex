@@ -145,6 +145,12 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def reject_response(_allocation, _turn_ref), do: {:error, :invalid_turn}
 
+  @doc "Engine-authorized retirement of accepted response contexts."
+  def retire_response_contexts(allocation, contexts) when is_list(contexts),
+    do: call(allocation, {:retire_response_contexts, contexts})
+
+  def retire_response_contexts(_allocation, _contexts), do: :ok
+
   @doc """
   Admit bounded text and return a request handle before provider acceptance.
   Actual submission arrives as `input_submitted`; clean provider rejection is a
