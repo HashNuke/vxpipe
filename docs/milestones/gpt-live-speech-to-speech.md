@@ -1684,3 +1684,110 @@ Open findings: R1-4, R7-1, R7-3, R9-1, R10-2.
 
 Next work, in order: the R7-1/R7-3 `BurstResponses` design plus the R9-1
 behaviour test; then the remaining C tasks; C's exit; then D–F.
+
+### Review 11 — 2026-09-26 (response to the review 10 response)
+
+Independent review of commits `522f23ec` (channel-side context retirement)
+and `f96f2e98` (restored `ResponseContexts` tests), and of the "Response to
+review 10".
+
+Reviewed state: `f96f2e98` on `sts2`, clean worktree.
+
+Verified:
+
+- 399 tests pass (seed 0, 3 excluded): the whole `speech` test directory,
+  `response_contexts_test.exs`, `sts_capability_origins_test.exs`,
+  `google_sts_controller_test.exs`, the Morse duplex provider tests, the duplex
+  capability tests and the room STS tests. Per R2-4, the reported umbrella run
+  (2,749 tests, zero failures) is cited, not repeated.
+- `f96f2e98` correctly restores the two staging and rollback tests that
+  `522f23ec` had dropped.
+
+Progress: 9 of 39 checkpoint tasks are done (A 4/4, B 4/4, C 1/8, D 0/5,
+E 0/6, F 0/7), so 77% of the tasks remain. Weighted by effort the remaining
+share is higher, roughly 80–85%: the open work includes the per-burst
+redesign, the compiled-room proofs, the real OpenAI adapter, session
+continuity and the hosted check.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R7-1, R7-3 — **still open**, per the review 10 design.
+- R9-1 — **partly resolved.** The updated origin test now drives seventeen
+  fingerprint changes through the capability and the channel, and the
+  seventeenth input reaches the provider. What is still unproven is that a
+  reply is then admitted. See the proposed shortcut under R11-3.
+- R10-1 — **resolved in capacity, with the regression in R11-1.** Contexts
+  pruned by `ResponseOrigins` are now retired at the channel, and a
+  seventeenth fingerprint change is accepted.
+- R10-2 — **still open** (separate docs commit).
+
+New findings:
+
+- R11-1 — **Medium: a late event on a just-retired context now ends the
+  Google session instead of being discarded.** Before `522f23ec`, the channel
+  still knew a stale context, so a late `:response_started` passed the channel
+  and the capability rejected it; the provider received
+  `{:vxpipe_speech_response_discard, ...}` and carried on. Now the channel has
+  forgotten the context, so `Event.emit/3` returns `{:error,
+  :stale_response}`, and the Google adapter treats any failed emit as
+  `:session_failed` (`sts_response_delivery.ex:31-34` for responses,
+  `sts_tool_call.ex:21-33` for tool calls). Race: after a hold or policy
+  change, the capability mints a new context and retires the old one before
+  the provider receives input with the new context. Model audio arriving in
+  that window is announced with the old context and now kills the session,
+  silencing the agent for the rest of the call.
+
+  Tool calls change too. A late tool call on an old origin used to stop the
+  capability with the explicit reason `:stale_tool_origin`. It now fails the
+  provider with a generic `:session_failed`, and the updated test no longer
+  asserts any outcome for the capability.
+
+  Review 10's R10-1 proposal said a retired context should be "treated like
+  one carrying an unknown context"; that wording missed that unknown contexts
+  are an emit error, which providers treat as fatal. It also contradicts step
+  5 of the review 10 design, which expects a rejected burst to arrive as a
+  discard message.
+
+  Proposed fix: keep a bounded set of recently retired contexts in the
+  channel (for example the last 16) as tombstones.
+  - A `:response_started` on a tombstoned context is accepted by `emit` and
+    answered at once with `{:vxpipe_speech_response_discard, channel,
+    turn_ref}`, the path every provider already handles.
+  - A `:tool_call` on a tombstoned context returns `:discarded`, which the
+    Google adapter already handles. The provider must still answer the
+    model's call (a cancellation or an error result); for GPT-Live an
+    unanswered call blocks every later tool call.
+  - A context outside the tombstone window stays an error, as today.
+
+  Tests: through the Google controller, retire a context and then announce a
+  response on it; the response is discarded, the session survives, and the
+  next response on a current context is admitted. A stale tool call is
+  discarded and answered, and the test asserts the capability's outcome again.
+
+- R11-2 — **Low: a failed retirement call is ignored.**
+  `ResponseOrigins.prune/2` discards the result of
+  `Session.retire_response_contexts/2` with `_ =`, yet drops the contexts from
+  its own map. If the call fails, the two maps drift apart, which is what the
+  change set out to prevent. Proposed fix: drop contexts from the
+  capability's map only after the channel confirms, so a failed call is
+  retried at the next prune; or fail the capability explicitly.
+
+- R11-3 — **Suggestion for R9-1: finish it in the origin test.** The response
+  says the Google-controller version could not be made deterministic. The
+  updated `sts_capability_origins_test.exs` case already reaches a seventeenth
+  context deterministically with its test provider. Extend it: have that
+  provider emit `:response_started` with the seventeenth context and assert
+  that the capability admits it (`{:vxpipe_speech_output, ...}` reaches the
+  provider). That completes R9-1 without the Google controller.
+
+Open findings: R1-4, R7-1, R7-3, R9-1, R10-2, R11-1, R11-2.
+
+Next work, in order:
+
+1. R11-1 (tombstones and graceful discard), with R11-2.
+2. R9-1 via R11-3.
+3. R7-1 and R7-3, per the review 10 design. Its step 5 relies on R11-1.
+4. The remaining C tasks, starting with the compiled-room duplex proof under
+   `clock: :realtime`; C's exit; then D.
+5. R10-2 in a separate docs commit.
