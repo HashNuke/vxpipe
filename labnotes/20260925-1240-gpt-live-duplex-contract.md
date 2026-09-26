@@ -256,6 +256,22 @@ to `MorseCodeDuplex.Profile` (descriptor facts, PCM format, segmenter options)
 and its tool trigger/summary handling to `MorseCodeDuplex.ToolReply`. The
 session keeps the GenServer and the output state machine and is 769 lines.
 
+## Review-7 response (R7-2, R7-4; R7-1/R7-3 planned)
+
+- R7-2: a yielded-before-admission reply now emits `:interrupted` and then
+  `:output_completed` for its admitted reference, releasing the room slot; the
+  test settles it and admits the next reply.
+- R7-4: added provider tests for the FIFO overflow (`:pending_reply_overflow`)
+  and for a tool result that sanitises to nothing (`:empty_tool_reply`), both
+  stopping the provider explicitly. The `:overlapped` proof stays in C.
+- R7-1/R7-3: confirmed `ResponseOrigins` accepts a stored context for later
+  `:response_started` events while its fingerprint is current, so no amendment
+  is needed; the frozen spec already requires per-burst outputs. The
+  `response_start?: true` redesign remains. A tractable shape: keep one output
+  slot but emit `:response_started` per burst and pause the clock after a burst
+  closes until `:vxpipe_speech_output_settled` for it arrives, so bursts
+  serialize and no multi-in-flight machinery is needed.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree

@@ -49,16 +49,32 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
 
     # Talk over the not-yet-admitted reply; the provider yields and remembers it.
     push_chunks(session, "NO")
-    drain_until_turn_ended(session)
+    next_turn = drain_until_turn_ended(session)
     advance(provider, 40)
 
-    assert {:ok, _output} = Session.admit_output(session, turn)
+    assert {:ok, output} = Session.admit_output(session, turn)
 
     assert_receive {:vxpipe_speech,
-                    %Event{session: ^session, kind: :interrupted, turn_ref: ^turn} = event},
+                    %Event{session: ^session, kind: :interrupted, turn_ref: ^turn} = interrupted},
                    500
 
-    assert :ok = Session.ack(session, event)
+    assert :ok = Session.ack(session, interrupted)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{
+                      session: ^session,
+                      kind: :output_completed,
+                      turn_ref: ^turn,
+                      request_ref: reference
+                    } = completed},
+                   500
+
+    assert reference == output.ref
+    assert :ok = Session.ack(session, completed)
+    assert :ok = Session.settle_output(session, output, 0)
+
+    # The released slot admits the next reply.
+    assert {:ok, _next} = Session.admit_output(session, next_turn)
   end
 
   test "plays two replies queued behind one output, in order" do
@@ -83,6 +99,35 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert {:ok, third_output} = Session.admit_output(session, third)
     assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
     assert :ok = Session.settle_output(session, third_output, 0)
+  end
+
+  test "fails explicitly when more replies queue than the FIFO allows" do
+    %{session: session, provider: provider} = start_session(clock: :manual, yield?: false)
+    push_chunks(session, "HI")
+    first = drain_until_turn_ended(session)
+    assert {:ok, _} = Session.admit_output(session, first)
+    monitor = Process.monitor(provider)
+
+    result =
+      Enum.reduce_while(~c"ABCDEFGHIJKLMNOPQRSTUVWXYZ", :ok, fn char, :ok ->
+        case push_text_turn(session, <<char>>) do
+          :ok -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+      end)
+
+    assert result in [{:error, :pending_reply_overflow}, {:error, :closed}]
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :pending_reply_overflow}}
+  end
+
+  test "fails explicitly when a tool result cannot produce a Morse reply" do
+    %{session: session, provider: provider} = start_session(clock: :manual)
+    assert :ok = Session.push_text(session, "TOOL echo {}")
+    call_ref = drain_until_tool_call(session)
+    monitor = Process.monitor(provider)
+
+    assert {:error, :empty_tool_reply} = DuplexSTS.send_tool_result(provider, call_ref, %{})
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :empty_tool_reply}}
   end
 
   test "keeps the reply open and yields when caller tone arrives while a credit is held" do
@@ -204,6 +249,41 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
         drain_until_turn_ended(session)
     after
       1_000 -> flunk("no turn_ended event")
+    end
+  end
+
+  defp drain_until_tool_call(session) do
+    receive do
+      {:vxpipe_speech, %Event{session: ^session, kind: :tool_call, call_ref: ref} = event} ->
+        assert :ok = Session.ack(session, event)
+        ref
+
+      {:vxpipe_speech, %Event{session: ^session} = event} ->
+        assert :ok = Session.ack(session, event)
+        drain_until_tool_call(session)
+    after
+      1_000 -> flunk("no tool_call event")
+    end
+  end
+
+  defp push_text_turn(session, text) do
+    case Session.push_text(session, text) do
+      :ok ->
+        drain_events(session)
+        :ok
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp drain_events(session) do
+    receive do
+      {:vxpipe_speech, %Event{session: ^session} = event} ->
+        assert :ok = Session.ack(session, event)
+        drain_events(session)
+    after
+      0 -> :ok
     end
   end
 

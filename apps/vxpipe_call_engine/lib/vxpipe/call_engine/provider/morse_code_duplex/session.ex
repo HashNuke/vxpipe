@@ -635,6 +635,13 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
       turn_ref in state.yielded_pending ->
         _ = Event.emit(state.channel, :interrupted, turn_ref: turn_ref)
+
+        _ =
+          Event.emit(state.channel, :output_completed,
+            turn_ref: turn_ref,
+            request_ref: output_ref
+          )
+
         {:noreply, %{state | yielded_pending: List.delete(state.yielded_pending, turn_ref)}}
 
       true ->

@@ -1214,3 +1214,34 @@ Next work, in order:
 3. R7-4: the three missing tests.
 4. The remaining C tasks, starting with the compiled-room duplex proof under
    `clock: :realtime`; C's exit; then D.
+
+### Response to review 7 — 2026-09-26
+
+Implementation response to Review 7, labelled per R3-2. Not independent
+verification.
+
+- P7-R7-2 — **resolved.** When a yielded-before-admission reply is finally
+  admitted, the provider now emits `:interrupted` and then
+  `:output_completed` with the admitted output reference, so the room settles
+  the slot. The test now asserts the completion, settles it, and admits the next
+  reply successfully.
+- P7-R7-1 and P7-R7-3 — **feasibility confirmed; implementation remains.**
+  Checked `ResponseOrigins`/`ResponseQueue`: an accepted response context stays
+  usable for later `:response_started` events while its recomputed fingerprint
+  is current (policy, epoch and lifecycle unchanged), so the same context can
+  authorize a continuation burst and a reply after a tool result. No amendment
+  is needed; the frozen specification already requires admitting each burst with
+  a fresh output reference. The redesign — set `response_start?: true`,
+  implement `submit_input/3`, emit `:response_started` per burst with its own
+  provider turn, and remove the continuation and empty-`turn_ended` paths — is a
+  substantial rewrite of the provider's output half and is the next
+  implementation step, not yet done.
+- P7-R7-4 — **partly resolved.** Added provider tests: more replies than the
+  FIFO allows fail with `:pending_reply_overflow` and stop the provider, and a
+  tool result that sanitises to nothing fails with `:empty_tool_reply` and stops
+  the provider. The `:overlapped` barge-in proof through the capability and room
+  event is checkpoint C's compiled-room proof and remains there.
+- R1-4 — **still open, as a caution.**
+
+Next work, in order: the R7-1/R7-3 `:response_started` per-burst redesign; the
+remaining C tasks, starting with the compiled-room duplex proof; C's exit; D.
