@@ -1822,3 +1822,99 @@ Open findings: R1-4, R7-1, R7-3, R10-2.
 Next work, in order: the R7-1/R7-3 `BurstResponses` per-burst redesign; then the
 remaining C tasks, starting with the compiled-room duplex proof; C's exit; D–F;
 R10-2 in a separate docs commit.
+
+### Review 12 — 2026-09-26 (response to the review 11 response, and the completion plan)
+
+Independent review of commit `9700df3a` and its "Response to review 11", plus
+a build plan for everything that remains.
+
+Reviewed state: `9700df3a` on `sts2`, clean worktree.
+
+Verified:
+
+- 401 tests pass (seed 0, 3 excluded): the whole `speech` test directory, the
+  capability origin tests, the Google controller tests, the Morse duplex
+  provider tests, the duplex capability tests and the room STS tests. Per
+  R2-4, the reported child-suite run (1,566 tests, zero failures) is cited,
+  not repeated.
+- R11-1: the channel keeps the last 16 retired contexts as tombstones. A late
+  `:response_started` on one is accepted and answered with
+  `{:vxpipe_speech_response_discard, ...}`, and a late `:tool_call` returns
+  `:discarded`. The new test retires an origin, announces a response on it,
+  sees the discard, and then admits a response on the current origin.
+- R11-2: `ResponseOrigins.prune/2` drops its own copy only after the channel
+  confirms retirement.
+- R9-1: the origin test admits a response on the seventeenth context after
+  seventeen fingerprint changes.
+
+Progress: 9 of 39 checkpoint tasks are done (A 4/4, B 4/4, C 1/8, D 0/5,
+E 0/6, F 0/7), so 77% of the tasks remain; weighted by effort, about 80%.
+This commit closes review findings, not checkpoint tasks, so the task count
+is unchanged since review 11.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R7-1, R7-3 — **still open**; now package 1 of the completion plan.
+- R9-1 — **resolved.**
+- R10-2 — **still open**; package 10 of the completion plan.
+- R11-1 — **resolved** for the capability and channel. A discarded tool call
+  still has to be answered to the model by the provider; the completion plan
+  requires that for GPT-Live (package 7). The Google adapter currently drops
+  a discarded call without answering it; that belongs to the parent
+  [Agent speech-to-speech](agent-speech-to-speech.md) milestone and is noted
+  here only so it is not lost.
+- R11-2 — **resolved.**
+
+Notes:
+
+- The umbrella run keeps flaking on the load-sensitive `SpeechToTextTest`,
+  which passes in isolation. It is outside this milestone, but a recurring
+  flake in the root gate should be tracked where that capability is owned
+  rather than rerun each time.
+- The implementation session was at 96% of its context during this round.
+  Start fresh sessions for the remaining work; the completion plan is written
+  to be read without this conversation.
+
+#### Completion plan
+
+[GPT-Live completion plan](../gpt-live-completion-plan.md) turns every open
+task into ordered work packages with specifications, module architecture,
+tests and acceptance:
+
+| # | Package | Closes |
+| --- | --- | --- |
+| 0 | Commit the in-progress R11 work (done in `9700df3a`) | R11-1, R11-2, R9-1 |
+| 1 | Per-burst responses (`Speech.Duplex.BurstResponses`) | R7-1, R7-3 |
+| 2 | Select the Morse duplex provider from a call spec (`model: "morse-duplex"`) | prerequisite for 5 |
+| 3 | Aligned spoken prefix in the capability | C: room-fence prefix |
+| 4 | Hold by muting (`set_input_hold/2`) | C: `hold: :mute` |
+| 5 | Compiled-room duplex proofs | C: remaining tasks and exit |
+| 6 | OpenAI provider package | D: first task |
+| 7 | GPT-Live adapter over a fake socket | D: remaining tasks and exit |
+| 8 | Session continuity (`append_history/2`, reseed) | E: all tasks |
+| 9 | Docs, Console gating, load, review, hosted check | F: all tasks |
+| 10 | Docs site homepage test | R10-2 |
+
+Facts the plan relies on, found while writing it:
+
+- The Morse duplex provider is not selectable from a call spec: the catalog
+  resolves `provider: "morse"` only to Morse STS (package 2).
+- Nothing reads the `:output_transcript` alignment fields yet; published
+  agent text is a single `pending_text` per output (package 3).
+- The capability's hold retires in-flight tool turns
+  (`interrupt_tool_turns/1`, `ToolEvents.retire/1`) and stops a
+  non-quiescent session as `:unsafe_hold`, so `hold: :mute` needs its own
+  branch (package 4).
+- No OpenAI provider or credential exists; the generic `api_key` credential
+  path in `speech_provider_resolution.ex` can carry it (package 6).
+
+The plan adds two optional provider callbacks, `set_input_hold/2` and
+`append_history/2`, recorded in the speech provider contract. Neither changes
+the frozen specification's behaviour, so no amendment is needed.
+
+Open findings: R1-4, R7-1, R7-3, R10-2.
+
+Next work, in order: the completion plan's packages 1 to 9; package 10 in a
+separate docs commit whenever convenient. Pause only for the hosted check in
+package 9 or for a blocker recorded with evidence.
