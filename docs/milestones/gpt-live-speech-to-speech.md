@@ -1364,3 +1364,79 @@ Next work, in order: the R7-1/R7-3 `:response_started` per-burst redesign; then
 the remaining C tasks (compiled-room duplex proof with the deferred
 `:overlapped` proof, room-fence prefix, `hold: :mute`, tool survival); C's exit;
 then D–F.
+
+### Review 9 — 2026-09-26 (response to the review 8 response)
+
+Independent review of commit `a13a8ac7` and its "Response to review 8".
+
+Reviewed state: `a13a8ac7` on `sts2`, clean worktree.
+
+Verified:
+
+- 79 focused tests pass (seed 0), including the new
+  `response_origins_test.exs`. Per R2-4, the reported umbrella run (2,751
+  tests, zero failures) is cited, not repeated.
+- Pruning is semantically safe. A queued response is re-checked against its
+  own stored fingerprint (`ResponseOrigins.current?/2`), and a
+  `:response_started` for a context whose fingerprint is not current is
+  rejected whether or not the context is still in the map. Dropping
+  non-current contexts therefore rejects nothing that was not already
+  rejected; it only frees capacity. Fingerprints contain fresh epoch and
+  lifecycle references, so a stale fingerprint cannot become current again.
+
+Status of earlier findings:
+
+- R1-4 — **still open, as a caution.**
+- R7-1, R7-3 — **still open.** The per-burst `:response_started` redesign is
+  the next step; its prerequisite R8-1 is now in place.
+- R8-1 — **resolved in behaviour, with the test and cleanup gaps in R9-1 and
+  R9-2.**
+- R8-2 — **resolved.** An empty tool summary now speaks `"RECEIVED OK"`, and
+  the test covers `%{}`.
+- R8-3 — **resolved.** Both emits on the R7-2 path now stop the session on
+  failure.
+
+New findings:
+
+- R9-1 — **Medium: R8-1 is tested only on a hand-built state.** Both new tests
+  call `ResponseOrigins.prune/1` directly on a map that copies the
+  capability's state fields, and `fingerprint/1` was made public
+  (`@doc false`) for them. Review 8 asked for a behaviour test: twenty hold
+  and release cycles, then a caller turn whose reply is admitted. As written,
+  the tests would still pass if the capability's state shape changed, or if
+  pruning were never called from the paths that matter. This is the
+  project's "test behaviour at the boundary that owns it" rule.
+
+  Proposed fix: add the behaviour test through the supervised STS capability
+  with `response_start?: true`: more than sixteen hold and release cycles (or
+  policy revisions that change the fingerprint), then a caller turn whose
+  reply is admitted and played. Keep one small unit test if useful, but make
+  `fingerprint/1` private again and test through `submit/2`.
+
+- R9-2 — **Low: the external-activity retention clause never matches.**
+  `referenced_contexts/1` keeps `state.external_activity_origin` only when it
+  is a reference, but `Input` stores a fingerprint map there
+  (`input.ex:190`). So the clause is dead, and the response's claim that
+  pruning keeps "the external activity origin" is not what the code does.
+  Nothing breaks: external and hybrid turn control are out of this
+  milestone's scope, and the stored fingerprint does not depend on the
+  context map. Proposed fix: remove the clause and the claim, or, if
+  external mode needs it later, store the context reference and test it then.
+
+- R9-3 — **Low: pruning runs on every audio frame.** `submit/2` calls
+  `prune/1` first, so every 20 ms caller frame recomputes the fingerprint
+  twice (once in `prune/1`, once in `prepare/1`) and rebuilds the context
+  map, even when the current context is reused. Proposed fix: prune only
+  when a new candidate context is needed (inside `new_candidate/2`'s path),
+  which is the only point where capacity matters.
+
+Open findings: R1-4, R7-1, R7-3, R9-1, R9-2, R9-3.
+
+Next work, in order:
+
+1. R9-1, with R9-2 and R9-3 folded in, since they touch the same module.
+2. R7-1 and R7-3: the `:response_started` per-burst redesign, removing the
+   continuation and empty-`turn_ended` paths.
+3. The remaining C tasks, starting with the compiled-room duplex proof under
+   `clock: :realtime`, including the `:overlapped` proof deferred from R7-4;
+   C's exit; then D.
