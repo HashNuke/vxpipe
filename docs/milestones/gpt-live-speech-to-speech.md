@@ -532,6 +532,18 @@ tests with one Gateway WebRTC handoff timeout and 59 tagged exclusions; that
 unrelated handoff case passed alone on rerun. Format, compile, strict Credo,
 unused-dependency and Lean checks passed.
 
+Lost-session tool evidence (2026-09-26): an in-flight Responses delegation
+keeps its room call reference across a GPT-Live socket reseed. The result is
+queued until replacement readiness, then supplied as private thinking context;
+the old delegation's function-call output is not replayed. A fake-socket
+capability test first failed with `:stale_request` and then passed. The three
+focused GPT-Live files passed 39 tests, zero failures. The design is recorded
+in `docs/gpt-live-reseed-tool-results.md`. This closes a Package 8 continuity
+gap; compiled transfer acceptance and the E exit remain open. The umbrella
+suite passed 2,853 tests with zero failures and 59 tagged exclusions, along
+with format, warnings-as-errors compile, strict Credo, unused-dependency and
+Lean verification.
+
 Transfer boundary evidence (2026-09-26): room-owned Morse duplex and fake
 GPT-Live trees now verify that transfer hold, recovery release, and
 `ParticipantTransfer.teardown_source/3` preserve the same provider during

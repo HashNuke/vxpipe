@@ -82,6 +82,41 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     end
   end
 
+  test "a tool result from the lost session reaches the replacement as private context" do
+    {capability, wire} = start_ready_capability()
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+    deliver_fixture(wire, "delegation")
+    deliver_fixture(wire, "first")
+    deliver_fixture(wire, "completed")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent1",
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}}
+
+    TestGPTLiveTransport.disconnect(wire)
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"answer" => 42})
+
+    refute_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.thinking.append"}},
+                   50
+
+    TestGPTLiveTransport.deliver_sync(replacement, %{
+      "type" => "session.started",
+      "session" => %{"id" => "s2"}
+    })
+
+    assert_receive {:test_gpt_live_control, ^replacement,
+                    %{"type" => "session.thinking.append", "content" => note}},
+                   1_000
+
+    assert String.contains?(note, "echo")
+    assert String.contains?(note, ~s("answer":42))
+    refute_received {:test_gpt_live_control, ^replacement, %{"type" => "response.item.create"}}
+    assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, call_ref, %{})
+  end
+
   test "a late delegated call keeps its retired response context and receives a denial" do
     {capability, wire} = start_ready_capability()
     assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)

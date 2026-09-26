@@ -28,8 +28,11 @@ needs a contract change, it says so and names the amendment to record.
 
 Current snapshot (2026-09-26): checkpoints A–D are locally complete. E has
 history reseeding and all three post-reseed speech cases with GPT-Live and the
-scripted Morse duplex provider; compiled transfer and teardown acceptance
-remains. F has Console enablement, documentation, rendered setup inspection
+scripted Morse duplex provider. Pending host tool results from a lost GPT-Live
+session now reach its replacement as private context; compiled transfer and
+teardown acceptance remains. Package 8 has been split into reviewable
+checkpoints while retaining the plan's implementation order. F has Console
+enablement, documentation, rendered setup inspection
 and the ten-call local duplex load lane. The E
 lifecycle matrix, independent review and authorized hosted phone check remain
 open. The ten-call local duplex load lane passed on

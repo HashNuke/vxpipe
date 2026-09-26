@@ -52,7 +52,8 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegation do
         state = %{
           state
           | delegations: Map.put(state.delegations, id, delegation),
-            calls: Map.put(state.calls, call_ref, %{delegation_id: id, call_id: call_id})
+            calls:
+              Map.put(state.calls, call_ref, %{delegation_id: id, call_id: call_id, name: name})
         }
 
         {:ok, state, [{:tool_call, call_ref, name, arguments, delegation.response_context}]}

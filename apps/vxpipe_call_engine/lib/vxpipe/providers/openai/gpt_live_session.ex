@@ -17,6 +17,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     GPTLive,
     GPTLiveDelegation,
     GPTLiveOutput,
+    GPTLiveRetiredTools,
     GPTLiveSocket,
     GPTLiveUsage
   }
@@ -42,6 +43,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     :retired_segmenter,
     :bursts,
     :delegation,
+    :retired_tools,
     :usage,
     :history,
     :output_gap_ms,
@@ -172,6 +174,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
          segmenter: segmenter,
          bursts: bursts,
          delegation: GPTLiveDelegation.new(),
+         retired_tools: GPTLiveRetiredTools.new(),
          usage: GPTLiveUsage.new(config.backend_model),
          history: PublishedHistory.new(),
          output_gap_ms: output_gap_ms,
@@ -306,7 +309,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
   def handle_call({:tool_result, call_ref, result}, _from, state) do
     case send_tool_result_command(state, call_ref, result) do
       {:ok, state} -> {:reply, :ok, state}
-      {:error, :stale_request} -> {:reply, {:error, :stale_request}, state}
+      {:error, :stale_request} -> reply_retired_tool_result(state, call_ref, result)
       {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
     end
   end
@@ -446,6 +449,39 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     state.wire_module.send_control(wire, JSON.encode!(command))
   end
 
+  defp send_controls(state, commands) do
+    Enum.reduce_while(commands, :ok, fn command, :ok ->
+      case send_control(state, state.wire, command) do
+        :ok -> {:cont, :ok}
+        _failure -> {:halt, {:error, :session_failed}}
+      end
+    end)
+  end
+
+  defp reply_retired_tool_result(state, call_ref, result) do
+    case GPTLiveRetiredTools.result(state.retired_tools, call_ref, result, state.ready?) do
+      {:ok, retired_tools, commands} ->
+        state = %{state | retired_tools: retired_tools}
+
+        case send_controls(state, commands) do
+          :ok -> {:reply, :ok, state}
+          _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+        end
+
+      {:error, :stale_request} ->
+        {:reply, {:error, :stale_request}, state}
+
+      _failure ->
+        {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  defp flush_retired_context(state) do
+    {commands, retired_tools} = GPTLiveRetiredTools.take_queued(state.retired_tools)
+    state = %{state | retired_tools: retired_tools}
+    with :ok <- send_controls(state, commands), do: {:ok, state}
+  end
+
   defp started(state, id) do
     _ = Process.cancel_timer(state.setup_timer)
 
@@ -453,18 +489,22 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
       if state.reseed_timer, do: Process.cancel_timer(state.reseed_timer)
       state = %{state | ready?: true, session_id: id, setup_timer: nil, reseed_timer: nil}
 
-      if state.resume_after_reseed? do
-        with {:ok, command} <-
-               GPTLive.commentary(
-                 "The line cut out briefly. Continue from the last thing the caller heard."
-               ),
-             :ok <- send_control(state, state.wire, command) do
-          {:noreply, %{state | resume_after_reseed?: false}}
+      with {:ok, state} <- flush_retired_context(state) do
+        if state.resume_after_reseed? do
+          with {:ok, command} <-
+                 GPTLive.commentary(
+                   "The line cut out briefly. Continue from the last thing the caller heard."
+                 ),
+               :ok <- send_control(state, state.wire, command) do
+            {:noreply, %{state | resume_after_reseed?: false}}
+          else
+            _failure -> {:stop, {:shutdown, :reseed_failed}, state}
+          end
         else
-          _failure -> {:stop, {:shutdown, :reseed_failed}, state}
+          {:noreply, state}
         end
       else
-        {:noreply, state}
+        _failure -> {:stop, {:shutdown, :reseed_failed}, state}
       end
     else
       case Event.emit(state.channel, :ready, readiness: :provider_acknowledged) do
@@ -670,6 +710,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
         retired_segmenter: state.segmenter,
         segmenter: segmenter,
         delegation: GPTLiveDelegation.new(),
+        retired_tools: GPTLiveRetiredTools.capture(state.delegation),
         usage: GPTLiveUsage.new(state.config.backend_model),
         input_ms: 0,
         output_timer: nil,

@@ -747,3 +747,18 @@ remaining checkpoint-C proofs.
   Format, warnings-as-errors compile, strict Credo, unused dependencies and
   Lean verification passed. The full umbrella suite then passed 2,835 tests,
   zero failures, with 58 integration exclusions. No hosted call was made.
+
+### Package 8 later checkpoints (2026-09-26)
+
+- Package 8 was split into reviewable commits for post-reseed speech,
+  provider lifecycle hooks, and the Morse scripted close harness. The current
+  milestone evidence records each checkpoint. The scripted-close commit is
+  `1baf3af8`; its CallEngine suite passed 1,661 tests. One Gateway WebRTC
+  handoff test timed out in the umbrella run and passed on an isolated rerun.
+- A fake-socket capability test for a host tool result arriving during GPT-Live
+  reseed failed red with `{:error, :stale_request}`. The replacement now gets
+  that result as private thinking context after readiness; the old delegation
+  output is not replayed. The focused GPT-Live files passed 39 tests. The
+  design record is `docs/gpt-live-reseed-tool-results.md`. All five root gates
+  passed; the umbrella suite passed 2,853 tests with zero failures and 59
+  tagged exclusions.
