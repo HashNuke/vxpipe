@@ -313,6 +313,18 @@ late old-origin tool call is rejected at the channel), and added
 controller is still open because deterministic settling of twenty sequential
 inputs needs the provider input slot.
 
+## Review-11 response (R11-1, R11-2, R11-3)
+
+- R11-1: the channel now keeps a bounded tombstone window of retired contexts.
+  A late `:response_started` on a tombstoned origin is accepted by `emit` and
+  answered with `{:vxpipe_speech_response_discard, ...}`; a late `:tool_call`
+  returns `:discarded`; a context outside the window is still rejected. A late
+  response can no longer fail the Google session.
+- R11-2: `ResponseOrigins.prune/2` drops its own copy only after the channel
+  confirms retirement, so a failure retries next prune.
+- R11-3: the origin test now announces a response on the seventeenth context and
+  asserts admission, completing R9-1.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree

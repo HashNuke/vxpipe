@@ -71,11 +71,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
     {kept, dropped} =
       Enum.split_with(origins.accepted, fn {_context, stored} -> stored == current end)
 
-    if dropped != [] do
-      _ = Session.retire_response_contexts(state.session, Enum.map(dropped, &elem(&1, 0)))
-    end
+    case Enum.map(dropped, &elem(&1, 0)) do
+      [] ->
+        %{state | response_origins: %{origins | accepted: Map.new(kept)}}
 
-    %{state | response_origins: %{origins | accepted: Map.new(kept)}}
+      contexts ->
+        # Drop the capability's copy only after the channel confirms retirement,
+        # so a failed call is retried at the next prune instead of drifting.
+        case Session.retire_response_contexts(state.session, contexts) do
+          :ok -> %{state | response_origins: %{origins | accepted: Map.new(kept)}}
+          _error -> state
+        end
+    end
   end
 
   defp fingerprint(state) do

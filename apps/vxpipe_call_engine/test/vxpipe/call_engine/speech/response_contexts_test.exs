@@ -46,9 +46,25 @@ defmodule Vxpipe.CallEngine.Speech.ResponseContextsTest do
 
     owner = Contexts.retire(owner, [first, unknown])
 
-    assert Contexts.status(owner, first) == :unknown
+    assert Contexts.status(owner, first) == :retired
     assert Contexts.status(owner, unknown) == :unknown
     assert Contexts.status(owner, second) == :staged
+  end
+
+  test "the retired tombstone window is bounded and evicts the oldest" do
+    {owner, contexts} =
+      Enum.reduce(1..20, {Contexts.new(), []}, fn _n, {owner, contexts} ->
+        context = make_ref()
+        command = make_ref()
+        {:ok, owner} = Contexts.stage(owner, context, command)
+        owner = Contexts.accept(owner, command)
+        owner = Contexts.retire(owner, [context])
+        {owner, [context | contexts]}
+      end)
+
+    assert length(owner.retired) == 16
+    assert Contexts.status(owner, hd(contexts)) == :retired
+    assert Contexts.status(owner, List.last(contexts)) == :unknown
   end
 
   test "retirement frees capacity at the context bound" do

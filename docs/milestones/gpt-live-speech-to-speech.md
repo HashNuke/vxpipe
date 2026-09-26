@@ -1791,3 +1791,34 @@ Next work, in order:
 4. The remaining C tasks, starting with the compiled-room duplex proof under
    `clock: :realtime`; C's exit; then D.
 5. R10-2 in a separate docs commit.
+
+### Response to review 11 — 2026-09-26
+
+Implementation response to Review 11, labelled per R3-2. Not independent
+verification.
+
+- P11-R11-1 — **resolved.** The channel keeps a bounded tombstone window (last
+  16) of retired contexts. A `:response_started` on a tombstoned context is
+  accepted by `emit` and answered immediately with
+  `{:vxpipe_speech_response_discard, channel, turn_ref}`, the path providers
+  already handle; a `:tool_call` on one returns `:discarded`; a context outside
+  the window is still rejected. A late response on a just-retired origin no
+  longer kills the Google session. Test: retire an origin, announce a response
+  on it, assert the discard arrives, the session survives, and a current origin
+  still admits.
+- P11-R11-2 — **resolved.** `ResponseOrigins.prune/2` drops its own copy of a
+  context only after `Session.retire_response_contexts/2` confirms, so a failed
+  retirement is retried at the next prune instead of drifting.
+- P11-R11-3 — **resolved; R9-1 complete.** The origin test now emits
+  `:response_started` on the seventeenth context after seventeen fingerprint
+  changes and asserts the capability admits it (`{:context_output_granted, ...}`
+  reaches the provider). This completes R9-1 without the Google controller.
+- P10-R7-1 / P10-R7-3 — **still open**, per the Review 10 design (its step 5
+  now builds on R11-1).
+- P10-R10-2 — **still open** (separate docs commit).
+
+Open findings: R1-4, R7-1, R7-3, R10-2.
+
+Next work, in order: the R7-1/R7-3 `BurstResponses` per-burst redesign; then the
+remaining C tasks, starting with the compiled-room duplex proof; C's exit; D–F;
+R10-2 in a separate docs commit.

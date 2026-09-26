@@ -82,6 +82,9 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
             {:error, :stale_response}
         end
 
+      :retired ->
+        {:discard, event, state}
+
       :unknown ->
         {:error, :stale_response}
     end
@@ -100,6 +103,9 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
           _other ->
             {:error, :stale_response}
         end
+
+      :retired ->
+        :discarded
 
       :unknown ->
         if is_reference(context),

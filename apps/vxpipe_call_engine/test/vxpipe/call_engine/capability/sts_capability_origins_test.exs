@@ -75,6 +75,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
 
   test "interim origin retention does not exhaust the context bound" do
     capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
 
     contexts =
       Enum.map(1..16, fn _index ->
@@ -92,6 +93,37 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     assert_receive {:context_input, seventeenth, {:audio, <<0, 0>>}, _}
     refute seventeenth in contexts
+
+    # R9-1: a reply announced on the seventeenth context is admitted.
+    turn = make_ref()
+    assert :ok = GenServer.call(provider, {:emit_response, seventeenth, turn, 1})
+    assert_receive {:context_output_granted, ^turn, _}, 1_000
+  end
+
+  test "a retired origin's late response is discarded and the session survives" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, old_context, {:audio, <<0, 0>>}, _}
+
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
+    assert_receive {:context_input, new_context, {:audio, <<0, 0>>}, _}
+    assert new_context != old_context
+
+    stale_turn = make_ref()
+
+    # A late response on the retired origin is answered with a discard, not a
+    # fatal emit error.
+    assert :ok = GenServer.call(provider, {:emit_response, old_context, stale_turn, 1})
+    assert_receive {:context_response_discarded, ^stale_turn}, 1_000
+    refute_received {:context_output_granted, ^stale_turn, _}
+
+    # A current origin still admits afterwards.
+    current_turn = make_ref()
+    assert :ok = GenServer.call(provider, {:emit_response, new_context, current_turn, 1})
+    assert_receive {:context_output_granted, ^current_turn, _}, 1_000
   end
 
   test "a direct policy revoke and regrant cannot reuse an earlier snapshot origin" do
@@ -339,7 +371,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     old_call = make_ref()
     old_turn = make_ref()
 
-    assert {:error, :stale_response} =
+    assert :discarded =
              GenServer.call(
                provider,
                {:emit, :tool_call,

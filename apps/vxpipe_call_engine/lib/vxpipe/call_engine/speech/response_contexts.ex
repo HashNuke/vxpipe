@@ -4,10 +4,17 @@ defmodule Vxpipe.CallEngine.Speech.ResponseContexts do
   # Interim input-only retention: accepted origins live until allocation teardown.
   # Response/tool holds and engine-authorized root retirement are a separate gate.
   @maximum_contexts 16
+  @maximum_retired 16
 
-  def new, do: %{contexts: %{}, pending: nil}
+  def new, do: %{contexts: %{}, pending: nil, retired: []}
 
-  def status(owner, context), do: Map.get(owner.contexts, context, :unknown)
+  def status(owner, context) do
+    cond do
+      Map.has_key?(owner.contexts, context) -> Map.fetch!(owner.contexts, context)
+      context in owner.retired -> :retired
+      true -> :unknown
+    end
+  end
 
   def stage(owner, context, command) when is_reference(context) and is_reference(command) do
     cond do
@@ -43,12 +50,15 @@ defmodule Vxpipe.CallEngine.Speech.ResponseContexts do
 
   @doc """
   Engine-authorized retirement of accepted contexts. Unknown contexts are
-  ignored and the currently staged context is never removed.
+  ignored, the currently staged context is never removed, and retired contexts
+  are remembered as a bounded tombstone window so a late event on one is
+  discarded gracefully instead of rejected fatally.
   """
   def retire(owner, contexts) when is_list(contexts) do
     Enum.reduce(contexts, owner, fn context, owner ->
       if status(owner, context) == :accepted do
-        %{owner | contexts: Map.delete(owner.contexts, context)}
+        retired = [context | owner.retired] |> Enum.uniq() |> Enum.take(@maximum_retired)
+        %{owner | contexts: Map.delete(owner.contexts, context), retired: retired}
       else
         owner
       end

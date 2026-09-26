@@ -432,6 +432,13 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
           {:ok, event, state} ->
             publish_event(event, producer, EventDelivery.note_early_event(event, state))
 
+          {:discard, event, state} ->
+            send(producer, {:vxpipe_speech_response_discard, self(), event.turn_ref})
+            {:reply, :ok, state}
+
+          :discarded ->
+            {:reply, :discarded, state}
+
           :failed ->
             ChannelFailure.fail(state, :session_failed)
 
