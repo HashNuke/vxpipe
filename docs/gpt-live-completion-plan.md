@@ -26,6 +26,15 @@ needs a contract change, it says so and names the amendment to record.
 
 ## Where things stand
 
+Current snapshot (2026-09-26): checkpoints A–C are complete. D has a local
+fake-socket adapter and credential package, E has an initial history-reseed
+path, and F has Console enablement, documentation and rendered setup inspection.
+The D and E acceptance matrices, ten-call load lane, independent review and
+authorized hosted phone check remain open. The milestone checklist is the
+source of truth for their verification.
+
+Original planning snapshot (before implementation):
+
 Checkpoints A and B are done (8 of 8 tasks). Checkpoint C has 1 of 8 tasks
 done; D, E and F have none. The capability-side and channel-side response
 context retirement (R8-1, R10-1, R11-1, R11-2) and its behaviour test (R9-1)

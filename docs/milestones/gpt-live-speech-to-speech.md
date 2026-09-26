@@ -467,8 +467,11 @@ fixtures pass with the real-time Morse duplex provider.
 
 ### F — Service setup, documentation and acceptance
 
-- [ ] Update the speech provider contract, integration guide (with an author
-  example for the duplex profile) and provider-package docs.
+- [x] Update the speech provider contract, integration guide (with an author
+  example for the duplex profile) and provider-package docs. The contract
+  records continuous burst admission, inferred turns and aligned settlement;
+  the author guide includes an OpenAI call-spec example, and the package guide
+  records the manifest and shared LLM path.
 - [x] Add OpenAI to the Console setup catalog with one API-key field and
   available LLM and GPT-Live speech badges. The user explicitly requested
   local enablement before the hosted check on 2026-09-26.
@@ -477,8 +480,9 @@ fixtures pass with the real-time Morse duplex provider.
   leg: a short turn, a backchannel and a real interruption during a reply, a
   tool call, a hold and release, a forced reconnect with reseed, and speakerphone echo without the agent reacting
   to its own voice. Resolve every item left unverified in checkpoint A.
-- [ ] Inspect the Console change in a rendered browser at desktop and mobile
-  widths.
+- [x] Inspect the Console change in a rendered browser at desktop and mobile
+  widths. Chrome inspection at 1280×800 and 390×844 covered the single-key
+  OpenAI setup form and its speech/LLM capabilities on 2026-09-26.
 - [ ] Run the bounded ten-call local load lane with the Morse duplex provider.
 - [ ] Run an independent implementation review and all root completion checks.
 - [x] Enable the manifest `:sts` entry and service badge for local use. Hosted

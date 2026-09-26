@@ -639,3 +639,16 @@ remaining checkpoint-C proofs.
   TypeScript, lint, 198 frontend tests and `mix assets.build` passed during
   this checkpoint. The rendered Console was inspected in Chrome at 1280x800
   and 390x844, with OpenAI selected and only the API-key field visible.
+
+### Documentation and acceptance-record sync (2026-09-26)
+
+- The author guide already contained a GPT-Live call-spec example and the
+  provider-package guide already listed OpenAI `:sts` and shared LLM support.
+  The speech provider contract still lacked the continuous-output mapping, so
+  it now records burst admission, inferred caller turns, provider-owned
+  barge-in and aligned text settlement.
+- The milestone now checks off its documentation and rendered Console
+  inspection tasks using the existing desktop/mobile evidence above. The
+  completion plan distinguishes its original planning snapshot from current
+  progress. D/E acceptance, the ten-call lane, independent review and hosted
+  phone interoperability remain open.
