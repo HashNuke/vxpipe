@@ -109,6 +109,24 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     end
   end
 
+  test "a second lost socket fails the speech capability with reseed_failed" do
+    {capability, wire} = start_ready_capability()
+    TestGPTLiveTransport.disconnect(wire)
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
+    TestGPTLiveTransport.disconnect(replacement)
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :reseed_failed}, 1_000
+    refute_receive {:test_gpt_live_started, _, _}, 50
+  end
+
+  test "a replacement that misses readiness fails the speech capability within its deadline" do
+    {capability, wire} = start_ready_capability()
+    TestGPTLiveTransport.disconnect(wire)
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :reseed_failed}, 6_000
+  end
+
   test "a fake GPT-Live caller fragment and spoken burst pass through the real capability" do
     {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())

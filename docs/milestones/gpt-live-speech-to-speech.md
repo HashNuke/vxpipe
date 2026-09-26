@@ -448,7 +448,7 @@ fixtures pass with the real-time Morse duplex provider.
   capability: caller and agent turns, overlap, delegated tools (including
   multiple pending calls, duplicates, and failed or incomplete responses),
   usage deltas, every close reason, and malformed-event failure.
-- [ ] Prove no credential, audio or transcript appears in logs, status or crash
+- [x] Prove no credential, audio or transcript appears in logs, status or crash
   reports.
 - [ ] Exit: fake-socket tests pass; no hosted call has been made.
 
@@ -459,10 +459,16 @@ require both results before one continuation, and failed/incomplete responses
 retire their pending calls. A capability test also proves two separate spoken
 bursts from one GPT-Live answer. The shared output segmenter now retains text
 from a burst closed before admission and treats its end timestamp as an
-exclusive boundary. The broader D matrix and redaction/crash-report proof
-remain open. The umbrella rerun passed 2,831 tests, zero failures, with 58
-integration exclusions; format, warnings-as-errors compile, strict Credo,
+exclusive boundary. The broader D matrix remains open. The umbrella rerun
+passed 2,831 tests, zero failures, with 58 integration exclusions; format,
+warnings-as-errors compile, strict Credo,
 unused dependencies and Lean verification also passed.
+
+Privacy evidence (2026-09-26): `gpt_live_session_test.exs` inspects provider
+and supervisor status after private key, prompt, history, transcript and audio
+have entered the session, then captures an abnormal provider exit. None of the
+synthetic private markers appears in status or crash logs. The shared speech
+socket and scope redaction tests continue to cover their own process statuses.
 
 ### E — Session continuity and lifecycle
 
@@ -481,11 +487,20 @@ unused dependencies and Lean verification also passed.
   2026-09-26, so there is no documented renewal window to test. The adapter
   instead handles `expired` with bounded history reseeding; revisit this if
   OpenAI documents a numeric limit.
-- [ ] Prove reseed failure and deadline expiry fail the capability explicitly.
+- [x] Prove reseed failure and deadline expiry fail the capability explicitly.
 - [ ] Prove a completed transfer and teardown stop the session, and a failed
   transfer releases the hold with the same session, with both Morse duplex and
   the fake socket.
 - [ ] Exit: lifecycle tests pass with both local providers.
+
+Reseed-failure evidence (2026-09-26): fake-socket capability tests disconnect
+the replacement socket and withhold replacement readiness past the five-second
+deadline. Both report `:reseed_failed` to the capability owner. The speech
+channel forwards only this controlled failure reason from a history-reseed
+provider; other provider failures retain their generic reason. Focused tests
+passed 27/27. The umbrella suite passed 2,834 tests with zero failures and 58
+integration exclusions; format, warnings-as-errors compile, strict Credo,
+unused dependencies and Lean verification also passed.
 
 ### F — Service setup, documentation and acceptance
 

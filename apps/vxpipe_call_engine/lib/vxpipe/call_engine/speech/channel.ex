@@ -610,6 +610,13 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     {:stop, :normal, state}
   end
 
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, {:shutdown, :reseed_failed}},
+        %{producer_monitor: monitor, descriptor: %{kind: :sts, continuity: :history_reseed}} =
+          state
+      ),
+      do: ChannelFailure.reseed_failed(state)
+
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
       when monitor == state.producer_monitor do
     state = %{state | producer: nil, producer_monitor: nil, producer_down?: true}

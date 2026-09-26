@@ -655,6 +655,62 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     refute String.contains?(status <> state, "private-live-phrase")
   end
 
+  test "provider crash reports and supervisor status omit private speech data" do
+    markers = [
+      "private-key-crash-sentinel",
+      "private-prompt-crash-sentinel",
+      "private-history-crash-sentinel",
+      "private-transcript-crash-sentinel",
+      "private-audio-sentinel"
+    ]
+
+    {:ok, config} =
+      GPTLive.new(
+        api_key: "private-key-crash-sentinel",
+        backend_model: "gpt-5.6",
+        system_prompt: "private-prompt-crash-sentinel"
+      )
+
+    {session, wire} = start_ready_session(test_config: config)
+    provider = Session.provider(session)
+    assert :ok = Session.append_history(session, {:caller, "private-history-crash-sentinel"})
+
+    assert :ok =
+             Session.push_audio(
+               session,
+               :binary.copy("private-audio-sentinel", 2),
+               response_context: make_ref()
+             )
+
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.input_transcript.delta",
+      "delta" => "private-transcript-crash-sentinel",
+      "start_ms" => 0,
+      "end_ms" => 40
+    })
+
+    _ = :sys.get_state(provider)
+
+    status =
+      inspect(:sys.get_status(Session.tree(session)),
+        limit: :infinity,
+        printable_limit: :infinity
+      )
+
+    assert Enum.all?(markers, &(not String.contains?(status, &1)))
+    monitor = Process.monitor(provider)
+
+    logs =
+      ExUnit.CaptureLog.capture_log(fn ->
+        Process.exit(provider, :provider_failed)
+        assert_receive {:DOWN, ^monitor, :process, ^provider, :provider_failed}, 1_000
+      end)
+
+    assert Enum.all?(markers, &(not String.contains?(logs, &1)))
+  end
+
   defp start_ready_session(options \\ []) do
     {test_config, options} = Keyword.pop(options, :test_config)
 

@@ -80,6 +80,12 @@ defmodule Vxpipe.CallEngine.Speech.ChannelFailure do
     {:stop, :normal, {:error, reason}, state}
   end
 
+  def reseed_failed(state) do
+    retire(state.allocation)
+    ScopeControl.failed(state.allocation, :reseed_failed)
+    {:stop, :normal, state}
+  end
+
   defp settle_draining_input(%{input: nil} = state), do: state
 
   defp settle_draining_input(%{input: input} = state) do

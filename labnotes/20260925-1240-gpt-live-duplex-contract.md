@@ -701,3 +701,26 @@ remaining checkpoint-C proofs.
 - Final root gates for this checkpoint passed: format, warnings-as-errors
   compile, strict Credo, unused dependencies, Lean verification, and all nine
   umbrella suites (2,831 tests, zero failures, 58 integration exclusions).
+
+### Reseed failure reporting and private crash data (2026-09-26)
+
+- Two new fake-socket capability tests failed red as expected: a second lost
+  socket and a replacement that missed its five-second readiness deadline
+  each reported `:provider_failed` instead of the specified `:reseed_failed`.
+  The provider already stopped with `{:shutdown, :reseed_failed}`. The speech
+  channel discarded that reason on the provider monitor and the capability
+  collapsed every session closure to `:provider_failed`.
+- The channel now forwards the controlled `:reseed_failed` reason only for an
+  STS provider declaring `continuity: :history_reseed`; the capability passes
+  it to its owner. Other provider failures continue to use the generic reason.
+  Both red tests passed green, and the GPT-Live focused files passed 27 tests.
+- A privacy test places synthetic key, prompt, history, transcript and audio
+  markers in a ready GPT-Live session, inspects provider and supervisor status,
+  and captures an abnormal provider exit. None appears in the inspected status
+  or crash logs. It passed alongside the existing provider-status test.
+- Strict Credo initially rejected the speech channel at 802 lines. Moving the
+  new cleanup into its existing failure module brought the channel below its
+  size limit. Format, warnings-as-errors compile, strict Credo, unused
+  dependencies and Lean verification then passed. The full umbrella run passed
+  2,834 tests, zero failures, with 58 integration exclusions. No hosted call
+  was made.

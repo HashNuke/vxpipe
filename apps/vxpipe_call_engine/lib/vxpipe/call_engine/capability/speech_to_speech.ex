@@ -447,6 +447,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   def handle_info({:DOWN, monitor, :process, _input, _reason}, %{input_monitor: monitor} = state),
     do: stop_unavailable(:input_unavailable, state)
 
+  def handle_info(
+        {:vxpipe_speech_closed, session, :reseed_failed},
+        %{session: session, descriptor: %{continuity: :history_reseed}} = state
+      ) do
+    stop_unavailable(:reseed_failed, state)
+  end
+
   def handle_info({:vxpipe_speech_closed, session, _reason}, %{session: session} = state) do
     stop_unavailable(:provider_failed, state)
   end
