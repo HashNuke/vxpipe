@@ -22,10 +22,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
   end
 
   def submit(state, operation) do
-    state = prune(state)
-
     case prepare(state) do
-      {:ok, context, fingerprint} ->
+      {:ok, state, context, fingerprint} ->
         result = dispatch(state.session, operation, options(context))
         {result, if(accepted?(result), do: accept(state, context, fingerprint), else: state)}
 
@@ -34,60 +32,51 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
     end
   end
 
-  @doc """
-  Drop accepted response contexts whose fingerprint is no longer current unless a
-  queued response still references them. Keeps the 16-context bound available for
-  live contexts; a stale context referenced by a pending response is retained
-  until that response settles or is rejected.
-  """
-  def prune(state) do
-    current =
-      case fingerprint(state) do
-        {:ok, fingerprint} -> fingerprint
-        _error -> nil
-      end
+  defp prepare(%{descriptor: %{response_start?: true}} = state) do
+    with {:ok, fingerprint} <- fingerprint(state) do
+      candidate(state, fingerprint)
+    end
+  end
 
-    referenced = referenced_contexts(state)
+  defp prepare(state), do: {:ok, state, nil, nil}
+
+  defp candidate(%{response_origins: origin} = state, fingerprint) do
+    case origin.current do
+      context when is_reference(context) ->
+        if Map.get(origin.accepted, context) == fingerprint,
+          do: {:ok, state, context, fingerprint},
+          else: new_candidate(state, fingerprint)
+
+      _other ->
+        new_candidate(state, fingerprint)
+    end
+  end
+
+  defp new_candidate(state, fingerprint) do
+    state = prune(state, fingerprint)
+
+    if map_size(state.response_origins.accepted) < @maximum_contexts,
+      do: {:ok, state, make_ref(), fingerprint},
+      else: {:error, :busy}
+  end
+
+  # Drop accepted contexts whose fingerprint is no longer current. This runs only
+  # when a fresh candidate context is needed, the one point where capacity
+  # matters. A queued response is re-checked against its own stored fingerprint,
+  # so dropping a non-current context rejects nothing that was not already
+  # rejected; it only frees capacity.
+  defp prune(state, current) do
     origins = state.response_origins
 
     accepted =
       origins.accepted
-      |> Enum.filter(fn {context, stored} ->
-        (is_map(current) and stored == current) or MapSet.member?(referenced, context)
-      end)
+      |> Enum.filter(fn {_context, stored} -> stored == current end)
       |> Map.new()
 
     %{state | response_origins: %{origins | accepted: accepted}}
   end
 
-  defp referenced_contexts(state) do
-    pending =
-      state
-      |> Map.get(:pending_turns, [])
-      |> Enum.flat_map(fn
-        {:response, _turn, context, _fingerprint, _sequence} -> [context]
-        _entry -> []
-      end)
-      |> MapSet.new()
-
-    case Map.get(state, :external_activity_origin) do
-      context when is_reference(context) -> MapSet.put(pending, context)
-      _other -> pending
-    end
-  end
-
-  defp prepare(%{descriptor: %{response_start?: true}} = state) do
-    origin = state.response_origins
-
-    with {:ok, fingerprint} <- fingerprint(state) do
-      candidate(origin, fingerprint)
-    end
-  end
-
-  defp prepare(_state), do: {:ok, nil, nil}
-
-  @doc false
-  def fingerprint(state) do
+  defp fingerprint(state) do
     epoch = state.input_epoch || direct_epoch(state)
 
     cond do
@@ -113,21 +102,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
            output_interval: interval(state, :audio_output, state.human_id)
          }}
     end
-  end
-
-  defp candidate(%{current: context, accepted: accepted}, fingerprint)
-       when is_reference(context) do
-    if Map.get(accepted, context) == fingerprint,
-      do: {:ok, context, fingerprint},
-      else: new_candidate(accepted, fingerprint)
-  end
-
-  defp candidate(%{accepted: accepted}, fingerprint), do: new_candidate(accepted, fingerprint)
-
-  defp new_candidate(accepted, fingerprint) do
-    if map_size(accepted) < @maximum_contexts,
-      do: {:ok, make_ref(), fingerprint},
-      else: {:error, :busy}
   end
 
   defp accept(state, nil, _fingerprint), do: state

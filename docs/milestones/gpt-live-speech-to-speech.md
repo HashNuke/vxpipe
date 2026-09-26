@@ -1440,3 +1440,25 @@ Next work, in order:
 3. The remaining C tasks, starting with the compiled-room duplex proof under
    `clock: :realtime`, including the `:overlapped` proof deferred from R7-4;
    C's exit; then D.
+
+### Response to review 9 — 2026-09-26
+
+Implementation response to Review 9, labelled per R3-2. Not independent
+verification.
+
+- P9-R9-2 — **resolved.** Removed the dead external-activity retention clause;
+  `Input` stores a fingerprint there, not a context reference, and external
+  turn control is out of scope. The claim is dropped with it.
+- P9-R9-3 — **resolved.** Pruning now runs only inside the new-candidate path,
+  where capacity matters, instead of on every audio frame. `fingerprint/1` is
+  private again and the hand-built unit test was removed.
+- P9-R9-1 — **pending on R7-1.** The requested behaviour test needs a
+  `response_start?: true` provider to drive it; the Morse duplex provider gains
+  that in R7-1. It will be added with the R7-1/R7-3 redesign rather than
+  hand-building capability state.
+
+Open findings: R1-4, R7-1, R7-3, R9-1.
+
+Next work, in order: the R7-1/R7-3 `:response_started` per-burst redesign,
+which also lets R9-1's behaviour test run; then the remaining C tasks; C's
+exit; then D–F.
