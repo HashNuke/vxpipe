@@ -120,14 +120,21 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :pending_reply_overflow}}
   end
 
-  test "fails explicitly when a tool result cannot produce a Morse reply" do
+  test "speaks an acknowledgement when a tool result sanitises to nothing" do
     %{session: session, provider: provider} = start_session(clock: :manual)
     assert :ok = Session.push_text(session, "TOOL echo {}")
     call_ref = drain_until_tool_call(session)
-    monitor = Process.monitor(provider)
+    drain_events(session)
 
-    assert {:error, :empty_tool_reply} = DuplexSTS.send_tool_result(provider, call_ref, %{})
-    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :empty_tool_reply}}
+    assert :ok = DuplexSTS.send_tool_result(provider, call_ref, %{})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :turn_ended, turn_ref: turn} = event},
+                   500
+
+    assert :ok = Session.ack(session, event)
+    assert {:ok, _output} = Session.admit_output(session, turn)
+    assert IO.iodata_to_binary(play_reply(session, provider)) != <<>>
   end
 
   test "keeps the reply open and yields when caller tone arrives while a credit is held" do

@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.ToolReply do
     end
   end
 
-  @spec text(map(), term()) :: {:ok, String.t()} | {:error, :empty_tool_reply}
+  @spec text(map(), term()) :: {:ok, String.t()} | {:error, term()}
   def text(config, result) do
     text =
       result
@@ -22,7 +22,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.ToolReply do
       |> morse_safe()
       |> String.slice(0, truncate_limit(config))
 
-    if text == "", do: {:error, :empty_tool_reply}, else: {:ok, @reply_prefix <> text}
+    # An empty summary (for example an action that returns no data) is still an
+    # ordinary success; acknowledge it rather than silencing the agent.
+    if text == "", do: {:ok, @reply_prefix <> "OK"}, else: {:ok, @reply_prefix <> text}
   end
 
   @spec reply(map(), String.t()) :: String.t()

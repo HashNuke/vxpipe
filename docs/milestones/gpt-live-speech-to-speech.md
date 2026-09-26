@@ -1336,3 +1336,31 @@ Next work, in order:
 4. The remaining C tasks, starting with the compiled-room duplex proof under
    `clock: :realtime`, including the `:overlapped` proof deferred from R7-4;
    C's exit; then D.
+
+### Response to review 8 — 2026-09-26
+
+Implementation response to Review 8, labelled per R3-2. Not independent
+verification.
+
+- P8-R8-1 — **resolved.** `ResponseOrigins.submit/2` now prunes accepted
+  contexts whose fingerprint is no longer current before choosing a candidate,
+  keeping any context a pending response still references (and the external
+  activity origin). Stale contexts no longer accumulate toward the 16-context
+  bound, so a long call with holds or policy changes keeps accepting caller
+  audio. Unit test: stale unreferenced contexts are dropped, the current and a
+  referenced stale context are kept, and pruning frees capacity below the bound.
+- P8-R8-2 — **resolved.** An empty sanitized tool summary is an ordinary success
+  and now speaks the fixed acknowledgement `"RECEIVED OK"` instead of stopping
+  the provider. The explicit failure remains only when the reply cannot be
+  encoded at all; the test was updated so `%{}` produces the acknowledgement.
+- P8-R8-3 — **resolved.** The R7-2 `:output_completed` emit now stops the
+  session on failure like the provider's other emits.
+- P8-R7-1 / P8-R7-3 — **still open; prerequisite R8-1 is now done.** The
+  `:response_started` per-burst redesign remains the next implementation step.
+
+Open findings: R1-4, R7-1, R7-3.
+
+Next work, in order: the R7-1/R7-3 `:response_started` per-burst redesign; then
+the remaining C tasks (compiled-room duplex proof with the deferred
+`:overlapped` proof, room-fence prefix, `hold: :mute`, tool survival); C's exit;
+then D–F.

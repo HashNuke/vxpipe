@@ -272,6 +272,21 @@ session keeps the GenServer and the output state machine and is 769 lines.
   closes until `:vxpipe_speech_output_settled` for it arrives, so bursts
   serialize and no multi-in-flight machinery is needed.
 
+## Review-8 response (R8-1, R8-2, R8-3)
+
+- R8-1: `ResponseOrigins.submit/2` prunes accepted contexts whose fingerprint
+  is stale before choosing a candidate, keeping contexts a pending response
+  references (and the external activity origin). Added
+  `response_origins_test.exs` proving stale unreferenced contexts are dropped,
+  current and referenced ones kept, and capacity is freed.
+- R8-2: an empty sanitized tool summary now speaks `"RECEIVED OK"` instead of
+  stopping the provider; the explicit failure stays for a reply that cannot be
+  encoded.
+- R8-3: the R7-2 `:output_completed` emit now stops the session on failure.
+
+R7-1/R7-3 (`:response_started` per-burst redesign) remain and are the next step
+now that R8-1's prerequisite is fixed.
+
 ## Full gate evidence
 
 All five root completion gates pass on the A + B + C-partial worktree

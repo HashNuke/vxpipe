@@ -22,6 +22,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
   end
 
   def submit(state, operation) do
+    state = prune(state)
+
     case prepare(state) do
       {:ok, context, fingerprint} ->
         result = dispatch(state.session, operation, options(context))
@@ -29,6 +31,48 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
 
       {:error, _reason} = error ->
         {error, state}
+    end
+  end
+
+  @doc """
+  Drop accepted response contexts whose fingerprint is no longer current unless a
+  queued response still references them. Keeps the 16-context bound available for
+  live contexts; a stale context referenced by a pending response is retained
+  until that response settles or is rejected.
+  """
+  def prune(state) do
+    current =
+      case fingerprint(state) do
+        {:ok, fingerprint} -> fingerprint
+        _error -> nil
+      end
+
+    referenced = referenced_contexts(state)
+    origins = state.response_origins
+
+    accepted =
+      origins.accepted
+      |> Enum.filter(fn {context, stored} ->
+        (is_map(current) and stored == current) or MapSet.member?(referenced, context)
+      end)
+      |> Map.new()
+
+    %{state | response_origins: %{origins | accepted: accepted}}
+  end
+
+  defp referenced_contexts(state) do
+    pending =
+      state
+      |> Map.get(:pending_turns, [])
+      |> Enum.flat_map(fn
+        {:response, _turn, context, _fingerprint, _sequence} -> [context]
+        _entry -> []
+      end)
+      |> MapSet.new()
+
+    case Map.get(state, :external_activity_origin) do
+      context when is_reference(context) -> MapSet.put(pending, context)
+      _other -> pending
     end
   end
 
@@ -42,7 +86,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
 
   defp prepare(_state), do: {:ok, nil, nil}
 
-  defp fingerprint(state) do
+  @doc false
+  def fingerprint(state) do
     epoch = state.input_epoch || direct_epoch(state)
 
     cond do
