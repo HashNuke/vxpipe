@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
     TextOutput
   }
 
-  alias Vxpipe.Providers.MorseCode.{STSSession, STTSession, TTSSession}
+  alias Vxpipe.Providers.MorseCode.{DuplexSTSSession, STSSession, STTSession, TTSSession}
 
   @measurements [
     :admission_ms,
@@ -26,6 +26,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
     :playback_ack_ms,
     :turn_completion_ms,
     :interruption_ms,
+    :overlap_ms,
     :failure_isolation_ms,
     :cleanup_ms
   ]
@@ -45,7 +46,12 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
     settings =
       original
       |> Keyword.put(:agent_runtime, runtime)
-      |> Keyword.put(:speech_to_speech, providers: %{STSSession => [enabled: true]})
+      |> Keyword.put(:speech_to_speech,
+        providers: %{
+          STSSession => [enabled: true],
+          DuplexSTSSession => [enabled: true]
+        }
+      )
       |> Keyword.put(:text_to_speech,
         providers: %{TTSSession => [enabled: true, maximum_requests: 2]}
       )
@@ -157,6 +163,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
         samples: state.samples,
         completed: state.completed,
         interruptions: state.interruptions,
+        overlaps: state.overlaps,
         survived: state.survived,
         cleaned: true,
         monitored_children: children,
@@ -194,6 +201,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
       samples: Map.new(@measurements, &{&1, []}),
       completed: 0,
       interruptions: 0,
+      overlaps: 0,
       survived: false,
       cleaned: false,
       monitored_children: 0,
@@ -273,8 +281,11 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
         {:vxpipe_event, %ParticipantTranscription{final: true, text: "HI"}} ->
           Map.update!(state, :caller_transcripts, &(&1 + 1))
 
-        {:vxpipe_event, %TextOutput{text: "RECEIVED HI"}} ->
-          Map.update!(state, :agent_transcripts, &(&1 + 1))
+        {:vxpipe_event, %TextOutput{text: text}} ->
+          if text == "RECEIVED HI" or
+               (state.context.mode == :sts_duplex and text == "RECEIVED"),
+             do: Map.update!(state, :agent_transcripts, &(&1 + 1)),
+             else: state
 
         {:vxpipe_event, %AgentTurnInterrupted{} = event} ->
           validate_event!(state.context, event, :agent)
@@ -290,12 +301,23 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
         {:vxpipe_event, %AgentTurnCompleted{} = event} ->
           validate_event!(state.context, event, :agent)
 
-          state
-          |> measure(
-            :turn_completion_ms,
-            Attribution.elapsed(state.attribution, :public, event.correlation_id, now())
-          )
-          |> Map.update!(:completed, &(&1 + 1))
+          state =
+            state
+            |> measure(
+              :turn_completion_ms,
+              Attribution.elapsed(state.attribution, :public, event.correlation_id, now())
+            )
+            |> Map.update!(:completed, &(&1 + 1))
+
+          if event.outcome == :overlapped and
+               state.context.mode == :sts_duplex and state.barge_at != nil and
+               Attribution.input(state.attribution, :public, event.correlation_id) == 2 do
+            state
+            |> measure(:overlap_ms, now() - state.barge_at)
+            |> Map.update!(:overlaps, &(&1 + 1))
+          else
+            state
+          end
 
         {:vxpipe_event, %AgentTurnFailed{}} ->
           raise "public agent turn failed"
@@ -327,14 +349,26 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
 
     done =
       case phase do
-        :ordinary -> state.completed >= 1
-        :barge -> state.completed >= 2 and state.interruptions == 1
-        :survive -> state.completed >= 3
+        :ordinary ->
+          state.completed >= 1
+
+        :barge when state.context.mode == :sts_duplex ->
+          state.completed >= 3 and state.overlaps == 1
+
+        :barge ->
+          state.completed >= 2 and state.interruptions == 1
+
+        :survive when state.context.mode == :sts_duplex ->
+          state.completed >= 4
+
+        :survive ->
+          state.completed >= 3
       end
 
     settled =
       length(state.samples.playback_ack_ms) >= state.completed and
-        state.agent_transcripts >= state.completed and state.input_finished == state.turn and
+        state.agent_transcripts >= state.completed - state.overlaps and
+        state.input_finished == state.turn and
         Attribution.ready?(state.attribution)
 
     if done and settled, do: %{state | deadline: now() + 90_000}, else: loop(state, phase)
@@ -426,6 +460,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Runner do
       duration_ms: duration,
       completed_turns: Enum.sum(Enum.map(good, & &1.completed)),
       interruptions: Enum.sum(Enum.map(good, & &1.interruptions)),
+      overlaps: Enum.sum(Enum.map(good, & &1.overlaps)),
       surviving_calls: Enum.count(good, & &1.survived),
       cleaned_calls: Enum.count(good, & &1.cleaned),
       errors: Enum.flat_map(results, & &1.errors),

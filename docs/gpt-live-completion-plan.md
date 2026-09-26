@@ -29,9 +29,10 @@ needs a contract change, it says so and names the amendment to record.
 Current snapshot (2026-09-26): checkpoints A–C are complete. D has a local
 fake-socket adapter and credential package, E has an initial history-reseed
 path, and F has Console enablement, documentation and rendered setup inspection.
-The D and E acceptance matrices, ten-call load lane, independent review and
-authorized hosted phone check remain open. The milestone checklist is the
-source of truth for their verification.
+The D and E acceptance matrices, independent review and authorized hosted
+phone check remain open. The ten-call local duplex load lane passed on
+2026-09-26. The milestone checklist is the source of truth for their
+verification.
 
 Original planning snapshot (before implementation):
 

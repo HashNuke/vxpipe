@@ -2,9 +2,10 @@
 
 The dedicated lane runs compiled, pinned calls through ordinary room admission,
 connection readiness, authorized PCM ingress, room output sinks and public events.
-It compares fixture LLM + Morse TTS, Morse STS with provider transcript, and Morse
-STS with agent-output STT. Every mode receives the same Morse `HI` input and
-generates `RECEIVED HI`. There are no hosted providers or credentials.
+It compares fixture LLM + Morse TTS, Morse STS with provider transcript, Morse
+STS with agent-output STT, and the real-time Morse duplex STS provider. Every
+mode receives the same Morse `HI` input and generates `RECEIVED HI`. There are
+no hosted providers or credentials.
 
 ## Reproduction
 
@@ -30,6 +31,7 @@ Focused harness tests, from `apps/vxpipe_call_engine`:
 ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_contract_test.exs test/vxpipe/call_engine/speech/call_load_sink_test.exs test/vxpipe/call_engine/speech/call_load_ingress_observer_test.exs
 ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_attribution_test.exs
 ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_test.exs --only mode:sts_provider --seed 0
+ERL_FLAGS='+S 2:2' mix test test/vxpipe/call_engine/speech/call_load_test.exs --only mode:sts_duplex --seed 0
 ```
 
 The tagged lane is excluded by the existing default `:integration` exclusion.
@@ -39,13 +41,15 @@ fixture. No production runtime modules are modified for the load.
 ## Workload and meaning
 
 All calls start concurrently, then wait at a readiness barrier before audio.
-Each completes one ordinary turn. A second reply is interrupted by a third
-microphone utterance after its first output chunk and after the previous input
-has finished. The third reply must complete through public events and selected
-agent transcript. After every call passes that barrier, one room authority is
-killed locally. Its supervised descendants must exit, while each surviving call
-completes a fourth input/reply. Healthy rooms are then stopped through their
-owning supervisor, with process monitors proving descendant cleanup.
+Each completes one ordinary turn. A third microphone utterance overlaps the
+second reply after its first output chunk and after the previous input has
+finished. The room interrupts the second reply in the original three modes;
+the duplex provider yields on its own and the public turn completes with
+`outcome: :overlapped`. The third reply must complete through public events and
+selected agent transcript. After every call passes that barrier, one room
+authority is killed locally. Its supervised descendants must exit, while each
+surviving call completes a fourth input/reply. Healthy rooms are then stopped
+through their owning supervisor, with process monitors proving descendant cleanup.
 
 The synthetic output sink incrementally decodes real PCM and discards its bytes.
 It accounts for mono PCM duration, including gaps between arriving chunks, and
@@ -73,6 +77,7 @@ never an invented zero. Latencies in milliseconds are:
 | Playback acknowledgement | Input start to sink's elapsed-consumption acknowledgement |
 | Turn completion | Input start to observed public agent turn completion |
 | Interruption | Barge-in producer start to observed public interruption |
+| Provider overlap | Barge-in producer start to the second public agent turn completing as overlapped |
 | Failure isolation | Fault injection start through a surviving room's subsequent completion |
 | Cleanup | Explicit room stop/fault through monitored descendant exits |
 
@@ -110,6 +115,8 @@ The selected short Morse payload bounds retained samples and decoder state.
 The lane fails on missing progress, bad transcripts/decoded output, dropped input,
 rejected output, absent measurements, missing interruption, failed healthy calls
 or cleanup leaks. Intended interrupted chunks are reported separately from drops.
+For duplex, the analogous gate requires ten overlapped completions and zero room
+interruptions; the ten overlapped turns need not have a full spoken transcript.
 Investigate a runtime failure before changing the workload to pass it; record a
 milestone task before proposing a runtime repair.
 
@@ -125,6 +132,28 @@ There is no warmup phase. The fixed mode order can include cold module/cache
 costs in the first mode's startup; do not attribute that difference solely to
 the speech architecture. With ten calls, p99 admission/startup is the maximum
 sample, not an estimate of a production tail distribution.
+
+## GPT-Live duplex local load — 2026-09-26
+
+`bin/sts-call-load measured` at `84710d6e655e10e7d835617cde7edf07e1dbed9c`
+passed all four ten-call modes (four tests, zero failures, exit 0). The command
+ran after the umbrella suite completed, without concurrent build or test
+commands. The x86_64 host had four logical CPUs and 7,750 MiB RAM; the script
+used two ordinary BEAM schedulers, one dirty CPU and one dirty I/O scheduler,
+and two async threads. OTP 28 and Elixir 1.19.5 were reported by the lane.
+Exact `CALL_LOAD_JSON` reports are in
+[`20260926-2015-gpt-live-load-lane.jsonl`](../labnotes/20260926-2015-gpt-live-load-lane.jsonl).
+
+The duplex mode held ten ready calls, completed 39 agent turns, observed ten
+provider-owned overlaps and zero room interruptions, retained nine healthy
+post-fault calls, and cleaned all ten. It accepted 2,106 input frames with zero
+ingress drops, rejected chunks, or incorrect decoded replies. The nine
+survivors each completed a fourth reply; the faulted call completed three.
+The duplex mode elapsed 12.53 seconds. Its startup p50/p95/p99 was
+64.8/72.1/72.1 ms; agent speech onset was 1,035.8/1,259.6/1,259.9 ms;
+overlap completion after barge-in was 797.3/799.2/799.2 ms. These are bounded
+local observations with synthetic PCM playback, not hosted-model or carrier
+capacity measurements.
 
 ## Measured local recheck — 2026-09-23
 

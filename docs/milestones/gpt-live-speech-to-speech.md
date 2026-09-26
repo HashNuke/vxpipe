@@ -529,7 +529,7 @@ unused dependencies and Lean verification also passed.
 - [x] Inspect the Console change in a rendered browser at desktop and mobile
   widths. Chrome inspection at 1280×800 and 390×844 covered the single-key
   OpenAI setup form and its speech/LLM capabilities on 2026-09-26.
-- [ ] Run the bounded ten-call local load lane with the Morse duplex provider.
+- [x] Run the bounded ten-call local load lane with the Morse duplex provider.
 - [ ] Run an independent implementation review and all root completion checks.
 - [x] Enable the manifest `:sts` entry and service badge for local use. Hosted
   phone interoperability remains an open acceptance gate.
@@ -538,8 +538,20 @@ Local enablement verification on 2026-09-26: the umbrella suite passed 2,825
 tests with zero failures and 58 integration exclusions. Format, warnings-as-errors
 compile, strict Credo, unused dependencies and Lean verification passed. The
 Console build, TypeScript check, lint and 198 frontend tests passed; Chrome
-inspection covered desktop and mobile credential setup. The hosted phone check,
-bounded Morse load lane and independent review remain open.
+inspection covered desktop and mobile credential setup. The hosted phone check
+and independent review remain open.
+
+Local duplex load evidence (2026-09-26): `bin/sts-call-load measured` ran four
+ten-call modes in a quiet window and passed four tests with zero failures. The
+real-time Morse duplex mode held ten ready calls, completed 39 agent turns,
+observed ten provider-owned overlaps and no room interruptions, kept nine calls
+healthy after the room fault, and cleaned all ten. Input and sink drop/rejection
+counters were zero. The exact machine-readable reports and host details are in
+[`20260926-2015-gpt-live-load-lane.jsonl`](../../labnotes/20260926-2015-gpt-live-load-lane.jsonl)
+and [its labnotes](../../labnotes/20260926-2015-gpt-live-load-lane.md).
+The default umbrella suite then passed 2,835 tests with zero failures and 59
+integration exclusions; format, warnings-as-errors compile, strict Credo and
+unused-dependency checks also passed.
 
 ## Scope boundaries
 

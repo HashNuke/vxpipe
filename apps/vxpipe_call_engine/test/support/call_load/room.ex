@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
 
   def plan(mode) do
     speech = %{provider: "morse", model: "morse", options: %{unit_duration_ms: 20}}
+    duplex = %{speech | model: "morse-duplex"}
 
     agent =
       case mode do
@@ -27,6 +28,9 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
 
         :sts_provider ->
           %{speech_to_speech: speech}
+
+        :sts_duplex ->
+          %{speech_to_speech: duplex}
 
         :sts_output_stt ->
           %{
