@@ -358,7 +358,7 @@ the pre-existing load-sensitive STT timing behavior, not this contract change.
   shorter than the gap, silence discarded, fragment alignment, late fragments,
   unmatched fragments and buffer overflow.
   Evidence: `test/vxpipe/call_engine/speech/duplex/output_segmenter_test.exs`
-  (9 tests, red then green) covers every listed fixture against
+  (12 tests, including two later pre-admission alignment regressions) covers every listed fixture against
   `lib/vxpipe/call_engine/speech/duplex/output_segmenter.ex`, including the
   pre-admission receive-buffer overflow and the quiet-onset pre-roll.
 - [x] Implement `MorseCode.DuplexSTSSession` and prove it through the STS
@@ -452,6 +452,18 @@ fixtures pass with the real-time Morse duplex provider.
   reports.
 - [ ] Exit: fake-socket tests pass; no hosted call has been made.
 
+Additional local evidence (2026-09-26): JSON-line delegated-tool fixtures now
+run through the real STS capability. They prove that an unfinished function
+item is not dispatched, duplicate call IDs yield one tool, two pending calls
+require both results before one continuation, and failed/incomplete responses
+retire their pending calls. A capability test also proves two separate spoken
+bursts from one GPT-Live answer. The shared output segmenter now retains text
+from a burst closed before admission and treats its end timestamp as an
+exclusive boundary. The broader D matrix and redaction/crash-report proof
+remain open. The umbrella rerun passed 2,831 tests, zero failures, with 58
+integration exclusions; format, warnings-as-errors compile, strict Credo,
+unused dependencies and Lean verification also passed.
+
 ### E — Session continuity and lifecycle
 
 - [x] Red-green reseed on `expired` and `connection_lost`: seeded history comes
@@ -463,8 +475,12 @@ fixtures pass with the real-time Morse duplex provider.
   `published_history_test.exs` proves both startup bounds.
 - [ ] Prove post-reseed speech: a drop mid-reply or after an unanswered caller
   turn makes the new session continue; a drop while idle leaves it waiting.
-- [ ] If a duration limit is documented, prove renewal at a quiet point before
-  it with no audible gap.
+- [x] Duration renewal is conditional. The official
+  [GPT-Live session guide](https://developers.openai.com/api/docs/guides/live-conversations)
+  describes `expired` but gives no numeric session-duration limit as of
+  2026-09-26, so there is no documented renewal window to test. The adapter
+  instead handles `expired` with bounded history reseeding; revisit this if
+  OpenAI documents a numeric limit.
 - [ ] Prove reseed failure and deadline expiry fail the capability explicitly.
 - [ ] Prove a completed transfer and teardown stop the session, and a failed
   transfer releases the hold with the same session, with both Morse duplex and

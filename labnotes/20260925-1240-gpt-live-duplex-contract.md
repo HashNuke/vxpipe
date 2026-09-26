@@ -675,3 +675,29 @@ remaining checkpoint-C proofs.
   the final umbrella rerun passed all nine children: 2,826 tests, zero
   failures, 58 integration exclusions. The final run included 1,635
   CallEngine tests and 519 Gateway tests with zero failures.
+
+### Fake-socket tool and burst acceptance (2026-09-26)
+
+- Added JSON-line delegated-tool fixtures and drove them through a real STS
+  capability with the fake GPT-Live socket. The first test failed because an
+  `in_progress` function item was dispatched as a tool. The adapter now
+  accepts only `status: completed` function items. Multiple pending results,
+  duplicate call IDs, and failed/incomplete delegation retirement pass through
+  the capability.
+- A two-burst capability test failed because a transcript received before
+  admission vanished when the burst closed in the same audio delta. A focused
+  segmenter test failed the same way. `close_burst/1` now aligns held fragments
+  before clearing the current output, and held-fragment processing records the
+  first fragment's provider timeline base for later fragments.
+- The second burst initially lost its text because its start timestamp equaled
+  the previous burst's inclusive end. A focused test confirmed the boundary
+  error. Output spans are now half-open, so the fragment waits for the next
+  burst. The segmenter and fake-socket suites passed 17 tests; the related
+  Morse room/capability and OpenAI session/delegation suites passed 39 tests.
+- Rechecked the official GPT-Live session guide on 2026-09-26. It describes
+  `expired` as reaching a duration limit but gives no numeric limit or renewal
+  window. The conditional quiet-point renewal task is therefore recorded as
+  not applicable, per package 8; expiry reseed remains required and tested.
+- Final root gates for this checkpoint passed: format, warnings-as-errors
+  compile, strict Credo, unused dependencies, Lean verification, and all nine
+  umbrella suites (2,831 tests, zero failures, 58 integration exclusions).

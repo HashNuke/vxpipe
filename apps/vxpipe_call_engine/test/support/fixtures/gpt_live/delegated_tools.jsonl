@@ -1,0 +1,7 @@
+{"name":"delegation","event":{"type":"session.delegation.created","delegation":{"id":"d1","target":"responses","response_id":"r1"}}}
+{"name":"pending","event":{"type":"response.event","delegation_id":"d1","event":{"type":"response.output_item.done","item":{"type":"function_call","status":"in_progress","call_id":"a","name":"echo","arguments":"{\"value\":\"a\"}"}}}}
+{"name":"first","event":{"type":"response.event","delegation_id":"d1","event":{"type":"response.output_item.done","item":{"type":"function_call","status":"completed","call_id":"a","name":"echo","arguments":"{\"value\":\"a\"}"}}}}
+{"name":"second","event":{"type":"response.event","delegation_id":"d1","event":{"type":"response.output_item.done","item":{"type":"function_call","status":"completed","call_id":"b","name":"echo","arguments":"{\"value\":\"b\"}"}}}}
+{"name":"completed","event":{"type":"response.event","delegation_id":"d1","event":{"type":"response.completed","response":{"id":"r1"}}}}
+{"name":"failed","event":{"type":"response.event","delegation_id":"d1","event":{"type":"response.failed","response":{"id":"r1"}}}}
+{"name":"incomplete","event":{"type":"response.event","delegation_id":"d1","event":{"type":"response.incomplete","response":{"id":"r1"}}}}

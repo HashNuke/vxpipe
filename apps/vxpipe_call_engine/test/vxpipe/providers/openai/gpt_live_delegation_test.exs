@@ -37,6 +37,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegationTest do
       "type" => "response.output_item.done",
       "item" => %{
         "type" => "function_call",
+        "status" => "completed",
         "call_id" => call_id,
         "name" => "echo",
         "arguments" => ~s({"value":1})

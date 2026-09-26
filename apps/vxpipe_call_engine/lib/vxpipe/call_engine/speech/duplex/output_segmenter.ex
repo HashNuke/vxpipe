@@ -321,6 +321,7 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
   defp close_burst(state) do
     ref = state.output_ref
     state = update_output_duration(state, ref, state.burst_ms)
+    {state, fragments} = check_held(state)
 
     outputs =
       if state.phase == :awaiting do
@@ -339,7 +340,7 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
         outputs: outputs
     }
 
-    {state, [{:close, ref}]}
+    {state, fragments ++ [{:close, ref}]}
   end
 
   defp count_silence(state, frame) do
@@ -402,7 +403,7 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
     Enum.find_value(state.output_order, :none, fn ref ->
       case Map.fetch(state.outputs, ref) do
         {:ok, %{base_ms: base_ms} = output} when is_integer(base_ms) ->
-          if start_ms >= base_ms and start_ms <= base_ms + output.duration_ms,
+          if start_ms >= base_ms and start_ms < base_ms + output.duration_ms,
             do: {:ok, ref, base_ms},
             else: nil
 
@@ -413,36 +414,24 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
   end
 
   defp check_held(state) do
-    {results, held} =
-      Enum.reduce(state.held, {[], []}, fn held, {results, kept} ->
-        case held_match(state, held) do
-          {:ok, result} -> {[result | results], kept}
-          :drop -> {[{:dropped, held.text} | results], kept}
-          :keep -> {results, [held | kept]}
+    {state, results} =
+      state.held
+      |> Enum.reverse()
+      |> Enum.reduce({%{state | held: []}, []}, fn held, {state, results} ->
+        case align(state, held.text, held.start_ms, held.end_ms) do
+          {:ok, state, result} ->
+            {state, [result | results]}
+
+          :pending ->
+            if state.produced_ms - held.held_at >= state.config.fragment_timeout_ms do
+              {%{state | dropped: state.dropped + 1}, [{:dropped, held.text} | results]}
+            else
+              {%{state | held: [held | state.held]}, results}
+            end
         end
       end)
 
-    dropped = state.dropped + Enum.count(results, &match?({:dropped, _}, &1))
-    {%{state | held: Enum.reverse(held), dropped: dropped}, Enum.reverse(results)}
-  end
-
-  defp held_match(state, held) do
-    case held_output(state, held.start_ms) do
-      {:ok, ref, base_ms} ->
-        {:ok, {:transcript, ref, held.text, held.start_ms - base_ms, held.end_ms - base_ms}}
-
-      :none ->
-        if state.produced_ms - held.held_at >= state.config.fragment_timeout_ms,
-          do: :drop,
-          else: :keep
-    end
-  end
-
-  defp held_output(state, start_ms) do
-    case current_output(state) do
-      %{ref: ref, base_ms: nil} -> {:ok, ref, start_ms}
-      _other -> find_output(state, start_ms)
-    end
+    {state, Enum.reverse(results)}
   end
 
   defp active?(state, frame), do: energy(frame) > state.config.activation_threshold

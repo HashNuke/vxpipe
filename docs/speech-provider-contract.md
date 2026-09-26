@@ -762,8 +762,12 @@ For aligned text, each `:output_transcript` fragment names its `output_ref`
 and its `audio_start_ms`/`audio_end_ms` span relative to that burst. Settlement
 publishes only fragments ending at or before the locally played duration.
 An unmatched or unplayed fragment is never treated as heard speech. A
-continuous provider may omit alignment only when it can still satisfy the
-ordinary turn-level settlement contract without claiming unheard text.
+fragment received before burst admission remains pending while that burst
+buffers or closes. Burst time spans are half-open: a fragment starting exactly
+at the prior burst's end waits for the next burst rather than attaching to the
+already closed output. A continuous provider may omit alignment only when it
+can still satisfy the ordinary turn-level settlement contract without
+claiming unheard text.
 GPT-Live's aligned burst profile is specified in
 [the duplex milestone](milestones/gpt-live-speech-to-speech.md#adapter-design).
 

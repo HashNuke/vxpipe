@@ -9,6 +9,106 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
   alias Vxpipe.CallEngine.TestGPTLiveTransport
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
 
+  @delegation_fixture Path.expand(
+                        "../../../support/fixtures/gpt_live/delegated_tools.jsonl",
+                        __DIR__
+                      )
+
+  test "only completed delegated calls reach the capability and all results precede continuation" do
+    {capability, wire} = start_ready_capability()
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    deliver_fixture(wire, "delegation")
+    deliver_fixture(wire, "pending")
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    _ = :sys.get_state(provider)
+    refute_receive {:vxpipe_sts_tool_event, ^capability, _, _}, 50
+
+    deliver_fixture(wire, "first")
+    deliver_fixture(wire, "first")
+    deliver_fixture(wire, "second")
+    deliver_fixture(wire, "completed")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent1",
+                    %{event: %{kind: :tool_call, call_ref: first, arguments: %{"value" => "a"}}}}
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent1",
+                    %{event: %{kind: :tool_call, call_ref: second, arguments: %{"value" => "b"}}}}
+
+    assert first != second
+    _ = :sys.get_state(provider)
+    refute_receive {:vxpipe_sts_tool_event, ^capability, _, _}, 50
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, first, %{"ok" => "a"})
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.item.create"}}
+    refute_receive {:test_gpt_live_control, ^wire, %{"type" => "response.create"}}, 50
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, second, %{"ok" => "b"})
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.item.create"}}
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.create"}}
+    assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, first, %{})
+  end
+
+  test "failed and incomplete delegations retire their capability tool calls" do
+    for terminal <- ["failed", "incomplete"] do
+      {capability, wire} = start_ready_capability()
+      assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+      assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+      deliver_fixture(wire, "delegation")
+      deliver_fixture(wire, "first")
+
+      assert_receive {:vxpipe_sts_tool_event, ^capability, "agent1",
+                      %{event: %{kind: :tool_call, call_ref: call_ref}}}
+
+      deliver_fixture(wire, terminal)
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      _ = :sys.get_state(provider)
+
+      assert {:error, :stale_request} =
+               SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
+
+      deliver_fixture(wire, "first")
+      _ = :sys.get_state(provider)
+      refute_receive {:vxpipe_sts_tool_event, ^capability, _, _}, 50
+      refute_receive {:test_gpt_live_control, ^wire, %{"type" => "response.item.create"}}, 50
+      refute_receive {:test_gpt_live_control, ^wire, %{"type" => "response.create"}}, 50
+    end
+  end
+
+  test "two GPT-Live audio bursts from one answer settle as separate capability turns" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    tone = :binary.copy(<<0, 16>>, 480)
+    silence = :binary.copy(<<0, 0>>, 480 * 2)
+
+    for {text, start_ms, end_ms} <- [{"Hello", 100, 120}, {"again", 160, 180}] do
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.output_transcript.delta",
+        "delta" => text,
+        "start_ms" => start_ms,
+        "end_ms" => end_ms
+      })
+
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(tone <> silence)
+      })
+
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent1", turn, _}, 1_000
+      assert_receive {:test_audio_output, sink, _frame}, 1_000
+      assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+      TestAudioOutputSink.playback_progress(sink, 60, 60)
+      TestAudioOutputSink.playback_completed(sink)
+
+      assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", ^text, ^turn, _, _, _},
+                     1_000
+    end
+  end
+
   test "a fake GPT-Live caller fragment and spoken burst pass through the real capability" do
     {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
@@ -215,5 +315,57 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
       record_audio: true,
       save_transcripts: true
     }
+  end
+
+  defp start_ready_capability(options \\ []) do
+    {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
+    sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
+
+    {:ok, private} =
+      PrivateInit.open(
+        [config: config, wire_module: TestGPTLiveTransport, wire_options: [observer: self()]] ++
+          options,
+        5_000
+      )
+
+    tree =
+      start_supervised!(
+        Supervisor.child_spec(
+          {SpeechToSpeech.Tree,
+           [
+             owner: self(),
+             agent_id: "agent1",
+             human_id: "human1",
+             provider: {GPTLiveSession, [backend_model: "gpt-5.6"]},
+             provider_private: private,
+             sink: sink,
+             frame_identity: %{},
+             caller_source: :sts,
+             policy: unrestricted()
+           ]},
+          id: make_ref()
+        )
+      )
+
+    capability = SpeechToSpeech.Tree.capability(tree)
+    assert_receive {:test_gpt_live_started, wire, _connection}, 5_000
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.start"}}
+
+    TestGPTLiveTransport.deliver(wire, %{"type" => "session.started", "session" => %{"id" => "s"}})
+
+    assert_receive {:vxpipe_sts_ready, ^capability}, 5_000
+    {capability, wire}
+  end
+
+  defp deliver_fixture(wire, name) do
+    event =
+      @delegation_fixture
+      |> File.stream!()
+      |> Stream.map(&JSON.decode!/1)
+      |> Enum.find_value(fn %{"name" => fixture_name, "event" => event} ->
+        if fixture_name == name, do: event
+      end)
+
+    TestGPTLiveTransport.deliver(wire, event)
   end
 end

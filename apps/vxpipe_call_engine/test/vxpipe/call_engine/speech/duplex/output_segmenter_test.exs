@@ -124,6 +124,39 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenterTest do
       assert {:transcript, ^output_ref, "late", 0, 10} = late
     end
 
+    test "early fragments align when an entire burst arrives before admission" do
+      segmenter = new(gap_ms: 20)
+      {segmenter, []} = OutputSegmenter.fragment(segmenter, fragment("Hi", 100, 110))
+      {segmenter, events} = push(segmenter, [@loud, @silence, @silence])
+
+      assert [{:open, ref}, transcript, closed] = events
+      assert {:transcript, ^ref, "Hi", 0, 10} = transcript
+      assert {:close, ^ref} = closed
+      assert {segmenter, [{:audio, ^ref, _pcm}]} = OutputSegmenter.admitted(segmenter, ref)
+
+      assert {_segmenter, [{:transcript, ^ref, "!", 10, 20}]} =
+               OutputSegmenter.fragment(segmenter, fragment("!", 110, 120))
+    end
+
+    test "a fragment at the end of a closed burst waits for the next burst" do
+      segmenter = new(gap_ms: 20)
+      {segmenter, []} = OutputSegmenter.fragment(segmenter, fragment("one", 100, 110))
+
+      {segmenter, [{:open, first}, _, first_close]} =
+        push(segmenter, [@loud, @silence, @silence])
+
+      assert {:close, ^first} = first_close
+
+      assert {segmenter, []} = OutputSegmenter.fragment(segmenter, fragment("two", 130, 140))
+
+      {_segmenter, [{:open, second}, transcript, second_close]} =
+        push(segmenter, [@loud, @silence, @silence])
+
+      assert second != first
+      assert {:close, ^second} = second_close
+      assert {:transcript, ^second, "two", 0, 10} = transcript
+    end
+
     test "drops and counts a fragment with no matching audio after the timeout" do
       segmenter = new(gap_ms: 100, fragment_timeout_ms: 20)
 

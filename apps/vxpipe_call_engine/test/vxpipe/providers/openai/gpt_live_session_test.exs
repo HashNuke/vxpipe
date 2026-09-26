@@ -174,6 +174,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
           "type" => "response.output_item.done",
           "item" => %{
             "type" => "function_call",
+            "status" => "completed",
             "call_id" => call_id,
             "name" => "echo",
             "arguments" => ~s({"value":"#{call_id}"})
@@ -472,6 +473,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
         "type" => "response.output_item.done",
         "item" => %{
           "type" => "function_call",
+          "status" => "completed",
           "call_id" => "bad_call",
           "name" => "echo",
           "arguments" => %{"not" => "JSON text"}
