@@ -386,3 +386,27 @@ failures across all children), and `mix deps.unlock --check-unused`.
 
 Package 3 (aligned spoken prefix), then package 4 (hold by muting) and the
 remaining checkpoint-C proofs.
+
+### Package 3 design notes (for a fresh session)
+
+- Capability: add `fragments`/`fragment_bytes` to the active output built in
+  `ResponseQueue.admit_reply/4`. `OutputTranscript.accept/2` appends
+  `{audio_start_ms, audio_end_ms, text}` when the event carries
+  `output_ref`/alignment for the active output, bounded to 256 fragments or
+  64 KiB (`:output_text_overflow`); without alignment fields it keeps today's
+  `pending_text` path. `OutputTranscript.ready?/1` must treat non-empty
+  fragments with `text_final?` as ready. At settlement (`Output.maybe_finish_turn`
+  → `publish_agent_transcript`) and at the fence (`Output.fence_output` prefix),
+  concatenate fragments whose `audio_end_ms <= played_ms`; `played_ms == 0`
+  publishes nothing.
+- Provider: the Morse duplex provider must emit aligned per-word
+  `:output_transcript` fragments (`output_ref` from the admitted segment,
+  `audio_start_ms`/`audio_end_ms` relative to the burst). The clean path is to
+  add word timings to `Provider.MorseCode.Encoder` (walk `start/2` runs, split
+  on the 7-unit inter-word silence) and feed them through
+  `OutputSegmenter.fragment/2`, which returns `{:transcript, seg_ref, text,
+  start_offset, end_offset}` aligned to the burst. Fragments must be fed near
+  their audio, not all upfront, because `fragment_timeout_ms` drops distant
+  ones.
+- This also replaces the package-1 approximation where the Morse mock repeats
+  the whole reply text on every burst transcript.
