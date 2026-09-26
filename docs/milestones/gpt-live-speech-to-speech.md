@@ -518,6 +518,20 @@ unused-dependency and Lean checks passing. No hosted call was made.
   the fake socket.
 - [ ] Exit: lifecycle tests pass with both local providers.
 
+Morse scripted-close evidence (2026-09-26): the opt-in manual-clock fixture
+provider now simulates `:expired` and `:connection_lost` without restarting the
+capability. It seeds only room-published caller and settled agent text, waits
+after an idle drop, speaks after an unanswered turn or mid-burst drop, keeps
+already admitted output until playback settles, and accepts an in-flight room
+tool result after reseed, including one already queued during a hold. A second
+close fails with `:reseed_failed`. The focused duplex capability, conversation
+and descriptor files passed 33 tests, zero failures. The design and limits
+are recorded in `docs/morse-duplex-scripted-reseed.md`. Compiled transfer
+orchestration and the final E exit remain open. The umbrella suite ran 2,852
+tests with one Gateway WebRTC handoff timeout and 59 tagged exclusions; that
+unrelated handoff case passed alone on rerun. Format, compile, strict Credo,
+unused-dependency and Lean checks passed.
+
 Transfer boundary evidence (2026-09-26): room-owned Morse duplex and fake
 GPT-Live trees now verify that transfer hold, recovery release, and
 `ParticipantTransfer.teardown_source/3` preserve the same provider during

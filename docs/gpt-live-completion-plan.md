@@ -27,9 +27,10 @@ needs a contract change, it says so and names the amendment to record.
 ## Where things stand
 
 Current snapshot (2026-09-26): checkpoints A–D are locally complete. E has
-history reseeding and all three GPT-Live post-reseed speech cases; transfer
-and teardown acceptance remains. F has Console enablement, documentation,
-rendered setup inspection and the ten-call local duplex load lane. The E
+history reseeding and all three post-reseed speech cases with GPT-Live and the
+scripted Morse duplex provider; compiled transfer and teardown acceptance
+remains. F has Console enablement, documentation, rendered setup inspection
+and the ten-call local duplex load lane. The E
 lifecycle matrix, independent review and authorized hosted phone check remain
 open. The ten-call local duplex load lane passed on
 2026-09-26. The milestone checklist is the source of truth for their

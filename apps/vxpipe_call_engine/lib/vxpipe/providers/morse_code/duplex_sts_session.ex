@@ -48,4 +48,7 @@ defmodule Vxpipe.Providers.MorseCode.DuplexSTSSession do
 
   @doc "Emit the next `ms` of clock-paced output. The adapter owns the clock."
   defdelegate advance(pid, ms), to: Native
+
+  @doc "Simulate one local session close when the test-only scripted-closes option is enabled."
+  defdelegate script_close(pid, reason), to: Native
 end

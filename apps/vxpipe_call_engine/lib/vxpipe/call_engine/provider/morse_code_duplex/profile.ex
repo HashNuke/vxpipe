@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Profile do
 
   @spec configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   def configure(options) do
-    allowed = Config.option_keys() ++ [:output_transcript, :yield?, :clock]
+    allowed = Config.option_keys() ++ [:output_transcript, :yield?, :clock, :scripted_closes?]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
@@ -20,15 +20,23 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Profile do
          true <- is_boolean(yield?),
          {clock, rest} = Keyword.pop(rest, :clock, :realtime),
          true <- clock in [:realtime, :manual],
+         {scripted_closes?, rest} = Keyword.pop(rest, :scripted_closes?, false),
+         true <- is_boolean(scripted_closes?),
+         true <- not scripted_closes? or clock == :manual,
          {:ok, config} <- Config.new(rest),
          true <- config.amplitude >= 2 do
+      settings =
+        config
+        |> Map.from_struct()
+        |> Map.put(:yield?, yield?)
+        |> Map.put(:clock, clock)
+
+      settings =
+        if scripted_closes?, do: Map.put(settings, :scripted_closes?, true), else: settings
+
       Descriptor.new(
         kind: :sts,
-        settings:
-          config
-          |> Map.from_struct()
-          |> Map.put(:yield?, yield?)
-          |> Map.put(:clock, clock),
+        settings: settings,
         input_format: format(config),
         format: format(config),
         usage_identity: %{

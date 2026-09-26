@@ -111,6 +111,186 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
                    5_000
   end
 
+  test "a scripted Morse expiry while idle reseeds without speaking until new input" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, scripted_closes?: true]}
+      )
+
+    push_morse(capability, "HI")
+    first_turn = await_turn_started(capability)
+    advance_until_idle(capability)
+    played_ms = playback_duration(capability)
+    complete_playback(played_ms)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^first_turn,
+                    ^played_ms, _, _},
+                   1_000
+
+    provider = Session.provider(:sys.get_state(capability).session)
+    _ = :sys.get_state(capability)
+    monitor = Process.monitor(provider)
+
+    assert {:ok, %{seeded_history: seeded, resume?: false}} =
+             DuplexSTS.script_close(provider, :expired)
+
+    assert Enum.map(seeded, & &1["role"]) == ["user", "assistant"]
+    assert Enum.map(seeded, fn entry -> hd(entry["content"])["text"] end) == ["HI", "RECEIVED HI"]
+    refute_received {:DOWN, ^monitor, :process, ^provider, _}
+    refute_received {:vxpipe_sts_turn_started, ^capability, @agent, _, _}
+
+    assert :ok = SpeechToSpeech.push_text(capability, "HI")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", final: true}}},
+                   1_000
+
+    assert is_reference(await_turn_started(capability))
+  end
+
+  test "a scripted Morse expiry seeds published caller text and resumes an unanswered turn" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, scripted_closes?: true]}
+      )
+
+    push_morse(capability, "HI")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", final: true}}},
+                   1_000
+
+    provider = Session.provider(:sys.get_state(capability).session)
+    _ = :sys.get_state(capability)
+
+    assert {:ok, %{seeded_history: seeded, resume?: true}} =
+             DuplexSTS.script_close(provider, :expired)
+
+    assert seeded == [
+             %{
+               "type" => "message",
+               "role" => "user",
+               "content" => [%{"type" => "input_text", "text" => "HI"}]
+             }
+           ]
+
+    turn = await_turn_started(capability)
+    advance_until_idle(capability)
+    played_ms = playback_duration(capability)
+    complete_playback(played_ms)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED LINE CUT OUT HI",
+                    ^turn, ^played_ms, _, _},
+                   1_000
+  end
+
+  test "a scripted Morse connection loss during output starts a new spoken burst" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, scripted_closes?: true]}
+      )
+
+    push_morse(capability, "HI")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", final: true}}},
+                   1_000
+
+    first_turn = await_turn_started(capability)
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    assert Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter.burst?(
+             :sys.get_state(provider).segmenter
+           )
+
+    assert {:ok, %{seeded_history: [_caller], resume?: true}} =
+             DuplexSTS.script_close(provider, :connection_lost)
+
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    TestAudioOutputSink.playback_progress(sink, 20, 20)
+    TestAudioOutputSink.playback_completed(sink)
+
+    second_turn = await_turn_started(capability)
+    assert second_turn != first_turn
+    assert :sys.get_state(capability).active_output.provider_turn == second_turn
+    advance_until_idle(capability)
+    played_ms = playback_duration(capability)
+    complete_playback(played_ms)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED LINE CUT OUT HI",
+                    ^second_turn, ^played_ms, _, _},
+                   1_000
+  end
+
+  test "a second scripted Morse close fails the capability instead of reseeding again" do
+    {_tree, capability, _sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, scripted_closes?: true]}
+      )
+
+    provider = Session.provider(:sys.get_state(capability).session)
+    monitor = Process.monitor(provider)
+    assert {:ok, %{resume?: false}} = DuplexSTS.script_close(provider, :expired)
+    assert {:error, :reseed_failed} = DuplexSTS.script_close(provider, :connection_lost)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :reseed_failed}}, 1_000
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :reseed_failed}, 1_000
+  end
+
+  test "Morse scripted closes are unavailable without the local test option" do
+    {_tree, capability, _sink} = start_capability(policy: unrestricted())
+    provider = Session.provider(:sys.get_state(capability).session)
+    assert {:error, :unsupported_operation} = DuplexSTS.script_close(provider, :expired)
+    assert :ok = SpeechToSpeech.push_text(capability, "HI")
+  end
+
+  test "a Morse tool already delegated to the room completes after scripted reseed" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, scripted_closes?: true]}
+      )
+
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}},
+                   1_000
+
+    provider = Session.provider(:sys.get_state(capability).session)
+    assert {:ok, %{resume?: true}} = DuplexSTS.script_close(provider, :connection_lost)
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
+
+    turns = collect_transcripts(capability, sink, 2)
+    assert Enum.map(turns, &elem(&1, 1)) == ["RECEIVED LINE CUT OUT", "RECEIVED OK TRUE"]
+  end
+
+  test "a held Morse tool result remains queued across scripted reseed" do
+    {_tree, capability, sink} =
+      start_capability(
+        policy: unrestricted(),
+        provider: {DuplexSTS, [clock: :manual, scripted_closes?: true]}
+      )
+
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}},
+                   1_000
+
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
+    provider = Session.provider(:sys.get_state(capability).session)
+    assert {:ok, %{resume?: true}} = DuplexSTS.script_close(provider, :expired)
+    assert :ok = SpeechToSpeech.release(capability)
+
+    turns = collect_transcripts(capability, sink, 2)
+    assert Enum.map(turns, &elem(&1, 1)) == ["RECEIVED OK TRUE", "RECEIVED LINE CUT OUT"]
+  end
+
   test "a delegated tool call result reopens a spoken reply" do
     {_tree, capability, _sink} = start_capability(policy: unrestricted())
 

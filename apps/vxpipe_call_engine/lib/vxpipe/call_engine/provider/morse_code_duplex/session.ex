@@ -28,6 +28,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   - `yield?: false` keeps a reply open when caller tone arrives, so a barge-in
     test can observe caller onset while output stays active. GPT-Live always
     decides for itself whether to yield.
+  - `scripted_closes?: true` enables `script_close/2` to simulate one `:expired`
+    or `:connection_lost` close. It reseeds only the room-published history and
+    resumes a dropped burst or unanswered caller turn under the manual clock.
   """
 
   use GenServer
@@ -41,6 +44,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     Output,
     Profile,
     ReplyFlow,
+    ScriptedReseed,
     ToolReply,
     Transcript
   }
@@ -120,6 +124,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   def advance(pid, ms) when is_integer(ms) and ms > 0,
     do: GenServer.call(pid, {:advance, ms}, 5_000)
 
+  @doc "Simulate an expiry or connection loss in the local scripted-close test mode."
+  def script_close(pid, reason) when reason in [:expired, :connection_lost],
+    do: GenServer.call(pid, {:script_close, reason}, 5_000)
+
   @impl true
   def init(options) do
     descriptor = Keyword.fetch!(options, :descriptor)
@@ -127,7 +135,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
     with {:ok, config} <-
            descriptor.settings
-           |> Map.drop([:yield?, :clock])
+           |> Map.drop([:yield?, :clock, :scripted_closes?])
            |> Map.to_list()
            |> Config.new(),
          {:ok, decoder} <- Decoder.new(config),
@@ -157,6 +165,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         last_partial: "",
         last_fragment_end_ms: nil,
         yield?: Map.get(descriptor.settings, :yield?, true),
+        scripted_closes?: Map.get(descriptor.settings, :scripted_closes?, false),
+        reseed_attempted?: false,
+        unanswered?: false,
         clock: clock,
         clock_origin_ms: System.monotonic_time(:millisecond),
         emitted_frames: 0,
@@ -230,6 +241,14 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   def handle_call({:append_history, _entry}, _from, state),
     do: {:reply, {:error, :invalid_history}, state}
+
+  def handle_call({:script_close, reason}, _from, %{scripted_closes?: true} = state)
+      when reason in [:expired, :connection_lost] do
+    script_close_session(state, reason)
+  end
+
+  def handle_call({:script_close, _reason}, _from, state),
+    do: {:reply, {:error, :unsupported_operation}, state}
 
   def handle_call({:set_input_hold, true}, _from, %{held?: false} = state),
     do: Hold.set(state, true)
@@ -344,6 +363,23 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     |> Map.put(:log, [])
   end
 
+  defp script_close_session(%{reseed_attempted?: true} = state, _reason),
+    do: {:stop, {:shutdown, :reseed_failed}, {:error, :reseed_failed}, state}
+
+  defp script_close_session(state, reason) do
+    resume? = OutputSegmenter.burst?(state.segmenter) or state.unanswered?
+    seeded_history = PublishedHistory.input(state.history)
+    {segmenter, events} = OutputSegmenter.finish(state.segmenter)
+
+    with {:ok, state} <- apply_segmenter_events(events, %{state | segmenter: segmenter}),
+         {:ok, state} <-
+           state |> drain_all() |> ScriptedReseed.reset() |> ScriptedReseed.queue_prompt(resume?) do
+      {:reply, {:ok, %{reason: reason, seeded_history: seeded_history, resume?: resume?}}, state}
+    else
+      _failure -> {:stop, {:shutdown, :reseed_failed}, {:error, :reseed_failed}, state}
+    end
+  end
+
   # Input ------------------------------------------------------------------
 
   defp decode_audio(state, audio) do
@@ -421,7 +457,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         last_fragment_end_ms: nil
     }
 
-    with :ok <- emit_events(events, state), do: {:ok, state, events}
+    with :ok <- emit_events(events, state) do
+      unanswered? = Enum.any?(events, fn {kind, _fields} -> kind == :turn_ended end)
+      {:ok, %{state | unanswered?: state.unanswered? or unanswered?}, events}
+    end
   end
 
   defp delta_since("", full), do: full
@@ -446,7 +485,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
              text: text,
              endpointing: :inferred_gap
            ) do
-      ToolReply.follow_up(state, text)
+      ToolReply.follow_up(%{state | unanswered?: true}, text)
     end
   end
 
@@ -573,7 +612,14 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
              ) do
           :ok ->
             segment = new_segment(turn_ref)
-            {:ok, %{state | bursts: bursts, segments: Map.put(state.segments, seg_ref, segment)}}
+
+            {:ok,
+             %{
+               state
+               | bursts: bursts,
+                 segments: Map.put(state.segments, seg_ref, segment),
+                 unanswered?: false
+             }}
 
           _failure ->
             {:error, :session_failed, state}
