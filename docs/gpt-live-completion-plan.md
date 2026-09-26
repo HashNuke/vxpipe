@@ -463,22 +463,23 @@ and deadline expiry; the ring's trimming bounds; a completed transfer stops
 the session and a failed transfer resumes it. Run the lifecycle cases with
 both the Morse duplex provider and the GPT-Live fake socket.
 
-## Package 9 — documentation, Console gating, load, review, hosted check
+## Package 9 — documentation, Console setup, load, review, hosted check
 
-Two commits: the local work, then (after authorization) the hosted check.
+Local checkpoints precede the hosted check, which needs separate billable
+authorization.
 
-### Local commit
+### Local checkpoints
 
 - Docs: add the duplex profile, burst-to-response mapping, `set_input_hold/2`
   and `append_history/2` to `docs/speech-provider-contract.md`; add an author
   example to `docs/speech-integration-guide.md`; add OpenAI to
   `docs/provider-integration-packages.md`.
 - Console: add an `openai` entry to
-  `apps/vxpipe_console/assets/src/admin/setupCatalog.json` with credential
-  setup only. The `s2s` capability stays hidden; extend the existing
-  "Speech-to-speech stays gated" test in `setupCatalog.test.ts` to cover
-  OpenAI. Inspect the setup page in a rendered browser with `agent-browser`
-  at desktop and mobile widths.
+  `apps/vxpipe_console/assets/src/admin/setupCatalog.json` with one API-key
+  field and LLM plus speech-to-speech capabilities. The user requested full
+  local enablement on 2026-09-26, overriding the prior badge gate. Test the
+  installed-capability intersection and inspect the rendered setup page with
+  `agent-browser` at desktop and mobile widths.
 - Load: add a `:sts_duplex` mode to `call_load_test.exs` using the Morse
   duplex provider under the real-time clock; run the ten-call lane in a quiet
   window and keep the reports with the evidence.
@@ -501,9 +502,9 @@ Manual phone scenarios over a real Twilio or Telnyx leg, recorded in the
 labnote: a backchannel does not stop the agent; a real interruption does;
 speakerphone echo does not make the agent react to its own voice.
 
-After it passes: add `sts: Vxpipe.Providers.OpenAI.GPTLiveSession` to the
-manifest, the `CapabilityCatalog` adapter clause, and the Console `s2s` badge
-for OpenAI, then tick the last F box.
+The manifest `:sts` entry, `CapabilityCatalog` adapter and Console `s2s` badge
+are already enabled by the user's direction. The hosted check still determines
+whether the milestone's phone interoperability acceptance is complete.
 
 ## Package 10 — docs site homepage test (R10-2)
 

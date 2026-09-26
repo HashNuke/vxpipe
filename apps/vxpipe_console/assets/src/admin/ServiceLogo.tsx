@@ -10,6 +10,7 @@ import type { ServiceProvider } from "./serviceTypes";
 const serviceMarks: Record<ServiceProvider, string> = {
   rime: "R",
   google: "G",
+  openai: "O",
   vertex_ai: "V",
   zenmux: "Z",
   deepgram: "D",
@@ -22,6 +23,7 @@ type LogoSource = "lobehub" | "official" | "avatar";
 const logoSources: Record<ServiceProvider, LogoSource> = {
   rime: "avatar",
   google: "official",
+  openai: "avatar",
   vertex_ai: "official",
   zenmux: "lobehub",
   deepgram: "avatar",

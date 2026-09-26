@@ -323,6 +323,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
     value.id.length === 0 ||
     !member(value.provider, [
       "google",
+      "openai",
       "vertex_ai",
       "zenmux",
       "deepgram",
@@ -445,6 +446,7 @@ function providerLabel(provider: ServiceProvider) {
   return {
     rime: "Rime",
     google: "Google AI Studio",
+    openai: "OpenAI",
     vertex_ai: "Google Vertex AI",
     zenmux: "Zenmux",
     deepgram: "Deepgram",

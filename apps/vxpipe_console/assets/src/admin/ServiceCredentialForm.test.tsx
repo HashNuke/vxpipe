@@ -16,8 +16,30 @@ test("credential setup offers the installed provider catalog", () => {
   const provider = screen.getByLabelText("Provider");
   expect(provider).toHaveTextContent("Rime");
   expect(provider).toHaveTextContent("Zenmux");
+  expect(provider).toHaveTextContent("OpenAI");
   expect(provider).toHaveTextContent("Twilio");
   expect(provider).not.toHaveTextContent("Google Vertex AI");
+});
+
+test("OpenAI setup submits only one API key", () => {
+  const submit = vi.fn();
+  render(
+    <ServiceCredentialForm
+      initialProvider="openai"
+      onCancel={vi.fn()}
+      onSubmit={submit}
+      status="idle"
+    />,
+  );
+
+  expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
+  expect(screen.queryByLabelText("Account SID")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-openai-key" } });
+  fireEvent.submit(screen.getByRole("form", { name: "Credential setup" }));
+  expect(submit).toHaveBeenCalledWith({
+    provider: "openai",
+    values: { apiKey: "synthetic-openai-key" },
+  });
 });
 
 test("an unsupported stored provider does not get a generic credential form", () => {

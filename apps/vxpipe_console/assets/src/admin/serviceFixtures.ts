@@ -229,6 +229,7 @@ function providerLabel(provider: CredentialDraft["provider"]) {
   return {
     rime: "Rime",
     google: "Google AI Studio",
+    openai: "OpenAI",
     vertex_ai: "Google Vertex AI",
     zenmux: "Zenmux",
     deepgram: "Deepgram",

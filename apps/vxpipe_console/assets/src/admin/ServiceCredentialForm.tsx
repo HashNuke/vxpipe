@@ -24,6 +24,7 @@ const providers = setupProviders.map((provider) => ({
 const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
   "deepgram",
   "google",
+  "openai",
   "rime",
   "zenmux",
 ]);

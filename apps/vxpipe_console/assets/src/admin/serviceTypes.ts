@@ -9,6 +9,7 @@ export type CredentialField =
 export type ServiceProvider =
   | "rime"
   | "google"
+  | "openai"
   | "vertex_ai"
   | "zenmux"
   | "deepgram"

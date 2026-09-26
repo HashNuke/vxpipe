@@ -35,6 +35,17 @@
       "sampleCapabilities": ["stt", "llm", "tts"]
     },
     {
+      "id": "openai",
+      "name": "OpenAI",
+      "description": "Connect GPT language models and live speech with one API key.",
+      "capabilities": ["llm", "s2s"],
+      "defaultModels": {
+        "llm": "gpt-5",
+        "s2s": "gpt-live-1"
+      },
+      "sampleCapabilities": ["llm", "s2s"]
+    },
+    {
       "id": "zenmux",
       "name": "Zenmux",
       "description": "Connect a language model through Zenmux.",

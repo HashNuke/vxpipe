@@ -7,6 +7,7 @@ import {
 const capabilities = {
   deepgram: ["credential", "credential_validation", "stt", "tts"],
   google: ["credential", "credential_validation", "stt", "tts"],
+  openai: ["credential", "credential_validation", "sts"],
   rime: ["credential", "credential_validation", "tts"],
   telnyx: ["credential", "credential_validation", "telephony"],
   twilio: ["credential", "credential_validation", "telephony"],
@@ -19,6 +20,7 @@ test("Setup offers installed providers and only their implemented call capabilit
     "deepgram",
     "rime",
     "google",
+    "openai",
     "zenmux",
     "telnyx",
     "twilio",
@@ -32,6 +34,10 @@ test("Setup offers installed providers and only their implemented call capabilit
     "stt",
     "llm",
     "tts",
+  ]);
+  expect(providers.find((provider) => provider.id === "openai")?.capabilities).toEqual([
+    "llm",
+    "s2s",
   ]);
   expect(providers.find((provider) => provider.id === "telnyx")?.capabilities).toEqual([
     "telephony",
@@ -51,20 +57,14 @@ test("Setup hides missing providers and removes undeclared speech capabilities",
   expect(providers[0]?.capabilities).toEqual(["stt"]);
 });
 
-test("Speech-to-speech stays gated until hosted acceptance passes", () => {
+test("OpenAI speech-to-speech is available with one connected credential", () => {
   const providers = installedSetupProviders(capabilities);
-  for (const provider of providers) {
-    expect(provider.capabilities).not.toContain("s2s");
-    expect(provider.sampleCapabilities).not.toContain("s2s");
-  }
-  const connected = [
-    { provider: "google", status: "connected" },
-    { provider: "deepgram", status: "connected" },
-  ] as const;
+  const connected = [{ provider: "openai", status: "connected" }] as const;
   expect(
     providersFor(
       "s2s",
       connected.map((connection) => ({ ...connection })),
+      providers,
     ),
-  ).toEqual([]);
+  ).toEqual([expect.objectContaining({ id: "openai" })]);
 });

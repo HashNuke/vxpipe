@@ -16,6 +16,7 @@ const providerDetails: Record<
     services: ["Speech to text", "Text to speech"],
   },
   google: { label: "Google AI Studio", services: ["Language model"] },
+  openai: { label: "OpenAI", services: ["Language model", "Speech to speech"] },
   zenmux: { label: "Zenmux", services: ["Language model"] },
   rime: { label: "Rime", services: ["Text to speech"] },
   telnyx: { label: "Telnyx", services: ["Telephony"] },

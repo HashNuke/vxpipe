@@ -46,7 +46,9 @@ export function installedSetupProviders(
     const declared = installed[provider.id];
     if (!declared?.includes("credential")) return [];
     const capabilities = provider.capabilities.filter(
-      (capability) => capability === "llm" || declared.includes(capability),
+      (capability) =>
+        capability === "llm" ||
+        declared.includes(capability === "s2s" ? "sts" : capability),
     );
     return [
       {

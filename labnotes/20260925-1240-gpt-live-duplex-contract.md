@@ -410,3 +410,232 @@ remaining checkpoint-C proofs.
   ones.
 - This also replaces the package-1 approximation where the Morse mock repeats
   the whole reply text on every burst transcript.
+
+### Package 3 implementation (2026-09-26)
+
+- Capability output tracks bounded aligned fragments and uses sink played
+  milliseconds for successful settlement and interrupted prefixes. Room
+  interruption handling publishes only a qualified aligned prefix, before
+  the terminal event; the old unverified prefix stays unpublished.
+- Morse word timing is derived from the actual encoder runs. The output
+  timeline emits due words alongside PCM frames; the provider feeds those
+  words through `OutputSegmenter.fragment/2` and emits them with the admitted
+  output reference. A final empty marker completes the transcript without
+  repeating the whole reply.
+- Red tests observed the previous last-fragment and whole-reply publication,
+  plus missing room prefix publication. Green evidence: focused capability
+  and room tests, then call-engine `mix test` at seed 628713: 1,588 tests, zero
+  failures, 30 excluded. After the cohesion refactor, root `mix test` at seed
+  600389 passes 2,775 tests, zero failures, 58 excluded. Root format, compile,
+  strict Credo, unused dependency check and Lean verification all pass.
+- The 256-fragment stress case occasionally lost its supervised fixture under
+  parallel execution; it passed in isolation and when the settlement test
+  module ran serially. The module is now serial. The root run covers that
+  configuration without a failure.
+- The first root `mix test` attempt failed before tests because PostgreSQL
+  required the local Unix socket. `PGHOST=/var/run/postgresql mix test` passed.
+- A sink's reported played duration must not exceed the output channel's
+  generated duration. The initial broad duplex test used a fabricated large
+  value and failed settlement as `:invalid_playback`; it now reads the local
+  segment's recorded duration. This preserves the playback contract while
+  testing full-text settlement.
+
+### Package 4 handoff
+
+- Current `SpeechToSpeech.handle_call(:hold, ...)` retires tool associations
+  and rotates response-origin lifecycle identity. That is correct for
+  `hold: :stop`, but `hold: :mute` must keep pending tools and allow their
+  results to produce a reply after release. The old response context also
+  becomes stale if the lifecycle revision or ingress epoch changes. A focused
+  red test should cover a tool result delivered during mute and spoken after
+  release, then implement a safe response-origin continuity rule for that path.
+- `SessionTree.initialize/2` is where descriptor and provider module are both
+  available to reject `hold: :mute` without `set_input_hold/2` before provider
+  startup. `Speech.Session` commands go through `Speech.Channel.execute/4`;
+  the new hold command needs a bounded callback with no synchronous event
+  emission back into the channel.
+
+### Package 4 implementation (2026-09-26)
+
+- Red capability test: a tool result received during mute was rejected as
+  `:stale_request`. Red room test: `SpeechToSpeech.hold/2` removed an admitted
+  tool from `sts_tool_calls`. Red descriptor test: a mute descriptor without
+  `set_input_hold/2` started the provider.
+- The capability now preserves tool and response origin across mute. The room
+  keeps pending tools through a transfer mute and permits their results under
+  the original admitted scope while checking the same capability, caller
+  identity, activation and current audio policy. A policy hold still cancels
+  pending tools. The Morse duplex provider ignores held audio, records bounded
+  hold boundaries, and buffers bounded tool replies until release.
+- Focused room, capability and descriptor suites passed after the changes:
+  38 tests, zero failures (seed 335534). Full root gates and Lean verification
+  were pending at that checkpoint. Root format, warnings-as-errors compile,
+  strict Credo, unused dependency check and Lean verification passed. The
+  first umbrella test run found that the test-only STS result receiver did not
+  handle the new `:hold_mode` query; its 31-test suite passed after the receiver
+  was updated. The umbrella rerun passed 2,778 tests, zero failures and 58
+  excluded (seed 963318). `git diff --check` also passed.
+
+### Package 5 implementation (2026-09-26)
+
+- A compiled-room `morse-duplex` fixture now uses the production call-spec
+  selection and real-time provider clock. Nine focused tests cover caller and
+  agent turns, aligned overlap prefix, a sub-window backchannel, a soft onset,
+  mute and release with an in-flight tool, active-output discard on hold,
+  policy fences at one word and zero playback, and a tool surviving overlap.
+- The soft-onset test failed red with the first audible frame at full Morse
+  amplitude (4,096 versus a 2,048 activation threshold). The Morse duplex
+  reply fixture now attenuates only its first 20 ms to one quarter amplitude;
+  the compiled room receives that frame through segmenter pre-roll and still
+  decodes the full reply.
+- The new fixture and existing Morse/Gemini transcript-mode room suite passed
+  together: 46 tests, zero failures (seed 265466). An earlier combined run
+  failed because the mute test assumed the stopped timeline output is removed
+  synchronously; the provider may retain it briefly with its cursor at the
+  end. The assertion now accepts either valid stopped state.
+- Root format, warnings-as-errors compile, strict Credo and unused-dependency
+  check pass. The first package 5 umbrella run exposed a flaky 256-fragment
+  settlement stress test under parallel load. Its test now acknowledges each
+  batch through the capability state before the next batch; the focused test
+  and full call-engine suite passed at seed 82355. The umbrella rerun passed
+  2,787 tests, zero failures and 58 excluded at the same seed. Lean verification
+  passed after the duplex changes.
+
+### Package 6 implementation (2026-09-26)
+
+- The new OpenAI provider's red tests failed because its manifest, credential
+  and validation modules were absent. The implementation adds only the
+  credential and credential-validation capabilities; the fixed registry still
+  rejects `:sts`. The provider and registry suites pass 9 tests.
+- The model-list probe uses `GET https://api.openai.com/v1/models` with a
+  bearer token and JSON accept header. The endpoint and authorization shape
+  were checked against the official OpenAI API reference. No network call or
+  hosted speech validation was made.
+- The first package 6 umbrella run reached Console and found its exact
+  provider-capability catalog expectation missing the new `openai` entry. The
+  Console test passed after the expected catalog was updated. A full umbrella
+  rerun remains necessary after the adapter work stabilizes.
+
+### Package 7 work in progress (2026-09-26)
+
+- The pure GPT-Live configuration/codec and the first fake-socket session
+  fixtures were red before implementation. Startup, readiness, audio append,
+  mute/release, one segmented output burst and two pending tool results now
+  pass focused tests. The session adapter is incomplete: usage, close/error
+  matrix, burst silence pacing, history reseed and hosted interoperability are
+  still open.
+- The fake output fixture exposed a shared `OutputSegmenter` defect: if a
+  complete audio burst arrived before admission, closing the burst discarded
+  its bounded PCM. A red pure test reproduced the loss. The segmenter now keeps
+  the pre-admission buffer with the retired output until admission and prunes
+  retired output metadata to the documented eight-output window. The segmenter
+  and first fake-socket output suite pass 12 tests together.
+
+- The adapter now covers mute acknowledgment before context and caller release,
+  inferred caller gaps, output idle closure, two delegated calls, malformed
+  delegated arguments, backend response failures, close reasons and fatal
+  errors. `SpeechToSpeechRuntime` passes API key, prompt and authorized tools
+  only through the provider's private init. A fake socket drives a real STS
+  capability from caller text to locally settled agent speech. Red tests found
+  both the mute acknowledgment ordering and a multi-frame segmenter overflow
+  crash; both were fixed.
+- Provider-reported cumulative voice seconds become non-duplicated millisecond
+  deltas. Delegated backend token counts are deduplicated by response ID and
+  retain their backend model identity. A red capability test showed the
+  provider counts were not yet visible to call accounting; the private
+  `provider_usage` speech event now produces distinct call observations for
+  speech duration and backend tokens. Locally measured egress remains a
+  separate observation.
+
+### Package 8 work in progress (2026-09-26)
+
+- A red fake-socket test showed `Session.append_history/2` was absent. The
+  channel now routes published text only from the STS consumer and validates
+  that `:history_reseed` providers implement the callback. Caller final text
+  is appended after the capability's transcript policy check; agent text is
+  appended after playback settlement and aligned prefix resolution. The pure
+  `Speech.Duplex.PublishedHistory` ring trims to 128 messages and an estimated
+  8,192 tokens. A second red capability test showed both texts missing from
+  the replacement `session.start`; it passes after the publication hooks.
+- On `expired` or `connection_lost`, GPT-Live starts one replacement socket
+  with that ring and a five-second readiness deadline. An unanswered caller
+  turn or active output prompts a brief continuation after `session.started`;
+  idle recovery waits for caller input. A second drop and a missed deadline
+  fail with `:reseed_failed`. A red test found an announced pre-drop burst
+  became inadmissible after reset; the adapter now closes its old segmenter,
+  retains the old segment's buffered PCM for admission, and starts a fresh
+  segmenter for replacement audio. The fake-socket tests cover all three
+  resumption states and the one-replacement limit.
+- Descriptor validation initially made the existing Morse duplex tests fail:
+  its descriptor already declares `:history_reseed` but had no callback. A
+  focused red Morse test captured that initialization failure. The local
+  provider and its public wrapper now append to the same bounded published
+  history. Scripted local close/reseed scenarios remain open.
+- Focused Morse, history, GPT-Live and capability tests passed 39 tests, zero
+  failures (seed 317109). Root format and unused-dependency checks passed;
+  the first strict Credo rerun found that the Morse session had grown nine
+  lines beyond the module size limit. Its playback-slot indexing, credit drain
+  and terminal output operations moved coherently into `SegmentStore`; focused
+  duplex suites passed 21 tests, zero failures (seed 817840), and strict Credo
+  then passed. Root formatting, warnings-as-errors compile, unused-dependency
+  check and Lean verification passed. The full umbrella test was still running
+  when this note was written.
+
+### OpenAI enablement checkpoint (2026-09-26)
+
+- The user explicitly requested OpenAI to be available for both GPT-Live
+  speech-to-speech and direct LLM models with a single API-key credential.
+  The previous hosted-check gate on the manifest and Console badge was
+  removed; the hosted phone check remains open for milestone acceptance.
+- Red tests first showed OpenAI model translation, tenant model activation,
+  registry STS resolution, compiled speech activation and Console setup were
+  unavailable. `ProviderSelection` now translates direct `openai:` models,
+  preserving only public generation options. ReqLLM requires
+  `max_completion_tokens` for GPT-5; the translator maps a supplied public
+  `max_tokens` and supplies 4,096 when absent. Tenant credentials are supplied
+  only by `CredentialSource`. GPT-Live defaults the delegated backend to
+  `gpt-5`; the call spec needs no additional options.
+- The catalog resolves OpenAI STS, its provider settings are enabled in the
+  umbrella configuration, and its manifest advertises `:sts`. The Console
+  catalog offers OpenAI for LLM and speech-to-speech; the form presents and
+  submits only an API key. Focused backend and frontend tests pass. `mix
+  assets.build` and TypeScript checking pass. Rendered Chrome inspection of
+  the live Console at 1280x800 and 390x844 shows the OpenAI selection and one
+  API-key field without layout overflow.
+- Before this enablement, the full umbrella passed 2,822 tests, zero failures,
+  58 excluded. Format, warnings-as-errors compile, strict Credo,
+  unused-dependency check and Lean verification also passed. Final gates for
+  this enablement are being rerun before committing.
+
+### Commit preparation and umbrella reruns (2026-09-26)
+
+- The enabled work was split into commits for the shared duplex runtime,
+  OpenAI backend integrations, and Console/configuration/documentation so
+  each has a purpose-specific commit body. Staged changes were checked for
+  whitespace errors and credential-like literals; none were found.
+- The first full umbrella rerun exposed an outdated OpenAI manifest assertion
+  and two STS cutover timeouts while the local browser server was also
+  running. The manifest assertion was updated for the authorized `:sts`
+  exposure. Both cutover cases passed in isolation, including with the
+  failing suite seed, after the browser server stopped.
+- The second full rerun passed those tests but exposed an existing speech
+  startup-deadline test with a 40 ms budget. Under the busy umbrella suite,
+  the provider could time out before its bound notification, so the test did
+  not reach the behavior it intended to check. Its deadline was raised to
+  2,000 ms and the close assertion to 3,000 ms; the focused test passed.
+  The final full umbrella rerun remains in progress.
+
+- That rerun passed CallEngine (1,634), Gateway (519), Calls (120), Providers
+  (22), Agent Runtime (96), MCP (37), Artifacts (20) and Persistence (186)
+  with zero failures. Console found one more stale expected capability list:
+  its operator endpoint returned OpenAI `:sts` correctly, but the test still
+  expected credentials only. The assertion was updated and the complete
+  Console child suite passed 191 tests with zero failures. A final umbrella
+  rerun is needed to record a green root `mix test` gate.
+
+- The final umbrella rerun passed all nine child suites: 2,825 tests, zero
+  failures, 58 integration exclusions (seed 309443). Format, warnings-as-errors
+  compile, strict Credo, unused-dependency check, `bin/verify-lean`, Console
+  TypeScript, lint, 198 frontend tests and `mix assets.build` passed during
+  this checkpoint. The rendered Console was inspected in Chrome at 1280x800
+  and 390x844, with OpenAI selected and only the API-key field visible.

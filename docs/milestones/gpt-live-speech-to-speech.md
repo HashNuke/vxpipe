@@ -1,16 +1,13 @@
 # GPT-Live speech-to-speech
 
-Status: specification frozen on 2026-09-25; checkpoints A and B are implemented
-and verified. Checkpoint B was reopened by review 3 and is closed again after
-the clock-paced output rework; review 4's R4-1 is resolved by giving the Morse
-duplex provider its own real-time clock (`clock: :realtime`, the default) with a
-manual test mode. Review 6's six code-review findings (R6-1..R6-6) are resolved
-(see the response to review 6). Checkpoint C is partially implemented: the capability's
-provider-owned barge-in branch is covered by a red-green test and the room's
-`:overlapped` outcome is in place, while the compiled-room duplex proof and the
-remaining C fixtures, checkpoint D (OpenAI package and GPT-Live adapter),
-checkpoint E (session continuity) and checkpoint F (docs, Console gating,
-hosted check, load, review) are not started. Change the specification only
+Status: specification frozen on 2026-09-25; checkpoints A, B and C are
+implemented and verified. Checkpoint D has a credential package and a local
+fake-socket adapter; checkpoint E has a first history-reseed path. Their
+remaining acceptance cases and checkpoint F are open. Checkpoint B was
+reopened by review 3 and closed again after the clock-paced output rework;
+review 4's R4-1 is resolved by the Morse duplex real-time clock. Review 6's
+six code-review findings (R6-1..R6-6) are resolved (see the response to review
+6). Change the specification only
 through a recorded amendment in this section, with its reason; for example, a
 checkpoint A finding that contradicts an assumption below. The milestones index
 entry stays unchecked until the acceptance checks below pass.
@@ -397,9 +394,8 @@ the pre-existing load-sensitive STT timing behavior, not this contract change.
 
 ### C — Room integration
 
-Partial: the capability's `barge_in: :provider` branch is covered by a
-red-green test and the room's `:overlapped` outcome is implemented. The
-compiled-room duplex proof and the remaining C fixtures are open.
+Complete: the capability branch, room outcome and compiled-room duplex
+fixtures pass with the real-time Morse duplex provider.
 
 - [x] Red-green the capability's barge-in branch: with `barge_in: :provider`,
   caller onset leaves output playing; policy denial, hold and teardown still
@@ -411,36 +407,37 @@ compiled-room duplex proof and the remaining C fixtures are open.
   fail (verified red then green). Existing `capability` + `speech` suites stay
   green. Hold and teardown fencing are covered by the existing STS hold/stop
   tests.
-- [ ] Prove compiled room calls with the Morse duplex provider: one caller and
+- [x] Prove compiled room calls with the Morse duplex provider: one caller and
   one agent turn per utterance, `:inferred_gap` evidence on the public caller
-  turn, and agent text published after playback settlement. Open.
-- [ ] Prove overlap: the caller speaks during the reply, the provider yields,
+  turn, and agent text published after playback settlement.
+- [x] Prove overlap: the caller speaks during the reply, the provider yields,
   the agent turn ends `:overlapped`, and its published text stops at the last
   fragment whose audio played. Prove a short backchannel during the reply does
   not stop playback.
-  Partial: the room now labels an overlapped agent turn `:overlapped`
-  (`AgentTurnCompleted.outcome`, default `:completed`) and inferred caller
-  boundaries carry their evidence onto `ParticipantTurnCompleted`. Focused room
-  tests `room_authority/speech_to_speech_test.exs` prove both outcomes. The
-  compiled-room overlap and per-fragment truncation remain.
-- [ ] Prove a soft word onset below the activation threshold is played in full
-  through the pre-roll. Open (the pure `OutputSegmenter` proof exists in B).
-- [ ] Prove hold with `hold: :mute`: input is muted, output is discarded while
+  The compiled-room tests prove `:overlapped`, the aligned `"RECEIVED"` prefix,
+  and uninterrupted playback after a 5 ms backchannel.
+- [x] Prove a soft word onset below the activation threshold is played in full
+  through the pre-roll. The 20 ms attenuated Morse onset is delivered and the
+  full reply decodes.
+- [x] Prove hold with `hold: :mute`: input is muted, output is discarded while
   held, the model receives hold and release context, a tool started before the
   hold delivers its result after it, and release resumes without a new session.
-  Open.
-- [ ] Prove a room fence mid-reply publishes only the aligned spoken prefix and
-  zero-playback fences publish none. Open.
-- [ ] Prove a tool invocation survives overlap and its result reaches the
-  provider. Open.
-- [ ] Exit: room tests pass for all of the above plus unchanged Gemini and
-  Morse STS room suites. Open.
+  The compiled room retains the pending tool, logs the hold and release,
+  discards held output, and speaks its buffered result on the same session.
+- [x] Prove a room fence mid-reply publishes only the aligned spoken prefix and
+  zero-playback fences publish none. Both policy cases pass in the compiled room.
+- [x] Prove a tool invocation survives overlap and its result reaches the
+  provider. The compiled-room overlap fixture speaks the tool result.
+- [x] Exit: room tests pass for all of the above plus unchanged Gemini and
+  Morse STS room suites. The combined room suite passed 46 tests; the umbrella
+  passed 2,787 tests, zero failures and 58 excluded (seed 82355).
 
 ### D — OpenAI provider package and GPT-Live adapter
 
-- [ ] Add `Vxpipe.Providers.OpenAI` with a tenant API-key credential through
-  the existing tenant credential readers. The manifest does not advertise
-  `:sts` until checkpoint F.
+- [x] Add `Vxpipe.Providers.OpenAI` with a tenant API-key credential through
+  the existing tenant credential readers. The manifest advertises `:sts` for
+  GPT-Live. The provider and registry suites pass 9 tests,
+  including the fixed model-list probe and bounded credential shape.
 - [ ] Implement `Vxpipe.Providers.OpenAI.GPTLiveSession` and a private socket
   under the agent capability tree: `session.start`, audio append and output
   decoding, fragment handling through the shared modules, and PCM format
@@ -468,12 +465,13 @@ compiled-room duplex proof and the remaining C fixtures are open.
   the fake socket.
 - [ ] Exit: lifecycle tests pass with both local providers.
 
-### F — Service gating, documentation and acceptance
+### F — Service setup, documentation and acceptance
 
 - [ ] Update the speech provider contract, integration guide (with an author
   example for the duplex profile) and provider-package docs.
-- [ ] Add a gated OpenAI GPT-Live option to the Console setup catalog; the
-  badge stays disabled until the hosted check passes.
+- [x] Add OpenAI to the Console setup catalog with one API-key field and
+  available LLM and GPT-Live speech badges. The user explicitly requested
+  local enablement before the hosted check on 2026-09-26.
 - [ ] Add a tagged hosted check, run only with explicit authorization for
   billable use and a fixed short budget, over a real Twilio or Telnyx phone
   leg: a short turn, a backchannel and a real interruption during a reply, a
@@ -483,8 +481,15 @@ compiled-room duplex proof and the remaining C fixtures are open.
   widths.
 - [ ] Run the bounded ten-call local load lane with the Morse duplex provider.
 - [ ] Run an independent implementation review and all root completion checks.
-- [ ] Enable the manifest `:sts` entry and service badge only after the hosted
-  check passes.
+- [x] Enable the manifest `:sts` entry and service badge for local use. Hosted
+  phone interoperability remains an open acceptance gate.
+
+Local enablement verification on 2026-09-26: the umbrella suite passed 2,825
+tests with zero failures and 58 integration exclusions. Format, warnings-as-errors
+compile, strict Credo, unused dependencies and Lean verification passed. The
+Console build, TypeScript check, lint and 198 frontend tests passed; Chrome
+inspection covered desktop and mobile credential setup. The hosted phone check,
+bounded Morse load lane and independent review remain open.
 
 ## Scope boundaries
 
@@ -1975,4 +1980,47 @@ independent verification.
 
 Open findings: R1-4, R10-2. Package 3 (aligned spoken prefix) is next.
 
+### Response to review 12 — 2026-09-26 (package 3)
 
+Implementation response to Review 12's package 3. The compiled-room fence
+acceptance remains in checkpoint C and is not checked here.
+
+- Package 3 (aligned spoken prefix) — **implemented at the capability and
+  provider boundary.** An admitted output keeps at most 256 timed transcript
+  fragments and 64 KiB of text. Playback settlement selects only fragments
+  whose audio end offset is within the sink's reported played duration. A
+  fence sends that same aligned prefix to the room; the room publishes it
+  before the interruption terminal event. A zero-egress fence publishes no
+  text. Unaligned STS providers retain their existing snapshot behavior.
+- The Morse duplex provider now derives word intervals from the encoded runs
+  and passes each word through `OutputSegmenter.fragment/2`. Its per-burst
+  transcript no longer repeats the whole reply. A final empty marker closes
+  a segment without publishing empty text.
+- Focused red-green tests cover partial settlement, first-word fence,
+  zero-egress fence, foreign output identity, fragment count overflow,
+  room publication order, and the Morse provider's split bursts. The
+  call-engine child suite passes 1,588 tests, zero failures, 30 excluded
+  (seed 628713). After splitting transcript and reply responsibilities for
+  strict Credo, the root suite passes 2,775 tests with zero failures and 58
+  excluded (seed 600389); format, warnings-as-errors compile, strict Credo,
+  unused-dependency check and `bin/verify-lean` also pass. Compiled-room
+  acceptance remains pending.
+
+Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
+
+### Response to review 12 — 2026-09-26 (package 4 capability and room path)
+
+- Added the conditional `set_input_hold/2` STS provider contract and descriptor
+  validation. `Speech.Session` routes the bounded command through its channel.
+- `hold: :mute` now keeps the provider session and admitted tools. The
+  capability mutes input, fences output, rejects queued responses and defers
+  tool-produced Morse speech until release. Release unmutes before reopening
+  input. `hold: :stop` keeps its existing tool retirement and quiescence path.
+- The room preserves admitted tools during a transfer mute and can settle a
+  result while the caller epoch is retired. It still checks capability,
+  activation, source identity, and current audio policy. A policy hold cancels
+  pending tools. Focused capability, room and descriptor tests passed. The
+  umbrella rerun passed 2,778 tests with zero failures and 58 excluded; root
+  format, warnings-as-errors compile, strict Credo, unused-dependency check
+  and Lean verification passed. The compiled-room proof and checkpoint C
+  checkbox remain open for package 5.
