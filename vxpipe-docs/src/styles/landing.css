@@ -357,56 +357,18 @@ html[data-has-hero] .header {
 .provider-groups {
   display: flex;
   flex-direction: column;
-  gap: 2.25rem;
-  padding-block: 0.5rem 1rem;
+  gap: 2.5rem;
+  padding-block: 1.5rem;
   text-align: center;
 }
 
-.sl-markdown-content .provider-groups .provider-group {
+.provider-groups .provider-group {
   margin: 0;
   min-width: 0;
 }
 
-.sl-markdown-content .provider-group h3 {
-  margin: 0 0 1.25rem;
-  color: var(--muted-foreground);
-  font-family: var(--sl-font-mono, ui-monospace, monospace);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.provider-logos--planned {
-  opacity: 0.6;
-}
-
-.provider-logos--planned .provider-logo {
-  font-size: var(--sl-text-base);
-}
-
-.provider-logos--planned .provider-wordmark {
-  height: 1.35rem;
-}
-
-.provider-monogram {
-  display: inline-grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
-  color: var(--sl-color-black);
-  background-color: var(--sl-color-white);
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.provider-logo small {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-align: start;
+.provider-group h2 {
+  margin: 0 0 1.5rem;
 }
 
 .provider-logos {

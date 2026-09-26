@@ -2,18 +2,17 @@
 title: VxPipe
 description: Open-source, self-hosted voice agents. Phone and browser calls, handoff between agents and people, MCP tools, recording, and live call inspection on your own infrastructure.
 template: splash
+release: v0.1.0
 hero:
   title: Voice agents you own.
-  tagline: VxPipe runs the whole call — phone and browser audio, speech, models, tools, and handoff to people — on your infrastructure, with no per-minute platform fee.
+  tagline: VxPipe runs the whole call on your infrastructure. Phone and browser audio, speech, models, tools, and handoff to people, with no per-minute platform fee.
 ---
 
-import { Badge, Icon, LinkButton, Steps } from '@astrojs/starlight/components';
+import { Badge, Code, Icon, LinkButton, Steps } from '@astrojs/starlight/components';
 import AiStudio from '@lobehub/icons/es/AiStudio/components/Mono.js';
 import Claude from '@lobehub/icons/es/Claude/components/Color.js';
 import ElevenLabs from '@lobehub/icons/es/ElevenLabs/components/Mono.js';
 import Fireworks from '@lobehub/icons/es/Fireworks/components/Color.js';
-import Gemini from '@lobehub/icons/es/Gemini/components/Color.js';
-import Google from '@lobehub/icons/es/Google/components/Color.js';
 import Grok from '@lobehub/icons/es/Grok/components/Mono.js';
 import Mistral from '@lobehub/icons/es/Mistral/components/Color.js';
 import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono.js';
@@ -62,7 +61,7 @@ import '../../styles/landing.css';
   <article className="pillar">
     <Icon name="server" class="pillar-icon" />
     <h3>Your infrastructure, your data</h3>
-    <p>Calls, transcripts, and recordings stay in your own PostgreSQL and S3-compatible storage.</p>
+    <p>Calls, transcripts, and recordings stay on your own servers and storage.</p>
   </article>
   <article className="pillar">
     <Icon name="approve-check-circle" class="pillar-icon" />
@@ -87,14 +86,11 @@ import '../../styles/landing.css';
 <Steps>
 1. **Connect your providers.**
 
-   Add speech, model, and phone credentials for a tenant. VxPipe stores them encrypted in your
-   database.
+   Add your speech, model, and phone provider keys. VxPipe stores them encrypted.
 
 2. **Describe the call.**
 
-   Write a call spec: the agents, their instructions and providers, their MCP tools, the call
-   variables to collect, and who may transfer to whom. Each saved call spec is an immutable
-   version.
+   Write a call spec with your agents, tools, and transfers.
 
 3. **Take calls.**
 
@@ -139,64 +135,17 @@ import '../../styles/landing.css';
     <h3 id="feature-own">Own</h3>
     <p className="feature-group-lede">No black box between you and your callers.</p>
     <ul>
-      <li><Icon name="server" class="feature-icon" /><span><strong>Self-hosted.</strong> Run it on your own servers with your own PostgreSQL.</span></li>
+      <li><Icon name="server" class="feature-icon" /><span><strong>Self-hosted.</strong> Run it on your own servers.</span></li>
       <li><Icon name="seti:elixir" class="feature-icon" /><span><strong>Built on Elixir and OTP.</strong> Calls run as supervised processes, so one failing call stays contained.</span></li>
-      <li><Icon name="approve-check" class="feature-icon" /><span><strong>Checked state machines.</strong> Critical audio-switching logic is modelled in Lean and replayed against the Elixir code.</span></li>
       <li><Icon name="code-branch" class="feature-icon" /><span><strong>Extendable.</strong> Add your own providers, tools, and integrations.</span></li>
     </ul>
   </section>
 </div>
 
-## Works with your providers
-
 <div className="provider-groups">
-  <section className="provider-group" data-status="available" aria-labelledby="providers-available">
-    <h3 id="providers-available">Available today</h3>
+  <section className="provider-group" aria-labelledby="ai-providers">
+    <h2 id="ai-providers">Supported AI Providers</h2>
     <div className="provider-logos">
-      <span className="provider-logo">
-        <Gemini size={32} aria-hidden="true" focusable="false" />
-        <span>Gemini</span>
-      </span>
-      <span className="provider-logo">
-        <span className="provider-monogram" aria-hidden="true">Z</span>
-        <span>Zenmux <small>GPT, Claude, and more</small></span>
-      </span>
-      <span className="provider-logo provider-logo--deepgram">
-        <DeepgramLogo width="32" height="32" aria-hidden="true" focusable="false" />
-        <span>Deepgram</span>
-      </span>
-      <span className="provider-logo">
-        <RimeAILogo class="provider-wordmark provider-wordmark--compact provider-wordmark--rime" role="img" aria-label="Rime" focusable="false" />
-      </span>
-      <span className="provider-logo">
-        <Google size={32} aria-hidden="true" focusable="false" />
-        <span>Google speech</span>
-      </span>
-      <span className="provider-logo">
-        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
-      </span>
-    </div>
-  </section>
-  <section className="provider-group" data-status="in-progress" aria-labelledby="providers-in-progress">
-    <h3 id="providers-in-progress">In progress</h3>
-    <div className="provider-logos">
-      <span className="provider-logo provider-logo--twilio">
-        <TwilioLogo width="32" height="32" aria-hidden="true" focusable="false" />
-        <span>Twilio</span>
-      </span>
-      <span className="provider-logo">
-        <OpenAI size={32} aria-hidden="true" focusable="false" />
-        <span>OpenAI GPT-Live</span>
-      </span>
-      <span className="provider-logo">
-        <Gemini size={32} aria-hidden="true" focusable="false" />
-        <span>Gemini Live</span>
-      </span>
-    </div>
-  </section>
-  <section className="provider-group" data-status="planned" aria-labelledby="providers-planned">
-    <h3 id="providers-planned">Planned</h3>
-    <div className="provider-logos provider-logos--planned">
       <span className="provider-logo">
         <AssemblyAILogo class="provider-wordmark" role="img" aria-label="AssemblyAI" focusable="false" />
       </span>
@@ -204,12 +153,32 @@ import '../../styles/landing.css';
         <CartesiaLogo class="provider-wordmark" role="img" aria-label="Cartesia" focusable="false" />
       </span>
       <span className="provider-logo">
-        <ElevenLabs size={28} aria-hidden="true" focusable="false" />
+        <Claude size={32} aria-hidden="true" focusable="false" />
+        <span>Claude</span>
+      </span>
+      <span className="provider-logo provider-logo--deepgram">
+        <DeepgramLogo width="32" height="32" aria-hidden="true" focusable="false" />
+        <span>Deepgram</span>
+      </span>
+      <span className="provider-logo">
+        <ElevenLabs size={32} aria-hidden="true" focusable="false" />
         <span>ElevenLabs</span>
+      </span>
+      <span className="provider-logo">
+        <Fireworks size={32} aria-hidden="true" focusable="false" />
+        <span>Fireworks AI</span>
       </span>
       <span className="provider-logo">
         <FishAudioLogo class="provider-icon" aria-hidden="true" focusable="false" />
         <span>Fish Audio</span>
+      </span>
+      <span className="provider-logo">
+        <AiStudio size={32} aria-hidden="true" focusable="false" />
+        <span>Google AI Studio</span>
+      </span>
+      <span className="provider-logo">
+        <Grok size={32} aria-hidden="true" focusable="false" />
+        <span>Grok</span>
       </span>
       <span className="provider-logo">
         <InworldAILogo class="provider-wordmark" role="img" aria-label="Inworld AI" focusable="false" />
@@ -218,38 +187,40 @@ import '../../styles/landing.css';
         <MinimaxLogo class="provider-wordmark" role="img" aria-label="MiniMax" focusable="false" />
       </span>
       <span className="provider-logo">
+        <Mistral size={32} aria-hidden="true" focusable="false" />
+        <span>Mistral</span>
+      </span>
+      <span className="provider-logo">
+        <OpenAI size={32} aria-hidden="true" focusable="false" />
+        <span>OpenAI</span>
+      </span>
+      <span className="provider-logo">
+        <OpenRouter size={32} aria-hidden="true" focusable="false" />
+        <span>OpenRouter</span>
+      </span>
+      <span className="provider-logo">
         <ResembleAILogo class="provider-wordmark" role="img" aria-label="Resemble AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <RimeAILogo class="provider-wordmark provider-wordmark--compact provider-wordmark--rime" role="img" aria-label="Rime AI" focusable="false" />
       </span>
       <span className="provider-logo">
         <SarvamLogo class="provider-wordmark provider-wordmark--sarvam" role="img" aria-label="Sarvam" focusable="false" />
       </span>
       <span className="provider-logo">
-        <Claude size={28} aria-hidden="true" focusable="false" />
-        <span>Claude</span>
+        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
       </span>
+    </div>
+  </section>
+  <section className="provider-group" aria-labelledby="telephony-providers">
+    <h2 id="telephony-providers">Supported Telephony Providers</h2>
+    <div className="provider-logos">
       <span className="provider-logo">
-        <OpenAI size={28} aria-hidden="true" focusable="false" />
-        <span>OpenAI</span>
+        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
       </span>
-      <span className="provider-logo">
-        <AiStudio size={28} aria-hidden="true" focusable="false" />
-        <span>Google AI Studio</span>
-      </span>
-      <span className="provider-logo">
-        <Mistral size={28} aria-hidden="true" focusable="false" />
-        <span>Mistral</span>
-      </span>
-      <span className="provider-logo">
-        <Grok size={28} aria-hidden="true" focusable="false" />
-        <span>Grok</span>
-      </span>
-      <span className="provider-logo">
-        <OpenRouter size={28} aria-hidden="true" focusable="false" />
-        <span>OpenRouter</span>
-      </span>
-      <span className="provider-logo">
-        <Fireworks size={28} aria-hidden="true" focusable="false" />
-        <span>Fireworks AI</span>
+      <span className="provider-logo provider-logo--twilio">
+        <TwilioLogo width="32" height="32" aria-hidden="true" focusable="false" />
+        <span>Twilio</span>
       </span>
     </div>
   </section>
@@ -262,7 +233,7 @@ import '../../styles/landing.css';
 |  | VxPipe | Hosted voice platforms | Voice agent frameworks |
 | --- | --- | --- | --- |
 | Where calls run | Your infrastructure | The vendor's cloud | Your infrastructure |
-| What you pay for | Your providers and hosting | Usually a per-minute fee on top of provider costs | Your providers and hosting |
+| What you pay for | Your providers and hosting | Per-minute fee | Your providers and hosting |
 | What you build | Agents, tools, and call specs | Agents and tools | Agents, tools, and the call engine around them |
 | Handoff, recording, and inspection | Included | Included | Build or assemble yourself |
 | Source code | Apache 2.0 | Usually closed | Usually open source |
@@ -275,47 +246,21 @@ import '../../styles/landing.css';
 
 ## Quickstart
 
-<div className="section-lede">
-  The Docker image is coming soon. Until then, run VxPipe from source. You need Elixir 1.19,
-  PostgreSQL, Node.js 24, a Rust toolchain, and API keys for Gemini and Deepgram.
-</div>
-
 <Steps>
-1. **Clone and install.**
+1. **Start VxPipe.**
 
-   ```shell
-   git clone https://github.com/HashNuke/vxpipe.git
-   cd vxpipe
-   mix deps.get
-   mix assets.setup
-   ```
+   <Code
+     lang="shell"
+     code={`docker compose -p vxpipe -f "https://github.com/HashNuke/vxpipe.git#${frontmatter.release}:compose.yml" up -d`}
+   />
 
-2. **Create the database.**
+2. **Open VxPipe.**
 
-   ```shell
-   mix ecto.create
-   mix ecto.migrate
-   ```
-
-3. **Add your provider keys and start VxPipe.**
-
-   Set up a tenant with your Gemini and Deepgram keys by following the guide, then run:
-
-   ```shell
-   export VXPIPE_DEV_TENANT="TENANT_KEY"
-   APP_HOST=localhost VXPIPE_DEV_TLS=http mix run --no-halt
-   ```
-
-4. **Talk to the sample agent.**
-
-   Open [the voice console](http://localhost:4000/admin/samples/pipecat-console), select
-   **Create room**, then **Connect**. Ask "What time is it?", then say "Transfer me to billing."
+   Visit [localhost:4000/start](http://localhost:4000/start).
 </Steps>
 
 <div className="quickstart-cta">
-  <LinkButton href="https://github.com/HashNuke/vxpipe/blob/main/docs/getting-started-elixir.md" icon="open-book">
-    Read the full guide
-  </LinkButton>
+  <LinkButton href="/en/docs/" icon="open-book">View documentation</LinkButton>
 </div>
 
 ## FAQ
@@ -332,16 +277,15 @@ import '../../styles/landing.css';
   <details>
     <summary>Do I need to know Elixir?</summary>
 
-    Not to build agents. Agents, providers, and tools are described in call specs, and tools
-    connect over MCP, so they can be written in any language. Running VxPipe from source needs
-    the Elixir toolchain today; a Docker image is planned.
+    No. VxPipe runs as a Docker image. You describe your agents in a call spec, and your tools can
+    be written in any language.
 
   </details>
   <details>
     <summary>Where does my call data go?</summary>
 
     Call audio and text go to the phone, speech, and model providers you configure. Call history
-    stays in your PostgreSQL, recordings go to your S3-compatible bucket, and provider keys are
+    stays in your database, recordings go to your own storage bucket, and provider keys are
     stored encrypted. VxPipe has no hosted service of its own.
 
   </details>
