@@ -26,8 +26,9 @@ needs a contract change, it says so and names the amendment to record.
 
 ## Where things stand
 
-Current snapshot (2026-09-26): checkpoints A–D are locally complete. E has an
-initial history-reseed path, and F has Console enablement, documentation,
+Current snapshot (2026-09-26): checkpoints A–D are locally complete. E has
+history reseeding and all three GPT-Live post-reseed speech cases; transfer
+and teardown acceptance remains. F has Console enablement, documentation,
 rendered setup inspection and the ten-call local duplex load lane. The E
 lifecycle matrix, independent review and authorized hosted phone check remain
 open. The ten-call local duplex load lane passed on

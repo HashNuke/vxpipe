@@ -504,7 +504,7 @@ unused-dependency and Lean checks passing. No hosted call was made.
   settled agent text; `gpt_live_session_test.exs` covers both close reasons,
   the final close usage delta and a new session's fresh counter. The shared
   `published_history_test.exs` proves both startup bounds.
-- [ ] Prove post-reseed speech: a drop mid-reply or after an unanswered caller
+- [x] Prove post-reseed speech: a drop mid-reply or after an unanswered caller
   turn makes the new session continue; a drop while idle leaves it waiting.
 - [x] Duration renewal is conditional. The official
   [GPT-Live session guide](https://developers.openai.com/api/docs/guides/live-conversations)
@@ -517,6 +517,17 @@ unused-dependency and Lean checks passing. No hosted call was made.
   transfer releases the hold with the same session, with both Morse duplex and
   the fake socket.
 - [ ] Exit: lifecycle tests pass with both local providers.
+
+Post-reseed speech evidence (2026-09-26): the real STS capability and fake
+GPT-Live socket prove all three resume branches. A drop during an active agent
+burst settles the first heard transcript, prompts the replacement and plays a
+new burst. An unanswered caller turn prompts the replacement and plays its
+answer. An idle drop sends no prompt; speech resumes only after fresh caller
+audio. The focused fake-socket file passed 16 tests, zero failures. Transfer
+and teardown cases, including the Morse duplex provider, remain for E's exit.
+The umbrella suite passed 2,843 tests with zero failures and 59 tagged
+exclusions, alongside format, compile, Credo, unused-dependency and Lean
+checks.
 
 Reseed-failure evidence (2026-09-26): fake-socket capability tests disconnect
 the replacement socket and withhold replacement readiness past the five-second

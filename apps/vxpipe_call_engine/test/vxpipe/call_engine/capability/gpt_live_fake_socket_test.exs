@@ -211,6 +211,103 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     refute_receive {:test_gpt_live_started, _, _}, 50
   end
 
+  test "an idle replacement waits for caller input before speaking" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    TestGPTLiveTransport.disconnect(wire)
+
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
+
+    TestGPTLiveTransport.deliver_sync(replacement, %{
+      "type" => "session.started",
+      "session" => %{"id" => "s2"}
+    })
+
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    _ = :sys.get_state(provider)
+
+    refute_received {:test_gpt_live_control, ^replacement,
+                     %{"type" => "session.commentary.append"}}
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+
+    assert_receive {:test_gpt_live_control, ^replacement,
+                    %{"type" => "session.input_audio.append"}},
+                   1_000
+
+    assert_replacement_speaks(capability, replacement)
+  end
+
+  test "an unanswered caller turn resumes as audible speech after reseed" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+    deliver_capability_fixture(wire, "caller_hi")
+
+    silence = :binary.copy(<<0, 0>>, div(24_000 * 800, 1_000))
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", silence)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "Hi", final: true}}},
+                   1_000
+
+    TestGPTLiveTransport.disconnect(wire)
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
+
+    TestGPTLiveTransport.deliver_sync(replacement, %{
+      "type" => "session.started",
+      "session" => %{"id" => "s2"}
+    })
+
+    assert_receive {:test_gpt_live_control, ^replacement,
+                    %{"type" => "session.commentary.append"}},
+                   1_000
+
+    assert_replacement_speaks(capability, replacement)
+  end
+
+  test "a drop during an agent burst settles heard audio then replacement speech" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+    deliver_capability_fixture(wire, "agent_hello")
+
+    tone = :binary.copy(<<0, 16>>, 480)
+
+    TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(tone)
+    })
+
+    TestGPTLiveTransport.disconnect(wire)
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent1", first_turn, _}, 1_000
+    assert_receive {:test_audio_output, sink, _frame}, 1_000
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
+
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    TestAudioOutputSink.playback_progress(sink, 20, 20)
+    TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", "Hello", ^first_turn, _,
+                    _, _},
+                   1_000
+
+    TestGPTLiveTransport.deliver_sync(replacement, %{
+      "type" => "session.started",
+      "session" => %{"id" => "s2"}
+    })
+
+    assert_receive {:test_gpt_live_control, ^replacement,
+                    %{"type" => "session.commentary.append"}},
+                   1_000
+
+    assert_replacement_speaks(capability, replacement)
+  end
+
   test "a replacement that misses readiness fails the speech capability within its deadline" do
     {capability, wire} = start_ready_capability()
     TestGPTLiveTransport.disconnect(wire)
@@ -439,6 +536,26 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
       record_audio: true,
       save_transcripts: true
     }
+  end
+
+  defp assert_replacement_speaks(capability, replacement) do
+    deliver_capability_fixture(replacement, "agent_hello")
+    tone = :binary.copy(<<0, 16>>, 480)
+    silence = :binary.copy(<<0, 0>>, 480 * 2)
+
+    TestGPTLiveTransport.deliver_sync(replacement, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(tone <> silence)
+    })
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent1", turn, _}, 1_000
+    assert_receive {:test_audio_output, sink, _frame}, 1_000
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    TestAudioOutputSink.playback_progress(sink, 60, 60)
+    TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", "Hello", ^turn, _, _, _},
+                   1_000
   end
 
   defp start_ready_capability(options \\ []) do
