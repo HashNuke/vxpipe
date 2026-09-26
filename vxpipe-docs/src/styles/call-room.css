@@ -4,16 +4,6 @@
    turntable contact; the caller joins over wire and telephony legs. */
 
 .crv {
-  /* Fixed caller blue: the theme accent variable resolves too dark here. */
-  --crv-caller: #7aa2ff;
-  --crv-caller-line: rgb(122 162 255 / 0.55);
-  --crv-caller-wash: rgb(122 162 255 / 0.13);
-  --crv-agent: var(--sl-color-green-high, #34d399);
-  --crv-agent-line: rgb(52 211 153 / 0.5);
-  --crv-agent-wash: rgb(52 211 153 / 0.12);
-  --crv-muted: var(--sl-color-gray-3, #a1a1aa);
-  --crv-hairline: rgb(255 255 255 / 0.12);
-  --crv-surface: #18191c;
   --crv-cycle: 12s;
 
   margin-block: 2rem 2.5rem;
@@ -21,12 +11,51 @@
   max-width: 54rem;
 }
 
+/* Every surface, line and accent is a theme token; the dark set is the default. */
+.crv,
 html[data-theme='dark'] .crv {
+  /* Fixed caller blue: the theme accent variable resolves too dark here. */
+  --crv-caller: #7aa2ff;
+  --crv-caller-line: rgb(122 162 255 / 0.55);
+  --crv-caller-wash: rgb(122 162 255 / 0.13);
+  --crv-caller-glow: rgb(122 162 255 / 0.6);
+  --crv-agent: var(--sl-color-green-high, #34d399);
+  --crv-agent-line: rgb(52 211 153 / 0.5);
+  --crv-agent-wash: rgb(52 211 153 / 0.12);
+  --crv-agent-glow: rgb(52 211 153 / 0.55);
+  --crv-muted: var(--sl-color-gray-3, #a1a1aa);
+  --crv-strong: #fff;
+  --crv-hairline: rgb(255 255 255 / 0.12);
+  --crv-chip-line: rgb(255 255 255 / 0.2);
+  --crv-track: rgb(255 255 255 / 0.28);
   --crv-surface: #18191c;
+  --crv-panel: rgb(0 0 0 / 0.28);
+  --crv-card: #111214;
+  --crv-card-active: #0b1712;
+  --crv-mixer-bg: #0a0a0c;
+  --crv-shadow: 0 1.5rem 4rem -2rem rgb(0 0 0 / 0.7);
 }
 
 html[data-theme='light'] .crv {
+  --crv-caller: #2f5fd0;
+  --crv-caller-line: rgb(47 95 208 / 0.45);
+  --crv-caller-wash: rgb(47 95 208 / 0.08);
+  --crv-caller-glow: rgb(47 95 208 / 0.4);
+  --crv-agent: #047857;
+  --crv-agent-line: rgb(4 120 87 / 0.45);
+  --crv-agent-wash: rgb(4 120 87 / 0.08);
+  --crv-agent-glow: rgb(4 120 87 / 0.3);
+  --crv-muted: #5b606a;
+  --crv-strong: #0b0c0e;
+  --crv-hairline: rgb(15 23 42 / 0.12);
+  --crv-chip-line: rgb(15 23 42 / 0.18);
+  --crv-track: rgb(15 23 42 / 0.22);
   --crv-surface: #f8f9fb;
+  --crv-panel: #ffffff;
+  --crv-card: #f1f3f6;
+  --crv-card-active: #ecfdf5;
+  --crv-mixer-bg: #ffffff;
+  --crv-shadow: 0 1.5rem 3rem -2rem rgb(15 23 42 / 0.35);
 }
 
 .crv-room {
@@ -38,7 +67,7 @@ html[data-theme='light'] .crv {
     radial-gradient(60% 90% at 18% 0%, rgb(122 162 255 / 0.1), transparent 70%),
     radial-gradient(60% 90% at 85% 100%, rgb(52 211 153 / 0.09), transparent 70%),
     var(--crv-surface);
-  box-shadow: 0 1.5rem 4rem -2rem rgb(0 0 0 / 0.7);
+  box-shadow: var(--crv-shadow);
   padding: clamp(1rem, 3vw, 1.6rem);
 }
 
@@ -86,7 +115,7 @@ html[data-theme='light'] .crv {
 .crv-managed {
   border: 1px solid var(--crv-hairline);
   border-radius: 0.9rem;
-  background: rgb(0 0 0 / 0.25);
+  background: var(--crv-panel);
   padding: 0.7rem 0.9rem;
   margin-block-end: clamp(0.75rem, 2.5vw, 1.25rem);
 }
@@ -118,16 +147,10 @@ html[data-theme='light'] .crv {
   font-family: var(--sl-font-mono, ui-monospace, monospace);
   font-size: 0.72rem;
   letter-spacing: 0.02em;
-  border: 1px solid rgb(255 255 255 / 0.2);
+  border: 1px solid var(--crv-chip-line);
   border-radius: 999px;
   padding: 0.3rem 0.7rem;
   color: inherit;
-}
-
-.crv-managed-list > li:first-child {
-  border-color: rgb(255 255 255 / 0.38);
-  background: rgb(255 255 255 / 0.07);
-  font-weight: 700;
 }
 
 /* ---- participants ---- */
@@ -145,7 +168,7 @@ html[data-theme='light'] .crv {
   gap: 0.7rem;
   border: 1px solid var(--crv-hairline);
   border-radius: 1rem;
-  background: rgb(0 0 0 / 0.28);
+  background: var(--crv-panel);
   padding: 1rem 1.05rem;
   min-width: 0;
 }
@@ -270,6 +293,7 @@ html[data-theme='light'] .crv {
 .crv .crv-managed-list > li,
 .crv .crv-caps > li,
 .crv .crv-profiles > li,
+.crv .crv-story > li,
 .crv .crv-grid > * {
   margin: 0;
 }
@@ -294,8 +318,8 @@ html[data-theme='light'] .crv {
   background: linear-gradient(
     to right,
     transparent,
-    rgb(255 255 255 / 0.28) 25%,
-    rgb(255 255 255 / 0.28) 75%,
+    var(--crv-track) 25%,
+    var(--crv-track) 75%,
     transparent
   );
 }
@@ -311,13 +335,13 @@ html[data-theme='light'] .crv {
 
 .crv-lane-dot--out {
   background: var(--crv-caller);
-  box-shadow: 0 0 12px 3px rgb(122 162 255 / 0.6);
+  box-shadow: 0 0 12px 3px var(--crv-caller-glow);
   animation: crv-dot-x-out 3s ease-in-out infinite;
 }
 
 .crv-lane-dot--back {
   background: var(--crv-agent);
-  box-shadow: 0 0 12px 3px rgb(52 211 153 / 0.6);
+  box-shadow: 0 0 12px 3px var(--crv-agent-glow);
   animation: crv-dot-x-back 3s ease-in-out infinite;
 }
 
@@ -337,7 +361,7 @@ html[data-theme='light'] .crv {
   color: var(--crv-muted);
   border-radius: 999px;
   padding: 0.35rem 0.7rem;
-  background: #0a0a0c;
+  background: var(--crv-mixer-bg);
   border: 1px solid var(--crv-hairline);
 }
 
@@ -357,7 +381,7 @@ html[data-theme='light'] .crv {
 
 .crv-deck {
   position: relative;
-  height: 150px;
+  height: 7.5rem;
 }
 
 .crv-profiles {
@@ -375,7 +399,7 @@ html[data-theme='light'] .crv {
   width: calc(100% - 24px);
   border: 1px solid var(--crv-hairline);
   border-radius: 0.8rem;
-  background: rgb(0 0 0 / 0.55);
+  background: var(--crv-card);
   padding: 0.55rem 0.7rem;
   color: var(--crv-muted);
   --dim: 0;
@@ -389,8 +413,8 @@ html[data-theme='light'] .crv {
 .crv-profile--a {
   animation: crv-deck-slot var(--crv-cycle) ease-in-out infinite;
   border-color: var(--crv-agent-line);
-  background-color: #0b1712;
-  box-shadow: 0 0 16px -2px rgb(52 211 153 / 0.55);
+  background-color: var(--crv-card-active);
+  box-shadow: 0 0 16px -2px var(--crv-agent-glow);
   color: var(--crv-agent);
   z-index: 3;
 }
@@ -436,7 +460,7 @@ html[data-theme='light'] .crv {
 .crv-profile-name {
   font-weight: 700;
   font-size: 0.85rem;
-  color: var(--sl-color-white, #fff);
+  color: var(--crv-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -452,14 +476,39 @@ html[data-theme='light'] .crv {
   color: var(--crv-muted);
 }
 
+/* ---- story caption, in step with the deck ---- */
+
+.crv .crv-story {
+  display: grid;
+  margin: clamp(0.5rem, 2vw, 0.9rem) 0 0;
+  padding: 0.8rem 0 0;
+  border-top: 1px solid var(--crv-hairline);
+  list-style: none;
+}
+
+.crv-story-line {
+  grid-area: 1 / 1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--crv-strong);
+  opacity: 0;
+  animation: crv-story-line var(--crv-cycle) ease-in-out infinite;
+}
+
+@keyframes crv-story-line {
+  0%, 28% { opacity: 1; transform: translateY(0); }
+  33%, 95% { opacity: 0; transform: translateY(0.25rem); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 /* ---- deck choreography (12s loop; cards fan upward behind the front) ---- */
 
 @keyframes crv-deck-slot {
   0%, 30% {
     transform: translate(0, 0) scale(1);
     border-color: var(--crv-agent-line);
-    background-color: #0b1712;
-    box-shadow: 0 0 16px -2px rgb(52 211 153 / 0.55);
+    background-color: var(--crv-card-active);
+    box-shadow: 0 0 16px -2px var(--crv-agent-glow);
     color: var(--crv-agent);
     opacity: 1;
     filter: none;
@@ -469,7 +518,7 @@ html[data-theme='light'] .crv {
   36%, 63% {
     transform: translate(16px, 16px) scale(0.98);
     border-color: var(--crv-hairline);
-    background-color: rgb(0 0 0 / 0.55);
+    background-color: var(--crv-card);
     box-shadow: none;
     color: var(--crv-muted);
     filter: blur(0.5px);
@@ -479,7 +528,7 @@ html[data-theme='light'] .crv {
   69%, 96% {
     transform: translate(32px, 32px) scale(0.96);
     border-color: var(--crv-hairline);
-    background-color: rgb(0 0 0 / 0.55);
+    background-color: var(--crv-card);
     box-shadow: none;
     color: var(--crv-muted);
     filter: blur(1.5px);
@@ -489,8 +538,8 @@ html[data-theme='light'] .crv {
   100% {
     transform: translate(0, 0) scale(1);
     border-color: var(--crv-agent-line);
-    background-color: #0b1712;
-    box-shadow: 0 0 16px -2px rgb(52 211 153 / 0.55);
+    background-color: var(--crv-card-active);
+    box-shadow: 0 0 16px -2px var(--crv-agent-glow);
     color: var(--crv-agent);
     opacity: 1;
     filter: none;
@@ -547,8 +596,8 @@ html[data-theme='light'] .crv {
     background: linear-gradient(
       to bottom,
       transparent,
-      rgb(255 255 255 / 0.28) 25%,
-      rgb(255 255 255 / 0.28) 75%,
+      var(--crv-track) 25%,
+      var(--crv-track) 75%,
       transparent
     );
   }
@@ -592,5 +641,9 @@ html[data-theme='light'] .crv {
 
   .crv-lane-dot {
     opacity: 0;
+  }
+
+  .crv-story-line:first-child {
+    opacity: 1;
   }
 }

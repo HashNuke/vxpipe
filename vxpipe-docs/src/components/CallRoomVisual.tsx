@@ -6,10 +6,12 @@ export interface AgentProfile {
   name: string;
   kind: 'agent' | 'human';
   capabilities: string[];
+  /** Plain-language caption shown while this profile is at the front. */
+  storyline: string;
 }
 
 export interface RoomVisualProps {
-  /** Room-owned services shown in the "managed by the room" strip. */
+  /** Call-wide services shown in the "shared by everyone" strip. */
   services?: string[];
   /** Capability chips on the caller participant. */
   callerCapabilities?: string[];
@@ -18,10 +20,10 @@ export interface RoomVisualProps {
 }
 
 const DEFAULT_SERVICES = [
-  'room authority',
   'call variables',
-  'transcript router',
+  'transcripts',
   'call recording',
+  'policies',
 ];
 
 const DEFAULT_CALLER_CAPABILITIES = ['speech-to-text'];
@@ -32,18 +34,21 @@ const DEFAULT_PROFILES: AgentProfile[] = [
     name: 'concierge',
     kind: 'agent',
     capabilities: ['LLM', 'text-to-speech', 'guardrails'],
+    storyline: 'The concierge agent greets the caller and fills in call variables.',
   },
   {
     id: 'b',
     name: 'billing',
     kind: 'agent',
     capabilities: ['LLM', 'text-to-speech'],
+    storyline: 'Billing takes over. The call variables carry across the transfer.',
   },
   {
     id: 'c',
     name: 'human specialist',
     kind: 'human',
     capabilities: ['private briefing'],
+    storyline: 'A human specialist joins after a private briefing.',
   },
 ];
 
@@ -93,7 +98,7 @@ export default function CallRoomVisual({
     <figure
       className="crv"
       role="img"
-      aria-label="Diagram of a VxPipe call room: the room manages authority, call variables, transcript routing, and recording. The caller joins over a telephony leg into speech-to-text. Agent profiles overlap like a deck of cards and take turns coming forward, so the front card is the active agent through the room mixer. The concierge profile carries LLM, text-to-speech, and guardrail capabilities."
+      aria-label="Diagram of a VxPipe call: call variables, transcripts, recording, and policies are shared by everyone on the call. A caller phones in. A concierge agent answers, transfers the caller to a billing agent with the call variables intact, and then a human specialist joins after a private briefing."
     >
       <div className="crv-room">
         <header className="crv-room-head">
@@ -104,8 +109,8 @@ export default function CallRoomVisual({
           </span>
         </header>
 
-        <section className="crv-managed" aria-label="managed by the room">
-          <span className="crv-managed-label">managed by the room</span>
+        <section className="crv-managed" aria-label="shared by everyone on the call">
+          <span className="crv-managed-label">shared by everyone on the call</span>
           <ul className="crv-managed-list">
             {services.map((service) => (
               <li key={service}>{service}</li>
@@ -188,6 +193,18 @@ export default function CallRoomVisual({
             </div>
           </section>
         </div>
+
+        <ol className="crv-story" aria-hidden="true">
+          {profiles.map((profile) => (
+            <li
+              key={profile.id}
+              className="crv-story-line"
+              style={{ animationDelay: PROFILE_DELAYS[profile.id] } as CSSProperties}
+            >
+              {profile.storyline}
+            </li>
+          ))}
+        </ol>
       </div>
     </figure>
   );

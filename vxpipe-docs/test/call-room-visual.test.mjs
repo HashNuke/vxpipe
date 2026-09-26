@@ -36,9 +36,10 @@ test('homepage renders a static React call-room visual built on room terminology
   // Room manages the call: authority and room-owned services lead.
   for (const term of [
     'call room',
-    'room authority',
     'call variables',
+    'transcripts',
     'call recording',
+    'policies',
     'room mixer',
     'caller',
     'agent',
@@ -51,6 +52,19 @@ test('homepage renders a static React call-room visual built on room terminology
       `visual must use room terminology: ${term}`,
     );
   }
+
+  // Newcomers read plain language, not internal architecture names.
+  for (const jargon of ['room authority', 'transcript router', 'managed by the room']) {
+    assert.doesNotMatch(visual.toLowerCase(), new RegExp(jargon), `visual must not show jargon: ${jargon}`);
+  }
+
+  // A caption narrates the handoff story in step with the deck.
+  assert.match(visual, /crv-story/, 'visual must narrate the call story');
+  assert.equal(
+    (visual.match(/storyline: '/g) ?? []).length,
+    3,
+    'each default profile must carry one story line',
+  );
 
   // Audiogram halo replaces header equalizer bars.
   assert.doesNotMatch(visual, /Equalizer|crv-eq/, 'equalizer bars must be gone');
@@ -188,9 +202,33 @@ test('homepage renders a static React call-room visual built on room terminology
   assert.doesNotMatch(css, /crv-caps-reveal/, 'deck cards must keep full content');
   assert.match(
     css,
-    /crv-deck-slot\s*\{[^}]*?0%, 30%\s*\{[^}]*background-color:\s*#[0-9a-f]{6}/s,
-    'front card must be opaque',
+    /crv-deck-slot\s*\{[^}]*?0%, 30%\s*\{[^}]*background-color:\s*var\(--crv-card-active\)/s,
+    'front card must use the themed opaque active surface',
   );
+
+  // Both themes own every surface; nothing dark is hard-coded into light mode.
+  for (const token of ['--crv-panel', '--crv-card', '--crv-card-active', '--crv-mixer-bg', '--crv-hairline']) {
+    for (const theme of ['dark', 'light']) {
+      assert.match(
+        css,
+        new RegExp(`html\\[data-theme=['"]${theme}['"]\\] \\.crv\\s*\\{[^}]*${token}:`, 's'),
+        `${theme} theme must define ${token}`,
+      );
+    }
+  }
+  for (const [rule, token] of [
+    ['\\.crv-managed', '--crv-panel'],
+    ['\\.crv-participant', '--crv-panel'],
+    ['\\.crv-mixer', '--crv-mixer-bg'],
+    ['\\.crv-profile', '--crv-card'],
+    ['\\.crv-profile--a', '--crv-card-active'],
+  ]) {
+    assert.match(
+      css,
+      new RegExp(`\\n${rule}\\s*\\{[^}]*background(-color)?:\\s*var\\(${token}\\)`, 's'),
+      `${rule} must paint its surface from ${token}`,
+    );
+  }
   assert.match(
     css,
     /crv-deck-slot\s*\{[^}]*?0%, 30%\s*\{[^}]*filter:\s*none/s,
