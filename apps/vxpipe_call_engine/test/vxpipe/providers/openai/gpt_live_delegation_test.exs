@@ -4,10 +4,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegationTest do
   alias Vxpipe.Providers.OpenAI.GPTLiveDelegation
 
   test "deduplicates call IDs and continues once after a completed response" do
-    {:ok, state} = GPTLiveDelegation.created(GPTLiveDelegation.new(), "d1", "responses", "r1")
+    context = make_ref()
+
+    {:ok, state} =
+      GPTLiveDelegation.created(GPTLiveDelegation.new(), "d1", "responses", "r1", context)
+
     item = function_event("c1")
 
-    assert {:ok, state, [{:tool_call, call_ref, "echo", %{"value" => 1}}]} =
+    assert {:ok, state, [{:tool_call, call_ref, "echo", %{"value" => 1}, ^context}]} =
              GPTLiveDelegation.event(state, "d1", item)
 
     assert {:ok, ^state, []} = GPTLiveDelegation.event(state, "d1", item)
@@ -21,9 +25,10 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegationTest do
 
   test "failed and incomplete responses retire calls and ignore late items" do
     for terminal <- ["response.failed", "response.incomplete"] do
-      {:ok, state} = GPTLiveDelegation.created(GPTLiveDelegation.new(), "d1", "responses", "r1")
+      {:ok, state} =
+        GPTLiveDelegation.created(GPTLiveDelegation.new(), "d1", "responses", "r1", make_ref())
 
-      {:ok, state, [{:tool_call, call_ref, _, _}]} =
+      {:ok, state, [{:tool_call, call_ref, _, _, _}]} =
         GPTLiveDelegation.event(state, "d1", function_event("c1"))
 
       assert {:ok, state, []} = GPTLiveDelegation.event(state, "d1", %{"type" => terminal})

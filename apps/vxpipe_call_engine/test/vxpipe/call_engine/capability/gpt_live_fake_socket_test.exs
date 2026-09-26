@@ -14,6 +14,11 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
                         __DIR__
                       )
 
+  @capability_fixture Path.expand(
+                        "../../../support/fixtures/gpt_live/capability_events.jsonl",
+                        __DIR__
+                      )
+
   test "only completed delegated calls reach the capability and all results precede continuation" do
     {capability, wire} = start_ready_capability()
     assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
@@ -77,6 +82,31 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     end
   end
 
+  test "a late delegated call keeps its retired response context and receives a denial" do
+    {capability, wire} = start_ready_capability()
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+    deliver_fixture(wire, "delegation")
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    _ = :sys.get_state(provider)
+
+    assert :ok = SpeechToSpeech.apply_policy(capability, unrestricted())
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    deliver_fixture(wire, "first")
+    deliver_fixture(wire, "completed")
+
+    assert_receive {:test_gpt_live_control, ^wire,
+                    %{"type" => "response.item.create", "item" => denied}},
+                   1_000
+
+    assert denied["call_id"] == "a"
+    assert String.contains?(denied["output"], "no_longer_permitted")
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.create"}}, 1_000
+    refute_received {:vxpipe_sts_tool_event, ^capability, _, _}
+  end
+
   test "two GPT-Live audio bursts from one answer settle as separate capability turns" do
     {capability, wire} = start_ready_capability(output_gap_ms: 40)
     assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
@@ -109,6 +139,68 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     end
   end
 
+  test "caller speech overlaps a fake GPT-Live reply until the provider yields" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    deliver_capability_fixture(wire, "agent_hello")
+    tone = :binary.copy(<<0, 16>>, 480)
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(tone)
+    })
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent1", turn, _}, 1_000
+    assert_receive {:test_audio_output, sink, _frame}, 1_000
+
+    deliver_capability_fixture(wire, "caller_yes")
+    assert_receive {:vxpipe_sts_speech_started, ^capability, "agent1", _caller_turn}, 1_000
+    refute_received {:vxpipe_sts_interrupted, ^capability, "agent1", ^turn, _, _, _}
+
+    silence = :binary.copy(<<0, 0>>, 480 * 2)
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(silence)
+    })
+
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    TestAudioOutputSink.playback_progress(sink, 60, 60)
+    TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", "Hello", ^turn, _, _, _},
+                   1_000
+
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent1", ^turn, _}, 1_000
+    refute_received {:vxpipe_sts_interrupted, ^capability, "agent1", ^turn, _, _, _}
+  end
+
+  test "a policy-denied GPT-Live burst is discarded before playback" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+    assert :ok = SpeechToSpeech.apply_policy(capability, deny_agent_audio())
+
+    deliver_capability_fixture(wire, "agent_hello")
+    tone = :binary.copy(<<0, 16>>, 480)
+    silence = :binary.copy(<<0, 0>>, 480 * 2)
+
+    TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(tone <> silence)
+    })
+
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    _ = :sys.get_state(provider)
+    _ = :sys.get_state(capability)
+    refute_received {:vxpipe_sts_turn_started, ^capability, "agent1", _, _}
+    refute_received {:test_audio_output, _, _}
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, "agent1", _, _, _, _, _}
+    assert :sys.get_state(capability).active_output == nil
+  end
+
   test "a second lost socket fails the speech capability with reseed_failed" do
     {capability, wire} = start_ready_capability()
     TestGPTLiveTransport.disconnect(wire)
@@ -129,14 +221,34 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
   test "a content close reports moderation to the speech capability owner" do
     {capability, wire} = start_ready_capability()
-
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.closed",
-      "reason" => "content",
-      "usage" => %{"seconds" => 0.5}
-    })
-
+    deliver_capability_fixture(wire, "content")
     assert_receive {:vxpipe_sts_unavailable, ^capability, :moderation}, 1_000
+  end
+
+  test "ordinary close reasons stop the provider without a replacement socket" do
+    for name <- ["closed_requested", "remote_hangup"] do
+      {capability, wire} = start_ready_capability()
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      monitor = Process.monitor(provider)
+      deliver_capability_fixture(wire, name)
+      assert_receive {:DOWN, ^monitor, :process, ^provider, :normal}, 1_000
+      assert_receive {:vxpipe_sts_unavailable, ^capability, :provider_failed}, 1_000
+      refute_receive {:test_gpt_live_started, _, _}, 50
+    end
+  end
+
+  test "malformed and unknown socket events fail the real speech capability" do
+    for name <- ["malformed", "unknown"] do
+      {capability, wire} = start_ready_capability()
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      monitor = Process.monitor(provider)
+      deliver_capability_fixture(wire, name)
+
+      assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :invalid_message}},
+                     1_000
+
+      assert_receive {:vxpipe_sts_unavailable, ^capability, :provider_failed}, 1_000
+    end
   end
 
   test "a fake GPT-Live caller fragment and spoken burst pass through the real capability" do
@@ -175,7 +287,11 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
     capability = SpeechToSpeech.Tree.capability(tree)
     assert_receive {:test_gpt_live_started, wire, _connection}, 5_000
-    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.start"}}
+
+    assert_receive {:test_gpt_live_control, ^wire,
+                    %{"type" => "session.start", "session" => %{"store" => false}}}
+
+    refute_received {:vxpipe_sts_ready, ^capability}
 
     TestGPTLiveTransport.deliver(wire, %{"type" => "session.started", "session" => %{"id" => "s"}})
 
@@ -184,12 +300,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
     assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
 
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.input_transcript.delta",
-      "delta" => "Hi",
-      "start_ms" => 0,
-      "end_ms" => 20
-    })
+    deliver_capability_fixture(wire, "caller_hi")
 
     assert_receive {:vxpipe_sts_input_event, ^capability,
                     %{event: %{kind: :input_transcript, text: "Hi"}}},
@@ -203,12 +314,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
                     %{event: %{kind: :input_transcript, text: "Hi", final: true}}},
                    1_000
 
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.output_transcript.delta",
-      "delta" => "Hello",
-      "start_ms" => 100,
-      "end_ms" => 120
-    })
+    deliver_capability_fixture(wire, "agent_hello")
 
     tone = :binary.copy(<<0, 16>>, 480)
 
@@ -228,7 +334,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", "Hello", ^turn, _, _, _},
                    1_000
 
-    TestGPTLiveTransport.deliver(wire, %{"type" => "session.closed", "reason" => "expired"})
+    deliver_capability_fixture(wire, "expired")
     assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
 
     assert_receive {:test_gpt_live_control, ^replacement,
@@ -293,10 +399,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
     assert_receive {:vxpipe_sts_ready, ^capability}, 5_000
 
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.usage.updated",
-      "usage" => %{"seconds" => 1.25}
-    })
+    deliver_capability_fixture(wire, "voice_125")
 
     assert_receive {:vxpipe_usage_observations, ^capability, [voice]}
     assert voice.capability == :speech_to_speech
@@ -304,32 +407,14 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     assert voice.measurement.quantity == 1_250
     assert voice.measurement.provenance == :provider_reported
 
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.usage.updated",
-      "usage" => %{"seconds" => 1.25}
-    })
-
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.usage.updated",
-      "usage" => %{"seconds" => 1.5}
-    })
+    deliver_capability_fixture(wire, "voice_125")
+    deliver_capability_fixture(wire, "voice_150")
 
     assert_receive {:vxpipe_usage_observations, ^capability, [voice_delta]}
     assert voice_delta.measurement.quantity == 250
 
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "session.delegation.created",
-      "delegation" => %{"id" => "d", "target" => "responses", "response_id" => "r"}
-    })
-
-    TestGPTLiveTransport.deliver(wire, %{
-      "type" => "response.event",
-      "delegation_id" => "d",
-      "event" => %{
-        "type" => "response.completed",
-        "response" => %{"id" => "r", "usage" => %{"input_tokens" => 3, "output_tokens" => 2}}
-      }
-    })
+    deliver_capability_fixture(wire, "backend_delegation")
+    deliver_capability_fixture(wire, "backend_completed")
 
     assert_receive {:vxpipe_usage_observations, ^capability, backend}
     assert Enum.map(backend, & &1.measurement.quantity) == [3, 2]
@@ -341,6 +426,15 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
   defp unrestricted do
     %Effective{
       audio_routes: :unrestricted,
+      transcript_routes: :unrestricted,
+      record_audio: true,
+      save_transcripts: true
+    }
+  end
+
+  defp deny_agent_audio do
+    %Effective{
+      audio_routes: %{"agent1" => MapSet.new()},
       transcript_routes: :unrestricted,
       record_audio: true,
       save_transcripts: true
@@ -379,7 +473,11 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
     capability = SpeechToSpeech.Tree.capability(tree)
     assert_receive {:test_gpt_live_started, wire, _connection}, 5_000
-    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.start"}}
+
+    assert_receive {:test_gpt_live_control, ^wire,
+                    %{"type" => "session.start", "session" => %{"store" => false}}}
+
+    refute_received {:vxpipe_sts_ready, ^capability}
 
     TestGPTLiveTransport.deliver(wire, %{"type" => "session.started", "session" => %{"id" => "s"}})
 
@@ -388,14 +486,22 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
   end
 
   defp deliver_fixture(wire, name) do
-    event =
-      @delegation_fixture
-      |> File.stream!()
-      |> Stream.map(&JSON.decode!/1)
-      |> Enum.find_value(fn %{"name" => fixture_name, "event" => event} ->
-        if fixture_name == name, do: event
-      end)
+    TestGPTLiveTransport.deliver_sync(wire, fixture_entry(@delegation_fixture, name)["event"])
+  end
 
-    TestGPTLiveTransport.deliver(wire, event)
+  defp deliver_capability_fixture(wire, name) do
+    case fixture_entry(@capability_fixture, name) do
+      %{"event" => event} -> TestGPTLiveTransport.deliver_sync(wire, event)
+      %{"raw" => payload} -> TestGPTLiveTransport.deliver_raw(wire, payload)
+    end
+  end
+
+  defp fixture_entry(path, name) do
+    path
+    |> File.stream!()
+    |> Stream.map(&JSON.decode!/1)
+    |> Enum.find_value(fn %{"name" => fixture_name} = entry ->
+      if fixture_name == name, do: entry
+    end)
   end
 end

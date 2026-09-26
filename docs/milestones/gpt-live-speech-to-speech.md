@@ -1,9 +1,8 @@
 # GPT-Live speech-to-speech
 
-Status: specification frozen on 2026-09-25; checkpoints A, B and C are
-implemented and verified. Checkpoint D has a credential package and a local
-fake-socket adapter; checkpoint E has a first history-reseed path. Their
-remaining acceptance cases and checkpoint F are open. Checkpoint B was
+Status: specification frozen on 2026-09-25; checkpoints A through D are
+implemented and locally verified. Checkpoint E has a first history-reseed path;
+its remaining lifecycle cases and checkpoint F are open. Checkpoint B was
 reopened by review 3 and closed again after the clock-paced output rework;
 review 4's R4-1 is resolved by the Morse duplex real-time clock. Review 6's
 six code-review findings (R6-1..R6-6) are resolved (see the response to review
@@ -444,13 +443,13 @@ fixtures pass with the real-time Morse duplex provider.
   negotiation or explicit rejection. `gpt_live_test.exs` fixes the 24 kHz PCM
   shape and rejects other rates; `gpt_live_session_test.exs` exercises scoped
   socket startup, readiness, audio, fragments and admitted output.
-- [ ] Drive a fake GPT-Live socket from JSON fixtures through the real STS
+- [x] Drive a fake GPT-Live socket from JSON fixtures through the real STS
   capability: caller and agent turns, overlap, delegated tools (including
   multiple pending calls, duplicates, and failed or incomplete responses),
   usage deltas, every close reason, and malformed-event failure.
 - [x] Prove no credential, audio or transcript appears in logs, status or crash
   reports.
-- [ ] Exit: fake-socket tests pass; no hosted call has been made.
+- [x] Exit: fake-socket tests pass; no hosted call has been made.
 
 Additional local evidence (2026-09-26): JSON-line delegated-tool fixtures now
 run through the real STS capability. They prove that an unfinished function
@@ -478,6 +477,23 @@ the allocation on a provider close. The remaining close-reason and overlap
 matrix is still open. Focused GPT-Live and STT files passed 47 tests; the
 umbrella suite passed 2,835 tests with zero failures and 58 integration
 exclusions, alongside format, compile, Credo, unused dependencies and Lean.
+
+Final local adapter matrix (2026-09-26): JSON-line fixtures drive the real STS
+capability through caller/agent turns, a provider-owned overlap and yield,
+policy-discarded output, delegated calls with two pending results, duplicate
+IDs, failed/incomplete responses, and a late call whose original response
+context was retired. The adapter now binds each delegation to the context it
+started under, so the retired call receives a `no_longer_permitted` function
+result and cannot block the continuation. The matrix also covers distinct
+voice/backend usage, all five documented close reasons (including transport
+loss), and malformed/unknown events. `close_requested` and `remote_hangup`
+terminate the provider normally; an active capability then reports that its
+speech session is unavailable. The adapter's session tests cover
+startup ordering, `store: false`, PCM format and output alignment; privacy
+evidence is recorded above. The three focused test files passed 35 tests,
+zero failures. The umbrella rerun passed 2,840 tests, zero failures and 59
+tagged exclusions, with format, warnings-as-errors compile, strict Credo,
+unused-dependency and Lean checks passing. No hosted call was made.
 
 ### E — Session continuity and lifecycle
 

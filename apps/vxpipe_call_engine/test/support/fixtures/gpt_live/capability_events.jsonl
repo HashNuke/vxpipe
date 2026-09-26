@@ -1,0 +1,13 @@
+{"name":"agent_hello","event":{"type":"session.output_transcript.delta","delta":"Hello","start_ms":100,"end_ms":120}}
+{"name":"caller_hi","event":{"type":"session.input_transcript.delta","delta":"Hi","start_ms":0,"end_ms":20}}
+{"name":"caller_yes","event":{"type":"session.input_transcript.delta","delta":"Yes","start_ms":140,"end_ms":160}}
+{"name":"voice_125","event":{"type":"session.usage.updated","usage":{"seconds":1.25}}}
+{"name":"voice_150","event":{"type":"session.usage.updated","usage":{"seconds":1.5}}}
+{"name":"backend_delegation","event":{"type":"session.delegation.created","delegation":{"id":"d_usage","target":"responses","response_id":"r_usage"}}}
+{"name":"backend_completed","event":{"type":"response.event","delegation_id":"d_usage","event":{"type":"response.completed","response":{"id":"r_usage","usage":{"input_tokens":3,"output_tokens":2}}}}}
+{"name":"closed_requested","event":{"type":"session.closed","reason":"close_requested"}}
+{"name":"remote_hangup","event":{"type":"session.closed","reason":"remote_hangup"}}
+{"name":"expired","event":{"type":"session.closed","reason":"expired"}}
+{"name":"content","event":{"type":"session.closed","reason":"content","usage":{"seconds":0.5}}}
+{"name":"unknown","event":{"type":"unexpected.event"}}
+{"name":"malformed","raw":"{"}

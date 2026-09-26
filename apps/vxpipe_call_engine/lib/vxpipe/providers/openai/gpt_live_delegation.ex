@@ -5,9 +5,10 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegation do
 
   def new, do: %__MODULE__{}
 
-  def created(%__MODULE__{} = state, id, "responses", response_id) do
+  def created(%__MODULE__{} = state, id, "responses", response_id, response_context) do
     delegation = %{
       response_id: response_id,
+      response_context: response_context,
       calls: MapSet.new(),
       seen: MapSet.new(),
       completed?: false,
@@ -18,7 +19,8 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegation do
     {:ok, %{state | delegations: Map.put(state.delegations, id, delegation)}}
   end
 
-  def created(%__MODULE__{}, _id, _target, _response_id), do: {:error, :unsupported_delegation}
+  def created(%__MODULE__{}, _id, _target, _response_id, _context),
+    do: {:error, :unsupported_delegation}
 
   def event(%__MODULE__{} = state, id, %{
         "type" => "response.output_item.done",
@@ -53,7 +55,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveDelegation do
             calls: Map.put(state.calls, call_ref, %{delegation_id: id, call_id: call_id})
         }
 
-        {:ok, state, [{:tool_call, call_ref, name, arguments}]}
+        {:ok, state, [{:tool_call, call_ref, name, arguments, delegation.response_context}]}
       end
     else
       _invalid -> {:error, :invalid_message}

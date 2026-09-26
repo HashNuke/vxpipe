@@ -355,7 +355,13 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
         output_audio(state, pcm)
 
       {:ok, {:delegation, id, target, response_id}} ->
-        case GPTLiveDelegation.created(state.delegation, id, target, response_id) do
+        case GPTLiveDelegation.created(
+               state.delegation,
+               id,
+               target,
+               response_id,
+               state.latest_context
+             ) do
           {:ok, delegation} -> {:noreply, %{state | delegation: delegation}}
           {:error, reason} -> {:stop, {:shutdown, reason}, state}
         end
@@ -548,7 +554,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     end)
   end
 
-  defp apply_delegation_action(state, {:tool_call, call_ref, name, arguments}) do
+  defp apply_delegation_action(state, {:tool_call, call_ref, name, arguments, context}) do
     turn_ref = state.inference.turn || make_ref()
 
     case Event.emit(state.channel, :tool_call,
@@ -556,7 +562,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
            turn_ref: turn_ref,
            tool_name: name,
            arguments: arguments,
-           response_context: state.latest_context
+           response_context: context
          ) do
       :ok -> {:ok, state}
       :discarded -> send_tool_result_command(state, call_ref, %{"error" => "no_longer_permitted"})
