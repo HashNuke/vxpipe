@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModel do
   @type t :: %__MODULE__{model: String.t(), provider: module(), configuration: term()}
 
   def resolve(%CapabilitySelection{provider: provider} = selection, tenant_id, options)
-      when provider in ["google", "zenmux"] do
+      when provider in ["google", "zenmux", "openai"] do
     with {:ok, %ProviderCredential{auth_kind: "api_key", payload: %{"api_key" => api_key}}} <-
            CredentialSource.resolve(tenant_id, selection, options),
          {:ok, provider_options} <-

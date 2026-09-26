@@ -59,23 +59,24 @@ Capability presence and runtime readiness are different facts:
 
 Credential testing is optional and does not determine whether another capability may be configured.
 Model inference remains the shared ReqLLM integration. Provider manifests do not duplicate ReqLLM;
-Google and Zenmux model support continues through the agent-runtime catalog.
+Google, Zenmux and OpenAI model support continues through the agent-runtime catalog.
 The Console's authenticated service-binding response includes `provider_capabilities` from the
 fixed registry. Setup offers only registered credential providers and intersects speech/telephony
-badges with that response. Google and Zenmux LLM labels remain explicit Console metadata for the
+badges with that response. Google, Zenmux and OpenAI LLM labels remain explicit Console metadata for the
 shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtime-capabilities.md).
 
 ## Existing provider manifests
 
-| Provider | Credential schema | Credential test | STT | TTS | Telephony |
-| --- | --- | --- | --- | --- | --- |
-| Deepgram | yes | yes | yes | yes | no |
-| Google AI Studio | yes | yes | yes | yes | no |
-| MorseCode (local proof only) | no | no | yes | yes | no |
-| Telnyx | yes | yes | no | no | yes |
-| Rime | yes | yes | no | yes | no |
-| Twilio | yes | yes | no | no | yes |
-| Zenmux | yes | yes | no | no | no |
+| Provider | Credential schema | Credential test | STT | TTS | STS | Telephony |
+| --- | --- | --- | --- | --- | --- | --- |
+| Deepgram | yes | yes | yes | yes | no | no |
+| Google AI Studio | yes | yes | yes | yes | no | no |
+| MorseCode (local proof only) | no | no | yes | yes | yes | no |
+| OpenAI | yes | yes | no | no | yes | no |
+| Telnyx | yes | yes | no | no | no | yes |
+| Rime | yes | yes | no | yes | no | no |
+| Twilio | yes | yes | no | no | no | yes |
+| Zenmux | yes | yes | no | no | no | no |
 
 MorseCode declares `:stt`, `:tts` and `:sts` without credential entries; it is
 available only to credential-free local configurations and never enters the
@@ -85,6 +86,8 @@ with fixture/fake-socket tests, but its `:sts` manifest entry stays absent:
 no production selection or service badge until the authorized hosted check
 passes. The table describes Vxpipe-owned provider capabilities. ReqLLM model support is deliberately outside
 this registry.
+OpenAI GPT-Live is selectable with one tenant API key and a default delegated
+`gpt-5` backend model. Its hosted phone interoperability check is still open.
 
 ## Names and ownership
 

@@ -5,6 +5,7 @@ defmodule Vxpipe.Providers.Registry do
     "deepgram" => Vxpipe.Providers.Deepgram,
     "google" => Vxpipe.Providers.Google,
     "morse" => Vxpipe.Providers.MorseCode,
+    "openai" => Vxpipe.Providers.OpenAI,
     "rime" => Vxpipe.Providers.Rime,
     "telnyx" => Vxpipe.Providers.Telnyx,
     "twilio" => Vxpipe.Providers.Twilio,

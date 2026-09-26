@@ -521,9 +521,37 @@ at the unchanged 131,072-byte limit. Local buffer, fake-socket credit/cleanup
 and PCM-tail regressions cover these guarantees (`sts_output_test.exs`,
 `sts_session_test.exs`, `sts_test.exs`); they do not establish hosted capacity.
 
+### GPT-Live duplex profile
+
+The OpenAI provider accepts one tenant API key for both direct language models
+and GPT-Live speech-to-speech. Its manifest offers `:sts`, and the call catalog
+selects it. The adapter uses `gpt-live-1` for bidirectional 24 kHz PCM and
+defaults the delegated Responses backend to `gpt-5`. An agent capability is
+authored in the same shape as other STS providers:
+
+```elixir
+%{
+  speech_to_speech: %{
+    provider: "openai",
+    model: "gpt-live-1",
+    options: %{}
+  }
+}
+```
+
+Keep the API key in the tenant credential source and the agent's prompt and
+allowlisted tools in its call spec; none belong in public provider options.
+The adapter waits for `session.started`, forwards accepted caller audio,
+segments continuous output into admitted bursts, and releases agent text only
+at the local playback fence. An inferred 800 ms caller gap labels turns but
+does not trigger the model's response. A mute hold preserves the model session
+and pending tools. An expired or lost socket gets one replacement seeded from
+bounded caller finals and heard agent text; an active answer or unanswered
+caller turn prompts a brief continuation. Provider voice milliseconds and
+delegated backend tokens are reported as separate usage observations.
+
 Register an STS provider through the same closed paths as STT/TTS, plus the
-provider manifest `:sts` entry in `Vxpipe.Providers` (declared only after the
-adapter passes local room/contract checks). An agent `speech_to_speech`
+provider manifest `:sts` entry in `Vxpipe.Providers`. An agent `speech_to_speech`
 selection rejects any simultaneous `model_inference`/`text_to_speech`; an
 agent `output_speech_to_text` selection is explicit per agent and never
 inherited from human STT defaults. It resolves through the existing `:stt`

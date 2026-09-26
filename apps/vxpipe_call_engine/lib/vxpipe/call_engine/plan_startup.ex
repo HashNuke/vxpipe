@@ -86,7 +86,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_model(%{
          capabilities: %{model_inference: %CapabilitySelection{provider: provider}}
        })
-       when provider in ["google", "zenmux", "fixture"],
+       when provider in ["google", "zenmux", "openai", "fixture"],
        do: :ok
 
   defp supported_model(%{capabilities: %{speech_to_speech: %CapabilitySelection{}}}), do: :ok

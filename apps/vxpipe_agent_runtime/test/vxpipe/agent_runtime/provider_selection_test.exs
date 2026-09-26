@@ -66,9 +66,25 @@ defmodule Vxpipe.AgentRuntime.ProviderSelectionTest do
                ProviderSelection.translate("zenmux", model, common, specific)
     end
 
-    for provider <- ["openai", "anthropic", "openrouter", "bedrock", "azure", "vertex"] do
+    for provider <- ["anthropic", "openrouter", "bedrock", "azure", "vertex"] do
       assert {:error, :invalid_provider_selection} =
                ProviderSelection.translate(provider, "model", %{}, %{})
+    end
+  end
+
+  test "translates an OpenAI model using only public generation options" do
+    assert {:ok, options} =
+             ProviderSelection.translate("openai", "gpt-5", %{"max_tokens" => 256}, %{})
+
+    assert Keyword.fetch!(options, :model) == "openai:gpt-5"
+    assert Keyword.fetch!(options, :streaming)
+    assert Keyword.fetch!(Keyword.fetch!(options, :generation_options), :max_completion_tokens) ==
+             256
+    refute Keyword.has_key?(options, :api_key)
+
+    for specific <- [%{"api_key" => "private-marker"}, %{"base_url" => "https://example.com"}] do
+      assert {:error, :invalid_provider_selection} =
+               ProviderSelection.translate("openai", "gpt-5", %{}, specific)
     end
   end
 

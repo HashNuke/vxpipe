@@ -22,6 +22,16 @@ Deepgram retains its existing model, encoding and sample-rate options. Telnyx re
 identity and public verification metadata; Twilio retains Account SID matching at its command and
 signature boundaries. None of these source changes requires a new authentication method.
 
+## Later OpenAI addition
+
+The [GPT-Live speech milestone](milestones/gpt-live-speech-to-speech.md) adds a
+direct `openai` provider after this historical inventory. It accepts one tenant
+API key through the existing encrypted credential storage and reader, previews
+only the last four characters, and validates the key with a model-list request
+to `https://api.openai.com/v1/models`. Its manifest advertises credential,
+credential-validation and speech-to-speech capabilities. The same saved key
+authenticates direct OpenAI language models through ReqLLM.
+
 ## Zenmux contract to preserve
 
 The reference tree's
@@ -40,7 +50,7 @@ Checkpoint 5 supplies the existing Zenmux API-key shape from tenant storage, inl
 provider/model translation, the supported nested native routing data and focused request checks.
 Public options still cannot replace credentials or redirect credential-bearing requests.
 The [current translator](../apps/vxpipe_agent_runtime/lib/vxpipe/agent_runtime/provider_selection.ex)
-supports Google and Zenmux. See the [inline example](inline-provider-selections.md#provider-translation)
+supports Google, Zenmux and direct OpenAI. See the [inline example](inline-provider-selections.md#provider-translation)
 and [checkpoint evidence](../labnotes/20260916-0033-zenmux-tenant-credentials.md).
 
 The [public room-startup regression](../apps/vxpipe_call_engine/test/vxpipe/call_engine/call_spec_driven_call_test.exs)
@@ -55,10 +65,11 @@ The caller supplies one Zenmux credential.
 
 ## Excluded additions
 
-The inventory found no separate Vxpipe integration test or configured reader for direct OpenAI,
-Anthropic, OpenRouter, Bedrock, Azure or Vertex authentication. The generic internal ReqLLM
+At the reference commit, the inventory found no separate Vxpipe integration test or configured
+reader for direct OpenAI, Anthropic, OpenRouter, Bedrock, Azure or Vertex authentication. The generic internal ReqLLM
 constructor can accept catalog models; that alone does not commit this milestone to implementing
-tenant authentication for every catalog provider. Such additions need their own future scope.
+tenant authentication for every catalog provider. The later OpenAI addition is
+tracked by the GPT-Live milestone; the other names remain outside this scope.
 
 Do not add cloud signing, service-account JSON, OAuth onboarding/refresh, credential-file discovery
 or extra Twilio authentication modes. Preserve the existing API-key and Account SID/Auth Token

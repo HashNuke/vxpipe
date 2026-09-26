@@ -4,6 +4,27 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
   alias Vxpipe.CallEngine.{CallInvocation, CallSpec, CallSpecCompiler, PlanStartup}
   alias Vxpipe.Providers.MorseCode.{STSSession, STTSession}
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession
+  alias Vxpipe.Providers.OpenAI.GPTLiveSession
+  alias Vxpipe.CallEngine.TestTenantCredentialSource
+
+  test "OpenAI speech starts from one saved API key and the default backend model" do
+    plan =
+      compile_plan(%{speech_to_speech: %{provider: "openai", model: "gpt-live-1", options: %{}}})
+
+    bindings = %{{"tenant-sts", "openai", "default"} => %{"api_key" => "openai-tenant-marker"}}
+
+    settings =
+      options()
+      |> Keyword.put(:credential_source, {TestTenantCredentialSource, {self(), bindings}})
+      |> Keyword.put(:speech_to_speech, providers: %{GPTLiveSession => [enabled: true]})
+
+    assert :ok = PlanStartup.validate(plan, settings)
+    assert {:ok, startup} = PlanStartup.new(plan, settings)
+    assert {GPTLiveSession, public} = startup.speech_to_speech.provider
+    assert public[:model] == "gpt-live-1"
+    assert public[:backend_model] == "gpt-5"
+    refute inspect(startup) =~ "tenant-marker"
+  end
 
   test "morse STS resolves an agent runtime without a text model" do
     plan =

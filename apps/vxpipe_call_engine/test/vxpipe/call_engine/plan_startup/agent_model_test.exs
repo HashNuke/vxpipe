@@ -51,6 +51,20 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModelTest do
     refute inspect(model) =~ "synthetic-key"
   end
 
+  test "resolves an OpenAI model with the tenant's saved API key" do
+    input = %{selection() | provider: "openai", model: "gpt-5", options: %{}}
+    bindings = %{{"tenant-model", "openai", "default"} => %{"api_key" => "openai-tenant-marker"}}
+
+    options =
+      Keyword.put(options(), :credential_source, {TestTenantCredentialSource, {self(), bindings}})
+
+    assert {:ok, model} = AgentModel.resolve(input, "tenant-model", options)
+    assert model.configuration.api_key == "openai-tenant-marker"
+    assert model.configuration.model.provider == :openai
+    assert model.configuration.model.id == "gpt-5"
+    refute inspect(model) =~ "tenant-marker"
+  end
+
   test "does not use application credentials for another tenant" do
     assert {:error, :unsupported_provider_options} =
              AgentModel.resolve(selection(), "other-tenant", options())

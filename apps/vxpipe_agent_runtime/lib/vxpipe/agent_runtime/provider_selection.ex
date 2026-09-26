@@ -6,6 +6,30 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
   @common [:temperature, :top_p, :top_k, :max_tokens, :seed, :stop]
   @google [:google_thinking_budget, :google_thinking_level]
 
+  def translate("openai", model, common, specific) when is_binary(model) do
+    with true <- local_model?(model),
+         {:ok, common} <- options(common, @common),
+         true <- Enum.all?(common, &valid_common?/1),
+         {:ok, []} <- options(specific, []),
+         {:ok, resolved} <- ReqLLM.model("openai:" <> model),
+         true <- resolved.provider == :openai,
+         generation <- openai_generation_options(common, resolved),
+         {:ok, provider} <- ReqLLM.provider(:openai),
+         {:ok, _validated} <-
+           ReqLLM.Provider.Options.process(
+             provider,
+             :chat,
+             resolved,
+             Keyword.put(generation, :on_unsupported, :error)
+           ) do
+      {:ok, [model: "openai:" <> model, generation_options: generation, streaming: true]}
+    else
+      _invalid -> {:error, :invalid_provider_selection}
+    end
+  rescue
+    _exception -> {:error, :invalid_provider_selection}
+  end
+
   @spec translate(String.t(), String.t(), map(), map()) ::
           {:ok, keyword()} | {:error, :invalid_provider_selection}
   def translate("google", model, common, specific) when is_binary(model) do
@@ -69,6 +93,20 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
 
   defp local_model?(model) do
     byte_size(model) in 1..256 and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/, model)
+  end
+
+  defp openai_generation_options(common, resolved) do
+    case {get_in(resolved.extra, ["constraints", "token_limit_key"]),
+          Keyword.pop(common, :max_tokens)} do
+      {"max_completion_tokens", {count, rest}} when is_integer(count) ->
+        Keyword.put(rest, :max_completion_tokens, count)
+
+      {"max_completion_tokens", {nil, rest}} ->
+        Keyword.put(rest, :max_completion_tokens, 4096)
+
+      {_limit_key, {_count, _rest}} ->
+        common
+    end
   end
 
   defp options(%_struct{}, _allowed), do: :error

@@ -4,6 +4,8 @@ defmodule Vxpipe.Providers.RegistryTest do
   alias Vxpipe.Providers.Registry
 
   test "declares only each provider's supported capabilities" do
+    assert {:ok, Vxpipe.Providers.OpenAI.GPTLiveSession} =
+             Registry.fetch_capability("openai", :sts)
     assert {:ok, Vxpipe.Providers.Deepgram} = Registry.fetch("deepgram")
 
     assert {:ok, Vxpipe.Providers.Deepgram.Credential} =
@@ -112,6 +114,7 @@ defmodule Vxpipe.Providers.RegistryTest do
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
              "google" => [:credential, :credential_validation, :stt, :tts],
              "morse" => [:sts, :stt, :tts],
+              "openai" => [:credential, :credential_validation, :sts],
              "rime" => [:credential, :credential_validation, :tts],
              "telnyx" => [:credential, :credential_validation, :telephony],
              "twilio" => [:credential, :credential_validation, :telephony],
@@ -120,7 +123,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   end
 
   test "credential schemas declare the accepted auth kind for consumers" do
-    for provider <- ["deepgram", "google", "rime", "telnyx", "zenmux"] do
+    for provider <- ["deepgram", "google", "openai", "rime", "telnyx", "zenmux"] do
       assert {:ok, schema} = Registry.resolve_capability(provider, :credential)
       assert schema.auth_kind() == "api_key"
     end
@@ -132,7 +135,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "credential schemas declare ordered, safe inventory previews" do
     api_key_preview = [%{field: "api_key", label: "API key", display: :last_four}]
 
-    for provider <- ["deepgram", "google", "rime", "telnyx", "zenmux"] do
+    for provider <- ["deepgram", "google", "openai", "rime", "telnyx", "zenmux"] do
       assert {:ok, schema} = Registry.resolve_capability(provider, :credential)
       assert schema.preview_fields() == api_key_preview
     end

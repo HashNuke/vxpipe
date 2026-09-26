@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession
+  alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
 
   @morse_keys [
     :amplitude,
@@ -29,7 +30,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: validate(%{selection | kind: :speech_to_text})
 
   def validate(%CapabilitySelection{kind: :model_inference, provider: provider} = selection)
-      when provider in ["google", "zenmux"] do
+      when provider in ["google", "zenmux", "openai"] do
     case Vxpipe.AgentRuntime.ProviderSelection.translate(
            selection.provider,
            selection.model,
@@ -60,7 +61,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def validate(_selection), do: {:error, :unsupported_capability}
 
   def adapter(%CapabilitySelection{kind: :model_inference, provider: provider})
-      when provider in ["google", "zenmux"],
+      when provider in ["google", "zenmux", "openai"],
       do: {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM}
 
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "deepgram"}),
@@ -89,6 +90,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "rime"}),
     do: Registry.resolve_capability("rime", :sts)
+
+  def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "openai"}),
+    do: Registry.resolve_capability("openai", :sts)
 
   def adapter(%CapabilitySelection{
         kind: :speech_to_speech,
@@ -147,7 +151,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp speech_adapters(:speech_to_speech) do
     {:ok, morse} = Registry.fetch_capability("morse", :sts)
-    [morse, DuplexSTSSession]
+    {:ok, openai} = Registry.fetch_capability("openai", :sts)
+    [morse, DuplexSTSSession, openai]
   end
 
   defp speech_adapters(_kind), do: []
@@ -225,6 +230,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp validate_provider_settings(DuplexSTSSession, :speech_to_speech, settings),
     do: Keyword.validate(settings, enabled: false)
 
+  defp validate_provider_settings(GPTLiveSession, :speech_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false)
+
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
 
@@ -275,6 +283,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
          {:ok, public} <-
            GoogleTTS.public_options(Keyword.put(options, :model, "gemini-3.1-flash-tts-preview")) do
       {:ok, [model: public.model, voice: public.voice]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        kind: :speech_to_speech,
+        provider: "openai",
+        model: "gpt-live-1",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice, :backend_model]),
+         {:ok, public} <- GPTLive.public_options(Keyword.put(options, :model, "gpt-live-1")) do
+      {:ok, [model: public.model, voice: public.voice, backend_model: public.backend_model]}
     end
   end
 
@@ -371,6 +391,13 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "google", kind: :text_to_speech}, options),
     do: validate_provider(GoogleTTSSession, options)
+
+  defp validate_speech(%{provider: "openai", kind: :speech_to_speech}, options) do
+    case GPTLive.public_options(options) do
+      {:ok, _public} -> :ok
+      {:error, _reason} -> {:error, :unsupported_capability}
+    end
+  end
 
   defp validate_speech(_selection, _options), do: {:error, :unsupported_capability}
 

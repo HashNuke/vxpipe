@@ -507,6 +507,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
              "google" => ["credential", "credential_validation", "stt", "tts"],
              "morse" => ["sts", "stt", "tts"],
+             "openai" => ["credential", "credential_validation"],
              "rime" => ["credential", "credential_validation", "tts"],
              "telnyx" => ["credential", "credential_validation", "telephony"],
              "twilio" => ["credential", "credential_validation", "telephony"],

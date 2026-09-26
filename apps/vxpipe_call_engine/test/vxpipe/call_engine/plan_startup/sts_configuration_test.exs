@@ -6,6 +6,33 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
   alias Vxpipe.CallEngine.SpeechToSpeechRuntime
   alias Vxpipe.CallEngine.STSContextTool
   alias Vxpipe.Providers.Google.{STS, STSSession}
+  alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
+
+  test "OpenAI activation keeps tenant auth, prompt and tools private" do
+    options = [api_key: "synthetic-openai-secret", backend_model: "gpt-5.6-luna"]
+    assert {:ok, ^options} = SpeechToSpeechRuntime.configure(GPTLiveSession, options)
+    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+
+    assert {:ok, {GPTLiveSession, public}, private} =
+             SpeechToSpeechRuntime.provider({GPTLiveSession, options}, [], activation)
+
+    refute Keyword.has_key?(public, :api_key)
+    assert {:ok, _descriptor} = GPTLiveSession.configure(public)
+    config = Keyword.fetch!(private, :config)
+    start = GPTLive.start(config, [])
+    assert start["session"]["instructions"] == "private-prompt-marker"
+
+    assert [%{"type" => "function", "name" => "echo_context"}] =
+             Enum.map(
+               start["session"]["delegation"]["responses"]["tools"],
+               &Map.take(&1, ["type", "name"])
+             )
+
+    for visible <- [public, private, config] do
+      refute inspect(visible) =~ "synthetic-openai-secret"
+      refute inspect(visible) =~ "private-prompt-marker"
+    end
+  end
 
   test "authenticated provider resolution validates private options before the public/private split" do
     options = [api_key: "synthetic-private-key", model: "gemini-3.8-live"]
