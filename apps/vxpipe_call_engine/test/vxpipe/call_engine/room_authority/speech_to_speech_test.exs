@@ -112,6 +112,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert state.sts_turns == %{}
   end
 
+  test "STS interruption publishes an aligned spoken prefix before its terminal event" do
+    state = state()
+    capability = self()
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-prefix")
+
+    state =
+      SpeechToSpeech.handle_interrupted(
+        state,
+        capability,
+        @agent,
+        "turn-prefix",
+        20,
+        {:aligned_prefix, "HELLO", 0}
+      )
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "HELLO", participant_id: @agent}}
+    assert_receive {:vxpipe_event, %AgentTurnInterrupted{played_ms: 20}}
+    assert state.sts_turns == %{}
+  end
+
   test "foreign STS capability messages are ignored" do
     state = state()
     other = spawn(fn -> :ok end)
@@ -253,6 +273,46 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     unchanged = SpeechToSpeech.handle_tool_executed(state, capability, call_ref, {:ok, %{}})
     assert unchanged == state
     refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{}}
+  end
+
+  test "mute hold preserves a room-owned pending tool and delivers its result while held" do
+    tools = %{"echo" => %{name: "echo", type: :mcp, conversation_mode: :non_blocking}}
+    {_tree, capability} = start_real_capability(duplex?: true)
+    state = state() |> with_plan(tools) |> bind_capability(capability, @agent)
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+
+    assert :ok =
+             Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(
+               capability,
+               "TOOL echo {\"text\":\"hi\"}"
+             )
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}}
+
+    state =
+      SpeechToSpeech.handle_tool_call(
+        state,
+        capability,
+        @agent,
+        call_ref,
+        "tool-turn",
+        "echo",
+        %{}
+      )
+
+    assert Map.has_key?(state.sts_tool_calls, call_ref)
+
+    held = SpeechToSpeech.hold(state)
+    assert Map.has_key?(held.sts_tool_calls, call_ref)
+    assert held.speech_to_speech_capability.input_epoch == nil
+
+    settled =
+      SpeechToSpeech.handle_tool_executed(held, capability, call_ref, {:ok, %{"text" => "OK"}})
+
+    assert settled.sts_tool_calls == %{}
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{name: "echo"}}
+    assert :sys.get_state(provider).held_tool_replies != []
   end
 
   test "live microphone audio offered through the room reaches the real STS allocation" do
@@ -686,7 +746,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     %{state | speech_to_speech_capability: binding}
   end
 
-  defp start_real_capability do
+  defp start_real_capability(options \\ []) do
     alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
     alias Vxpipe.CallEngine.MediaPolicy.Effective
     alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
@@ -707,7 +767,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
              owner: self(),
              agent_id: @agent,
              human_id: @human,
-             provider: {Vxpipe.Providers.MorseCode.STSSession, []},
+             provider:
+               if(Keyword.get(options, :duplex?, false),
+                 do: {Vxpipe.Providers.MorseCode.DuplexSTSSession, [clock: :manual]},
+                 else: {Vxpipe.Providers.MorseCode.STSSession, []}
+               ),
              provider_private: private_init,
              sink: sink,
              frame_identity: %{},

@@ -406,6 +406,19 @@ defmodule Vxpipe.CallEngine.Speech.Session do
     end
   end
 
+  @doc "Keep an STS session alive while muting or resuming its caller input."
+  def set_input_hold(allocation, held?) when is_boolean(held?),
+    do: call(allocation, {:set_input_hold, held?})
+
+  def set_input_hold(_allocation, _held?), do: {:error, :invalid_hold}
+
+  @doc "Append published caller or agent text to an STS provider's reseed history."
+  def append_history(allocation, {role, text} = entry)
+      when role in [:caller, :agent] and is_binary(text) and byte_size(text) > 0,
+      do: call(allocation, {:append_history, entry})
+
+  def append_history(_allocation, _entry), do: {:error, :invalid_history}
+
   defp provider_input_quiescent?(module, provider) do
     apply(module, :input_quiescent?, [provider]) == true
   catch

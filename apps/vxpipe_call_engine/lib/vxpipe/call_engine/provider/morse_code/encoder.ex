@@ -47,6 +47,26 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.Encoder do
 
   def start(%Config{}, _text), do: {:error, :invalid_text}
 
+  @doc "The encoded word intervals, relative to the start of the rendered PCM."
+  @spec word_intervals(Config.t(), String.t()) ::
+          {:ok, [{String.t(), non_neg_integer(), non_neg_integer()}]} | {:error, error()}
+  def word_intervals(%Config{} = config, text) do
+    with {:ok, _encoder} <- start(config, text),
+         {:ok, words} <- normalize_words(text) do
+      unit_ms = config.unit_duration_ms
+
+      {intervals, _cursor} =
+        Enum.reduce(words, {[], 0}, fn word, {intervals, cursor} ->
+          {:ok, runs} = encode_word(word)
+          units = Enum.reduce(runs, 0, fn {_kind, count}, total -> total + count end)
+          ending = cursor + units * unit_ms
+          {[{word, cursor, ending} | intervals], ending + 7 * unit_ms}
+        end)
+
+      {:ok, Enum.reverse(intervals)}
+    end
+  end
+
   @spec next(t(), pos_integer()) :: {:ok, binary(), t()} | :done | {:error, :invalid_chunk_size}
   def next(%__MODULE__{} = encoder, maximum_samples)
       when is_integer(maximum_samples) and maximum_samples > 0 do

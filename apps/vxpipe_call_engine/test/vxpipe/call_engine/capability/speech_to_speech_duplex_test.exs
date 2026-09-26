@@ -29,7 +29,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     turns = transcripts |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
 
     assert length(turns) == 2
-    assert Enum.all?(transcripts, fn {_turn, text} -> is_binary(text) end)
+    assert Enum.map(transcripts, &elem(&1, 1)) == ["RECEIVED", " AB"]
   end
 
   test "one caller audio turn produces one segmented reply, transcript and usage" do
@@ -46,10 +46,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
 
     turn = await_turn_started(capability)
     advance_until_idle(capability)
-    complete_playback(20)
+    played_ms = playback_duration(capability)
+    complete_playback(played_ms)
 
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20,
-                    _interval, _}
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn,
+                    ^played_ms, _interval, _}
 
     assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn, _}
 
@@ -57,6 +58,32 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert observation.capability == :speech_to_speech
     assert observation.measurement.unit == :milliseconds
     refute_received {:vxpipe_send_text, _, _, _}
+  end
+
+  test "the Morse duplex provider fences at the last played word" do
+    {_tree, capability, sink} = start_capability(policy: unrestricted())
+    push_morse(capability, "HI")
+    turn = await_turn_started(capability)
+    advance_until_idle(capability)
+
+    output = :sys.get_state(capability).active_output
+
+    {_start_ms, first_end_ms, "RECEIVED"} =
+      Enum.find(output.fragments, fn {_start_ms, _end_ms, text} -> text == "RECEIVED" end)
+
+    assert_receive {:test_audio_output_finish, ^sink, _turn}, 5_000
+
+    assert :ok =
+             TestAudioOutputSink.playback_progress(
+               sink,
+               first_end_ms,
+               playback_duration(capability)
+             )
+
+    assert {:ok, ^first_end_ms} = SpeechToSpeech.interrupt(capability)
+
+    assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, ^first_end_ms,
+                    {:aligned_prefix, "RECEIVED", _interval}, _}
   end
 
   test "the realtime clock speaks without any external ticks" do
@@ -75,11 +102,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, turn, _}, 5_000
     assert_receive {:test_audio_output, sink, _frame}, 5_000
     assert_receive {:test_audio_output_finish, ^sink, _turn}, 10_000
-    TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+    played_ms = playback_duration(capability)
+    TestAudioOutputSink.playback_progress(sink, played_ms, played_ms)
     TestAudioOutputSink.playback_completed(sink)
 
-    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn, 20,
-                    _, _},
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^turn,
+                    ^played_ms, _, _},
                    5_000
   end
 
@@ -106,8 +134,36 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     reply_turn = await_turn_started(capability)
     assert reply_turn != tool_turn
     advance_until_idle(capability)
-    complete_playback(20)
+    complete_playback(playback_duration(capability))
 
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED OK", _, _, _, _}
+  end
+
+  test "mute hold keeps a tool and provider session, then speaks the tool result after release" do
+    {_tree, capability, _sink} = start_capability(policy: unrestricted())
+    provider = Session.provider(:sys.get_state(capability).session)
+    monitor = Process.monitor(provider)
+
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}}
+
+    assert :ok = SpeechToSpeech.hold(capability)
+    {:ok, pcm} = encode("HI", [])
+    <<first::binary-size(320), _::binary>> = pcm
+    assert {:error, :held} = SpeechToSpeech.push_audio(capability, @human, first)
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, "OK")
+    refute_received {:vxpipe_sts_turn_started, ^capability, @agent, _, _}
+
+    assert :ok = SpeechToSpeech.release(capability)
+    assert Session.provider(:sys.get_state(capability).session) == provider
+    refute_received {:DOWN, ^monitor, :process, ^provider, _}
+    assert :sys.get_state(provider).hold_log == [{:hold, :started}, {:hold, :ended}]
+
+    _turn = await_turn_started(capability)
+    advance_until_idle(capability)
+    complete_playback(playback_duration(capability))
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED OK", _, _, _, _}
   end
 
@@ -124,7 +180,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     reply_turn = await_turn_started(capability)
     assert reply_turn != tool_turn
     advance_until_idle(capability)
-    complete_playback(20)
+    complete_playback(playback_duration(capability))
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED OK TRUE", _, _,
                     _, _}
@@ -146,7 +202,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
 
     _turn = await_turn_started(capability)
     advance_until_idle(capability)
-    complete_playback(20)
+    complete_playback(playback_duration(capability))
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, text, _, _, _, _}
     assert String.starts_with?(text, "RECEIVED ")
@@ -243,7 +299,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
           collect_transcripts(capability, sink, expected, [{turn, text} | acc], remaining)
 
         {:test_audio_output_finish, ^sink, _turn} ->
-          TestAudioOutputSink.playback_progress(sink, 20, 1_020)
+          played_ms = playback_duration(capability)
+          TestAudioOutputSink.playback_progress(sink, played_ms, played_ms)
           TestAudioOutputSink.playback_completed(sink)
           collect_transcripts(capability, sink, expected, acc, remaining)
 
@@ -332,6 +389,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert_receive {:test_audio_output_finish, sink, _turn}, 5_000
     TestAudioOutputSink.playback_progress(sink, played_ms, played_ms + 1_000)
     TestAudioOutputSink.playback_completed(sink)
+  end
+
+  defp playback_duration(capability) do
+    capability_state = :sys.get_state(capability)
+    provider = Session.provider(capability_state.session)
+    provider_state = :sys.get_state(provider)
+    burst = Map.fetch!(provider_state.bursts.bursts, capability_state.active_output.provider_turn)
+    Map.fetch!(provider_state.segmenter.outputs, burst.seg_ref).duration_ms
   end
 
   defp deny_audio(source, _recipient) do

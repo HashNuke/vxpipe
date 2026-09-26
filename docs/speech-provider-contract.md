@@ -106,6 +106,32 @@ separately. Use `Speech.STTProvider`, `Speech.TTSProvider`, `Speech.STSProvider`
 | STS: `send_tool_result(pid, call_ref, result)` | Delivers a bounded, room-authorized result to the matching private tool-call association. |
 | `close(pid)` | Idempotent, bounded explicit shutdown; supervisor/monitor ownership guarantees cleanup if the call fails. |
 
+An STS descriptor with `hold: :mute` also requires
+`set_input_hold(pid, boolean()) :: :ok | {:error, atom()}`. The speech channel
+routes `Session.set_input_hold/2` to this callback. On `true`, the provider
+stops forwarding caller audio and tells its model that the caller cannot hear
+speech during the hold. On `false`, it resumes input and tells the model that
+the caller heard nothing during the hold. The provider owns that wire wording.
+The allocation, conversation, and admitted tool calls survive a mute hold;
+output is fenced until release. Providers declaring `hold: :stop` retain the
+existing stop and quiescence contract.
+
+An STS descriptor with `continuity: :history_reseed` also requires
+`append_history(pid, {:caller | :agent, text})`. The speech channel routes
+`Session.append_history/2` only from the allocation's consumer. The capability
+appends a caller's final transcript after its transcript route is approved and
+an agent's aligned transcript only after local playback settlement. The
+provider keeps at most 128 messages and an estimated 8,192 tokens, trimming
+oldest text first. A replacement session seeds only this published text;
+provider partial transcripts and unplayed output never enter history.
+
+`provider_usage` is a private STS event to the capability. Its `usage` payload
+is either `%{kind: :voice, milliseconds: positive_delta}` or
+`%{kind: :backend, model: model, input_tokens: count, output_tokens: count}`.
+The capability projects voice duration under the speech model and backend
+tokens under the delegated model as separate provider-reported call
+observations. Neither quantity is inferred from PCM bytes.
+
 This is four required callbacks for STT, five for TTS, and eight for STS, including
 configuration and startup. The provider callback is `start_link/1`; the shared provider
 helpers expose `start_link/2` to validate and invoke it with a module and private init.

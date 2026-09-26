@@ -48,8 +48,12 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   @callback input_activity(pid(), :started | :ended) :: :ok | {:error, atom()}
   @doc "A bounded, provider-owned proof that no prior input can produce later native evidence."
   @callback input_quiescent?(pid()) :: boolean()
+  @doc "Mute or resume caller input while keeping the provider session and its tools alive."
+  @callback set_input_hold(pid(), boolean()) :: :ok | {:error, atom()}
+  @doc "Record text already published to the room for a future history reseed."
+  @callback append_history(pid(), {:caller | :agent, String.t()}) :: :ok | {:error, atom()}
   @callback interrupt(pid(), reference()) :: :ok | {:error, atom()}
   @callback send_tool_result(pid(), reference(), term()) :: :ok | {:error, atom()}
   @callback close(pid()) :: :ok | {:error, atom()}
-  @optional_callbacks input_quiescent?: 1
+  @optional_callbacks input_quiescent?: 1, set_input_hold: 2, append_history: 2
 end

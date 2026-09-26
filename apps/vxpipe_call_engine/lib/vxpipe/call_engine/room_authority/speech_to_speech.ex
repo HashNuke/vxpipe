@@ -17,12 +17,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechStarted,
     AgentTurnCompleted,
-    AgentTurnInterrupted,
-    TextOutput
+    AgentTurnInterrupted
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{
     ActivityControl,
+    AgentTranscript,
     CallerTurns,
     Evidence,
     OriginRecovery,
@@ -169,7 +169,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
              (is_binary(provider_turn) or is_reference(provider_turn)) and
              is_integer(played_ms),
       do:
-        handle_agent_transcript(
+        AgentTranscript.publish(
           state,
           capability,
           agent_id,
@@ -193,42 +193,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
       when is_binary(agent_id) and is_binary(text) and
              (is_binary(provider_turn) or is_reference(provider_turn)) and
              is_integer(played_ms) do
-    with true <- Evidence.current_agent?(state, capability, agent_id),
-         {:ok, %{agent_id: ^agent_id, source_sequence: ^sequence, text_published?: false} = turn} <-
-           Map.fetch(state.sts_turns, turn_key(provider_turn)),
-         {connection_id, connection} <- agent_connection(state),
-         true <- connection_id == turn.connection_id and connection.pid == turn.connection do
-      event = %TextOutput{
-        id: Id.generate(:event),
-        sequence: state.next_sequence,
-        tenant_id: state.snapshot.tenant_id,
-        room_id: state.snapshot.room_id,
-        incarnation_id: state.snapshot.incarnation_id,
-        participant_id: agent_id,
-        source_participant_id: agent_id,
-        connection_id: turn.connection_id,
-        command_id: turn.command_id,
-        correlation_id: turn.correlation_id,
-        text: text,
-        aggregated_by: :sentence,
-        will_be_spoken: true,
-        occurred_at: DateTime.utc_now(:millisecond)
-      }
-
-      {state, _policy} =
-        EventPublisher.publish_transcript(state, connection.pid, event,
-          media_policy_revision: interval
-        )
-
-      %{
-        state
-        | next_sequence: state.next_sequence + 1,
-          sts_turns:
-            Map.put(state.sts_turns, turn_key(provider_turn), %{turn | text_published?: true})
-      }
-    else
-      _stale -> state
-    end
+    AgentTranscript.publish(
+      state,
+      capability,
+      agent_id,
+      text,
+      provider_turn,
+      played_ms,
+      interval,
+      sequence
+    )
   end
 
   @spec handle_turn_completed(State.t(), pid(), String.t(), turn_ref(), pos_integer()) ::
@@ -272,7 +246,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         agent_id,
         provider_turn,
         played_ms,
-        _prefix,
+        prefix,
         sequence
       )
       when is_binary(agent_id) and (is_binary(provider_turn) or is_reference(provider_turn)) and
@@ -280,6 +254,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     if Evidence.current_agent?(state, capability, agent_id) do
       case Map.fetch(state.sts_turns, turn_key(provider_turn)) do
         {:ok, %{source_sequence: ^sequence} = turn} ->
+          state =
+            AgentTranscript.publish_prefix(
+              state,
+              capability,
+              agent_id,
+              provider_turn,
+              played_ms,
+              prefix,
+              sequence
+            )
+
           state =
             publish_terminal(state, turn, AgentTurnInterrupted, %{
               interrupted_by_participant_id: turn.agent_id,
@@ -421,11 +406,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   def hold(%State{} = state, reason) when reason in [:transfer, :policy] do
     state = STSSourceCutover.hold(state, reason)
-    _ = Capability.hold(state.speech_to_speech_capability.pid)
+    capability = state.speech_to_speech_capability.pid
+    mute? = reason == :transfer and Capability.hold_mode(capability) == :mute
+    hold_result = Capability.hold(capability)
 
-    if ActivityControl.mode(state) in ["external", "hybrid"],
-      do: stop(state),
-      else: state |> cancel_pending_tools() |> retire_caller_epoch()
+    cond do
+      ActivityControl.mode(state) in ["external", "hybrid"] ->
+        stop(state)
+
+      mute? and hold_result == :ok ->
+        state
+        |> Map.update!(:speech_to_speech_capability, &Map.put(&1, :hold_mode, :mute))
+        |> retire_caller_epoch()
+
+      true ->
+        state |> cancel_pending_tools() |> retire_caller_epoch()
+    end
   catch
     :exit, _reason ->
       if ActivityControl.mode(state) in ["external", "hybrid"],

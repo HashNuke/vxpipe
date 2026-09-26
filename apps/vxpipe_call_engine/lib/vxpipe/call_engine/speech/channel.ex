@@ -139,6 +139,56 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     {:reply, consumer == state.consumer and STSInput.input_evidence_idle?(state), state}
   end
 
+  def handle_call(
+        {:set_input_hold, held?},
+        {consumer, _tag},
+        %{consumer: consumer, descriptor: %{kind: :sts, hold: :mute}, producer: provider} = state
+      )
+      when is_boolean(held?) and is_pid(provider) do
+    result =
+      if Allocation.valid?(state.allocation) do
+        try do
+          apply(state.module, :set_input_hold, [provider, held?])
+        catch
+          _, _ -> {:error, :session_failed}
+        end
+      else
+        {:error, :closed}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call({:set_input_hold, _held?}, _from, state),
+    do: {:reply, {:error, :unsupported_operation}, state}
+
+  def handle_call(
+        {:append_history, {role, text} = entry},
+        {consumer, _tag},
+        %{
+          consumer: consumer,
+          descriptor: %{kind: :sts, continuity: :history_reseed},
+          producer: provider
+        } = state
+      )
+      when role in [:caller, :agent] and is_binary(text) and is_pid(provider) do
+    result =
+      if Allocation.valid?(state.allocation) do
+        try do
+          apply(state.module, :append_history, [provider, entry])
+        catch
+          _, _ -> {:error, :session_failed}
+        end
+      else
+        {:error, :closed}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call({:append_history, _entry}, _from, state),
+    do: {:reply, {:error, :unsupported_operation}, state}
+
   def handle_call({:submit_audio, reference, audio}, {producer, _tag}, state) do
     cond do
       not Allocation.valid?(state.allocation) ->

@@ -97,6 +97,8 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :output_transcript}, %{kind: :sts} = descriptor),
     do: descriptor.output_transcript?
 
+  def supported?(%__MODULE__{kind: :provider_usage}, %{kind: :sts}), do: true
+
   def supported?(%__MODULE__{kind: :response_started}, %{kind: :sts, response_start?: true}),
     do: true
 
@@ -152,6 +154,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     do: [:call_ref, :turn_ref, :tool_name, :arguments, :provider_request_id, :response_context]
 
   defp allowed_fields(:tool_cancelled), do: [:call_ref, :provider_request_id]
+  defp allowed_fields(:provider_usage), do: [:usage]
   defp allowed_fields(:interrupted), do: [:turn_ref, :provider_request_id]
   defp allowed_fields(:output_completed), do: [:turn_ref, :request_ref, :provider_request_id]
 
@@ -251,6 +254,21 @@ defmodule Vxpipe.CallEngine.Speech.Event do
 
   defp valid_kind?(%__MODULE__{kind: :interrupted, turn_ref: reference}),
     do: is_reference(reference)
+
+  defp valid_kind?(
+         %__MODULE__{kind: :provider_usage, usage: %{kind: :voice, milliseconds: ms}} = event
+       ),
+       do: map_size(event.usage) == 2 and is_integer(ms) and ms > 0
+
+  defp valid_kind?(
+         %__MODULE__{
+           kind: :provider_usage,
+           usage: %{kind: :backend, model: model, input_tokens: input, output_tokens: output}
+         } = event
+       ),
+       do:
+         map_size(event.usage) == 4 and is_binary(model) and byte_size(model) in 1..128 and
+           is_integer(input) and input >= 0 and is_integer(output) and output >= 0
 
   defp valid_kind?(%__MODULE__{kind: :output_completed, request_ref: reference, turn_ref: turn}),
     do: is_reference(reference) and is_reference(turn)

@@ -71,6 +71,21 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenterTest do
 
       {segmenter, _events} = push(segmenter, [@loud, @loud])
       assert {:error, :buffer_overflow, _segmenter} = push(segmenter, [@loud])
+
+      assert {:error, :buffer_overflow, _segmenter} =
+               push(new(buffer_ms: 30), [@loud, @loud, @loud, @loud])
+    end
+
+    test "a complete burst arriving before admission retains its bounded audio" do
+      segmenter = new(gap_ms: 20)
+      {segmenter, events} = push(segmenter, [@loud, @silence, @silence])
+      assert [{:open, output_ref}, {:close, closed_ref}] = events
+      assert closed_ref == output_ref
+
+      {_segmenter, [{:audio, ^output_ref, pcm}]} =
+        OutputSegmenter.admitted(segmenter, output_ref)
+
+      assert pcm == frame(@loud) <> frame(@silence) <> frame(@silence)
     end
   end
 

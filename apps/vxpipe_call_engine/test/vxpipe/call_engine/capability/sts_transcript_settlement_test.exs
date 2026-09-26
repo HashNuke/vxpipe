@@ -1,5 +1,5 @@
 defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   @moduletag :capture_log
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
@@ -15,6 +15,98 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
     finish_playback(context)
     assert_transcript(context, "FINAL")
+  end
+
+  test "aligned fragments publish only the part whose audio played" do
+    context = start_output()
+    assert :ok = aligned_transcript(context, "HELLO", 0, 20)
+    assert :ok = aligned_transcript(context, " WORLD", 20, 40, true)
+    finish_generation(context)
+    assert :ok = TestAudioOutputSink.playback_progress(context.sink, 20, 40)
+    assert :ok = TestAudioOutputSink.playback_completed(context.sink)
+
+    capability = context.capability
+    turn = context.turn
+
+    assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent", "HELLO", ^turn, 20, _, _}
+  end
+
+  test "an aligned fence reports only the played prefix" do
+    context = start_output()
+    assert :ok = aligned_transcript(context, "HELLO", 0, 20)
+    assert :ok = aligned_transcript(context, " WORLD", 20, 40, true)
+    assert :ok = TestAudioOutputSink.playback_progress(context.sink, 20, 40)
+    assert {:ok, 20} = SpeechToSpeech.interrupt(context.capability)
+
+    capability = context.capability
+    turn = context.turn
+
+    assert_receive {:vxpipe_sts_interrupted, ^capability, "agent", ^turn, 20,
+                    {:aligned_prefix, "HELLO", _interval}, _}
+  end
+
+  test "an aligned fence before playback publishes no prefix" do
+    context = start_output()
+    assert :ok = aligned_transcript(context, "HELLO", 0, 20, true)
+    assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
+
+    capability = context.capability
+    turn = context.turn
+    assert_receive {:vxpipe_sts_interrupted, ^capability, "agent", ^turn, 0, :no_prefix, _}
+  end
+
+  test "a foreign aligned final cannot finalize the admitted output" do
+    context = start_output()
+    foreign = %{context | output: make_ref()}
+    assert :ok = aligned_transcript(foreign, "FOREIGN", 0, 20, true)
+    finish_generation(context)
+    finish_playback(context)
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
+    assert :ok = aligned_transcript(context, "CURRENT", 0, 20, true)
+    assert_transcript(context, "CURRENT")
+  end
+
+  test "aligned transcript fragments have a bounded count" do
+    context = start_output()
+    capability = context.capability
+    monitor = Process.monitor(capability)
+
+    for index <- 1..256 do
+      assert :ok = aligned_transcript(context, "A", 0, 20)
+
+      if rem(index, 32) == 0 do
+        count =
+          Enum.reduce_while(1..500, 0, fn _, _ ->
+            %{active_output: %{fragments: fragments}} = :sys.get_state(capability)
+            count = length(fragments)
+            if count == index, do: {:halt, count}, else: {:cont, count}
+          end)
+
+        assert count == index
+      end
+    end
+
+    # Overflow retires the allocation and can stop the supervised fixture
+    # before its synchronous emit call replies.
+    try do
+      _ = aligned_transcript(context, "B", 20, 40)
+    catch
+      :exit, _reason -> :ok
+    end
+
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :output_text_overflow}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :output_text_overflow}, 1_000
+  end
+
+  test "an empty final with no aligned words completes without publishing text" do
+    context = start_output()
+    assert :ok = transcript(context, "", true)
+    finish_generation(context)
+    finish_playback(context)
+    capability = context.capability
+    turn = context.turn
+    assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^turn, _}
+    refute_received {:vxpipe_sts_agent_transcript, _, _, _, _, _, _, _}
   end
 
   test "playback and partial text do not settle before a late explicit final" do
@@ -211,6 +303,21 @@ defmodule Vxpipe.CallEngine.Capability.STSTranscriptSettlementTest do
     fields = [turn_ref: context.turn, text: text]
     fields = if is_nil(final), do: fields, else: Keyword.put(fields, :final, final)
     GenServer.call(context.provider, {:emit, :output_transcript, fields})
+  end
+
+  defp aligned_transcript(context, text, start_ms, end_ms, final \\ false) do
+    GenServer.call(context.provider, {
+      :emit,
+      :output_transcript,
+      [
+        turn_ref: context.turn,
+        output_ref: context.output,
+        text: text,
+        audio_start_ms: start_ms,
+        audio_end_ms: end_ms,
+        final: final
+      ]
+    })
   end
 
   defp finish_generation(context) do

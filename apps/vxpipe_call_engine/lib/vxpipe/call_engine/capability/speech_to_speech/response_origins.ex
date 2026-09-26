@@ -21,6 +21,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
     end
   end
 
+  def current_tool_context?(state, context) do
+    case accepted_fingerprint(state, context) do
+      {:ok, stored} ->
+        case fingerprint(state, true) do
+          {:ok, ^stored} -> true
+          _other -> false
+        end
+
+      :error ->
+        false
+    end
+  end
+
   def submit(state, operation) do
     case prepare(state) do
       {:ok, state, context, fingerprint} ->
@@ -85,11 +98,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
     end
   end
 
-  defp fingerprint(state) do
-    epoch = state.input_epoch || direct_epoch(state)
+  defp fingerprint(state, allow_held? \\ false) do
+    epoch =
+      if state.descriptor.hold == :mute,
+        do: state.session.generation,
+        else: state.input_epoch || direct_epoch(state)
 
     cond do
-      state.held? or not is_reference(epoch) ->
+      (state.held? and not allow_held?) or not is_reference(epoch) ->
         {:error, :held}
 
       not present?(state, state.human_id) or not present?(state, state.agent_id) ->

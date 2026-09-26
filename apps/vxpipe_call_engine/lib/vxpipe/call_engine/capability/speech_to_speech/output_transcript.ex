@@ -5,6 +5,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputTranscript do
 
   @default_timeout_ms 5_000
   @maximum_timeout_ms 30_000
+  @maximum_fragments 256
+  @maximum_fragment_bytes 65_536
 
   def timeout_ms(options) do
     case Keyword.get(options, :output_transcript_timeout_ms, @default_timeout_ms) do
@@ -31,18 +33,57 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputTranscript do
 
   defp accept_current(event, output, state) do
     final? = state.descriptor.output_settlement == :transcript_end and event.final == true
-    output = %{output | pending_text: event.text, text_final?: final?}
 
-    output =
-      if final? and output.text_deadline != nil do
-        Process.cancel_timer(output.text_deadline)
-        %{output | text_deadline: nil}
-      else
-        output
-      end
+    with {:ok, output} <- add_text(output, event) do
+      output = %{output | text_final?: final?}
 
-    Output.maybe_finish_turn(%{state | active_output: output})
+      output =
+        if final? and output.text_deadline != nil do
+          Process.cancel_timer(output.text_deadline)
+          %{output | text_deadline: nil}
+        else
+          output
+        end
+
+      Output.maybe_finish_turn(%{state | active_output: output})
+    else
+      :ignore -> {:noreply, state}
+      {:error, :output_text_overflow} -> Output.stop_unavailable(:output_text_overflow, state)
+    end
   end
+
+  defp add_text(%{output: %{ref: ref}} = output, %{output_ref: ref} = event) do
+    bytes = output.fragment_bytes + byte_size(event.text)
+
+    if length(output.fragments) >= @maximum_fragments or bytes > @maximum_fragment_bytes do
+      {:error, :output_text_overflow}
+    else
+      fragment = {event.audio_start_ms, event.audio_end_ms, event.text}
+      {:ok, %{output | fragments: [fragment | output.fragments], fragment_bytes: bytes}}
+    end
+  end
+
+  defp add_text(output, %{output_ref: nil, text: text}),
+    do: {:ok, %{output | pending_text: text}}
+
+  defp add_text(_output, _foreign_output), do: :ignore
+
+  def text(%{fragments: [_ | _]} = output, played_ms) do
+    output.fragments
+    |> Enum.reverse()
+    |> Enum.filter(fn {_start_ms, end_ms, _text} -> end_ms <= played_ms end)
+    |> Enum.map_join("", fn {_start_ms, _end_ms, text} -> text end)
+    |> case do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  def text(%{pending_text: ""}, _played_ms), do: nil
+  def text(%{pending_text: text}, _played_ms), do: text
+
+  def aligned?(%{fragments: [_ | _]}), do: true
+  def aligned?(_output), do: false
 
   def acknowledge_generation(state) do
     output = %{state.active_output | generation_done?: true}
@@ -53,7 +94,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputTranscript do
           output
 
         state.descriptor.output_settlement == :generation_boundary ->
-          %{output | text_final?: is_binary(output.pending_text)}
+          %{output | text_final?: is_binary(output.pending_text) or output.fragments != []}
 
         output.text_final? or output.text_deadline != nil ->
           output
@@ -100,7 +141,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputTranscript do
 
   def expire(_ref, state), do: {:noreply, state}
 
-  def ready?(output), do: output.text_final? and is_binary(output.pending_text)
+  def ready?(output),
+    do: output.text_final? and (is_binary(output.pending_text) or output.fragments != [])
 
   defp expired?(%{text_final?: false, text_expires_at: deadline}) when is_integer(deadline),
     do: System.monotonic_time(:millisecond) >= deadline

@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Encoder}
   alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Output
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
+  alias Vxpipe.CallEngine.Speech.Duplex.PublishedHistory
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession, as: DuplexSTS
 
   @sample_rate 16_000
@@ -22,6 +23,13 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     %{session: session, provider: provider} = start_session(clock: :realtime)
     assert {:error, :unsupported_operation} = DuplexSTS.advance(provider, 20)
     assert :ok = Session.close(session)
+  end
+
+  test "the local duplex provider keeps a bounded room-published reseed history" do
+    %{session: session, provider: provider} = start_session(clock: :manual)
+    assert :ok = Session.append_history(session, {:caller, "The question"})
+    assert :ok = Session.append_history(session, {:agent, "The heard answer"})
+    assert :sys.get_state(provider).history |> PublishedHistory.input() |> length() == 2
   end
 
   test "rejects an amplitude that cannot open the gate and plays a low accepted one" do

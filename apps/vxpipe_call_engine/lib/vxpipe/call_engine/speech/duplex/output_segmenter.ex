@@ -89,6 +89,17 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
   def admitted(%__MODULE__{phase: :awaiting, output_ref: ref} = state, ref),
     do: {%{state | phase: :open, buffer: <<>>}, [{:audio, ref, state.buffer}]}
 
+  def admitted(%__MODULE__{} = state, ref) when is_reference(ref) do
+    case Map.get(state.outputs, ref) do
+      %{pending_pcm: pcm} ->
+        outputs = Map.update!(state.outputs, ref, &Map.delete(&1, :pending_pcm))
+        {%{state | outputs: outputs}, [{:audio, ref, pcm}]}
+
+      _other ->
+        {state, []}
+    end
+  end
+
   def admitted(%__MODULE__{} = state, _ref), do: {state, []}
 
   @doc "Align one provider output transcript fragment to an admitted output."
@@ -227,8 +238,10 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
         {:error, :buffer_overflow, state}
 
       {state, events} ->
-        {state, more} = process_frames(state, rest)
-        {state, events ++ more}
+        case process_frames(state, rest) do
+          {:error, :buffer_overflow, state} -> {:error, :buffer_overflow, state}
+          {state, more} -> {state, events ++ more}
+        end
     end
   end
 
@@ -280,8 +293,8 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
     ref = make_ref()
     pre_roll = IO.iodata_to_binary(Enum.reverse(state.pre_roll))
 
-    outputs = Map.put(state.outputs, ref, %{base_ms: nil, duration_ms: 0})
     order = Enum.take([ref | state.output_order], @maximum_retired_outputs)
+    outputs = state.outputs |> Map.take(order) |> Map.put(ref, %{base_ms: nil, duration_ms: 0})
 
     state = %{
       state
@@ -309,13 +322,21 @@ defmodule Vxpipe.CallEngine.Speech.Duplex.OutputSegmenter do
     ref = state.output_ref
     state = update_output_duration(state, ref, state.burst_ms)
 
+    outputs =
+      if state.phase == :awaiting do
+        Map.update!(state.outputs, ref, &Map.put(&1, :pending_pcm, state.buffer))
+      else
+        state.outputs
+      end
+
     state = %{
       state
       | phase: :closed,
         output_ref: nil,
         burst_ms: 0,
         buffer: <<>>,
-        silence_frames: 0
+        silence_frames: 0,
+        outputs: outputs
     }
 
     {state, [{:close, ref}]}

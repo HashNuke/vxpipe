@@ -6,6 +6,30 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.ToolReply do
 
   @reply_prefix "RECEIVED "
 
+  alias Vxpipe.CallEngine.Provider.MorseCode.Encoder
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Hold
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.ReplyFlow
+
+  def publish(state, result) do
+    with {:ok, text} <- text(state.config, result),
+         {:ok, pcm} <- Encoder.encode(state.config, text) do
+      Hold.queue_tool_reply(state, %{text: text, pcm: pcm})
+    end
+  end
+
+  def follow_up(state, text) do
+    case trigger(text) do
+      {:tool, _name, _arguments} ->
+        {:ok, state}
+
+      :not_a_tool ->
+        reply_text = reply(state.config, text)
+
+        with {:ok, pcm} <- Encoder.encode(state.config, reply_text),
+             do: ReplyFlow.enqueue(state, %{text: reply_text, pcm: pcm})
+    end
+  end
+
   @spec trigger(String.t()) :: {:tool, String.t(), map()} | :not_a_tool
   def trigger(text) do
     case parse(text) do

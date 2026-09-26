@@ -33,9 +33,35 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STSProvider
 
-  alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
-  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.{Clock, Output, Profile, ToolReply}
-  alias Vxpipe.CallEngine.Speech.Duplex.{BurstResponses, OutputSegmenter, TurnInference}
+  alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder}
+
+  alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.{
+    Clock,
+    Hold,
+    Output,
+    Profile,
+    ReplyFlow,
+    ToolReply,
+    Transcript
+  }
+
+  import Vxpipe.CallEngine.Provider.MorseCodeDuplex.SegmentStore,
+    only: [
+      find_segment_by_turn: 2,
+      find_segment_by_output: 2,
+      put_segment: 3,
+      delete_segment: 2,
+      new_segment: 1,
+      drain_all: 1
+    ]
+
+  alias Vxpipe.CallEngine.Speech.Duplex.{
+    BurstResponses,
+    OutputSegmenter,
+    PublishedHistory,
+    TurnInference
+  }
+
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
 
   @default_input_gap_ms 800
@@ -66,6 +92,13 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   @impl true
   def input_quiescent?(pid), do: GenServer.call(pid, :input_quiescent?, 1_000)
+
+  @impl true
+  def set_input_hold(pid, held?) when is_boolean(held?),
+    do: GenServer.call(pid, {:set_input_hold, held?}, 5_000)
+
+  @impl true
+  def append_history(pid, entry), do: GenServer.call(pid, {:append_history, entry}, 5_000)
 
   @impl true
   def interrupt(pid, turn_ref) when is_reference(turn_ref),
@@ -130,7 +163,11 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         clock_generation: make_ref(),
         clock_timer: nil,
         late_clocks: 0,
-        pending_tools: %{}
+        pending_tools: %{},
+        held?: false,
+        hold_log: [],
+        held_tool_replies: [],
+        history: PublishedHistory.new()
       }
 
       if clock == :realtime, do: {:ok, schedule_tick(state)}, else: {:ok, state}
@@ -147,6 +184,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   defp cancel_clock(%{clock_timer: timer}), do: Process.cancel_timer(timer)
 
   @impl true
+  def handle_call({:submit_input, _context, {:audio, _audio}}, _from, %{held?: true} = state),
+    do: {:reply, :ok, state}
+
   def handle_call({:submit_input, context, {:audio, audio}}, _from, state)
       when is_binary(audio) do
     {bursts, []} = BurstResponses.input_accepted(state.bursts, context)
@@ -184,6 +224,22 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     {:reply, quiescent?, state}
   end
 
+  def handle_call({:append_history, {role, text} = entry}, _from, state)
+      when role in [:caller, :agent] and is_binary(text) and byte_size(text) > 0,
+      do: {:reply, :ok, %{state | history: PublishedHistory.append(state.history, entry)}}
+
+  def handle_call({:append_history, _entry}, _from, state),
+    do: {:reply, {:error, :invalid_history}, state}
+
+  def handle_call({:set_input_hold, true}, _from, %{held?: false} = state),
+    do: Hold.set(state, true)
+
+  def handle_call({:set_input_hold, false}, _from, %{held?: true} = state),
+    do: Hold.set(state, false)
+
+  def handle_call({:set_input_hold, held?}, _from, %{held?: held?} = state),
+    do: {:reply, :ok, state}
+
   def handle_call({:interrupt, turn_ref}, _from, state) when is_reference(turn_ref) do
     case find_segment_by_turn(state, turn_ref) do
       {:ok, seg_ref, segment} ->
@@ -201,7 +257,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
       {:ok, _tool} ->
         state = %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}
 
-        case publish_tool_reply(state, result) do
+        case ToolReply.publish(state, result) do
           {:ok, state} -> {:reply, :ok, state}
           {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
         end
@@ -318,14 +374,14 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   end
 
   defp apply_decoder_event(:started, %{yield?: false} = state), do: {:ok, state}
-  defp apply_decoder_event(:started, state), do: {:ok, self_yield(state)}
+  defp apply_decoder_event(:started, state), do: {:ok, ReplyFlow.yield_current(state)}
 
   defp apply_decoder_event({:partial, text}, state), do: feed_fragment(state, text)
 
   defp apply_decoder_event({:final, text}, state) do
     with {:ok, state} <- feed_fragment(state, text),
          {:ok, state, _close_events} <- close_input_turn(state) do
-      follow_up(state, text)
+      ToolReply.follow_up(state, text)
     end
   end
 
@@ -390,14 +446,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
              text: text,
              endpointing: :inferred_gap
            ) do
-      follow_up(state, text)
-    end
-  end
-
-  defp publish_tool_reply(state, result) do
-    with {:ok, text} <- ToolReply.text(state.config, result),
-         {:ok, pcm} <- Encoder.encode(state.config, text) do
-      enqueue_reply(state, %{text: text, pcm: pcm})
+      ToolReply.follow_up(state, text)
     end
   end
 
@@ -408,19 +457,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         _failure -> {:halt, {:error, :session_failed}}
       end
     end)
-  end
-
-  defp follow_up(state, text) do
-    case ToolReply.trigger(text) do
-      {:tool, _name, _arguments} ->
-        {:ok, state}
-
-      :not_a_tool ->
-        reply_text = ToolReply.reply(state.config, text)
-
-        with {:ok, pcm} <- Encoder.encode(state.config, reply_text),
-             do: enqueue_reply(state, %{text: reply_text, pcm: pcm})
-    end
   end
 
   defp maybe_emit_tool(state, turn_ref, text) do
@@ -472,7 +508,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   end
 
   defp emit_frame(state) do
-    {frame, state} = next_frame(state)
+    {frame, due, state} = ReplyFlow.next_frame(state)
+    frame_start_ms = state.segmenter.produced_ms
 
     case OutputSegmenter.push_pcm(state.segmenter, frame) do
       {:error, :buffer_overflow, segmenter} ->
@@ -482,16 +519,32 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         state = %{state | segmenter: segmenter}
 
         case apply_segmenter_events(events, state) do
-          {:ok, state} -> {:ok, state |> advance_reply() |> drain_all()}
-          {:error, :buffer_overflow, state} -> {:error, :buffer_overflow, state}
-          {:error, reason, state} -> {:error, reason, state}
+          {:ok, state} ->
+            case emit_due_fragments(due, frame_start_ms, state) do
+              {:ok, state} -> {:ok, state |> ReplyFlow.advance() |> drain_all()}
+              {:error, reason, state} -> {:error, reason, state}
+            end
+
+          {:error, :buffer_overflow, state} ->
+            {:error, :buffer_overflow, state}
+
+          {:error, reason, state} ->
+            {:error, reason, state}
         end
     end
   end
 
-  defp next_frame(state) do
-    {frame, timeline} = Output.next_frame(state.timeline, state.frame_bytes, silence_frame(state))
-    {frame, %{state | timeline: timeline}}
+  defp emit_due_fragments(due, frame_start_ms, state) do
+    due
+    |> Transcript.due_fragments(frame_start_ms, state.config.sample_rate)
+    |> Enum.reduce_while({:ok, state}, fn fragment, {:ok, state} ->
+      {segmenter, events} = OutputSegmenter.fragment(state.segmenter, fragment)
+
+      case apply_segmenter_events(events, %{state | segmenter: segmenter}) do
+        {:ok, state} -> {:cont, {:ok, state}}
+        {:error, reason, state} -> {:halt, {:error, reason, state}}
+      end
+    end)
   end
 
   defp apply_segmenter_events(events, state) do
@@ -519,8 +572,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
                response_context: context
              ) do
           :ok ->
-            text = Output.text(state.timeline)
-            segment = new_segment(turn_ref, text)
+            segment = new_segment(turn_ref)
             {:ok, %{state | bursts: bursts, segments: Map.put(state.segments, seg_ref, segment)}}
 
           _failure ->
@@ -560,6 +612,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
       _action, acc ->
         {:cont, acc}
     end)
+  end
+
+  defp apply_segmenter_event({:transcript, seg_ref, text, start_ms, end_ms}, state) do
+    Transcript.accept(state, seg_ref, text, start_ms, end_ms)
   end
 
   defp apply_segmenter_event(_event, state), do: {:ok, state}
@@ -605,7 +661,12 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         :error -> state
       end
 
-    apply_segmenter_events(events, state)
+    with {:ok, state} <- apply_segmenter_events(events, state),
+         {:ok, state} <- Transcript.admitted(state, seg_ref) do
+      {:ok, state}
+    else
+      {:error, reason, state} -> {:error, reason, state}
+    end
   end
 
   defp apply_admit_action({:complete, turn_ref, _output_ref}, state) do
@@ -658,137 +719,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     {:noreply, drain_all(state)}
   end
 
-  # Reply timeline ---------------------------------------------------------
-
-  defp advance_reply(state) do
-    %{state | timeline: Output.advance(state.timeline, OutputSegmenter.burst?(state.segmenter))}
-  end
-
-  defp enqueue_reply(state, reply) do
-    case Output.enqueue(state.timeline, reply) do
-      {:ok, timeline} -> {:ok, advance_reply(%{state | timeline: timeline})}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp self_yield(state) do
-    {bursts, []} = BurstResponses.yielded(state.bursts)
-
-    segments =
-      Enum.into(state.segments, %{}, fn {seg_ref, segment} ->
-        {seg_ref, %{segment | yielded?: true, queue: [], queue_bytes: 0}}
-      end)
-
-    %{state | bursts: bursts, timeline: Output.stop(state.timeline), segments: segments}
-  end
-
-  # Playback slots ---------------------------------------------------------
-
-  defp new_segment(turn_ref, text) do
-    %{
-      turn_ref: turn_ref,
-      output_ref: nil,
-      text: text,
-      queue: [],
-      queue_bytes: 0,
-      awaiting: nil,
-      yielded?: false,
-      closed?: false,
-      completed?: false
-    }
-  end
-
-  defp drain_all(state) do
-    Enum.reduce(Map.keys(state.segments), state, fn seg_ref, state ->
-      drain_segment(state, seg_ref)
-    end)
-  end
-
-  defp drain_segment(state, seg_ref) do
-    case Map.fetch(state.segments, seg_ref) do
-      :error ->
-        state
-
-      {:ok, %{yielded?: true} = segment} ->
-        maybe_complete_segment(state, seg_ref, segment)
-
-      {:ok, %{awaiting: nil, output_ref: output_ref} = segment} when is_reference(output_ref) ->
-        case segment.queue do
-          [pcm | rest] ->
-            case Channel.submit(state.channel, output_ref, pcm) do
-              {:ok, credit} ->
-                put_segment(state, seg_ref, %{
-                  segment
-                  | queue: rest,
-                    queue_bytes: segment.queue_bytes - byte_size(pcm),
-                    awaiting: credit
-                })
-
-              _failure ->
-                put_segment(state, seg_ref, %{
-                  segment
-                  | queue: [],
-                    queue_bytes: 0,
-                    closed?: true,
-                    completed?: true
-                })
-            end
-
-          [] ->
-            maybe_complete_segment(state, seg_ref, segment)
-        end
-
-      _other ->
-        state
-    end
-  end
-
-  defp maybe_complete_segment(
-         state,
-         seg_ref,
-         %{completed?: true, output_ref: output_ref} = segment
-       )
-       when is_reference(output_ref) do
-    _ =
-      Event.emit(state.channel, :output_transcript,
-        turn_ref: segment.turn_ref,
-        text: segment.text,
-        final: true
-      )
-
-    _ =
-      Event.emit(state.channel, :output_completed,
-        turn_ref: segment.turn_ref,
-        request_ref: output_ref
-      )
-
-    delete_segment(state, seg_ref)
-  end
-
-  defp maybe_complete_segment(state, _seg_ref, _segment), do: state
-
-  defp find_segment_by_turn(state, turn_ref) do
-    Enum.find_value(state.segments, :error, fn {seg_ref, segment} ->
-      if segment.turn_ref == turn_ref, do: {:ok, seg_ref, segment}, else: nil
-    end)
-  end
-
-  defp find_segment_by_output(state, output_ref) do
-    Enum.find_value(state.segments, :error, fn {seg_ref, segment} ->
-      if segment.output_ref == output_ref, do: {:ok, seg_ref, segment}, else: nil
-    end)
-  end
-
-  defp put_segment(state, seg_ref, segment),
-    do: %{state | segments: Map.put(state.segments, seg_ref, segment)}
-
-  defp delete_segment(state, seg_ref),
-    do: %{state | segments: Map.delete(state.segments, seg_ref)}
-
   # Helpers ----------------------------------------------------------------
-
-  defp silence_frame(state),
-    do: :binary.copy(<<0, 0>>, div(state.config.sample_rate * @frame_ms, 1_000))
 
   defp silence_bytes(config, frames),
     do: :binary.copy(<<0, 0>>, div(config.sample_rate * @frame_ms, 1_000) * frames * 2)

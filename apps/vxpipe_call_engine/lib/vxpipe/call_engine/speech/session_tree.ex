@@ -37,6 +37,8 @@ defmodule Vxpipe.CallEngine.Speech.SessionTree do
     with true <- Allocation.valid?(allocation),
          {:ok, descriptor} <- provider.configure(Keyword.get(public, :options, [])),
          :ok <- Descriptor.validate(descriptor),
+         :ok <- validate_provider_hold(descriptor, provider),
+         :ok <- validate_provider_history(descriptor, provider),
          :ok <-
            Channel.configure(
              allocation,
@@ -62,6 +64,22 @@ defmodule Vxpipe.CallEngine.Speech.SessionTree do
   catch
     _kind, _reason -> ScopeControl.failed(allocation, :initialization_failed)
   end
+
+  defp validate_provider_hold(%{kind: :sts, hold: :mute}, provider) do
+    if function_exported?(provider, :set_input_hold, 2),
+      do: :ok,
+      else: {:error, :invalid_descriptor}
+  end
+
+  defp validate_provider_hold(_descriptor, _provider), do: :ok
+
+  defp validate_provider_history(%{kind: :sts, continuity: :history_reseed}, provider) do
+    if function_exported?(provider, :append_history, 2),
+      do: :ok,
+      else: {:error, :invalid_descriptor}
+  end
+
+  defp validate_provider_history(_descriptor, _provider), do: :ok
 
   def start_provider(allocation, provider, descriptor) do
     with {:ok, private} <- ScopeControl.claim(allocation),

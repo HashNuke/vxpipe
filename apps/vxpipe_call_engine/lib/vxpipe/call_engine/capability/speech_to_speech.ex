@@ -46,6 +46,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{
     CallerEvents,
+    Hold,
     Input,
     OutputTranscript,
     Policy,
@@ -115,6 +116,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     GenServer.call(capability, :hold, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec hold_mode(pid()) :: :mute | :stop
+  def hold_mode(capability) when is_pid(capability) do
+    GenServer.call(capability, :hold_mode, @call_timeout)
+  catch
+    :exit, _reason -> :stop
   end
 
   @spec apply_policy(pid(), term()) :: :ok | {:error, term()}
@@ -237,6 +245,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   @impl true
   def handle_call(:input_format, _from, state), do: {:reply, Input.format(state), state}
 
+  def handle_call(:hold_mode, _from, state) do
+    {:reply, if(state.descriptor && state.descriptor.hold == :mute, do: :mute, else: :stop),
+     state}
+  end
+
   def handle_call({:bind_input, ingress}, {owner, _tag}, state) when is_pid(ingress),
     do: Input.bind(state, ingress, owner)
 
@@ -312,49 +325,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {:reply, {:ok, played_ms}, state}
   end
 
-  def handle_call(:hold, _from, state) do
-    state = Input.hold(state)
-    state = %{state | origin_lifecycle_revision: make_ref(), input_turns: MapSet.new()}
-    state = state |> interrupt_tool_turns() |> ToolEvents.retire()
+  def handle_call(:hold, _from, state), do: Hold.hold(state)
 
-    case retire_stale_pending(state) do
-      {:ok, state} ->
-        {_played, state} = fence_output(state)
-
-        if Input.input_quiescent?(state) do
-          {:noreply, state} =
-            if state.descriptor.response_start?,
-              do: admit_next_pending(state),
-              else: {:noreply, state}
-
-          {:reply, :ok, %{state | external_activity_origin: nil}}
-        else
-          stop_unavailable(:unsafe_hold, state)
-        end
-
-      {:error, _reason} ->
-        stop_unavailable(:provider_failed, state)
-    end
-  end
-
-  def handle_call({:release, epoch}, _from, state) when is_reference(epoch) do
-    case Input.release(state, epoch) do
-      {:ok, state} ->
-        state = %{state | origin_lifecycle_revision: make_ref(), input_turns: MapSet.new()}
-
-        case retire_stale_pending(state) do
-          {:ok, state} ->
-            {:noreply, state} = admit_next_pending(state)
-            {:reply, :ok, state}
-
-          {:error, _reason} ->
-            stop_unavailable(:provider_failed, state)
-        end
-
-      {:error, _reason} = error ->
-        {:reply, error, state}
-    end
-  end
+  def handle_call({:release, epoch}, _from, state) when is_reference(epoch),
+    do: Hold.release(state, epoch)
 
   def handle_call({:apply_policy, policy}, _from, state) do
     state = %{
@@ -719,6 +693,27 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     case Session.ack(state.session, event) do
       :ok -> {:noreply, state}
       {:error, _reason} -> stop_unavailable(:provider_failed, state)
+    end
+  end
+
+  defp handle_event(%Event{kind: :provider_usage} = event, state) do
+    case Session.ack(state.session, event) do
+      :ok ->
+        observations =
+          Vxpipe.CallEngine.Capability.SpeechToSpeech.ProviderUsage.observations(
+            state.usage_context,
+            state.descriptor,
+            event.usage
+          )
+
+        unless observations == [] do
+          send(state.owner, {:vxpipe_usage_observations, self(), observations})
+        end
+
+        {:noreply, state}
+
+      _failure ->
+        stop_unavailable(:provider_failed, state)
     end
   end
 

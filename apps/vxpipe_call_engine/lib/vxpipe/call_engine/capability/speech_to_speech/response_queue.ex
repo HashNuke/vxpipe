@@ -70,6 +70,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
               transcript_interval: Input.transcript_interval(state, state.agent_id),
               sink_turn: sink_turn,
               pending_text: nil,
+              fragments: [],
+              fragment_bytes: 0,
               text_final?: false,
               stt_text: nil,
               stt_segments: OutputRecognition.new(),

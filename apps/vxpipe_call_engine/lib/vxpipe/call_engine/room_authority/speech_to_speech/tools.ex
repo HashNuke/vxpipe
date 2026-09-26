@@ -445,14 +445,48 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   end
 
   defp pending_connection(state, pending) do
-    with true <- pending.source == state.speech_to_speech_capability,
-         {_, connection} <- permitted_connection(state),
+    with true <- pending_source_current?(state, pending),
+         {_, connection} <- pending_source_connection(state),
          true <- pending_policy_current?(state, pending) do
       {:ok, connection}
     else
       _stale -> :error
     end
   end
+
+  defp pending_source_current?(%{speech_to_speech_capability: %{hold_mode: :mute} = current}, %{
+         source: source
+       }) do
+    Map.take(source, [
+      :pid,
+      :participant_id,
+      :activation_id,
+      :connection_id,
+      :connection,
+      :input_handle
+    ]) ==
+      Map.take(current, [
+        :pid,
+        :participant_id,
+        :activation_id,
+        :connection_id,
+        :connection,
+        :input_handle
+      ])
+  end
+
+  defp pending_source_current?(state, pending),
+    do: pending.source == state.speech_to_speech_capability
+
+  defp pending_source_connection(%{speech_to_speech_capability: %{hold_mode: :mute}} = state),
+    do: agent_connection(state)
+
+  defp pending_source_connection(state), do: permitted_connection(state)
+
+  defp pending_policy_current?(%{speech_to_speech_capability: %{hold_mode: :mute}} = state, %{
+         evidence: evidence
+       }),
+       do: Evidence.pending_tool_scope_current?(state, evidence)
 
   defp pending_policy_current?(state, %{evidence: evidence}),
     do: Evidence.tool_scope_current?(state, evidence)

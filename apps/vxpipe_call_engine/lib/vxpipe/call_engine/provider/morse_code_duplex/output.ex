@@ -27,11 +27,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Output do
   def idle?(%__MODULE__{output: nil, queued: []}), do: true
   def idle?(%__MODULE__{}), do: false
 
-  @doc "The text of the reply currently streaming, or the empty string."
-  @spec text(t()) :: String.t()
-  def text(%__MODULE__{output: %{text: text}}), do: text
-  def text(%__MODULE__{}), do: ""
-
   @spec enqueue(t(), map()) :: {:ok, t()} | {:error, :pending_reply_overflow}
   def enqueue(%__MODULE__{queued: queued} = state, reply) do
     if length(queued) >= @maximum_queued_replies,
@@ -58,17 +53,29 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Output do
   end
 
   @doc "The next frame of output audio, or silence when nothing is streaming."
-  @spec next_frame(t(), pos_integer(), binary()) :: {binary(), t()}
+  @spec next_frame(t(), pos_integer(), binary()) :: {binary(), t(), [tuple()]}
   def next_frame(%__MODULE__{output: nil} = state, _frame_bytes, silence_frame),
-    do: {silence_frame, state}
+    do: {silence_frame, state, []}
 
   def next_frame(%__MODULE__{output: output} = state, frame_bytes, silence_frame) do
     if output.cursor < byte_size(output.stream) do
       size = min(frame_bytes, byte_size(output.stream) - output.cursor)
       frame = binary_part(output.stream, output.cursor, size)
-      {frame, %{state | output: %{output | cursor: output.cursor + size}}}
+
+      {due, pending} =
+        Enum.split_while(output.fragments, fn {_text, _start, ending} ->
+          ending <= output.cursor + size
+        end)
+
+      due =
+        Enum.map(due, fn {text, start, ending} ->
+          {text, start - output.cursor, ending - output.cursor}
+        end)
+
+      {frame, %{state | output: %{output | cursor: output.cursor + size, fragments: pending}},
+       due}
     else
-      {silence_frame, state}
+      {silence_frame, state, []}
     end
   end
 
@@ -81,6 +88,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Output do
 
   defp begin_stream(state, reply) do
     stream = state.leading_silence <> reply.pcm <> state.trailing_silence
-    %{text: reply.text, stream: stream, cursor: 0}
+
+    fragments =
+      Enum.with_index(reply.word_intervals)
+      |> Enum.map(fn {{word, start, ending}, index} ->
+        text = if index == 0, do: word, else: " " <> word
+        onset = byte_size(state.leading_silence) + start * reply.bytes_per_ms
+        beginning = max(onset - 300 * reply.bytes_per_ms, 0)
+        {text, beginning, byte_size(state.leading_silence) + ending * reply.bytes_per_ms}
+      end)
+
+    %{stream: stream, cursor: 0, fragments: fragments}
   end
 end

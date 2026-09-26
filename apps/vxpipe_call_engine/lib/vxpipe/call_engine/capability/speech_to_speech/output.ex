@@ -80,26 +80,23 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
       case Session.settle_output(state.session, output.output, played_ms) do
         :ok ->
           state = cancel_text_deadline(state)
-          state = publish_agent_transcript(output, played_ms, state)
 
-          _ =
-            emit_turn_usage(
-              state,
-              output.provider_turn,
-              :succeeded,
-              played_ms,
-              output
-            )
+          case publish_agent_transcript(output, played_ms, state) do
+            {:ok, state} ->
+              _ = emit_turn_usage(state, output.provider_turn, :succeeded, played_ms, output)
+              state = drop_stt_buffer(%{state | active_output: nil, egress_ms: played_ms})
 
-          state = drop_stt_buffer(%{state | active_output: nil, egress_ms: played_ms})
+              send(
+                state.owner,
+                {:vxpipe_sts_turn_completed, self(), state.agent_id, output.provider_turn,
+                 output.owner_sequence}
+              )
 
-          send(
-            state.owner,
-            {:vxpipe_sts_turn_completed, self(), state.agent_id, output.provider_turn,
-             output.owner_sequence}
-          )
+              admit_next_pending(state)
 
-          admit_next_pending(state)
+            {:error, _reason} ->
+              stop_unavailable(:provider_failed, state)
+          end
 
         {:error, _reason} ->
           stop_unavailable(:provider_failed, state)
@@ -188,17 +185,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   defp output_text_ready?(%{stt_text: :failed}, _state), do: true
   defp output_text_ready?(%{stt_text: text}, _state), do: not is_nil(text)
 
-  defp resolve_agent_text(%{pending_text: text}, %{output_stt: nil}), do: text
+  defp resolve_agent_text(output, %{output_stt: nil}),
+    do: OutputTranscript.text(output, output.played_ms)
+
   defp resolve_agent_text(%{stt_text: :failed}, _state), do: nil
   defp resolve_agent_text(%{stt_text: ""}, _state), do: nil
   defp resolve_agent_text(%{stt_text: text}, _state), do: text
 
   defp publish_agent_transcript(output, played_ms, state) do
-    text = resolve_agent_text(output, state)
+    text = resolve_agent_text(%{output | played_ms: played_ms}, state)
 
     cond do
       is_nil(text) ->
-        state
+        {:ok, state}
 
       played_ms <= 0 ->
         send(
@@ -207,21 +206,32 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
            output.owner_sequence}
         )
 
-        state
+        {:ok, state}
 
       transcript_route_permitted?(state, state.agent_id, state.human_id) ->
-        send(
-          state.owner,
-          {:vxpipe_sts_agent_transcript, self(), state.agent_id, text, output.provider_turn,
-           played_ms, output.transcript_interval, output.owner_sequence}
-        )
+        case append_agent_history(state, text) do
+          :ok ->
+            send(
+              state.owner,
+              {:vxpipe_sts_agent_transcript, self(), state.agent_id, text, output.provider_turn,
+               played_ms, output.transcript_interval, output.owner_sequence}
+            )
 
-        state
+            {:ok, state}
+
+          failure ->
+            failure
+        end
 
       true ->
-        state
+        {:ok, state}
     end
   end
+
+  defp append_agent_history(%{descriptor: %{continuity: :history_reseed}} = state, text),
+    do: Session.append_history(state.session, {:agent, text})
+
+  defp append_agent_history(_state, _text), do: :ok
 
   defp drain_queue(state) do
     case admit_next_pending(state) do
@@ -569,10 +579,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         state = drop_stt_buffer(state)
         state = restart_output_stt(state)
 
-        prefix =
-          if played_ms > 0 and not is_nil(resolve_agent_text(output, state)),
-            do: {:unverified_prefix, resolve_agent_text(output, state)},
-            else: :no_prefix
+        prefix = interrupted_prefix(output, played_ms, state)
 
         send(
           state.owner,
@@ -586,6 +593,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
            | active_output: nil,
              fenced_turns: MapSet.put(state.fenced_turns, provider_turn)
          })}
+    end
+  end
+
+  defp interrupted_prefix(_output, played_ms, _state) when played_ms <= 0, do: :no_prefix
+
+  defp interrupted_prefix(output, played_ms, %{output_stt: nil} = state) do
+    text = resolve_agent_text(%{output | played_ms: played_ms}, state)
+
+    cond do
+      is_nil(text) ->
+        :no_prefix
+
+      OutputTranscript.aligned?(output) ->
+        {:aligned_prefix, text, output.transcript_interval}
+
+      true ->
+        {:unverified_prefix, text}
+    end
+  end
+
+  defp interrupted_prefix(output, played_ms, state) do
+    case resolve_agent_text(%{output | played_ms: played_ms}, state) do
+      nil -> :no_prefix
+      text -> {:unverified_prefix, text}
     end
   end
 

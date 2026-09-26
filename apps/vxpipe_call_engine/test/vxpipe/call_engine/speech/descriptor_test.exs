@@ -75,6 +75,21 @@ defmodule Vxpipe.CallEngine.Speech.DescriptorTest do
     refute_received {:vxpipe_speech, _event}
   end
 
+  test "engine rejects a mute descriptor when its provider lacks the hold callback" do
+    tree = start_supervised!({CapabilityTree, owner: self()})
+    {:ok, descriptor} = Vxpipe.Providers.MorseCode.DuplexSTSSession.configure([])
+
+    {:ok, allocation, :starting} =
+      Session.start(CapabilityTree.scope(tree),
+        provider: SpeechSessionProbe,
+        options: [descriptor: descriptor],
+        private: [observer: self()]
+      )
+
+    assert_receive {:vxpipe_speech_closed, ^allocation, :initialization_failed}, 500
+    refute_received {:probe_initializing, _pid, _channel}
+  end
+
   test "finite-input completion is admitted only by a declaring STT descriptor and remains ordered" do
     tree = start_supervised!({CapabilityTree, owner: self()})
     {:ok, descriptor} = MorseSession.configure([])

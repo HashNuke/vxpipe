@@ -17,6 +17,8 @@ defmodule Vxpipe.CallEngine.STSToolResultReceiver do
     {:reply, :ok, observer}
   end
 
+  def handle_call(:hold_mode, _from, observer), do: {:reply, :stop, observer}
+
   @impl true
   def handle_info({:vxpipe_event, _event} = message, observer) do
     send(observer, message)

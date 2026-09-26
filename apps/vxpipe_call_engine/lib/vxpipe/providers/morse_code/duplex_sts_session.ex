@@ -32,6 +32,12 @@ defmodule Vxpipe.Providers.MorseCode.DuplexSTSSession do
   defdelegate input_quiescent?(pid), to: Native
 
   @impl true
+  defdelegate set_input_hold(pid, held?), to: Native
+
+  @impl true
+  defdelegate append_history(pid, entry), to: Native
+
+  @impl true
   defdelegate interrupt(pid, turn_ref), to: Native
 
   @impl true

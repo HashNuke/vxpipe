@@ -46,6 +46,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence do
 
   def tool_scope_current?(_state, _evidence, _policy), do: false
 
+  # A tool already admitted by the room can finish across a mute hold. Its
+  # original input epoch is retired, while source identity and policy still
+  # have to match the currently bound caller.
+  def pending_tool_scope_current?(state, evidence) do
+    case policy_snapshot(state) do
+      %Snapshot{} = policy ->
+        with %{identity: identity, epoch: epoch, audio_interval: interval} <- evidence,
+             %{input_handle: handle, participant_id: agent} <- state.speech_to_speech_capability,
+             true <- is_reference(epoch) and identity == handle.identity,
+             {_, connection} <- agent_connection(state),
+             true <- Snapshot.valid?(policy),
+             true <- MapSet.member?(policy.present_participant_ids, connection.participant_id),
+             true <- MapSet.member?(policy.present_participant_ids, agent) do
+          interval == Snapshot.interval(policy, :audio_input, connection.participant_id) and
+            Effective.audio_route_permitted?(policy.effective, connection.participant_id, agent)
+        else
+          _invalid -> false
+        end
+
+      _unavailable ->
+        false
+    end
+  end
+
   def human_connection(state, human_id) do
     Enum.find_value(state.connections, nil, fn {id, connection} ->
       if connection.participant_id == human_id, do: {id, connection}
