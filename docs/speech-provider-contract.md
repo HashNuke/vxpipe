@@ -118,9 +118,10 @@ existing stop and quiescence contract.
 
 An STS descriptor with `continuity: :history_reseed` also requires
 `append_history(pid, {:caller | :agent, text})`. The speech channel routes
-`Session.append_history/2` only from the allocation's consumer. The capability
-appends a caller's final transcript after its transcript route is approved and
-an agent's aligned transcript only after local playback settlement. The
+`Session.append_history/2` only from the allocation's consumer. The room
+acknowledges final caller text after the router approves its route to the
+virtual agent, and aligned, playback-settled agent text after delivery to the
+human connection. The capability then appends the acknowledged text. The
 provider keeps at most 128 messages and an estimated 8,192 tokens, trimming
 oldest text first. A replacement session seeds only this published text;
 provider partial transcripts and unplayed output never enter history.

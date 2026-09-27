@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSOutputIdentityTest do
         SpeechToSpeech.handle_agent_transcript(state, self(), @agent, "HELLO", provider_turn, 20)
 
       assert_receive {:vxpipe_event, %TextOutput{} = text}
+      assert_receive {:vxpipe_sts_published_history, _, {:agent, "HELLO"}}
       assert same_turn?(started, text)
 
       state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, provider_turn)
@@ -52,6 +53,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSOutputIdentityTest do
              ) == state
 
       refute_received {:vxpipe_event, _}
+      refute_received {:vxpipe_sts_published_history, _, _}
     end
   end
 
@@ -86,6 +88,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSOutputIdentityTest do
     assert state.sts_turns == %{}
     assert SpeechToSpeech.handle_turn_completed(state, self(), @agent, "private-turn") == state
     refute_received {:vxpipe_event, _}
+  end
+
+  test "an agent transcript suppressed by the router never enters reseed history" do
+    state = %{state() | transcript_router: :missing_transcript_router}
+    state = SpeechToSpeech.handle_turn_started(state, self(), @agent, "turn")
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{}}
+
+    _state =
+      SpeechToSpeech.handle_agent_transcript(state, self(), @agent, "UNDELIVERED", "turn", 20)
+
+    refute_received {:vxpipe_event, %TextOutput{}}
+    refute_received {:vxpipe_sts_published_history, _, _}
   end
 
   test "a delayed start cannot reopen a completed public output" do

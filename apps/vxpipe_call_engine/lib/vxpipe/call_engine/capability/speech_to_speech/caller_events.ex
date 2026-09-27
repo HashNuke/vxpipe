@@ -3,7 +3,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.CallerEvents do
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Input, Output}
   alias Vxpipe.CallEngine.Speech.Event
-  alias Vxpipe.CallEngine.Speech.Session
 
   @maximum_pending 16
 
@@ -47,14 +46,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.CallerEvents do
   defp forward_unassociated_text(state, %Event{kind: :input_transcript} = event) do
     if not state.held? and Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
          Output.transcript_route_permitted?(state, state.human_id, state.agent_id) do
-      case append_final_history(state, event) do
-        :ok ->
-          send_event(state, %{evidence: evidence(state)}, event)
-          {:ok, state}
-
-        failure ->
-          failure
-      end
+      send_event(state, %{evidence: evidence(state)}, event)
+      {:ok, state}
     else
       {:ok, state}
     end
@@ -65,10 +58,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.CallerEvents do
   defp forward_current(state, turn, %Event{kind: :input_transcript, turn_ref: key} = event) do
     if not turn.final? and
          Output.transcript_route_permitted?(state, state.human_id, state.agent_id) do
-      with :ok <- append_final_history(state, event) do
-        send_event(state, turn, event)
-        {:ok, put_turn(state, key, %{turn | final?: event.final != false})}
-      end
+      send_event(state, turn, event)
+      {:ok, put_turn(state, key, %{turn | final?: event.final != false})}
     else
       {:ok, state}
     end
@@ -94,16 +85,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.CallerEvents do
   defp send_event(state, turn, event),
     do:
       send(state.owner, {:vxpipe_sts_input_event, self(), Map.put(turn.evidence, :event, event)})
-
-  defp append_final_history(%{descriptor: %{continuity: :history_reseed}} = state, %Event{
-         kind: :input_transcript,
-         final: true,
-         text: text
-       })
-       when is_binary(text) and byte_size(text) > 0,
-       do: Session.append_history(state.session, {:caller, text})
-
-  defp append_final_history(_state, _event), do: :ok
 
   defp put_turn(state, key, %{ended?: true, final?: true}),
     do: %{state | caller_turns: Map.delete(state.caller_turns, key)}

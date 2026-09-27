@@ -26,19 +26,24 @@ needs a contract change, it says so and names the amendment to record.
 
 ## Where things stand
 
-Current snapshot (2026-09-27): checkpoints A–E are locally complete. E covers
+Current snapshot (2026-09-27): checkpoints A–D are locally complete. E covers
 history reseeding, all three post-reseed speech cases, pending host tool
 results across a lost GPT-Live session, and provider-originated transfer
 through compiled Morse and fake GPT-Live rooms. Both providers now reach the
 room-owned transfer binding; destination commit tears down the source and
 failure returns a tool result while keeping the same session usable. Package
 8 was split into reviewable checkpoints while retaining the plan's order.
-F has Console enablement, documentation, rendered setup inspection and the
-ten-call local duplex load lane. The review of A–E and all root gates passed;
-the final hosted harness review and authorized hosted phone check remain
-open. Package 10's docs-site test was committed separately as `97e5c0af` and
-its eight-test lane passes. The milestone checklist is the source of truth
-for acceptance.
+F has Console enablement, documentation, rendered setup inspection, the
+ten-call local duplex load lane, and a reviewed opt-in hosted harness
+(`a2946557`). The Package 9 review found that E history was appended before
+the room accepted text. The room now acknowledges router-approved caller
+text and delivered agent text before the capability records history. The
+red-green boundary tests and all local root gates pass, including 2,864
+umbrella tests. E's exact history snapshot during a concurrent disconnect
+remains an open contract decision; the authorized hosted service and phone
+check also remain open. Package 10's docs-site test was committed separately
+as `97e5c0af` and its eight-test lane passes. The milestone checklist is the
+source of truth for acceptance.
 
 Original planning snapshot (before implementation):
 
@@ -433,10 +438,12 @@ New optional STS callback, required when a descriptor declares `continuity:
 @callback append_history(pid(), {:caller | :agent, String.t()}) :: :ok | {:error, atom()}
 ```
 
-and `Speech.Session.append_history(allocation, entry)`. The capability calls
-it when it publishes a caller final transcript and when it publishes an
-agent transcript at settlement (the aligned prefix from package 3). Only
-published text is ever sent, so nothing unheard is seeded.
+and `Speech.Session.append_history(allocation, entry)`. The room acknowledges
+an accepted final caller transcript after the router approves its route to
+the virtual agent, or a playback-settled agent transcript after delivery to
+the human connection. The capability then calls the session callback. Only
+room-authorized caller text and delivered agent text enter history. The
+room-boundary correction is recorded in [the decision](gpt-live-room-history.md).
 
 ### Provider behaviour (`GPTLiveHistory`, pure)
 

@@ -150,10 +150,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
 
     {_, connection} = Evidence.agent_connection(state)
 
-    {state, _policy} =
-      EventPublisher.publish_transcript(state, connection.pid, event,
-        media_policy_revision: turn.evidence.transcript_interval
+    {state, _policy, recipients} =
+      EventPublisher.publish_transcript_with_recipients(state, connection.pid, event,
+        media_policy_revision: turn.evidence.transcript_interval,
+        virtual_recipient_participant_id: state.speech_to_speech_capability.participant_id
       )
+
+    agent_id = state.speech_to_speech_capability.participant_id
+
+    if final? and text != "" and recipient?(recipients, agent_id) do
+      send(state.speech_to_speech_capability.pid, {
+        :vxpipe_sts_published_history,
+        self(),
+        {:caller, text}
+      })
+    end
 
     history =
       if final?,
@@ -186,4 +197,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
 
   defp put_turn(state, key, turn),
     do: %{state | sts_caller_turns: Map.put(state.sts_caller_turns, key, turn)}
+
+  defp recipient?(:legacy, _target), do: true
+  defp recipient?(recipients, target), do: MapSet.member?(recipients, target)
 end

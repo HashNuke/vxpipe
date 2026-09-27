@@ -53,10 +53,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.AgentTranscript do
         occurred_at: DateTime.utc_now(:millisecond)
       }
 
-      {state, _policy} =
-        EventPublisher.publish_transcript(state, connection.pid, event,
+      {state, _policy, recipients} =
+        EventPublisher.publish_transcript_with_recipients(state, connection.pid, event,
           media_policy_revision: interval
         )
+
+      if text != "" and recipient?(recipients, connection.participant_id) do
+        send(capability, {:vxpipe_sts_published_history, self(), {:agent, text}})
+      end
 
       %{
         state
@@ -101,4 +105,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.AgentTranscript do
         _sequence
       ),
       do: state
+
+  defp recipient?(:legacy, _target), do: true
+  defp recipient?(recipients, target), do: MapSet.member?(recipients, target)
 end

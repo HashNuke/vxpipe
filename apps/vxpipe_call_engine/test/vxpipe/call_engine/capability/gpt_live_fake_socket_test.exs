@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Speech.PrivateInit
+  alias Vxpipe.CallEngine.Speech.Duplex.PublishedHistory
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.TestGPTLiveTransport
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
@@ -465,6 +466,12 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", "Hello", ^turn, _, _, _},
                    1_000
+
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    assert PublishedHistory.input(:sys.get_state(provider).history) == []
+    send(capability, {:vxpipe_sts_published_history, self(), {:caller, "Hi"}})
+    send(capability, {:vxpipe_sts_published_history, self(), {:agent, "Hello"}})
+    _ = :sys.get_state(capability)
 
     deliver_capability_fixture(wire, "expired")
     assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000

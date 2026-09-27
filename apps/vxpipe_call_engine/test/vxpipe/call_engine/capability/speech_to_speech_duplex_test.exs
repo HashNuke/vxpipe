@@ -119,6 +119,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
       )
 
     push_morse(capability, "HI")
+
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{event: %{kind: :input_transcript, text: "HI", final: true}}},
+                   1_000
+
+    publish_history(capability, {:caller, "HI"})
     first_turn = await_turn_started(capability)
     advance_until_idle(capability)
     played_ms = playback_duration(capability)
@@ -127,6 +133,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "RECEIVED HI", ^first_turn,
                     ^played_ms, _, _},
                    1_000
+
+    publish_history(capability, {:agent, "RECEIVED HI"})
 
     provider = Session.provider(:sys.get_state(capability).session)
     _ = :sys.get_state(capability)
@@ -146,6 +154,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
                     %{event: %{kind: :input_transcript, text: "HI", final: true}}},
                    1_000
 
+    publish_history(capability, {:caller, "HI"})
+
     assert is_reference(await_turn_started(capability))
   end
 
@@ -161,6 +171,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     assert_receive {:vxpipe_sts_input_event, ^capability,
                     %{event: %{kind: :input_transcript, text: "HI", final: true}}},
                    1_000
+
+    publish_history(capability, {:caller, "HI"})
 
     provider = Session.provider(:sys.get_state(capability).session)
     _ = :sys.get_state(capability)
@@ -199,6 +211,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
                     %{event: %{kind: :input_transcript, text: "HI", final: true}}},
                    1_000
 
+    publish_history(capability, {:caller, "HI"})
     first_turn = await_turn_started(capability)
     provider = Session.provider(:sys.get_state(capability).session)
 
@@ -563,6 +576,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
   defp encode(text, options) do
     {:ok, config} = Config.new(options)
     Encoder.encode(config, text)
+  end
+
+  defp publish_history(capability, entry) do
+    send(capability, {:vxpipe_sts_published_history, self(), entry})
+    _ = :sys.get_state(capability)
   end
 
   defp complete_playback(played_ms) do

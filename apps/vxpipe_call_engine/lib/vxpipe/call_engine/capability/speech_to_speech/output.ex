@@ -81,22 +81,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
         :ok ->
           state = cancel_text_deadline(state)
 
-          case publish_agent_transcript(output, played_ms, state) do
-            {:ok, state} ->
-              _ = emit_turn_usage(state, output.provider_turn, :succeeded, played_ms, output)
-              state = drop_stt_buffer(%{state | active_output: nil, egress_ms: played_ms})
+          state = publish_agent_transcript(output, played_ms, state)
+          _ = emit_turn_usage(state, output.provider_turn, :succeeded, played_ms, output)
+          state = drop_stt_buffer(%{state | active_output: nil, egress_ms: played_ms})
 
-              send(
-                state.owner,
-                {:vxpipe_sts_turn_completed, self(), state.agent_id, output.provider_turn,
-                 output.owner_sequence}
-              )
+          send(
+            state.owner,
+            {:vxpipe_sts_turn_completed, self(), state.agent_id, output.provider_turn,
+             output.owner_sequence}
+          )
 
-              admit_next_pending(state)
-
-            {:error, _reason} ->
-              stop_unavailable(:provider_failed, state)
-          end
+          admit_next_pending(state)
 
         {:error, _reason} ->
           stop_unavailable(:provider_failed, state)
@@ -197,7 +192,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
     cond do
       is_nil(text) ->
-        {:ok, state}
+        state
 
       played_ms <= 0 ->
         send(
@@ -206,32 +201,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
            output.owner_sequence}
         )
 
-        {:ok, state}
+        state
 
       transcript_route_permitted?(state, state.agent_id, state.human_id) ->
-        case append_agent_history(state, text) do
-          :ok ->
-            send(
-              state.owner,
-              {:vxpipe_sts_agent_transcript, self(), state.agent_id, text, output.provider_turn,
-               played_ms, output.transcript_interval, output.owner_sequence}
-            )
+        send(
+          state.owner,
+          {:vxpipe_sts_agent_transcript, self(), state.agent_id, text, output.provider_turn,
+           played_ms, output.transcript_interval, output.owner_sequence}
+        )
 
-            {:ok, state}
-
-          failure ->
-            failure
-        end
+        state
 
       true ->
-        {:ok, state}
+        state
     end
   end
-
-  defp append_agent_history(%{descriptor: %{continuity: :history_reseed}} = state, text),
-    do: Session.append_history(state.session, {:agent, text})
-
-  defp append_agent_history(_state, _text), do: :ok
 
   defp drain_queue(state) do
     case admit_next_pending(state) do

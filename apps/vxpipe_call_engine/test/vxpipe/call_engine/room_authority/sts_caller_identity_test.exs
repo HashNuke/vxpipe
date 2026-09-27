@@ -10,12 +10,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
     ParticipantTurnStarted
   }
 
-  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
+  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns
   alias Vxpipe.CallEngine.Speech.Event
   alias Vxpipe.CallEngine.STSInputHandle
+  alias Vxpipe.CallEngine.TranscriptRouter
 
   @identity %{
     tenant_id: "tenant",
@@ -45,6 +46,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
         handle(state, evidence(state, :input_transcript, turn, 3, text: "HELLO", final: true))
 
       assert_receive {:vxpipe_event, %ParticipantTranscription{text: "HELLO", final: true} = text}
+      assert_receive {:vxpipe_sts_published_history, _, {:caller, "HELLO"}}
       assert_same_turn(started, text)
       assert state.sts_caller_turns == %{}
       assert handle(state, start) == state
@@ -121,6 +123,60 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
     replaced = %{state | connections: %{"source" => %{source | pid: other}}}
     assert {:ok, ^replaced} = CallerTurns.handle(replaced, self(), event, policy())
     refute_received {:vxpipe_event, _}
+    refute_received {:vxpipe_sts_published_history, _, _}
+  end
+
+  test "a final caller transcript rejected after hold never enters reseed history" do
+    state = state()
+    turn = make_ref()
+    state = handle(state, evidence(state, :speech_started, turn, 1))
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}
+
+    held = %{state | held_participant_ids: MapSet.new(["human"])}
+
+    assert {:ok, ^held} =
+             CallerTurns.handle(
+               held,
+               self(),
+               evidence(state, :input_transcript, turn, 2, text: "UNHEARD", final: true),
+               policy()
+             )
+
+    refute_received {:vxpipe_event, %ParticipantTranscription{}}
+    refute_received {:vxpipe_sts_published_history, _, _}
+  end
+
+  test "a final caller transcript suppressed by the router never enters reseed history" do
+    state = %{state() | transcript_router: :missing_transcript_router}
+    turn = make_ref()
+    state = handle(state, evidence(state, :speech_started, turn, 1))
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}
+
+    _state =
+      handle(state, evidence(state, :input_transcript, turn, 2, text: "UNDELIVERED", final: true))
+
+    refute_received {:vxpipe_event, %ParticipantTranscription{}}
+    refute_received {:vxpipe_sts_published_history, _, _}
+  end
+
+  test "a routed final caller transcript reaches the virtual agent's reseed history" do
+    router =
+      start_supervised!(
+        {TranscriptRouter,
+         Map.to_list(Map.delete(@identity, :participant_id)) ++
+           [maximum_retained_revisions: 8, register: false]}
+      )
+
+    assert :ok = Enforcer.apply(router, policy(), 1_000)
+    state = %{state() | transcript_router: router}
+    turn = make_ref()
+    state = handle(state, evidence(state, :speech_started, turn, 1))
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}
+
+    _state =
+      handle(state, evidence(state, :input_transcript, turn, 2, text: "HEARD", final: true))
+
+    assert_receive {:vxpipe_sts_published_history, _, {:caller, "HEARD"}}
   end
 
   test "the seventeenth unsettled association fails and settled turns release capacity" do

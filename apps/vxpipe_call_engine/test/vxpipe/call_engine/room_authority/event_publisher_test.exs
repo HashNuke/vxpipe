@@ -26,13 +26,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EventPublisherTest do
             %{
               "media_policy_revision" => 0,
               "save_transcripts" => true
-            }} =
-             EventPublisher.publish_transcript(
+            }, recipients} =
+             EventPublisher.publish_transcript_with_recipients(
                state,
                self(),
                event,
                media_policy_revision: 0
              )
+
+    assert recipients == MapSet.new()
 
     refute_receive {:vxpipe_event, ^event}
 
@@ -51,10 +53,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EventPublisherTest do
 
     event = event()
 
-    assert {_state, %{"save_transcripts" => false}} =
-             EventPublisher.publish_transcript(state(router), self(), event)
+    assert {_state, %{"save_transcripts" => false}, recipients} =
+             EventPublisher.publish_transcript_with_recipients(state(router), self(), event)
+
+    assert recipients == MapSet.new()
 
     refute_receive {:vxpipe_event, ^event}
+  end
+
+  test "reports the recipients that actually received the projected transcript" do
+    router = start_router()
+    :ok = apply_policy(router, 0, ["source", "recipient"])
+    event = event()
+
+    assert {_state, _source_policy, recipients} =
+             EventPublisher.publish_transcript_with_recipients(state(router), self(), event)
+
+    assert MapSet.member?(recipients, "recipient")
+    assert_receive {:vxpipe_event, ^event}
   end
 
   defp state(router) do

@@ -1,9 +1,11 @@
 # GPT-Live speech-to-speech
 
 Status: specification frozen on 2026-09-25; checkpoints A through D are
-implemented and locally verified. Checkpoint E has reseed and transfer boundary
-proofs, but a compiled STS transfer tool execution gap remains; checkpoint F is
-open. Checkpoint B was
+implemented and locally verified. Checkpoint E has local reseed and transfer
+proofs, including room-owned STS transfer execution, but the exact history
+snapshot at a concurrent disconnect is under review. Checkpoint F has a local
+opt-in hosted harness; its authorized service and phone check remain open.
+Checkpoint B was
 reopened by review 3 and closed again after the clock-paced output rework;
 review 4's R4-1 is resolved by the Morse duplex real-time clock. Review 6's
 six code-review findings (R6-1..R6-6) are resolved (see the response to review
@@ -507,13 +509,15 @@ unused-dependency and Lean checks passing. No hosted call was made.
 
 ### E — Session continuity and lifecycle
 
-- [x] Red-green reseed on `expired` and `connection_lost`: seeded history comes
+- [ ] Red-green reseed on `expired` and `connection_lost`: seeded history comes
   from room-published, playback-fenced transcripts, is truncated to the
   startup limits, and starts a new usage count. `gpt_live_fake_socket_test.exs`
-  asserts a replacement seeded with the capability's published caller and
-  settled agent text; `gpt_live_session_test.exs` covers both close reasons,
+  asserts a replacement seeded with room-acknowledged caller and settled
+  agent text; `gpt_live_session_test.exs` covers both close reasons,
   the final close usage delta and a new session's fresh counter. The shared
-  `published_history_test.exs` proves both startup bounds.
+  `published_history_test.exs` proves both startup bounds. Publication-route
+  safety is implemented; the strict snapshot timing at a concurrent disconnect
+  remains open pending the milestone's contract decision.
 - [x] Prove post-reseed speech: a drop mid-reply or after an unanswered caller
   turn makes the new session continue; a drop while idle leaves it waiting.
 - [x] Duration renewal is conditional. The official
@@ -526,7 +530,8 @@ unused-dependency and Lean checks passing. No hosted call was made.
 - [x] Prove a completed transfer and teardown stop the session, and a failed
   transfer releases the hold with the same session, with both Morse duplex and
   the fake socket.
-- [x] Exit: lifecycle tests pass with both local providers.
+- [ ] Exit: lifecycle tests pass with both local providers. The suites are
+  green, but the history snapshot contract above remains open.
 
 Morse scripted-close evidence (2026-09-26): the opt-in manual-clock fixture
 provider now simulates `:expired` and `:connection_lost` without restarting the
@@ -2221,3 +2226,30 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   structure test now checks the current hero actions, section order and
   provider wall. The docs-site `node --test` lane passes eight tests. This
   resolves the review finding without changing GPT-Live acceptance scope.
+
+### Response to review 12 — 2026-09-27 (package 9 local harness and E publication audit)
+
+- The opt-in hosted harness is committed in `a2946557`. Its two tagged tests
+  exercise the real WebSocket through the private test transport with a fixed
+  9.64-second input budget and at most four provider sessions. With the run
+  flag unset, both tests load and skip. No hosted session or real carrier call
+  has run; F's service and phone acceptance remains open.
+- Independent implementation review found that the capability appended caller
+  and agent text before the room accepted it. It could seed a replacement with
+  stale or undelivered text. The capability now records only a room publication
+  acknowledgment. The room checks the transcript router's recipient set;
+  caller text requires an approved route to the virtual agent, and agent text
+  requires delivery to the human connection. A failed router, held caller,
+  stale turn, or rejected route sends no acknowledgment. The
+  [decision record](../gpt-live-room-history.md) explains the boundary.
+- Red-green tests caught the early append, missing room acknowledgments,
+  router suppression, and missing virtual-agent candidate before each fix.
+  The focused fake GPT-Live, Morse lifecycle, room, and publisher tests pass.
+  Root format, warnings-as-errors compile, strict Credo, unused-dependency
+  and Lean checks pass. The umbrella suite passed 2,864 tests with zero
+  failures and 61 tagged exclusions.
+- A close can still snapshot history before an asynchronous room publication
+  acknowledgment is processed. Review treats strict inclusion of every
+  transcript published just before disconnect as an open E contract decision.
+  E's reseed task and exit are unchecked until that rule is decided or
+  implemented. F's independent review and hosted acceptance remain unchecked.

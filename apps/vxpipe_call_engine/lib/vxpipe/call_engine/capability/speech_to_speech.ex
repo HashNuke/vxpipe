@@ -421,6 +421,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {:noreply, state}
   end
 
+  def handle_info(
+        {:vxpipe_sts_published_history, owner, {role, text} = entry},
+        %{owner: owner, descriptor: %{continuity: :history_reseed}} = state
+      )
+      when role in [:caller, :agent] and is_binary(text) and text != "" do
+    case Session.append_history(state.session, entry) do
+      :ok -> {:noreply, state}
+      _failure -> stop_unavailable(:provider_failed, state)
+    end
+  end
+
   def handle_info({:vxpipe_sts_input, ingress, reference, frame, revision, epoch}, state),
     do: Input.deliver(state, ingress, reference, frame, revision, epoch)
 
