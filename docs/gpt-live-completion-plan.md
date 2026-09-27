@@ -38,12 +38,21 @@ ten-call local duplex load lane, and a reviewed opt-in hosted harness
 (`a2946557`). The Package 9 review found that E history was appended before
 the room accepted text. The room now acknowledges router-approved caller
 text and delivered agent text before the capability records history. The
-red-green boundary tests and all local root gates pass, including 2,864
-umbrella tests. E's exact history snapshot during a concurrent disconnect
-remains an open contract decision; the authorized hosted service and phone
-check also remain open. Package 10's docs-site test was committed separately
-as `97e5c0af` and its eight-test lane passes. The milestone checklist is the
-source of truth for acceptance.
+red-green boundary tests and all local root gates passed in checkpoint 8's
+publication correction. A follow-up room-ordered barrier now waits for queued
+and in-progress publications before either local provider snapshots history;
+its final root verification is recorded in the milestone (2,868 tests, zero
+failures). The authorized hosted service and phone check remains open. Package
+10's docs-site test was committed separately as `97e5c0af` and its eight-test
+lane passes. The milestone checklist is at 33 of 34 tasks (97.1%) and remains
+the source of truth for acceptance.
+
+Plan audit (2026-09-27): the implementation follows the package order. Package
+8 was split into coherent commits, and the publication barrier closes the
+strict snapshot rule in checkpoint E. OpenAI's LLM and GPT-Live setup was
+enabled before the hosted check at the user's explicit direction. Package 10
+remains a separate docs-site commit. The only outstanding acceptance is the
+authorized hosted service and phone check in Package 9.
 
 Original planning snapshot (before implementation):
 
@@ -444,6 +453,9 @@ the virtual agent, or a playback-settled agent transcript after delivery to
 the human connection. The capability then calls the session callback. Only
 room-authorized caller text and delivered agent text enter history. The
 room-boundary correction is recorded in [the decision](gpt-live-room-history.md).
+On a lost session, the provider waits for a speech-channel, capability and
+room publication barrier before taking its bounded snapshot. The reconnect
+deadline includes that wait; failure to complete it fails reseed.
 
 ### Provider behaviour (`GPTLiveHistory`, pure)
 

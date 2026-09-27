@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Speech.PrivateInit
+  alias Vxpipe.CallEngine.Speech.Session
   alias Vxpipe.CallEngine.Speech.Duplex.PublishedHistory
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.TestGPTLiveTransport
@@ -19,6 +20,52 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
                         "../../../support/fixtures/gpt_live/capability_events.jsonl",
                         __DIR__
                       )
+
+  test "reseed waits for room-published history already queued at disconnect" do
+    {capability, wire} = start_ready_capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    assert :ok = :sys.suspend(capability)
+
+    try do
+      send(capability, {:vxpipe_sts_published_history, self(), {:caller, "published"}})
+      deliver_capability_fixture(wire, "expired")
+      _ = :sys.get_state(provider)
+
+      refute_received {:test_gpt_live_started, _, _}
+    after
+      assert :ok = :sys.resume(capability)
+    end
+
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+
+    assert_receive {:test_gpt_live_control, ^replacement,
+                    %{"type" => "session.start", "session" => reseed}},
+                   1_000
+
+    assert reseed["input"] == [
+             %{
+               "type" => "message",
+               "role" => "user",
+               "content" => [%{"type" => "input_text", "text" => "published"}]
+             }
+           ]
+  end
+
+  test "reseed waits until the room finishes publications already in progress" do
+    {capability, wire} = start_ready_capability(room_history_barrier?: true)
+    provider = Session.provider(:sys.get_state(capability).session)
+
+    deliver_capability_fixture(wire, "expired")
+    _ = :sys.get_state(provider)
+
+    assert_receive {:vxpipe_sts_reseed_room_barrier, ^capability, reference}, 1_000
+    refute_received {:test_gpt_live_started, _, _}
+
+    send(capability, {:vxpipe_sts_reseed_room_ready, self(), reference})
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
+  end
 
   test "only completed delegated calls reach the capability and all results precede continuation" do
     {capability, wire} = start_ready_capability()
@@ -352,6 +399,18 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     assert_receive {:vxpipe_sts_unavailable, ^capability, :reseed_failed}, 6_000
   end
 
+  test "a room that never completes its publication barrier fails reseed without reconnecting" do
+    {capability, wire} = start_ready_capability(room_history_barrier?: true)
+    provider = Session.provider(:sys.get_state(capability).session)
+    monitor = Process.monitor(provider)
+
+    TestGPTLiveTransport.disconnect(wire)
+    assert_receive {:vxpipe_sts_reseed_room_barrier, ^capability, _reference}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :reseed_failed}}, 6_000
+    assert_receive {:vxpipe_sts_unavailable, ^capability, :reseed_failed}, 1_000
+    refute_received {:test_gpt_live_started, _, _}
+  end
+
   test "a content close reports moderation to the speech capability owner" do
     {capability, wire} = start_ready_capability()
     deliver_capability_fixture(wire, "content")
@@ -601,6 +660,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
   end
 
   defp start_ready_capability(options \\ []) do
+    {room_history_barrier?, options} = Keyword.pop(options, :room_history_barrier?, false)
     {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
 
@@ -617,6 +677,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
           {SpeechToSpeech.Tree,
            [
              owner: self(),
+             room_history_barrier?: room_history_barrier?,
              agent_id: "agent1",
              human_id: "human1",
              provider: {GPTLiveSession, [backend_model: "gpt-5.6"]},

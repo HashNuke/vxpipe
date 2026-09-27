@@ -2,6 +2,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
   @moduledoc false
   alias Vxpipe.CallEngine.RoomAuthority.{CallerIdle, SpeechToSpeech, StartupReadiness}
 
+  def handle(
+        {:vxpipe_sts_reseed_room_barrier, capability, reference},
+        %{speech_to_speech_capability: %{pid: capability}} = state
+      )
+      when is_reference(reference) do
+    send(capability, {:vxpipe_sts_reseed_room_ready, self(), reference})
+    {:noreply, state}
+  end
+
+  def handle({:vxpipe_sts_reseed_room_barrier, _capability, _reference}, state),
+    do: {:noreply, state}
+
   def handle({:vxpipe_sts_ready, capability}, state) do
     if SpeechToSpeech.current?(state, capability) do
       state = SpeechToSpeech.handle_ready(state, capability)

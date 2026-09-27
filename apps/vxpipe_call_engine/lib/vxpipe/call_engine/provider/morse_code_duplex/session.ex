@@ -132,6 +132,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   def init(options) do
     descriptor = Keyword.fetch!(options, :descriptor)
     channel = Keyword.fetch!(options, :channel)
+    allocation = Keyword.fetch!(options, :allocation)
 
     with {:ok, config} <-
            descriptor.settings
@@ -148,6 +149,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
       state = %{
         channel: channel,
+        consumer: allocation.consumer,
         descriptor: descriptor,
         config: config,
         decoder: decoder,
@@ -167,6 +169,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         yield?: Map.get(descriptor.settings, :yield?, true),
         scripted_closes?: Map.get(descriptor.settings, :scripted_closes?, false),
         reseed_attempted?: false,
+        pending_reseed: nil,
         unanswered?: false,
         clock: clock,
         clock_origin_ms: System.monotonic_time(:millisecond),
@@ -242,9 +245,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   def handle_call({:append_history, _entry}, _from, state),
     do: {:reply, {:error, :invalid_history}, state}
 
-  def handle_call({:script_close, reason}, _from, %{scripted_closes?: true} = state)
+  def handle_call({:script_close, reason}, from, %{scripted_closes?: true} = state)
       when reason in [:expired, :connection_lost] do
-    script_close_session(state, reason)
+    script_close_session(state, reason, from)
   end
 
   def handle_call({:script_close, _reason}, _from, state),
@@ -352,6 +355,18 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
+  def handle_info(
+        {:vxpipe_sts_reseed_history_ready, consumer, reference},
+        %{consumer: consumer, pending_reseed: %{reference: reference} = pending} = state
+      ),
+      do: ScriptedReseed.confirm(state, pending)
+
+  def handle_info(
+        {:reseed_barrier_timeout, reference},
+        %{pending_reseed: %{reference: reference} = pending} = state
+      ),
+      do: ScriptedReseed.timeout(state, pending)
+
   def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
@@ -363,18 +378,19 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     |> Map.put(:log, [])
   end
 
-  defp script_close_session(%{reseed_attempted?: true} = state, _reason),
+  defp script_close_session(%{pending_reseed: pending} = state, _reason, _from)
+       when not is_nil(pending),
+       do: {:reply, {:error, :busy}, state}
+
+  defp script_close_session(%{reseed_attempted?: true} = state, _reason, _from),
     do: {:stop, {:shutdown, :reseed_failed}, {:error, :reseed_failed}, state}
 
-  defp script_close_session(state, reason) do
+  defp script_close_session(state, reason, from) do
     resume? = OutputSegmenter.burst?(state.segmenter) or state.unanswered?
-    seeded_history = PublishedHistory.input(state.history)
     {segmenter, events} = OutputSegmenter.finish(state.segmenter)
 
-    with {:ok, state} <- apply_segmenter_events(events, %{state | segmenter: segmenter}),
-         {:ok, state} <-
-           state |> drain_all() |> ScriptedReseed.reset() |> ScriptedReseed.queue_prompt(resume?) do
-      {:reply, {:ok, %{reason: reason, seeded_history: seeded_history, resume?: resume?}}, state}
+    with {:ok, state} <- apply_segmenter_events(events, %{state | segmenter: segmenter}) do
+      ScriptedReseed.begin(state, from, reason, resume?)
     else
       _failure -> {:stop, {:shutdown, :reseed_failed}, {:error, :reseed_failed}, state}
     end

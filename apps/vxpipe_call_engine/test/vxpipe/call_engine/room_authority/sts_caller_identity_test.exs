@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
 
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
+  alias Vxpipe.CallEngine.RoomAuthority
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns
   alias Vxpipe.CallEngine.Speech.Event
@@ -25,6 +26,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallerIdentityTest do
     participant_id: "human",
     connection_id: "source"
   }
+
+  test "room history barrier acknowledges only the current speech capability" do
+    state = state()
+    reference = make_ref()
+
+    assert {:noreply, ^state} =
+             RoomAuthority.handle_info(
+               {:vxpipe_sts_reseed_room_barrier, self(), reference},
+               state
+             )
+
+    assert_receive {:vxpipe_sts_reseed_room_ready, room, ^reference}
+    assert room == self()
+
+    retired = %{state | speech_to_speech_capability: nil}
+
+    assert {:noreply, ^retired} =
+             RoomAuthority.handle_info(
+               {:vxpipe_sts_reseed_room_barrier, self(), make_ref()},
+               retired
+             )
+
+    refute_received {:vxpipe_sts_reseed_room_ready, _, _}
+  end
 
   for kind <- [:reference, :binary] do
     test "#{kind} provider identity stays private through late final caller text" do

@@ -125,6 +125,9 @@ human connection. The capability then appends the acknowledged text. The
 provider keeps at most 128 messages and an estimated 8,192 tokens, trimming
 oldest text first. A replacement session seeds only this published text;
 provider partial transcripts and unplayed output never enter history.
+Before reseeding after a lost session, the provider waits for the speech
+channel, capability and room publication barrier. It snapshots history only
+after acknowledgments for earlier room publication have been appended.
 
 `provider_usage` is a private STS event to the capability. Its `usage` payload
 is either `%{kind: :voice, milliseconds: positive_delta}` or

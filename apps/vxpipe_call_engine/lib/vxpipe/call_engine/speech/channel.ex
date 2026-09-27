@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     ProviderName,
     ResponseContexts,
     ResponseStarts,
+    ReseedHistoryBarrier,
     ScopeControl,
     STSInput,
     STSOutput,
@@ -541,6 +542,11 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   @impl true
+  def handle_cast({:reseed_history_barrier, producer, reference}, state) do
+    ReseedHistoryBarrier.forward(state, producer, reference, self())
+    {:noreply, state}
+  end
+
   def handle_cast(:retire, state), do: {:stop, :normal, state}
 
   def handle_cast({:input_result, reference, worker, result}, state) do

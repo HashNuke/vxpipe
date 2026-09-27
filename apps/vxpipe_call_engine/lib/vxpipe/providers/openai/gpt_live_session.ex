@@ -11,7 +11,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     TurnInference
   }
 
-  alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, SessionTree, STSProvider}
+  alias Vxpipe.CallEngine.Speech.{
+    Channel,
+    Descriptor,
+    Event,
+    ReseedHistoryBarrier,
+    SessionTree,
+    STSProvider
+  }
 
   alias Vxpipe.Providers.OpenAI.{
     GPTLive,
@@ -29,6 +36,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
   @derive {Inspect, only: [:ready?, :held?]}
   defstruct [
     :channel,
+    :consumer,
     :config,
     :socket_supervisor,
     :wire,
@@ -51,6 +59,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     :output_generation,
     :pending_hold,
     :reseed_timer,
+    :reseed_barrier,
     segments: %{},
     input_ms: 0,
     ready?: false,
@@ -166,6 +175,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
       {:ok,
        %__MODULE__{
          channel: channel,
+         consumer: allocation.consumer,
          config: config,
          socket_supervisor: SessionTree.providers(allocation),
          wire_module: wire_module,
@@ -413,6 +423,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
 
   def handle_info(:reseed_deadline, %{ready?: false, reseed_attempted?: true} = state),
     do: {:stop, {:shutdown, :reseed_failed}, state}
+
+  def handle_info(
+        {:vxpipe_sts_reseed_history_ready, consumer, reference},
+        %{consumer: consumer, reseed_barrier: reference} = state
+      )
+      when is_reference(reference) do
+    connect(%{state | reseed_barrier: nil}, PublishedHistory.input(state.history))
+  end
 
   def handle_info(
         {:hold_timeout, event_id},
@@ -718,7 +736,8 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
         unanswered?: false
     }
 
-    connect(state, PublishedHistory.input(state.history))
+    reference = ReseedHistoryBarrier.request(state.channel)
+    {:noreply, %{state | reseed_barrier: reference}}
   end
 
   defp failure_reason(%{reseed_attempted?: true}), do: :reseed_failed

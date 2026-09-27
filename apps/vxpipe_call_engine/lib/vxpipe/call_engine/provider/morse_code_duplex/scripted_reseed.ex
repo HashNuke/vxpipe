@@ -7,10 +7,46 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.ScriptedReseed do
     Hold,
     Output,
     Profile,
+    SegmentStore,
     ToolReply
   }
 
-  alias Vxpipe.CallEngine.Speech.Duplex.{OutputSegmenter, TurnInference}
+  alias Vxpipe.CallEngine.Speech.Duplex.{OutputSegmenter, PublishedHistory, TurnInference}
+  alias Vxpipe.CallEngine.Speech.ReseedHistoryBarrier
+
+  @barrier_timeout 4_000
+
+  def begin(state, from, reason, resume?) do
+    reference = ReseedHistoryBarrier.request(state.channel)
+    timer = Process.send_after(self(), {:reseed_barrier_timeout, reference}, @barrier_timeout)
+    pending = %{from: from, reason: reason, resume?: resume?, reference: reference, timer: timer}
+    {:noreply, %{state | pending_reseed: pending}}
+  end
+
+  def confirm(state, pending) do
+    Process.cancel_timer(pending.timer)
+    seeded_history = PublishedHistory.input(state.history)
+
+    case state |> SegmentStore.drain_all() |> reset() |> queue_prompt(pending.resume?) do
+      {:ok, state} ->
+        GenServer.reply(
+          pending.from,
+          {:ok,
+           %{reason: pending.reason, seeded_history: seeded_history, resume?: pending.resume?}}
+        )
+
+        {:noreply, %{state | pending_reseed: nil}}
+
+      _failure ->
+        GenServer.reply(pending.from, {:error, :reseed_failed})
+        {:stop, {:shutdown, :reseed_failed}, state}
+    end
+  end
+
+  def timeout(state, pending) do
+    GenServer.reply(pending.from, {:error, :reseed_failed})
+    {:stop, {:shutdown, :reseed_failed}, state}
+  end
 
   def reset(state) do
     {:ok, decoder} = Decoder.new(state.config)

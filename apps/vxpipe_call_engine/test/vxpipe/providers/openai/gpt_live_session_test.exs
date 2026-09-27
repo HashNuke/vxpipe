@@ -2,7 +2,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
   use ExUnit.Case, async: true
   @moduletag :capture_log
 
-  alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
+  alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Channel, Event, Session}
   alias Vxpipe.CallEngine.TestGPTLiveTransport
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
 
@@ -393,7 +393,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
 
     assert closing == %{kind: :voice, milliseconds: 500}
     assert :ok = Session.ack(session, final)
-    assert_receive {:test_gpt_live_started, replacement, _connection}
+    replacement = await_replacement(session)
     assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
 
     TestGPTLiveTransport.deliver(replacement, %{
@@ -491,7 +491,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     assert :ok = Session.append_history(session, {:agent, "The heard answer"})
 
     TestGPTLiveTransport.deliver(wire, %{"type" => "session.closed", "reason" => "expired"})
-    assert_receive {:test_gpt_live_started, replacement, _connection}
+    replacement = await_replacement(session)
     assert replacement != wire
 
     assert_receive {:test_gpt_live_control, ^replacement,
@@ -553,7 +553,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     end
 
     TestGPTLiveTransport.disconnect(wire)
-    assert_receive {:test_gpt_live_started, replacement, _connection}
+    replacement = await_replacement(session)
     assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
 
     TestGPTLiveTransport.deliver(replacement, %{
@@ -572,7 +572,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     provider = Session.provider(session)
     monitor = Process.monitor(provider)
     TestGPTLiveTransport.disconnect(wire)
-    assert_receive {:test_gpt_live_started, replacement, _connection}
+    replacement = await_replacement(session)
     assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
     TestGPTLiveTransport.disconnect(replacement)
     assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :reseed_failed}}, 1_000
@@ -596,7 +596,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     assert :ok = Session.ack(session, started)
 
     TestGPTLiveTransport.disconnect(wire)
-    assert_receive {:test_gpt_live_started, replacement, _connection}
+    replacement = await_replacement(session)
     assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
     assert {:ok, output} = Session.admit_output(session, turn)
 
@@ -623,7 +623,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     provider = Session.provider(session)
     monitor = Process.monitor(provider)
     TestGPTLiveTransport.disconnect(wire)
-    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    replacement = await_replacement(session)
     assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :reseed_failed}}, 6_000
   end
@@ -710,6 +710,16 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
       end)
 
     assert Enum.all?(markers, &(not String.contains?(logs, &1)))
+  end
+
+  defp await_replacement(session) do
+    provider = Session.provider(session)
+    channel = GenServer.whereis(Channel.address(session))
+
+    assert_receive {:vxpipe_sts_reseed_history_barrier, ^channel, ^provider, reference}, 1_000
+    send(provider, {:vxpipe_sts_reseed_history_ready, self(), reference})
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    replacement
   end
 
   defp start_ready_session(options \\ []) do

@@ -1,10 +1,10 @@
 # GPT-Live speech-to-speech
 
-Status: specification frozen on 2026-09-25; checkpoints A through D are
-implemented and locally verified. Checkpoint E has local reseed and transfer
-proofs, including room-owned STS transfer execution, but the exact history
-snapshot at a concurrent disconnect is under review. Checkpoint F has a local
-opt-in hosted harness; its authorized service and phone check remain open.
+Status: specification frozen on 2026-09-25; checkpoints A through E are
+implemented and locally verified. Checkpoint E includes room-owned STS transfer
+execution and a room-ordered reseed snapshot at concurrent disconnect.
+Checkpoint F has local setup, load, review, and an opt-in hosted harness; its
+authorized service and phone check remain open.
 Checkpoint B was
 reopened by review 3 and closed again after the clock-paced output rework;
 review 4's R4-1 is resolved by the Morse duplex real-time clock. Review 6's
@@ -509,15 +509,16 @@ unused-dependency and Lean checks passing. No hosted call was made.
 
 ### E — Session continuity and lifecycle
 
-- [ ] Red-green reseed on `expired` and `connection_lost`: seeded history comes
+- [x] Red-green reseed on `expired` and `connection_lost`: seeded history comes
   from room-published, playback-fenced transcripts, is truncated to the
   startup limits, and starts a new usage count. `gpt_live_fake_socket_test.exs`
   asserts a replacement seeded with room-acknowledged caller and settled
   agent text; `gpt_live_session_test.exs` covers both close reasons,
   the final close usage delta and a new session's fresh counter. The shared
-  `published_history_test.exs` proves both startup bounds. Publication-route
-  safety is implemented; the strict snapshot timing at a concurrent disconnect
-  remains open pending the milestone's contract decision.
+  `published_history_test.exs` proves both startup bounds. A barrier through
+  the speech channel, capability, and room ensures a concurrent disconnect
+  snapshots after queued and in-progress room publications. Withholding the
+  barrier fails reseed within the existing deadline.
 - [x] Prove post-reseed speech: a drop mid-reply or after an unanswered caller
   turn makes the new session continue; a drop while idle leaves it waiting.
 - [x] Duration renewal is conditional. The official
@@ -530,8 +531,8 @@ unused-dependency and Lean checks passing. No hosted call was made.
 - [x] Prove a completed transfer and teardown stop the session, and a failed
   transfer releases the hold with the same session, with both Morse duplex and
   the fake socket.
-- [ ] Exit: lifecycle tests pass with both local providers. The suites are
-  green, but the history snapshot contract above remains open.
+- [x] Exit: lifecycle tests pass with both local providers, including the
+  room-ordered history snapshot at a concurrent disconnect.
 
 Morse scripted-close evidence (2026-09-26): the opt-in manual-clock fixture
 provider now simulates `:expired` and `:connection_lost` without restarting the
@@ -623,7 +624,7 @@ unused dependencies and Lean verification also passed.
   widths. Chrome inspection at 1280×800 and 390×844 covered the single-key
   OpenAI setup form and its speech/LLM capabilities on 2026-09-26.
 - [x] Run the bounded ten-call local load lane with the Morse duplex provider.
-- [ ] Run an independent implementation review and all root completion checks.
+- [x] Run an independent implementation review and all root completion checks.
 - [x] Enable the manifest `:sts` entry and service badge for local use. Hosted
   phone interoperability remains an open acceptance gate.
 
@@ -2253,3 +2254,33 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   transcript published just before disconnect as an open E contract decision.
   E's reseed task and exit are unchecked until that rule is decided or
   implemented. F's independent review and hosted acceptance remain unchecked.
+
+### Response to review 13 — 2026-09-27 (publication barrier and local acceptance)
+
+- Checkpoint E now enforces the strict snapshot boundary. A lost provider
+  requests a marker through its speech channel and capability. A room-owned
+  capability waits for the room to finish earlier publication handlers and
+  their acknowledgments before releasing either GPT-Live or scripted Morse to
+  snapshot history. The room replies only for its current capability. The
+  existing GPT-Live reseed deadline includes this wait; Morse has a bounded
+  four-second wait. The decision and ordering proof are recorded in
+  [room history](../gpt-live-room-history.md).
+- A suspended-capability red test first showed GPT-Live connecting before a
+  queued publication acknowledgment. A second red test showed it connecting
+  before the room completed publication. Both pass after the two-hop barrier.
+  Independent teammate and subagent review identified one missing acceptance
+  case: a withheld barrier must fail reseed. That focused test now verifies
+  the five-second deadline, explicit `:reseed_failed`, and no replacement
+  socket. Room identity and both local-provider lifecycle suites pass.
+- Two unrelated load-sensitive test fixture races surfaced during final
+  umbrella reruns. The STS overflow test now accepts the provider's teardown
+  before a terminal call reply while still requiring the overflow event and
+  monitored capability exit. The STT preparation test now acknowledges each
+  process hop before checking readiness. Both corrections passed focused
+  verification; their labnotes record the failed runs and rationale.
+- The final umbrella suite passed **2,868 tests, zero failures, 61 tagged
+  exclusions**. Root format, warnings-as-errors compile, strict Credo,
+  unused-dependency and Lean verification also passed. Checkpoint E and its
+  exit are closed. Checkpoint F's independent local review and root gates are
+  closed. The authorized hosted OpenAI service and real phone check remains
+  the only open milestone task; no hosted call was made.

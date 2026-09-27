@@ -707,6 +707,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     options =
       [
         owner: self(),
+        room_history_barrier?: true,
         agent_id: runtime.participant_id,
         human_id: human_id,
         input_required?: true,

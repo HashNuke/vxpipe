@@ -46,6 +46,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{
     CallerEvents,
+    HistoryBarrier,
     Hold,
     Input,
     OutputTranscript,
@@ -175,6 +176,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         state = %{
           owner: owner,
           owner_monitor: Process.monitor(owner),
+          room_history_barrier?: Keyword.get(options, :room_history_barrier?, false),
+          pending_reseed_barrier: nil,
           agent_id: Keyword.fetch!(options, :agent_id),
           human_id: Keyword.fetch!(options, :human_id),
           provider: provider,
@@ -421,16 +424,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {:noreply, state}
   end
 
-  def handle_info(
-        {:vxpipe_sts_published_history, owner, {role, text} = entry},
-        %{owner: owner, descriptor: %{continuity: :history_reseed}} = state
-      )
-      when role in [:caller, :agent] and is_binary(text) and text != "" do
-    case Session.append_history(state.session, entry) do
-      :ok -> {:noreply, state}
-      _failure -> stop_unavailable(:provider_failed, state)
-    end
-  end
+  def handle_info({:vxpipe_sts_published_history, owner, entry}, state),
+    do: HistoryBarrier.published(state, owner, entry)
+
+  def handle_info({:vxpipe_sts_reseed_history_barrier, channel, provider, reference}, state),
+    do: HistoryBarrier.channel(state, channel, provider, reference)
+
+  def handle_info({:vxpipe_sts_reseed_room_ready, owner, reference}, state),
+    do: HistoryBarrier.room(state, owner, reference)
 
   def handle_info({:vxpipe_sts_input, ingress, reference, frame, revision, epoch}, state),
     do: Input.deliver(state, ingress, reference, frame, revision, epoch)
