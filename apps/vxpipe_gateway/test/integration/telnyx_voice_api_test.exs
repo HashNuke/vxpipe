@@ -4,12 +4,9 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
   alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
   alias Vxpipe.Providers.Telnyx.Adapter, as: TelnyxAdapter
 
-  @moduletag :integration
-  @moduletag live_provider: "telnyx"
-  @moduletag :telnyx_live
+  @moduletag :live_providers
+  @moduletag :live_telnyx
   @moduletag timeout: 30_000
-
-  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   setup do
     {:ok,

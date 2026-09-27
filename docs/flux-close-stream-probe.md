@@ -13,11 +13,11 @@ whether our client observes peer close or EOF. One future authorized run can
 resolve that interoperability observation for the selected model and fixture;
 it cannot establish universal drain correctness or raw empty/1000 distinction.
 
-Use a tagged integration test and test-support runner/evidence collector only.
-Require explicit boolean opt-in before reading a fixture, resolving credentials
-or connecting. An available credential or an integration tag is not authorization.
-The hosted entry point uses `VXPIPE_LIVE=1`; it is never
-executed as part of implementation verification, even if set externally.
+Use a tagged live-provider test and test-support runner/evidence collector only.
+Require explicit Mix selection before reading a fixture, resolving credentials
+or connecting. An available credential does not select the test. The hosted
+entry point uses `--only live_deepgram` with its exact file path; the default
+suite excludes it.
 
 One connection to existing `flux-general-en`, raw signed PCM16LE mono 16 kHz:
 
@@ -82,18 +82,16 @@ enable shell tracing. The explicit opt-in below authorizes only this test run:
 ```sh
 cd apps/vxpipe_call_engine
 ERL_FLAGS='+S 2:2' MIX_BUILD_PATH="$PWD/../../_build" \
-  VXPIPE_LIVE=1 \
   VXPIPE_FLUX_PROBE_PCM="$FLUX_FIXTURE_PATH" \
   VXPIPE_FLUX_PROBE_EXPECTED_TAIL="$FLUX_EXPECTED_TAIL" \
   mix test test/integration/deepgram_flux_close_stream_probe_test.exs \
-    --include integration --include hosted --seed 0
+    --only live_deepgram --seed 0
 ```
 
-The test is integration/hosted-tagged, skipped without opt-in, and the runner has
-an independent strict boolean gate before file/credential/network work. Never
-run the hosted file during offline implementation verification, even if the
-environment happens to be armed. Do not replace the explicit path with the full
-integration directory: that could invoke unrelated hosted tests.
+The test is live-provider-tagged and excluded without explicit selection. The
+runner validates fixture and credential inputs before opening a connection.
+Run this hosted file only with authorization for its provider call. Keep its
+exact path in the command so the filter does not select other Deepgram tests.
 
 Retain only the emitted map: `terminal`, `connected?`, `audio_sent?`,
 `close_stream_sent?`, `tail_verified?`, `error_free?`, `passed?`. A successful

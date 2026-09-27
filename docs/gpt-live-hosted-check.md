@@ -24,11 +24,10 @@ to the adapter and reports only event types to the test. A separate manual
 phone pass over a real Twilio or Telnyx leg checks backchannels, interruption,
 and speakerphone echo.
 
-The lane is skipped unless `VXPIPE_LIVE=1` is set. Select it with Mix's
-`--only live_provider:openai` filter; `OPENAI_API_KEY` is required when it runs.
-Merely setting a tenant credential or running the default umbrella suite
-never starts this lane. The hosted run requires explicit billable
-authorization before setting the run flag.
+The lane is excluded by default. Select it with Mix's `--only live_openai`
+filter; `OPENAI_API_KEY` is required when it runs. Merely setting a tenant
+credential or running the default umbrella suite never starts this lane. The
+hosted run requires explicit billable authorization before selecting the tag.
 
 ## Automated evidence
 
@@ -91,10 +90,10 @@ unmeasured impression remains an observation, not a numeric acceptance claim.
 
 ## Verification
 
-The integration file compiles and its two tests skip with no run flag or key
-when included explicitly (`mix test --include integration
-test/integration/gpt_live_hosted_test.exs` from the call-engine child). The
-synthetic tool configuration validates locally without a network call.
+The live file compiles and its two tests are excluded by default, including
+when `--include integration` is used. `--only live_openai` selects both; with
+`OPENAI_API_KEY` unset, they fail before connecting. The synthetic tool
+configuration validates locally without a network call.
 The authorized hosted results will be recorded here and in the checkpoint
 labnotes when available. The unresolved items in
 [the duplex profile](sts-duplex-profile.md) remain unverified until the

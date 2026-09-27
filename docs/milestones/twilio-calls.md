@@ -400,10 +400,9 @@ all 802 tests, and the unused-dependency check pass.
 
 ## Checkpoint 10: guarded real-provider control lane
 
-An `:integration`/`:twilio_live` test now exercises the production Twilio Calls client against an
-explicitly authorized destination. The lane remains excluded by default and additionally skips
-unless `VXPIPE_LIVE=1`. When selected, it requires `TWILIO_ACCOUNT_SID`,
-`TWILIO_AUTH_TOKEN`, `TWILIO_TEST_FROM`, `TWILIO_TEST_DESTINATION`,
+An `:live_providers`/`:live_twilio` test now exercises the production Twilio Calls client against an
+explicitly authorized destination. The lane remains excluded by default. When selected, it
+requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_TEST_FROM`, `TWILIO_TEST_DESTINATION`,
 `TWILIO_TEST_WEBHOOK_URL`, and `TWILIO_TEST_MEDIA_URL`. The two URLs must be public TLS endpoints
 owned by the operator running the test. The test submits one call with the configured media and
 callback contract, validates the returned Call SID, and schedules an exact-call completion action.
@@ -419,13 +418,13 @@ The currently supported Twilio boundary is deliberately narrow:
 - The gateway's Membrane pipelines convert between that wire format and signed 16-bit mono 48 kHz
   room PCM. SIP, unidirectional `<Start><Stream>`, and other Twilio media products are not claimed.
 
-The guarded lane compiles and skips safely in this checkout because no live-test credentials or
+The guarded lane compiles and is excluded in this checkout because no live-test credentials or
 authorized numbers are configured:
 
 ```text
 cd apps/vxpipe_gateway
-mix test test/integration/twilio_voice_api_test.exs --include integration
-# 1 test, 0 failures, 1 skipped
+mix test test/integration/twilio_voice_api_test.exs
+# 0 tests, 0 failures (1 excluded)
 ```
 
 This test proves only that the provider accepts the configured control request when explicitly

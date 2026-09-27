@@ -1,7 +1,7 @@
 # Opt-in live provider tests
 
-Status: design and inventory recorded 2026-09-27. Current live modules have a
-common provider tag and one explicit run guard, `VXPIPE_LIVE=1`. The
+Status: design and inventory recorded 2026-09-27. Current live modules use
+Mix tags for selection, with `:live_providers` excluded by default. The
 configured-service harness described below remains implementation work. No
 live service was called for this checkpoint.
 
@@ -38,39 +38,37 @@ additional call.
 ## Selection and authorization
 
 Use Mix/ExUnit's built-in tag filters. Every test that contacts a third-party
-service gets `@moduletag :integration` and a common valued tag such as
-`@moduletag live_provider: "openai"`. Retain existing narrower tags such as
-`:hosted`, `:twilio_live`, and `:telnyx_live` for compatibility. The owning
-child's `test_helper.exs` excludes `:integration` from ordinary `mix test`.
-When a child has no such exclusion, add it before adding a live test there.
+service gets `@moduletag :live_providers` and a provider tag such as
+`@moduletag :live_openai`. Every child test helper excludes `:live_providers`
+from ordinary `mix test`. Live modules do not carry `:integration`, so a broad
+`--include integration` selection cannot include them. The Mix filter is the
+explicit selection; no additional run flag is required.
 
-Every live module skips unless `VXPIPE_LIVE=1`. With required credentials and
-test settings already available to the process, run all current live groups
-from the umbrella root by naming the four owning test directories:
+With required credentials and test settings already available to the process,
+run all current live groups from the umbrella root by naming the four owning
+test directories:
 
 ```shell
-VXPIPE_LIVE=1 mix test --only live_provider \
+mix test --only live_providers \
   apps/vxpipe_agent_runtime/test/integration \
   apps/vxpipe_artifacts/test/integration \
   apps/vxpipe_call_engine/test/integration \
   apps/vxpipe_gateway/test/integration
 ```
 
-To run only OpenAI, select its valued tag with the usual Mix filter:
+To run only OpenAI, select its provider tag:
 
 ```shell
-VXPIPE_LIVE=1 mix test --only live_provider:openai \
+mix test --only live_openai \
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
 ```
 
-The explicit paths matter in an umbrella: `--only live_provider` against a
+The explicit paths matter in an umbrella: `--only live_providers` against a
 child with no matching tests exits with a no-tests result. From an owning child
-directory, the same filters work without an umbrella path. The run flag
-protects live tests from a broad `--include integration` command when
-credentials happen to be present. When selected without a required credential
-or fixture setting, the test should fail clearly before contacting the
-provider. CI and the default suite do not set `VXPIPE_LIVE` or inject live
-credentials.
+directory, the same filters work without an umbrella path. When selected
+without a required credential or fixture setting, the test should fail clearly
+before contacting the provider. CI and the default suite do not select live
+tags or inject live credentials.
 
 Use a dedicated provider test project or account with an explicit spend limit
 where the provider supports one. Supply keys through the shell environment or
@@ -102,14 +100,15 @@ interoperability from a direct WebSocket protocol test.
 
 ## Existing inventory and migration order
 
-1. Add the common valued live tag and single explicit run guard to current OpenAI,
-   Deepgram, Gemini, Zenmux, Twilio, Telnyx, and S3 live integration modules.
+1. Add group and provider-specific live tags to current OpenAI, Deepgram,
+   Gemini, Zenmux, Twilio, Telnyx, and S3 live modules, and exclude the group
+   tag in every child test helper.
    Keep local HTTP, database, fake-socket, conformance, and loopback integration
-   modules out of the live group. Existing `:integration` exclusion remains in
-   force. Completed for the current inventory.
-2. Verify ordinary `mix test` excludes them and an explicit `--only
-   live_provider:...` selects exactly the intended files without network when
-   the run flag is absent. Verify missing secrets fail clearly after opt-in.
+   modules out of the live group. Keep `:integration` for local integration
+   tests. Completed for the current inventory.
+2. Verify ordinary `mix test` and `--include integration` exclude live modules.
+   Verify `--only live_providers` and `--only live_<provider>` select the
+   intended files. Verify missing secrets fail clearly after selection.
 3. Add a test-only configured-service fixture at the Calls/Persistence
    boundary. Prove the fixture selects a tenant override and platform fallback
    with fake transports before any live use, then add one bounded real-provider
@@ -125,6 +124,8 @@ interoperability from a direct WebSocket protocol test.
 
 - Running all `:integration` tests for provider checks mixes local integration
   with billable calls and makes cost hard to see.
+- An extra environment run gate duplicated Mix selection and made a selected
+  test silently skip; the dedicated live tag is sufficient for opt-in.
 - Passing environment keys straight to an end-to-end provider test bypasses
   the tenant/platform source contract that the test claims to verify.
 - Forcing every low-level adapter test through a database would add an
@@ -135,14 +136,15 @@ interoperability from a direct WebSocket protocol test.
 ## Verification evidence
 
 Local `mix help test` documents `--include`, `--exclude`, and `--only`. With
-`VXPIPE_LIVE=0`, the umbrella command above selected and skipped all 14 live
-tests: AgentRuntime (4), Artifacts (1), CallEngine (4), and Gateway (5), with no
-provider connection. The OpenAI filter selected only its two hosted tests and
-skipped both. With `VXPIPE_LIVE=1` and `OPENAI_API_KEY` explicitly unset, those
-two tests failed at `System.fetch_env!/1` before a provider connection. A child
+`OPENAI_API_KEY` explicitly unset, both ordinary `mix test` and `--include
+integration` excluded the two OpenAI tests. `--only live_openai` selected both;
+they failed at `System.fetch_env!/1` before a provider connection. `--only
+live_providers` selected the same two tests on that file and also stopped at
+the missing-key check. The group and provider tags cover 14 current live tests
+across AgentRuntime (4), Artifacts (1), CallEngine (4), and Gateway (5). A child
 without matching tags exits with no tests under `--only`; this is why the
-umbrella command names the owning paths.
-The configured-service fixture and authorized live runs remain pending.
-The final default umbrella suite passed 2,868 tests with zero failures;
-formatting, warnings-as-errors compilation, strict Credo, and the
-unused-dependency check also passed.
+umbrella command names the owning paths. The configured-service fixture and
+authorized live runs remain pending. Formatting, warnings-as-errors compilation,
+strict Credo, and the unused-dependency check passed. The first umbrella run
+had three timing failures in unchanged tests; each passed in a focused rerun.
+A repeat root `mix test --max-cases 2` passed all 2,868 tests with zero failures.

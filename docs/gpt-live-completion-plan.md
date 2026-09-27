@@ -528,8 +528,9 @@ authorization.
 ### Hosted check (only with explicit billable authorization)
 
 Add `test/integration/gpt_live_hosted_test.exs` with `@moduletag
-:integration`, `@moduletag :hosted`, a 120-second timeout, and `skip` unless
-`VXPIPE_LIVE=1` is set. Require `OPENAI_API_KEY` when selected. Keep the budget
+:live_providers`, `@moduletag :live_openai`, and a 120-second timeout. Exclude
+`:live_providers` from the default suite and require `OPENAI_API_KEY` when
+selected with Mix's `--only live_openai` filter. Keep the budget
 short and fixed (at most five sessions, three minutes of voice).
 
 Automated scenarios: a short turn; caller speech during a reply (the model

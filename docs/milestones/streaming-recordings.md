@@ -602,8 +602,8 @@ files, all 824 umbrella tests, and the unused-dependency check.
 
 ## Checkpoint 15: S3-compatible multipart interoperability
 
-The artifacts test suite now excludes tagged integration tests by default and adds one explicit
-`:integration` / `:s3_live` lane. The test requires an authorized root endpoint and bucket, keeps
+The artifacts test suite now excludes tagged live-provider tests by default and adds one explicit
+`:live_providers` / `:live_s3` lane. The test requires an authorized root endpoint and bucket, keeps
 credentials in ExAws's standard provider chain, and uses the production `S3ObjectStore` plus
 `ExAwsS3Client`. It creates the configured test bucket only when it is absent, uploads an exact
 five-MiB first part plus a final short PCM part, completes the multipart object, reads it through the
@@ -613,20 +613,19 @@ key created by that test.
 The lane was exercised against a disposable MinIO server using its then-current container image.
 The container and its ephemeral data were removed after the run; the locally cached image is not a
 runtime or packaging dependency. Neither the command output nor repository content contains the
-test credential values or a signed request.
+test credential values or a signed request. The historical authorized run passed one test; the
+equivalent command under the current tag names is:
 
 ```text
 cd apps/vxpipe_artifacts
 mix test --max-cases 1
 # 7 tests, 0 failures (1 excluded)
 
-VXPIPE_LIVE=1 \
 VXPIPE_S3_INTEGRATION_ENDPOINT=<authorized-root-origin> \
 VXPIPE_S3_INTEGRATION_BUCKET=<authorized-test-bucket> \
 VXPIPE_S3_INTEGRATION_REGION=<region> \
 mix test test/integration/s3_compatible_object_store_test.exs \
-  --include integration --max-cases 1
-# 1 test, 0 failures
+  --only live_s3 --max-cases 1
 ```
 
 Authorized operator playback and final cross-slice manual verification remain pending. The
@@ -691,17 +690,15 @@ mix test --max-cases 1
 ```
 
 The tagged S3-compatible lane now also reads a six-byte range spanning the multipart boundary
-through the production reader. It passed against a disposable server whose container and storage
-were removed after the run:
+through the production reader. The historical authorized run passed one test against a disposable
+server whose container and storage were removed after the run. Its current equivalent command is:
 
 ```text
-VXPIPE_LIVE=1 \
 VXPIPE_S3_INTEGRATION_ENDPOINT=<authorized-root-origin> \
 VXPIPE_S3_INTEGRATION_BUCKET=<authorized-test-bucket> \
 VXPIPE_S3_INTEGRATION_REGION=<region> \
 mix test test/integration/s3_compatible_object_store_test.exs \
-  --include integration --max-cases 1
-# 1 test, 0 failures
+  --only live_s3 --max-cases 1
 ```
 
 The browser route, WAV projection, and call-inspection controls remain pending, so operator

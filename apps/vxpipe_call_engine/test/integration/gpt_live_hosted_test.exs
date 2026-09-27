@@ -5,12 +5,10 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
   alias Vxpipe.CallEngine.TestGPTLiveHostedTransport
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
 
-  @moduletag :integration
-  @moduletag live_provider: "openai"
-  @moduletag :hosted
+  @moduletag :live_providers
+  @moduletag :live_openai
   @moduletag timeout: 120_000
   @moduletag capture_log: true
-  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   @moduledoc """
   Opt-in hosted GPT-Live acceptance harness.

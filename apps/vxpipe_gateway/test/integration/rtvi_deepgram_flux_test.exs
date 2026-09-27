@@ -21,9 +21,8 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTenantCredentialSource, TestTurnCall}
   alias Vxpipe.Gateway.HTTP.Endpoint
 
-  @moduletag :integration
-  @moduletag live_provider: "deepgram"
-  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
+  @moduletag :live_providers
+  @moduletag :live_deepgram
   @moduletag capture_log: true
   @moduletag timeout: 60_000
 

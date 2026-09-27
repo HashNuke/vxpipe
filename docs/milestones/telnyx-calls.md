@@ -293,11 +293,11 @@ The wire choices were checked on 2026-09-11 against Telnyx's current official
 documentation. This validates the fixture envelopes and configured command/media options against
 the published contract; it is not a claim that an external carrier call ran in this checkout.
 
-An `:integration`/`:telnyx_live` test provides the separate real Voice API dial lane. It remains
-excluded by default and additionally skips unless `VXPIPE_LIVE=1`. Its required settings are
+An `:live_providers`/`:live_telnyx` test provides the separate real Voice API dial lane. It remains
+excluded by default. Its required settings are
 the API key, connection ID, controlled from/destination numbers, and provider-reachable webhook and
 media URLs. A successful accepted dial captures all three provider identities and schedules an
-exact-leg hangup. The live lane was compiled and observed to skip safely without those explicit
+exact-leg hangup. The live lane was compiled and observed to be excluded without those explicit
 settings; no external call was placed for this checkpoint.
 
 Focused verification:
@@ -312,8 +312,8 @@ mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
   test/vxpipe/gateway/telephony/telnyx/media_decoder_test.exs
 # 28 tests, 0 failures
 
-mix test test/integration/telnyx_voice_api_test.exs --include integration
-# 1 test, 0 failures, 1 skipped
+mix test test/integration/telnyx_voice_api_test.exs
+# 0 tests, 0 failures (1 excluded)
 ```
 
 The implementation commit also passed the root formatting, warnings-as-errors compilation, strict

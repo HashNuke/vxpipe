@@ -4,12 +4,9 @@ defmodule Vxpipe.Gateway.Integration.TwilioVoiceAPITest do
   alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
   alias Vxpipe.Providers.Twilio.Adapter, as: TwilioAdapter
 
-  @moduletag :integration
-  @moduletag live_provider: "twilio"
-  @moduletag :twilio_live
+  @moduletag :live_providers
+  @moduletag :live_twilio
   @moduletag timeout: 30_000
-
-  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   setup do
     {:ok,
