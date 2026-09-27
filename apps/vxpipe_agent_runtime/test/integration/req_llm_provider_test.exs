@@ -15,6 +15,8 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
   alias Vxpipe.AgentRuntime.Provider.ReqLLM, as: Provider
 
   @moduletag :integration
+  @moduletag live_provider: "gemini"
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   test "Gemini accepts an exact tool schema and its running continuation" do
     config = provider_config()

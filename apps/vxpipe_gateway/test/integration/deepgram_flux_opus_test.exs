@@ -6,6 +6,8 @@ defmodule Vxpipe.Gateway.Integration.DeepgramFluxOpusTest do
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 
   @moduletag :integration
+  @moduletag live_provider: "deepgram"
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
   @moduletag timeout: 60_000
 
   test "streams individual WebRTC-compatible Opus packets to Flux" do

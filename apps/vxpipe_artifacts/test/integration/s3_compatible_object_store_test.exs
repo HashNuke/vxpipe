@@ -4,14 +4,13 @@ defmodule Vxpipe.Artifacts.Integration.S3CompatibleObjectStoreTest do
   alias Vxpipe.Artifacts.{ArtifactSpec, Chunk, Manifest, S3ObjectReader, S3ObjectStore}
 
   @moduletag :integration
+  @moduletag live_provider: "s3"
   @moduletag :s3_live
   @moduletag timeout: 60_000
 
   @part_size_bytes 5 * 1_024 * 1_024
 
-  if System.get_env("VXPIPE_S3_LIVE") != "1" do
-    @moduletag skip: "set VXPIPE_S3_LIVE=1 to exercise an authorized S3-compatible bucket"
-  end
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   setup do
     bucket = System.fetch_env!("VXPIPE_S3_INTEGRATION_BUCKET")

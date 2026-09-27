@@ -16,7 +16,7 @@ it cannot establish universal drain correctness or raw empty/1000 distinction.
 Use a tagged integration test and test-support runner/evidence collector only.
 Require explicit boolean opt-in before reading a fixture, resolving credentials
 or connecting. An available credential or an integration tag is not authorization.
-The future hosted entry point uses `VXPIPE_RUN_FLUX_CLOSE_PROBE=1`; it is never
+The hosted entry point uses `VXPIPE_LIVE=1`; it is never
 executed as part of implementation verification, even if set externally.
 
 One connection to existing `flux-general-en`, raw signed PCM16LE mono 16 kHz:
@@ -82,7 +82,7 @@ enable shell tracing. The explicit opt-in below authorizes only this test run:
 ```sh
 cd apps/vxpipe_call_engine
 ERL_FLAGS='+S 2:2' MIX_BUILD_PATH="$PWD/../../_build" \
-  VXPIPE_RUN_FLUX_CLOSE_PROBE=1 \
+  VXPIPE_LIVE=1 \
   VXPIPE_FLUX_PROBE_PCM="$FLUX_FIXTURE_PATH" \
   VXPIPE_FLUX_PROBE_EXPECTED_TAIL="$FLUX_EXPECTED_TAIL" \
   mix test test/integration/deepgram_flux_close_stream_probe_test.exs \

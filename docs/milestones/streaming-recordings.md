@@ -620,7 +620,7 @@ cd apps/vxpipe_artifacts
 mix test --max-cases 1
 # 7 tests, 0 failures (1 excluded)
 
-VXPIPE_S3_LIVE=1 \
+VXPIPE_LIVE=1 \
 VXPIPE_S3_INTEGRATION_ENDPOINT=<authorized-root-origin> \
 VXPIPE_S3_INTEGRATION_BUCKET=<authorized-test-bucket> \
 VXPIPE_S3_INTEGRATION_REGION=<region> \
@@ -695,7 +695,7 @@ through the production reader. It passed against a disposable server whose conta
 were removed after the run:
 
 ```text
-VXPIPE_S3_LIVE=1 \
+VXPIPE_LIVE=1 \
 VXPIPE_S3_INTEGRATION_ENDPOINT=<authorized-root-origin> \
 VXPIPE_S3_INTEGRATION_BUCKET=<authorized-test-bucket> \
 VXPIPE_S3_INTEGRATION_REGION=<region> \

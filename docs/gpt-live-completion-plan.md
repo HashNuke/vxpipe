@@ -529,7 +529,7 @@ authorization.
 
 Add `test/integration/gpt_live_hosted_test.exs` with `@moduletag
 :integration`, `@moduletag :hosted`, a 120-second timeout, and `skip` unless
-`VXPIPE_RUN_GPT_LIVE_HOSTED=1` and `OPENAI_API_KEY` are set. Keep the budget
+`VXPIPE_LIVE=1` is set. Require `OPENAI_API_KEY` when selected. Keep the budget
 short and fixed (at most five sessions, three minutes of voice).
 
 Automated scenarios: a short turn; caller speech during a reply (the model

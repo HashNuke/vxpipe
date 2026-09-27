@@ -6,6 +6,8 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxTextToSpeechTest do
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
 
   @moduletag :integration
+  @moduletag live_provider: "deepgram"
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
   @moduletag timeout: 60_000
 
   test "native session streams nonempty 48 kHz linear16 audio and a terminal boundary" do

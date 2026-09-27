@@ -4,16 +4,17 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxCloseStreamProbeTest do
   alias Vxpipe.CallEngine.TestFluxCloseProbe, as: Probe
 
   @moduletag :integration
+  @moduletag live_provider: "deepgram"
   @moduletag :hosted
   @moduletag timeout: 60_000
-  @moduletag skip: System.get_env("VXPIPE_RUN_FLUX_CLOSE_PROBE") != "1"
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   test "authorized known speech observes tail then CloseStream peer terminal" do
     # No credential resolution occurs unless Probe.run's independent gate opens.
     result =
       Probe.run(
         [
-          enabled: System.get_env("VXPIPE_RUN_FLUX_CLOSE_PROBE") == "1",
+          enabled: System.get_env("VXPIPE_LIVE") == "1",
           fixture_path: System.get_env("VXPIPE_FLUX_PROBE_PCM"),
           expected_tail: System.get_env("VXPIPE_FLUX_PROBE_EXPECTED_TAIL")
         ],

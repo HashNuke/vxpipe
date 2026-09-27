@@ -5,6 +5,8 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMNativeRoutingTest do
   alias Vxpipe.AgentRuntime.Provider.ReqLLM, as: Provider
 
   @moduletag :integration
+  @moduletag live_provider: "zenmux"
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   @routing %{
     fallback: "anthropic",

@@ -294,7 +294,7 @@ documentation. This validates the fixture envelopes and configured command/media
 the published contract; it is not a claim that an external carrier call ran in this checkout.
 
 An `:integration`/`:telnyx_live` test provides the separate real Voice API dial lane. It remains
-excluded by default and additionally skips unless `VXPIPE_TELNYX_LIVE=1`. Its required settings are
+excluded by default and additionally skips unless `VXPIPE_LIVE=1`. Its required settings are
 the API key, connection ID, controlled from/destination numbers, and provider-reachable webhook and
 media URLs. A successful accepted dial captures all three provider identities and schedules an
 exact-leg hangup. The live lane was compiled and observed to skip safely without those explicit

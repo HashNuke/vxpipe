@@ -5,12 +5,11 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
   alias Vxpipe.Providers.Telnyx.Adapter, as: TelnyxAdapter
 
   @moduletag :integration
+  @moduletag live_provider: "telnyx"
   @moduletag :telnyx_live
   @moduletag timeout: 30_000
 
-  if System.get_env("VXPIPE_TELNYX_LIVE") != "1" do
-    @moduletag skip: "set VXPIPE_TELNYX_LIVE=1 to place an authorized test call"
-  end
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
 
   setup do
     {:ok,

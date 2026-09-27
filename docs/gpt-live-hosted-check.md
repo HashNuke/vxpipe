@@ -8,6 +8,10 @@ F's final opt-in interoperability gate in
 
 Run one tagged, explicitly enabled integration lane against the real GPT-Live
 WebSocket using the existing `GPTLiveSession` and speech session boundary.
+The repository-wide [live provider test plan](live-provider-tests.md)
+distinguishes this direct protocol check from a configured-service call. The
+manual phone pass must use the effective tenant or platform service selected
+through the normal call path.
 Feed three committed, locally synthesized 24 kHz mono PCM16 phrases. The two
 test sessions can each reseed once after an incidental connection loss, so the
 theoretical maximum is four sessions, below the plan cap of five. Fixed test
@@ -20,10 +24,11 @@ to the adapter and reports only event types to the test. A separate manual
 phone pass over a real Twilio or Telnyx leg checks backchannels, interruption,
 and speakerphone echo.
 
-The lane is skipped unless both `VXPIPE_RUN_GPT_LIVE_HOSTED=1` and
-`OPENAI_API_KEY` are present. Merely setting a tenant credential or running the
-default umbrella suite never starts this lane. The hosted run requires explicit
-billable authorization before setting the run flag.
+The lane is skipped unless `VXPIPE_LIVE=1` is set. Select it with Mix's
+`--only live_provider:openai` filter; `OPENAI_API_KEY` is required when it runs.
+Merely setting a tenant credential or running the default umbrella suite
+never starts this lane. The hosted run requires explicit billable
+authorization before setting the run flag.
 
 ## Automated evidence
 

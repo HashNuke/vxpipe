@@ -13,6 +13,8 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
   alias Vxpipe.Gateway.HTTP.Endpoint
 
   @moduletag :integration
+  @moduletag live_provider: "deepgram"
+  @moduletag skip: System.get_env("VXPIPE_LIVE") != "1"
   @moduletag capture_log: true
   @moduletag timeout: 60_000
 

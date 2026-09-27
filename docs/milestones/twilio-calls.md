@@ -402,7 +402,7 @@ all 802 tests, and the unused-dependency check pass.
 
 An `:integration`/`:twilio_live` test now exercises the production Twilio Calls client against an
 explicitly authorized destination. The lane remains excluded by default and additionally skips
-unless `VXPIPE_TWILIO_LIVE=1`. When enabled, it requires `TWILIO_ACCOUNT_SID`,
+unless `VXPIPE_LIVE=1`. When selected, it requires `TWILIO_ACCOUNT_SID`,
 `TWILIO_AUTH_TOKEN`, `TWILIO_TEST_FROM`, `TWILIO_TEST_DESTINATION`,
 `TWILIO_TEST_WEBHOOK_URL`, and `TWILIO_TEST_MEDIA_URL`. The two URLs must be public TLS endpoints
 owned by the operator running the test. The test submits one call with the configured media and
