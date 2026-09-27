@@ -140,6 +140,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert_receive {:test_sts_source_hold, ^fixture, hold_scope}, 5_000
     assert hold_scope.attachment == connection.room_monitor
 
+    # Policy installation can replace the STT binding before the room observes
+    # its connected signal. A held cutover must still find that ready binding.
+    assert {:ok, %{allocation_generation: fresh_generation}} =
+             SpeechToText.input_binding(old_capability)
+
+    assert fresh_generation != old_generation
+
+    :sys.replace_state(context.authority, fn state ->
+      cutover = %{state.source_cutover | fresh_stt?: false, stt_ready?: false}
+      %{state | source_cutover: cutover}
+    end)
+
     # Both input lanes are closed before the recognizer is retired.
     assert :closed == :sys.get_state(old_ingress).opening_input_admission
     assert :sys.get_state(context.ingress).open? == false

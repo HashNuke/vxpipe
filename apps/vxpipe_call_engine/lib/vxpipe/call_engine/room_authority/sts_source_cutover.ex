@@ -419,16 +419,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSSourceCutover do
   defp stt_generation(_connection), do: nil
 
   defp bind_observed_source(
-         %State{source_cutover: %{fresh_stt?: true, connection_id: connection_id} = cutover} =
-           state
+         %State{
+           source_cutover:
+             %{connection_id: connection_id, old_stt_generation: old_generation} =
+               cutover
+         } = state
        ) do
-    case NativeInput.bind_audio_origin(connection_id, state) do
-      :ok -> %{state | source_cutover: %{cutover | stt_ready?: true}}
-      _error -> fail(state, :fresh_stt_origin_unavailable)
-    end
-  end
+    case Map.get(state.connections, connection_id) do
+      %{speech_to_text: %{capability: capability}} ->
+        case SpeechToText.input_binding(capability) do
+          {:ok, %{status: :ready, allocation_generation: generation}}
+          when is_reference(generation) and generation != old_generation ->
+            case NativeInput.bind_audio_origin(connection_id, state) do
+              :ok -> %{state | source_cutover: %{cutover | stt_ready?: true}}
+              _error -> fail(state, :fresh_stt_origin_unavailable)
+            end
 
-  defp bind_observed_source(state), do: state
+          _not_fresh ->
+            state
+        end
+
+      _no_stt ->
+        state
+    end
+  catch
+    :exit, _reason -> state
+  end
 
   defp valid_receipt?(
          %{
