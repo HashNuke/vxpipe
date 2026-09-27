@@ -120,9 +120,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert_receive {:test_stt_transport_started, transport, _connection}
     monitor = Process.monitor(transport)
     TestSpeechToTextTransport.deliver(transport, connected_message("prepared", 0))
-    channel = :sys.get_state(transport).owner
-    _ = :sys.get_state(channel)
-    _ = :sys.get_state(capability)
+    await_prepared_connection(capability, transport)
 
     assert {:ok, %{status: :ready, activity_origin: nil}} =
              SpeechToText.input_binding(capability, resource)
@@ -173,9 +171,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
     assert_receive {:test_stt_transport_started, replacement, _connection}
     TestSpeechToTextTransport.deliver(replacement, connected_message("adopted", 0))
-    replacement_channel = :sys.get_state(replacement).owner
-    _ = :sys.get_state(replacement_channel)
-    _ = :sys.get_state(capability)
+    await_prepared_connection(capability, replacement)
 
     assert {:ok, %{status: :ready, activity_origin: nil}} =
              SpeechToText.input_binding(capability, next_resource)
@@ -1217,6 +1213,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       "request_id" => request_id,
       "sequence_id" => sequence
     })
+  end
+
+  defp await_prepared_connection(capability, transport) do
+    provider = :sys.get_state(transport).owner
+    _ = :sys.get_state(provider)
+    allocation = :sys.get_state(capability).pending_policy.state.session
+    channel = GenServer.whereis(Channel.address(allocation))
+    _ = :sys.get_state(channel)
+    _ = :sys.get_state(capability)
   end
 
   defp usage_context do

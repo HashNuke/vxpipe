@@ -674,7 +674,18 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
     end)
 
     assert MapSet.size(:sys.get_state(capability).input_turns) == 16
-    assert :ok = GenServer.call(provider, {:emit, :speech_started, turn_ref: make_ref()})
+
+    result =
+      try do
+        GenServer.call(provider, {:emit, :speech_started, turn_ref: make_ref()})
+      catch
+        # Overflow stops the capability and its provider subtree. The
+        # fixture may be killed after emission but before its reply.
+        :exit, :killed -> :ok
+      end
+
+    assert :ok = result
+
     assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_caller_overflow}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^capability, :pending_caller_overflow}, 1_000
   end
