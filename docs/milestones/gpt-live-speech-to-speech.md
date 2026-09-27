@@ -2214,3 +2214,10 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   Credo, unused-dependency and Lean checks passed. The umbrella suite passed
   2,859 tests with zero failures and 59 tagged exclusions. E and its exit are
   checked; the hosted check and F's final review gate remain open.
+
+### Response to review 12 — 2026-09-27 (package 10 docs-site test)
+
+- R10-2 was resolved in the separate docs-site commit `97e5c0af`. The homepage
+  structure test now checks the current hero actions, section order and
+  provider wall. The docs-site `node --test` lane passes eight tests. This
+  resolves the review finding without changing GPT-Live acceptance scope.
