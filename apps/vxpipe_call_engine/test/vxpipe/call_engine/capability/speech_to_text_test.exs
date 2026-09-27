@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.Usage.ProviderContext
-  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel}
+  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel, Session}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
@@ -532,6 +532,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     restored = %{unrelated | revision: 3}
     assert :ok = Enforcer.apply(capability, restored, 500)
     assert_receive {:test_stt_transport_started, replacement, _connection}
+    state = :sys.get_state(capability)
+    provider = Session.provider(state.session)
+    _ = :sys.get_state(provider)
     TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
     assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
 

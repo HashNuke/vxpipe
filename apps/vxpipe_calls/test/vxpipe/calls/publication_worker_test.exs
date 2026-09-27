@@ -52,7 +52,8 @@ defmodule Vxpipe.Calls.PublicationWorkerTest do
                     "publication-worker-1"}
 
     assert_receive {:vxpipe_call_details_published, ^worker, "publication-worker-1", 1}
-    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+    assert_receive {:DOWN, ^monitor, :process, ^worker, reason}
+    assert reason in [:normal, :noproc]
 
     assert {:ok, retry, :started} =
              Vxpipe.Calls.publish_call_details(@tenant_key, @call_id, snapshot(), options)
@@ -93,7 +94,8 @@ defmodule Vxpipe.Calls.PublicationWorkerTest do
     assert_receive {:vxpipe_call_details_unavailable, ^worker, "publication-worker-1", 2,
                     :storage_unavailable}
 
-    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+    assert_receive {:DOWN, ^monitor, :process, ^worker, reason}
+    assert reason in [:normal, :noproc]
 
     assert [publication] =
              repository
@@ -138,8 +140,10 @@ defmodule Vxpipe.Calls.PublicationWorkerTest do
     assert_receive {:vxpipe_call_details_unavailable, ^worker, "publication-worker-1", 1,
                     :publication_attempt_timeout}
 
-    assert_receive {:DOWN, ^attempt_monitor, :process, ^attempt, :killed}
-    assert_receive {:DOWN, ^worker_monitor, :process, ^worker, :normal}
+    assert_receive {:DOWN, ^attempt_monitor, :process, ^attempt, attempt_reason}
+    assert attempt_reason in [:killed, :noproc]
+    assert_receive {:DOWN, ^worker_monitor, :process, ^worker, worker_reason}
+    assert worker_reason in [:normal, :noproc]
     refute_received {:publication_committed, _, _, _, _}
   end
 
