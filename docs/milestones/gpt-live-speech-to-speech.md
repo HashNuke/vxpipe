@@ -1,8 +1,9 @@
 # GPT-Live speech-to-speech
 
 Status: specification frozen on 2026-09-25; checkpoints A through D are
-implemented and locally verified. Checkpoint E has a first history-reseed path;
-its remaining lifecycle cases and checkpoint F are open. Checkpoint B was
+implemented and locally verified. Checkpoint E has reseed and transfer boundary
+proofs, but a compiled STS transfer tool execution gap remains; checkpoint F is
+open. Checkpoint B was
 reopened by review 3 and closed again after the clock-paced output rework;
 review 4's R4-1 is resolved by the Morse duplex real-time clock. Review 6's
 six code-review findings (R6-1..R6-6) are resolved (see the response to review
@@ -33,6 +34,15 @@ Amendments:
   `output_shape: :turns`, `barge_in: :room`, `tool_cancellation?: true` and
   `hold: :stop`. Reason: the original "existing providers declare the first
   value" rule claimed a resumption handle for Morse STS, which has none.
+- **Amendment 2 (2026-09-26), from Package 8 transfer audit.** An allowlisted
+  `transfer` function call from an STS provider must execute through the
+  room-owned transfer invocation path. The room supplies the current STS
+  capability and caller identity to the tool context. A failed transfer returns
+  a failure result to the provider and leaves its session usable; a committed
+  transfer publishes its completion and stops the source session. Reason: the
+  original Package 8 plan assumed transfer orchestration needed only a test,
+  but the STS tool executor submitted host tools only, leaving an advertised
+  transfer call pending.
 
 Prerequisites: [Agent speech-to-speech](agent-speech-to-speech.md) (the
 provider-controlled STS contract, room publication and Morse STS) and
@@ -513,10 +523,10 @@ unused-dependency and Lean checks passing. No hosted call was made.
   instead handles `expired` with bounded history reseeding; revisit this if
   OpenAI documents a numeric limit.
 - [x] Prove reseed failure and deadline expiry fail the capability explicitly.
-- [ ] Prove a completed transfer and teardown stop the session, and a failed
+- [x] Prove a completed transfer and teardown stop the session, and a failed
   transfer releases the hold with the same session, with both Morse duplex and
   the fake socket.
-- [ ] Exit: lifecycle tests pass with both local providers.
+- [x] Exit: lifecycle tests pass with both local providers.
 
 Morse scripted-close evidence (2026-09-26): the opt-in manual-clock fixture
 provider now simulates `:expired` and `:connection_lost` without restarting the
@@ -554,6 +564,20 @@ Compiled transfer orchestration with these providers remains open before the
 transfer task can be checked. The umbrella suite passed 2,845 tests, zero
 failures and 59 tagged exclusions; format, compile, Credo, unused-dependency
 and Lean checks passed.
+
+Completed transfer evidence (2026-09-26): a compiled Morse duplex room now
+proves the destination commit followed by the room's platform-effect source
+teardown; both STS provider and capability exit. A destination preparation
+failure releases the hold, keeps the same provider bound, and accepts new
+input. The room-owned fake GPT-Live lifecycle tests independently prove the
+same hold/release and teardown boundary with mute/unmute acknowledgements on
+the original socket. This matches Package 8's two local provider acceptance
+scope without exposing a fake socket through public call-plan settings. The
+combined lifecycle matrix passed 59 tests, zero failures. The umbrella suite
+passed 2,855 tests with zero failures and 59 tagged exclusions; format,
+warnings-as-errors compile, strict Credo, unused-dependency and Lean checks
+also passed. A later audit found the STS provider-originated transfer tool path
+does not execute; E remains open until that path is red-green verified.
 
 Post-reseed speech evidence (2026-09-26): the real STS capability and fake
 GPT-Live socket prove all three resume branches. A drop during an active agent
@@ -2150,3 +2174,43 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   format, warnings-as-errors compile, strict Credo, unused-dependency check
   and Lean verification passed. The compiled-room proof and checkpoint C
   checkbox remain open for package 5.
+
+### Response to review 12 — 2026-09-26 (package 8 completion)
+
+- Package 8 was delivered as small, usable commits under the repository's
+  checkpoint and detailed-commit rules. GPT-Live and scripted Morse duplex
+  now cover history reseeding, the three speech-resume branches, one-reseed
+  failure, bounded history, and in-flight host tool continuity.
+- Compiled Morse room transfer tests now cover destination commit followed
+  by source teardown, plus failure recovery with the original provider.
+  Room-owned fake GPT-Live tests cover the matching mute, unmute, same-socket
+  release, and teardown boundary. The fake socket remains a private test seam
+  rather than a public call-plan setting.
+- The combined lifecycle matrix passed 59 tests. Format, warnings-as-errors
+  compile, strict Credo, unused-dependency, Lean, and the umbrella suite
+  passed; the umbrella ran 2,855 tests with zero failures and 59 exclusions.
+  A later audit found the advertised STS `transfer` tool is not submitted by
+  the room's STS executor. Amendment 2 records the required behavior; E and
+  its exit remain open. Checkpoint F still needs independent review and the
+  authorized hosted phone check.
+
+### Response to review 12 — 2026-09-27 (package 8 transfer closure)
+
+- The Amendment 2 gap is closed. The STS tool executor submits the allowlisted
+  participant-transfer binding with the room's current capability, caller
+  identity and invocation context. A committed transfer sends the room's
+  platform effect before the old caller connection is treated as stale, so
+  destination completion tears down the source. A rejected destination sends
+  the provider a failed tool result and leaves the original session usable.
+- Compiled-room tests exercise provider-originated transfers through Morse
+  duplex and the private fake GPT-Live socket. They cover destination commit,
+  provider and capability teardown, room survival, destination failure,
+  same-session release, the delegated `function_call_output`, and subsequent
+  caller audio. The fake wire is injected only in the test runtime, leaving
+  the tenant-facing OpenAI configuration at one API-key field.
+- The focused transfer file passed six tests. Independent teammate and
+  subagent review found and closed the missing fake-socket assertions and
+  test-rule violations. Root format, warnings-as-errors compile, strict
+  Credo, unused-dependency and Lean checks passed. The umbrella suite passed
+  2,859 tests with zero failures and 59 tagged exclusions. E and its exit are
+  checked; the hosted check and F's final review gate remain open.

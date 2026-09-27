@@ -762,3 +762,30 @@ remaining checkpoint-C proofs.
   design record is `docs/gpt-live-reseed-tool-results.md`. All five root gates
   passed; the umbrella suite passed 2,853 tests with zero failures and 59
   tagged exclusions.
+
+### Package 8 transfer exit (2026-09-26)
+
+- Added compiled Morse duplex room transfer cases. A successful destination
+  commit followed by the room platform-effect message stops source STS
+  provider and capability. A failed destination preparation releases the
+  hold and leaves the same provider able to accept input. The existing
+  room-owned fake GPT-Live tests prove the corresponding provider boundary.
+- Focused Package 8 lifecycle matrix passed 59 tests. All five root gates and
+  Lean verification passed; the umbrella suite passed 2,855 tests with zero
+  failures and 59 tagged exclusions. A subsequent audit found that the STS
+  executor does not run the provider-originated `transfer` call. Amendment 2
+  records the additional acceptance path, so E remains open.
+- A compiled Morse room test made the missing provider-originated call fail
+  red, then pass after the room STS tool executor submitted the transfer
+  binding with the current capability and caller identity. A committed
+  transfer now dispatches the source teardown effect after the destination
+  publishes completion; a failed transfer replies to the provider and keeps
+  the original session usable. The focused matrix passed 49 tests; the full
+  umbrella gate is pending after an unrelated Calls monitor race.
+- Independent review then required the same provider-originated route through
+  a compiled GPT-Live room with its fake socket. Both commit/teardown and
+  destination failure now pass. The failure test verifies the delegated
+  function result and continuation on the original socket before fresh audio.
+  Six focused transfer tests, root static gates and Lean verification pass.
+  After separate test-only timing fixes, the full umbrella suite passed 2,859
+  tests with zero failures and 59 tagged exclusions. E is locally complete.

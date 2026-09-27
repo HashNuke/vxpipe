@@ -51,7 +51,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
          {:ok, target} <- Map.fetch(binding.targets, destination),
          {:ok, reason} <- reason(arguments, target),
          source_capability when is_pid(source_capability) <-
-           AgentActivationSupervisor.whereis_child(binding.source_activation_id, :coordinator) do
+           source_capability(context, binding) do
       {:ok,
        %__MODULE__{
          tenant_id: context.tenant_id,
@@ -76,6 +76,13 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
   end
 
   def new(%Binding{}, _arguments, %Context{}), do: {:error, :rejected}
+
+  defp source_capability(%Context{source_capability: capability}, _binding)
+       when is_pid(capability),
+       do: capability
+
+  defp source_capability(_context, binding),
+    do: AgentActivationSupervisor.whereis_child(binding.source_activation_id, :coordinator)
 
   defp destination(%{"destination" => destination}) when is_binary(destination),
     do: {:ok, destination}

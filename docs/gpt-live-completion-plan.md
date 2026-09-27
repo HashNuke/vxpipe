@@ -26,18 +26,19 @@ needs a contract change, it says so and names the amendment to record.
 
 ## Where things stand
 
-Current snapshot (2026-09-26): checkpoints A–D are locally complete. E has
-history reseeding and all three post-reseed speech cases with GPT-Live and the
-scripted Morse duplex provider. Pending host tool results from a lost GPT-Live
-session now reach its replacement as private context; compiled transfer and
-teardown acceptance remains. Package 8 has been split into reviewable
-checkpoints while retaining the plan's implementation order. F has Console
-enablement, documentation, rendered setup inspection
-and the ten-call local duplex load lane. The E
-lifecycle matrix, independent review and authorized hosted phone check remain
-open. The ten-call local duplex load lane passed on
-2026-09-26. The milestone checklist is the source of truth for their
-verification.
+Current snapshot (2026-09-27): checkpoints A–E are locally complete. E covers
+history reseeding, all three post-reseed speech cases, pending host tool
+results across a lost GPT-Live session, and provider-originated transfer
+through compiled Morse and fake GPT-Live rooms. Both providers now reach the
+room-owned transfer binding; destination commit tears down the source and
+failure returns a tool result while keeping the same session usable. Package
+8 was split into reviewable checkpoints while retaining the plan's order.
+F has Console enablement, documentation, rendered setup inspection and the
+ten-call local duplex load lane. The review of A–E and all root gates passed;
+the final hosted harness review and authorized hosted phone check remain
+open. Package 10's docs-site test was committed separately as `97e5c0af` and
+its eight-test lane passes. The milestone checklist is the source of truth
+for acceptance.
 
 Original planning snapshot (before implementation):
 
@@ -461,8 +462,12 @@ published text is ever sent, so nothing unheard is seeded.
 ### Transfers
 
 A completed transfer stops the session (existing teardown). A failed transfer
-releases the hold with the same session (package 4); nothing new is needed
-beyond a test.
+releases the hold with the same session (package 4). Amendment 2 adds the
+missing STS tool path: the room submits an allowlisted provider-originated
+`transfer` call through the participant-transfer invocation, carrying the
+current STS capability and caller identity in its tool context. Test committed
+teardown and failed-transfer recovery from a provider-originated call with
+both Morse duplex and the fake GPT-Live socket.
 
 ### Morse duplex
 
@@ -527,6 +532,9 @@ In a separate docs commit, update
 `vxpipe-docs/test/homepage-structure.test.mjs` to the current page: two hero
 buttons, the current trust badges, and the current section order. Keep the
 checks minimal and run `node --test` in `vxpipe-docs`.
+
+Completed in the separate docs commit `97e5c0af`; the current docs-site
+`node --test` lane passes eight tests.
 
 ## Contract changes this plan introduces
 

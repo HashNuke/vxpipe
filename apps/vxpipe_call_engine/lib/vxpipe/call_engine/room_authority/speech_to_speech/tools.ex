@@ -12,10 +12,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   }
 
   alias Vxpipe.CallEngine.Id
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
-  alias Vxpipe.CallEngine.Tool.{CompletionLease, InvocationBinding, InvocationRegistry}
+
+  alias Vxpipe.CallEngine.Tool.{
+    CompletionLease,
+    InvocationBinding,
+    InvocationRegistry,
+    PlatformResult
+  }
 
   import Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence,
     only: [
@@ -60,7 +67,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
                 source: state.speech_to_speech_capability,
                 tool_call_id: tool_call_id,
                 name: name,
-                binding: binding
+                binding: binding,
+                context: tool_context(state, turn, tool_call_id, capability, connection)
               }
 
               state = %{state | sts_tool_calls: Map.put(state.sts_tool_calls, call_ref, pending)}
@@ -245,27 +253,40 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   defp participant_activation(_state, _agent_id), do: nil
 
   defp maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending) do
+    case invocation_for(binding, pending.name) do
+      {:ok, invocation} ->
+        case InvocationRegistry.submit(
+               Tree.invocation_registry(capability),
+               invocation,
+               arguments,
+               pending.context,
+               pending.tool_call_id
+             ) do
+          {:accepted, _mode} -> state
+          {:error, reason} -> handle_tool_executed(state, capability, call_ref, {:error, reason})
+        end
+
+      {:error, reason} ->
+        handle_tool_executed(state, capability, call_ref, {:error, reason})
+
+      :deferred ->
+        state
+    end
+  end
+
+  defp invocation_for(%ToolBinding{type: :participant_transfer} = binding, _name),
+    do: InvocationBinding.from_participant_transfer(binding)
+
+  defp invocation_for(binding, name) do
     if executable_host_tool?(binding) do
-      context = tool_context(state, pending.turn, pending.tool_call_id)
-
-      invocation = %InvocationBinding{
-        name: pending.name,
-        conversation_mode: Map.get(binding, :conversation_mode),
-        handler: {:host, Map.get(binding, :action)}
-      }
-
-      case InvocationRegistry.submit(
-             Tree.invocation_registry(capability),
-             invocation,
-             arguments,
-             context,
-             pending.tool_call_id
-           ) do
-        {:accepted, _mode} -> state
-        {:error, reason} -> handle_tool_executed(state, capability, call_ref, {:error, reason})
-      end
+      {:ok,
+       %InvocationBinding{
+         name: name,
+         conversation_mode: Map.get(binding, :conversation_mode),
+         handler: {:host, Map.get(binding, :action)}
+       }}
     else
-      state
+      :deferred
     end
   end
 
@@ -301,18 +322,34 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   defp executable_host_tool?(_binding), do: false
 
-  defp tool_context(state, turn, tool_call_id) do
+  defp tool_context(state, turn, tool_call_id, capability, connection) do
     %ToolContext{
       tenant_id: state.snapshot.tenant_id,
       room_id: state.snapshot.room_id,
       incarnation_id: state.snapshot.incarnation_id,
       agent_participant_id: turn.agent_id,
-      source_participant_id: turn.agent_id,
+      source_participant_id: connection.participant_id,
       connection_id: turn.connection_id,
       command_id: turn.command_id,
       correlation_id: turn.correlation_id,
-      tool_call_id: tool_call_id
+      tool_call_id: tool_call_id,
+      source_capability: capability
     }
+  end
+
+  defp settle_executed_tool(
+         state,
+         capability,
+         pending,
+         _call_ref,
+         {:ok, %PlatformResult{effect: :participant_transfer_committed}}
+       ) do
+    send(
+      self(),
+      {:vxpipe_platform_effect, capability, pending.context, :participant_transfer_committed}
+    )
+
+    state
   end
 
   defp settle_executed_tool(state, capability, pending, call_ref, outcome) do
