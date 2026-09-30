@@ -84,7 +84,7 @@ defmodule Vxpipe.CallEngine.Speech.TTSFlow do
     end
   end
 
-  def settle_completed(state, caller, reference, played_ms) do
+  def settle_completed(state, {caller, _tag} = from, reference, played_ms) do
     cond do
       caller != state.consumer ->
         {:reply, {:error, :not_owner}, state}
@@ -105,11 +105,30 @@ defmodule Vxpipe.CallEngine.Speech.TTSFlow do
                played_ms,
                state.descriptor.format
              ) do
-          {:ok, output} -> {:reply, :ok, %{state | output: output}}
+          {:ok, output} -> settle_after_acceptance(state, from, reference, output)
           error -> {:reply, error, state}
         end
     end
   end
+
+  def settle_accepted_output(state, %{settled_output: output}), do: %{state | output: output}
+  def settle_accepted_output(state, _input), do: state
+
+  defp settle_after_acceptance(%{input: nil} = state, _from, _reference, output),
+    do: {:reply, :ok, %{state | output: output}}
+
+  defp settle_after_acceptance(
+         %{input: %{command: %{operation: {:speak, reference}}, from: nil} = input} = state,
+         from,
+         reference,
+         output
+       ) do
+    input = Map.merge(input, %{from: from, settled_output: output})
+    {:noreply, %{state | input: input}}
+  end
+
+  defp settle_after_acceptance(state, _from, _reference, _output),
+    do: {:reply, {:error, :busy}, state}
 
   def settle(
         %{

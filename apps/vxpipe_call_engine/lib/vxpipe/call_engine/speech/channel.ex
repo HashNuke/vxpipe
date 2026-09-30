@@ -412,8 +412,8 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     end
   end
 
-  def handle_call({:settle_output, reference, played_ms}, {caller, _tag}, state) do
-    TTSFlow.settle_completed(state, caller, reference, played_ms)
+  def handle_call({:settle_output, reference, played_ms}, from, state) do
+    TTSFlow.settle_completed(state, from, reference, played_ms)
   end
 
   def handle_call({:admit_output, command, turn}, {caller, _tag}, state),
@@ -728,6 +728,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
       Process.cancel_timer(input.timer)
       contexts = STSInput.finish_context(state.response_contexts, command, result)
       state = %{state | response_contexts: contexts, input: nil}
+      state = TTSFlow.settle_accepted_output(state, input)
       ChannelFailure.reply_input(input, reply)
       TTSFlow.continue_after_input(command, result, dispatch(state))
     else

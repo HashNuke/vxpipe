@@ -104,7 +104,11 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def ack(allocation, event), do: call(allocation, {:ack, event})
 
-  @doc "Release completed TTS or STS output after the consumer confirms local playout."
+  @doc """
+  Release completed TTS or STS output after the consumer confirms local playout.
+  TTS settlement also waits for its outstanding speak callback to be accepted,
+  within the original command deadline, before making the next phrase admissible.
+  """
   def settle_output(allocation, %Request{session: allocation, ref: reference}, played_ms)
       when is_integer(played_ms) and played_ms >= 0,
       do: call(allocation, {:settle_output, reference, played_ms})

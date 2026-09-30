@@ -354,6 +354,13 @@ and input-finalization logic establishes this terminal boundary. The capability 
 existing sink's finish operation, then waits for its actual playback acknowledgement before finishing the
 room turn or starting the next queued request. A provider event never asserts audibility.
 
+Playback settlement also waits for an outstanding `speak` callback to return successfully
+within its original command deadline. Provider completion can precede that asynchronous
+input result; it does not release the input slot. Retain terminal/usage delivery while this
+result is pending, and reply to settlement only after both confirmations. Callback failure
+or expiry closes the allocation and fails the pending settlement instead of admitting a
+replacement over an unresolved command.
+
 Cancellation immediately invalidates old output at the engine boundary, clears the existing
 pending turn queue as today, and interrupts the sink first. The allocation's output/session boundary
 maintains a playback ledger from actual sink acknowledgements. `cancel/3` receives a typed

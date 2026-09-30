@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.Usage.ProviderContext
-  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel, Session}
+  alias Vxpipe.CallEngine.Speech.{Allocation, CapabilityTree, Channel}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
@@ -524,12 +524,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     denied = %{unrelated | revision: 2, effective: %{unrelated.effective | audio_routes: %{}}}
     assert :ok = Enforcer.apply(capability, denied, 500)
     assert {:ok, %{activity_origin: nil}} = SpeechToText.input_binding(capability)
+    assert_receive {:test_stt_transport_started, denied_provider, _connection}, 1_000
 
     restored = %{unrelated | revision: 3}
     assert :ok = Enforcer.apply(capability, restored, 500)
-    assert_receive {:test_stt_transport_started, replacement, _connection}
-    state = :sys.get_state(capability)
-    provider = Session.provider(state.session)
+    assert_receive {:test_stt_transport_started, replacement, _connection}, 1_000
+    assert replacement != denied_provider
+    provider = :sys.get_state(replacement).owner
     _ = :sys.get_state(provider)
     TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
     assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
@@ -1071,8 +1072,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
         id: make_ref()
       )
 
-    assert_receive {:probe_initializing, provider, _channel}
-    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert_receive {:probe_initializing, provider, _channel}, 1_000
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}, 1_000
     policy = snapshot(0, ["part-human"], :unrestricted, true)
     assert :ok = Enforcer.apply(capability, policy, 500)
     assert {:ok, resource, :ready} = SpeechToText.readiness(capability)

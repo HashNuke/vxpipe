@@ -108,6 +108,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       )
 
     assert {:ok, room} = CallEngine.start_call(plan)
+
+    [{lifecycle, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {:call_lifecycle, room.incarnation_id})
+
     assert_receive {:test_tts_transport_started, tts, _}, 1_000
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -134,10 +138,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_eventually_open(plan)
 
     assert_receive {:opening_audio_telemetry, @startup_stop, %{count: 1, duration: duration},
-                    %{outcome: :ready, blockers: []}}
+                    %{outcome: :ready, blockers: [], emitter: ^lifecycle}}
 
     assert duration >= 0
-    refute_receive {:opening_audio_telemetry, @startup_stop, _, _}
+    refute_receive {:opening_audio_telemetry, @startup_stop, _, %{emitter: ^lifecycle}}
     refute_receive {:test_tts_transport_started, _, _}
     refute_receive {:test_stt_transport_started, _, _}
   end
@@ -589,6 +593,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
     room_monitor = Process.monitor(authority)
 
+    [{lifecycle, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {:call_lifecycle, room.incarnation_id})
+
     TestTextToSpeechTransport.deliver_control(
       tts_transport,
       ~s({"type":"Error","request_id":"req","code":"MESSAGE_INVALID"})
@@ -603,10 +610,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert duration >= 0
 
     assert_receive {:opening_audio_telemetry, @startup_stop, _,
-                    %{outcome: :failed, blockers: blockers}}
+                    %{outcome: :failed, blockers: blockers, emitter: ^lifecycle}}
 
     assert :opening_audio in blockers
-    refute_receive {:opening_audio_telemetry, @startup_stop, _, _}
+    refute_receive {:opening_audio_telemetry, @startup_stop, _, %{emitter: ^lifecycle}}
   end
 
   test "targets the entry caller rather than another attached participant" do
@@ -1118,6 +1125,14 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     }
 
     assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)
+
+    on_exit(fn ->
+      case Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
+        [{authority, _}] -> GenServer.stop(authority, :shutdown)
+        [] -> :ok
+      end
+    end)
+
     plan
   end
 
@@ -1366,7 +1381,10 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   end
 
   def handle_opening_audio_telemetry(event, measurements, metadata, test) do
-    send(test, {:opening_audio_telemetry, event, measurements, metadata})
+    send(
+      test,
+      {:opening_audio_telemetry, event, measurements, Map.put(metadata, :emitter, self())}
+    )
   end
 
   defp attach_opening_audio_telemetry do
