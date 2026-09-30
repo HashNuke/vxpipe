@@ -2359,11 +2359,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
               assert_receive {:test_stt_transport_started, replacement, _}, 1_000
               assert replacement != transport
 
+              # Reconciliation can retain the same blocker kinds, so a second
+              # progress notification is not a readiness acknowledgement.
+              # The replacement must keep native activation closed until ready.
               assert :ok =
-                       await_destination_blocker(
+                       refute_native_activation(
                          support_client,
-                         "speech_to_text",
-                         System.monotonic_time(:millisecond) + 2_000
+                         System.monotonic_time(:millisecond) + 100
                        )
 
               TestSpeechToTextTransport.deliver(
@@ -3616,17 +3618,6 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert {:ok, retry} = Preparation.run_candidate(room_authority, retained, options)
     assert :ok = Preparation.discard(retry)
-  end
-
-  defp await_destination_blocker(connection, kind, deadline) do
-    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
-
-    %{"data" => %{"blockers" => blockers}} =
-      await_sideband(connection, "transfer.progress", remaining, "preparing")
-
-    if kind in blockers,
-      do: :ok,
-      else: await_destination_blocker(connection, kind, deadline)
   end
 
   defp await_terminal_transfer_failure(connection, attempt) do

@@ -244,7 +244,7 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
     assert {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "We can continue.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
-    await_speak(source_tts, System.monotonic_time(:millisecond) + 2_000)
+    await_recovery_speech(source_tts, System.monotonic_time(:millisecond) + 2_000)
 
     CallEngine.TestTextToSpeechTransport.deliver_control(
       source_tts,
@@ -307,7 +307,7 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     token
   end
 
-  defp await_speak(voice, deadline) do
+  def await_recovery_speech(voice, deadline) do
     receive do
       {:test_tts_control, ^voice, control} ->
         case JSON.decode!(control) do
@@ -316,18 +316,24 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
 
           %{"type" => "Speak", "text" => "Connecting support."} ->
             # This earlier response can reach TTS before the handoff interrupts it.
-            # Complete the synthetic provider request so recovery speech can start.
-            for type <- ["SpeechStarted", "SpeechMetadata"] do
-              CallEngine.TestTextToSpeechTransport.deliver_control(
-                voice,
-                JSON.encode!(%{type: type, speech_id: "transfer-acknowledgement"})
-              )
-            end
+            # Establish an output turn before completing an uncancelled request.
+            # A fenced request discards these bytes through the same provider path.
+            CallEngine.TestTextToSpeechTransport.deliver_control(
+              voice,
+              JSON.encode!(%{type: "SpeechStarted", speech_id: "transfer-acknowledgement"})
+            )
 
-            await_speak(voice, deadline)
+            CallEngine.TestTextToSpeechTransport.deliver_audio(voice, tone(750, 48_000, 960))
+
+            CallEngine.TestTextToSpeechTransport.deliver_control(
+              voice,
+              JSON.encode!(%{type: "SpeechMetadata", speech_id: "transfer-acknowledgement"})
+            )
+
+            await_recovery_speech(voice, deadline)
 
           _other ->
-            await_speak(voice, deadline)
+            await_recovery_speech(voice, deadline)
         end
     after
       max(deadline - System.monotonic_time(:millisecond), 0) ->

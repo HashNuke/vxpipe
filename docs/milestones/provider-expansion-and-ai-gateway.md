@@ -165,3 +165,16 @@ passes all 2,922 reported tests, zero failures and 74 exclusions, including
 and Lean pass for this checkpoint. The intermittent failure's cause remains
 unproven; a separate focused fixture-ordering investigation is open.
 ElevenLabs and final shared milestone acceptance remain pending.
+
+A subsequent Gateway fixture checkpoint supplies valid credited acknowledgement
+PCM before recovery, checks replacement readiness without requiring a duplicate
+progress notification, and establishes RTVI readiness before room-end departure.
+The [phone recovery](../../labnotes/20260930-0851-phone-recovery-order.md),
+[handoff progress](../../labnotes/20260930-0924-handoff-progress-order.md), and
+[departure readiness](../../labnotes/20260930-0945-rtvi-departure-readiness.md)
+labnotes distinguish deterministic boundary violations from inferred intermittent
+ordering. Two new owned recovery checks and the selected handoff/RTVI checks pass.
+All five root completion gates pass; the same-seed full run reports 2,924 tests,
+zero failures and 74 exclusions, including all 522 Gateway tests. Production
+protocols, timeouts and state machines are unchanged. The milestone remains
+in progress while ElevenLabs and final shared acceptance are pending.

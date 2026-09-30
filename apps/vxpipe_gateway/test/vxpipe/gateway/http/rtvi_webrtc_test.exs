@@ -188,7 +188,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {"tenant-development", room_id})
   end
 
-  test "signals bot departure before closing WebRTC when the room ends" do
+  test "signals bot departure before closing WebRTC when a ready room ends" do
     room_id = "room-webrtc-ended-#{System.unique_integer([:positive, :monotonic])}"
     session_id = create_room_session(room_id)
 
@@ -240,6 +240,23 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     assert [{connection, _value}] =
              Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, connection_id})
+
+    # Client-side channel opening does not acknowledge that the server has handled
+    # its channel notification. Establish the RTVI session before ending the room.
+    :ok =
+      PeerConnection.send_data(
+        client,
+        client_channel,
+        JSON.encode!(%{
+          "id" => "departure-ready",
+          "label" => "rtvi-ai",
+          "type" => "client-ready",
+          "data" => %{"version" => "2.1.0"}
+        })
+      )
+
+    assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, ready}}, 5_000
+    assert %{"id" => "departure-ready", "type" => "bot-ready"} = JSON.decode!(ready)
 
     connection_monitor = Process.monitor(connection)
     Process.exit(room, :shutdown)
