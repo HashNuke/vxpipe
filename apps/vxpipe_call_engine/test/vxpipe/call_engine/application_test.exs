@@ -5,6 +5,22 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
   alias Vxpipe.CallEngine.OpeningAudio.AssetCache
   alias Vxpipe.CallEngine.RemoteMCP.CatalogRefresher
+  alias Vxpipe.Providers.ElevenLabs.AgentLeaseSupervisor
+
+  test "agent cleanup supervisor outlives room teardown and has an explicit name" do
+    settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    children = Application.child_specs(settings)
+
+    lease_index =
+      Enum.find_index(children, fn
+        {AgentLeaseSupervisor, options} -> Keyword.get(options, :name) == AgentLeaseSupervisor
+        _child -> false
+      end)
+
+    room_index = Enum.find_index(children, &(&1 == Vxpipe.CallEngine.RoomSupervisor))
+    assert is_integer(lease_index)
+    assert lease_index < room_index
+  end
 
   test "does not supervise the retired Jido runtime" do
     settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)

@@ -28,6 +28,8 @@ defmodule Vxpipe.CallEngine.Application do
        name: Vxpipe.CallEngine.Recording.PreparedWriterSupervisor, strategy: :one_for_one},
       Vxpipe.CallEngine.Archive.Supervisor,
       {Vxpipe.CallEngine.RemoteMCP.CatalogStore, name: Vxpipe.CallEngine.RemoteMCP.CatalogStore},
+      {Vxpipe.Providers.ElevenLabs.AgentLeaseSupervisor,
+       name: Vxpipe.Providers.ElevenLabs.AgentLeaseSupervisor},
       opening_audio_cache(settings)
     ]
 

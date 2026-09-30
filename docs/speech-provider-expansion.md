@@ -269,6 +269,15 @@ runtime resource recovery is accepted by this result. Neither zero retention
 nor deletion of hosted conversation records is claimed. See
 [checkpoint evidence](../labnotes/20260930-1120-elevenlabs-agent-protocol.md).
 
+The next [ownership checkpoint](elevenlabs-agent-ownership.md) adds a supervisor
+owned by the application, temporary lease controllers and independent request
+workers. Preparation is asynchronous, owner/controller death retires the remote
+agent, and graceful shutdown preserves checked deletion. Release acknowledgement
+is separate from terminal cleanup evidence; fixed telemetry retains cleanup
+failure after owner loss. The local ownership/API/application checks pass without
+another provider call. Runtime reconciliation, native session/tool/history state
+and scoped room/Console support remain open; no STS capability is registered.
+
 ## Acceptance sequence
 
 1. Write protocol/configuration tests before each behavior change.

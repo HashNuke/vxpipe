@@ -17,6 +17,8 @@ Design sources: [Platform and tenant services](../platform-and-tenant-services.m
 [Live provider tests](../live-provider-tests.md).
 The [ElevenLabs input turn proposal](../elevenlabs-turn-ownership.md) records
 boundary ownership and unresolved design gates; it is not an implemented milestone.
+The [remote agent ownership checkpoint](../elevenlabs-agent-ownership.md) separates
+local monitored cleanup from pending production reconciliation and room integration.
 
 ## Runnable outcome
 
@@ -93,6 +95,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
   bounded PCM framing, explicit segment commits and sanitized typed events.
 - [x] Prepare a hosted-agent codec/socket and bounded create/sign/delete operation;
   verify native completion without advertising runtime room support.
+- [x] Implement asynchronous, independently supervised agent leases with checked
+  owner-death/graceful-shutdown cleanup and payload-free failure observation locally.
 - [ ] Implement ElevenLabs STT after approving authoritative speech-start/turn-end ownership.
 - [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
@@ -249,3 +253,16 @@ default run reports 2,959 tests, zero failures and 89 exclusions, including
 machine changes require another Lean run for this preparation; the eventual
 runtime STS integration still requires its own room, browser and Lean gates.
 The milestone/index remain unchecked.
+
+The [agent ownership checkpoint](../../labnotes/20260930-1321-elevenlabs-agent-ownership.md)
+adds a named application-owned resource supervisor ahead of room supervision.
+Temporary controllers stay responsive while separate workers run bounded HTTP
+preparation/deletion. Monitors retain cleanup across owner or controller death;
+graceful shutdown waits for the explicit deletion result. Thirty-seven combined
+local protocol/API/socket/ownership/application checks pass, including the real
+API helper against a synthetic HTTP Plug. No paid case is repeated, no STS
+manifest entry is added, and no room support is claimed. Durable request-worker/
+VM-loss reconciliation and full conversational STT/STS acceptance remain open.
+All five root gates pass: format, warnings compile, strict Credo, default test
+and unused dependencies. The default suite reports 2,968 tests, zero failures,
+89 exclusions, seed 149103 (CallEngine 1,761; Gateway 522; Console 194).
