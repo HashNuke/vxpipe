@@ -27,6 +27,8 @@ For substantial research or architecture changes, add a focused document under
 verification evidence. Do not create decision documents for simple status checks
 or routine mechanical edits.
 
+Never read or modify `~/.config/vxpipe/live_providers.env` file
+
 ### Teammate runner
 
 - Use `bin/teammate` for non-interactive OpenCode work. It accepts a task as
@@ -160,6 +162,15 @@ or routine mechanical edits.
   must wait until a process has handled earlier messages.
 - Keep external-service and network interoperability tests in an explicitly
   tagged integration lane that is excluded from the default suite.
+- Run telephony and AI provider live tests with `bin/test-live-providers`. Copy
+  `config/live_providers.env.example` to
+  `~/.config/vxpipe/live_providers.env` and fill only the credentials needed.
+  The runner loads that file only for its child `mix test` process. No arguments
+  run all live provider tests; pass Mix arguments such as
+  `--only live_deepgram apps/vxpipe_gateway/test/integration` to select a
+  provider. Selected Deepgram tests generate missing speech samples with one
+  Deepgram TTS request, then reuse the files for later runs. Review generated
+  samples before committing them.
 - Keep tests in the umbrella application that owns the behavior. Run focused
   tests from that child application's directory when iterating.
 
