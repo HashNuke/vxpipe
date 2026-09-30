@@ -104,6 +104,12 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
     for {provider, values, expected_kind, expected_payload} <- [
           {"rime", %{"api_key" => "rime-private"}, "api_key", %{"api_key" => "rime-private"}},
+          {"deepseek", %{"api_key" => "synthetic-deepseek"}, "api_key",
+           %{"api_key" => "synthetic-deepseek"}},
+          {"openrouter", %{"api_key" => "synthetic-openrouter"}, "api_key",
+           %{"api_key" => "synthetic-openrouter"}},
+          {"fireworks", %{"api_key" => "synthetic-fireworks"}, "api_key",
+           %{"api_key" => "synthetic-fireworks"}},
           {"google", %{"api_key" => "google-private"}, "api_key",
            %{"api_key" => "google-private"}},
           {"deepgram", %{"api_key" => "deepgram-private"}, "api_key",
@@ -505,9 +511,12 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
     assert json_response(conn, 200)["provider_capabilities"] == %{
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
+             "deepseek" => ["credential", "credential_validation"],
+             "fireworks" => ["credential"],
              "google" => ["credential", "credential_validation", "stt", "tts"],
              "morse" => ["sts", "stt", "tts"],
              "openai" => ["credential", "credential_validation", "sts"],
+             "openrouter" => ["credential", "credential_validation"],
              "rime" => ["credential", "credential_validation", "tts"],
              "telnyx" => ["credential", "credential_validation", "telephony"],
              "twilio" => ["credential", "credential_validation", "telephony"],

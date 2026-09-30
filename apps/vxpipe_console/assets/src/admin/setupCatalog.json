@@ -56,6 +56,36 @@
       "sampleCapabilities": ["llm"]
     },
     {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "description": "Connect DeepSeek language models.",
+      "capabilities": ["llm"],
+      "defaultModels": {
+        "llm": "deepseek-flash"
+      },
+      "sampleCapabilities": ["llm"]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "description": "Choose language models through OpenRouter.",
+      "capabilities": ["llm"],
+      "defaultModels": {
+        "llm": "google/gemini-3.5-flash-lite"
+      },
+      "sampleCapabilities": ["llm"]
+    },
+    {
+      "id": "fireworks",
+      "name": "Fireworks AI",
+      "description": "Connect serverless language models on Fireworks AI.",
+      "capabilities": ["llm"],
+      "defaultModels": {
+        "llm": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
+      },
+      "sampleCapabilities": ["llm"]
+    },
+    {
       "id": "telnyx",
       "name": "Telnyx",
       "description": "Connect phone calls with Telnyx.",

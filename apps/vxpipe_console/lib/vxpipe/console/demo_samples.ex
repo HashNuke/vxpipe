@@ -4,9 +4,10 @@ defmodule Vxpipe.Console.DemoSamples do
   alias Vxpipe.Calls.InstallationOperator
 
   @catalog_version 1
+  @model_providers ["google", "zenmux", "openai", "deepseek", "openrouter", "fireworks"]
 
   @spec catalog(String.t()) :: [map()]
-  def catalog(model_provider) when model_provider in ["google", "zenmux"] do
+  def catalog(model_provider) when model_provider in @model_providers do
     [
       entry(
         "sample-voice-conversation",
@@ -151,11 +152,12 @@ defmodule Vxpipe.Console.DemoSamples do
       |> Enum.filter(&(&1.status == :connected and &1.name == &1.provider))
       |> MapSet.new(& &1.provider)
 
-    cond do
-      not MapSet.member?(active, "deepgram") -> {:error, :sample_prerequisites_missing}
-      MapSet.member?(active, "google") -> {:ok, "google"}
-      MapSet.member?(active, "zenmux") -> {:ok, "zenmux"}
-      true -> {:error, :sample_prerequisites_missing}
+    with true <- MapSet.member?(active, "deepgram"),
+         provider when is_binary(provider) <-
+           Enum.find(@model_providers, &MapSet.member?(active, &1)) do
+      {:ok, provider}
+    else
+      _missing -> {:error, :sample_prerequisites_missing}
     end
   end
 
@@ -219,6 +221,10 @@ defmodule Vxpipe.Console.DemoSamples do
 
   defp model_name("google"), do: "gemini-2.5-flash"
   defp model_name("zenmux"), do: "openai/gpt-5"
+  defp model_name("openai"), do: "gpt-5"
+  defp model_name("deepseek"), do: "deepseek-flash"
+  defp model_name("openrouter"), do: "google/gemini-3.5-flash-lite"
+  defp model_name("fireworks"), do: "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
 
   defp source_digest(source) do
     source

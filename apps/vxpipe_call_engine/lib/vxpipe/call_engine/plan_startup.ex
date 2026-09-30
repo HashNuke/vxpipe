@@ -28,6 +28,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   import Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution,
     only: [resolve_provider: 4, unsupported_speech_configuration_reason: 1]
 
+  @model_providers ~w(google zenmux openai deepseek openrouter fireworks fixture)
+
   @participant_command_timeout_ms 5_000
   @error_code :unsupported_call_plan
   @error_message "The resolved call plan is not supported by this runtime."
@@ -86,7 +88,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_model(%{
          capabilities: %{model_inference: %CapabilitySelection{provider: provider}}
        })
-       when provider in ["google", "zenmux", "openai", "fixture"],
+       when provider in @model_providers,
        do: :ok
 
   defp supported_model(%{capabilities: %{speech_to_speech: %CapabilitySelection{}}}), do: :ok

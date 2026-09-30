@@ -6,6 +6,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "declares only each provider's supported capabilities" do
     assert {:ok, Vxpipe.Providers.OpenAI.GPTLiveSession} =
              Registry.fetch_capability("openai", :sts)
+
     assert {:ok, Vxpipe.Providers.Deepgram} = Registry.fetch("deepgram")
 
     assert {:ok, Vxpipe.Providers.Deepgram.Credential} =
@@ -111,10 +112,13 @@ defmodule Vxpipe.Providers.RegistryTest do
 
   test "catalog contains explicit capability metadata" do
     assert Registry.catalog() == %{
+             "deepseek" => [:credential, :credential_validation],
+             "openrouter" => [:credential, :credential_validation],
+             "fireworks" => [:credential],
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
              "google" => [:credential, :credential_validation, :stt, :tts],
              "morse" => [:sts, :stt, :tts],
-              "openai" => [:credential, :credential_validation, :sts],
+             "openai" => [:credential, :credential_validation, :sts],
              "rime" => [:credential, :credential_validation, :tts],
              "telnyx" => [:credential, :credential_validation, :telephony],
              "twilio" => [:credential, :credential_validation, :telephony],

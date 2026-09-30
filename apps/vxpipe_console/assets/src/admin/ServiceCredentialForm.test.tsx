@@ -308,3 +308,27 @@ test("Telnyx accepts an API key alone or both keys, rejects malformed public key
   expect(screen.getByLabelText("API key")).toHaveValue("");
   expect(screen.getByLabelText("Public key")).toHaveValue("");
 });
+
+for (const provider of ["deepseek", "openrouter", "fireworks"] as const) {
+  test(`${provider} setup submits its single private key`, () => {
+    const submit = vi.fn();
+    render(<ServiceCredentialForm initialProvider={provider} onCancel={vi.fn()} onSubmit={submit} status="idle" />);
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-key" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(submit).toHaveBeenCalledWith({ provider, values: { apiKey: "synthetic-key" } });
+  });
+}
+
+test("Fireworks saves independently and does not offer an unsupported credential probe", () => {
+  const probe = vi.fn();
+  const submit = vi.fn();
+  render(<ServiceCredentialForm initialProvider="fireworks" onCancel={vi.fn()} onSubmit={submit} onTest={probe} status="idle" />);
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-key" } });
+  const testButton = screen.getByRole("button", { name: "Test credentials" });
+  expect(testButton).toBeDisabled();
+  expect(screen.getByText("Credential testing is unavailable for this provider. You can save its API key and verify it with a call.")).toBeInTheDocument();
+  fireEvent.click(testButton);
+  expect(probe).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(submit).toHaveBeenCalledWith({ provider: "fireworks", values: { apiKey: "synthetic-key" } });
+});

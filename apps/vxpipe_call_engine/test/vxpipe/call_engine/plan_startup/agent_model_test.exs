@@ -65,6 +65,48 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModelTest do
     refute inspect(model) =~ "tenant-marker"
   end
 
+  test "new LLM services validate and resolve only the selected scoped credential" do
+    for {provider, model_id, native} <- [
+          {"deepseek", "deepseek-flash", :deepseek},
+          {"openrouter", "google/gemini-3.5-flash-lite", :openrouter},
+          {"fireworks", "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b", :fireworks_ai}
+        ] do
+      input = %{
+        selection()
+        | provider: provider,
+          model: model_id,
+          options: %{"max_tokens" => 256}
+      }
+
+      bindings = %{
+        {"tenant-model", provider, "default"} => %{"api_key" => "scoped-provider-marker"}
+      }
+
+      settings =
+        Keyword.put(
+          options(),
+          :credential_source,
+          {TestTenantCredentialSource, {self(), bindings}}
+        )
+
+      assert :ok = Vxpipe.CallEngine.CapabilityCatalog.validate(input)
+
+      assert {:ok, Vxpipe.AgentRuntime.Provider.ReqLLM} =
+               Vxpipe.CallEngine.CapabilityCatalog.adapter(input)
+
+      assert {:ok, model} = AgentModel.resolve(input, "tenant-model", settings)
+      assert_receive {:tenant_credential_resolved, "tenant-model", ^provider, "default"}
+      assert model.configuration.api_key == "scoped-provider-marker"
+      assert model.configuration.model.provider == native
+      assert model.configuration.model.id == model_id
+      assert model.model == provider <> ":" <> model_id
+      refute inspect(model) =~ "scoped-provider-marker"
+
+      assert {:error, :unsupported_provider_options} =
+               AgentModel.resolve(input, "other-tenant", settings)
+    end
+  end
+
   test "does not use application credentials for another tenant" do
     assert {:error, :unsupported_provider_options} =
              AgentModel.resolve(selection(), "other-tenant", options())

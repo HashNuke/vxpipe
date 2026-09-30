@@ -34,8 +34,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.Config do
            ),
          api_key when is_binary(api_key) <- Keyword.fetch!(options, :api_key),
          true <- String.trim(api_key) != "",
-         model_spec when is_binary(model_spec) <- Keyword.fetch!(options, :model),
-         true <- String.trim(model_spec) != "",
+         model_spec = Keyword.fetch!(options, :model),
+         true <- valid_model_spec?(model_spec),
          generation_options when is_list(generation_options) <-
            Keyword.fetch!(options, :generation_options),
          true <- Keyword.keyword?(generation_options),
@@ -59,6 +59,10 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.Config do
   end
 
   def new(_options), do: {:error, :invalid_configuration}
+
+  defp valid_model_spec?(%Model{}), do: true
+  defp valid_model_spec?(spec) when is_binary(spec), do: String.trim(spec) != ""
+  defp valid_model_spec?(_spec), do: false
 
   defp protected_options_absent?(options) do
     Enum.all?(

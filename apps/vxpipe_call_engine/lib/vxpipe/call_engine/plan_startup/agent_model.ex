@@ -12,7 +12,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModel do
   @type t :: %__MODULE__{model: String.t(), provider: module(), configuration: term()}
 
   def resolve(%CapabilitySelection{provider: provider} = selection, tenant_id, options)
-      when provider in ["google", "zenmux", "openai"] do
+      when provider in [
+             "google",
+             "zenmux",
+             "openai",
+             "deepseek",
+             "openrouter",
+             "fireworks"
+           ] do
     with {:ok, %ProviderCredential{auth_kind: "api_key", payload: %{"api_key" => api_key}}} <-
            CredentialSource.resolve(tenant_id, selection, options),
          {:ok, provider_options} <-
@@ -26,7 +33,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModel do
            initialize(ReqLLM, Keyword.put(provider_options, :api_key, api_key), options) do
       {:ok,
        %__MODULE__{
-         model: Keyword.fetch!(provider_options, :model),
+         model: selection.provider <> ":" <> selection.model,
          provider: ReqLLM,
          configuration: configuration
        }}

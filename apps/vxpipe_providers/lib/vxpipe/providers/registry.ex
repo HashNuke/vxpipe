@@ -2,6 +2,9 @@ defmodule Vxpipe.Providers.Registry do
   @moduledoc "Fixed, exact provider capability catalog."
 
   @providers %{
+    "deepseek" => Vxpipe.Providers.DeepSeek,
+    "openrouter" => Vxpipe.Providers.OpenRouter,
+    "fireworks" => Vxpipe.Providers.Fireworks,
     "deepgram" => Vxpipe.Providers.Deepgram,
     "google" => Vxpipe.Providers.Google,
     "morse" => Vxpipe.Providers.MorseCode,

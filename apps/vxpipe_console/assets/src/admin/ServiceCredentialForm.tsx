@@ -27,6 +27,9 @@ const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
   "openai",
   "rime",
   "zenmux",
+  "deepseek",
+  "openrouter",
+  "fireworks",
 ]);
 
 export function ServiceCredentialForm({
@@ -65,6 +68,7 @@ export function ServiceCredentialForm({
   const [publicKey, setPublicKey] = useState("");
   const supportedProvider =
     apiKeyProviders.has(provider) || provider === "telnyx" || provider === "twilio";
+  const supportsCredentialTest = supportedProvider && provider !== "fireworks";
   const includePublicKey = provider === "telnyx" && showTelnyxPublicKey;
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -111,7 +115,7 @@ export function ServiceCredentialForm({
 
   async function testCredentials() {
     const nextDraft = locallyValidDraft();
-    if (!nextDraft || !onTest) return;
+    if (!nextDraft || !onTest || !supportsCredentialTest) return;
 
     setTestResult({ status: "testing" });
     try {
@@ -259,6 +263,11 @@ export function ServiceCredentialForm({
           Credential stored.
         </p>
       ) : null}
+      {provider === "fireworks" ? (
+        <p className="text-sm text-[var(--admin-muted)]">
+          Credential testing is unavailable for this provider. You can save its API key and verify it with a call.
+        </p>
+      ) : null}
       {beforeActions}
       <div className="setup-credential-actions" role="group" aria-label="Credential actions">
         {showCancel ? (
@@ -276,7 +285,7 @@ export function ServiceCredentialForm({
         ) : null}
         <Button
           aria-label={testing ? "Testing credentials" : "Test credentials"}
-          disabled={pending || !onTest || !supportedProvider}
+          disabled={pending || !onTest || !supportsCredentialTest}
           onClick={() => void testCredentials()}
           type="button"
           variant="ghost"

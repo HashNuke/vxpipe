@@ -66,6 +66,84 @@ defmodule Vxpipe.Console.DemoSamplesTest do
              )
   end
 
+  test "new direct model services install publishable samples with scoped credentials" do
+    {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
+
+    options = [
+      credential_repository: {CredentialStore, Repo},
+      provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
+      call_spec_repository: {CallSpecStore, Repo},
+      admin_repository: {AdminStore, Repo}
+    ]
+
+    assert {:ok, _} =
+             ProviderCredentials.provision(
+               :platform,
+               "deepgram",
+               "deepgram",
+               "api_key",
+               %{"api_key" => "synthetic-speech"},
+               options
+             )
+
+    for {provider, model} <- [
+          {"openai", "gpt-5"},
+          {"deepseek", "deepseek-flash"},
+          {"openrouter", "google/gemini-3.5-flash-lite"},
+          {"fireworks", "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"}
+        ] do
+      assert {:ok, tenant, _} = Administration.bootstrap_tenant(provider, [:admin], options)
+
+      assert {:ok, platform} =
+               ProviderCredentials.provision(
+                 :platform,
+                 provider,
+                 provider,
+                 "api_key",
+                 %{"api_key" => "synthetic-platform"},
+                 options
+               )
+
+      assert {:ok, inherited} =
+               ProviderCredentials.resolve(tenant.key, provider, provider, options)
+
+      assert inherited.credential.id == platform.id
+
+      # Only this model service is active for this tenant; earlier loop providers
+      # are removed from platform scope after their acceptance below.
+      assert {:ok, installed} =
+               DemoSamples.install(InstallationOperator.authority(), tenant.key, options)
+
+      assert Enum.map(installed, &{&1.id, &1.status, &1.revision}) == expected_installations()
+
+      assert {:ok, publication} =
+               Vxpipe.Calls.fetch_call_spec(tenant.key, "sample-voice-conversation", 1, options)
+
+      selection = publication.source["defaults"]["capabilities"]["model_inference"]
+      assert selection["provider"] == provider
+      assert selection["model"] == model
+      assert selection["credential_name"] == provider
+
+      assert {:ok, own} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 provider,
+                 provider,
+                 "api_key",
+                 %{"api_key" => "synthetic-tenant"},
+                 options
+               )
+
+      assert {:ok, overridden} =
+               ProviderCredentials.resolve(tenant.key, provider, provider, options)
+
+      assert overridden.credential.id == own.id
+      assert overridden.payload == %{"api_key" => "synthetic-tenant"}
+      refute inspect(overridden.credential) =~ "synthetic-tenant"
+      assert :ok = ProviderCredentials.delete(:platform, platform.id, options)
+    end
+  end
+
   test "requires installation operator authority" do
     assert {:error, :installation_operator_required} =
              DemoSamples.install(:anonymous, "DEMOabcdefgh1234", [])

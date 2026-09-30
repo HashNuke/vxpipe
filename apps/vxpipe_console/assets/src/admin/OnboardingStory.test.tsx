@@ -569,6 +569,9 @@ test("onboarding offers only installed AI and telephony services in their groups
     "Google AI Studio",
     "OpenAI",
     "Zenmux",
+    "DeepSeek",
+    "OpenRouter",
+    "Fireworks AI",
     "Telnyx",
     "Twilio",
   ]);

@@ -11,7 +11,7 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
          {:ok, common} <- options(common, @common),
          true <- Enum.all?(common, &valid_common?/1),
          {:ok, []} <- options(specific, []),
-         {:ok, resolved} <- ReqLLM.model("openai:" <> model),
+         {:ok, resolved} <- openai_model(model),
          true <- resolved.provider == :openai,
          generation <- openai_generation_options(common, resolved),
          {:ok, provider} <- ReqLLM.provider(:openai),
@@ -22,7 +22,12 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
              resolved,
              Keyword.put(generation, :on_unsupported, :error)
            ) do
-      {:ok, [model: "openai:" <> model, generation_options: generation, streaming: true]}
+      {:ok,
+       [
+         model: openai_model_spec(model, resolved),
+         generation_options: generation,
+         streaming: true
+       ]}
     else
       _invalid -> {:error, :invalid_provider_selection}
     end
@@ -88,16 +93,100 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
     _exception -> {:error, :invalid_provider_selection}
   end
 
+  def translate(provider, model, common, specific)
+      when provider in ["deepseek", "openrouter", "fireworks"] and is_binary(model) do
+    {native, endpoint} = direct_provider(provider)
+
+    with true <- local_model?(model),
+         {:ok, common} <- options(common, @common),
+         true <- Enum.all?(common, &valid_common?/1),
+         {:ok, specific} <- direct_options(provider, specific),
+         {:ok, resolved} <- direct_model(native, model),
+         true <- resolved.provider == native,
+         generation =
+           Keyword.put_new(common, :max_tokens, 4096) ++
+             [base_url: endpoint, provider_options: specific],
+         {:ok, adapter} <- ReqLLM.provider(native),
+         {:ok, _validated} <-
+           ReqLLM.Provider.Options.process(
+             adapter,
+             :chat,
+             resolved,
+             Keyword.put(generation, :on_unsupported, :error)
+           ) do
+      {:ok, [model: resolved, generation_options: generation, streaming: true]}
+    else
+      _invalid -> {:error, :invalid_provider_selection}
+    end
+  rescue
+    _exception -> {:error, :invalid_provider_selection}
+  end
+
   def translate(_provider, _model, _common, _specific),
     do: {:error, :invalid_provider_selection}
+
+  defp direct_provider("deepseek"), do: {:deepseek, "https://api.deepseek.com"}
+  defp direct_provider("openrouter"), do: {:openrouter, "https://openrouter.ai/api/v1"}
+  defp direct_provider("fireworks"), do: {:fireworks_ai, "https://api.fireworks.ai/inference/v1"}
+
+  # This provider alias postdates the installed LLMDB snapshot. Keep the current
+  # wire identity and documented limits instead of substituting a retired alias.
+  defp direct_model(:deepseek, "deepseek-flash") do
+    ReqLLM.model(%{
+      provider: :deepseek,
+      id: "deepseek-flash",
+      name: "DeepSeek V4.1 Flash",
+      limits: %{context: 1_048_576, output: 393_216},
+      capabilities: %{
+        tools: %{enabled: true, streaming: true},
+        streaming: %{text: true, tool_calls: true}
+      }
+    })
+  end
+
+  defp direct_model(provider, model), do: ReqLLM.model(Atom.to_string(provider) <> ":" <> model)
+
+  defp direct_options("deepseek", input) do
+    with {:ok, options} <- options(input, [:thinking]),
+         true <- Enum.all?(options, fn {:thinking, value} -> value in ["enabled", "disabled"] end) do
+      {:ok, Enum.map(options, fn {:thinking, value} -> {:thinking, %{type: value}} end)}
+    else
+      _invalid -> :error
+    end
+  end
+
+  defp direct_options(_provider, input), do: options(input, [])
 
   defp local_model?(model) do
     byte_size(model) in 1..256 and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/, model)
   end
 
+  # The current Luna alias is newer than LLMDB. Its tool-enabled surface uses Responses;
+  # preserve its output token bound and retain the wire identity without inventing pricing.
+  defp openai_model("gpt-6-luna") do
+    ReqLLM.model(%{
+      provider: :openai,
+      id: "gpt-6-luna",
+      extra: %{
+        "constraints" => %{"token_limit_key" => "max_output_tokens"},
+        "wire" => %{"protocol" => "openai_responses"}
+      }
+    })
+  end
+
+  defp openai_model(model), do: ReqLLM.model("openai:" <> model)
+  defp openai_model_spec("gpt-6-luna", resolved), do: resolved
+  defp openai_model_spec(model, _resolved), do: "openai:" <> model
+
   defp openai_generation_options(common, resolved) do
     case {get_in(resolved.extra, ["constraints", "token_limit_key"]),
           Keyword.pop(common, :max_tokens)} do
+      {"max_output_tokens", {count, rest}} when is_integer(count) ->
+        Keyword.put(rest, :max_output_tokens, count)
+
+      {"max_output_tokens", {nil, rest}} ->
+        Keyword.put(rest, :max_output_tokens, 4096)
+
       {"max_completion_tokens", {count, rest}} when is_integer(count) ->
         Keyword.put(rest, :max_completion_tokens, count)
 
