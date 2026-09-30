@@ -131,7 +131,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
           initial_variables: %{},
           transport: %{type: "telephony"}
         },
-        tenant_id: "telephonyharness",
+        tenant_id: "th" <> String.pad_leading(Integer.to_string(id, 36), 14, "0"),
         actor_id: "actor-telephony-harness",
         call_id: "call-telephony-harness-#{id}",
         room_id: "room-telephony-harness-#{id}"
@@ -221,7 +221,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   defp service_options(:telnyx, tenant_id, public_key, observer) do
     [
       id: "primary-phone",
-      ingress_key: "harness",
+      ingress_key: tenant_id,
       scope: {:tenant, tenant_id},
       provider: :telnyx,
       provider_connection_id: "voice-application-harness",
@@ -236,7 +236,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
   defp service_options(:twilio, tenant_id, auth_token, _observer) do
     [
       id: "primary-phone",
-      ingress_key: "harness",
+      ingress_key: tenant_id,
       scope: {:tenant, tenant_id},
       provider: :twilio,
       account_sid: @twilio_account_sid,
