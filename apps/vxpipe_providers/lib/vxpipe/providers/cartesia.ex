@@ -9,6 +9,7 @@ defmodule Vxpipe.Providers.Cartesia do
   def capabilities do
     %{
       credential: Vxpipe.Providers.APIKeyCredential,
+      stt: Vxpipe.Providers.Cartesia.STTSession,
       tts: Vxpipe.Providers.Cartesia.TTSSession
     }
   end

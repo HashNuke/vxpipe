@@ -196,14 +196,20 @@ from the shared test model catalog. It sends one short phrase with retries and
 redirects disabled, acknowledges raw PCM credit, and requires generation and
 playback settlement within bounded observation. It passed on 2026-09-30.
 Platform/tenant credential inheritance, override and published startup are
-verified separately with synthetic encrypted fixtures. Cartesia STT and
-ElevenLabs live cases are still pending.
+verified separately with synthetic encrypted fixtures. The selected STT check
+uses `ink-2` and reuses the committed public 16 kHz PCM sample, adding paced
+silence within a ten-second input budget. It opens one connection, verifies
+semantic turns and the final word, then requires close-and-drain completion.
+It never generates another provider's sample. Both Cartesia checks passed on
+2026-09-30; ElevenLabs live cases remain pending.
 
 ```shell
 bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_text_to_speech_test.exs
+bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_speech_to_text_test.exs
 ```
 
-See [Cartesia TTS checkpoint evidence](../labnotes/20260930-0705-cartesia-request-tts.md).
+Run these commands individually. See [TTS evidence](../labnotes/20260930-0705-cartesia-request-tts.md)
+and [STT evidence](../labnotes/20260930-0753-cartesia-turn-stt.md).
 
 Cloudflare/Vercel gateway implementation is deferred. There is no current
 `live_cloudflare` lane or gateway provider catalog entry. See the separate

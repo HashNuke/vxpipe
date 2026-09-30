@@ -1,9 +1,9 @@
 # Cartesia and ElevenLabs speech integration
 
-Local design review and Cartesia TTS checkpoint, 2026-09-30. This document informs
+Local design review and Cartesia STT/TTS checkpoints, 2026-09-30. This document informs
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md).
-Cartesia TTS has local scoped-service/startup and selected live acceptance;
-Cartesia STT and ElevenLabs remain pending. The existing
+Cartesia STT/TTS have local scoped-service/startup and selected live evidence;
+ElevenLabs and the milestone's remaining acceptance checks are pending. The existing
 [speech contract](speech-provider-contract.md) and
 [session ownership](speech-session-ownership.md) remain authoritative.
 
@@ -49,6 +49,38 @@ and readiness rejection. [Turn guide](https://docs.cartesia.ai/use-the-api/stt/t
 Reject manual and batch endpoints for this conversational slice. They require
 different turn ownership or whole-file input; they are not automatic-turn
 alternatives. [Endpoint comparison](https://docs.cartesia.ai/use-the-api/stt/compare-endpoints).
+
+The implemented provider keeps configuration/decoding (`Cartesia.STT`), turn
+state (`STTTurns`), socket framing (`STTSocket`) and allocation lifecycle
+(`STTSession`) separate. One active local turn and a bounded cumulative transcript
+replace a growing provider-turn map. Connection identity must remain stable;
+overlap, transcript revision and invalid eager/resume transitions fail closed.
+Provider errors and close reasons are excluded from diagnostics.
+
+The initial closed public contract accepts only `ink-2`, raw mono signed
+little-endian 16 kHz PCM, messages up to 256 KiB, transcripts up to 64 KiB and
+audio chunks up to 32,000 bytes. Authentication stays in versioned Bearer headers.
+Optional turn tuning is omitted because the guide and generated SDK disagree on
+default thresholds. There is no automatic retry or reconnect.
+
+The socket is a temporary child of the allocation's provider supervisor; its
+deferred connection cannot block the session process's initialization. Readiness
+requires `connected`. Finite input sends the JSON close command and leaves the
+socket open to drain. Only an observed normal/no-status peer close after that
+command, with no unfinished turn, permits ordered `input_finished`. EOF, abnormal
+close, incomplete turns and the 15-second setup/drain timeouts fail. Local session
+close aborts the allocation without claiming successful recognition completion.
+
+Rejected alternatives include treating every segment as a completed turn,
+concatenating cumulative updates, using local socket close as drain evidence,
+or sharing Google's renewal logic with Cartesia's distinct protocol. Existing
+room/media and event acknowledgement boundaries remain authoritative.
+
+One selected live Ink 2 connection passed using the committed public phrase,
+under ten seconds of paced speech/silence, preserving its final word before
+finite completion. Local session, coalesced real-socket close, compiled session
+startup and persisted platform/tenant override checks pass. Root acceptance is
+tracked separately in the [STT checkpoint](../labnotes/20260930-0753-cartesia-turn-stt.md).
 
 ## Cartesia TTS
 

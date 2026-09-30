@@ -49,6 +49,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
       Vxpipe.Providers.Google.STTSession ->
         Vxpipe.Providers.Google.STT.new(options)
 
+      Vxpipe.Providers.Cartesia.STTSession ->
+        Vxpipe.Providers.Cartesia.STT.new(options)
+
       _other ->
         case provider.configure(options) do
           {:ok, _descriptor} -> {:ok, options}

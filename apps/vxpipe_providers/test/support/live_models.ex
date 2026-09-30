@@ -24,6 +24,7 @@ defmodule Vxpipe.Providers.LiveModels do
 
   @speech %{
     "cartesia" => %{
+      stt: "ink-2",
       tts: "sonic-3.6",
       tts_voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"
     },

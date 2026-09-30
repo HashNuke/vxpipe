@@ -5,7 +5,7 @@ import {
 } from "./setupCatalog";
 
 const capabilities = {
-  cartesia: ["credential", "tts"],
+  cartesia: ["credential", "stt", "tts"],
   deepgram: ["credential", "credential_validation", "stt", "tts"],
   google: ["credential", "credential_validation", "stt", "tts"],
   openai: ["credential", "credential_validation", "sts"],
@@ -49,10 +49,18 @@ test("Setup offers installed providers and only their implemented call capabilit
   ]);
 });
 
-test("Cartesia offers verified TTS without advertising transcription or agent speech", () => {
+test("Cartesia filters capabilities against the installed manifest", () => {
   const [provider] = installedSetupProviders({cartesia: ["credential", "tts"]});
   expect(provider).toMatchObject({id: "cartesia", capabilities: ["tts"], defaultModels: {tts: "sonic-3.6"}});
   expect(providersFor("tts", [{provider: "cartesia", status: "connected"}], [provider!])).toHaveLength(1);
+});
+
+test("Cartesia offers Ink transcription and Sonic synthesis from one service", () => {
+  const [provider] = installedSetupProviders({cartesia: ["credential", "stt", "tts"]});
+  expect(provider).toMatchObject({id: "cartesia", capabilities: ["stt", "tts"],
+    defaultModels: {stt: "ink-2", tts: "sonic-3.6"}});
+  expect(providersFor("stt", [{provider: "cartesia", status: "connected"}], [provider!])).toHaveLength(1);
+  expect(provider?.capabilities).not.toContain("s2s");
 });
 
 test("Setup hides missing providers and removes undeclared speech capabilities", () => {

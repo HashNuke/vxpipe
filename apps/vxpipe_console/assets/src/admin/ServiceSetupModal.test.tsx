@@ -12,7 +12,7 @@ test.each([
   render(<ServiceSetupModal state={{provider: "cartesia", status: "idle"}} scope={scope} onClose={vi.fn()} onSelect={vi.fn()} onSubmit={submit} onTest={vi.fn()} />);
   expect(screen.getByRole("dialog", {name: "Connect Cartesia"})).toBeVisible();
   expect(screen.getByText("Text-to-speech")).toBeVisible();
-  expect(screen.queryByText("Speech-to-text")).not.toBeInTheDocument();
+  expect(screen.getByText("Speech-to-text")).toBeVisible();
   expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
   expect(screen.getByRole("button", {name: "Test credentials"})).toBeDisabled();
   fireEvent.change(screen.getByLabelText("API key"), {target: {value: "synthetic-cartesia"}});

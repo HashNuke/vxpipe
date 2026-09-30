@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
+  alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -286,6 +287,81 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     assert config.api_key == "google-tenant-private-marker"
     refute inspect(startup) =~ "google-tenant-private-marker"
+  end
+
+  test "compiled Cartesia input launches its scoped semantic session with private credentials" do
+    alias Vxpipe.CallEngine.Speech.{CapabilityTree, Event, Session}
+    alias Vxpipe.CallEngine.TestCartesiaSTTTransport, as: Wire
+
+    plan =
+      plan(
+        %{
+          provider: "cartesia",
+          model: "sonic-3.6",
+          options: %{voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"}
+        },
+        %{provider: "cartesia", model: "ink-2"}
+      )
+
+    options =
+      cartesia_options()
+      |> Keyword.put(:speech_to_text,
+        providers: %{
+          CartesiaSTTSession => [
+            enabled: true,
+            wire_module: Wire,
+            wire_options: [observer: self()],
+            media_ingress: [
+              maximum_frames: 50,
+              maximum_bytes: 262_144,
+              maximum_age_ms: 2_000,
+              maximum_consecutive_overflows: 5
+            ]
+          ]
+        }
+      )
+
+    assert {:ok, startup} = PlanStartup.new(plan, options)
+    caller = Map.fetch!(plan.participants, "caller")
+    runtime = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+    assert {CartesiaSTTSession, public} = runtime.provider
+    assert Keyword.fetch!(public, :sample_rate) == 16_000
+
+    assert Keyword.fetch!(runtime.provider_private, :config).api_key ==
+             "synthetic-cartesia-private-marker"
+
+    assert runtime.usage_provider.name == "cartesia"
+    refute inspect(startup) =~ "synthetic-cartesia-private-marker"
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: CartesiaSTTSession,
+               options: public,
+               private: runtime.provider_private
+             )
+
+    assert_receive {:cartesia_stt_started, wire, _connection}, 1_000
+    :ok = Wire.deliver(wire, %{type: "connected", request_id: "compiled"})
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}, 1_000
+    assert :ok = Session.ack(session, ready)
+    assert :ok = Session.push_audio(session, <<1, 0>>)
+    assert_receive {:cartesia_stt_audio, ^wire, <<1, 0>>}
+    :ok = Wire.deliver(wire, %{type: "turn.start", request_id: "compiled"})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :speech_started, turn_ref: turn} = started},
+                   1_000
+
+    assert :ok = Session.ack(session, started)
+    :ok = Wire.deliver(wire, %{type: "turn.end", request_id: "compiled", transcript: "Hello."})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :turn_ended, turn_ref: ^turn, text: "Hello."} =
+                      ended},
+                   1_000
+
+    assert :ok = Session.ack(session, ended)
   end
 
   test "ambient private settings cannot rescue an absent tenant source" do

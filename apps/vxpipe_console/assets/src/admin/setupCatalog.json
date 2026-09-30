@@ -25,12 +25,13 @@
     {
       "id": "cartesia",
       "name": "Cartesia",
-      "description": "Speak with Cartesia Sonic.",
-      "capabilities": ["tts"],
+      "description": "Transcribe with Ink and speak with Sonic.",
+      "capabilities": ["stt", "tts"],
       "defaultModels": {
+        "stt": "ink-2",
         "tts": "sonic-3.6"
       },
-      "sampleCapabilities": ["tts"]
+      "sampleCapabilities": ["stt", "tts"]
     },
     {
       "id": "google",

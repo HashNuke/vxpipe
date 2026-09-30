@@ -1,10 +1,10 @@
 # Provider expansion and live acceptance
 
 Status: In progress. Authorized 2026-09-30. Gemini, repaired Deepgram speech,
-repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks and Cartesia TTS
-have selected passing live evidence. Cartesia TTS has scoped service/UI and
-compiled startup checks. Cartesia STT, ElevenLabs and repository completion
-gates remain.
+repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks and Cartesia STT/TTS
+have selected passing live evidence. Cartesia has scoped publication/startup
+checks and Console metadata. ElevenLabs, shared room acceptance and the final
+repository completion gates remain.
 
 Prerequisites: [Provider integration packages](provider-integration-packages.md),
 [Rime and Google speech providers](rime-and-google-speech-providers.md),
@@ -62,7 +62,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Extend runner isolation and placeholder template for the direct LLM providers.
 - [x] Isolate Cartesia/ElevenLabs keys and add template placeholders.
 - [x] Add reviewed Cartesia TTS model/voice selection and its bounded live case.
-- [ ] Add Cartesia STT and ElevenLabs selections and live cases.
+- [x] Add Cartesia STT selection and its bounded live case.
+- [ ] Add ElevenLabs selections and live cases.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
 
@@ -78,14 +79,15 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 ## Checkpoint D — Speech services
 
 - [x] Implement Cartesia TTS through an owned credited request session.
-- [ ] Implement Cartesia STT through an owned semantic speech session.
+- [x] Implement Cartesia STT through an owned semantic speech session.
 - [ ] Implement ElevenLabs STT and TTS through owned semantic speech sessions.
 - [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
 - [ ] Exercise compiled room support and relevant shared conformance checks.
 - [x] Pass one bounded selected Cartesia TTS live test.
-- [ ] Run selected Cartesia STT and ElevenLabs speech live tests.
+- [x] Pass one bounded selected Cartesia STT live test.
+- [ ] Run selected ElevenLabs speech live tests.
 
 ## Checkpoint E — Platform and tenant Console
 
@@ -97,7 +99,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
   `agent-browser`; local frontend tests cover saved/error states.
 - [x] Verify Cartesia TTS scoped save, capability catalog, persisted publication,
   compiled startup and rendered platform/tenant forms at desktop/narrow widths.
-- [ ] Extend Cartesia acceptance to STT and repeat scoped acceptance for ElevenLabs.
+- [x] Extend Cartesia persisted publication/startup and Console metadata to STT.
+- [ ] Repeat scoped acceptance for ElevenLabs.
 
 ## Checkpoint F — Acceptance
 
@@ -143,4 +146,22 @@ The Cartesia TTS root run passes all 2,902 reported tests with zero failures,
 All five root completion gates and the Lean lane pass for this checkpoint;
 its seven local HTTP checks pass in their explicit integration lane. The earlier
 handoff failure is not reproduced, and its cause is still unproven. These gates
-accept the TTS checkpoint, not the pending Cartesia STT/ElevenLabs milestone work.
+accept the TTS checkpoint, not the later STT checkpoint or pending ElevenLabs work.
+
+The [Cartesia STT checkpoint](../../labnotes/20260930-0753-cartesia-turn-stt.md)
+implements Ink 2 automatic turns with cumulative text, eager/resume semantics,
+allocation-owned sockets and bounded close-and-drain. Its selected live test
+passes one connection with a reused public sample. Local compiled session and
+persisted scope checks pass; frontend passes 209 checks. Root gates for this
+checkpoint are recorded as they finish. Rendered review returns `ship` for the
+four captured blank-key platform/tenant states. No final milestone acceptance
+or ElevenLabs support is claimed.
+
+The STT checkpoint's initial seed-149103 root run reports one Telnyx
+custom-URL/destination-loss recovery-speech failure. Its selected-case and
+thirteen-test whole-file reruns pass. The subsequent full same-seed rerun
+passes all 2,922 reported tests, zero failures and 74 exclusions, including
+1,718 CallEngine, 520 Gateway and 193 Console checks. All five root gates
+and Lean pass for this checkpoint. The intermittent failure's cause remains
+unproven; a separate focused fixture-ordering investigation is open.
+ElevenLabs and final shared milestone acceptance remain pending.

@@ -5,6 +5,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.Providers.Google.STT, as: GoogleSTT
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
+  alias Vxpipe.Providers.Cartesia.STT, as: CartesiaSTT
+  alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [
@@ -61,6 +63,22 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
     end
   end
 
+  def provider({CartesiaSTTSession, %CartesiaSTT{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         wire_module when is_atom(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.Providers.Cartesia.STTSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
+      public = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
+
+      {:ok, {CartesiaSTTSession, public},
+       [config: config, wire_module: wire_module, wire_options: wire_options]}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
   def provider({provider, options} = selected, settings) do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),
@@ -85,6 +103,14 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
 
   def usage_identity(GoogleSTTSession, %GoogleSTT{} = config) do
     usage_identity(GoogleSTTSession,
+      model: config.model,
+      encoding: config.encoding,
+      sample_rate: config.sample_rate
+    )
+  end
+
+  def usage_identity(CartesiaSTTSession, %CartesiaSTT{} = config) do
+    usage_identity(CartesiaSTTSession,
       model: config.model,
       encoding: config.encoding,
       sample_rate: config.sample_rate

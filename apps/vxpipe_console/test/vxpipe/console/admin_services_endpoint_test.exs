@@ -512,7 +512,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
            }
 
     assert json_response(conn, 200)["provider_capabilities"] == %{
-             "cartesia" => ["credential", "tts"],
+             "cartesia" => ["credential", "stt", "tts"],
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
              "deepseek" => ["credential", "credential_validation"],
              "fireworks" => ["credential"],

@@ -69,7 +69,7 @@ shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtim
 
 | Provider | Credential schema | Credential test | STT | TTS | STS | Telephony |
 | --- | --- | --- | --- | --- | --- | --- |
-| Cartesia | yes | no | no | yes | no | no |
+| Cartesia | yes | no | yes | yes | no | no |
 | Deepgram | yes | yes | yes | yes | no | no |
 | DeepSeek | yes | yes | no | no | no | no |
 | Fireworks AI | yes | no | no | no | no | no |
