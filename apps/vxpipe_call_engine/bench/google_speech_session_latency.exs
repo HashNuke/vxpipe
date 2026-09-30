@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
-  alias Vxpipe.CallEngine.{TestGoogleSTTTransport, TestGoogleTTSRequest}
+  alias Vxpipe.CallEngine.{TestGoogleSTTTransport, TestRequestTTS}
   alias Vxpipe.Providers.Google.{STT, STTSession, TTS, TTSSession}
 
   @frame :binary.copy(<<1, 0>>, 320)
@@ -41,7 +41,10 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
 
     File.mkdir_p!(Path.dirname(report_path))
     File.write!(report_path, JSON.encode!(report))
-    IO.puts("Google speech session report written to #{report_path}; #{length(tts)} TTS and #{length(stt)} STT turns")
+
+    IO.puts(
+      "Google speech session report written to #{report_path}; #{length(tts)} TTS and #{length(stt)} STT turns"
+    )
   end
 
   defp trials(concurrency, rounds, worker) do
@@ -68,7 +71,7 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
         Session.start(CapabilityTree.scope(tree),
           provider: TTSSession,
           options: [model: config.model, voice: config.voice],
-          private: [config: config, request_module: TestGoogleTTSRequest]
+          private: [config: config, request_module: TestRequestTTS]
         )
 
       ack_event(session, :ready)
@@ -83,13 +86,13 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
     assert {:ok, request} = Session.speak(session, "load")
     submitted = ack_event(session, :input_submitted)
     assert submitted.request_ref == request.ref
-    assert_receive {:test_google_tts_started, task, "load"}, 5_000
+    assert_receive {:test_request_tts_started, task, "load"}, 5_000
     send(task, {:audio, @frame})
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}, 5_000
     assert audio.request_ref == request.ref
     assert :ok = Session.validate_audio(session, audio)
     assert :ok = Session.ack_audio(session, audio)
-    assert_receive {:test_google_tts_audio_consumed, ^task, :ok}, 5_000
+    assert_receive {:test_request_tts_audio_consumed, ^task, :ok}, 5_000
     send(task, :complete)
     completed = ack_event(session, :completed)
     assert completed.request_ref == request.ref
@@ -107,8 +110,16 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
       {:ok, session, :starting} =
         Session.start(CapabilityTree.scope(tree),
           provider: STTSession,
-          options: [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate],
-          private: [config: config, wire_module: TestGoogleSTTTransport, wire_options: [observer: self()]]
+          options: [
+            model: config.model,
+            encoding: config.encoding,
+            sample_rate: config.sample_rate
+          ],
+          private: [
+            config: config,
+            wire_module: TestGoogleSTTTransport,
+            wire_options: [observer: self()]
+          ]
         )
 
       assert_receive {:test_google_stt_started, wire, _connection}, 5_000
@@ -129,7 +140,12 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
     TestGoogleSTTTransport.deliver(wire, ~s({"voiceActivity":{"type":"ACTIVITY_START"}}))
     started_event = ack_event(session, :speech_started)
     TestGoogleSTTTransport.deliver(wire, ~s({"voiceActivity":{"type":"ACTIVITY_END"}}))
-    TestGoogleSTTTransport.deliver(wire, ~s({"serverContent":{"inputTranscription":{"text":"load"}}}))
+
+    TestGoogleSTTTransport.deliver(
+      wire,
+      ~s({"serverContent":{"inputTranscription":{"text":"load"}}})
+    )
+
     ended = ack_event(session, :turn_ended)
     assert ended.turn_ref == started_event.turn_ref
     %{worker: worker, round: round, admission_us: admission, turn_end_us: now() - started}
@@ -142,7 +158,13 @@ defmodule Vxpipe.CallEngine.GoogleSpeechSessionLatencyBench do
   end
 
   defp arguments! do
-    report = Enum.at(System.argv(), 0, Path.join(System.tmp_dir!(), "vxpipe-google-speech-session-latency.json"))
+    report =
+      Enum.at(
+        System.argv(),
+        0,
+        Path.join(System.tmp_dir!(), "vxpipe-google-speech-session-latency.json")
+      )
+
     concurrency = integer_argument!(1, 16)
     rounds = integer_argument!(2, 20)
 

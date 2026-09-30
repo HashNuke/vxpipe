@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTSSession
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
+  alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -128,6 +129,123 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert config.api_key == "google-tenant-private-marker"
     refute inspect(startup) =~ "google-tenant-private-marker"
     assert_received {:tenant_credential_resolved, "tenant-inline", "google", "default"}
+  end
+
+  test "Cartesia TTS activation keeps its scoped credential private and preserves voice and rate" do
+    plan = cartesia_plan()
+    assert {:ok, startup} = PlanStartup.new(plan, cartesia_options())
+    assert {CartesiaTTSSession, public} = startup.text_to_speech.provider
+    assert Keyword.fetch!(public, :model) == "sonic-3.6"
+    assert Keyword.fetch!(public, :voice) == "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"
+    assert Keyword.fetch!(public, :sample_rate) == 16_000
+
+    assert [config: config, request_module: Vxpipe.Providers.Cartesia.TTSRequest] =
+             startup.text_to_speech.provider_private
+
+    assert config.api_key == "synthetic-cartesia-private-marker"
+    assert config.sample_rate == 16_000
+    assert startup.text_to_speech.usage_provider.name == "cartesia"
+    refute inspect(startup) =~ "synthetic-cartesia-private-marker"
+    refute :erlang.term_to_binary(plan) =~ "synthetic-cartesia-private-marker"
+    assert_received {:tenant_credential_resolved, "tenant-inline", "cartesia", "default"}
+  end
+
+  test "Cartesia admission rejects private options and unsupported models" do
+    for selection <- [
+          %{
+            provider: "cartesia",
+            model: "invented",
+            options: %{voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"}
+          },
+          %{
+            provider: "cartesia",
+            model: "sonic-3.6",
+            options: %{voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", api_key: "synthetic-key"}
+          },
+          %{
+            provider: "cartesia",
+            model: "sonic-3.6",
+            options: %{
+              voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4",
+              endpoint: "https://invalid.example"
+            }
+          }
+        ] do
+      source = Vxpipe.CallEngine.CallSpec.CapabilitySelection
+      assert {:error, _reason} = source.new(selection, :text_to_speech, ["text_to_speech"])
+    end
+  end
+
+  test "compiled Cartesia configuration starts a credited session with measured usage" do
+    alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session, TTSUsage}
+    assert {:ok, startup} = PlanStartup.new(cartesia_plan(), cartesia_options())
+    {provider, public} = startup.text_to_speech.provider
+    private = startup.text_to_speech.provider_private
+    config = %{Keyword.fetch!(private, :config) | endpoint: self()}
+    private = [config: config, request_module: Vxpipe.CallEngine.TestRequestTTS]
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: provider,
+               options: public,
+               private: private,
+               usage: true
+             )
+
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
+    assert :ok = Session.ack(session, ready)
+    assert {:ok, %{ref: request} = handle} = Session.speak(session, "Hello")
+
+    assert_receive {:vxpipe_speech,
+                    %Event{request_ref: ^request, kind: :input_submitted} = submitted}
+
+    assert :ok = Session.ack(session, submitted)
+    assert submitted.usage.input_characters == 5
+    assert_receive {:test_request_tts_started, worker, "Hello"}
+    pcm = :binary.copy(<<1, 0>>, 16_000)
+    send(worker, {:audio, pcm})
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session, payload: ^pcm} = audio}
+    assert :ok = Session.validate_audio(session, audio)
+    assert :ok = Session.ack_audio(session, audio)
+    assert_receive {:test_request_tts_audio_consumed, ^worker, :ok}
+    send(worker, :complete)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{request_ref: ^request, kind: :completed, usage: %TTSUsage{} = usage} =
+                      completed}
+
+    assert :ok = Session.ack(session, completed)
+    assert usage.input_characters == 5
+    assert usage.generated_bytes == byte_size(pcm)
+    assert usage.generation == :completed
+    assert usage.provenance == :locally_measured
+
+    assert usage.usage_identity == %{
+             provider: :cartesia,
+             model: "sonic-3.6",
+             provenance: :locally_measured
+           }
+
+    assert :ok = Session.settle_output(session, handle, 1_000)
+    assert :ok = Session.close(session)
+  end
+
+  test "Cartesia startup cannot use disabled settings or another provider's credential" do
+    options = cartesia_options()
+
+    assert {:error, _error} =
+             PlanStartup.new(cartesia_plan(), Keyword.delete(options, :credential_source))
+
+    disabled = [providers: %{CartesiaTTSSession => [enabled: false, maximum_requests: 4]}]
+
+    assert {:error, _error} =
+             PlanStartup.new(cartesia_plan(), Keyword.put(options, :text_to_speech, disabled))
+
+    missing =
+      Keyword.put(options, :credential_source, Keyword.fetch!(options(), :credential_source))
+
+    assert {:error, _error} = PlanStartup.new(cartesia_plan(), missing)
   end
 
   test "Google live STT activation selects 16 kHz PCM and a private credential" do
@@ -352,6 +470,32 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
       assert {:error, %{code: :unsupported_call_plan}} = PlanStartup.validate(changed, options())
     end
+  end
+
+  defp cartesia_plan do
+    plan(%{
+      provider: "cartesia",
+      model: "sonic-3.6",
+      options: %{voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", sample_rate: 16_000}
+    })
+  end
+
+  defp cartesia_options do
+    options = options()
+
+    {TestTenantCredentialSource, {observer, bindings}} =
+      Keyword.fetch!(options, :credential_source)
+
+    bindings =
+      Map.put(bindings, {"tenant-inline", "cartesia", "default"}, %{
+        "api_key" => "synthetic-cartesia-private-marker"
+      })
+
+    options
+    |> Keyword.put(:credential_source, {TestTenantCredentialSource, {observer, bindings}})
+    |> Keyword.put(:text_to_speech,
+      providers: %{CartesiaTTSSession => [enabled: true, maximum_requests: 4]}
+    )
   end
 
   defp options do

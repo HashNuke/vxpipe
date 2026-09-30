@@ -566,6 +566,7 @@ test("onboarding offers only installed AI and telephony services in their groups
     "Select a service",
     "Deepgram",
     "Rime",
+    "Cartesia",
     "Google AI Studio",
     "OpenAI",
     "Zenmux",

@@ -1,9 +1,10 @@
 # Provider expansion and live acceptance
 
 Status: In progress. Authorized 2026-09-30. Gemini, repaired Deepgram speech,
-repaired OpenAI hosted speech, DeepSeek, OpenRouter and Fireworks have selected
-passing live evidence. Scoped service/UI acceptance for speech additions,
-ElevenLabs and Cartesia implementation, and repository completion gates remain.
+repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks and Cartesia TTS
+have selected passing live evidence. Cartesia TTS has scoped service/UI and
+compiled startup checks. Cartesia STT, ElevenLabs and repository completion
+gates remain.
 
 Prerequisites: [Provider integration packages](provider-integration-packages.md),
 [Rime and Google speech providers](rime-and-google-speech-providers.md),
@@ -60,7 +61,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
   inexpensive serverless Fireworks Nemotron (listed Gemma models require deployment).
 - [x] Extend runner isolation and placeholder template for the direct LLM providers.
 - [x] Isolate Cartesia/ElevenLabs keys and add template placeholders.
-- [ ] Add reviewed Cartesia and ElevenLabs test model/voice selections and live cases.
+- [x] Add reviewed Cartesia TTS model/voice selection and its bounded live case.
+- [ ] Add Cartesia STT and ElevenLabs selections and live cases.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
 
@@ -75,13 +77,15 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 
 ## Checkpoint D — Speech services
 
-- [ ] Implement Cartesia STT and TTS through owned semantic speech sessions.
+- [x] Implement Cartesia TTS through an owned credited request session.
+- [ ] Implement Cartesia STT through an owned semantic speech session.
 - [ ] Implement ElevenLabs STT and TTS through owned semantic speech sessions.
 - [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
 - [ ] Exercise compiled room support and relevant shared conformance checks.
-- [ ] Run bounded selected live tests for each new speech capability.
+- [x] Pass one bounded selected Cartesia TTS live test.
+- [ ] Run selected Cartesia STT and ElevenLabs speech live tests.
 
 ## Checkpoint E — Platform and tenant Console
 
@@ -91,8 +95,9 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Verify demo readiness and publication for direct model providers.
 - [x] Inspect direct LLM platform/tenant forms at desktop and narrow widths with
   `agent-browser`; local frontend tests cover saved/error states.
-- [ ] Repeat scoped save, catalog, publication and rendered acceptance for the
-  new speech providers after their capabilities are implemented.
+- [x] Verify Cartesia TTS scoped save, capability catalog, persisted publication,
+  compiled startup and rendered platform/tenant forms at desktop/narrow widths.
+- [ ] Extend Cartesia acceptance to STT and repeat scoped acceptance for ElevenLabs.
 
 ## Checkpoint F — Acceptance
 
@@ -123,7 +128,19 @@ with warnings as errors, strict Credo and unused-dependency checks pass; the TTS
 checkpoint's Lean build/oracle/replay also passes. These are current-checkpoint
 results, not final acceptance of the pending speech additions.
 
-Cartesia's reviewed contracts are design progress; neither new speech provider
-is registered or advertised as implemented. The runner/template now isolate both
-providers' keys; their fake-Mix regression and Bash syntax checks pass without
-reading the private credentials file or making a provider call.
+The [Cartesia request TTS checkpoint](../../labnotes/20260930-0705-cartesia-request-tts.md)
+registers only its implemented TTS capability and exact API-key schema. It shares
+Google's extracted request lifecycle without sharing vendor wire parsing. Local
+configuration/session/PCM/HTTP, compiled credited usage and persisted scope checks
+pass. The selected live request passes one short Sonic 3.6/Skylar phrase.
+Console frontend tests pass 208 checks and its independent rendered review says `ship`
+for the four captured blank-key form states. Loading/error/inheritance states
+have local tests but are not claimed as rendered acceptance. Cartesia STT and
+ElevenLabs remain unimplemented; the milestone and index stay unchecked.
+
+The Cartesia TTS root run passes all 2,902 reported tests with zero failures,
+72 excluded, seed 412687, including all 1,698 CallEngine and 520 Gateway tests.
+All five root completion gates and the Lean lane pass for this checkpoint;
+its seven local HTTP checks pass in their explicit integration lane. The earlier
+handoff failure is not reproduced, and its cause is still unproven. These gates
+accept the TTS checkpoint, not the pending Cartesia STT/ElevenLabs milestone work.

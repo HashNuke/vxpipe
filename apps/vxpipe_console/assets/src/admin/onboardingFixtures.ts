@@ -11,6 +11,7 @@ const providerDetails: Record<
   Exclude<ServiceProvider, "vertex_ai">,
   Pick<OnboardingProvider, "label" | "services">
 > = {
+  cartesia: { label: "Cartesia", services: ["Text to speech"] },
   deepgram: {
     label: "Deepgram",
     services: ["Speech to text", "Text to speech"],

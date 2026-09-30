@@ -1,8 +1,9 @@
 # Cartesia and ElevenLabs speech integration
 
-Local design review, 2026-09-30. This document informs
-[provider expansion](milestones/provider-expansion-and-ai-gateway.md); it does not
-claim implemented services or live acceptance. The existing
+Local design review and Cartesia TTS checkpoint, 2026-09-30. This document informs
+[provider expansion](milestones/provider-expansion-and-ai-gateway.md).
+Cartesia TTS has local scoped-service/startup and selected live acceptance;
+Cartesia STT and ElevenLabs remain pending. The existing
 [speech contract](speech-provider-contract.md) and
 [session ownership](speech-session-ownership.md) remain authoritative.
 
@@ -72,11 +73,34 @@ Do not treat a flush acknowledgement as generation completion or copy another
 vendor's persistent-session segmentation policy.
 [WebSocket reference](https://docs.cartesia.ai/api-reference/tts/websocket).
 
-Implementation review must choose between reusing the request lifecycle already
-implemented for Google TTS and extracting a shared owned request session. A
-shared session should own tasks, credit and cancellation; each vendor adapter
-still owns configuration and wire parsing. Avoid three copied lifecycle engines.
-No generic adapter or extraction is implemented by this document.
+The implemented request lifecycle is `Speech.RequestTTSSession`, extracted from
+Google TTS. Google and Cartesia retain separate provider configuration and wire
+decoders; their session wrappers implement `Speech.RequestTTSProvider` for private
+configuration and phrase validation. This shared process owns a single credited
+request task, its deadline and exact-request cancellation under the existing
+session tree. `Speech.PCMStream` frames bounded raw signed 16-bit fragments.
+
+Rejected alternatives are copying Google's lifecycle into each HTTP provider,
+or introducing a generic base for both HTTP and persistent WebSocket protocols.
+The extraction applies only to complete-phrase request TTS. It adds no provider
+discovery, public transport hooks, gateway routing or dependency reversal.
+Google's public session/configuration contract and SSE decoding remain unchanged.
+
+Cartesia service configuration uses one API key. Public call options require a
+voice UUID, a reviewed model and optionally 8/16/24/48 kHz PCM (default 24 kHz).
+The supported model choices are `sonic-3.6`, its reviewed dated snapshot
+`sonic-3.6-2026-08-27`, `sonic-3.5` and `sonic-3`. Each phrase is limited to
+1,000 characters/4,000 UTF-8 bytes, with no HTTP retries or redirects, a
+60-second request deadline and a 32 MiB response limit. Empty, truncated,
+unsupported-format or unsuccessful responses fail without false completion.
+Initialization is local readiness, not proof of upstream authentication.
+Credential testing remains optional and unavailable for this checkpoint; the
+selected live synthesis verifies its key without advertising an unreviewed probe.
+
+Verification: shared session/configuration/framing checks, seven loopback HTTP
+checks, compiled startup with credited usage, persisted publication and scoped
+credential checks, and one short live Sonic/Skylar request pass. See
+[checkpoint evidence](../labnotes/20260930-0705-cartesia-request-tts.md).
 
 ## ElevenLabs TTS
 

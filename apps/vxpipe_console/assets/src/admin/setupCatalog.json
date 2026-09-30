@@ -23,6 +23,16 @@
       "sampleCapabilities": ["tts"]
     },
     {
+      "id": "cartesia",
+      "name": "Cartesia",
+      "description": "Speak with Cartesia Sonic.",
+      "capabilities": ["tts"],
+      "defaultModels": {
+        "tts": "sonic-3.6"
+      },
+      "sampleCapabilities": ["tts"]
+    },
+    {
       "id": "google",
       "name": "Google AI Studio",
       "description": "Connect Gemini language, transcription, and speech synthesis.",

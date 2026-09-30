@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
 
   alias Vxpipe.Providers.Deepgram.STTSession, as: FluxSession
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTextToSpeech
+  alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTextToSpeech
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleTextToSpeech
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSpeechToText
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
@@ -236,6 +237,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
   defp provider(FluxSession), do: :deepgram
   defp provider(DeepgramTextToSpeech), do: :deepgram
   defp provider(RimeTextToSpeech), do: :rime
+  defp provider(CartesiaTextToSpeech), do: :cartesia
   defp provider(GoogleTextToSpeech), do: :google
   defp provider(GoogleSpeechToText), do: :google
   defp provider(MorseSTTSession), do: :morse

@@ -464,13 +464,14 @@ test("maps a created credential response without accepting private response fiel
   ).toThrow("Invalid credential response");
 });
 
-test("keeps saved Rime credentials readable in the tenant service inventory", () => {
+for (const [provider, name] of [["rime", "Rime"], ["cartesia", "Cartesia"]] as const) {
+test(`keeps saved ${name} credentials readable in the tenant service inventory`, () => {
   const directory = parseServiceDirectory({
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
     truncated: false,
     credentials: [{
       id: "credential-rime",
-      provider: "rime",
+      provider,
       name: "rime",
       auth_kind: "api_key",
       status: "active",
@@ -483,6 +484,7 @@ test("keeps saved Rime credentials readable in the tenant service inventory", ()
   });
 
   expect(directory.services).toEqual([
-    expect.objectContaining({ provider: "rime", name: "Rime" }),
+    expect.objectContaining({ provider, name }),
   ]);
 });
+}

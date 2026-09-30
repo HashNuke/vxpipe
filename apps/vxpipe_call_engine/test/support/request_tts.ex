@@ -1,8 +1,8 @@
-defmodule Vxpipe.CallEngine.TestGoogleTTSRequest do
+defmodule Vxpipe.CallEngine.TestRequestTTS do
   @moduledoc false
 
   def run(config, text, consume) do
-    send(config.endpoint, {:test_google_tts_started, self(), text})
+    send(config.endpoint, {:test_request_tts_started, self(), text})
     loop(config.endpoint, consume)
   end
 
@@ -10,7 +10,7 @@ defmodule Vxpipe.CallEngine.TestGoogleTTSRequest do
     receive do
       {:audio, audio} ->
         result = consume.(audio)
-        send(observer, {:test_google_tts_audio_consumed, self(), result})
+        send(observer, {:test_request_tts_audio_consumed, self(), result})
         if result == :ok, do: loop(observer, consume), else: result
 
       :complete ->

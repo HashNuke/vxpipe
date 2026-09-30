@@ -104,6 +104,8 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
     for {provider, values, expected_kind, expected_payload} <- [
           {"rime", %{"api_key" => "rime-private"}, "api_key", %{"api_key" => "rime-private"}},
+          {"cartesia", %{"api_key" => "synthetic-cartesia"}, "api_key",
+           %{"api_key" => "synthetic-cartesia"}},
           {"deepseek", %{"api_key" => "synthetic-deepseek"}, "api_key",
            %{"api_key" => "synthetic-deepseek"}},
           {"openrouter", %{"api_key" => "synthetic-openrouter"}, "api_key",
@@ -510,6 +512,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
            }
 
     assert json_response(conn, 200)["provider_capabilities"] == %{
+             "cartesia" => ["credential", "tts"],
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
              "deepseek" => ["credential", "credential_validation"],
              "fireworks" => ["credential"],

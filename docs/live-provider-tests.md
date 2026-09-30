@@ -191,6 +191,20 @@ Results and earlier failures are recorded in
 [checkpoint labnotes](../labnotes/20260930-0353-provider-expansion-gateway.md).
 These direct protocol calls do not claim encrypted-service live-call acceptance.
 
+Cartesia's selected TTS check uses `sonic-3.6` and the documented Skylar voice
+from the shared test model catalog. It sends one short phrase with retries and
+redirects disabled, acknowledges raw PCM credit, and requires generation and
+playback settlement within bounded observation. It passed on 2026-09-30.
+Platform/tenant credential inheritance, override and published startup are
+verified separately with synthetic encrypted fixtures. Cartesia STT and
+ElevenLabs live cases are still pending.
+
+```shell
+bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_text_to_speech_test.exs
+```
+
+See [Cartesia TTS checkpoint evidence](../labnotes/20260930-0705-cartesia-request-tts.md).
+
 Cloudflare/Vercel gateway implementation is deferred. There is no current
 `live_cloudflare` lane or gateway provider catalog entry. See the separate
 [AI gateway routing design milestone](milestones/ai-gateway-routing.md).

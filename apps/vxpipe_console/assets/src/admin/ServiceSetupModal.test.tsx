@@ -1,8 +1,24 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ServiceSetupModal } from "./ServiceSetupModal";
 
 afterEach(cleanup);
+
+test.each([
+  {kind: "platform"} as const,
+  {kind: "tenant", tenantKey: "demo", tenantName: "Demo"} as const,
+])("Cartesia saves a private key for the selected scope: %j", (scope) => {
+  const submit = vi.fn();
+  render(<ServiceSetupModal state={{provider: "cartesia", status: "idle"}} scope={scope} onClose={vi.fn()} onSelect={vi.fn()} onSubmit={submit} onTest={vi.fn()} />);
+  expect(screen.getByRole("dialog", {name: "Connect Cartesia"})).toBeVisible();
+  expect(screen.getByText("Text-to-speech")).toBeVisible();
+  expect(screen.queryByText("Speech-to-text")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
+  expect(screen.getByRole("button", {name: "Test credentials"})).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("API key"), {target: {value: "synthetic-cartesia"}});
+  fireEvent.click(screen.getByRole("button", {name: "Save"}));
+  expect(submit).toHaveBeenCalledWith({provider: "cartesia", values: {apiKey: "synthetic-cartesia"}});
+});
 
 test("credential dialog keeps only its edit actions", () => {
   render(

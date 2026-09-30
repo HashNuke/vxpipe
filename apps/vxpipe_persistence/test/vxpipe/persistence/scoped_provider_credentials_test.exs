@@ -73,34 +73,38 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
              end)
   end
 
-  test "unusable tenant credentials fail closed until removed",
-       data do
-    [tenant | _] = data.tenants
+  for provider <- ["google", "cartesia"] do
+    @tag scoped_provider: provider
+    test "#{provider} unusable tenant credentials fail closed until removed",
+         %{scoped_provider: provider} = data do
+      [tenant | _] = data.tenants
 
-    assert {:ok, platform} =
-             provision(:platform, "shared-model", "platform-example", data.options)
+      assert {:ok, platform} =
+               provision(:platform, "shared-model", "platform-example", data.options, provider)
 
-    assert {:ok, override} = provision(tenant.key, "shared-model", "tenant-example", data.options)
+      assert {:ok, override} =
+               provision(tenant.key, "shared-model", "tenant-example", data.options, provider)
 
-    stored = Repo.get_by!(ProviderCredential, public_id: override.id)
-    Repo.update!(Ecto.Changeset.change(stored, status: "revoked"))
+      stored = Repo.get_by!(ProviderCredential, public_id: override.id)
+      Repo.update!(Ecto.Changeset.change(stored, status: "revoked"))
 
-    assert {:error, :provider_credential_revoked} =
-             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+      assert {:error, :provider_credential_revoked} =
+               ProviderCredentials.resolve(tenant.key, provider, "shared-model", data.options)
 
-    requirements = [%{provider: "google", name: "shared-model", path: ["model"]}]
+      requirements = [%{provider: provider, name: "shared-model", path: ["model"]}]
 
-    assert {:error, {:provider_credential_unavailable, ["model"]}} =
-             ProviderCredentialStore.with_active(data.context, tenant.key, requirements, fn ->
-               flunk("unusable credentials reached the write")
-             end)
+      assert {:error, {:provider_credential_unavailable, ["model"]}} =
+               ProviderCredentialStore.with_active(data.context, tenant.key, requirements, fn ->
+                 flunk("unusable credentials reached the write")
+               end)
 
-    assert :ok = ProviderCredentials.delete(tenant.key, override.id, data.options)
+      assert :ok = ProviderCredentials.delete(tenant.key, override.id, data.options)
 
-    assert {:ok, inherited} =
-             ProviderCredentials.resolve(tenant.key, "google", "shared-model", data.options)
+      assert {:ok, inherited} =
+               ProviderCredentials.resolve(tenant.key, provider, "shared-model", data.options)
 
-    assert inherited.credential.id == platform.id
+      assert inherited.credential.id == platform.id
+    end
   end
 
   test "platform ciphertext cannot be transplanted into a tenant and both scopes re-encrypt",
@@ -236,10 +240,10 @@ defmodule Vxpipe.Persistence.ScopedProviderCredentialsTest do
     assert [%{saved_fields: [], source: :tenant, status: :unavailable}] = unreadable.bindings
   end
 
-  defp provision(owner, name, secret, options) do
+  defp provision(owner, name, secret, options, provider \\ "google") do
     ProviderCredentials.provision(
       owner,
-      "google",
+      provider,
       name,
       "api_key",
       %{"api_key" => secret},

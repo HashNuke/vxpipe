@@ -1,10 +1,9 @@
-defmodule Vxpipe.Providers.Google.TTSSession do
+defmodule Vxpipe.Providers.Cartesia.TTSSession do
   @moduledoc false
   @behaviour Vxpipe.CallEngine.Speech.TTSProvider
   @behaviour Vxpipe.CallEngine.Speech.RequestTTSProvider
-
   alias Vxpipe.CallEngine.Speech.{Descriptor, RequestTTSSession}
-  alias Vxpipe.Providers.Google.{TTS, TTSRequest}
+  alias Vxpipe.Providers.Cartesia.{TTS, TTSRequest}
 
   @impl true
   def configure(options) do
@@ -20,14 +19,10 @@ defmodule Vxpipe.Providers.Google.TTSSession do
           signed?: true,
           sample_rate: public.sample_rate
         },
-        usage_identity: %{
-          provider: :google,
-          model: public.model,
-          provenance: :locally_measured
-        },
+        usage_identity: %{provider: :cartesia, model: public.model, provenance: :locally_measured},
         readiness: :initialized,
         endpointing: :none,
-        cache_identity: :crypto.hash(:sha256, :erlang.term_to_binary({:google_tts, 1, public}))
+        cache_identity: :crypto.hash(:sha256, :erlang.term_to_binary({:cartesia_tts, 1, public}))
       )
     end
   end
@@ -40,13 +35,13 @@ defmodule Vxpipe.Providers.Google.TTSSession do
   defdelegate cancel(pid, reference, playback), to: RequestTTSSession
   @impl true
   defdelegate close(pid), to: RequestTTSSession
-
   @impl true
   defdelegate validate_text(text), to: TTS
 
   @impl true
   def request_configuration(%TTS{} = config) do
-    with {:ok, descriptor} <- configure(model: config.model, voice: config.voice) do
+    with {:ok, descriptor} <-
+           configure(model: config.model, voice: config.voice, sample_rate: config.sample_rate) do
       {:ok, descriptor, TTSRequest}
     end
   end

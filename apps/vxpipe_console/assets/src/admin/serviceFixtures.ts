@@ -228,6 +228,7 @@ export function applyCredentialCreation(
 function providerLabel(provider: CredentialDraft["provider"]) {
   return {
     rime: "Rime",
+    cartesia: "Cartesia",
     google: "Google AI Studio",
     openai: "OpenAI",
     vertex_ai: "Google Vertex AI",

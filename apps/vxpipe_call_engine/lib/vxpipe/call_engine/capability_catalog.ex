@@ -7,6 +7,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
   alias Vxpipe.Providers.Google.STT, as: GoogleSTT
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
+  alias Vxpipe.Providers.Cartesia.TTS, as: CartesiaTTS
+  alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession
@@ -79,6 +81,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "google"}),
     do: Registry.resolve_capability("google", :tts)
 
+  def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "cartesia"}),
+    do: Registry.resolve_capability("cartesia", :tts)
+
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: Registry.resolve_capability("morse", :stt)
 
@@ -144,9 +149,10 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     {:ok, deepgram} = Registry.fetch_capability("deepgram", :tts)
     {:ok, rime} = Registry.fetch_capability("rime", :tts)
     {:ok, google} = Registry.fetch_capability("google", :tts)
+    {:ok, cartesia} = Registry.fetch_capability("cartesia", :tts)
     {:ok, morse} = Registry.fetch_capability("morse", :tts)
 
-    [deepgram, rime, google, morse, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+    [deepgram, rime, google, cartesia, morse, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
   end
 
   defp speech_adapters(:speech_to_speech) do
@@ -204,6 +210,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
 
   defp validate_provider_settings(GoogleTTSSession, :text_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
+  defp validate_provider_settings(CartesiaTTSSession, :text_to_speech, settings),
     do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
 
   defp validate_provider_settings(
@@ -283,6 +292,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
          {:ok, public} <-
            GoogleTTS.public_options(Keyword.put(options, :model, "gemini-3.1-flash-tts-preview")) do
       {:ok, [model: public.model, voice: public.voice]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        provider: "cartesia",
+        kind: :text_to_speech,
+        model: model,
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
+         {:ok, public} <- CartesiaTTS.public_options(Keyword.put(options, :model, model)) do
+      {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
     end
   end
 
@@ -391,6 +412,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "google", kind: :text_to_speech}, options),
     do: validate_provider(GoogleTTSSession, options)
+
+  defp validate_speech(%{provider: "cartesia", kind: :text_to_speech}, options),
+    do: validate_provider(CartesiaTTSSession, options)
 
   defp validate_speech(%{provider: "openai", kind: :speech_to_speech}, options) do
     case GPTLive.public_options(options) do

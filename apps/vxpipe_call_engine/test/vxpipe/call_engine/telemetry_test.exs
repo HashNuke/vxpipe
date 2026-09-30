@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSTTSession
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseCodeTTS
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTS
+  alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTS
 
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
@@ -132,27 +133,33 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
                     %{capability: :stt, provider: :morse, category: :unavailable}}
   end
 
-  test "attributes Rime synthesis and failure to the declared provider" do
-    handler_id = {__MODULE__, self(), make_ref()}
+  for {implementation, label} <- [{RimeTTS, :rime}, {CartesiaTTS, :cartesia}] do
+    @tag tts_implementation: implementation, tts_label: label
+    test "attributes #{label} synthesis and failure to the declared provider", %{
+      tts_implementation: implementation,
+      tts_label: label
+    } do
+      handler_id = {__MODULE__, self(), make_ref()}
 
-    assert :ok =
-             :telemetry.attach_many(
-               handler_id,
-               [@tts_first_audio_event, @provider_failure_event],
-               &__MODULE__.handle_event/4,
-               self()
-             )
+      assert :ok =
+               :telemetry.attach_many(
+                 handler_id,
+                 [@tts_first_audio_event, @provider_failure_event],
+                 &__MODULE__.handle_event/4,
+                 self()
+               )
 
-    on_exit(fn -> :telemetry.detach(handler_id) end)
-    assert :ok = Telemetry.tts_first_audio(Telemetry.started_at(), RimeTTS)
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+      assert :ok = Telemetry.tts_first_audio(Telemetry.started_at(), implementation)
 
-    assert_receive {:embedded_telemetry, @tts_first_audio_event, _measurements,
-                    %{provider: :rime}}
+      assert_receive {:embedded_telemetry, @tts_first_audio_event, _measurements,
+                      %{provider: ^label}}
 
-    assert :ok = Telemetry.provider_failure(:tts, RimeTTS, :provider_failed)
+      assert :ok = Telemetry.provider_failure(:tts, implementation, :provider_failed)
 
-    assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
-                    %{capability: :tts, provider: :rime, category: :unavailable}}
+      assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
+                      %{capability: :tts, provider: ^label, category: :unavailable}}
+    end
   end
 
   def handle_event(event, measurements, metadata, test_pid) do

@@ -5,6 +5,7 @@ import {
 } from "./setupCatalog";
 
 const capabilities = {
+  cartesia: ["credential", "tts"],
   deepgram: ["credential", "credential_validation", "stt", "tts"],
   google: ["credential", "credential_validation", "stt", "tts"],
   openai: ["credential", "credential_validation", "sts"],
@@ -19,6 +20,7 @@ test("Setup offers installed providers and only their implemented call capabilit
   expect(providers.map((provider) => provider.id)).toEqual([
     "deepgram",
     "rime",
+    "cartesia",
     "google",
     "openai",
     "zenmux",
@@ -45,6 +47,12 @@ test("Setup offers installed providers and only their implemented call capabilit
   expect(providers.find((provider) => provider.id === "twilio")?.capabilities).toEqual([
     "telephony",
   ]);
+});
+
+test("Cartesia offers verified TTS without advertising transcription or agent speech", () => {
+  const [provider] = installedSetupProviders({cartesia: ["credential", "tts"]});
+  expect(provider).toMatchObject({id: "cartesia", capabilities: ["tts"], defaultModels: {tts: "sonic-3.6"}});
+  expect(providersFor("tts", [{provider: "cartesia", status: "connected"}], [provider!])).toHaveLength(1);
 });
 
 test("Setup hides missing providers and removes undeclared speech capabilities", () => {

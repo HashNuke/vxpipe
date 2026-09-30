@@ -22,6 +22,7 @@ const providers = setupProviders.map((provider) => ({
   label: provider.name,
 }));
 const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
+  "cartesia",
   "deepgram",
   "google",
   "openai",
@@ -68,7 +69,7 @@ export function ServiceCredentialForm({
   const [publicKey, setPublicKey] = useState("");
   const supportedProvider =
     apiKeyProviders.has(provider) || provider === "telnyx" || provider === "twilio";
-  const supportsCredentialTest = supportedProvider && provider !== "fireworks";
+  const supportsCredentialTest = supportedProvider && provider !== "fireworks" && provider !== "cartesia";
   const includePublicKey = provider === "telnyx" && showTelnyxPublicKey;
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -263,7 +264,7 @@ export function ServiceCredentialForm({
           Credential stored.
         </p>
       ) : null}
-      {provider === "fireworks" ? (
+      {provider === "fireworks" || provider === "cartesia" ? (
         <p className="text-sm text-[var(--admin-muted)]">
           Credential testing is unavailable for this provider. You can save its API key and verify it with a call.
         </p>

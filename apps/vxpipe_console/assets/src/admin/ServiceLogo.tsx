@@ -8,6 +8,7 @@ import vertexAiLogo from "./assets/icons/vertex-ai.svg";
 import type { ServiceProvider } from "./serviceTypes";
 
 const serviceMarks: Record<ServiceProvider, string> = {
+  cartesia: "C",
   rime: "R",
   google: "G",
   openai: "O",
@@ -24,6 +25,7 @@ const serviceMarks: Record<ServiceProvider, string> = {
 type LogoSource = "lobehub" | "official" | "avatar";
 
 const logoSources: Record<ServiceProvider, LogoSource> = {
+  cartesia: "avatar",
   rime: "avatar",
   google: "official",
   openai: "avatar",

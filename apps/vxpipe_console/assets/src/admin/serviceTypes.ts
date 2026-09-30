@@ -7,6 +7,7 @@ export type CredentialField =
   | "authToken";
 
 export type ServiceProvider =
+  | "cartesia"
   | "rime"
   | "google"
   | "openai"
