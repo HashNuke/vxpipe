@@ -12,7 +12,7 @@ cat > "$scratch/bin/mix" <<'MIX'
   printf 'directory=%s\n' "$PWD"
   printf 'openai=%s\n' "${OPENAI_API_KEY:-missing}"
   printf 'gemini=%s\n' "${GEMINI_API_KEY:-missing}"
-  for name in DEEPSEEK_API_KEY OPENROUTER_API_KEY FIREWORKS_API_KEY; do
+  for name in DEEPSEEK_API_KEY OPENROUTER_API_KEY FIREWORKS_API_KEY CARTESIA_API_KEY ELEVENLABS_API_KEY; do
     printf '%s=%s\n' "$name" "${!name:-missing}"
   done
   printf 'telnyx=%s\n' "${TELNYX_API_KEY:-missing}"
@@ -26,6 +26,8 @@ cat > "$scratch/live_providers.env" <<'ENV'
 DEEPSEEK_API_KEY=test-deepseek
 OPENROUTER_API_KEY=test-openrouter
 FIREWORKS_API_KEY=todo
+CARTESIA_API_KEY=todo
+ELEVENLABS_API_KEY=test-elevenlabs
 OPENAI_API_KEY=test-only-key
 GEMINI_API_KEY=todo
 TELNYX_API_KEY=todo
@@ -37,6 +39,8 @@ export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/live_providers.env"
 export VXPIPE_LIVE_PROVIDERS_MIX_BIN="$scratch/bin/mix"
 export TELNYX_API_KEY=ambient-test-only-key
 export FIREWORKS_API_KEY=ambient-test-only-key
+export CARTESIA_API_KEY=ambient-test-only-key
+export ELEVENLABS_API_KEY=ambient-test-only-key
 
 "$repo_root/bin/test-live-providers" --only live_openai \
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
@@ -45,9 +49,13 @@ rg -q -F "directory=$repo_root" "$scratch/output"
 rg -q -F 'openai=test-only-key' "$scratch/output"
 rg -q -F 'DEEPSEEK_API_KEY=test-deepseek' "$scratch/output"
 rg -q -F 'OPENROUTER_API_KEY=test-openrouter' "$scratch/output"
-for name in FIREWORKS_API_KEY; do
-  rg -q -F "$name=missing" "$scratch/output"
+for name in FIREWORKS_API_KEY CARTESIA_API_KEY; do
+  if ! rg -q -F "$name=missing" "$scratch/output"; then
+    printf '%s placeholder was not cleared\n' "$name" >&2
+    exit 1
+  fi
 done
+rg -q -F 'ELEVENLABS_API_KEY=test-elevenlabs' "$scratch/output"
 rg -q -F 'gemini=missing' "$scratch/output"
 rg -q -F 'telnyx=missing' "$scratch/output"
 rg -q -F 'webhook=missing' "$scratch/output"
@@ -55,7 +63,17 @@ rg -q -F 'argument=--only' "$scratch/output"
 rg -q -F 'argument=live_openai' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs' "$scratch/output"
 
+cat > "$scratch/live_providers.env" <<'ENV'
+OPENAI_API_KEY=test-only-key
+ENV
+
 "$repo_root/bin/test-live-providers"
+for name in CARTESIA_API_KEY ELEVENLABS_API_KEY; do
+  if ! rg -q -F "$name=missing" "$scratch/output"; then
+    printf '%s leaked from the ambient environment\n' "$name" >&2
+    exit 1
+  fi
+done
 rg -q -F 'argument=live_providers' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_agent_runtime/test/integration' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_call_engine/test/integration' "$scratch/output"
