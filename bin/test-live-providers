@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+env_file="${VXPIPE_LIVE_PROVIDERS_ENV_FILE:-${HOME}/.config/vxpipe/live_providers.env}"
+mix_bin="${VXPIPE_LIVE_PROVIDERS_MIX_BIN:-mix}"
+
+if [[ ! -f "$env_file" ]]; then
+  printf 'Missing live provider credentials: %s\n' "$env_file" >&2
+  printf 'Copy %s/config/live_providers.env.example to that path and fill in the providers you will run.\n' \
+    "$repo_root" >&2
+  exit 1
+fi
+
+# The file is loaded only in this child process. Ignore ambient credentials
+# that may have been loaded by an interactive dotenv hook.
+credential_names=(
+  OPENAI_API_KEY GEMINI_API_KEY ZENMUX_API_KEY DEEPGRAM_API_KEY
+  DEEPSEEK_API_KEY OPENROUTER_API_KEY FIREWORKS_API_KEY
+  TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_TEST_FROM
+  TWILIO_TEST_DESTINATION TWILIO_TEST_WEBHOOK_URL TWILIO_TEST_MEDIA_URL
+  TELNYX_API_KEY TELNYX_APP_ID TELNYX_TEST_FROM
+  TELNYX_TEST_DESTINATION TELNYX_TEST_WEBHOOK_URL TELNYX_TEST_MEDIA_URL
+)
+unset "${credential_names[@]}"
+
+set -a
+# shellcheck source=/dev/null
+source "$env_file"
+set +a
+
+# Template placeholders behave like missing settings at the selected test.
+for name in "${credential_names[@]}"; do
+  case "${!name:-}" in
+    ''|todo|http://todo|https://todo) unset "$name" ;;
+  esac
+done
+
+cd -- "$repo_root"
+
+if [[ $# -eq 0 ]]; then
+  exec "$mix_bin" test --only live_providers \
+    apps/vxpipe_agent_runtime/test/integration \
+    apps/vxpipe_call_engine/test/integration \
+    apps/vxpipe_gateway/test/integration
+fi
+
+exec "$mix_bin" test "$@"

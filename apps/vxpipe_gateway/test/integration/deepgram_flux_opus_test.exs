@@ -4,19 +4,25 @@ defmodule Vxpipe.Gateway.Integration.DeepgramFluxOpusTest do
   alias ExWebRTC.Media.Ogg.Reader
   alias Vxpipe.Providers.Deepgram.{Flux, STTSocket}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.Providers.Deepgram.LiveFixture
 
   @moduletag :live_providers
   @moduletag :live_deepgram
   @moduletag timeout: 60_000
+  @audio_path LiveFixture.opus_path()
+
+  setup_all do
+    LiveFixture.ensure!()
+    :ok
+  end
 
   test "streams individual WebRTC-compatible Opus packets to Flux" do
     api_key = System.fetch_env!("DEEPGRAM_API_KEY")
-    audio_path = System.fetch_env!("DEEPGRAM_LIVE_AUDIO")
 
     assert {:ok, provider} =
              Flux.new(
                api_key: api_key,
-               model: "flux-general-en",
+               model: Vxpipe.Providers.LiveModels.speech("deepgram", :stt_en),
                encoding: :opus,
                sample_rate: 48_000
              )
@@ -38,7 +44,7 @@ defmodule Vxpipe.Gateway.Integration.DeepgramFluxOpusTest do
 
     assert %Signal{kind: :connected} = await_signal(socket, :connected, 10_000)
 
-    assert {:ok, reader} = Reader.open(audio_path)
+    assert {:ok, reader} = Reader.open(@audio_path)
     on_exit(fn -> Reader.close(reader) end)
     stream_packets(reader, socket)
 

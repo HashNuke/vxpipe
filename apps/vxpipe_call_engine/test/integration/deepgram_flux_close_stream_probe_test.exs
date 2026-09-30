@@ -2,10 +2,17 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxCloseStreamProbeTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.TestFluxCloseProbe, as: Probe
+  alias Vxpipe.Providers.Deepgram.LiveFixture
 
   @moduletag :live_providers
   @moduletag :live_deepgram
   @moduletag timeout: 60_000
+  @audio_path LiveFixture.pcm_path()
+
+  setup_all do
+    LiveFixture.ensure!()
+    :ok
+  end
 
   test "authorized known speech observes tail then CloseStream peer terminal" do
     # Mix selects this test before the probe resolves its fixture or credentials.
@@ -13,8 +20,8 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxCloseStreamProbeTest do
       Probe.run(
         [
           enabled: true,
-          fixture_path: System.get_env("VXPIPE_FLUX_PROBE_PCM"),
-          expected_tail: System.get_env("VXPIPE_FLUX_PROBE_EXPECTED_TAIL")
+          fixture_path: @audio_path,
+          expected_tail: "telescope."
         ],
         %{
           credential: fn -> System.get_env("DEEPGRAM_API_KEY") end,

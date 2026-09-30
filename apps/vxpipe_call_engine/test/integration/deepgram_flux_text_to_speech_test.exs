@@ -13,7 +13,7 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxTextToSpeechTest do
     config =
       FluxTextToSpeech.new!(
         api_key: System.fetch_env!("DEEPGRAM_API_KEY"),
-        model: "flux-haley-en",
+        model: Vxpipe.Providers.LiveModels.speech("deepgram", :tts),
         encoding: :linear16,
         sample_rate: 48_000
       )

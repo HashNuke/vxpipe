@@ -19,12 +19,19 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
   alias Vxpipe.Providers.Deepgram.TTSSocket
 
   alias Vxpipe.CallEngine.{TestEchoModelProvider, TestTenantCredentialSource, TestTurnCall}
+  alias Vxpipe.Providers.Deepgram.LiveFixture
   alias Vxpipe.Gateway.HTTP.Endpoint
 
   @moduletag :live_providers
   @moduletag :live_deepgram
+  @audio_path LiveFixture.opus_path()
   @moduletag capture_log: true
   @moduletag timeout: 60_000
+
+  setup_all do
+    LiveFixture.ensure!()
+    :ok
+  end
 
   @endpoint_options Endpoint.init(
                       cors: [],
@@ -181,7 +188,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     assert %{"type" => "bot-ready"} = await_rtvi_message(client, client_channel, 5_000)
 
-    assert {:ok, reader} = Reader.open(System.fetch_env!("DEEPGRAM_LIVE_AUDIO"))
+    assert {:ok, reader} = Reader.open(@audio_path)
     on_exit(fn -> Reader.close(reader) end)
     stream_rtp(reader, client, audio_track.id, 0, 0)
 

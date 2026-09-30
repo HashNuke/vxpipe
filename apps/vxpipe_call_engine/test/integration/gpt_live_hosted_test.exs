@@ -52,7 +52,7 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
     assert :ok = Session.append_history(session, {:agent, "I will remember violet."})
 
     :ok = GenServer.stop(wire)
-    replacement = await_reseeded_wire(wire, deadline)
+    replacement = await_reseeded_wire(session, provider, wire, deadline)
     assert replacement != wire
     wait_provider_wire(provider, replacement, deadline)
 
@@ -83,7 +83,15 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
       start_ready_session(
         [
           tools: tools,
-          system_prompt: "When the caller asks to ping, call the ping function before answering."
+          system_prompt: """
+          Speak briefly in English.
+          Backchannel policy: Do not backchannel.
+          Interruption policy: Yield when the caller speaks.
+          Delegation policy:
+          Backend tools: ping returns the current test status.
+          Delegate to the backend when: the caller asks to ping or asks for test status.
+          Do not answer the ping request yourself; wait for the backend result.
+          """
         ],
         deadline
       )
@@ -104,7 +112,7 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
     api_key = System.fetch_env!("OPENAI_API_KEY")
 
     config_options =
-      [api_key: api_key, backend_model: "gpt-5"] ++
+      [api_key: api_key, backend_model: Vxpipe.Providers.LiveModels.speech("openai", :backend)] ++
         Keyword.take(options, [:tools, :system_prompt])
 
     {:ok, config} = GPTLive.new(config_options)
@@ -112,7 +120,7 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
     assert {:ok, session, :starting} =
              Session.start(CapabilityTree.scope(scope),
                provider: GPTLiveSession,
-               options: [backend_model: "gpt-5"],
+               options: [backend_model: Vxpipe.Providers.LiveModels.speech("openai", :backend)],
                private: [
                  config: config,
                  wire_module: TestGPTLiveHostedTransport,
@@ -141,6 +149,7 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
     pcm = File.read!(path)
     assert byte_size(pcm) in 1..@fixture_bytes_limit
     assert rem(byte_size(pcm), 2) == 0
+    pcm = pcm <> :binary.copy(<<0, 0>>, 48_000)
     context = make_ref()
     chunk_bytes = 48_000
 
@@ -246,9 +255,19 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
     end
   end
 
-  defp await_reseeded_wire(old_wire, deadline) do
+  defp await_reseeded_wire(session, provider, old_wire, deadline) do
+    channel = GenServer.whereis(Vxpipe.CallEngine.Speech.Channel.address(session))
+
     receive do
-      {:gpt_live_hosted_event, wire, "session.started"} when wire != old_wire -> wire
+      {:gpt_live_hosted_event, wire, "session.started"} when wire != old_wire ->
+        wire
+
+      {:vxpipe_sts_reseed_history_barrier, ^channel, ^provider, reference} ->
+        send(provider, {:vxpipe_sts_reseed_history_ready, self(), reference})
+        await_reseeded_wire(session, provider, old_wire, deadline)
+
+      {:vxpipe_speech_closed, ^session, _reason} ->
+        flunk("hosted speech session closed during reseed")
     after
       remaining(deadline) -> flunk("hosted reseed did not start a replacement session")
     end

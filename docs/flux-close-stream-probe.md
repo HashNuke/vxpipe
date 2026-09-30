@@ -66,30 +66,13 @@ after startup/failure, with the existing bounded expiry as fallback.
 
 ## Future authorized execution
 
-Do not run this without separate authorization for one potentially billable
-connection. Prepare a non-sensitive known speech fixture yourself: raw signed
-16-bit little-endian mono PCM, 16,000 Hz, no container header, at most 10 seconds.
-The probe checks byte bounds/alignment, not the acoustic content or declared raw
-format; the operator must establish those. Supply an exact expected final suffix
-(case/punctuation/whitespace sensitive), preferably a distinctive final phrase.
-No speech fixture is bundled and no download/TTS is performed.
-
-From the isolated worktree root, after authorization, set `FLUX_FIXTURE_PATH` and
-`FLUX_EXPECTED_TAIL` privately to that path/suffix, and provision `DEEPGRAM_API_KEY`
-using the existing private operator environment. Do not print those values or
-enable shell tracing. The explicit opt-in below authorizes only this test run:
-
-```sh
-cd apps/vxpipe_call_engine
-ERL_FLAGS='+S 2:2' MIX_BUILD_PATH="$PWD/../../_build" \
-  VXPIPE_FLUX_PROBE_PCM="$FLUX_FIXTURE_PATH" \
-  VXPIPE_FLUX_PROBE_EXPECTED_TAIL="$FLUX_EXPECTED_TAIL" \
-  mix test test/integration/deepgram_flux_close_stream_probe_test.exs \
-    --only live_deepgram --seed 0
-```
+The original execution procedure used an operator-supplied PCM file and
+expected suffix. The 2026-09-28 fixture update below supersedes that input
+procedure. Live selection still requires explicit authorization for its
+provider calls.
 
 The test is live-provider-tagged and excluded without explicit selection. The
-runner validates fixture and credential inputs before opening a connection.
+test setup generates missing fixture inputs before opening the probe connection.
 Run this hosted file only with authorization for its provider call. Keep its
 exact path in the command so the filter does not select other Deepgram tests.
 
@@ -109,6 +92,30 @@ No hosted run has been performed. A successful observation still requires profil
 review followed by provider final-tail, channel lifetime/acknowledgement, deadline
 and usage tests before finite admission. It would not prove every possible server
 closure is successful, or distinguish raw empty close from explicit status 1000.
+
+## 2026-09-28 live-test fixture update
+
+The earlier operator-supplied PCM and expected-tail inputs above have been
+replaced for the live test. The selected test calls
+`Vxpipe.Providers.Deepgram.LiveFixture.ensure!/0` during setup. That helper
+uses Deepgram TTS to generate the missing 16 kHz PCM sample for the fixed
+phrase “The final word is telescope.” It derives an Opus sample locally with
+FFmpeg if needed, and reuses existing files. The expected probe suffix is
+`telescope.`. The generated samples remain in the Deepgram provider test fixture directory
+for review and a later commit. This makes the first selected run include one
+additional billable TTS request when the PCM sample has not been generated.
+
+After filling `~/.config/vxpipe/live_providers.env` from the
+[template](../config/live_providers.env.example), run only the probe with:
+
+```sh
+bin/test-live-providers --only live_deepgram \
+  apps/vxpipe_call_engine/test/integration/deepgram_flux_close_stream_probe_test.exs
+```
+
+The probe’s bounded PCM validation and sanitized result contract are
+unchanged. The earlier operator-fixture instructions record the original
+design and are superseded by this update.
 
 ## Local verification
 

@@ -111,8 +111,8 @@ At the Session boundary, a separate partial-stream failure test proves there is
 no hidden Vxpipe model resubmission, buffered fallback, or tool submission after
 text has been emitted.
 
-The tagged live lane requires `ZENMUX_API_KEY` and optionally accepts
-`VXPIPE_ZENMUX_MODEL`; it is excluded from the default suite. It verifies a real
+The tagged live lane requires `ZENMUX_API_KEY` and uses the fixed
+`zenmux:openai/gpt-4o` test model; it is excluded from the default suite. It verifies a real
 Zenmux request with native routing and an exact tool schema, then requires a
 non-empty provider-reported model and usage. The lane is present and compiles,
 but has not been executed in this workspace because the credential is unset.

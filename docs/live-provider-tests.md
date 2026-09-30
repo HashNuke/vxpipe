@@ -1,9 +1,10 @@
 # Opt-in live provider tests
 
-Status: design and inventory recorded 2026-09-27. Current live modules use
-Mix tags for selection, with `:live_providers` excluded by default. The
-configured-service harness described below remains implementation work. No
-live service was called for this checkpoint.
+Status: telephony and AI live modules use Mix tags, with `:live_providers`
+excluded by default. Selected Gemini, Deepgram, OpenAI, DeepSeek, OpenRouter
+and Fireworks protocol checks have passing evidence. The configured-service
+live harness remains separate work; local encrypted service tests prove scoped
+resolution and publication. Cartesia and ElevenLabs integration is pending.
 
 ## Decision
 
@@ -44,22 +45,23 @@ from ordinary `mix test`. Live modules do not carry `:integration`, so a broad
 `--include integration` selection cannot include them. The Mix filter is the
 explicit selection; no additional run flag is required.
 
-With required credentials and test settings already available to the process,
-run all current live groups from the umbrella root by naming the four owning
-test directories:
+Copy the [template](../config/live_providers.env.example) to
+`~/.config/vxpipe/live_providers.env`, then replace the `todo` placeholders
+only for the providers being run. URL placeholders include `https://`; the
+runner treats unchanged placeholders as missing settings.
+`bin/test-live-providers` loads that file for its child Mix process. It clears
+ambient provider credentials first, so a dotenv hook on entering the directory
+does not silently provide credentials. No arguments run every current live
+provider test from the three owning directories:
 
 ```shell
-mix test --only live_providers \
-  apps/vxpipe_agent_runtime/test/integration \
-  apps/vxpipe_artifacts/test/integration \
-  apps/vxpipe_call_engine/test/integration \
-  apps/vxpipe_gateway/test/integration
+bin/test-live-providers
 ```
 
-To run only OpenAI, select its provider tag:
+The runner forwards supplied arguments to `mix test`. For one provider or file:
 
 ```shell
-mix test --only live_openai \
+bin/test-live-providers --only live_openai \
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
 ```
 
@@ -68,7 +70,18 @@ child with no matching tests exits with a no-tests result. From an owning child
 directory, the same filters work without an umbrella path. When selected
 without a required credential or fixture setting, the test should fail clearly
 before contacting the provider. CI and the default suite do not select live
-tags or inject live credentials.
+tags or load the credentials file.
+
+Selected Deepgram tests use an Elixir helper in the Deepgram provider test
+support. If the fixed PCM sample is absent, setup makes one Deepgram TTS
+request for a short phrase. If the Opus sample is absent, it transcodes the PCM
+locally with FFmpeg. Generated files remain in the Deepgram provider test
+fixture directory for review and a separate commit; later runs reuse them.
+The first run may therefore incur one additional billable TTS request. No
+separate audio-path or expected-tail environment variables are needed. The
+helper requests Deepgram's documented
+[raw linear16 TTS output](https://developers.deepgram.com/docs/tts-media-output-settings)
+at 16 kHz before local Opus transcoding.
 
 Use a dedicated provider test project or account with an explicit spend limit
 where the provider supports one. Supply keys through the shell environment or
@@ -101,7 +114,7 @@ interoperability from a direct WebSocket protocol test.
 ## Existing inventory and migration order
 
 1. Add group and provider-specific live tags to current OpenAI, Deepgram,
-   Gemini, Zenmux, Twilio, Telnyx, and S3 live modules, and exclude the group
+   Gemini, Zenmux, Twilio, and Telnyx live modules, and exclude the group
    tag in every child test helper.
    Keep local HTTP, database, fake-socket, conformance, and loopback integration
    modules out of the live group. Keep `:integration` for local integration
@@ -133,18 +146,51 @@ interoperability from a direct WebSocket protocol test.
 - Using the production tenant or platform database from `MIX_ENV=test` would
   make tests change live configuration and lose isolation.
 
-## Verification evidence
+## Initial tag migration evidence
 
 Local `mix help test` documents `--include`, `--exclude`, and `--only`. With
 `OPENAI_API_KEY` explicitly unset, both ordinary `mix test` and `--include
 integration` excluded the two OpenAI tests. `--only live_openai` selected both;
 they failed at `System.fetch_env!/1` before a provider connection. `--only
 live_providers` selected the same two tests on that file and also stopped at
-the missing-key check. The group and provider tags cover 14 current live tests
-across AgentRuntime (4), Artifacts (1), CallEngine (4), and Gateway (5). A child
+the missing-key check. At that migration checkpoint, the tags covered 14 live tests
+across AgentRuntime (4), Artifacts (1, since retired), CallEngine (4), and Gateway (5). A child
 without matching tags exits with no tests under `--only`; this is why the
 umbrella command names the owning paths. The configured-service fixture and
-authorized live runs remain pending. Formatting, warnings-as-errors compilation,
+authorized live runs were still pending. Formatting, warnings-as-errors compilation,
 strict Credo, and the unused-dependency check passed. The first umbrella run
 had three timing failures in unchanged tests; each passed in a focused rerun.
 A repeat root `mix test --max-cases 2` passed all 2,868 tests with zero failures.
+
+
+## Reviewed model catalog and current acceptance
+
+`Vxpipe.Providers.LiveModels` in provider test support owns fixed model selections;
+model overrides are not additional environment variables. Current direct LLM
+checks use `gpt-6-luna` (OpenAI Responses), `deepseek-flash` (thinking disabled),
+`google/gemini-3.5-flash-lite` (OpenRouter), and
+`accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` (Fireworks).
+Each shared check makes at most two inference requests, capped at 256 output
+tokens each: a streamed tool call and a continuation. It verifies parsed tool
+arguments, nonempty final text and provider-reported usage. No automatic retries
+are added. The chosen Fireworks Gemma listings require dedicated deployment;
+the fixed Nemotron model is serverless and inexpensive.
+
+```shell
+bin/test-live-providers --only live_deepseek apps/vxpipe_agent_runtime/test/integration/deepseek_llm_test.exs
+bin/test-live-providers --only live_openrouter apps/vxpipe_agent_runtime/test/integration/openrouter_llm_test.exs
+bin/test-live-providers --only live_fireworks apps/vxpipe_agent_runtime/test/integration/fireworks_llm_test.exs
+bin/test-live-providers --only live_openai apps/vxpipe_agent_runtime/test/integration/openai_llm_test.exs
+```
+
+Run one selected group at a time for this milestone. Deepgram samples include
+two seconds of trailing silence for automatic turn completion and are reused;
+no extra TTS call is needed when both fixture files exist. OpenAI hosted speech
+checks cover reseeding/mute/talkover and delegated-tool continuation separately.
+Results and earlier failures are recorded in
+[checkpoint labnotes](../labnotes/20260930-0353-provider-expansion-gateway.md).
+These direct protocol calls do not claim encrypted-service live-call acceptance.
+
+Cloudflare/Vercel gateway implementation is deferred. There is no current
+`live_cloudflare` lane or gateway provider catalog entry. See the separate
+[AI gateway routing design milestone](milestones/ai-gateway-routing.md).

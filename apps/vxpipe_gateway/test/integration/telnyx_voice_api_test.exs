@@ -11,7 +11,7 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
   setup do
     {:ok,
      api_key: System.fetch_env!("TELNYX_API_KEY"),
-     connection_id: System.fetch_env!("TELNYX_CONNECTION_ID"),
+     app_id: System.fetch_env!("TELNYX_APP_ID"),
      from: System.fetch_env!("TELNYX_TEST_FROM"),
      media_url: System.fetch_env!("TELNYX_TEST_MEDIA_URL"),
      to: System.fetch_env!("TELNYX_TEST_DESTINATION"),
@@ -30,7 +30,7 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
       answering_machine_detection: :disabled
     }
 
-    options = [api_key: context.api_key, provider_connection_id: context.connection_id]
+    options = [api_key: context.api_key, provider_connection_id: context.app_id]
 
     assert {:ok,
             %Submission{

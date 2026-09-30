@@ -195,7 +195,7 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
     assert {:ok, config} =
              Provider.new(
                api_key: System.fetch_env!("GEMINI_API_KEY"),
-               model: "google:gemini-3.5-flash-lite",
+               model: "google:" <> Vxpipe.Providers.LiveModels.llm("google").model,
                generation_options: [temperature: 0.0],
                streaming: true
              )

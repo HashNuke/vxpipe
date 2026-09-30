@@ -48,7 +48,7 @@ tenant scope. Put the application metadata in a JSON object such as `service.jso
   "name": "support-phone",
   "ingress_key": "tenant-support-ingress",
   "provider": "telnyx",
-  "provider_connection_id": "TELNYX_CONNECTION_ID",
+  "provider_connection_id": "TELNYX_APP_ID",
   "credential_name": "telnyx"
 }
 ```

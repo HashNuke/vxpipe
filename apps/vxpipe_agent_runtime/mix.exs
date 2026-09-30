@@ -25,6 +25,7 @@ defmodule Vxpipe.AgentRuntime.MixProject do
 
   defp deps do
     [
+      {:vxpipe_providers, in_umbrella: true, only: :test},
       {:jsv, "~> 0.22"},
       {:plug, "~> 1.20", only: :test},
       {:req_llm, "~> 1.22"}

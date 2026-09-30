@@ -20,7 +20,7 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMNativeRoutingTest do
     assert {:ok, config} =
              Provider.new(
                api_key: System.fetch_env!("ZENMUX_API_KEY"),
-               model: System.get_env("VXPIPE_ZENMUX_MODEL", "zenmux:openai/gpt-4o"),
+               model: "zenmux:" <> Vxpipe.Providers.LiveModels.llm("zenmux").model,
                generation_options: [
                  provider_options: [provider: @routing],
                  tool_choice: :none,

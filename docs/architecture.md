@@ -2512,12 +2512,9 @@ remain in ExAws's standard provider chain; Console does not copy them into a cal
 prepared-call record, client response, or inspectable recording state. An embedding host can supply
 the same engine recording options directly without including Console.
 
-The artifacts application keeps real object-store interoperability in an opt-in
-`:live_providers` / `:live_s3` lane. It requires an explicitly authorized endpoint and bucket,
-obtains credentials only from ExAws's standard environment/provider chain, performs a real
-multipart upload, reads the finished raw PCM object byte-for-byte, and deletes that unique test
-object. The default suite makes no network request and never prints credential values or signed
-requests.
+The artifacts application verifies its object-store port and multipart protocol
+through local tests. The separate live S3 lane was retired from the telephony and AI
+provider group; the ExAws library owns wire interoperability with S3-compatible stores.
 
 Playback reads use a separate artifacts-owned S3 read port rather than extending the upload
 session or letting Console issue provider operations. Every request is an inclusive byte range of
