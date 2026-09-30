@@ -69,6 +69,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Add ElevenLabs TTS Flash 2.5/George selection and one bounded live case.
 - [x] Prepare fixed Scribe v2 realtime configuration and one bounded transcription
   protocol case; this does not establish conversational STT acceptance.
+- [x] Prepare fixed hosted-agent backend/voice models and one bounded native
+  transcription, response-audio and whole-response completion case.
 - [ ] Add ElevenLabs STT and conversational agent STS selections/live cases after contract review.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
@@ -89,6 +91,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Implement ElevenLabs phrase TTS through an owned credited request session.
 - [x] Prepare provider-owned Scribe codec/socket with private authentication,
   bounded PCM framing, explicit segment commits and sanitized typed events.
+- [x] Prepare a hosted-agent codec/socket and bounded create/sign/delete operation;
+  verify native completion without advertising runtime room support.
 - [ ] Implement ElevenLabs STT after approving authoritative speech-start/turn-end ownership.
 - [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
@@ -226,3 +230,22 @@ machine or source cutover; Lean is not repeated for this checkpoint. The new
 [input turn proposal](../elevenlabs-turn-ownership.md) separates design review
 from implementation and leaves detector feasibility and final-segment completion
 gates unchecked. The milestone and index remain in progress.
+
+The [hosted-agent protocol checkpoint](../../labnotes/20260930-1120-elevenlabs-agent-protocol.md)
+prepares provider-owned native framing, supervised socket transport, private
+signed connections and a bounded provisioning probe which explicitly checks
+deletion of each created agent. Twenty-four local checks pass, including one
+loopback transport case. Controlled metadata checks distinguish rejected hosted
+Flash 2.5 configuration from accepted V4 Turbo; saved configuration confirms
+the enabled completion event. One selected Gemini 3.5 Flash Lite/V4 Turbo/George
+conversation recognizes the public sample, returns bounded PCM and emits a
+matching whole-response completion event. Earlier creation, ping and completion
+failures remain documented. This is protocol preparation, not room/tool/history,
+runtime resource ownership, scoped STS or conversational STT acceptance.
+
+All five root gates pass for this hosted protocol checkpoint. Its seed-149103
+default run reports 2,959 tests, zero failures and 89 exclusions, including
+1,752 CallEngine, 522 Gateway and 194 Console checks. No speech/source state
+machine changes require another Lean run for this preparation; the eventual
+runtime STS integration still requires its own room, browser and Lean gates.
+The milestone/index remain unchecked.

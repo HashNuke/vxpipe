@@ -237,9 +237,37 @@ not implemented acceptance.
 
 The voice-changer STS models transform existing speech. They do not by themselves
 implement Vxpipe's conversational agent STS behavior. Do not register voice
-conversion as agent conversation. Product interpretation and the corresponding
-agent configuration contract remain pending; STT and TTS work can proceed
-independently. [Model catalog](https://elevenlabs.io/docs/overview/models).
+conversion as agent conversation. The requested integration is conversational
+agent STS; its runtime configuration and ownership contracts remain pending.
+STT and TTS work can proceed independently.
+[Model catalog](https://elevenlabs.io/docs/overview/models).
+
+### Hosted-agent protocol preparation
+
+`AgentProtocol` keeps bounded native transcript/response identities, aligned PCM,
+whole-response completion, interruption, tool and queue events separate. Optional
+audio alignment forwards only recognized timing fields. Numeric provider error
+codes are retained without private messages. A supervised `AgentSocket` delivers
+typed events to its owner, which reflects ping IDs immediately; the optional
+latency estimate is not a mandatory delay. This is native framing, not a room
+session or an interpretation of provider event IDs as room-owned turns.
+
+`AgentAPI` creates one private agent, obtains a redacted signed connection and
+checks HTTP 204 deletion after its consumer finishes or fails. It rejects unsafe
+resource paths/destinations and disables retries/redirects. This is a bounded
+provisioning probe: production use still needs explicit resource ownership,
+durable crash/ambiguous-create recovery and tool provisioning contracts.
+
+Twenty-four local codec/API/socket checks pass. One selected live conversation
+uses fixed Gemini 3.5 Flash Lite, V4 Turbo and George at 16 kHz. It recognizes the
+existing sample's final word, returns bounded audio, and observes whole-response
+completion with matching response/audio event IDs. The final-audio flag is absent
+or false in this observation and is not a completion prerequisite. The harness
+keeps paced input/silence below ten seconds and stops at observed completion.
+No audible playout, room history, delegated tools, scoped STS publication or
+runtime resource recovery is accepted by this result. Neither zero retention
+nor deletion of hosted conversation records is claimed. See
+[checkpoint evidence](../labnotes/20260930-1120-elevenlabs-agent-protocol.md).
 
 ## Acceptance sequence
 

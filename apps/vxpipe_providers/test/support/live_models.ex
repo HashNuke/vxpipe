@@ -25,6 +25,8 @@ defmodule Vxpipe.Providers.LiveModels do
   @speech %{
     "elevenlabs" => %{
       stt: "scribe_v2_realtime",
+      sts_backend: "gemini-3.5-flash-lite",
+      sts_tts: "eleven_v4_turbo",
       tts: "eleven_flash_v2_5",
       tts_voice: "JBFqnCBsd6RMkjVDRZzb"
     },

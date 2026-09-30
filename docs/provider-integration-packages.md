@@ -14,6 +14,12 @@ implementations stay in the existing umbrella child that owns their runtime depe
 - CallEngine owns speech session contracts and execution.
 - Gateway owns telephony HTTP/media orchestration.
 
+AI gateway routing is a separate concern from these provider manifests. Cloudflare,
+Vercel and future gateway routes must preserve upstream model identity and reuse
+verified protocol adapters without maintaining duplicate provider/model catalogs.
+The [AI gateway design milestone](milestones/ai-gateway-routing.md) records this
+direction; its public routing contract and implementation remain deferred.
+
 Those modules still use the provider namespace. Elixir module identity gives each provider one
 logical package without forcing CallEngine or Gateway to depend on a plugin that itself depends on
 their contracts. No provider process, registry process or dynamic module discovery is introduced.

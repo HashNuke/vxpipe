@@ -246,6 +246,29 @@ loaded by the existing runner. Ordinary `mix test` excludes this test. See
 [protocol evidence](../labnotes/20260930-1042-elevenlabs-turn-contracts.md).
 Conversational STT and agent STS have no accepted live cases yet.
 
+### ElevenLabs hosted-agent protocol
+
+The preparation file has three separately selectable cases: public model
+metadata, create/read/sign/delete configuration validation without a speech
+connection, and one native hosted conversation. The conversation uses fixed
+Gemini 3.5 Flash Lite, minimal reasoning, a 128-token cap, V4 Turbo/George and
+16 kHz PCM. It reuses the public fixture, paces at most ten seconds of input
+including silence, requests one short response and requires explicit whole-response
+completion. Backup LLMs and speculative generation are disabled. The agent waits
+30 seconds before an idle prompt; the test closes its socket before deleting the
+temporary agent. Every owned deletion requires HTTP 204, including callback failure.
+
+```shell
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_agent_protocol_test.exs:75
+```
+
+Line selections follow the named test's current location; check it before invoking
+a case after edits. One bounded conversation passes on 2026-09-30. Model metadata
+and saved configuration pass independently. This proves native protocol only;
+room/tool/history integration and production provisioning ownership remain open.
+Temporary agent deletion is not deletion of hosted conversation records. See
+[checkpoint evidence](../labnotes/20260930-1120-elevenlabs-agent-protocol.md).
+
 Cloudflare/Vercel gateway implementation is deferred. There is no current
 `live_cloudflare` lane or gateway provider catalog entry. See the separate
 [AI gateway routing design milestone](milestones/ai-gateway-routing.md).
