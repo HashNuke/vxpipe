@@ -228,7 +228,23 @@ bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/inte
 ```
 
 See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.md).
-Standalone STT and conversational agent STS have no accepted live cases yet.
+
+### ElevenLabs Scribe protocol
+
+The preparation test uses fixed `scribe_v2_realtime`, 16 kHz PCM and the existing
+public Deepgram sample with one second of additional silence (5.16 seconds
+total). It opens one connection, paces bounded chunks, explicitly commits and
+checks the known final word. Select this file independently of TTS:
+
+```shell
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs
+```
+
+One selected run passes. This verifies transcription protocol only; speech-start,
+turn-end, room admission and scoped STT support are pending. The private key is
+loaded by the existing runner. Ordinary `mix test` excludes this test. See
+[protocol evidence](../labnotes/20260930-1042-elevenlabs-turn-contracts.md).
+Conversational STT and agent STS have no accepted live cases yet.
 
 Cloudflare/Vercel gateway implementation is deferred. There is no current
 `live_cloudflare` lane or gateway provider catalog entry. See the separate

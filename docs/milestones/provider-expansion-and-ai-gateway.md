@@ -15,6 +15,8 @@ Design sources: [Platform and tenant services](../platform-and-tenant-services.m
 [Speech provider comparison](../speech-provider-comparison.md),
 [Cartesia and ElevenLabs contracts](../speech-provider-expansion.md), and
 [Live provider tests](../live-provider-tests.md).
+The [ElevenLabs input turn proposal](../elevenlabs-turn-ownership.md) records
+boundary ownership and unresolved design gates; it is not an implemented milestone.
 
 ## Runnable outcome
 
@@ -65,6 +67,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Add reviewed Cartesia TTS model/voice selection and its bounded live case.
 - [x] Add Cartesia STT selection and its bounded live case.
 - [x] Add ElevenLabs TTS Flash 2.5/George selection and one bounded live case.
+- [x] Prepare fixed Scribe v2 realtime configuration and one bounded transcription
+  protocol case; this does not establish conversational STT acceptance.
 - [ ] Add ElevenLabs STT and conversational agent STS selections/live cases after contract review.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
@@ -83,6 +87,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Implement Cartesia TTS through an owned credited request session.
 - [x] Implement Cartesia STT through an owned semantic speech session.
 - [x] Implement ElevenLabs phrase TTS through an owned credited request session.
+- [x] Prepare provider-owned Scribe codec/socket with private authentication,
+  bounded PCM framing, explicit segment commits and sanitized typed events.
 - [ ] Implement ElevenLabs STT after approving authoritative speech-start/turn-end ownership.
 - [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
@@ -202,3 +208,21 @@ All five root completion gates and Lean pass for this checkpoint. Seven local
 HTTP checks also pass after replacing a swallowed callback assertion with
 explicit unexpected-PCM observation. STT and agent STS remain unimplemented
 and are not advertised by the Console catalog; the milestone/index remain open.
+
+The [Scribe protocol checkpoint](../../labnotes/20260930-1042-elevenlabs-turn-contracts.md)
+prepares a closed codec and allocation-ready supervised wire worker. Seven local
+configuration/framing/privacy checks pass. One selected live connection returns
+the sample's known final word after 5.16 seconds of input. Two earlier connections
+failed acknowledgement validation before sending audio; the verified optional
+acknowledgement fields are now accepted while conflicting values fail closed.
+The final privacy delivery refactor is checked locally without repeating the
+passing provider call. These results establish protocol preparation only;
+ElevenLabs conversational STT/agent STS and final milestone acceptance remain open.
+
+All five root gates pass for the protocol checkpoint. The seed-149103 default run
+reports 2,936 tests, zero failures and 85 exclusions, including 1,729 CallEngine,
+522 Gateway and 194 Console checks. Its protocol code changes no speech state
+machine or source cutover; Lean is not repeated for this checkpoint. The new
+[input turn proposal](../elevenlabs-turn-ownership.md) separates design review
+from implementation and leaves detector feasibility and final-segment completion
+gates unchecked. The milestone and index remain in progress.

@@ -188,6 +188,34 @@ The current conversational STT contract requires authoritative endpointing;
 do not loosen it silently or label inferred activity as provider-reported VAD.
 This question remains open and is not an implemented STT capability.
 
+### Scribe protocol preparation
+
+The provider directory now owns a closed `Scribe` configuration/codec and
+supervised `ScribeSocket`. The direct connection uses private header
+authentication, fixed 16 kHz PCM, and manual commits. Provider errors are reduced
+to safe reasons before delivery to the owner. Present acknowledgement fields
+must match the request; individually optional fields may be absent. Partial
+text replaces earlier partial text, and committed text is a segment event.
+Neither event emits room speech-start or turn-end.
+
+One selected live protocol check acknowledged the connection and returned the
+existing sample's final word, `telescope`, after 5.16 seconds of paced input.
+It verifies transcription and explicit commit framing, not conversational
+endpointing, close-and-drain, usage, compiled room startup or scoped STT support.
+No STT capability is registered or advertised. See
+[protocol checkpoint evidence](../labnotes/20260930-1042-elevenlabs-turn-contracts.md).
+
+The next design must name a genuine input-boundary owner, retain committed
+segments across server auto-commits, and finalize a turn only after that owner's
+endpoint evidence and the matching transcript completion. Silence heuristics or
+the first partial cannot be presented as provider speech-start. An explicit
+local/external owner would require a reviewed amendment to the conversational
+STT admission contract and separate allocation, cancellation, failure, usage
+and supervision checks.
+The [input turn ownership proposal](elevenlabs-turn-ownership.md) records a
+candidate local detector composition, rejected shortcuts and unresolved
+final-segment correlation/runtime feasibility gates separately from implementation.
+
 ## ElevenLabs STS: conversational agents and voice conversion differ
 
 Conversational ElevenAgents uses an agent ID and its own conversation WebSocket;
@@ -196,6 +224,16 @@ must establish initiation overrides, input/output formats, turn and output
 identity, interruption, transcript reconciliation, history, client tool results,
 agent provisioning and cleanup. Keep signed URLs private.
 [Agents WebSocket guide](https://elevenlabs.io/docs/eleven-agents/libraries/web-sockets).
+
+The full [agent wire schema](https://elevenlabs.io/docs/eleven-agents/api-reference/eleven-agents/websocket)
+has transcript event IDs, agent response IDs, and an optional final-audio marker.
+Explicitly enabled `agent_response_complete` includes pending tool completion;
+these are candidate output boundaries to verify rather than assuming that an
+audio gap completes a response. The
+[agent creation schema](https://elevenlabs.io/docs/api-reference/agents/create)
+also requires deciding whether Vxpipe owns call-spec-derived agent/tool resources
+or binds an existing agent. Provisioning, reuse and cleanup remain design work,
+not implemented acceptance.
 
 The voice-changer STS models transform existing speech. They do not by themselves
 implement Vxpipe's conversational agent STS behavior. Do not register voice
