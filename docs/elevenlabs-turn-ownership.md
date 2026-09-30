@@ -79,6 +79,76 @@ speech, silence and non-speech noise fixtures. Measure CPU and backlog with the
 intended number of simultaneous calls. No runtime model download or additional
 provider credential is part of the proposed contract.
 
+### Feasibility review, 2026-09-30
+
+The read-only investigation leaves both gates open. SDK documentation supports
+ordinary segment buffer clearing, but does not establish which received segment
+acknowledges the final manual commit under an automatic race, or how completion
+is acknowledged when no buffered audio remains. The pinned official
+[Python SDK](https://github.com/elevenlabs/elevenlabs-python/blob/963b4a59bc0d22f652daf426e02c048a61772a78/src/elevenlabs/realtime/connection.py#L192)
+and [JavaScript SDK](https://github.com/elevenlabs/elevenlabs-js/blob/b6deef08ed7c65134176482af69ceb4d348e1817/src/wrapper/realtime/connection.ts#L648)
+send an empty-audio commit without waiting for a correlated acknowledgement.
+
+Recognized-word timestamps describe recognition output. **Inference:** measuring
+their origin cannot establish a processed-through input boundary, because silent,
+unrecognized or empty audio need not produce a boundary-reaching word. The
+[realtime schema](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime)
+also requires processed silent audio for keepalive messages; continuing silence
+moves the accepted input boundary. SDK close terminates transcription. Neither
+keepalive nor delivery observed after close establishes finite-input drain.
+
+There is a documentation discrepancy: the
+[event guide](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/event-reference)
+does not describe a separate final event, while the pinned JavaScript SDK defines
+and dispatches `final_transcript` variants. SDK support alone does not prove
+server emission or turn/drain semantics. Resolve that contract before relying
+on those variants.
+
+An optional race experiment can measure behavior or find counterexamples. It
+must include input below, near and above the documented automatic boundary,
+identifiable trailing speech, an automatic commit followed by a manual commit
+with no new audio, and input shorter than the documented processing threshold.
+Capture ordered accepted sample counts and messages. Intermediate commits and
+an initial connection delay can clarify timestamp origins, but cannot prove
+finalization. Prefer contract evidence before a paid matrix; no such matrix
+has run. The existing selected transcription-only case remains passing evidence
+for its original scope.
+
+For the detector, pinned
+[Silero v6.2.3](https://github.com/snakers4/silero-vad/blob/v6.2.3/src/silero_vad/utils_vad.py)
+starts streaming activity on the first above-threshold frame. It provides
+hysteresis and a minimum silence duration, but no minimum speech duration for
+streaming start confirmation. Any confirmation rule must be specified and tested
+by Vxpipe. At 16 kHz each 512-new-sample step represents 32 ms; the 64 retained
+context samples must not be counted twice.
+
+[Ortex 0.1.10](https://github.com/elixir-nx/ortex/tree/v0.1.10) resolves native
+Rustler 0.29.1 and `ort`/`ort-sys` 2.0.0-rc.8. Its separate Elixir Rustler
+requirement permits the umbrella's 0.37.3; native compatibility is untested.
+The selected [ort version](https://docs.rs/crate/ort/2.0.0-rc.8/source/Cargo.toml)
+requires Rust 1.70 or later; its
+[build script](https://docs.rs/crate/ort-sys/2.0.0-rc.8/source/build.rs)
+uses ONNX Runtime 1.19.2, with binary download/copy defaults at build time.
+Silero's Python wrapper limits native thread counts; Ortex's session builder
+does not set those limits.
+**Inference:** per-allocation sessions may multiply native thread pools.
+
+Before detector selection, run an isolated offline probe: pin model revision,
+opset, checksum and notices; inspect ordered model shapes/types; compare
+normalized PCM inference with the pinned upstream wrapper on the same fixtures;
+verify arbitrary chunk splitting, independent/reset recurrent states and sample
+accounting; decide incomplete-frame padding explicitly; measure native threads,
+CPU and backlog under bounded concurrency. No dependency, model or probe is
+installed/executed by this review.
+
+The [Speech Engine upstream protocol](https://elevenlabs.io/docs/api-reference/speech-engine/speech-engine-upstream)
+is another candidate for investigation: it sends completed speech turns to a
+public WebSocket server hosted by the application and accepts response text.
+It requires a callback deployment/authentication design and does not establish
+standalone STT admission through the existing outbound Scribe socket. No Speech
+Engine resource or provider is implemented. Hosted agent STS remains a separate
+required capability.
+
 ## Rejected shortcuts
 
 - Treating the first partial as speech-start: recognition latency is not voice

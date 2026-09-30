@@ -266,3 +266,13 @@ VM-loss reconciliation and full conversational STT/STS acceptance remain open.
 All five root gates pass: format, warnings compile, strict Credo, default test
 and unused dependencies. The default suite reports 2,968 tests, zero failures,
 89 exclusions, seed 149103 (CallEngine 1,761; Gateway 522; Console 194).
+
+The [input turn feasibility review](../elevenlabs-turn-ownership.md#feasibility-review-2026-09-30)
+is recorded separately from implementation acceptance. Teammate research and two
+review/fix passes confirm that SDK segment-buffer clearing does not establish
+completion across automatic/manual races or empty remainders. Recognized-word
+timestamps cannot establish processed-through audio. Detector runtime versions,
+threading uncertainty and a concrete offline probe are documented; no model,
+dependency or experiment is installed by this research. Speech Engine's public
+callback protocol is an unimplemented alternative requiring further design.
+Standalone conversational STT and hosted room STS remain required and unchecked.
