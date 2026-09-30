@@ -59,7 +59,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Select current DeepSeek Flash, Gemini Flash Lite through OpenRouter, and
   inexpensive serverless Fireworks Nemotron (listed Gemma models require deployment).
 - [x] Extend runner isolation and placeholder template for the direct LLM providers.
-- [ ] Add reviewed Cartesia and ElevenLabs test models and credentials.
+- [x] Isolate Cartesia/ElevenLabs keys and add template placeholders.
+- [ ] Add reviewed Cartesia and ElevenLabs test model/voice selections and live cases.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
 
@@ -112,6 +113,17 @@ The [TTS ordering checkpoint](../../labnotes/20260930-0554-tts-completion-order.
 records a deterministic runtime repair and 318 passing speech/opening-audio
 checks. The later full run passed all 520 Gateway tests and exposed an STT fixture
 which mistook a denied allocation's unread start notification for its replacement.
-The corrected file passes 23 tests; a same-seed root rerun is pending. Cartesia's
-reviewed contracts are design progress; neither new speech provider is registered
-or advertised as implemented.
+The corrected file passes 23 tests; its same-seed root rerun passes all 1683
+CallEngine tests. The root run reports 2885 tests across the umbrella and has one
+remaining Gateway failure: `after_speech_adoption` preparation times out waiting
+for a new progress notification. Its same-seed focused rerun passes one test in
+161.3 seconds; its cause is not established and no handoff repair is claimed.
+Format, compilation
+with warnings as errors, strict Credo and unused-dependency checks pass; the TTS
+checkpoint's Lean build/oracle/replay also passes. These are current-checkpoint
+results, not final acceptance of the pending speech additions.
+
+Cartesia's reviewed contracts are design progress; neither new speech provider
+is registered or advertised as implemented. The runner/template now isolate both
+providers' keys; their fake-Mix regression and Bash syntax checks pass without
+reading the private credentials file or making a provider call.

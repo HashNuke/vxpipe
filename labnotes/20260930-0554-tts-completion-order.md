@@ -57,3 +57,14 @@ the worker's asynchronous callback-result cast.
 
 The provider milestone remains incomplete. No new live API calls were made for
 this race repair, and the private credentials file was not read or modified.
+
+## Final current-checkpoint evidence
+
+The same-seed root rerun passes all 1683 CallEngine tests after the STT fixture
+correction. Across the umbrella it reports 2885 tests, with one remaining failure
+in Gateway's `after_speech_adoption` preparation case while waiting for another
+progress notification. The same-seed selected case passes one test in 161.3
+seconds (67 excluded); this does not establish its cause or a repair. Root
+format, compile, strict Credo and unused-lock checks still pass, and the earlier
+Lean result covers the unchanged TTS runtime checkpoint. Full acceptance remains
+open instead of being inferred from passing focused reruns.
