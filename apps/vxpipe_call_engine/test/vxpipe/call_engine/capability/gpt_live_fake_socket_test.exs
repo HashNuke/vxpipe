@@ -548,7 +548,7 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
              %{
                "type" => "message",
                "role" => "assistant",
-               "content" => [%{"type" => "input_text", "text" => "Hello"}]
+               "content" => [%{"type" => "output_text", "text" => "Hello"}]
              }
            ]
   end

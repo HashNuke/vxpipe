@@ -65,6 +65,34 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveTest do
     assert {:error, :invalid_audio} = GPTLive.audio_append("")
   end
 
+  test "reseed history encodes assistant text with the provider's output text type" do
+    {:ok, config} = GPTLive.new(api_key: "synthetic", backend_model: "gpt-5.6")
+
+    history = [
+      %{
+        "type" => "message",
+        "role" => "user",
+        "content" => [%{"type" => "input_text", "text" => "Question"}]
+      },
+      %{
+        "type" => "message",
+        "role" => "assistant",
+        "content" => [%{"type" => "input_text", "text" => "Answer"}]
+      }
+    ]
+
+    command = GPTLive.start(config, history)
+
+    assert command["session"]["input"] == [
+             Enum.at(history, 0),
+             %{
+               "type" => "message",
+               "role" => "assistant",
+               "content" => [%{"type" => "output_text", "text" => "Answer"}]
+             }
+           ]
+  end
+
   test "decodes typed events and rejects malformed or unknown events" do
     assert {:ok, {:started, "session_1"}} =
              GPTLive.decode(~s({"type":"session.started","session":{"id":"session_1"}}))

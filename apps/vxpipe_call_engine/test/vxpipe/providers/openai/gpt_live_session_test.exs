@@ -485,6 +485,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :invalid_message}}, 1_000
   end
 
+  test "a stopped transport reseeds after the consumer acknowledges its history barrier" do
+    {session, wire} = start_ready_session()
+    :ok = GenServer.stop(wire)
+    replacement = await_replacement(session)
+    assert replacement != wire
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}
+  end
+
   test "expired sessions reseed only history appended through the speech allocation" do
     {session, wire} = start_ready_session()
     assert :ok = Session.append_history(session, {:caller, "The published question"})
@@ -506,7 +514,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
              %{
                "type" => "message",
                "role" => "assistant",
-               "content" => [%{"type" => "input_text", "text" => "The heard answer"}]
+               "content" => [%{"type" => "output_text", "text" => "The heard answer"}]
              }
            ]
 
@@ -744,8 +752,8 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
         owner: self()
       )
 
-    assert_receive {:test_gpt_live_started, wire, _connection}
-    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.start"}}
+    assert_receive {:test_gpt_live_started, wire, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.start"}}, 1_000
 
     TestGPTLiveTransport.deliver(wire, %{"type" => "session.started", "session" => %{"id" => "s"}})
 

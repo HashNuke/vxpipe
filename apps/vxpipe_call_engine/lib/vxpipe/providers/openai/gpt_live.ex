@@ -107,7 +107,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLive do
       "session" => %{
         "model" => config.model,
         "instructions" => config.system_prompt,
-        "input" => history,
+        "input" => Enum.map(history, &history_message/1),
         "audio" => %{
           "format" => %{"type" => "audio/pcm", "rate" => 24_000},
           "output" => %{"voice" => config.voice}
@@ -174,6 +174,12 @@ defmodule Vxpipe.Providers.OpenAI.GPTLive do
       }
     end)
   end
+
+  defp history_message(%{"role" => "assistant", "content" => content} = message) do
+    Map.put(message, "content", Enum.map(content, &Map.put(&1, "type", "output_text")))
+  end
+
+  defp history_message(message), do: message
 
   defp validate_agent_config(prompt, tools) do
     with true <- is_binary(prompt) and byte_size(prompt) <= @maximum_text_bytes,
