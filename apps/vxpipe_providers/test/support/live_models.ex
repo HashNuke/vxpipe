@@ -23,6 +23,10 @@ defmodule Vxpipe.Providers.LiveModels do
   }
 
   @speech %{
+    "elevenlabs" => %{
+      tts: "eleven_flash_v2_5",
+      tts_voice: "JBFqnCBsd6RMkjVDRZzb"
+    },
     "cartesia" => %{
       stt: "ink-2",
       tts: "sonic-3.6",

@@ -1,9 +1,10 @@
 # Cartesia and ElevenLabs speech integration
 
-Local design review and Cartesia STT/TTS checkpoints, 2026-09-30. This document informs
+Local design review and speech provider checkpoints, 2026-09-30. This document informs
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md).
 Cartesia STT/TTS have local scoped-service/startup and selected live evidence;
-ElevenLabs and the milestone's remaining acceptance checks are pending. The existing
+ElevenLabs TTS also has scoped-service/startup and selected live evidence;
+ElevenLabs STT/agent STS and the milestone's remaining acceptance checks are pending. The existing
 [speech contract](speech-provider-contract.md) and
 [session ownership](speech-session-ownership.md) remain authoritative.
 
@@ -144,9 +145,32 @@ The same owned-request, credit and cancellation requirements apply.
 `eleven_flash_v2_5` is a documented economical realtime test choice. The current
 catalog also includes newer `eleven_v4` and `eleven_v4_turbo`; support should
 validate reviewed model choices without claiming every model has identical
-transport constraints. Confirm voice availability and PCM entitlement in the
-selected bounded test before advertising acceptance.
+transport constraints. The selected bounded Flash 2.5/George request passes
+with 16 kHz PCM; this does not establish every account's voice or format entitlement.
 [Model catalog](https://elevenlabs.io/docs/overview/models).
+
+The implemented slice keeps closed configuration in `ElevenLabs.TTS`, vendor
+HTTP handling in `ElevenLabs.TTSRequest`, and a provider-owned `TTSSession`
+wrapper around `Speech.RequestTTSSession`. Only TTS and API-key configuration
+are registered. The service needs one private API key; public call settings
+require a path-safe voice ID, select Flash 2.5, Multilingual v2 or v3, and negotiate
+raw mono signed little-endian PCM at 8/16/24/48 kHz (default 16 kHz). Newer model
+families remain outside this reviewed HTTP contract.
+
+The request posts one complete phrase to `/v1/text-to-speech/{voice_id}/stream`,
+uses private `xi-api-key` authentication, and requests `pcm_<rate>` in the query.
+It accepts successful raw PCM, bounds and aligns fragmented bytes, and rejects
+empty, misaligned, oversized, unsuccessful or unsupported-format responses.
+Retries and redirects are disabled. Credit, cancellation, request task ownership,
+usage and readiness reuse the shared session contract; readiness is local
+initialization, generation completion does not establish audible playout, and
+usage is explicitly locally measured.
+
+Configuration, loopback HTTP, compiled credited-session and encrypted
+platform/tenant publication checks pass. Console uses the incumbent single-key
+setup with unavailable credential testing and independent saving. The selected
+live request passes exactly one short Flash 2.5/George phrase without retry.
+See [checkpoint evidence](../labnotes/20260930-0911-elevenlabs-request-tts.md).
 
 ## ElevenLabs STT: turn authority still needs resolution
 

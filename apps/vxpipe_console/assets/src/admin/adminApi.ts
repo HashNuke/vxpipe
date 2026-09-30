@@ -330,6 +330,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
       "openrouter",
       "fireworks",
       "cartesia",
+      "elevenlabs",
       "deepgram",
       "rime",
       "telnyx",
@@ -450,6 +451,7 @@ function providerLabel(provider: ServiceProvider) {
   return {
     rime: "Rime",
     cartesia: "Cartesia",
+    elevenlabs: "ElevenLabs",
     google: "Google AI Studio",
     openai: "OpenAI",
     vertex_ai: "Google Vertex AI",

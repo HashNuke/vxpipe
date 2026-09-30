@@ -3,6 +3,7 @@ defmodule Vxpipe.Providers.Registry do
 
   @providers %{
     "cartesia" => Vxpipe.Providers.Cartesia,
+    "elevenlabs" => Vxpipe.Providers.ElevenLabs,
     "deepseek" => Vxpipe.Providers.DeepSeek,
     "openrouter" => Vxpipe.Providers.OpenRouter,
     "fireworks" => Vxpipe.Providers.Fireworks,

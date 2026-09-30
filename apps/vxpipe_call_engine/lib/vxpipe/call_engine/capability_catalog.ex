@@ -11,6 +11,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
   alias Vxpipe.Providers.Cartesia.STT, as: CartesiaSTT
   alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
+  alias Vxpipe.Providers.ElevenLabs.TTS, as: ElevenLabsTTS
+  alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTSSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession
@@ -89,6 +91,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "cartesia"}),
     do: Registry.resolve_capability("cartesia", :tts)
 
+  def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "elevenlabs"}),
+    do: Registry.resolve_capability("elevenlabs", :tts)
+
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: Registry.resolve_capability("morse", :stt)
 
@@ -156,9 +161,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     {:ok, rime} = Registry.fetch_capability("rime", :tts)
     {:ok, google} = Registry.fetch_capability("google", :tts)
     {:ok, cartesia} = Registry.fetch_capability("cartesia", :tts)
+    {:ok, elevenlabs} = Registry.fetch_capability("elevenlabs", :tts)
     {:ok, morse} = Registry.fetch_capability("morse", :tts)
 
-    [deepgram, rime, google, cartesia, morse, Vxpipe.CallEngine.Provider.MorseCodeTTS.Session]
+    [
+      deepgram,
+      rime,
+      google,
+      cartesia,
+      elevenlabs,
+      morse,
+      Vxpipe.CallEngine.Provider.MorseCodeTTS.Session
+    ]
   end
 
   defp speech_adapters(:speech_to_speech) do
@@ -228,6 +242,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
 
   defp validate_provider_settings(CartesiaTTSSession, :text_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+
+  defp validate_provider_settings(ElevenLabsTTSSession, :text_to_speech, settings),
     do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
 
   defp validate_provider_settings(
@@ -330,6 +347,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       }) do
     with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
          {:ok, public} <- CartesiaTTS.public_options(Keyword.put(options, :model, model)) do
+      {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        provider: "elevenlabs",
+        kind: :text_to_speech,
+        model: model,
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
+         {:ok, public} <- ElevenLabsTTS.public_options(Keyword.put(options, :model, model)) do
       {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
     end
   end
@@ -445,6 +474,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "cartesia", kind: :text_to_speech}, options),
     do: validate_provider(CartesiaTTSSession, options)
+
+  defp validate_speech(%{provider: "elevenlabs", kind: :text_to_speech}, options),
+    do: validate_provider(ElevenLabsTTSSession, options)
 
   defp validate_speech(%{provider: "openai", kind: :speech_to_speech}, options) do
     case GPTLive.public_options(options) do

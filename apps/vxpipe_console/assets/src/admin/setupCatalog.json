@@ -34,6 +34,16 @@
       "sampleCapabilities": ["stt", "tts"]
     },
     {
+      "id": "elevenlabs",
+      "name": "ElevenLabs",
+      "description": "Speak with ElevenLabs voices.",
+      "capabilities": ["tts"],
+      "defaultModels": {
+        "tts": "eleven_flash_v2_5"
+      },
+      "sampleCapabilities": ["tts"]
+    },
+    {
       "id": "google",
       "name": "Google AI Studio",
       "description": "Connect Gemini language, transcription, and speech synthesis.",

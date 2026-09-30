@@ -36,3 +36,18 @@ test("stores only new credential metadata", () => {
     resultVersion: 1,
   });
 });
+
+test("saving an ElevenLabs service does not claim upstream validation", () => {
+  const result = applyCredentialCreation(serviceFixture("empty"), {
+    provider: "elevenlabs",
+    values: { apiKey: "synthetic-private-input" },
+  });
+
+  expect(result.status).toBe("ready");
+  if (result.status !== "ready") return;
+  expect(result.services.at(-1)).toMatchObject({
+    provider: "elevenlabs",
+    lastValidatedAt: null,
+  });
+  expect(JSON.stringify(result)).not.toContain("synthetic-private-input");
+});

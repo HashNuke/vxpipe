@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
   alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
+  alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTSSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
   alias Vxpipe.CallEngine.ConnectionSpeechPreparation
 
@@ -546,6 +547,136 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
       assert {:error, %{code: :unsupported_call_plan}} = PlanStartup.validate(changed, options())
     end
+  end
+
+  test "ElevenLabs compiled TTS uses its scoped credential and measured credited audio" do
+    alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session, TTSUsage}
+    plan = elevenlabs_plan()
+    assert {:ok, startup} = PlanStartup.new(plan, elevenlabs_options())
+    assert {ElevenLabsTTSSession, public} = startup.text_to_speech.provider
+    assert Keyword.fetch!(public, :model) == "eleven_flash_v2_5"
+    assert Keyword.fetch!(public, :voice) == "JBFqnCBsd6RMkjVDRZzb"
+    assert Keyword.fetch!(public, :sample_rate) == 16_000
+
+    assert [config: config, request_module: Vxpipe.Providers.ElevenLabs.TTSRequest] =
+             startup.text_to_speech.provider_private
+
+    assert config.api_key == "synthetic-elevenlabs-private-marker"
+    assert startup.text_to_speech.usage_provider.name == "elevenlabs"
+    refute inspect(startup) =~ "synthetic-elevenlabs-private-marker"
+    refute :erlang.term_to_binary(plan) =~ "synthetic-elevenlabs-private-marker"
+    assert_received {:tenant_credential_resolved, "tenant-inline", "elevenlabs", "default"}
+
+    config = %{config | endpoint: self()}
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: ElevenLabsTTSSession,
+               options: public,
+               private: [config: config, request_module: Vxpipe.CallEngine.TestRequestTTS],
+               usage: true
+             )
+
+    assert_receive {:vxpipe_speech, %Event{kind: :ready} = ready}
+    assert :ok = Session.ack(session, ready)
+    assert {:ok, %{ref: request} = handle} = Session.speak(session, "Hello")
+
+    assert_receive {:vxpipe_speech,
+                    %Event{request_ref: ^request, kind: :input_submitted} = submitted}
+
+    assert :ok = Session.ack(session, submitted)
+    assert_receive {:test_request_tts_started, worker, "Hello"}
+    pcm = :binary.copy(<<1, 0>>, 16_000)
+    send(worker, {:audio, pcm})
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session, payload: ^pcm} = audio}
+    assert :ok = Session.validate_audio(session, audio)
+    refute_received {:test_request_tts_audio_consumed, ^worker, :ok}
+    assert :ok = Session.ack_audio(session, audio)
+    assert_receive {:test_request_tts_audio_consumed, ^worker, :ok}
+    send(worker, :complete)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{request_ref: ^request, kind: :completed, usage: %TTSUsage{} = usage} =
+                      completed}
+
+    assert :ok = Session.ack(session, completed)
+    assert usage.input_characters == 5
+    assert usage.generated_bytes == byte_size(pcm)
+    assert usage.provenance == :locally_measured
+
+    assert usage.usage_identity == %{
+             provider: :elevenlabs,
+             model: "eleven_flash_v2_5",
+             provenance: :locally_measured
+           }
+
+    assert :ok = Session.settle_output(session, handle, 1_000)
+    assert :ok = Session.close(session)
+  end
+
+  test "ElevenLabs admission rejects unreviewed models, voice paths and private options" do
+    for selection <- [
+          %{provider: "elevenlabs", model: "invented", options: %{voice: "JBFqnCBsd6RMkjVDRZzb"}},
+          %{provider: "elevenlabs", model: "eleven_flash_v2_5", options: %{voice: "../other"}},
+          %{
+            provider: "elevenlabs",
+            model: "eleven_flash_v2_5",
+            options: %{voice: "JBFqnCBsd6RMkjVDRZzb", api_key: "synthetic"}
+          },
+          %{
+            provider: "elevenlabs",
+            model: "eleven_flash_v2_5",
+            options: %{voice: "JBFqnCBsd6RMkjVDRZzb", endpoint: "https://invalid.example"}
+          }
+        ] do
+      assert {:error, _reason} =
+               Vxpipe.CallEngine.CallSpec.CapabilitySelection.new(
+                 selection,
+                 :text_to_speech,
+                 ["text_to_speech"]
+               )
+    end
+  end
+
+  test "ElevenLabs startup rejects disabled settings and credentials from another provider" do
+    options = elevenlabs_options()
+
+    disabled = [providers: %{ElevenLabsTTSSession => [enabled: false, maximum_requests: 4]}]
+
+    assert {:error, _error} =
+             PlanStartup.new(elevenlabs_plan(), Keyword.put(options, :text_to_speech, disabled))
+
+    missing =
+      Keyword.put(options, :credential_source, Keyword.fetch!(options(), :credential_source))
+
+    assert {:error, _error} = PlanStartup.new(elevenlabs_plan(), missing)
+  end
+
+  defp elevenlabs_plan do
+    plan(%{
+      provider: "elevenlabs",
+      model: "eleven_flash_v2_5",
+      options: %{voice: "JBFqnCBsd6RMkjVDRZzb", sample_rate: 16_000}
+    })
+  end
+
+  defp elevenlabs_options do
+    options = options()
+
+    {TestTenantCredentialSource, {observer, bindings}} =
+      Keyword.fetch!(options, :credential_source)
+
+    bindings =
+      Map.put(bindings, {"tenant-inline", "elevenlabs", "default"}, %{
+        "api_key" => "synthetic-elevenlabs-private-marker"
+      })
+
+    options
+    |> Keyword.put(:credential_source, {TestTenantCredentialSource, {observer, bindings}})
+    |> Keyword.put(:text_to_speech,
+      providers: %{ElevenLabsTTSSession => [enabled: true, maximum_requests: 4]}
+    )
   end
 
   defp cartesia_plan do

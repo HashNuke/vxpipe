@@ -113,6 +113,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "catalog contains explicit capability metadata" do
     assert Registry.catalog() == %{
              "cartesia" => [:credential, :stt, :tts],
+             "elevenlabs" => [:credential, :tts],
              "deepseek" => [:credential, :credential_validation],
              "openrouter" => [:credential, :credential_validation],
              "fireworks" => [:credential],
@@ -128,7 +129,16 @@ defmodule Vxpipe.Providers.RegistryTest do
   end
 
   test "credential schemas declare the accepted auth kind for consumers" do
-    for provider <- ["cartesia", "deepgram", "google", "openai", "rime", "telnyx", "zenmux"] do
+    for provider <- [
+          "cartesia",
+          "elevenlabs",
+          "deepgram",
+          "google",
+          "openai",
+          "rime",
+          "telnyx",
+          "zenmux"
+        ] do
       assert {:ok, schema} = Registry.resolve_capability(provider, :credential)
       assert schema.auth_kind() == "api_key"
     end
@@ -140,7 +150,16 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "credential schemas declare ordered, safe inventory previews" do
     api_key_preview = [%{field: "api_key", label: "API key", display: :last_four}]
 
-    for provider <- ["cartesia", "deepgram", "google", "openai", "rime", "telnyx", "zenmux"] do
+    for provider <- [
+          "cartesia",
+          "elevenlabs",
+          "deepgram",
+          "google",
+          "openai",
+          "rime",
+          "telnyx",
+          "zenmux"
+        ] do
       assert {:ok, schema} = Registry.resolve_capability(provider, :credential)
       assert schema.preview_fields() == api_key_preview
     end

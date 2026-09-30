@@ -103,6 +103,10 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
         enabled: true,
         maximum_requests: 4
       ],
+      Vxpipe.Providers.ElevenLabs.TTSSession => [
+        enabled: true,
+        maximum_requests: 4
+      ],
       Vxpipe.CallEngine.Provider.MorseCodeTTS.Session => [
         enabled: true,
         maximum_requests: 4

@@ -218,7 +218,7 @@ export function applyCredentialCreation(
         provider: draft.provider,
         credentialName: draft.provider,
         credentialPreview: [],
-        lastValidatedAt: new Date().toISOString(),
+        lastValidatedAt: null,
         updatedAt: new Date().toISOString(),
       },
     ],
@@ -229,6 +229,7 @@ function providerLabel(provider: CredentialDraft["provider"]) {
   return {
     rime: "Rime",
     cartesia: "Cartesia",
+    elevenlabs: "ElevenLabs",
     google: "Google AI Studio",
     openai: "OpenAI",
     vertex_ai: "Google Vertex AI",

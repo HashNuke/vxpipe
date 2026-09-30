@@ -20,6 +20,23 @@ test.each([
   expect(submit).toHaveBeenCalledWith({provider: "cartesia", values: {apiKey: "synthetic-cartesia"}});
 });
 
+test.each([
+  {kind: "platform"} as const,
+  {kind: "tenant", tenantKey: "demo", tenantName: "Demo"} as const,
+])("ElevenLabs saves its single private key for the selected scope: %j", (scope) => {
+  const submit = vi.fn();
+  render(<ServiceSetupModal state={{provider: "elevenlabs", status: "idle"}} scope={scope} onClose={vi.fn()} onSelect={vi.fn()} onSubmit={submit} onTest={vi.fn()} />);
+  expect(screen.getByRole("dialog", {name: "Connect ElevenLabs"})).toBeVisible();
+  expect(screen.getByText("Text-to-speech")).toBeVisible();
+  expect(screen.queryByText("Speech-to-text")).not.toBeInTheDocument();
+  expect(screen.queryByText("Speech-to-speech")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
+  expect(screen.getByRole("button", {name: "Test credentials"})).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("API key"), {target: {value: "synthetic-elevenlabs"}});
+  fireEvent.click(screen.getByRole("button", {name: "Save"}));
+  expect(submit).toHaveBeenCalledWith({provider: "elevenlabs", values: {apiKey: "synthetic-elevenlabs"}});
+});
+
 test("credential dialog keeps only its edit actions", () => {
   render(
     <ServiceSetupModal

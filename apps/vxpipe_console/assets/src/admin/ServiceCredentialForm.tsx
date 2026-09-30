@@ -23,6 +23,7 @@ const providers = setupProviders.map((provider) => ({
 }));
 const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
   "cartesia",
+  "elevenlabs",
   "deepgram",
   "google",
   "openai",
@@ -31,6 +32,11 @@ const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
   "deepseek",
   "openrouter",
   "fireworks",
+]);
+const credentialTestUnavailableProviders: ReadonlySet<ServiceProvider> = new Set([
+  "fireworks",
+  "cartesia",
+  "elevenlabs",
 ]);
 
 export function ServiceCredentialForm({
@@ -69,7 +75,7 @@ export function ServiceCredentialForm({
   const [publicKey, setPublicKey] = useState("");
   const supportedProvider =
     apiKeyProviders.has(provider) || provider === "telnyx" || provider === "twilio";
-  const supportsCredentialTest = supportedProvider && provider !== "fireworks" && provider !== "cartesia";
+  const supportsCredentialTest = supportedProvider && !credentialTestUnavailableProviders.has(provider);
   const includePublicKey = provider === "telnyx" && showTelnyxPublicKey;
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -264,7 +270,7 @@ export function ServiceCredentialForm({
           Credential stored.
         </p>
       ) : null}
-      {provider === "fireworks" || provider === "cartesia" ? (
+      {credentialTestUnavailableProviders.has(provider) ? (
         <p className="text-sm text-[var(--admin-muted)]">
           Credential testing is unavailable for this provider. You can save its API key and verify it with a call.
         </p>

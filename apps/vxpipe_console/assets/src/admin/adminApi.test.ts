@@ -464,7 +464,7 @@ test("maps a created credential response without accepting private response fiel
   ).toThrow("Invalid credential response");
 });
 
-for (const [provider, name] of [["rime", "Rime"], ["cartesia", "Cartesia"]] as const) {
+for (const [provider, name] of [["rime", "Rime"], ["cartesia", "Cartesia"], ["elevenlabs", "ElevenLabs"]] as const) {
 test(`keeps saved ${name} credentials readable in the tenant service inventory`, () => {
   const directory = parseServiceDirectory({
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },

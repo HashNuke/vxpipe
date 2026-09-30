@@ -76,6 +76,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
   defp configure_provider(Vxpipe.Providers.Cartesia.TTSSession, options, :text_to_speech),
     do: Vxpipe.Providers.Cartesia.TTS.new(options)
 
+  defp configure_provider(Vxpipe.Providers.ElevenLabs.TTSSession, options, :text_to_speech),
+    do: Vxpipe.Providers.ElevenLabs.TTS.new(options)
+
   defp configure_provider(provider, options, :text_to_speech) do
     case provider.configure(options) do
       {:ok, _descriptor} -> {:ok, options}

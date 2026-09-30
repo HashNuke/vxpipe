@@ -6,6 +6,7 @@ import {
 
 const capabilities = {
   cartesia: ["credential", "stt", "tts"],
+  elevenlabs: ["credential", "tts"],
   deepgram: ["credential", "credential_validation", "stt", "tts"],
   google: ["credential", "credential_validation", "stt", "tts"],
   openai: ["credential", "credential_validation", "sts"],
@@ -21,6 +22,7 @@ test("Setup offers installed providers and only their implemented call capabilit
     "deepgram",
     "rime",
     "cartesia",
+    "elevenlabs",
     "google",
     "openai",
     "zenmux",
@@ -53,6 +55,15 @@ test("Cartesia filters capabilities against the installed manifest", () => {
   const [provider] = installedSetupProviders({cartesia: ["credential", "tts"]});
   expect(provider).toMatchObject({id: "cartesia", capabilities: ["tts"], defaultModels: {tts: "sonic-3.6"}});
   expect(providersFor("tts", [{provider: "cartesia", status: "connected"}], [provider!])).toHaveLength(1);
+});
+
+test("ElevenLabs offers installed phrase synthesis with its reviewed default model", () => {
+  const [provider] = installedSetupProviders({elevenlabs: ["credential", "tts"]});
+  expect(provider).toMatchObject({id: "elevenlabs", name: "ElevenLabs", capabilities: ["tts"],
+    defaultModels: {tts: "eleven_flash_v2_5"}});
+  expect(providersFor("tts", [{provider: "elevenlabs", status: "connected"}], [provider!])).toHaveLength(1);
+  expect(provider?.capabilities).not.toContain("stt");
+  expect(provider?.capabilities).not.toContain("s2s");
 });
 
 test("Cartesia offers Ink transcription and Sonic synthesis from one service", () => {

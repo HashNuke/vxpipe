@@ -8,6 +8,7 @@ export type CredentialField =
 
 export type ServiceProvider =
   | "cartesia"
+  | "elevenlabs"
   | "rime"
   | "google"
   | "openai"

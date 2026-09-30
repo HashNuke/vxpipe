@@ -309,7 +309,7 @@ test("Telnyx accepts an API key alone or both keys, rejects malformed public key
   expect(screen.getByLabelText("Public key")).toHaveValue("");
 });
 
-for (const provider of ["deepseek", "openrouter", "fireworks", "cartesia"] as const) {
+for (const provider of ["deepseek", "openrouter", "fireworks", "cartesia", "elevenlabs"] as const) {
   test(`${provider} setup submits its single private key`, () => {
     const submit = vi.fn();
     render(<ServiceCredentialForm initialProvider={provider} onCancel={vi.fn()} onSubmit={submit} status="idle" />);
@@ -319,7 +319,7 @@ for (const provider of ["deepseek", "openrouter", "fireworks", "cartesia"] as co
   });
 }
 
-for (const provider of ["fireworks", "cartesia"] as const) {
+for (const provider of ["fireworks", "cartesia", "elevenlabs"] as const) {
 test(`${provider} saves independently and does not offer an unsupported credential probe`, () => {
   const probe = vi.fn();
   const submit = vi.fn();

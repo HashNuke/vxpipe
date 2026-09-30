@@ -8,6 +8,8 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
   alias Vxpipe.Providers.Cartesia.TTS, as: CartesiaTTS
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
+  alias Vxpipe.Providers.ElevenLabs.TTS, as: ElevenLabsTTS
+  alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTSSession
 
   @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}
   @enforce_keys [
@@ -102,6 +104,24 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
 
       with {:ok, descriptor} <- CartesiaTTSSession.configure(public) do
         {:ok, {CartesiaTTSSession, public}, [config: config, request_module: request_module],
+         descriptor}
+      end
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  def provider({ElevenLabsTTSSession, %ElevenLabsTTS{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         nil <- Keyword.get(settings, :wire_module),
+         nil <- Keyword.get(settings, :wire_options),
+         request_module when is_atom(request_module) <-
+           Keyword.get(settings, :request_module, Vxpipe.Providers.ElevenLabs.TTSRequest) do
+      public = [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
+
+      with {:ok, descriptor} <- ElevenLabsTTSSession.configure(public) do
+        {:ok, {ElevenLabsTTSSession, public}, [config: config, request_module: request_module],
          descriptor}
       end
     else

@@ -4,7 +4,8 @@ Status: telephony and AI live modules use Mix tags, with `:live_providers`
 excluded by default. Selected Gemini, Deepgram, OpenAI, DeepSeek, OpenRouter
 and Fireworks protocol checks have passing evidence. The configured-service
 live harness remains separate work; local encrypted service tests prove scoped
-resolution and publication. Cartesia and ElevenLabs integration is pending.
+resolution and publication. Cartesia STT/TTS and ElevenLabs TTS have selected
+passing live checks; ElevenLabs STT and conversational agent STS remain pending.
 
 ## Decision
 
@@ -201,7 +202,7 @@ uses `ink-2` and reuses the committed public 16 kHz PCM sample, adding paced
 silence within a ten-second input budget. It opens one connection, verifies
 semantic turns and the final word, then requires close-and-drain completion.
 It never generates another provider's sample. Both Cartesia checks passed on
-2026-09-30; ElevenLabs live cases remain pending.
+2026-09-30.
 
 ```shell
 bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_text_to_speech_test.exs
@@ -210,6 +211,24 @@ bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integr
 
 Run these commands individually. See [TTS evidence](../labnotes/20260930-0705-cartesia-request-tts.md)
 and [STT evidence](../labnotes/20260930-0753-cartesia-turn-stt.md).
+
+ElevenLabs TTS uses `eleven_flash_v2_5`, the documented stock George voice
+(`JBFqnCBsd6RMkjVDRZzb`) and 16 kHz raw PCM from the shared test catalog.
+Its selected test sends exactly one short phrase, disables retries and redirects,
+acknowledges PCM credit, and bounds generated audio to ten seconds with a
+30-second observation deadline. It requires locally measured character/audio
+usage and generation settlement; no audible output device is attached and it
+does not claim the audio was heard. One test passed on 2026-09-30. Local encrypted
+service checks separately prove platform inheritance, tenant override, private
+credential redaction and published compiled startup. Saving the service does
+not run or claim an authentication-only probe.
+
+```shell
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_text_to_speech_test.exs
+```
+
+See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.md).
+Standalone STT and conversational agent STS have no accepted live cases yet.
 
 Cloudflare/Vercel gateway implementation is deferred. There is no current
 `live_cloudflare` lane or gateway provider catalog entry. See the separate

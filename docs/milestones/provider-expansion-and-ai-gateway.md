@@ -1,10 +1,10 @@
 # Provider expansion and live acceptance
 
 Status: In progress. Authorized 2026-09-30. Gemini, repaired Deepgram speech,
-repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks and Cartesia STT/TTS
-have selected passing live evidence. Cartesia has scoped publication/startup
-checks and Console metadata. ElevenLabs, shared room acceptance and the final
-repository completion gates remain.
+repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks, Cartesia STT/TTS
+and ElevenLabs TTS have selected passing live evidence. Both speech providers
+have scoped publication/startup checks and implemented-capability Console metadata.
+ElevenLabs STT/agent STS, shared room acceptance and final milestone gates remain.
 
 Prerequisites: [Provider integration packages](provider-integration-packages.md),
 [Rime and Google speech providers](rime-and-google-speech-providers.md),
@@ -41,7 +41,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Keep generic LLM inference in ReqLLM and credentials/probes in provider packages.
 - [x] Keep gateways separate from provider/model identity; defer implementation.
 - [x] Review Cartesia session, interruption, transcript and audio contracts.
-- [ ] Review ElevenLabs STT/TTS and agent STS separately from voice conversion.
+- [x] Review ElevenLabs phrase TTS request, credit, PCM, cancellation and usage contracts.
+- [ ] Resolve ElevenLabs STT turn authority and review agent STS separately from voice conversion.
 - [ ] Establish scoped credentials, startup/cancellation, usage and supervision
   contracts for both speech providers before implementation.
 
@@ -63,7 +64,8 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Isolate Cartesia/ElevenLabs keys and add template placeholders.
 - [x] Add reviewed Cartesia TTS model/voice selection and its bounded live case.
 - [x] Add Cartesia STT selection and its bounded live case.
-- [ ] Add ElevenLabs selections and live cases.
+- [x] Add ElevenLabs TTS Flash 2.5/George selection and one bounded live case.
+- [ ] Add ElevenLabs STT and conversational agent STS selections/live cases after contract review.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
 
@@ -80,14 +82,16 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 
 - [x] Implement Cartesia TTS through an owned credited request session.
 - [x] Implement Cartesia STT through an owned semantic speech session.
-- [ ] Implement ElevenLabs STT and TTS through owned semantic speech sessions.
+- [x] Implement ElevenLabs phrase TTS through an owned credited request session.
+- [ ] Implement ElevenLabs STT after approving authoritative speech-start/turn-end ownership.
 - [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
 - [ ] Exercise compiled room support and relevant shared conformance checks.
 - [x] Pass one bounded selected Cartesia TTS live test.
 - [x] Pass one bounded selected Cartesia STT live test.
-- [ ] Run selected ElevenLabs speech live tests.
+- [x] Pass one bounded selected ElevenLabs TTS live test.
+- [ ] Run selected ElevenLabs STT and conversational agent STS live tests.
 
 ## Checkpoint E — Platform and tenant Console
 
@@ -100,7 +104,12 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Verify Cartesia TTS scoped save, capability catalog, persisted publication,
   compiled startup and rendered platform/tenant forms at desktop/narrow widths.
 - [x] Extend Cartesia persisted publication/startup and Console metadata to STT.
-- [ ] Repeat scoped acceptance for ElevenLabs.
+- [x] Verify ElevenLabs TTS single-key saves, registered capability metadata,
+  encrypted publication, compiled credited startup and tenant/platform precedence locally.
+- [x] Inspect ElevenLabs TTS platform/tenant blank-key forms at desktop/narrow widths;
+  independent rendered review returns `ship` for these four captured states.
+- [x] Complete all five root gates and Lean acceptance for the ElevenLabs TTS checkpoint.
+- [ ] Extend ElevenLabs scoped acceptance to STT and conversational agent STS.
 
 ## Checkpoint F — Acceptance
 
@@ -178,3 +187,18 @@ All five root completion gates pass; the same-seed full run reports 2,924 tests,
 zero failures and 74 exclusions, including all 522 Gateway tests. Production
 protocols, timeouts and state machines are unchanged. The milestone remains
 in progress while ElevenLabs and final shared acceptance are pending.
+
+The [ElevenLabs request TTS checkpoint](../../labnotes/20260930-0911-elevenlabs-request-tts.md)
+adds only its implemented TTS capability and a single private API-key schema.
+Vendor HTTP/configuration/PCM handling stays in its provider directory; the
+shared owned request session supplies credit, cancellation and measured usage.
+Compiled session, registry, loopback HTTP and encrypted platform/tenant
+publication checks pass. One selected Flash 2.5/George/16 kHz live request passes
+with no retry. Frontend tests pass 216 checks with TypeScript and lint clean.
+Independent rendered review returns `ship` for the four blank-key forms. The
+root run passes all 2,931 reported tests with zero failures and 82 exclusions,
+seed 149103, including 1,724 CallEngine, 522 Gateway and 194 Console checks.
+All five root completion gates and Lean pass for this checkpoint. Seven local
+HTTP checks also pass after replacing a swallowed callback assertion with
+explicit unexpected-PCM observation. STT and agent STS remain unimplemented
+and are not advertised by the Console catalog; the milestone/index remain open.
