@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 35 milestone specifications: 24 complete and 11 incomplete. Milestone 17, Telnyx calls and
+Status: 38 milestone specifications: 27 complete and 11 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -161,8 +161,10 @@ progress without claiming the entire milestone is complete.
 32. [x] [Rime and Google speech providers](rime-and-google-speech-providers.md) — Add Rime and Google speech through scoped sessions, refine Deepgram's provider-level API and voice selection, and prove each capability before advertising it.
 33. [ ] [Agent speech-to-speech](agent-speech-to-speech.md) — Add an agent-owned STS capability, explicit provider or output-STT transcript modes, Morse proof, Gemini 3.8 Live, and room-authorized turn/playback routing. All four transcript-source combinations have embedded room PCM proof; native input conversion/readiness also passes. Provider-controlled caller turns, agent output and tool publications use room-owned IDs with exact-source checks. Supervised tool execution and local agent-output retirement have focused proof; ordered tool continuation, full turn-controller/native conversations, complete lifecycle and final acceptance remain open. Earlier intermittent Gateway handoff failures remain under investigation despite subsequent green gates.
 34. [ ] [GPT-Live speech-to-speech](gpt-live-speech-to-speech.md) — Add OpenAI GPT-Live as an agent STS provider through a duplex profile: adapter-inferred turns, segmented and transcript-aligned output, provider-owned barge-in, delegated tools and history-reseeded continuity, proven locally with a Morse duplex provider. A–E are locally verified, including the room-ordered reseed snapshot. OpenAI LLM and GPT-Live setup are enabled with one tenant API key; the opt-in hosted harness is committed, while the authorized service and phone check remains open.
-35. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-36. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+35. [ ] [Provider expansion and live acceptance](provider-expansion-and-ai-gateway.md) — Verify existing live providers and add direct LLM, Cartesia and ElevenLabs service/room support; gateway implementation deferred.
+36. [ ] [AI gateway routing](ai-gateway-routing.md) — Design separate upstream/provider and gateway routing contracts for Cloudflare, Vercel and future gateways; implementation deferred.
+37. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+38. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
