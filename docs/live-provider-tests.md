@@ -232,6 +232,22 @@ See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.m
 
 ### ElevenLabs Scribe protocol
 
+The long VAD experiment is independently selectable:
+
+```shell
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_long_vad_test.exs
+```
+
+It reuses the public fixture, repeats only its speech portion, and submits at
+most 45 seconds of PCM on one connection without a manual commit. One selected
+run passes (44.0 seconds, seed 364893): a segment arrives during the repeated
+speech phase at 36 seconds of accepted client audio and another during silence
+at 43.04 seconds. These are receipt positions, not provider processing cursors
+or commit reasons. This protocol experiment does not establish natural-speech
+quality or admit segment commits as room turn ends. See
+[long VAD evidence](../labnotes/20261001-0102-scribe-long-vad.md). Do not repeat
+the paid experiment merely to verify unrelated changes.
+
 The preparation test uses fixed `scribe_v2_realtime`, 16 kHz PCM and the existing
 public Deepgram sample with one second of additional silence (5.16 seconds
 total). It opens one connection, paces bounded chunks, explicitly commits and

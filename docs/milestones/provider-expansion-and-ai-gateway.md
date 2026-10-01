@@ -109,6 +109,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Prepare closed Scribe VAD query/acknowledgement handling with focused offline tests.
 - [x] Fix native VAD probe thresholds explicitly and reject conflicting optional echoes locally.
 - [x] Pass the separately selected short Scribe VAD case without a manual commit.
+- [x] Observe one bounded long Scribe VAD stream with ordered segment receipt positions.
 - [ ] Resolve long-input endpoint identity and semantics.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
@@ -351,3 +352,23 @@ workers retain exact reference probabilities through one shared model. No
 model/dependency, supervised activity owner or STT manifest capability is added.
 Production deployment/execution bounds and local-onset/native-end correlation
 remain unchecked. See [research labnotes](../../labnotes/20261001-0037-speech-activity-feasibility.md).
+
+The [long VAD experiment](../../labnotes/20261001-0102-scribe-long-vad.md)
+passes one selected live case in 44.0 seconds, seed 364893. A committed segment
+arrives during the repeated-speech input phase at 36 seconds of accepted client
+audio; another arrives during silence at 43.04 seconds. Receipt positions do not
+identify processed input or commit causes. This evidence keeps segment commits
+separate from authoritative room turn ends; long-input turn ownership remains
+unchecked. No previously passing paid case is repeated.
+
+Design review of this evidence rejects local onset combined with every native
+commit as a turn end. Controlled manual segment submission below buffer limits,
+with one outstanding commit and explicit failure for missing settlement, is a
+candidate for further protocol verification. It must establish finalization and
+acoustic boundary ownership before STT admission; no shared contract is amended
+by this experiment.
+
+The long-probe checkpoint passes all five root gates. The default umbrella run
+reports 2,973 tests, zero failures, 91 exclusions, seed 536614. Its new live
+module is excluded; this does not repeat the paid experiment or complete the
+pending conversational STT acceptance.

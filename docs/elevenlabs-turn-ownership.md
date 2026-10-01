@@ -42,6 +42,32 @@ cannot prove long uninterrupted-input behavior or manufacture speech-start.
 Resolve the long-input contract from primary sources before authorizing a larger
 paid matrix; any such experiment needs ordered accepted-sample/message evidence.
 
+### Long VAD observation — 2026-10-01
+
+One separately selected long-input experiment passes: one test, zero failures,
+44.0 seconds, seed 364893. It removes the public fixture's known two-second
+silence tail, repeats the remaining phrase nineteen times (41.04 seconds), then
+sends two seconds of zero PCM. It sends no manual commit. Ordered observations
+record two committed segments: one during the repeated-speech input phase at
+36,000 ms of accepted client audio, and one during the silence phase at
+43,040 ms. Both preserve the known public-fixture word.
+
+Receipt position is not a server processed-through cursor or a commit reason.
+Phrase repetition is a protocol experiment, not continuous natural speech or
+an acoustic quality corpus. The first observation is consistent with the
+documented buffer limit also affecting VAD mode, but does not establish its
+cause. It does not provide enough evidence to treat every VAD commit as an
+authoritative silence endpoint. The long-input admission gate remains open.
+See [experiment evidence](../labnotes/20261001-0102-scribe-long-vad.md).
+
+The local-onset/native-commit shortcut therefore remains inadmissible. Evaluate
+controlled manual segment boundaries separately from acoustic turn ownership:
+cap submitted audio below automatic-commit limits, allow only one outstanding
+commit, and stop submitting new audio until its segment is settled. Verify
+empty/unrecognized input and early or delayed segments explicitly. A deadline
+must fail the allocation rather than invent a final transcript. This is a
+candidate protocol, not an approved finalization guarantee or implemented STT.
+
 The preparation codec now accepts only the explicit `:manual`/`:vad` strategies
 and checks any returned commit-strategy acknowledgement against the requested
 mode. Its socket carries that expected mode privately. Nine focused offline
