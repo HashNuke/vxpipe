@@ -1,10 +1,11 @@
 # ElevenLabs input turn ownership
 
-Status: Design proposal, updated 2026-10-01. Scribe manual, short/long native VAD
-protocol experiments and bounded manual recognition assembly are verified;
-native VAD admission and the fallback boundary composition are not implemented
-or admitted by the conversational STT contract. This document records unresolved
-feasibility gates separately from milestone progress.
+Status: Historical feasibility proposal, updated 2026-10-01. The
+[allocation-owned session checkpoint](elevenlabs-stt-session.md) now implements
+and admits the STT-only local acoustic composition and passes its selected
+two-turn live case. Scoped services, compiled room startup and Console STT
+integration remain pending. The investigation below records earlier evidence
+and rejected native-VAD shortcuts; it is not the current implementation checklist.
 
 The user-approved 2026-10-01 milestone scope is ElevenLabs realtime STT and TTS.
 Hosted-agent STS is deferred; this proposal addresses caller STT only.

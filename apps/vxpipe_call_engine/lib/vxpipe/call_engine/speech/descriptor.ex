@@ -57,7 +57,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           finite_input?: boolean(),
           usage_identity: map(),
           readiness: :initialized | :provider_acknowledged,
-          endpointing: :provider_semantic | :provider_gap | :inferred_gap | :external | :none,
+          endpointing:
+            :provider_semantic | :provider_gap | :local_gap | :inferred_gap | :external | :none,
           speech_start?: boolean(),
           response_start?: boolean(),
           eager_end?: boolean(),
@@ -95,13 +96,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          is_map(descriptor.settings) and
          valid_format?(descriptor.format) and valid_identity?(descriptor.usage_identity) and
          descriptor.readiness in [:initialized, :provider_acknowledged] and
-         descriptor.endpointing in [
-           :provider_semantic,
-           :provider_gap,
-           :inferred_gap,
-           :external,
-           :none
-         ] and
+         valid_endpointing?(descriptor) and
          is_boolean(descriptor.speech_start?) and is_boolean(descriptor.eager_end?) and
          is_boolean(descriptor.response_start?) and
          (not descriptor.response_start? or descriptor.kind == :sts) and
@@ -123,7 +118,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   def validate_conversational_stt(%__MODULE__{} = descriptor) do
     with :ok <- validate(descriptor),
          true <- descriptor.kind == :stt,
-         true <- descriptor.endpointing in [:provider_semantic, :provider_gap],
+         true <- descriptor.endpointing in [:provider_semantic, :provider_gap, :local_gap],
          true <- descriptor.speech_start? do
       :ok
     else
@@ -132,6 +127,18 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   end
 
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
+
+  defp valid_endpointing?(%{kind: :stt, endpointing: :local_gap}), do: true
+
+  defp valid_endpointing?(descriptor),
+    do:
+      descriptor.endpointing in [
+        :provider_semantic,
+        :provider_gap,
+        :inferred_gap,
+        :external,
+        :none
+      ]
 
   defp valid_duplex_facts?(descriptor) do
     descriptor.output_shape in [:turns, :continuous] and

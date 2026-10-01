@@ -90,6 +90,43 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     end
   end
 
+  test "waits for opening TTS readiness when the caller output is already ready" do
+    configure_speech_runtime(tts_ready?: false)
+    plan = compile_plan(receiver: :human, wait_sounds: %{})
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, transport, _connection}, 1_000
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-opening-before-tts")
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
+    assert_receive {:test_stt_transport_started, _stt, _connection}, 1_000
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    await_output_observation(
+      authority,
+      command.connection_id,
+      System.monotonic_time(:millisecond) + 1_000
+    )
+
+    refute_receive {:test_tts_control, ^transport, _premature_request}, 100
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"Connected","request_id":"opening-ready"})
+    )
+
+    assert_receive {:test_tts_control, ^transport, speak}, 1_000
+    assert JSON.decode!(speak) == %{"text" => "This call may be recorded.", "type" => "Speak"}
+    assert_receive {:test_tts_control, ^transport, _flush}, 1_000
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+
+    monitor = Process.monitor(authority)
+    assert :ok = GenServer.stop(authority, :shutdown)
+    assert_receive {:DOWN, ^monitor, :process, ^authority, :shutdown}
+  end
+
   test "reports TTS and opening blockers until actual setup readiness" do
     attach_opening_audio_telemetry()
     configure_speech_runtime(tts_ready?: false)
@@ -1025,6 +1062,22 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     end
   end
 
+  defp await_output_observation(authority, connection_id, deadline) do
+    state = :sys.get_state(authority)
+    wait = Map.get(state.startup.waits, connection_id)
+
+    if match?(%{status: status} when status != :checking, wait) do
+      :ok
+    else
+      assert System.monotonic_time(:millisecond) < deadline, "caller output did not become ready"
+
+      receive do
+      after
+        5 -> await_output_observation(authority, connection_id, deadline)
+      end
+    end
+  end
+
   defp compile_plan(options \\ []) do
     opening_credential_name = Keyword.get(options, :opening_credential_name, "default")
 
@@ -1128,8 +1181,15 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     on_exit(fn ->
       case Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
-        [{authority, _}] -> GenServer.stop(authority, :shutdown)
-        [] -> :ok
+        [{authority, _}] ->
+          try do
+            GenServer.stop(authority, :shutdown)
+          catch
+            :exit, {:noproc, _call} -> :ok
+          end
+
+        [] ->
+          :ok
       end
     end)
 

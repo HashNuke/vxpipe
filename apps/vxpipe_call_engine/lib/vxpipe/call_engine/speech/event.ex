@@ -72,6 +72,14 @@ defmodule Vxpipe.CallEngine.Speech.Event do
       do: descriptor.resume?
 
   def supported?(
+        %__MODULE__{kind: :turn_ended, endpointing: :local_gap},
+        %{kind: :stt, endpointing: :local_gap}
+      ),
+      do: true
+
+  def supported?(%__MODULE__{endpointing: :local_gap}, _descriptor), do: false
+
+  def supported?(
         %__MODULE__{kind: :eager_turn_ended, endpointing: evidence},
         %{kind: kind} = descriptor
       )
@@ -222,7 +230,13 @@ defmodule Vxpipe.CallEngine.Speech.Event do
        do:
          is_reference(reference) and is_binary(text) and
            (kind == :transcript or
-              event.endpointing in [:provider_semantic, :provider_gap, :inferred_gap, :external])
+              event.endpointing in [
+                :provider_semantic,
+                :provider_gap,
+                :local_gap,
+                :inferred_gap,
+                :external
+              ])
 
   defp valid_kind?(%__MODULE__{kind: kind, turn_ref: reference, text: text} = event)
        when kind in [:input_transcript],

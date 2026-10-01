@@ -6,6 +6,45 @@ defmodule Vxpipe.CallEngine.Speech.DescriptorTest do
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Descriptor, Event, Session}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
+  test "local acoustic gap authority is conversational STT only and still requires speech onset" do
+    {:ok, original} = MorseSession.configure([])
+    local = %{original | endpointing: :local_gap}
+    assert :ok = Descriptor.validate_conversational_stt(local)
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate_conversational_stt(%{local | speech_start?: false})
+
+    assert {:error, :invalid_descriptor} = Descriptor.validate(%{local | eager_end?: true})
+
+    for unsupported <- [:external, :none, :inferred_gap] do
+      assert {:error, :invalid_descriptor} =
+               Descriptor.validate_conversational_stt(%{local | endpointing: unsupported})
+    end
+
+    {:ok, sts} = Vxpipe.Providers.MorseCode.STSSession.configure([])
+    assert {:error, :invalid_descriptor} = Descriptor.validate(%{sts | endpointing: :local_gap})
+  end
+
+  test "local acoustic end evidence remains distinct from provider endpointing" do
+    {:ok, descriptor} = MorseSession.configure([])
+    descriptor = %{descriptor | endpointing: :local_gap}
+    turn = make_ref()
+
+    assert {:ok, event} =
+             Event.build(:turn_ended, turn_ref: turn, text: "LOCAL", endpointing: :local_gap)
+
+    assert Event.supported?(event, descriptor)
+    refute Event.supported?(event, %{descriptor | endpointing: :provider_gap})
+    refute Event.supported?(event, %{descriptor | kind: :sts})
+    refute Event.supported?(%{event | kind: :eager_turn_ended}, descriptor)
+
+    refute Event.supported?(%{event | kind: :eager_turn_ended}, %{
+             descriptor
+             | kind: :sts,
+               eager_end?: true
+           })
+  end
+
   test "validates the closed STT metadata boundary without exposing public settings" do
     {:ok, descriptor} = MorseSession.configure([])
     fields = descriptor |> Map.from_struct() |> Map.to_list()

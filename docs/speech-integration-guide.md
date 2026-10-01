@@ -16,12 +16,16 @@ bounded audio representation and publish cumulative current-turn text. A convers
 must declare a real turn-boundary authority:
 
 - `:provider_semantic` when the provider explicitly identifies the conversational turn end;
-- `:provider_gap` when the provider's configured silence rule owns the turn end.
+- `:provider_gap` when the provider's configured silence rule owns the turn end;
+- `:local_gap` when an allocation-owned acoustic detector supplies onset and
+  silence endpoints independently of recognition. This STT-only mode does not
+  admit eager-end evidence or relax STS controller rules.
 
 `:none` describes recognition without a conversational end signal and is rejected by the current
-room STT admission. The current conversational path also requires genuine provider speech-start
+room STT admission. The conversational path also requires genuine acoustic speech-start
 evidence for barge-in. External endpointing, transcript-only recognition, and manual finalization
-need a separate input-boundary owner and are not admitted by this path. A stable or committed
+alone are not admitted. The reviewed [local STT composition](elevenlabs-stt-session.md)
+owns the detector and recognition lifetime within the allocation. A stable or committed
 segment is not automatically a speaker turn. Keep segment assembly inside the provider and publish
 `:turn_ended` only when the declared authority has ended the turn.
 

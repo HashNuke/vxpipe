@@ -1,10 +1,18 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.StartupProbe do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Capability.TextToSpeech
   alias Vxpipe.CallEngine.Media.ConnectionReadiness
   alias Vxpipe.CallEngine.MediaPolicy.Authority
   alias Vxpipe.CallEngine.Readiness.{Preparation, Probe, RoomInventory}
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor
+
+  def opening_voice(capability, incarnation, deadline) do
+    safe_run(fn ->
+      with {:ok, resource, _status} <- TextToSpeech.readiness(capability),
+           do: collect([resource], incarnation, deadline, poll_interval_ms: 10)
+    end)
+  end
 
   def output(connection, identity, policy_authority, deadline) do
     retry(deadline, fn ->
@@ -67,13 +75,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupProbe do
     if remaining(deadline) > 0, do: result, else: {:error, :deadline_elapsed}
   end
 
-  defp collect(resources, incarnation, deadline) do
+  defp collect(resources, incarnation, deadline, options \\ []) do
     with {:ok, collector} <-
-           RoomCapabilitySupervisor.start_readiness(incarnation,
-             owner: self(),
-             attempt_id: "call-setup",
-             deadline_ms: deadline,
-             resources: resources
+           RoomCapabilitySupervisor.start_readiness(
+             incarnation,
+             Keyword.merge(options,
+               owner: self(),
+               attempt_id: "call-setup",
+               deadline_ms: deadline,
+               resources: resources
+             )
            ) do
       try do
         await(collector, incarnation, deadline)

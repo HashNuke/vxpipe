@@ -619,5 +619,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   defp endpointing_trigger(:provider_gap), do: "provider_gap"
+  defp endpointing_trigger(:local_gap), do: "local_gap"
   defp endpointing_trigger(:provider_semantic), do: "provider_semantic"
 end

@@ -17,6 +17,72 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
 
+  test "local acoustic ends preserve provenance and an older turn while new speech starts" do
+    {:ok, descriptor} = Vxpipe.CallEngine.Provider.MorseCodeSTT.Session.configure([])
+    descriptor = %{descriptor | endpointing: :local_gap}
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
+    capability =
+      start_supervised!(
+        {SpeechToText,
+         [
+           tenant_id: "tenant-local-gap",
+           room_id: "room-local-gap",
+           incarnation_id: "incarnation-local-gap",
+           participant_id: "part-human",
+           connection_id: "connection-local-gap",
+           owner: self(),
+           speech_scope: CapabilityTree.scope(tree),
+           provider: {SpeechSessionProbe, [descriptor: descriptor]},
+           provider_private: [observer: self()]
+         ]},
+        id: make_ref()
+      )
+
+    assert_receive {:probe_initializing, provider, _channel}, 1_000
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}, 1_000
+    assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
+    first = make_ref()
+    second = make_ref()
+
+    for turn <- [first, second] do
+      assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: turn]})
+      assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :turn_started}}, 1_000
+    end
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended, [turn_ref: first, text: "OLDER", endpointing: :local_gap]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{
+                      kind: :turn_ended,
+                      provider_turn_index: 0,
+                      turn_ref: ^first,
+                      text: "OLDER",
+                      trigger: "local_gap"
+                    }},
+                   1_000
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended, [turn_ref: second, text: "NEWER", endpointing: :local_gap]}
+             )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{
+                      kind: :turn_ended,
+                      provider_turn_index: 1,
+                      turn_ref: ^second,
+                      text: "NEWER",
+                      trigger: "local_gap"
+                    }},
+                   1_000
+  end
+
   test "initial policy without speech demand avoids a preliminary provider connection" do
     initial = snapshot(0, [], :unrestricted, true)
     capability = start_capability_process(initial_policy: initial)

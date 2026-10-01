@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
+    CallLifecycle,
     CallVariables,
     PlanStartup,
     ResolvedCallPlan,
@@ -15,7 +16,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
     TextToSpeechRuntime
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, StartupProbe, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime,
     as: ParticipantTransferRuntime
@@ -82,6 +83,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          {:ok, state} <- start_human_receiver(entries, state) do
       runtime = %ParticipantTransferRuntime{plan: plan, startup_options: startup_options}
       incarnation = state.snapshot.incarnation_id
+      deadline = CallLifecycle.readiness_deadline(state.call_lifecycle)
 
       task =
         Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
@@ -94,14 +96,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          | participant_transfer_runtime: runtime,
            startup: %{
              task: task,
-             opening_task: prepare_opening(plan, startup_options, incarnation),
+             opening_task: prepare_opening(plan, startup_options, incarnation, deadline),
              status: :preparing,
              waits: %{},
              readiness: nil,
              release_task: nil,
              ready_graph: nil,
              resources_ready?: false,
-             deadline_ms: Vxpipe.CallEngine.CallLifecycle.readiness_deadline(state.call_lifecycle)
+             deadline_ms: deadline
            }
        }}
     else
@@ -141,20 +143,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
     :exit, _reason -> {:error, :entry_start_failed}
   end
 
-  defp prepare_opening(%{opening_audio: %{type: :text}} = plan, options, incarnation) do
+  defp prepare_opening(%{opening_audio: %{type: :text}} = plan, options, incarnation, deadline) do
     owner = Keyword.fetch!(options, :owner)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
     Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
       result =
         with {:ok, runtime} <- PlanStartup.opening_runtime(plan, options),
-             do: prepare_text_to_speech(runtime, caller.participant_id, incarnation, owner)
+             {:ok, voice} <-
+               prepare_text_to_speech(runtime, caller.participant_id, incarnation, owner),
+             :ok <- StartupProbe.opening_voice(voice.pid, incarnation, deadline) do
+          {:ok, voice}
+        end
 
       {:opening_prepared, result}
     end)
   end
 
-  defp prepare_opening(_plan, _options, _incarnation), do: nil
+  defp prepare_opening(_plan, _options, _incarnation, _deadline), do: nil
 
   defp prepare_receiver(%{receiver: %{kind: :human}}, _incarnation), do: {:ok, nil}
 

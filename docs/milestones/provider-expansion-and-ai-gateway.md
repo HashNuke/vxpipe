@@ -60,7 +60,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Review and record the user-approved STT/TTS-only ElevenLabs scope; defer hosted-agent STS.
 - [x] Verify isolated pinned activity-model and native Elixir inference compatibility;
   keep production runtime ownership and turn correlation unchecked.
-- [ ] Resolve ElevenLabs realtime STT turn authority without weakening shared contracts.
+- [x] Resolve ElevenLabs realtime STT turn authority without weakening shared STS contracts.
 - [ ] Establish scoped credentials, startup/cancellation, usage and supervision
   contracts for both speech providers before implementation.
 
@@ -105,13 +105,17 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Implement ElevenLabs phrase TTS through an owned credited request session.
 - [x] Prepare provider-owned Scribe codec/socket with private authentication,
   bounded PCM framing, explicit segment commits and sanitized typed events.
-- [ ] Implement ElevenLabs STT after approving authoritative speech-start/turn-end ownership.
+- [ ] Register ElevenLabs STT through scoped credentials and compiled room startup
+  after the session authority checkpoint.
 - [x] Prepare closed Scribe VAD query/acknowledgement handling with focused offline tests.
 - [x] Fix native VAD probe thresholds explicitly and reject conflicting optional echoes locally.
 - [x] Pass the separately selected short Scribe VAD case without a manual commit.
 - [x] Observe one bounded long Scribe VAD stream with ordered segment receipt positions.
 - [x] Implement bounded manual recognition assembly and pass its selected two-segment wire case.
 - [x] Package pinned local activity inference and verify allocation-owned runtime behavior.
+- [x] Implement the allocation-owned Scribe STT session with STT-only local gap
+  provenance, bounded queued turns and fresh per-turn recognition connections.
+- [x] Pass its separately selected two-turn acoustic/session live case.
 - [ ] Resolve long-input endpoint identity and semantics.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
@@ -410,3 +414,32 @@ admission and conversational live evidence remain pending. All five root gates
 pass for the runtime checkpoint: 2,997 default tests, zero failures, 92 exclusions,
 seed 936184. The existing Lean model/replay lane passes. No new STT or STS
 capability is advertised.
+
+## Allocation-owned Scribe session checkpoint — 2026-10-01
+
+The [session decision](../elevenlabs-stt-session.md) admits explicit STT-only
+`local_gap` provenance without changing STS controller rules. Real packaged
+acoustic inference supplies onset and silence endpoints. Recognition retains old
+turn references, bounds queued PCM/turns and waits for manual settlement rather
+than treating a segment as conversational completion. Twenty-second segments
+remain within one acoustic turn; distinct acoustic turns use fresh connections.
+
+Two selected live runs failed the known-word check on reused recognition context.
+Safe diagnostics showed an empty second final transcript; the server cause is
+not established. The repaired session case passes one test in 9.0 seconds, seed
+172613: two acoustic starts, distinct references, two settled local-gap ends and
+the public-fixture word in both. No passing paid case is repeated.
+
+The owning local provider/admission/consumer/STS group passes 106 checks
+(seed 609275). Scoped service registration, compiled room startup, Console STT
+configuration, short initial utterances and initial idle acceptance remain open.
+See [checkpoint labnotes](../../labnotes/20261001-0230-scribe-local-session.md)
+for terminal root and Lean gate evidence. The milestone and index remain unchecked.
+
+Final checkpoint verification also exposed and repaired a text opening readiness
+race: asynchronous voice preparation now waits for its TTS resource before
+synthesis can start. Its delayed-acknowledgement regression and all 24 opening
+audio checks pass. All five root gates pass for the repaired checkpoint: 3,013
+default tests, zero failures, 93 exclusions, seed 705441. The existing Lean
+build/oracle/replay passes one test, seed 867759. This does not complete the
+pending scoped STT and room acceptance tasks above.

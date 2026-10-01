@@ -200,7 +200,7 @@ the context-bearing ordered callback can send input to its wire.
 The descriptor contains validated provider-specific public settings, media format, safe usage
 identity, explicit readiness evidence (`:initialized` or `:provider_acknowledged`), and TTS cache
 identity. STT declares endpointing provenance (provider semantic detection, provider silence/gap
-detection, external boundary required, or none), speech-start evidence and supported optional
+detection, allocation-owned local acoustic gap detection, external boundary required, or none), speech-start evidence and supported optional
 eager/resume events. STT providers that support finite fed input for the agent-output STS mode
 declare `finite_input?: true` (default false, legal only for STT) and export the
 optional `finish_input/1` operation. Human conversational onset and turn-end
@@ -313,13 +313,17 @@ recognition events in the allocation. Repeated finalization must not duplicate
 the marker. A segment endpoint, quiet period or successful callback is not this
 proof. Consumers acknowledge the marker through the same channel/session boundary.
 
-The conversational path requires provider-owned endpointing and the speech-start evidence
-needed by its current barge-in behavior. A transcript-only or manually finalized provider is
-rejected for this path until a separate endpointing/input-boundary design exists. Provider VAD
+The conversational path requires authoritative endpointing and genuine speech-start evidence
+needed by its current barge-in behavior. The 2026-10-01
+[local acoustic STT amendment](elevenlabs-stt-session.md) admits `local_gap` only
+for STT when an allocation-owned detector supplies both boundaries. This mode
+does not admit eager-end evidence or change STS controller rules. A transcript-only
+or manually finalized provider without this boundary owner remains rejected. Provider VAD
 can be legitimate endpointing evidence, but a timed buffer commit is not automatically a user
 turn. The comparison's Cartesia manual STT and ElevenLabs segment commits make this distinction
-concrete. This milestone adds no VAD, timer-based invented turn ending, optional manual-finalize
-callback without a consumer, or automatic eager-response policy. Preserve existing speech-start
+concrete. Missing input and elapsed network timers cannot invent turn ends.
+Optional finalization needs its declaring consumer; the local acoustic amendment
+does not add automatic eager-response policy. Preserve existing speech-start
 barge-in and any existing eager/resume handling.
 
 No permitted consumer means no STT session or submitted audio. A changed speech permission
