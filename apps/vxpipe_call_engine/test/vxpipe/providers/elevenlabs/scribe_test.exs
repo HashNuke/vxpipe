@@ -3,6 +3,87 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTest do
 
   alias Vxpipe.Providers.ElevenLabs.Scribe
 
+  test "VAD configuration requests provider silence commits without exposing the key" do
+    assert {:ok, config} =
+             Scribe.new(api_key: "synthetic-scribe-private", commit_strategy: :vad)
+
+    assert config.commit_strategy == :vad
+    connection = Scribe.connection_options(config)
+
+    assert URI.decode_query(URI.parse(connection.url).query) == %{
+             "model_id" => "scribe_v2_realtime",
+             "audio_format" => "pcm_16000",
+             "commit_strategy" => "vad",
+             "vad_silence_threshold_secs" => "1.5",
+             "vad_threshold" => "0.4",
+             "min_speech_duration_ms" => "100",
+             "min_silence_duration_ms" => "100"
+           }
+
+    refute connection.url =~ "synthetic-scribe-private"
+    refute inspect(config) =~ "synthetic-scribe-private"
+
+    for invalid <- [nil, :invented, "vad"] do
+      assert {:error, :invalid_configuration} = Scribe.public_options(commit_strategy: invalid)
+    end
+  end
+
+  test "VAD readiness rejects changed detection settings while optional echoes may be absent" do
+    profile = %{
+      "commit_strategy" => "vad",
+      "vad_silence_threshold_secs" => 1.5,
+      "vad_threshold" => 0.4,
+      "min_speech_duration_ms" => 100,
+      "min_silence_duration_ms" => 100
+    }
+
+    ready = %{
+      "message_type" => "session_started",
+      "session_id" => "session-scribe-vad",
+      "config" => profile
+    }
+
+    assert {:ok, {:ready, "session-scribe-vad"}} = Scribe.decode(JSON.encode!(ready), :vad)
+
+    for field <- Map.keys(profile) do
+      message = update_in(ready, ["config"], &Map.delete(&1, field))
+      assert {:ok, {:ready, "session-scribe-vad"}} = Scribe.decode(JSON.encode!(message), :vad)
+    end
+
+    for {field, value} <- [
+          {"vad_silence_threshold_secs", 3.0},
+          {"vad_threshold", 0.8},
+          {"min_speech_duration_ms", 250},
+          {"min_silence_duration_ms", 250},
+          {"vad_threshold", "0.4"},
+          {"min_speech_duration_ms", nil}
+        ] do
+      message = put_in(ready, ["config", field], value)
+      assert {:error, :invalid_message} = Scribe.decode(JSON.encode!(message), :vad)
+    end
+  end
+
+  test "session acknowledgement is checked against the requested commit strategy" do
+    ready = %{
+      "message_type" => "session_started",
+      "session_id" => "session-scribe-vad",
+      "config" => %{"commit_strategy" => "vad"}
+    }
+
+    assert {:ok, {:ready, "session-scribe-vad"}} = Scribe.decode(JSON.encode!(ready), :vad)
+    assert {:error, :invalid_message} = Scribe.decode(JSON.encode!(ready), :manual)
+
+    manual = put_in(ready, ["config", "commit_strategy"], "manual")
+    assert {:error, :invalid_message} = Scribe.decode(JSON.encode!(manual), :vad)
+
+    absent = put_in(ready, ["config"], %{})
+    assert {:ok, {:ready, "session-scribe-vad"}} = Scribe.decode(JSON.encode!(absent), :vad)
+
+    segment = JSON.encode!(%{"message_type" => "committed_transcript", "text" => "Hello"})
+    assert {:ok, {:segment, "Hello"}} = Scribe.decode(segment, :vad)
+    assert {:error, :invalid_message} = Scribe.decode(segment, :invented)
+  end
+
   test "keeps Scribe's scoped credential private and public configuration closed" do
     assert {:ok, config} = Scribe.new(api_key: "synthetic-scribe-private", language_code: "en")
     assert config.model == "scribe_v2_realtime"

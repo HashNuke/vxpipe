@@ -42,6 +42,45 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsScribeProtocolTest do
            "Scribe did not preserve the fixture's known final word"
   end
 
+  test "VAD mode commits the bounded existing sample without a manual commit" do
+    # This proves automatic segment finalization only, not speech-start or room admission.
+    pcm = File.read!(LiveFixture.pcm_path()) <> :binary.copy(<<0, 0>>, 16_000 * 2)
+    assert rem(byte_size(pcm), 2) == 0
+    assert byte_size(pcm) <= 16_000 * 2 * 10
+
+    assert {:ok, config} =
+             Scribe.new(
+               api_key: System.fetch_env!("ELEVENLABS_API_KEY"),
+               model: LiveModels.speech("elevenlabs", :stt),
+               language_code: "en",
+               commit_strategy: :vad
+             )
+
+    socket =
+      start_supervised!(%{
+        id: make_ref(),
+        start:
+          {ScribeSocket, :start_link,
+           [
+             [
+               owner: self(),
+               connection: Scribe.connection_options(config),
+               commit_strategy: config.commit_strategy,
+               transport_options: []
+             ]
+           ]},
+        restart: :temporary
+      })
+
+    assert_receive {:vxpipe_socket_connected, ^socket}, 15_000
+    assert_receive {:vxpipe_scribe_transport, ^socket, {:event, {:ready, _session_id}}}, 5_000
+    stream_audio(socket, pcm)
+    segment = await_segment(socket, System.monotonic_time(:millisecond) + 15_000)
+
+    assert String.downcase(segment) =~ "telescope",
+           "Scribe VAD did not preserve the fixture's known final word"
+  end
+
   defp stream_audio(_socket, ""), do: :ok
 
   defp stream_audio(socket, pcm) do

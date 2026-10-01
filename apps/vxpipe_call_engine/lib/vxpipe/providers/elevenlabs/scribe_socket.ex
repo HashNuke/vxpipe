@@ -5,9 +5,16 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
   alias Vxpipe.Providers.ElevenLabs.Scribe
 
   def start_link(options) do
-    Socket.start_link(Keyword.put(options, :connect_mode, :deferred), __MODULE__, %{
-      owner: Keyword.fetch!(options, :owner)
-    })
+    strategy = Keyword.get(options, :commit_strategy, :manual)
+
+    if strategy in [:manual, :vad] do
+      Socket.start_link(Keyword.put(options, :connect_mode, :deferred), __MODULE__, %{
+        owner: Keyword.fetch!(options, :owner),
+        commit_strategy: strategy
+      })
+    else
+      {:error, :invalid_configuration}
+    end
   end
 
   def send_audio(socket, audio) do
@@ -19,7 +26,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
 
   @impl true
   def handle_frame({:text, payload}, state) do
-    case Scribe.decode(payload) do
+    case Scribe.decode(payload, Map.get(state, :commit_strategy, :manual)) do
       {:ok, event} -> notify(state, {:event, event})
       {:error, reason} -> notify(state, {:closed, reason})
     end

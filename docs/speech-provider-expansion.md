@@ -4,7 +4,9 @@ Local design review and speech provider checkpoints, 2026-09-30. This document i
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md).
 Cartesia STT/TTS have local scoped-service/startup and selected live evidence;
 ElevenLabs TTS also has scoped-service/startup and selected live evidence;
-ElevenLabs STT/agent STS and the milestone's remaining acceptance checks are pending. The existing
+ElevenLabs realtime STT and the milestone's remaining acceptance checks are pending.
+The user-approved 2026-10-01 scope limits ElevenLabs to STT/TTS; hosted-agent STS
+is deferred. The existing
 [speech contract](speech-provider-contract.md) and
 [session ownership](speech-session-ownership.md) remain authoritative.
 
@@ -192,7 +194,8 @@ This question remains open and is not an implemented STT capability.
 
 The provider directory now owns a closed `Scribe` configuration/codec and
 supervised `ScribeSocket`. The direct connection uses private header
-authentication, fixed 16 kHz PCM, and manual commits. Provider errors are reduced
+authentication, fixed 16 kHz PCM, and explicit manual or VAD commit strategies.
+Manual remains the protocol default. Provider errors are reduced
 to safe reasons before delivery to the owner. Present acknowledgement fields
 must match the request; individually optional fields may be absent. Partial
 text replaces earlier partial text, and committed text is a segment event.
@@ -212,11 +215,21 @@ the first partial cannot be presented as provider speech-start. An explicit
 local/external owner would require a reviewed amendment to the conversational
 STT admission contract and separate allocation, cancellation, failure, usage
 and supervision checks.
-The [input turn ownership proposal](elevenlabs-turn-ownership.md) records a
-candidate local detector composition, rejected shortcuts and unresolved
-final-segment correlation/runtime feasibility gates separately from implementation.
+The [input turn ownership proposal](elevenlabs-turn-ownership.md) prioritizes
+native realtime VAD before selecting a local detector. Closed VAD query/codec
+and socket callback checks pass in an offline ten-test lane; a selected short
+VAD live case passes on 2026-10-01: one test in 6.6 seconds, seed 205077.
+The owning codec/socket suite also passes twelve checks, including local transport.
+The proposal records missing speech-start evidence, long-input endpoint checks,
+rejected shortcuts and a fallback local composition separately from room support.
 
-## ElevenLabs STS: conversational agents and voice conversion differ
+## Deferred ElevenLabs STS research
+
+The user-approved 2026-10-01 scope excludes hosted-agent STS from this milestone.
+The investigation below has not established compatibility with the existing
+Gemini/OpenAI STS contracts. Those contracts remain authoritative; no ElevenLabs
+STS capability is registered. Committed protocol/ownership preparation is retained
+as historical research rather than a current implementation requirement.
 
 Conversational ElevenAgents uses an agent ID and its own conversation WebSocket;
 private agents require a server-obtained signed URL. A reusable room integration
@@ -237,9 +250,9 @@ not implemented acceptance.
 
 The voice-changer STS models transform existing speech. They do not by themselves
 implement Vxpipe's conversational agent STS behavior. Do not register voice
-conversion as agent conversation. The requested integration is conversational
-agent STS; its runtime configuration and ownership contracts remain pending.
-STT and TTS work can proceed independently.
+conversion as agent conversation. A future conversational agent STS integration
+would need its own contract-fit review before implementation.
+The current integration is limited to realtime STT and TTS.
 [Model catalog](https://elevenlabs.io/docs/overview/models).
 
 ### Hosted-agent protocol preparation
@@ -277,6 +290,11 @@ is separate from terminal cleanup evidence; fixed telemetry retains cleanup
 failure after owner loss. The local ownership/API/application checks pass without
 another provider call. Runtime reconciliation, native session/tool/history state
 and scoped room/Console support remain open; no STS capability is registered.
+
+The subsequent [tool-resource investigation](../labnotes/20260930-2305-elevenlabs-tool-resources.md)
+and [agent-definition investigation](../labnotes/20260930-2351-elevenlabs-agent-definition.md)
+are historical evidence. Their new uncommitted implementation and tests were
+removed after the scope change. No per-call hosted-agent integration is claimed.
 
 ## Acceptance sequence
 

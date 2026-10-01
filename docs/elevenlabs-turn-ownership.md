@@ -1,9 +1,87 @@
 # ElevenLabs input turn ownership
 
-Status: Design proposal, 2026-09-30. Scribe protocol preparation is verified;
-the boundary composition described here is not implemented or admitted by the
-conversational STT contract. This document records the next implementation
-contract and its unresolved feasibility gates separately from milestone progress.
+Status: Design proposal, updated 2026-10-01. Scribe manual and short native VAD
+protocol preparation are verified;
+native VAD admission and the fallback boundary composition are not implemented
+or admitted by the conversational STT contract. This document records unresolved
+feasibility gates separately from milestone progress.
+
+The user-approved 2026-10-01 milestone scope is ElevenLabs realtime STT and TTS.
+Hosted-agent STS is deferred; this proposal addresses caller STT only.
+
+## Realtime scope and native VAD first
+
+The user's scope clarification selects Scribe Realtime or another suitable
+ElevenLabs realtime model. Batch recognition does not satisfy this milestone.
+Assess `scribe_v2_realtime` with `commit_strategy=vad` before selecting a local
+detector or changing shared contracts. The
+[commit guide](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/transcripts-and-commit-strategies)
+documents server speech/silence detection and automatic segment commits after
+the configured silence threshold. This is acoustic silence endpointing, not a
+documented semantic end-of-thought signal.
+
+Two requirements need separate evidence:
+
+- **Turn end:** determine whether VAD-mode commits reliably identify silence
+  endpoints, including uninterrupted speech and long input. The guide documents
+  automatic approximately 36-second commits under manual mode. It does not
+  establish their behavior under VAD mode; do not assume either that they occur
+  there or that every VAD-mode segment is a complete user turn.
+- **Speech start:** the current
+  [public event reference](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/event-reference)
+  documents partial/committed transcripts but no explicit activity-start event.
+  A first partial is insufficient evidence for the room's speech-start/barge-in
+  contract. Native endpointing alone does not settle that separate requirement.
+
+The separately selected short VAD live case passes on 2026-10-01: one test,
+zero failures, 6.6 seconds, seed 205077. It exercises VAD mode with the existing
+committed speech fixture and bounded paced silence, asserting stable final text
+without sending a manual commit. This is new VAD-mode evidence, not a reason to
+repeat the already passing manual transcription probe. A short passing case
+cannot prove long uninterrupted-input behavior or manufacture speech-start.
+Resolve the long-input contract from primary sources before authorizing a larger
+paid matrix; any such experiment needs ordered accepted-sample/message evidence.
+
+The preparation codec now accepts only the explicit `:manual`/`:vad` strategies
+and checks any returned commit-strategy acknowledgement against the requested
+mode. Its socket carries that expected mode privately. Nine focused offline
+ExUnit checks pass after four new checks first fail, including mismatch rejection
+and safe credential inspection. This is configuration/codec evidence only, not
+an integrated socket or provider/room acceptance result.
+
+### Fixed VAD probe profile — 2026-10-01
+
+The preparation now sends the four explicit values shown in the provider's
+[commit-strategy example](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/transcripts-and-commit-strategies),
+rather than depending on undocumented or changing defaults:
+
+| Native setting | Fixed value |
+| --- | --- |
+| `vad_silence_threshold_secs` | 1.5 seconds |
+| `vad_threshold` | 0.4 |
+| `min_speech_duration_ms` | 100 ms |
+| `min_silence_duration_ms` | 100 ms |
+
+Manual mode sends none of these settings. The VAD acknowledgement rejects
+conflicting values when echoed; individual echo fields remain optional as in the
+[official SDK configuration type](https://github.com/elevenlabs/elevenlabs-js/blob/main/src/wrapper/realtime/connection.ts).
+These fixed values belong to the provider protocol preparation, not new public
+tuning options or proven conversational latency. A short sample plus two seconds
+of streamed silence exercises the explicit threshold; it still does not establish
+long-input turn identity or speech onset. Two request/acknowledgement checks fail
+before the change; the resulting offline lane passes ten checks.
+
+If native VAD supplies valid turn ends but no activity-start signal, evaluate
+only the missing activity responsibility. Preserve provider endpoint provenance;
+do not automatically replace valid native endpointing with local turn ownership.
+Any composition still needs an explicit descriptor/consumer review and focused
+failing tests before implementation. No detector dependency or contract amendment
+is selected by this proposal.
+
+Human conversational STT does not require the optional finite-input operation.
+Its drain proof remains a separate gate only if the provider advertises
+`finite_input?: true` for agent-output recognition. Do not make optional output
+recognition finalization a prerequisite for the requested caller STT integration.
 
 ## Why a boundary owner is necessary
 
@@ -19,7 +97,7 @@ speech-start and endpoint evidence. The current descriptor validator accepts
 provider endpointing only. Scribe is not registered as conversational STT, and
 the passing selected live protocol test does not satisfy that admission rule.
 
-## Proposed composition
+## Fallback composition if native evidence is insufficient
 
 Use a genuine local voice detector to own acoustic activity and silence-based
 endpoints, while Scribe owns recognition. Report endpoint provenance as
@@ -97,12 +175,12 @@ also requires processed silent audio for keepalive messages; continuing silence
 moves the accepted input boundary. SDK close terminates transcription. Neither
 keepalive nor delivery observed after close establishes finite-input drain.
 
-There is a documentation discrepancy: the
-[event guide](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/event-reference)
-does not describe a separate final event, while the pinned JavaScript SDK defines
-and dispatches `final_transcript` variants. SDK support alone does not prove
-server emission or turn/drain semantics. Resolve that contract before relying
-on those variants.
+The [event guide](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/event-reference)
+explicitly says the public API does not emit a separate `final_transcript` event,
+while the pinned JavaScript SDK defines and dispatches those variants. SDK support
+alone does not prove server emission or turn/drain semantics. The native-VAD
+assessment must use the documented public events; it does not depend on resolving
+unused SDK variants.
 
 An optional race experiment can measure behavior or find counterexamples. It
 must include input below, near and above the documented automatic boundary,
@@ -146,8 +224,8 @@ is another candidate for investigation: it sends completed speech turns to a
 public WebSocket server hosted by the application and accepts response text.
 It requires a callback deployment/authentication design and does not establish
 standalone STT admission through the existing outbound Scribe socket. No Speech
-Engine resource or provider is implemented. Hosted agent STS remains a separate
-required capability.
+Engine resource or provider is implemented. This alternative is not selected;
+hosted-agent STS is deferred outside the current STT/TTS scope.
 
 ## Rejected shortcuts
 
@@ -165,11 +243,16 @@ required capability.
 
 ## Design review and acceptance
 
+- [x] Prioritize native realtime VAD and separate endpoint evidence from missing onset evidence.
+- [x] Keep optional agent-output drain outside the caller STT prerequisites.
+- [x] Verify closed VAD protocol configuration and acknowledgement handling locally.
+- [x] Run the selected short VAD case without a manual commit.
+- [ ] Establish long-input endpoint identity and semantics.
 - [x] Separate transcript segments from speech-start, turn-end and finite-input drain.
 - [x] Identify per-allocation detector state and per-turn transcript isolation.
-- [ ] Prove final-segment completion under automatic/manual commit races; revise
-  the composition if the wire cannot establish it.
-- [ ] Verify detector runtime/model feasibility and deployment ownership.
+- [ ] If a local endpoint owner is selected, prove final-segment completion under
+  automatic/manual commit races; revise the composition if the wire cannot establish it.
+- [ ] If a local detector is selected, verify runtime/model feasibility and deployment ownership.
 - [ ] Review the explicit conversational STT admission amendment.
 - [ ] Specify readiness, overlap bounds, cancellation, privacy, usage and drain.
 - [ ] Write failing tests at each owning boundary before implementation.
@@ -179,6 +262,5 @@ required capability.
 
 The [protocol labnotes](../labnotes/20260930-1042-elevenlabs-turn-contracts.md)
 record current local and live evidence. None of the unchecked gates is satisfied
-by the transcription-only test. ElevenLabs hosted agent STS has separate output,
-tool, history and provisioning contracts; this detector proposal does not settle
-those contracts.
+by the transcription-only test. Hosted-agent STS research has separate output,
+tool, history and provisioning contracts and is outside this milestone scope.

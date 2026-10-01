@@ -6,6 +6,15 @@ CallEngine application; room-capable STS is still unimplemented. See
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md) and the
 [hosted protocol evidence](../labnotes/20260930-1120-elevenlabs-agent-protocol.md).
 
+## Current scope — 2026-10-01
+
+The user limited ElevenLabs integration to realtime STT and TTS. Hosted-agent
+STS has not established compatibility with the shared Gemini/OpenAI contracts
+and is deferred. This document records previously committed ownership research.
+Its unresolved hosted-agent gates are not requirements of the current milestone.
+New uncommitted tool-resource and agent-definition work was removed; the committed
+agent-only lifecycle described below remains unchanged.
+
 ## Ownership decision
 
 A remotely created agent outlives its local process. Creating it inside an

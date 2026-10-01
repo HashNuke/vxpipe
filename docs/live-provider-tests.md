@@ -5,7 +5,8 @@ excluded by default. Selected Gemini, Deepgram, OpenAI, DeepSeek, OpenRouter
 and Fireworks protocol checks have passing evidence. The configured-service
 live harness remains separate work; local encrypted service tests prove scoped
 resolution and publication. Cartesia STT/TTS and ElevenLabs TTS have selected
-passing live checks; ElevenLabs STT and conversational agent STS remain pending.
+passing live checks; ElevenLabs conversational realtime STT remains pending.
+Hosted-agent STS is deferred outside the user-approved 2026-10-01 STT/TTS scope.
 
 ## Decision
 
@@ -234,19 +235,44 @@ See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.m
 The preparation test uses fixed `scribe_v2_realtime`, 16 kHz PCM and the existing
 public Deepgram sample with one second of additional silence (5.16 seconds
 total). It opens one connection, paces bounded chunks, explicitly commits and
-checks the known final word. Select this file independently of TTS:
+checks the known final word. Select the manual case independently of TTS and VAD:
 
 ```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs:12
 ```
 
 One selected run passes. This verifies transcription protocol only; speech-start,
 turn-end, room admission and scoped STT support are pending. The private key is
 loaded by the existing runner. Ordinary `mix test` excludes this test. See
 [protocol evidence](../labnotes/20260930-1042-elevenlabs-turn-contracts.md).
-Conversational STT and agent STS have no accepted live cases yet.
+Conversational realtime STT has no accepted live case yet; hosted-agent STS is deferred.
 
-### ElevenLabs hosted-agent protocol
+The separate VAD case requests `commit_strategy=vad`, sends the existing fixture
+with two seconds of paced silence, and checks automatic segment finalization
+without sending a manual commit. It submits under ten seconds of audio through
+one connection. The request fixes a 1.5-second silence threshold, 0.4 detection
+threshold and 100 ms minimum speech/silence durations. Conflicting echoed settings
+reject readiness; no model/detection-setting environment variables are required.
+One selected run passes on 2026-10-01: one test, zero failures, one excluded,
+6.6 seconds, seed 205077. An earlier attempt stopped at local database setup
+before provider contact; setting `PGHOST` to the local socket directory uses the
+documented peer-authenticated PostgreSQL connection. Mix TCP and DNS now work. Select only
+this case; do not repeat the passing manual probe:
+
+```shell
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs:45
+```
+
+Even a passing short VAD case would not prove long-input turn boundaries,
+speech-start notification, finite-input drain or conversational room support.
+See [native VAD assessment](elevenlabs-turn-ownership.md#realtime-scope-and-native-vad-first).
+
+### Historical ElevenLabs hosted-agent protocol
+
+Hosted-agent STS is deferred by the 2026-10-01 scope decision. These previously
+committed probes are historical research, not current acceptance requirements.
+They remain explicitly excluded from ordinary tests; do not repeat passing paid
+cases as part of the current STT/TTS work.
 
 The preparation file has three separately selectable cases: public model
 metadata, create/read/sign/delete configuration validation without a speech
@@ -256,7 +282,7 @@ Gemini 3.5 Flash Lite, minimal reasoning, a 128-token cap, V4 Turbo/George and
 including silence, requests one short response and requires explicit whole-response
 completion. Backup LLMs and speculative generation are disabled. The agent waits
 30 seconds before an idle prompt; the test closes its socket before deleting the
-temporary agent. Every owned deletion requires HTTP 204, including callback failure.
+temporary agent. Every owned agent deletion requires HTTP 204, including callback failure.
 
 ```shell
 bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_agent_protocol_test.exs:75
@@ -268,6 +294,10 @@ and saved configuration pass independently. This proves native protocol only;
 room/tool/history integration and production provisioning ownership remain open.
 Temporary agent deletion is not deletion of hosted conversation records. See
 [checkpoint evidence](../labnotes/20260930-1120-elevenlabs-agent-protocol.md).
+
+The later uncommitted tool-resource case and implementation were removed after
+the scope change. Its investigation and successful cleanup evidence remain in
+[historical labnotes](../labnotes/20260930-2305-elevenlabs-tool-resources.md).
 
 Cloudflare/Vercel gateway implementation is deferred. There is no current
 `live_cloudflare` lane or gateway provider catalog entry. See the separate

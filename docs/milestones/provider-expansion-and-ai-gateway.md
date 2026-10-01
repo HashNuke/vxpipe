@@ -4,12 +4,12 @@ Status: In progress. Authorized 2026-09-30. Gemini, repaired Deepgram speech,
 repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks, Cartesia STT/TTS
 and ElevenLabs TTS have selected passing live evidence. Both speech providers
 have scoped publication/startup checks and implemented-capability Console metadata.
-ElevenLabs STT/agent STS, shared room acceptance and final milestone gates remain.
+ElevenLabs realtime STT, shared room acceptance and final milestone gates remain.
+ElevenLabs hosted-agent STS is deferred by the user-approved 2026-10-01 scope change.
 
 Prerequisites: [Provider integration packages](provider-integration-packages.md),
 [Rime and Google speech providers](rime-and-google-speech-providers.md),
-[Tenant provider credentials](tenant-provider-credentials-and-platform-configuration.md),
-and [Agent speech-to-speech](agent-speech-to-speech.md) for hosted agent STS.
+[Tenant provider credentials](tenant-provider-credentials-and-platform-configuration.md).
 Design sources: [Platform and tenant services](../platform-and-tenant-services.md),
 [Provider packages](../provider-integration-packages.md),
 [Speech provider comparison](../speech-provider-comparison.md),
@@ -18,14 +18,15 @@ Design sources: [Platform and tenant services](../platform-and-tenant-services.m
 The [ElevenLabs input turn proposal](../elevenlabs-turn-ownership.md) records
 boundary ownership and unresolved design gates; it is not an implemented milestone.
 The [remote agent ownership checkpoint](../elevenlabs-agent-ownership.md) separates
-local monitored cleanup from pending production reconciliation and room integration.
+historical local monitored cleanup from deferred hosted-agent room integration.
+Its unresolved hosted-agent gates are outside the current STT/TTS milestone scope.
 
 ## Runnable outcome
 
 Operators and tenants configure direct AI services through the encrypted service
 workflow. Published call specs use DeepSeek, OpenRouter and Fireworks for LLM
-inference, Cartesia for STT/TTS, and ElevenLabs for STT/TTS and the verified
-agent STS contract. Explicitly selected live tests exercise configured credentials
+inference, Cartesia for STT/TTS, and ElevenLabs for realtime STT and TTS.
+Explicitly selected live tests exercise configured credentials
 without adding billable calls to ordinary `mix test`.
 
 ## Approved scope changes
@@ -39,6 +40,14 @@ The updated goal adds ElevenLabs and Cartesia speech integrations. These remain
 unchecked until their supported contracts and live evidence exist.
 Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 
+On 2026-10-01 the user limited ElevenLabs to realtime STT and TTS because hosted
+ElevenAgents has not established a fit for the existing Gemini/OpenAI STS
+contracts. The shared STS contracts remain authoritative. Hosted-agent STS is
+deferred; it is not an acceptance gate here. Newly written uncommitted agent
+definition/tool-resource implementation and tests were removed. Previously
+committed protocol/ownership preparation remains historical evidence, with no
+STS capability advertised and no further hosted-agent paid checks required.
+
 ## Design review
 
 - [x] Preserve tenant override and platform fallback; invalid overrides fail closed.
@@ -46,7 +55,10 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Keep gateways separate from provider/model identity; defer implementation.
 - [x] Review Cartesia session, interruption, transcript and audio contracts.
 - [x] Review ElevenLabs phrase TTS request, credit, PCM, cancellation and usage contracts.
-- [ ] Resolve ElevenLabs STT turn authority and review agent STS separately from voice conversion.
+- [x] Review Scribe Realtime native VAD separately from its missing speech-start event;
+  keep optional agent-output drain outside caller STT prerequisites.
+- [x] Review and record the user-approved STT/TTS-only ElevenLabs scope; defer hosted-agent STS.
+- [ ] Resolve ElevenLabs realtime STT turn authority without weakening shared contracts.
 - [ ] Establish scoped credentials, startup/cancellation, usage and supervision
   contracts for both speech providers before implementation.
 
@@ -71,9 +83,7 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Add ElevenLabs TTS Flash 2.5/George selection and one bounded live case.
 - [x] Prepare fixed Scribe v2 realtime configuration and one bounded transcription
   protocol case; this does not establish conversational STT acceptance.
-- [x] Prepare fixed hosted-agent backend/voice models and one bounded native
-  transcription, response-audio and whole-response completion case.
-- [ ] Add ElevenLabs STT and conversational agent STS selections/live cases after contract review.
+- [ ] Complete ElevenLabs conversational realtime STT live cases after contract review.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
 
@@ -93,19 +103,18 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Implement ElevenLabs phrase TTS through an owned credited request session.
 - [x] Prepare provider-owned Scribe codec/socket with private authentication,
   bounded PCM framing, explicit segment commits and sanitized typed events.
-- [x] Prepare a hosted-agent codec/socket and bounded create/sign/delete operation;
-  verify native completion without advertising runtime room support.
-- [x] Implement asynchronous, independently supervised agent leases with checked
-  owner-death/graceful-shutdown cleanup and payload-free failure observation locally.
 - [ ] Implement ElevenLabs STT after approving authoritative speech-start/turn-end ownership.
-- [ ] Implement ElevenLabs agent STS only after confirming its room/tool/history contract.
+- [x] Prepare closed Scribe VAD query/acknowledgement handling with focused offline tests.
+- [x] Fix native VAD probe thresholds explicitly and reject conflicting optional echoes locally.
+- [x] Pass the separately selected short Scribe VAD case without a manual commit.
+- [ ] Resolve long-input endpoint identity and semantics.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
 - [ ] Exercise compiled room support and relevant shared conformance checks.
 - [x] Pass one bounded selected Cartesia TTS live test.
 - [x] Pass one bounded selected Cartesia STT live test.
 - [x] Pass one bounded selected ElevenLabs TTS live test.
-- [ ] Run selected ElevenLabs STT and conversational agent STS live tests.
+- [ ] Run selected ElevenLabs conversational realtime STT live tests.
 
 ## Checkpoint E — Platform and tenant Console
 
@@ -123,7 +132,7 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [x] Inspect ElevenLabs TTS platform/tenant blank-key forms at desktop/narrow widths;
   independent rendered review returns `ship` for these four captured states.
 - [x] Complete all five root gates and Lean acceptance for the ElevenLabs TTS checkpoint.
-- [ ] Extend ElevenLabs scoped acceptance to STT and conversational agent STS.
+- [ ] Extend ElevenLabs scoped acceptance to realtime STT.
 
 ## Checkpoint F — Acceptance
 
@@ -134,6 +143,10 @@ Telnyx/Twilio live acceptance remains a separate credentials/destination batch.
 - [ ] Commit coherent checkpoints with detailed bodies and push the authorized branch.
 
 ## Evidence
+
+Entries below record dated checkpoints. Their earlier STS requirements reflect
+the scope before the 2026-10-01 change; hosted-agent work is now deferred. The
+current acceptance checklist above requires ElevenLabs realtime STT and TTS only.
 
 See [checkpoint labnotes](../../labnotes/20260930-0353-provider-expansion-gateway.md)
 for failures, repairs and selected live results. Passing provider calls do not
@@ -275,4 +288,55 @@ timestamps cannot establish processed-through audio. Detector runtime versions,
 threading uncertainty and a concrete offline probe are documented; no model,
 dependency or experiment is installed by this research. Speech Engine's public
 callback protocol is an unimplemented alternative requiring further design.
-Standalone conversational STT and hosted room STS remain required and unchecked.
+Standalone conversational STT remains required and unchecked. Hosted room STS,
+which was required when this review was recorded, is now deferred.
+
+The [tool-resource investigation](../../labnotes/20260930-2305-elevenlabs-tool-resources.md)
+previously passed 49 combined local checks and one selected 4.4-second live
+metadata case, seed 103331. Failed cleanup attempts were recovered and a provider
+read confirmed no matching test residues. This is historical investigation
+rather than current implementation acceptance: its uncommitted tool API, lease
+extension and tests were removed following the STT/TTS-only scope decision.
+Previously committed agent protocol/ownership code remains unchanged. The
+[agent-definition investigation](../../labnotes/20260930-2351-elevenlabs-agent-definition.md)
+also records the withdrawn per-call configuration work and its unresolved tests.
+Neither investigation advertises an STS capability or completes a current gate.
+
+The [native VAD preparation](../../labnotes/20260930-2340-elevenlabs-native-vad.md)
+adds validated Scribe manual/VAD protocol modes and request-specific
+acknowledgement handling. Four new focused checks first fail, then all nine
+offline checks pass on current sources, seed 980595. The separate bounded VAD
+live case is written but unrun; no billable request is made for this preparation.
+Format and documentation checks pass. Before the access change, Mix compilation,
+strict Credo, test startup and dependency locking were denied TCP access; earlier tool-only
+gate results did not verify this later source change. Git metadata was declared
+read-only, so the checkpoint could not then be staged, committed or pushed.
+Native VAD evidence is assessed before any local detector selection, while
+genuine onset and long-input endpoint contracts still need resolution.
+
+The [fixed native-boundary checkpoint](../../labnotes/20261001-0016-scribe-native-boundaries.md)
+requests explicit native VAD settings and rejects conflicting optional echoes.
+The focused lane first reports ten checks with two expected failures, then passes
+ten checks. These results improve reproducibility of the unrun selected probe;
+they do not establish native speech-start, long-input endpointing or room admission.
+At that checkpoint, shell DNS prevented obtaining detector/runtime artifacts for the separate
+local activity feasibility probe. No detector dependency is added, no live case
+was repeated and the milestone remained unchecked. The then-current root Mix gates
+failed before project execution at TCP startup/locking (`:eperm`).
+
+The [native VAD acceptance checkpoint](../../labnotes/20261001-0037-scribe-vad-acceptance.md)
+confirms restored Mix TCP/DNS access and passes the selected native VAD case:
+one test, zero failures, one excluded, 6.6 seconds, seed 205077. The initial
+attempt fails at PostgreSQL authentication before provider contact; using the
+local Unix socket resolves it. Twelve owning codec/socket checks pass, including
+loopback transport. No manual, TTS, hosted-agent or other paid provider case is
+repeated. Genuine speech-start, long-input turn identity and integrated realtime
+STT acceptance remain open. Earlier sandbox-blocked entries above are historical;
+the final restored-access root test result is recorded with this checkpoint.
+
+All five root gates pass for native VAD preparation and the approved scope update.
+The default umbrella run completes with 2,973 reported tests, zero failures,
+90 exclusions, seed 899045 (CallEngine 1,766; Gateway 522; Console 194).
+No source-cutover or speech state machine changes require a new Lean run for this
+checkpoint. This evidence supersedes earlier execution restrictions for this
+code, while conversational realtime STT and final milestone acceptance remain open.
