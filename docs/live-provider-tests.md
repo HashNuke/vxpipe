@@ -7,8 +7,10 @@ live harness remains separate work; local encrypted service tests prove scoped
 resolution and publication. Cartesia STT/TTS and ElevenLabs TTS have selected
 passing live checks. ElevenLabs realtime STT has separately selected two-turn,
 brief-first-answer and thirty-second initial-idle session evidence, plus local
-scoped publication/startup and compiled room checks. Its configured-service live
-room harness remains pending; these session tests do not establish that boundary.
+scoped publication/startup and compiled room checks. Its separately selected
+configured-service live room case also passes long-input recognition through an
+encrypted platform service and the production reader; the earlier session tests
+remain distinct evidence.
 Hosted-agent STS is deferred outside the user-approved 2026-10-01 STT/TTS scope.
 
 ## Decision
@@ -57,7 +59,8 @@ runner treats unchanged placeholders as missing settings.
 `bin/test-live-providers` loads that file for its child Mix process. It clears
 ambient provider credentials first, so a dotenv hook on entering the directory
 does not silently provide credentials. No arguments run every current live
-provider test from the three owning directories:
+provider test from the four owning directories (AgentRuntime, CallEngine,
+Gateway and Console):
 
 ```shell
 bin/test-live-providers
@@ -69,6 +72,23 @@ The runner forwards supplied arguments to `mix test`. For one provider or file:
 bin/test-live-providers --only live_openai \
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
 ```
+
+The configured ElevenLabs STT room case belongs to Console, which composes
+encrypted services, publication and room startup:
+
+```shell
+bin/test-live-providers --only live_elevenlabs \
+  apps/vxpipe_console/test/integration/elevenlabs_configured_room_test.exs
+```
+
+Only that file's live case contacts the provider. Its local companion uses a
+synthetic encrypted platform service and wire while retaining native acoustic
+inference. The live case provisions an isolated encrypted platform service and
+dedicated tenant, asserts the production reader's owner/identity/version, then
+starts a published human room through normal attachment and PCM ingress. It
+bounds one connection and 24.2 seconds of existing public input, with no retry.
+No LLM, TTS or hosted-agent operation is needed for this STT acceptance case.
+Explicit test shutdown is cleanup, not carrier hangup acceptance.
 
 The explicit paths matter in an umbrella: `--only live_providers` against a
 child with no matching tests exits with a no-tests result. From an owning child
@@ -303,10 +323,11 @@ See [native VAD assessment](elevenlabs-turn-ownership.md#realtime-scope-and-nati
 
 Hosted-agent STS is deferred by the 2026-10-01 scope decision. These previously
 committed probes are historical research, not current acceptance requirements.
-They remain explicitly excluded from ordinary tests; do not repeat passing paid
-cases as part of the current STT/TTS work.
+They remain excluded from ordinary tests and are explicitly skipped even when
+`live_elevenlabs` or `live_providers` is selected. Current provider acceptance
+executes STT/TTS cases; the historical file makes no hosted request.
 
-The preparation file has three separately selectable cases: public model
+The skipped preparation file records three cases: public model
 metadata, create/read/sign/delete configuration validation without a speech
 connection, and one native hosted conversation. The conversation uses fixed
 Gemini 3.5 Flash Lite, minimal reasoning, a 128-token cap, V4 Turbo/George and
@@ -316,12 +337,7 @@ completion. Backup LLMs and speculative generation are disabled. The agent waits
 30 seconds before an idle prompt; the test closes its socket before deleting the
 temporary agent. Every owned agent deletion requires HTTP 204, including callback failure.
 
-```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_agent_protocol_test.exs:75
-```
-
-Line selections follow the named test's current location; check it before invoking
-a case after edits. One bounded conversation passes on 2026-09-30. Model metadata
+One bounded historical conversation passes on 2026-09-30. Model metadata
 and saved configuration pass independently. This proves native protocol only;
 room/tool/history integration and production provisioning ownership remain open.
 Temporary agent deletion is not deletion of hosted conversation records. See

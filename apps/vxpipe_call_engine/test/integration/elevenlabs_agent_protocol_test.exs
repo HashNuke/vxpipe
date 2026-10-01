@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsAgentProtocolTest do
   use ExUnit.Case, async: false
   @moduletag :live_providers
   @moduletag :live_elevenlabs
+  @moduletag skip: "Hosted-agent STS is deferred; current ElevenLabs acceptance is STT/TTS."
   @moduletag :capture_log
   @moduletag timeout: 90_000
 

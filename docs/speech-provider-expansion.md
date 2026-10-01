@@ -5,8 +5,9 @@ Local design review and speech provider checkpoints, 2026-09-30. This document i
 Cartesia STT/TTS have local scoped-service/startup and selected live evidence;
 ElevenLabs TTS also has scoped-service/startup and selected live evidence;
 ElevenLabs realtime STT now has scoped publication/startup, compiled room-turn
-and rendered Console evidence. Configured-service live room and final milestone
-acceptance remain pending.
+and rendered Console evidence. Configured-service long-input live room acceptance
+and shared room checks pass; final milestone acceptance is complete under the
+approved STT/TTS scope.
 The user-approved 2026-10-01 scope limits ElevenLabs to STT/TTS; hosted-agent STS
 is deferred. The existing
 [speech contract](speech-provider-contract.md) and
@@ -183,7 +184,7 @@ STT-only local acoustic onset and gap endpoints, with Scribe manual recognition.
 Its manifest declares STT alongside TTS; published calls resolve one encrypted
 tenant/platform API-key service privately. Compiled room and Console checks
 pass locally. The investigation below records the earlier protocol preparation
-and rejected shortcuts; configured-service live room acceptance remains pending.
+and rejected shortcuts; configured-service long-input live room acceptance now passes.
 
 `scribe_v2_realtime` supports PCM and manual/VAD commit strategies. Its partial
 transcripts are replaceable; committed transcripts finalize segments. The server

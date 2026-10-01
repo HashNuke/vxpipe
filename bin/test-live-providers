@@ -43,7 +43,8 @@ if [[ $# -eq 0 ]]; then
   exec "$mix_bin" test --only live_providers \
     apps/vxpipe_agent_runtime/test/integration \
     apps/vxpipe_call_engine/test/integration \
-    apps/vxpipe_gateway/test/integration
+    apps/vxpipe_gateway/test/integration \
+    apps/vxpipe_console/test/integration
 fi
 
 exec "$mix_bin" test "$@"

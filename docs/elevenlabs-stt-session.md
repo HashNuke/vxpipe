@@ -2,8 +2,9 @@
 
 Status: Session and scoped-service integration implemented on 2026-10-01.
 Private credential resolution, publication, compiled room turns and rendered
-Console configuration have local acceptance evidence. Configured-service live
-room acceptance and final milestone verification remain pending.
+Console configuration have local acceptance evidence. The configured-service
+long-input live room case also passes. Other speech room checks pass locally;
+final milestone verification passes under the approved STT/TTS scope.
 
 ## Decision
 
@@ -174,3 +175,15 @@ acceptance remains required.
 See [checkpoint labnotes](../labnotes/20261001-0230-scribe-local-session.md) for
 terminal completion gates and remaining work. No passing paid case is repeated
 by the default suite.
+
+The [configured-room checkpoint](../labnotes/20261001-0505-scribe-configured-room.md)
+passes one selected live case, seed 608205, in 25.8 seconds. A published room
+resolves an isolated encrypted platform service through the production reader.
+The 24.2-second public corpus forms one final room turn containing both the
+earlier fixture word and the appended brief answer. Initial input first exposed
+a failure; the [admission checkpoint](../labnotes/20261001-0522-scribe-input-admission.md)
+adds ordered bounded PCM buffering and monitor-confirmed native worker retirement
+with focused local red/green evidence. The original remote/native failure cause
+is not asserted from the passing retry. Other provider room checks are recorded in
+the [acceptance review](provider-expansion-acceptance.md). Final root and Lean
+gates pass and coherent checkpoints publish the accepted STT/TTS milestone.

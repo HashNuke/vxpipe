@@ -171,6 +171,9 @@ Never read or modify `~/.config/vxpipe/live_providers.env` file
   provider. Selected Deepgram tests generate missing speech samples with one
   Deepgram TTS request, then reuse the files for later runs. Review generated
   samples before committing them.
+  Configured-service live room tests belong to Console; select the ElevenLabs
+  case with `--only live_elevenlabs
+  apps/vxpipe_console/test/integration/elevenlabs_configured_room_test.exs`.
 - Keep tests in the umbrella application that owns the behavior. Run focused
   tests from that child application's directory when iterating.
 

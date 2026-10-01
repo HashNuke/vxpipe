@@ -1,12 +1,13 @@
 # Provider expansion and live acceptance
 
-Status: In progress. Authorized 2026-09-30. Gemini, repaired Deepgram speech,
+Status: Complete 2026-10-01 under the approved STT/TTS-only scope. Authorized
+2026-09-30. Gemini, repaired Deepgram speech,
 repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks, Cartesia STT/TTS
 and ElevenLabs TTS have selected passing live evidence. Both speech providers
 have scoped publication/startup checks and implemented-capability Console metadata.
 ElevenLabs realtime STT has local scoped publication/startup, compiled room-turn
-and rendered Console evidence. Configured-service live room acceptance and final
-milestone gates remain.
+and rendered Console evidence, plus passing configured-service long-input live
+room acceptance. Shared room checks and final milestone gates pass.
 ElevenLabs hosted-agent STS is deferred by the user-approved 2026-10-01 scope change.
 
 Prerequisites: [Provider integration packages](provider-integration-packages.md),
@@ -63,7 +64,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Verify isolated pinned activity-model and native Elixir inference compatibility;
   keep production runtime ownership and turn correlation unchecked.
 - [x] Resolve ElevenLabs realtime STT turn authority without weakening shared STS contracts.
-- [ ] Establish scoped credentials, startup/cancellation, usage and supervision
+- [x] Establish scoped credentials, startup/cancellation, usage and supervision
   contracts for both speech providers before implementation.
 
 ## Checkpoint A — Existing live providers
@@ -87,7 +88,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Add ElevenLabs TTS Flash 2.5/George selection and one bounded live case.
 - [x] Prepare fixed Scribe v2 realtime configuration and one bounded transcription
   protocol case; this does not establish conversational STT acceptance.
-- [ ] Complete ElevenLabs conversational realtime STT live cases after contract review.
+- [x] Complete ElevenLabs conversational realtime STT live cases after contract review.
 - [x] Verify runner isolation, argument forwarding and default test exclusion.
 - [x] Keep the private env file unchanged; load credentials only with the runner.
 
@@ -120,14 +121,14 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Pass its separately selected two-turn acoustic/session live case.
 - [x] Recognize a brief first answer without padding and retain readiness through
   a thirty-second initial idle window with no caller audio.
-- [ ] Resolve long-input endpoint identity and semantics.
-- [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
+- [x] Resolve long-input endpoint identity and semantics.
+- [x] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
-- [ ] Exercise compiled room support and relevant shared conformance checks.
+- [x] Exercise compiled room support and relevant shared conformance checks.
 - [x] Pass one bounded selected Cartesia TTS live test.
 - [x] Pass one bounded selected Cartesia STT live test.
 - [x] Pass one bounded selected ElevenLabs TTS live test.
-- [ ] Run selected ElevenLabs conversational realtime STT live tests.
+- [x] Run selected ElevenLabs conversational realtime STT live tests.
 
 ## Checkpoint E — Platform and tenant Console
 
@@ -145,16 +146,16 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Inspect ElevenLabs TTS platform/tenant blank-key forms at desktop/narrow widths;
   independent rendered review returns `ship` for these four captured states.
 - [x] Complete all five root gates and Lean acceptance for the ElevenLabs TTS checkpoint.
-- [x] Extend ElevenLabs scoped acceptance to realtime STT locally; selected configured-service
-  live room acceptance remains part of the shared acceptance checkpoint.
+- [x] Extend ElevenLabs scoped acceptance to realtime STT, including its selected
+  configured-service long-input live room case.
 
 ## Checkpoint F — Acceptance
 
-- [ ] Pass relevant local suites and all five root completion gates.
-- [ ] Pass Lean verification for speech/state-machine changes.
-- [ ] Record selected live evidence; never run all providers together.
-- [ ] Synchronize milestone/index, models, docs and labnotes with actual evidence.
-- [ ] Commit coherent checkpoints with detailed bodies and push the authorized branch.
+- [x] Pass relevant local suites and all five root completion gates.
+- [x] Pass Lean verification for speech/state-machine changes.
+- [x] Record selected live evidence; never run all providers together.
+- [x] Synchronize milestone/index, models, docs and labnotes with actual evidence.
+- [x] Commit coherent checkpoints with detailed bodies and push the authorized branch.
 
 ## Evidence
 
@@ -164,8 +165,9 @@ current acceptance checklist above requires ElevenLabs realtime STT and TTS only
 
 See [checkpoint labnotes](../../labnotes/20260930-0353-provider-expansion-gateway.md)
 for failures, repairs and selected live results. Passing provider calls do not
-establish complete room/UI acceptance. The speech additions and final gates are
-still pending; this milestone is not complete.
+establish complete room/UI acceptance. The dated entries below preserve earlier
+pending work and failed gates; the final acceptance entry records their current
+status.
 
 The [TTS ordering checkpoint](../../labnotes/20260930-0554-tts-completion-order.md)
 records a deterministic runtime repair and 318 passing speech/opening-audio
@@ -480,3 +482,67 @@ zero failures and 96 exclusions, seed 232973. An existing source-arm rejection
 test now observes the established cutover deadline; its original scheduling
 cause remains unproven. Configured-service hosted long-input room acceptance
 and the final shared milestone audit remain open.
+
+The [configured Scribe room checkpoint](../../labnotes/20261001-0505-scribe-configured-room.md)
+passes one selected live test in 25.8 seconds, seed 608205: an encrypted platform
+service resolves through the production reader, 24.2 seconds of public audio
+remain one room turn across manual recognition segments, and the final text
+preserves the known prefix/suffix words. The first attempt failed near initial
+input; local ordered buffering and native task-retirement repairs are recorded
+in [admission evidence](../../labnotes/20261001-0522-scribe-input-admission.md).
+Shared provider/request conformance passes 24 checks and local HTTP/socket/privacy
+checks pass 42. The [acceptance audit](../provider-expansion-acceptance.md) retains
+additional Cartesia STT and Cartesia/ElevenLabs TTS whole-room checks; compiled
+startup and standalone allocations alone do not complete that broader gate.
+Final milestone acceptance and checkpoint publication remain pending.
+
+The [whole-room checkpoint](../../labnotes/20261001-0544-speech-room-acceptance.md)
+adds five exact-provider room checks: Cartesia caller PCM/transcript/model input,
+and Cartesia/ElevenLabs credited agent playback completion and interruption with
+owned worker retirement and clean replacement. Its first four TTS cases fail
+because trusted settings omit the runtime's existing private request seam; the
+closed catalog now admits it without changing public authoring. All five pass.
+The previous full run reports 3,026 tests, one existing Gateway tone-observation
+failure and 97 exclusions, seed 232973; its selected same-seed rerun passes in
+168.7 seconds, with no causal repair claimed. The final full rerun and coherent
+commit/push remain required.
+
+The complete room source passes all 1,822 CallEngine and 195 Console checks.
+Its first final run reports 3,031 tests, two Gateway harness failures and 97
+exclusions, seed 232973. Same-seed cue-loss/disconnection selection passes four
+cases; the complete two-carrier harness files pass all 26 tests in 29.5 seconds.
+No production carrier repair is claimed from those passing reruns. Format,
+warnings-as-errors compilation, strict Credo, unused-dependency checks and Lean
+build/oracle/replay pass (one Lean replay check, seed 116049). The final full
+umbrella rerun and checkpoint publication remain required. See the
+[Gateway gate investigation](../../labnotes/20261001-0559-gateway-final-acceptance.md).
+
+## Final milestone acceptance — 2026-10-01
+
+The same-seed full umbrella rerun is terminal, exit zero: 3,031 tests, zero
+failures and 97 exclusions, seed 232973. All 1,822 CallEngine, 522 Gateway and
+195 Console tests pass. The prior two Gateway failures are not reproduced;
+their original causes remain unproven and no production carrier repair is
+claimed. All five root completion gates and Lean build/oracle/replay pass.
+
+Three additional direct LLM room-startup cases pass separately from the root,
+seed 752435, without billable inference. They were added after that full run
+loaded its CallEngine suite; their count is not included in 3,031. The final
+historical hosted-agent skip configuration is checked separately: three skipped,
+zero failures, seed 680666. Both additions are test-only; production source is
+unchanged since the full run started. Final formatting and strict Credo cover
+these files. Frontend/rendered evidence is unchanged from the accepted scoped
+STT checkpoint: 218 frontend checks plus desktop and phone form inspection.
+
+The selected configured Scribe long-room case passes once after its failed
+attempt was locally investigated, seed 608205, in 25.8 seconds. No other passing
+paid case is repeated. Provider/request conformance passes 24 checks; the local
+wire/privacy/peer-close lane passes 42; five exact speech-provider room cases
+pass. Live isolation/forwarding shell checks and local documentation links pass.
+
+Native admission/worker retirement is published separately as `fb238b80`.
+The final acceptance checkpoint keeps configured live-room fixtures, actual
+room coverage, trusted request settings, deferred-probe exclusion and the
+requirement audit together with a detailed commit body. The milestone/index
+now reflect the approved scope. Hosted-agent STS, gateway implementation and
+paid carrier interoperability remain outside this completed milestone.

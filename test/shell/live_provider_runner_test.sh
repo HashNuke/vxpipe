@@ -78,6 +78,7 @@ rg -q -F 'argument=live_providers' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_agent_runtime/test/integration' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_call_engine/test/integration' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_gateway/test/integration' "$scratch/output"
+rg -q -F 'argument=apps/vxpipe_console/test/integration' "$scratch/output"
 if rg -q -F 'apps/vxpipe_artifacts/test/integration' "$scratch/output"; then
   printf 'storage tests entered the live provider lane\n' >&2
   exit 1

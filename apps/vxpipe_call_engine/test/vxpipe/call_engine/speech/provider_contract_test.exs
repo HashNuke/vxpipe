@@ -33,6 +33,23 @@ defmodule Vxpipe.CallEngine.Speech.ProviderContractTest do
     assert :ok = Contract.assert_descriptor(SegmentedSTT, [], :stt)
     assert :ok = Contract.assert_descriptor(RequestTTS, [], :tts)
     assert :ok = Contract.assert_descriptor(GuideTTS, [], :tts)
+
+    assert :ok = Contract.assert_descriptor(Vxpipe.Providers.Cartesia.STTSession, [], :stt)
+    assert :ok = Contract.assert_descriptor(Vxpipe.Providers.ElevenLabs.STTSession, [], :stt)
+
+    assert :ok =
+             Contract.assert_descriptor(
+               Vxpipe.Providers.Cartesia.TTSSession,
+               [voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"],
+               :tts
+             )
+
+    assert :ok =
+             Contract.assert_descriptor(
+               Vxpipe.Providers.ElevenLabs.TTSSession,
+               [voice: "JBFqnCBsd6RMkjVDRZzb"],
+               :tts
+             )
   end
 
   test "the guide's minimal provider runs through the public contract" do

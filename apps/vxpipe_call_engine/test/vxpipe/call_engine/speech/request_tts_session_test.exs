@@ -6,8 +6,9 @@ defmodule Vxpipe.CallEngine.Speech.RequestTTSSessionTest do
   alias Vxpipe.CallEngine.TestRequestTTS
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleSession
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaSession
+  alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsSession
 
-  for provider <- [GoogleSession, CartesiaSession] do
+  for provider <- [GoogleSession, CartesiaSession, ElevenLabsSession] do
     @tag request_provider: provider
     test "#{inspect(provider)} a streamed request releases each PCM chunk only after consumer credit",
          %{request_provider: provider} do
@@ -68,7 +69,7 @@ defmodule Vxpipe.CallEngine.Speech.RequestTTSSessionTest do
   end
 
   test "a killed provider cannot leave its request task running" do
-    for provider <- [GoogleSession, CartesiaSession] do
+    for provider <- [GoogleSession, CartesiaSession, ElevenLabsSession] do
       session = start_session(provider)
       assert {:ok, _request} = Session.speak(session, "Held")
       assert %Event{kind: :input_submitted} = next_event(session)
@@ -93,6 +94,9 @@ defmodule Vxpipe.CallEngine.Speech.RequestTTSSessionTest do
 
         CartesiaSession ->
           {Vxpipe.Providers.Cartesia.TTS, [voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"]}
+
+        ElevenLabsSession ->
+          {Vxpipe.Providers.ElevenLabs.TTS, [voice: "JBFqnCBsd6RMkjVDRZzb"]}
       end
 
     assert {:ok, config} = configuration.new(Keyword.put(options, :api_key, "synthetic-key"))

@@ -262,13 +262,28 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
 
   defp validate_provider_settings(GoogleTTSSession, :text_to_speech, settings),
-    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+    do:
+      Keyword.validate(settings,
+        enabled: false,
+        maximum_requests: nil,
+        request_module: Vxpipe.Providers.Google.TTSRequest
+      )
 
   defp validate_provider_settings(CartesiaTTSSession, :text_to_speech, settings),
-    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+    do:
+      Keyword.validate(settings,
+        enabled: false,
+        maximum_requests: nil,
+        request_module: Vxpipe.Providers.Cartesia.TTSRequest
+      )
 
   defp validate_provider_settings(ElevenLabsTTSSession, :text_to_speech, settings),
-    do: Keyword.validate(settings, enabled: false, maximum_requests: nil)
+    do:
+      Keyword.validate(settings,
+        enabled: false,
+        maximum_requests: nil,
+        request_module: Vxpipe.Providers.ElevenLabs.TTSRequest
+      )
 
   defp validate_provider_settings(
          Vxpipe.CallEngine.Provider.MorseCodeTTS.Session,
