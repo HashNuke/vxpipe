@@ -6,7 +6,7 @@ import {
 
 const capabilities = {
   cartesia: ["credential", "stt", "tts"],
-  elevenlabs: ["credential", "tts"],
+  elevenlabs: ["credential", "stt", "tts"],
   deepgram: ["credential", "credential_validation", "stt", "tts"],
   google: ["credential", "credential_validation", "stt", "tts"],
   openai: ["credential", "credential_validation", "sts"],
@@ -63,6 +63,14 @@ test("ElevenLabs offers installed phrase synthesis with its reviewed default mod
     defaultModels: {tts: "eleven_flash_v2_5"}});
   expect(providersFor("tts", [{provider: "elevenlabs", status: "connected"}], [provider!])).toHaveLength(1);
   expect(provider?.capabilities).not.toContain("stt");
+  expect(provider?.capabilities).not.toContain("s2s");
+});
+
+test("ElevenLabs offers realtime Scribe and synthesis through one configured service", () => {
+  const [provider] = installedSetupProviders({elevenlabs: ["credential", "stt", "tts"]});
+  expect(provider).toMatchObject({id: "elevenlabs", capabilities: ["stt", "tts"],
+    defaultModels: {stt: "scribe_v2_realtime", tts: "eleven_flash_v2_5"}});
+  expect(providersFor("stt", [{provider: "elevenlabs", status: "connected"}], [provider!])).toHaveLength(1);
   expect(provider?.capabilities).not.toContain("s2s");
 });
 

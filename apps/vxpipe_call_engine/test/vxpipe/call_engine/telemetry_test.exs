@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseCodeTTS
   alias Vxpipe.Providers.Rime.TTSSession, as: RimeTTS
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTS
+  alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTS
 
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
@@ -133,7 +134,11 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
                     %{capability: :stt, provider: :morse, category: :unavailable}}
   end
 
-  for {implementation, label} <- [{RimeTTS, :rime}, {CartesiaTTS, :cartesia}] do
+  for {implementation, label} <- [
+        {RimeTTS, :rime},
+        {CartesiaTTS, :cartesia},
+        {ElevenLabsTTS, :elevenlabs}
+      ] do
     @tag tts_implementation: implementation, tts_label: label
     test "attributes #{label} synthesis and failure to the declared provider", %{
       tts_implementation: implementation,
@@ -159,6 +164,33 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
 
       assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
                       %{capability: :tts, provider: ^label, category: :unavailable}}
+    end
+  end
+
+  for {implementation, label} <- [
+        {Vxpipe.Providers.Cartesia.STTSession, :cartesia},
+        {Vxpipe.Providers.ElevenLabs.STTSession, :elevenlabs}
+      ] do
+    @tag stt_implementation: implementation, stt_label: label
+    test "attributes #{label} recognition failure to the declared provider", %{
+      stt_implementation: implementation,
+      stt_label: label
+    } do
+      handler_id = {__MODULE__, self(), make_ref()}
+
+      assert :ok =
+               :telemetry.attach(
+                 handler_id,
+                 @provider_failure_event,
+                 &__MODULE__.handle_event/4,
+                 self()
+               )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+      assert :ok = Telemetry.provider_failure(:stt, implementation, :provider_failed)
+
+      assert_receive {:embedded_telemetry, @provider_failure_event, %{count: 1},
+                      %{capability: :stt, provider: ^label, category: :unavailable}}
     end
   end
 

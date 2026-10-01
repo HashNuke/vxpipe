@@ -36,12 +36,13 @@
     {
       "id": "elevenlabs",
       "name": "ElevenLabs",
-      "description": "Speak with ElevenLabs voices.",
-      "capabilities": ["tts"],
+      "description": "Transcribe with Scribe and speak with ElevenLabs voices.",
+      "capabilities": ["stt", "tts"],
       "defaultModels": {
+        "stt": "scribe_v2_realtime",
         "tts": "eleven_flash_v2_5"
       },
-      "sampleCapabilities": ["tts"]
+      "sampleCapabilities": ["stt", "tts"]
     },
     {
       "id": "google",

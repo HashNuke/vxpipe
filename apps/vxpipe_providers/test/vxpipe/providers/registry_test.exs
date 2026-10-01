@@ -113,7 +113,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "catalog contains explicit capability metadata" do
     assert Registry.catalog() == %{
              "cartesia" => [:credential, :stt, :tts],
-             "elevenlabs" => [:credential, :tts],
+             "elevenlabs" => [:credential, :stt, :tts],
              "deepseek" => [:credential, :credential_validation],
              "openrouter" => [:credential, :credential_validation],
              "fireworks" => [:credential],

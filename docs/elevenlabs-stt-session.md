@@ -1,8 +1,9 @@
 # ElevenLabs realtime STT session
 
-Status: Session checkpoint implemented on 2026-10-01. Conversational service
-registration, scoped credentials, compiled room startup, Console configuration
-and final milestone acceptance remain pending.
+Status: Session and scoped-service integration implemented on 2026-10-01.
+Private credential resolution, publication, compiled room turns and rendered
+Console configuration have local acceptance evidence. Configured-service live
+room acceptance and final milestone verification remain pending.
 
 ## Decision
 
@@ -68,8 +69,39 @@ remain false. Caller STT does not require optional agent-output drain support.
 
 Accepted-input usage and acoustic turn duration are project observations, not a
 claim about the provider's billed audio. Recognition sends a selected subset of
-accepted PCM and includes genuine trailing silence; future scoped integration
-must retain the existing usage and permission-interval ownership.
+accepted PCM and includes genuine trailing silence. Scoped integration retains
+the existing usage and permission-interval ownership.
+
+## Scoped selection and Console configuration
+
+The provider manifest declares credential, STT and TTS capabilities. The same
+single API-key service supports Scribe recognition and ElevenLabs synthesis.
+The standard encrypted tenant override or platform fallback is resolved privately
+when starting a published call; its pinned plan and publication contain no key.
+
+Caller selection is inline:
+
+```json
+{
+  "speech_to_text": {
+    "provider": "elevenlabs",
+    "model": "scribe_v2_realtime",
+    "credential_name": "voice",
+    "options": {"language_code": "en"}
+  }
+}
+```
+
+Language is optional. The admitted recognizer fixes mono linear16 at 16 kHz
+and manual recognition commits. Public authoring rejects other models,
+commit strategies, sample rates, credentials and transport/classifier hooks.
+Trusted runtime settings enable the session and supply the bounded media-ingress
+budget. Provider usage and failure telemetry identify `elevenlabs` explicitly.
+
+Platform and tenant service forms advertise STT/TTS and require only one API key.
+The authoring catalog selects `scribe_v2_realtime` for STT; it advertises no
+ElevenLabs STS capability. The forms truthfully leave credential-only testing
+unavailable and direct verification through a call.
 
 ## Rejected alternatives and implications
 
@@ -116,6 +148,19 @@ hard provider death. The separately selected repaired live case passes one test
 in 9.0 seconds, seed 172613: two acoustic starts, distinct references, two settled
 `local_gap` ends and the known public-fixture word in both. Passing this session
 case does not establish scoped services or complete room acceptance.
+
+The subsequent [scoped checkpoint](../labnotes/20261001-0427-elevenlabs-scoped-stt.md)
+passes private selection/telemetry checks and thirteen persisted service/endpoint
+checks. The compiled room check passes, seed 716606: twenty-one seconds of
+deterministically classified voiced input cross a manual segment boundary;
+the intermediate transcript stays nonfinal, the acoustic endpoint settles the
+cumulative first turn, and a second caller turn receives a distinct index.
+This verifies room composition with a local wire/classifier, not a hosted long
+utterance or acoustic quality. The earlier native and selected live evidence
+remain separate. TypeScript/lint and all 218 frontend checks pass. Rendered
+Chrome inspection covers platform and tenant forms at 1440×1000 and 390×844,
+including the tenant inventory and setup forms. Configured-service live room
+acceptance remains required.
 
 See [checkpoint labnotes](../labnotes/20261001-0230-scribe-local-session.md) for
 terminal completion gates and remaining work. No passing paid case is repeated

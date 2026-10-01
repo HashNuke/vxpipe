@@ -4,7 +4,9 @@ Local design review and speech provider checkpoints, 2026-09-30. This document i
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md).
 Cartesia STT/TTS have local scoped-service/startup and selected live evidence;
 ElevenLabs TTS also has scoped-service/startup and selected live evidence;
-ElevenLabs realtime STT and the milestone's remaining acceptance checks are pending.
+ElevenLabs realtime STT now has scoped publication/startup, compiled room-turn
+and rendered Console evidence. Configured-service live room and final milestone
+acceptance remain pending.
 The user-approved 2026-10-01 scope limits ElevenLabs to STT/TTS; hosted-agent STS
 is deferred. The existing
 [speech contract](speech-provider-contract.md) and
@@ -174,7 +176,14 @@ setup with unavailable credential testing and independent saving. The selected
 live request passes exactly one short Flash 2.5/George phrase without retry.
 See [checkpoint evidence](../labnotes/20260930-0911-elevenlabs-request-tts.md).
 
-## ElevenLabs STT: turn authority still needs resolution
+## ElevenLabs STT: local acoustic turn authority
+
+The [allocation-owned session](elevenlabs-stt-session.md) now supplies explicit
+STT-only local acoustic onset and gap endpoints, with Scribe manual recognition.
+Its manifest declares STT alongside TTS; published calls resolve one encrypted
+tenant/platform API-key service privately. Compiled room and Console checks
+pass locally. The investigation below records the earlier protocol preparation
+and rejected shortcuts; configured-service live room acceptance remains pending.
 
 `scribe_v2_realtime` supports PCM and manual/VAD commit strategies. Its partial
 transcripts are replaceable; committed transcripts finalize segments. The server
@@ -183,12 +192,12 @@ segment alone cannot prove that a conversational user turn ended.
 [Realtime reference](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime),
 [commit strategies](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/transcripts-and-commit-strategies).
 
-Before room admission, specify how speech start and definitive turn end are
-established, including long uninterrupted speech and server commits. Options are
+Before the session checkpoint, room admission required specifying how speech
+start and definitive turn end are established, including long uninterrupted speech and server commits. Options are
 verified provider boundary evidence or an explicit local/external turn owner.
 The current conversational STT contract requires authoritative endpointing;
 do not loosen it silently or label inferred activity as provider-reported VAD.
-This question remains open and is not an implemented STT capability.
+The session decision now resolves this question with explicit local provenance.
 
 ### Scribe protocol preparation
 
@@ -205,7 +214,7 @@ One selected live protocol check acknowledged the connection and returned the
 existing sample's final word, `telescope`, after 5.16 seconds of paced input.
 It verifies transcription and explicit commit framing, not conversational
 endpointing, close-and-drain, usage, compiled room startup or scoped STT support.
-No STT capability is registered or advertised. See
+No STT capability was registered or advertised at that protocol checkpoint. See
 [protocol checkpoint evidence](../labnotes/20260930-1042-elevenlabs-turn-contracts.md).
 
 The next design must name a genuine input-boundary owner, retain committed

@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
   alias Vxpipe.Providers.Cartesia.STT, as: CartesiaSTT
   alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
+  alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [
@@ -79,6 +80,27 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
     end
   end
 
+  def provider({STTSession, %Scribe{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         wire_module when is_atom(wire_module) and not is_nil(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.Providers.ElevenLabs.ScribeSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         activity_options when is_list(activity_options) <-
+           Keyword.get(settings, :activity_options, []),
+         true <- Keyword.keyword?(wire_options) and Keyword.keyword?(activity_options) do
+      {:ok, {STTSession, scribe_options(config)},
+       [
+         config: config,
+         wire_module: wire_module,
+         wire_options: wire_options,
+         activity_options: activity_options
+       ]}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
   def provider({provider, options} = selected, settings) do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),
@@ -117,6 +139,9 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
     )
   end
 
+  def usage_identity(STTSession, %Scribe{} = config),
+    do: usage_identity(STTSession, scribe_options(config))
+
   def usage_identity(provider, options) do
     cond do
       function_exported?(provider, :configure, 1) ->
@@ -141,4 +166,14 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
 
   defp identity_label(value) when is_atom(value), do: Atom.to_string(value)
   defp identity_label(value) when is_binary(value), do: value
+
+  defp scribe_options(config) do
+    [
+      model: config.model,
+      encoding: config.encoding,
+      sample_rate: config.sample_rate,
+      language_code: config.language_code,
+      commit_strategy: config.commit_strategy
+    ]
+  end
 end

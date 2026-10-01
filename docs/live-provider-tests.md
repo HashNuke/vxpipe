@@ -5,7 +5,10 @@ excluded by default. Selected Gemini, Deepgram, OpenAI, DeepSeek, OpenRouter
 and Fireworks protocol checks have passing evidence. The configured-service
 live harness remains separate work; local encrypted service tests prove scoped
 resolution and publication. Cartesia STT/TTS and ElevenLabs TTS have selected
-passing live checks; ElevenLabs conversational realtime STT remains pending.
+passing live checks. ElevenLabs realtime STT has separately selected two-turn,
+brief-first-answer and thirty-second initial-idle session evidence, plus local
+scoped publication/startup and compiled room checks. Its configured-service live
+room harness remains pending; these session tests do not establish that boundary.
 Hosted-agent STS is deferred outside the user-approved 2026-10-01 STT/TTS scope.
 
 ## Decision

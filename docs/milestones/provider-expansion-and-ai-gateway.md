@@ -4,7 +4,9 @@ Status: In progress. Authorized 2026-09-30. Gemini, repaired Deepgram speech,
 repaired OpenAI hosted speech, DeepSeek, OpenRouter, Fireworks, Cartesia STT/TTS
 and ElevenLabs TTS have selected passing live evidence. Both speech providers
 have scoped publication/startup checks and implemented-capability Console metadata.
-ElevenLabs realtime STT, shared room acceptance and final milestone gates remain.
+ElevenLabs realtime STT has local scoped publication/startup, compiled room-turn
+and rendered Console evidence. Configured-service live room acceptance and final
+milestone gates remain.
 ElevenLabs hosted-agent STS is deferred by the user-approved 2026-10-01 scope change.
 
 Prerequisites: [Provider integration packages](provider-integration-packages.md),
@@ -105,7 +107,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Implement ElevenLabs phrase TTS through an owned credited request session.
 - [x] Prepare provider-owned Scribe codec/socket with private authentication,
   bounded PCM framing, explicit segment commits and sanitized typed events.
-- [ ] Register ElevenLabs STT through scoped credentials and compiled room startup
+- [x] Register ElevenLabs STT through scoped credentials and compiled room startup
   after the session authority checkpoint.
 - [x] Prepare closed Scribe VAD query/acknowledgement handling with focused offline tests.
 - [x] Fix native VAD probe thresholds explicitly and reject conflicting optional echoes locally.
@@ -143,7 +145,8 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Inspect ElevenLabs TTS platform/tenant blank-key forms at desktop/narrow widths;
   independent rendered review returns `ship` for these four captured states.
 - [x] Complete all five root gates and Lean acceptance for the ElevenLabs TTS checkpoint.
-- [ ] Extend ElevenLabs scoped acceptance to realtime STT.
+- [x] Extend ElevenLabs scoped acceptance to realtime STT locally; selected configured-service
+  live room acceptance remains part of the shared acceptance checkpoint.
 
 ## Checkpoint F — Acceptance
 
@@ -466,3 +469,14 @@ unused-dependency checking and the default umbrella suite, with 3,014 tests,
 zero failures, 96 exclusions, seed 844978. The existing Lean build/oracle/replay
 passes one test, seed 665060. These checks accept the short/idle checkpoint;
 scoped STT and full room/Console acceptance remain required.
+
+The [scoped Scribe checkpoint](../../labnotes/20261001-0427-elevenlabs-scoped-stt.md)
+registers realtime STT, resolves encrypted tenant/platform services, preserves
+manual segment identity through compiled room ingress and advertises STT/TTS
+in rendered Console forms. Private selection/telemetry and persisted publication
+checks pass, along with all 218 frontend tests, TypeScript and lint. All five
+root gates and Lean pass. The final same-seed umbrella run reports 3,020 tests,
+zero failures and 96 exclusions, seed 232973. An existing source-arm rejection
+test now observes the established cutover deadline; its original scheduling
+cause remains unproven. Configured-service hosted long-input room acceptance
+and the final shared milestone audit remain open.

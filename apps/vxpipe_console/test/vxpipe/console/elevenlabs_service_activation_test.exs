@@ -13,6 +13,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
   }
 
   alias Vxpipe.Providers.ElevenLabs.TTSSession
+  alias Vxpipe.Providers.ElevenLabs.STTSession
 
   setup do
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
@@ -80,7 +81,20 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
       agent_runtime:
         Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
         |> Keyword.fetch!(:agent_runtime),
-      text_to_speech: [providers: %{TTSSession => [enabled: true, maximum_requests: 4]}]
+      text_to_speech: [providers: %{TTSSession => [enabled: true, maximum_requests: 4]}],
+      speech_to_text: [
+        providers: %{
+          STTSession => [
+            enabled: true,
+            media_ingress: [
+              maximum_frames: 50,
+              maximum_bytes: 262_144,
+              maximum_age_ms: 2_000,
+              maximum_consecutive_overflows: 5
+            ]
+          ]
+        }
+      ]
     ]
 
     assert {:ok, inherited} = PlanStartup.new(plan, runtime_options)
@@ -89,6 +103,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
              "synthetic-platform-elevenlabs"
 
     assert inherited.text_to_speech.asset_cache_identity["credential"]["id"] == platform.id
+    assert stt_key(inherited) == "synthetic-platform-elevenlabs"
 
     assert {:ok, own} =
              ProviderCredentials.provision(
@@ -109,6 +124,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
              inherited.text_to_speech.asset_cache_identity
 
     refute inspect(overridden) =~ "synthetic-tenant-elevenlabs"
+    assert stt_key(overridden) == "synthetic-tenant-elevenlabs"
     refute :erlang.term_to_binary(publication) =~ "synthetic-"
 
     assert :ok = ProviderCredentials.delete(tenant.key, own.id, options)
@@ -121,8 +137,17 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
              "synthetic-platform-elevenlabs"
 
     assert {TTSSession, public} = restored.text_to_speech.provider
+    assert stt_key(restored) == "synthetic-platform-elevenlabs"
     assert Keyword.fetch!(public, :model) == "eleven_flash_v2_5"
     assert restored.text_to_speech.usage_provider.name == "elevenlabs"
+  end
+
+  defp stt_key(startup) do
+    [runtime] = startup.speech_to_text_runtimes |> Map.values() |> Enum.reject(&is_nil/1)
+    assert {STTSession, public} = runtime.provider
+    assert Keyword.fetch!(public, :model) == "scribe_v2_realtime"
+    assert runtime.usage_provider.name == "elevenlabs"
+    Keyword.fetch!(runtime.provider_private, :config).api_key
   end
 
   defp source do
@@ -135,6 +160,11 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
       defaults: %{
         capabilities: %{
           model_inference: %{provider: "fixture", model: "echo"},
+          speech_to_text: %{
+            provider: "elevenlabs",
+            model: "scribe_v2_realtime",
+            credential_name: "voice"
+          },
           text_to_speech: %{
             provider: "elevenlabs",
             model: "eleven_flash_v2_5",

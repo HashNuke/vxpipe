@@ -238,6 +238,9 @@ defmodule Vxpipe.CallEngine.Telemetry do
   defp provider(DeepgramTextToSpeech), do: :deepgram
   defp provider(RimeTextToSpeech), do: :rime
   defp provider(CartesiaTextToSpeech), do: :cartesia
+  defp provider(Vxpipe.Providers.Cartesia.STTSession), do: :cartesia
+  defp provider(Vxpipe.Providers.ElevenLabs.STTSession), do: :elevenlabs
+  defp provider(Vxpipe.Providers.ElevenLabs.TTSSession), do: :elevenlabs
   defp provider(GoogleTextToSpeech), do: :google
   defp provider(GoogleSpeechToText), do: :google
   defp provider(MorseSTTSession), do: :morse
