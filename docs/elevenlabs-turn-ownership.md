@@ -194,22 +194,24 @@ current semantics.
 
 ## Detector candidate and feasibility
 
-[Silero VAD](https://github.com/snakers4/silero-vad) is a candidate speech
-classifier, not an approved new dependency. Its upstream
+[Silero VAD](https://github.com/snakers4/silero-vad) is selected for the local
+activity runtime. Its upstream
 [ONNX wrapper](https://github.com/snakers4/silero-vad/blob/master/src/silero_vad/utils_vad.py)
 uses 512 new samples plus 64 samples of context at 16 kHz and retains recurrent
 state per stream. Its [license](https://github.com/snakers4/silero-vad/blob/master/LICENSE)
 is MIT. [Ortex](https://github.com/elixir-nx/ortex) provides Elixir ONNX Runtime
-bindings and requires Rust compilation. These remain implementation candidates;
-isolated native compatibility is verified below, while production packaging and
-supervised execution remain unimplemented.
+bindings and requires Rust compilation. The pinned model and bindings now have
+packaged local-runtime implementation with allocation-owned inference and a
+shared public resource cache. Twenty-three focused checks pass. This does not
+connect detector observations to Scribe or admit conversational STT. See
+[runtime ownership and evidence](speech-activity-feasibility.md#allocation-owned-runtime-checkpoint).
 
-Before selecting them, verify a pinned model revision and checksum, distribution
-and license notice, supported deployment platforms, deterministic local inference,
-allocation-state isolation, bounded concurrency and failure supervision. Include
-speech, silence and non-speech noise fixtures. Measure CPU and backlog with the
-intended number of simultaneous calls. No runtime model download or additional
-provider credential is part of the proposed contract.
+Pinned identity, packaging, deterministic inference, private state and failure
+supervision have focused evidence. Remaining deployment acceptance must cover
+supported platforms, realistic speech/noise and CPU/backlog with the intended
+number of simultaneous calls. The bounded controls do not replace those checks.
+No runtime model download or additional provider credential is part of the
+proposed contract.
 
 ### Feasibility review, 2026-09-30
 

@@ -111,6 +111,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Pass the separately selected short Scribe VAD case without a manual commit.
 - [x] Observe one bounded long Scribe VAD stream with ordered segment receipt positions.
 - [x] Implement bounded manual recognition assembly and pass its selected two-segment wire case.
+- [x] Package pinned local activity inference and verify allocation-owned runtime behavior.
 - [ ] Resolve long-input endpoint identity and semantics.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
@@ -395,3 +396,17 @@ per-turn socket creation is not a mandatory prerequisite. Incoming PCM must
 remain bounded while awaiting settlement, and later turn activity must retain
 its own reference even if earlier recognition is draining. Review descriptor
 provenance and consumers before admitting local acoustic turn ownership.
+
+The [local activity runtime](../speech-activity-feasibility.md#allocation-owned-runtime-checkpoint)
+packages the pinned CPU model, verifies its checksum and adds its owning native
+dependencies. The application shares only a public model resource; private
+inference trees, recurrent state, PCM and cancellation remain allocation-local.
+Twenty-three focused checks pass, seed 865692, covering reference probabilities,
+chunking/reset, incomplete frames, acoustic confirmation/hysteresis, negative
+controls, bounded admission, caller loss, deadlines and failure isolation.
+The new runtime has not yet been started within a Scribe session. Actual privacy
+interval resets, local-boundary provenance, recognition correlation, scoped room
+admission and conversational live evidence remain pending. All five root gates
+pass for the runtime checkpoint: 2,997 default tests, zero failures, 92 exclusions,
+seed 936184. The existing Lean model/replay lane passes. No new STT or STS
+capability is advertised.

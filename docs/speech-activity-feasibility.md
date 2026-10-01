@@ -1,6 +1,6 @@
 # Speech activity runtime feasibility
 
-Status: Isolated research, 2026-10-01. This informs
+Status: Local runtime implementation, 2026-10-01. This informs
 [ElevenLabs caller STT](elevenlabs-turn-ownership.md) and
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md).
 It does not register conversational STT or change shared STS contracts.
@@ -11,9 +11,9 @@ Keep Scribe's verified short native VAD segment evidence, while the long-stream
 observation leaves commit cause and turn authority unresolved. Investigate
 genuine acoustic onset/end separately from recognition settlement. Silero is a
 viable candidate for acoustic activity in the tested Python and native Elixir environments.
-Its runtime is not yet selected for production: startup/distribution ownership,
-bounded execution and turn correlation still need implementation and acceptance.
-The existing detector fallback design remains conditional.
+The pinned model and native bindings are now selected for an allocation-owned
+runtime. Packaging and focused runtime checks pass; connection to Scribe, turn
+correlation, room admission and deployment acceptance remain pending.
 
 A first transcript partial cannot supply activity evidence. Local acoustic turn
 ownership requires explicit provenance and consumer review; native segment
@@ -72,7 +72,56 @@ issue required patching native inference.
 
 See [experiment labnotes](../labnotes/20261001-0037-speech-activity-feasibility.md)
 for failed setup attempts, runtime versions, controls and verification details.
-Model/runtime artifacts and experiments remain isolated from project dependencies.
+The initial experiments remain isolated. The local runtime checkpoint below
+adds the pinned native dependency and model to the owning application.
+
+## Allocation-owned runtime checkpoint
+
+CallEngine directly owns Nx 0.11.0 and the pinned Ortex revision. The unmodified
+model and MIT notice are packaged under `priv/speech/`; loading verifies its
+SHA-256 digest. Startup performs no download or model load. A named lazy cache
+retains only the public CPU resource; it receives no PCM or per-stream state.
+An allocation's `ActivitySupervisor` owns its runtime and task supervisor, with
+one inference slot by default and no waiting audio queue. Starting this helper
+under the actual Scribe allocation remains part of session integration.
+
+The stream accepts at most 32,000 bytes of aligned 16 kHz PCM per request and
+retains fewer than 1,024 incomplete bytes. Complete 512-sample frames use explicit
+little-endian normalization and private recurrent/context state. No incomplete
+frame is padded or counted as silence. Reset discards all previous stream state.
+
+`ActivityBoundary` requires four consecutive frames at probability >= 0.5 for
+onset (128 ms), and sixteen frames below 0.35 for endpoint (512 ms). Hysteresis
+or resumed voice clears pending silence. Boundaries identify the initial sample
+of the confirmed interval; confirmation arrives later. These fixed acoustic
+thresholds do not establish semantic completion and expose no public tuning.
+
+Admission returns busy without accepting more work. Accepted tasks are monitored
+against their caller, use fixed safe error reasons and have separate 15-second
+initialization and 2-second warm inference deadlines. Cancellation requests task
+termination but retains its slot until task settlement; killing an Elixir process
+does not guarantee interruption of an in-progress native call. A `one_for_all`
+tree retires local workers after runtime failure. Another allocation's worker
+continues. Total concurrency follows active allocation count; this is not a
+machine-wide four-worker pool or an application-wide speech execution queue.
+
+Rejected alternatives: per-call model loading duplicates native resources;
+unbounded asynchronous submission retains arbitrary PCM; sharing private workers
+globally couples allocation failures; interpreting missing frames as silence
+fabricates evidence. A separate Python process would add deployment and lifecycle
+responsibilities already served by the verified native binding.
+
+Twenty-three focused checks pass, seed 865692. Native probabilities match the
+stored official-wrapper reference within 1e-6, independent of chunking or reset.
+The public speech fixture supplies one actual acoustic onset/end through the
+supervised runtime. Silence, a bounded tone and seeded noise supply negative
+controls, not a general false-activation or natural-conversation quality claim.
+Only Linux x86-64 native compilation/inference is verified on this host. Other
+deployment targets and realistic acoustic coverage remain open. All five root
+gates pass: 2,997 default tests, zero failures, 92 exclusions, seed 936184. The
+existing Lean model/replay lane also passes; it does not add a formal model of
+this private classifier. No conversational STT capability is registered by this checkpoint.
+See [runtime labnotes](../labnotes/20261001-0153-local-speech-activity.md).
 
 ## Required integration gates
 
@@ -80,9 +129,10 @@ Model/runtime artifacts and experiments remain isolated from project dependencie
 - [x] Compare normalized CPU inference with the upstream wrapper on one public fixture.
 - [x] Verify reference chunk splitting/reset and native independent stream states.
 - [x] Build and execute the native Elixir candidate with the umbrella's library versions.
-- [ ] Establish incomplete-frame behavior, confirmation/hysteresis and realistic acoustic coverage.
-- [ ] Package model/notices and verify supported deployment targets without startup downloads.
-- [ ] Bound scheduler time, concurrency, backlog and failures under an owned supervised runtime.
+- [x] Establish complete-frame accounting, confirmation/hysteresis and bounded negative controls.
+- [x] Package the pinned model/notices without startup downloads.
+- [x] Implement bounded allocation-owned inference, deadlines, cancellation and failure supervision.
+- [ ] Verify supported deployment targets and realistic acoustic coverage beyond the tested host/fixture.
 - [ ] Reset activity state across permission intervals, allocations and participant changes.
 - [ ] Review local acoustic boundaries, serialized recognition and delayed-event correlation.
 - [ ] Verify session, room, scoped publication, Console and live conversational acceptance.
