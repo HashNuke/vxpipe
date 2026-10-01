@@ -11,7 +11,6 @@ defmodule Vxpipe.CallEngine.Speech.ActivitySupervisor do
   def init(options) do
     tasks = Keyword.fetch!(options, :tasks)
     runtime = Keyword.fetch!(options, :runtime)
-    limit = Keyword.get(options, :max_jobs, 1)
 
     runtime_options =
       options
@@ -20,7 +19,9 @@ defmodule Vxpipe.CallEngine.Speech.ActivitySupervisor do
 
     Supervisor.init(
       [
-        {Task.Supervisor, name: tasks, max_children: limit},
+        # Runtime admission retains each slot through the worker's DOWN signal.
+        # A second supervisor quota races with retirement bookkeeping there.
+        {Task.Supervisor, name: tasks},
         {ActivityRuntime, runtime_options}
       ],
       strategy: :one_for_all

@@ -49,6 +49,7 @@ defmodule Vxpipe.CallEngine.Speech.ActivityRuntime do
         owner: owner,
         owner_ref: Process.monitor(owner),
         timer: Process.send_after(self(), {:deadline, task.ref}, timeout),
+        result: nil,
         status: :active
       }
 
@@ -68,22 +69,20 @@ defmodule Vxpipe.CallEngine.Speech.ActivityRuntime do
 
   @impl true
   def handle_info({reference, result}, state) when is_reference(reference) do
-    case Map.pop(state.jobs, reference) do
-      {nil, _jobs} ->
+    case Map.fetch(state.jobs, reference) do
+      :error ->
         {:noreply, state}
 
-      {job, jobs} ->
-        cleanup(job)
-        Process.demonitor(reference, [:flush])
-        {model, outcome} = outcome(result, state.model)
-        deliver(job, reference, outcome)
-        {:noreply, %{state | jobs: jobs, model: model}}
+      {:ok, job} ->
+        if job.timer, do: Process.cancel_timer(job.timer)
+        job = %{job | result: result, timer: nil}
+        {:noreply, %{state | jobs: Map.put(state.jobs, reference, job)}}
     end
   end
 
   def handle_info({:deadline, reference}, state) do
     case Map.fetch(state.jobs, reference) do
-      {:ok, %{status: :active} = job} ->
+      {:ok, %{status: :active, result: nil} = job} ->
         send(job.owner, {:vxpipe_speech_activity, reference, {:error, :classification_timeout}})
         {:noreply, retire(state, reference, job, :timed_out)}
 
@@ -99,8 +98,9 @@ defmodule Vxpipe.CallEngine.Speech.ActivityRuntime do
 
       {job, jobs} ->
         cleanup(job)
-        deliver(job, reference, {:error, :classification_failed})
-        {:noreply, %{state | jobs: jobs}}
+        {model, result} = outcome(job.result, state.model)
+        deliver(job, reference, result)
+        {:noreply, %{state | jobs: jobs, model: model}}
     end
   end
 

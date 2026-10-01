@@ -108,7 +108,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
   end
 
-  test "inference admission rejects busy input and hard provider death retires its worker" do
+  test "inference admission bounds queued PCM and hard provider death retires its worker" do
     observer = self()
 
     {session, wire} =
@@ -122,7 +122,9 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     ready(session, wire)
     assert :ok = Session.push_audio(session, voice())
     assert_receive {:scribe_classifying, worker}, 1_000
-    assert {:error, :busy} = Session.push_audio(session, voice())
+    assert :ok = Session.push_audio(session, voice())
+    for _ <- 1..2, do: assert(:ok = Session.push_audio(session, :binary.copy(<<1, 0>>, 16_000)))
+    assert {:error, :busy} = Session.push_audio(session, :binary.copy(<<1, 0>>, 16_000))
     refute_received {:vxpipe_speech, %Event{kind: :speech_started}}
     monitor = Process.monitor(worker)
     wire_monitor = Process.monitor(wire)
@@ -130,6 +132,34 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 1_000
     assert_receive {:DOWN, ^wire_monitor, :process, ^wire, _reason}, 1_000
+  end
+
+  test "audio arriving during classification is accepted in order within the PCM budget" do
+    observer = self()
+    first = voice()
+    second = :binary.copy(<<2, 0>>, 2_048)
+
+    {session, wire} =
+      start_session(
+        classify: fn model, stream, audio ->
+          send(observer, {:queued_scribe_classifying, self(), audio})
+          receive do: (:continue -> classify(model, stream, audio))
+        end
+      )
+
+    ready(session, wire)
+    assert :ok = Session.push_audio(session, first)
+    assert_receive {:queued_scribe_classifying, worker, ^first}, 1_000
+    assert :ok = Session.push_audio(session, second)
+    refute_received {:vxpipe_speech, %Event{kind: :speech_started}}
+    send(worker, :continue)
+    assert %Event{kind: :speech_started} = next_event(session)
+    assert_receive {:scribe_audio, ^wire, ^first}, 1_000
+    assert_receive {:queued_scribe_classifying, next_worker, ^second}, 1_000
+    send(next_worker, :continue)
+    assert_receive {:scribe_audio, ^wire, ^second}, 1_000
+    await_input(session)
+    refute_received {:vxpipe_speech_closed, ^session, _reason}
   end
 
   test "queued audio is bounded while a completed acoustic turn awaits recognition" do

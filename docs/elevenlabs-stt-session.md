@@ -54,13 +54,22 @@ PCM, recurrent state, transcript assembly and turn references remain private to
 the allocation. The channel is bound before preparation. Readiness requires
 model preparation and the initial provider acknowledgement.
 
-Admission owns at most one accepted classification chunk, a 96,000-byte retained
-PCM budget and four unsettled turns. Chunks are aligned 16 kHz mono S16LE PCM of
+Admission owns at most one executing classification job, an ordered pending PCM
+buffer, a 96,000-byte total retained PCM budget and four unsettled turns. The
+budget includes pending input and the executing chunk, acoustic assembly and
+queued recognition. Chunks are aligned 16 kHz mono S16LE PCM of
 at most 32,000 bytes. Busy input is rejected without acceptance; accepted input
 may later fail processing. Overflow, classifier failure, connection failure,
 preparation deadlines and missing commit settlement retire the allocation with
 a fixed safe reason. They do not manufacture final text. Empty initial partials
 are harmless; empty committed text can settle only an outstanding commit.
+
+The activity runtime retains a job slot through the worker's monitor-confirmed
+termination, including the interval after result delivery. Only then does it
+publish the outcome and admit replacement work. Its job budget controls native
+concurrency; the owning task supervisor handles lifecycle without a second,
+racing child quota. This permits ordinary room audio to queue during inference
+while retaining bounded input and allocation cleanup.
 
 Closing or replacing the allocation discards private audio/text and retires
 inference, model preparation and sockets. Inspection hides credentials, PCM,

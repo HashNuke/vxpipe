@@ -49,6 +49,30 @@ defmodule Vxpipe.CallEngine.Speech.ActivityRuntimeTest do
     refute_receive {:vxpipe_speech_activity, ^ref, {:ok, _, _}}
   end
 
+  test "a result does not release admission before its worker terminates" do
+    owner = self()
+
+    runtime =
+      runtime(
+        classify: fn _, stream, _ ->
+          send(owner, {:classifying, self()})
+          receive do: (:continue -> {:ok, stream, [0.8]})
+        end
+      )
+
+    assert {:ok, ref} = ActivityRuntime.submit(Silero.new(), <<1, 0>>, runtime)
+    assert_receive {:classifying, worker}
+    # Model the gap between Task result delivery and the task's monitor signal.
+    send(runtime, {ref, {:ok, :model, {:ok, Silero.new(), [0.8]}}})
+    _ = :sys.get_state(runtime)
+    refute_received {:vxpipe_speech_activity, ^ref, _outcome}
+    assert {:error, :busy} = ActivityRuntime.submit(Silero.new(), <<1, 0>>, runtime)
+    monitor = Process.monitor(worker)
+    send(worker, :continue)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+    assert_receive {:vxpipe_speech_activity, ^ref, {:ok, _, [0.8]}}
+  end
+
   test "deadlines fail accepted work safely and private status hides PCM" do
     owner = self()
 

@@ -44,6 +44,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     model_ready?: false,
     stream: nil,
     input: nil,
+    pending_audio: "",
     turns: []
   ]
 
@@ -186,7 +187,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   end
 
   @impl true
-  def handle_call({:push_audio, audio}, _from, %{ready?: true, inference_ref: nil} = state) do
+  def handle_call({:push_audio, audio}, _from, %{ready?: true} = state) do
     cond do
       not Silero.valid_audio?(audio) ->
         {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -195,16 +196,12 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
         {:reply, {:error, :busy}, state}
 
       true ->
-        case ActivityRuntime.submit(state.stream, audio, state.runtime) do
-          {:ok, ref} -> {:reply, :ok, %{state | inference_ref: ref, accepted_audio: audio}}
-          {:error, :busy} -> {:reply, {:error, :busy}, state}
+        case advance_input(%{state | pending_audio: state.pending_audio <> audio}) do
+          {:ok, state} -> {:reply, :ok, state}
           _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
         end
     end
   end
-
-  def handle_call({:push_audio, _audio}, _from, %{ready?: true} = state),
-    do: {:reply, {:error, :busy}, state}
 
   def handle_call({:push_audio, _audio}, _from, state),
     do: {:reply, {:error, :session_failed}, state}
@@ -245,7 +242,8 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
              %{state | input: input, stream: stream, inference_ref: nil, accepted_audio: nil},
              actions
            ),
-         {:ok, state} <- advance_recognition(state) do
+         {:ok, state} <- advance_recognition(state),
+         {:ok, state} <- advance_input(state) do
       {:noreply, state}
     else
       _failure -> fail(state)
@@ -313,6 +311,22 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     _error -> :error
   catch
     _kind, _reason -> :error
+  end
+
+  defp advance_input(%{inference_ref: ref} = state) when is_reference(ref), do: {:ok, state}
+  defp advance_input(%{pending_audio: ""} = state), do: {:ok, state}
+
+  defp advance_input(state) do
+    size = min(byte_size(state.pending_audio), 32_000)
+    <<audio::binary-size(size), pending::binary>> = state.pending_audio
+
+    case ActivityRuntime.submit(state.stream, audio, state.runtime) do
+      {:ok, ref} ->
+        {:ok, %{state | inference_ref: ref, accepted_audio: audio, pending_audio: pending}}
+
+      _failure ->
+        {:error, :classification_failed}
+    end
   end
 
   defp activate(%{model_ready?: true, request_id: request} = state)
@@ -486,7 +500,8 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     do:
       Enum.reduce(
         state.turns,
-        byte_size(state.input.pending) + byte_size(state.input.pre_roll),
+        byte_size(state.input.pending) + byte_size(state.input.pre_roll) +
+          byte_size(state.pending_audio) + byte_size(state.accepted_audio || ""),
         fn head, size -> size + byte_size(head.audio) + byte_size(head.turn.remainder) end
       )
 
