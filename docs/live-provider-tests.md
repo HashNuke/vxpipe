@@ -232,6 +232,19 @@ See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.m
 
 ### ElevenLabs Scribe protocol
 
+The controlled manual assembly case is also independently selectable:
+
+```shell
+bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_controlled_segments_test.exs
+```
+
+It submits 23.6 seconds of the existing repeated public fixture, bounded to
+25 seconds, and settles two manual segments on one connection. One run passes
+in 24.9 seconds, seed 512880, preserving one cumulative turn end. The boundary
+is supplied by the test; acoustic detection and conversational room acceptance
+remain pending. No other paid case is included. See
+[controlled segment evidence](../labnotes/20261001-0125-scribe-controlled-segments.md).
+
 The long VAD experiment is independently selectable:
 
 ```shell

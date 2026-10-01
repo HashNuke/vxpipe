@@ -7,16 +7,18 @@ It does not register conversational STT or change shared STS contracts.
 
 ## Decision and boundary
 
-Keep Scribe's verified short native VAD endpointing and investigate the missing
-genuine activity-start responsibility separately. Silero is a viable candidate
-for that responsibility in the tested Python and native Elixir environments.
+Keep Scribe's verified short native VAD segment evidence, while the long-stream
+observation leaves commit cause and turn authority unresolved. Investigate
+genuine acoustic onset/end separately from recognition settlement. Silero is a
+viable candidate for acoustic activity in the tested Python and native Elixir environments.
 Its runtime is not yet selected for production: startup/distribution ownership,
 bounded execution and turn correlation still need implementation and acceptance.
 The existing detector fallback design remains conditional.
 
-A first transcript partial cannot supply activity evidence. Replacing valid
-native endpointing with local silence ownership would introduce a larger contract
-change. A hosted agent is outside the user-approved STT/TTS scope. These remain
+A first transcript partial cannot supply activity evidence. Local acoustic turn
+ownership requires explicit provenance and consumer review; native segment
+commits alone do not establish a turn boundary. A hosted agent is outside the
+user-approved STT/TTS scope. These remain
 rejected shortcuts. An activity classifier detects voice, not semantic completion
 of a person's thought.
 
@@ -82,10 +84,15 @@ Model/runtime artifacts and experiments remain isolated from project dependencie
 - [ ] Package model/notices and verify supported deployment targets without startup downloads.
 - [ ] Bound scheduler time, concurrency, backlog and failures under an owned supervised runtime.
 - [ ] Reset activity state across permission intervals, allocations and participant changes.
-- [ ] Review local-onset/native-end turn identity and delayed-event correlation.
+- [ ] Review local acoustic boundaries, serialized recognition and delayed-event correlation.
 - [ ] Verify session, room, scoped publication, Console and live conversational acceptance.
 
 Delayed native commits cannot be assigned to a later turn solely by receipt time.
 Long-input endpoint identity remains separate from activity-start feasibility.
 Optional finite-input agent-output recognition is outside caller STT prerequisites.
 The milestone remains in progress until actual integration and acceptance pass.
+
+The [controlled recognition checkpoint](elevenlabs-turn-ownership.md#controlled-manual-recognition-assembly--2026-10-01)
+passes eighteen owning local checks and one selected two-segment manual wire
+case. It supplies a boundary explicitly and does not implement or validate this
+acoustic classifier. Its bounded assembly is preparation for the composed session.

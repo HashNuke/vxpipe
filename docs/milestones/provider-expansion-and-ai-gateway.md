@@ -110,6 +110,7 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Fix native VAD probe thresholds explicitly and reject conflicting optional echoes locally.
 - [x] Pass the separately selected short Scribe VAD case without a manual commit.
 - [x] Observe one bounded long Scribe VAD stream with ordered segment receipt positions.
+- [x] Implement bounded manual recognition assembly and pass its selected two-segment wire case.
 - [ ] Resolve long-input endpoint identity and semantics.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
@@ -372,3 +373,25 @@ The long-probe checkpoint passes all five root gates. The default umbrella run
 reports 2,973 tests, zero failures, 91 exclusions, seed 536614. Its new live
 module is excluded; this does not repeat the paid experiment or complete the
 pending conversational STT acceptance.
+
+The [controlled segment checkpoint](../../labnotes/20261001-0125-scribe-controlled-segments.md)
+adds provider-owned cumulative recognition assembly with a twenty-second manual
+segment cap, one outstanding commit, retained crossing input, replaceable
+partials, idempotent endpoints and private bounded state. Eighteen focused checks
+pass including codec/socket transport. The new selected wire case passes once
+in 24.9 seconds, seed 512880: two settlements preserve one supplied caller turn
+over 23.6 seconds of input. Acoustic detection, supervised pending-input/deadline
+ownership, scoped session/room admission and conversational live evidence remain
+open; this helper does not register an STT capability. The existing Lean lane
+passes, without claiming a new formal model of the private assembly owner.
+
+All five root gates pass for this implementation. The default suite reports
+2,979 tests, zero failures, 92 exclusions, seed 297292. The selected paid case
+is not repeated by the default suite; conversational STT acceptance stays open.
+
+Design review separates acoustic endpoint ownership from ordered recognition
+settlement. A single serialized context can cross multiple manual segments;
+per-turn socket creation is not a mandatory prerequisite. Incoming PCM must
+remain bounded while awaiting settlement, and later turn activity must retain
+its own reference even if earlier recognition is draining. Review descriptor
+provenance and consumers before admitting local acoustic turn ownership.

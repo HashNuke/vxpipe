@@ -1,7 +1,7 @@
 # ElevenLabs input turn ownership
 
-Status: Design proposal, updated 2026-10-01. Scribe manual and short native VAD
-protocol preparation are verified;
+Status: Design proposal, updated 2026-10-01. Scribe manual, short/long native VAD
+protocol experiments and bounded manual recognition assembly are verified;
 native VAD admission and the fallback boundary composition are not implemented
 or admitted by the conversational STT contract. This document records unresolved
 feasibility gates separately from milestone progress.
@@ -67,6 +67,32 @@ commit, and stop submitting new audio until its segment is settled. Verify
 empty/unrecognized input and early or delayed segments explicitly. A deadline
 must fail the allocation rather than invent a final transcript. This is a
 candidate protocol, not an approved finalization guarantee or implemented STT.
+
+### Controlled manual recognition assembly — 2026-10-01
+
+`ScribeTurn` now owns cumulative recognition for an opaque, locally supplied
+caller turn. It caps each manual segment at twenty seconds of submitted PCM,
+accepts only one outstanding commit, and retains at most the remainder of one
+already accepted chunk. Later input is rejected as busy without acceptance.
+Partials replace only their current segment; duplicate and empty partials do
+not publish additional events. Committed text extends a bounded stable prefix.
+An intermediate segment does not end the turn. A supplied acoustic endpoint
+seals input; final turn text waits for all retained audio and requested segment
+settlement. Unexpected segments and oversized text fail safely.
+
+Eighteen focused turn/codec/socket checks pass, including local transport.
+One separately selected manual wire case submits 23.6 seconds, waits for the
+twenty-second commit before resuming audio, then settles the supplied endpoint.
+It passes in 24.9 seconds, seed 512880: two segment settlements, one cumulative
+turn end and the known public-fixture word. The test supplies its boundary; it
+does not classify acoustic activity or establish conversational room readiness.
+See [implementation evidence](../labnotes/20261001-0125-scribe-controlled-segments.md).
+
+This supports a serialized recognition context instead of requiring a separate
+connection for each turn. The future supervised owner must correlate pending
+turns, bound queued PCM, enforce commit deadlines and reset across privacy
+intervals. Empty or missing settlement still needs explicit failure checks.
+No STT capability or contract amendment is admitted by this helper alone.
 
 The preparation codec now accepts only the explicit `:manual`/`:vad` strategies
 and checks any returned commit-strategy acknowledgement against the requested
@@ -142,10 +168,11 @@ current semantics.
    timer, a transcript partial or a provider commit does not establish silence.
    Reviewed hysteresis and duration thresholds must be fixed and tested before
    exposing public tuning controls.
-3. Each local turn has its own Scribe socket/context. Partial text is scoped to
-   that context; committed segments accumulate within its turn. Automatic commits
-   never emit turn-end. A fresh turn cannot receive stale text from an older
-   context.
+3. Each local turn has its own recognition assembly. A serialized manual context
+   can be reused after a verified commit barrier; separate sockets remain an
+   alternative when overlapping drains require independent contexts. Partial
+   text and committed segments remain scoped to their turn. Automatic commits
+   never emit turn-end. A fresh turn cannot receive stale text from an older one.
 4. At the detector endpoint, stop audio delivery to that context and request its
    final segment. Emit turn-end only after transcript completion for the closed
    input boundary. Scribe has no commit correlation ID: determine a reliable
@@ -173,8 +200,9 @@ classifier, not an approved new dependency. Its upstream
 uses 512 new samples plus 64 samples of context at 16 kHz and retains recurrent
 state per stream. Its [license](https://github.com/snakers4/silero-vad/blob/master/LICENSE)
 is MIT. [Ortex](https://github.com/elixir-nx/ortex) provides Elixir ONNX Runtime
-bindings and requires Rust compilation. These are implementation candidates;
-native build compatibility and performance have not been verified in Vxpipe.
+bindings and requires Rust compilation. These remain implementation candidates;
+isolated native compatibility is verified below, while production packaging and
+supervised execution remain unimplemented.
 
 Before selecting them, verify a pinned model revision and checksum, distribution
 and license notice, supported deployment platforms, deterministic local inference,
