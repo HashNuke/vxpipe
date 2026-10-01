@@ -386,7 +386,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
     assert :ok = TestTransferConnection.complete_source_hold(fixture, {:ok, receipt})
 
-    assert_receive {:test_sts_source_arm, ^fixture, arm_scope}, 5_000
+    # The source cutover owns a nine-second room deadline. Observe that bounded
+    # transition before injecting rejection, as the successful cutover tests do.
+    assert_receive {:test_sts_source_arm, ^fixture, arm_scope}, 10_000
     assert arm_scope.receipt == receipt
 
     assert :ok =
