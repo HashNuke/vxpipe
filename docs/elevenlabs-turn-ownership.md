@@ -227,6 +227,21 @@ standalone STT admission through the existing outbound Scribe socket. No Speech
 Engine resource or provider is implemented. This alternative is not selected;
 hosted-agent STS is deferred outside the current STT/TTS scope.
 
+## Runtime feasibility update — 2026-10-01
+
+The [isolated activity-runtime experiment](speech-activity-feasibility.md) now
+pins the Silero model/checksum/license, matches the official Python wrapper,
+and executes all 130 fixture frames through an unpatched native Elixir Ortex
+build with zero probability difference. Independent native states for sixty-four
+streams with sixteen bounded workers also match their references. Model/artifacts
+remain outside project dependencies; no supervised detector is implemented.
+
+This resolves the tested build/inference compatibility question raised by the
+2026-09-30 review. Production thread/backlog limits, distribution, deployment
+targets and realistic activity quality still require acceptance. Local-onset/
+native-end turn correlation and long-input endpoint identity remain separate
+open contracts. No shared speech admission rule changes in this research.
+
 ## Rejected shortcuts
 
 - Treating the first partial as speech-start: recognition latency is not voice

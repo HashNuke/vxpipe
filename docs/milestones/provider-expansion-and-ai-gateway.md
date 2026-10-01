@@ -58,6 +58,8 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Review Scribe Realtime native VAD separately from its missing speech-start event;
   keep optional agent-output drain outside caller STT prerequisites.
 - [x] Review and record the user-approved STT/TTS-only ElevenLabs scope; defer hosted-agent STS.
+- [x] Verify isolated pinned activity-model and native Elixir inference compatibility;
+  keep production runtime ownership and turn correlation unchecked.
 - [ ] Resolve ElevenLabs realtime STT turn authority without weakening shared contracts.
 - [ ] Establish scoped credentials, startup/cancellation, usage and supervision
   contracts for both speech providers before implementation.
@@ -340,3 +342,12 @@ The default umbrella run completes with 2,973 reported tests, zero failures,
 No source-cutover or speech state machine changes require a new Lean run for this
 checkpoint. This evidence supersedes earlier execution restrictions for this
 code, while conversational realtime STT and final milestone acceptance remain open.
+
+The [activity runtime experiment](../speech-activity-feasibility.md), recorded
+separately from implementation, establishes pinned Silero model identity,
+reference framing/state equivalence and native Ortex build/inference with the
+umbrella's Nx/Rustler versions. Sixty-four native stream states with sixteen
+workers retain exact reference probabilities through one shared model. No
+model/dependency, supervised activity owner or STT manifest capability is added.
+Production deployment/execution bounds and local-onset/native-end correlation
+remain unchecked. See [research labnotes](../../labnotes/20261001-0037-speech-activity-feasibility.md).
