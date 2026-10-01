@@ -18,6 +18,30 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixture do
     Path.join(root, "apps/vxpipe_providers/test/fixtures/deepgram/final_word_48k_mono_opus.ogg")
   end
 
+  def short_pcm_path(root \\ @root) do
+    Path.join(root, "apps/vxpipe_providers/test/fixtures/deepgram/short_answer_16k_mono_s16le.pcm")
+  end
+
+  def ensure_short!(options \\ []) do
+    path = short_pcm_path(Keyword.get(options, :root, @root))
+
+    unless File.regular?(path) do
+      request = Keyword.get(options, :request, fn -> request_tts!("Yes.") end)
+
+      case request.() do
+        {:ok, audio}
+        when is_binary(audio) and byte_size(audio) in 2..64_000 and rem(byte_size(audio), 2) == 0 ->
+          File.mkdir_p!(Path.dirname(path))
+          File.write!(path, audio)
+
+        _failure ->
+          raise "Deepgram short fixture must be nonempty 16 kHz PCM of at most two seconds"
+      end
+    end
+
+    :ok
+  end
+
   def ensure!(options \\ []) do
     root = Keyword.get(options, :root, @root)
     pcm = pcm_path(root)
@@ -100,12 +124,12 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixture do
     audio <> :binary.copy(<<0>>, @trailing_silence_bytes)
   end
 
-  defp request_tts! do
+  defp request_tts!(text \\ @text) do
     key = System.fetch_env!("DEEPGRAM_API_KEY")
 
     case Req.post(@tts_url,
            headers: [{"authorization", "Token " <> key}],
-           json: %{text: @text},
+           json: %{text: text},
            retry: false,
            receive_timeout: 30_000
          ) do

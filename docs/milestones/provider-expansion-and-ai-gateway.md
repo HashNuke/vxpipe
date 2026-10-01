@@ -116,6 +116,8 @@ STS capability advertised and no further hosted-agent paid checks required.
 - [x] Implement the allocation-owned Scribe STT session with STT-only local gap
   provenance, bounded queued turns and fresh per-turn recognition connections.
 - [x] Pass its separately selected two-turn acoustic/session live case.
+- [x] Recognize a brief first answer without padding and retain readiness through
+  a thirty-second initial idle window with no caller audio.
 - [ ] Resolve long-input endpoint identity and semantics.
 - [ ] Verify audio negotiation, transcripts, interruption, cancellation, startup
   failure, supervision, usage identity and secret redaction locally.
@@ -443,3 +445,24 @@ audio checks pass. All five root gates pass for the repaired checkpoint: 3,013
 default tests, zero failures, 93 exclusions, seed 705441. The existing Lean
 build/oracle/replay passes one test, seed 867759. This does not complete the
 pending scoped STT and room acceptance tasks above.
+
+### Short answer and initial idle checkpoint, 2026-10-01
+
+The [short/idle labnotes](../../labnotes/20261001-0354-scribe-short-idle.md) record
+two distinct selected live checks. The existing adapter recognizes the fixed
+600 ms public "Yes." sample without added padding: one test, zero failures,
+3.0 seconds, seed 902523. A thirty-second no-input wait initially leaves the
+allocation closed at the first answer (seed 762412). An empty, noncommitting
+protocol message every ten seconds repairs this bounded idle window: the same
+case passes one test in 32.3 seconds, seed 892995. These messages contain no
+caller PCM and supply no acoustic evidence. The local wire/peer-close/privacy
+group passes 29 checks, seed 477328, including unchanged ordinary TTS pings.
+Passing paid cases are not repeated. Unlimited idle lifetime, scoped STT
+publication/startup, room integration and Console metadata are not established
+by this checkpoint; the milestone and index remain unchecked.
+
+Final checkpoint gates pass: format, warnings-as-errors compile, strict Credo,
+unused-dependency checking and the default umbrella suite, with 3,014 tests,
+zero failures, 96 exclusions, seed 844978. The existing Lean build/oracle/replay
+passes one test, seed 665060. These checks accept the short/idle checkpoint;
+scoped STT and full room/Console acceptance remain required.

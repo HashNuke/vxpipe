@@ -3,6 +3,31 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixtureTest do
 
   alias Vxpipe.Providers.Deepgram.LiveFixture
 
+  test "generates a brief PCM answer once and reuses it without transcoding" do
+    root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
+    on_exit(fn -> File.rm_rf!(root) end)
+    audio = :binary.copy(<<1, 0>>, 8_000)
+    observer = self()
+
+    assert :ok =
+             LiveFixture.ensure_short!(
+               root: root,
+               request: fn ->
+                 send(observer, :short_fixture_requested)
+                 {:ok, audio}
+               end
+             )
+
+    assert_received :short_fixture_requested
+    assert File.read!(LiveFixture.short_pcm_path(root)) == audio
+
+    assert :ok =
+             LiveFixture.ensure_short!(
+               root: root,
+               request: fn -> flunk("the saved short sample must be reused") end
+             )
+  end
+
   test "generated speech carries two seconds of PCM silence for streaming turn detection" do
     root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
     on_exit(fn -> File.rm_rf!(root) end)

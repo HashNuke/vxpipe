@@ -10,7 +10,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
     if strategy in [:manual, :vad] do
       Socket.start_link(Keyword.put(options, :connect_mode, :deferred), __MODULE__, %{
         owner: Keyword.fetch!(options, :owner),
-        commit_strategy: strategy
+        commit_strategy: strategy,
+        keepalive_interval: 10_000
       })
     else
       {:error, :invalid_configuration}
@@ -23,6 +24,9 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
   end
 
   def commit(socket), do: Socket.send_frame(socket, {:text, Scribe.commit()})
+
+  @impl true
+  def keepalive_frame(_state), do: {:text, Scribe.keepalive()}
 
   @impl true
   def handle_frame({:text, payload}, state) do

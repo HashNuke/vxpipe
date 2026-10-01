@@ -35,6 +35,15 @@ connection acknowledgement before audio is sent. Otherwise the next connection
 is opened when the next turn's PCM is available. Late messages from retired
 connections are ignored. Only initial readiness emits `ready` for the allocation.
 
+Every open Scribe connection sends an empty, noncommitting `input_audio_chunk`
+every ten seconds. This maintains the connection while no caller audio is
+available. These protocol messages contain no PCM and do not advance detector
+state, accepted caller usage, recognition segment budgets or acoustic duration.
+They neither commit recognition nor manufacture silence or turn events. The
+owned socket schedules them and retires its timer with its process. Other speech
+socket callbacks retain their ordinary WebSocket ping unless they explicitly
+provide a protocol keepalive frame.
+
 ## Ownership, admission and failure
 
 The socket and detector supervisor are children of the allocation's provider
@@ -75,11 +84,24 @@ must retain the existing usage and permission-interval ownership.
   latency and must be included in subsequent room acceptance.
 
 The selected repair changes connection lifetime, not transcript assertions or
-the user-visible STS contract. Before milestone completion, verify short initial
-utterances against the documented two-second processing threshold, initial idle
-lifetime, scoped replacement/usage, room consumers and Console metadata.
+the user-visible STS contract. A brief first answer and a thirty-second initial
+idle window now have separately selected passing evidence. This does not prove
+an unlimited idle lifetime. Before milestone completion, verify scoped
+replacement/usage, room consumers and Console metadata.
 
 ## Verification
+
+The brief-first-answer case passes against the unchanged STT adapter: one test
+in 3.0 seconds, seed 902523. A fixed 600 ms public "Yes." sample produces one
+genuine onset, a matching local-gap end and recognized text without adding
+padding. The separate initial-idle case initially fails after thirty seconds
+without caller audio: the first submitted chunk is rejected as closed
+(seed 762412). This does not establish the provider's exact disconnect reason.
+With the empty, noncommitting protocol keepalive, the same selected idle case
+passes in 32.3 seconds, seed 892995. Both earlier passing live cases are excluded.
+The local protocol regression fails on a WebSocket ping before the repair;
+afterwards the wire/peer-close/privacy group passes 29 checks, seed 477328,
+including the existing ordinary TTS ping case.
 
 The initial input/session lane failed seven checks before implementation.
 STT admission/event/consumer checks failed three checks before `local_gap` was

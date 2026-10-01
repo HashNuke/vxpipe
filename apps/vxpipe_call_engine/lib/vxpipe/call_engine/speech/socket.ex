@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   @callback handle_frame(tuple(), map()) :: {:ok, map()} | {:await, reference(), map()}
   @callback handle_disconnect(term(), map()) :: {:ok, map()}
   @callback handle_peer_close(peer_close_status(), map()) :: {:ok, map()}
-  @optional_callbacks handle_peer_close: 2
+  @callback keepalive_frame(map()) :: tuple()
+  @optional_callbacks handle_peer_close: 2, keepalive_frame: 1
 
   @send_timeout 5_000
   @output_timeout 15_000
@@ -149,8 +150,15 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   def handle_info({:output_timeout, _reference}, state), do: {:noreply, state}
 
+  def handle_info(:keepalive, %{connection: nil} = state), do: {:noreply, state}
+
   def handle_info(:keepalive, state) do
-    case SocketConnection.send_frame(state.connection, :ping) do
+    frame =
+      if function_exported?(state.callback, :keepalive_frame, 1),
+        do: state.callback.keepalive_frame(state.callback_state),
+        else: :ping
+
+    case SocketConnection.send_frame(state.connection, frame) do
       {:ok, connection} ->
         schedule_keepalive(state.keepalive_interval)
         {:noreply, %{state | connection: connection}}

@@ -86,6 +86,8 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
 
   def commit, do: input_message("", true)
 
+  def keepalive, do: input_message("", false)
+
   def decode(payload, commit_strategy \\ :manual)
 
   def decode(payload, commit_strategy)

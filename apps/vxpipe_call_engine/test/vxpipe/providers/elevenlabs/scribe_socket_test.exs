@@ -5,6 +5,41 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocketTest do
   alias Vxpipe.CallEngine.TestSpeechWireServer
   alias Vxpipe.Providers.ElevenLabs.ScribeSocket
 
+  test "idle keepalive sends an empty noncommitting protocol message without speech events" do
+    server = start_supervised!({TestSpeechWireServer, owner: self()})
+
+    socket =
+      start_supervised!(%{
+        id: make_ref(),
+        start:
+          {ScribeSocket, :start_link,
+           [
+             [
+               owner: self(),
+               connection: %{url: TestSpeechWireServer.endpoint(server), headers: []},
+               transport_options: []
+             ]
+           ]},
+        restart: :temporary
+      })
+
+    assert_receive {:vxpipe_socket_connected, ^socket}, 1_000
+    send(socket, :keepalive)
+
+    assert_receive {:speech_wire_frame, _, :text, payload}, 1_000
+
+    assert JSON.decode!(payload) == %{
+             "message_type" => "input_audio_chunk",
+             "audio_base_64" => "",
+             "commit" => false,
+             "sample_rate" => 16_000
+           }
+
+    assert :sys.get_state(socket).keepalive_interval == 10_000
+    refute_received {:vxpipe_scribe_transport, ^socket, _event}
+    assert {:error, :invalid_audio} = ScribeSocket.send_audio(socket, "")
+  end
+
   test "decodes segments and removes private provider error text before notifying its owner" do
     observer = self()
     state = %{owner: observer}

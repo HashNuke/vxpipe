@@ -9,6 +9,101 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsSpeechToTextTest do
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
   alias Vxpipe.Providers.LiveModels
 
+  test "recognizes the first answer after thirty seconds without caller audio" do
+    assert :ok = LiveFixture.ensure_short!()
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, config} =
+             Scribe.new(
+               api_key: System.fetch_env!("ELEVENLABS_API_KEY"),
+               model: LiveModels.speech("elevenlabs", :stt),
+               language_code: "en"
+             )
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: STTSession,
+               options: [language_code: "en"],
+               private: [config: config]
+             )
+
+    assert_receive {:vxpipe_speech, %Event{kind: :ready} = ready}, 20_000
+    assert :ok = Session.ack(session, ready)
+    ref = make_ref()
+    Process.send_after(self(), {:idle_elapsed, ref}, 30_000)
+
+    receive do
+      {:idle_elapsed, ^ref} ->
+        :ok
+
+      {:vxpipe_speech, %Event{kind: kind}} ->
+        flunk("prepared Scribe allocation emitted #{kind} during initial idle")
+    after
+      31_000 -> flunk("idle acceptance deadline did not arrive")
+    end
+
+    pcm = File.read!(LiveFixture.short_pcm_path())
+    events = stream(session, pcm <> :binary.copy(<<0>>, 32_768), [])
+    events = await_ends(session, events, System.monotonic_time(:millisecond) + 15_000, 1)
+
+    assert [%Event{kind: :speech_started, turn_ref: turn}] =
+             Enum.filter(events, &(&1.kind == :speech_started))
+
+    assert [%Event{kind: :turn_ended, turn_ref: ^turn} = ended] =
+             Enum.filter(events, &(&1.kind == :turn_ended))
+
+    assert ended.endpointing == :local_gap
+
+    assert Regex.match?(~r/\byes\b/i, ended.text),
+           "answer after idle was not recognized (#{byte_size(ended.text)} text bytes)"
+
+    IO.puts("Scribe initial idle: 30 seconds without caller audio; first answer settled")
+    assert :ok = Session.close(session)
+  end
+
+  test "recognizes a brief first answer below the initial processing window" do
+    assert :ok = LiveFixture.ensure_short!()
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, config} =
+             Scribe.new(
+               api_key: System.fetch_env!("ELEVENLABS_API_KEY"),
+               model: LiveModels.speech("elevenlabs", :stt),
+               language_code: "en"
+             )
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               provider: STTSession,
+               options: [language_code: "en"],
+               private: [config: config]
+             )
+
+    assert_receive {:vxpipe_speech, %Event{kind: :ready} = ready}, 20_000
+    assert :ok = Session.ack(session, ready)
+    pcm = File.read!(LiveFixture.short_pcm_path())
+    assert byte_size(pcm) <= 64_000
+    events = stream(session, pcm <> :binary.copy(<<0>>, 32_768), [])
+
+    events =
+      await_ends(session, events, System.monotonic_time(:millisecond) + 15_000, 1)
+
+    assert [%Event{kind: :speech_started, turn_ref: turn}] =
+             Enum.filter(events, &(&1.kind == :speech_started))
+
+    assert [%Event{kind: :turn_ended, turn_ref: ^turn} = ended] =
+             Enum.filter(events, &(&1.kind == :turn_ended))
+
+    assert ended.endpointing == :local_gap
+    assert ended.audio_duration_ms in 1..1_200
+
+    assert Regex.match?(~r/\byes\b/i, ended.text),
+           "brief answer was not recognized (#{byte_size(ended.text)} text bytes)"
+
+    IO.puts("Scribe short answer: local onset/end, known word and sub-two-second acoustic input")
+    assert :ok = Session.close(session)
+  end
+
   test "owned realtime recognition settles two acoustically detected caller turns" do
     tree = start_supervised!({CapabilityTree, owner: self()})
 
@@ -89,8 +184,8 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsSpeechToTextTest do
     end
   end
 
-  defp await_ends(session, events, deadline) do
-    if Enum.count(events, &(&1.kind == :turn_ended)) == 2 do
+  defp await_ends(session, events, deadline, expected \\ 2) do
+    if Enum.count(events, &(&1.kind == :turn_ended)) == expected do
       events
     else
       remaining = deadline - System.monotonic_time(:millisecond)
@@ -99,7 +194,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsSpeechToTextTest do
       receive do
         {:vxpipe_speech, event} ->
           assert :ok = Session.ack(session, event)
-          await_ends(session, events ++ [event], deadline)
+          await_ends(session, events ++ [event], deadline, expected)
 
         {:vxpipe_speech_closed, ^session, _reason} ->
           flunk("Scribe closed before turn settlement")
