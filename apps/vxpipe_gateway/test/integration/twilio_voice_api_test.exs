@@ -2,20 +2,35 @@ defmodule Vxpipe.Gateway.Integration.TwilioVoiceAPITest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
+  alias Vxpipe.Gateway.TestTelephonyServiceRepository
   alias Vxpipe.Providers.Twilio.Adapter, as: TwilioAdapter
+  alias Vxpipe.Providers.Twilio.PublicEndpoint
 
   @moduletag :live_providers
   @moduletag :live_twilio
   @moduletag timeout: 30_000
 
   setup do
+    account_sid = System.fetch_env!("TWILIO_ACCOUNT_SID")
+    auth_token = System.fetch_env!("TWILIO_AUTH_TOKEN")
+
+    service =
+      TestTelephonyServiceRepository.configured(
+        id: "live-twilio",
+        ingress_key: "live-twilio",
+        scope: {:tenant, "livetwiliotest00"},
+        provider: :twilio,
+        account_sid: account_sid,
+        auth_token: auth_token,
+        public_base_url: System.fetch_env!("TELEPHONY_TEST_PUBLIC_URL")
+      )
+
     {:ok,
-     account_sid: System.fetch_env!("TWILIO_ACCOUNT_SID"),
-     auth_token: System.fetch_env!("TWILIO_AUTH_TOKEN"),
+     account_sid: account_sid,
+     auth_token: auth_token,
      from: System.fetch_env!("TWILIO_TEST_FROM"),
-     media_url: System.fetch_env!("TWILIO_TEST_MEDIA_URL"),
-     to: System.fetch_env!("TWILIO_TEST_DESTINATION"),
-     webhook_url: System.fetch_env!("TWILIO_TEST_WEBHOOK_URL")}
+     service: service,
+     to: System.fetch_env!("TWILIO_TEST_DESTINATION")}
   end
 
   test "Twilio accepts one outbound request for an authorized destination", context do
@@ -25,8 +40,8 @@ defmodule Vxpipe.Gateway.Integration.TwilioVoiceAPITest do
       leg_id: leg_id,
       from: context.from,
       to: context.to,
-      callback_url: context.webhook_url,
-      media_url: context.media_url,
+      callback_url: PublicEndpoint.event_url(context.service, leg_id),
+      media_url: PublicEndpoint.media_url(context.service, leg_id),
       answering_machine_detection: :disabled
     }
 

@@ -2,20 +2,36 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
+  alias Vxpipe.Gateway.TestTelephonyServiceRepository
   alias Vxpipe.Providers.Telnyx.Adapter, as: TelnyxAdapter
+  alias Vxpipe.Providers.Telnyx.PublicEndpoint
 
   @moduletag :live_providers
   @moduletag :live_telnyx
   @moduletag timeout: 30_000
 
   setup do
+    api_key = System.fetch_env!("TELNYX_API_KEY")
+    app_id = System.fetch_env!("TELNYX_APP_ID")
+
+    service =
+      TestTelephonyServiceRepository.configured(
+        id: "live-telnyx",
+        ingress_key: "live-telnyx",
+        scope: {:tenant, "livetelnyxtest00"},
+        provider: :telnyx,
+        provider_connection_id: app_id,
+        api_key: api_key,
+        public_key: System.fetch_env!("TELNYX_PUBLIC_KEY"),
+        public_base_url: System.fetch_env!("TELEPHONY_TEST_PUBLIC_URL")
+      )
+
     {:ok,
-     api_key: System.fetch_env!("TELNYX_API_KEY"),
-     app_id: System.fetch_env!("TELNYX_APP_ID"),
+     api_key: api_key,
+     app_id: app_id,
      from: System.fetch_env!("TELNYX_TEST_FROM"),
-     media_url: System.fetch_env!("TELNYX_TEST_MEDIA_URL"),
-     to: System.fetch_env!("TELNYX_TEST_DESTINATION"),
-     webhook_url: System.fetch_env!("TELNYX_TEST_WEBHOOK_URL")}
+     service: service,
+     to: System.fetch_env!("TELNYX_TEST_DESTINATION")}
   end
 
   test "Telnyx accepts the current dial/media contract for an authorized destination", context do
@@ -25,8 +41,8 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
       leg_id: leg_id,
       from: context.from,
       to: context.to,
-      callback_url: context.webhook_url,
-      media_url: context.media_url,
+      callback_url: PublicEndpoint.event_url(context.service),
+      media_url: PublicEndpoint.media_url(context.service, leg_id),
       answering_machine_detection: :disabled
     }
 

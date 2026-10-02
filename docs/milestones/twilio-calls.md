@@ -403,8 +403,9 @@ all 802 tests, and the unused-dependency check pass.
 An `:live_providers`/`:live_twilio` test now exercises the production Twilio Calls client against an
 explicitly authorized destination. The lane remains excluded by default. When selected, it
 requires `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_TEST_FROM`, `TWILIO_TEST_DESTINATION`,
-`TWILIO_TEST_WEBHOOK_URL`, and `TWILIO_TEST_MEDIA_URL`. The two URLs must be public TLS endpoints
-owned by the operator running the test. The test submits one call with the configured media and
+and `TELEPHONY_TEST_PUBLIC_URL`. The test builds the per-call status callback and `wss://` media
+URLs under that operator-owned public TLS origin with the gateway's own Twilio route shapes. The
+test submits one call with the configured media and
 callback contract, validates the returned Call SID, and schedules an exact-call completion action.
 
 The currently supported Twilio boundary is deliberately narrow:

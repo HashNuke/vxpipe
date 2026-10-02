@@ -16,7 +16,8 @@ cat > "$scratch/bin/mix" <<'MIX'
     printf '%s=%s\n' "$name" "${!name:-missing}"
   done
   printf 'telnyx=%s\n' "${TELNYX_API_KEY:-missing}"
-  printf 'webhook=%s\n' "${TELNYX_TEST_WEBHOOK_URL:-missing}"
+  printf 'telephony_url=%s\n' "${TELEPHONY_TEST_PUBLIC_URL:-missing}"
+  printf 'telnyx_public_key=%s\n' "${TELNYX_PUBLIC_KEY:-missing}"
   printf 'argument=%s\n' "$@"
 } > "$VXPIPE_LIVE_RUNNER_TEST_OUTPUT"
 MIX
@@ -31,13 +32,14 @@ ELEVENLABS_API_KEY=test-elevenlabs
 OPENAI_API_KEY=test-only-key
 GEMINI_API_KEY=todo
 TELNYX_API_KEY=todo
-TELNYX_TEST_WEBHOOK_URL=https://todo
+TELEPHONY_TEST_PUBLIC_URL=https://todo
 ENV
 
 export VXPIPE_LIVE_RUNNER_TEST_OUTPUT="$scratch/output"
 export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/live_providers.env"
 export VXPIPE_LIVE_PROVIDERS_MIX_BIN="$scratch/bin/mix"
 export TELNYX_API_KEY=ambient-test-only-key
+export TELNYX_PUBLIC_KEY=ambient-test-only-key
 export FIREWORKS_API_KEY=ambient-test-only-key
 export CARTESIA_API_KEY=ambient-test-only-key
 export ELEVENLABS_API_KEY=ambient-test-only-key
@@ -58,7 +60,8 @@ done
 rg -q -F 'ELEVENLABS_API_KEY=test-elevenlabs' "$scratch/output"
 rg -q -F 'gemini=missing' "$scratch/output"
 rg -q -F 'telnyx=missing' "$scratch/output"
-rg -q -F 'webhook=missing' "$scratch/output"
+rg -q -F 'telephony_url=missing' "$scratch/output"
+rg -q -F 'telnyx_public_key=missing' "$scratch/output"
 rg -q -F 'argument=--only' "$scratch/output"
 rg -q -F 'argument=live_openai' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs' "$scratch/output"
