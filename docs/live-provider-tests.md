@@ -56,20 +56,20 @@ Copy the [template](../config/live_providers.env.example) to
 `~/.config/vxpipe/live_providers.env`, then replace the `todo` placeholders
 only for the providers being run. URL placeholders include `https://`; the
 runner treats unchanged placeholders as missing settings.
-`bin/test-live-providers` loads that file for its child Mix process. It clears
+`bin/livetests run` loads that file for its child Mix process. It clears
 ambient provider credentials first, so a dotenv hook on entering the directory
 does not silently provide credentials. No arguments run every current live
 provider test from the four owning directories (AgentRuntime, CallEngine,
 Gateway and Console):
 
 ```shell
-bin/test-live-providers
+bin/livetests run
 ```
 
 The runner forwards supplied arguments to `mix test`. For one provider or file:
 
 ```shell
-bin/test-live-providers --only live_openai \
+bin/livetests run --only live_openai \
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
 ```
 
@@ -77,7 +77,7 @@ The configured ElevenLabs STT room case belongs to Console, which composes
 encrypted services, publication and room startup:
 
 ```shell
-bin/test-live-providers --only live_elevenlabs \
+bin/livetests run --only live_elevenlabs \
   apps/vxpipe_console/test/integration/elevenlabs_configured_room_test.exs
 ```
 
@@ -202,10 +202,10 @@ are added. The chosen Fireworks Gemma listings require dedicated deployment;
 the fixed Nemotron model is serverless and inexpensive.
 
 ```shell
-bin/test-live-providers --only live_deepseek apps/vxpipe_agent_runtime/test/integration/deepseek_llm_test.exs
-bin/test-live-providers --only live_openrouter apps/vxpipe_agent_runtime/test/integration/openrouter_llm_test.exs
-bin/test-live-providers --only live_fireworks apps/vxpipe_agent_runtime/test/integration/fireworks_llm_test.exs
-bin/test-live-providers --only live_openai apps/vxpipe_agent_runtime/test/integration/openai_llm_test.exs
+bin/livetests run --only live_deepseek apps/vxpipe_agent_runtime/test/integration/deepseek_llm_test.exs
+bin/livetests run --only live_openrouter apps/vxpipe_agent_runtime/test/integration/openrouter_llm_test.exs
+bin/livetests run --only live_fireworks apps/vxpipe_agent_runtime/test/integration/fireworks_llm_test.exs
+bin/livetests run --only live_openai apps/vxpipe_agent_runtime/test/integration/openai_llm_test.exs
 ```
 
 Run one selected group at a time for this milestone. Deepgram samples include
@@ -229,8 +229,8 @@ It never generates another provider's sample. Both Cartesia checks passed on
 2026-09-30.
 
 ```shell
-bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_text_to_speech_test.exs
-bin/test-live-providers --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_speech_to_text_test.exs
+bin/livetests run --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_text_to_speech_test.exs
+bin/livetests run --only live_cartesia apps/vxpipe_call_engine/test/integration/cartesia_speech_to_text_test.exs
 ```
 
 Run these commands individually. See [TTS evidence](../labnotes/20260930-0705-cartesia-request-tts.md)
@@ -248,7 +248,7 @@ credential redaction and published compiled startup. Saving the service does
 not run or claim an authentication-only probe.
 
 ```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_text_to_speech_test.exs
+bin/livetests run --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_text_to_speech_test.exs
 ```
 
 See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.md).
@@ -258,7 +258,7 @@ See [ElevenLabs TTS evidence](../labnotes/20260930-0911-elevenlabs-request-tts.m
 The controlled manual assembly case is also independently selectable:
 
 ```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_controlled_segments_test.exs
+bin/livetests run --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_controlled_segments_test.exs
 ```
 
 It submits 23.6 seconds of the existing repeated public fixture, bounded to
@@ -271,7 +271,7 @@ remain pending. No other paid case is included. See
 The long VAD experiment is independently selectable:
 
 ```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_long_vad_test.exs
+bin/livetests run --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_long_vad_test.exs
 ```
 
 It reuses the public fixture, repeats only its speech portion, and submits at
@@ -290,7 +290,7 @@ total). It opens one connection, paces bounded chunks, explicitly commits and
 checks the known final word. Select the manual case independently of TTS and VAD:
 
 ```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs:12
+bin/livetests run --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs:12
 ```
 
 One selected run passes. This verifies transcription protocol only; speech-start,
@@ -312,7 +312,7 @@ documented peer-authenticated PostgreSQL connection. Mix TCP and DNS now work. S
 this case; do not repeat the passing manual probe:
 
 ```shell
-bin/test-live-providers --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs:45
+bin/livetests run --only live_elevenlabs apps/vxpipe_call_engine/test/integration/elevenlabs_scribe_protocol_test.exs:45
 ```
 
 Even a passing short VAD case would not prove long-input turn boundaries,

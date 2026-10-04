@@ -18,6 +18,7 @@ cat > "$scratch/bin/mix" <<'MIX'
   printf 'telnyx=%s\n' "${TELNYX_API_KEY:-missing}"
   printf 'telephony_url=%s\n' "${TELEPHONY_TEST_PUBLIC_URL:-missing}"
   printf 'telnyx_public_key=%s\n' "${TELNYX_PUBLIC_KEY:-missing}"
+  printf 'tailscale_secret=%s\n' "${TAILSCALE_CLIENT_SECRET:-missing}"
   printf 'argument=%s\n' "$@"
 } > "$VXPIPE_LIVE_RUNNER_TEST_OUTPUT"
 MIX
@@ -40,11 +41,12 @@ export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/live_providers.env"
 export VXPIPE_LIVE_PROVIDERS_MIX_BIN="$scratch/bin/mix"
 export TELNYX_API_KEY=ambient-test-only-key
 export TELNYX_PUBLIC_KEY=ambient-test-only-key
+export TAILSCALE_CLIENT_SECRET=ambient-test-only-key
 export FIREWORKS_API_KEY=ambient-test-only-key
 export CARTESIA_API_KEY=ambient-test-only-key
 export ELEVENLABS_API_KEY=ambient-test-only-key
 
-"$repo_root/bin/test-live-providers" --only live_openai \
+"$repo_root/bin/livetests" run --only live_openai \
   apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs
 
 rg -q -F "directory=$repo_root" "$scratch/output"
@@ -62,6 +64,7 @@ rg -q -F 'gemini=missing' "$scratch/output"
 rg -q -F 'telnyx=missing' "$scratch/output"
 rg -q -F 'telephony_url=missing' "$scratch/output"
 rg -q -F 'telnyx_public_key=missing' "$scratch/output"
+rg -q -F 'tailscale_secret=missing' "$scratch/output"
 rg -q -F 'argument=--only' "$scratch/output"
 rg -q -F 'argument=live_openai' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs' "$scratch/output"
@@ -70,7 +73,7 @@ cat > "$scratch/live_providers.env" <<'ENV'
 OPENAI_API_KEY=test-only-key
 ENV
 
-"$repo_root/bin/test-live-providers"
+"$repo_root/bin/livetests" run
 for name in CARTESIA_API_KEY ELEVENLABS_API_KEY; do
   if ! rg -q -F "$name=missing" "$scratch/output"; then
     printf '%s leaked from the ambient environment\n' "$name" >&2
@@ -88,10 +91,28 @@ if rg -q -F 'apps/vxpipe_artifacts/test/integration' "$scratch/output"; then
 fi
 
 rm -- "$scratch/live_providers.env"
-if "$repo_root/bin/test-live-providers" --only live_openai > "$scratch/stdout" 2> "$scratch/stderr"; then
+if "$repo_root/bin/livetests" run --only live_openai > "$scratch/stdout" 2> "$scratch/stderr"; then
   printf 'missing credential file unexpectedly succeeded\n' >&2
   exit 1
 fi
 rg -q -F 'live_providers.env.example' "$scratch/stderr"
 
-printf 'live provider runner checks passed\n'
+# Subcommand dispatch
+"$repo_root/bin/livetests" help > "$scratch/help"
+rg -q -F 'run' "$scratch/help"
+
+for arguments in "" "unknown-subcommand"; do
+  # shellcheck disable=SC2086
+  if "$repo_root/bin/livetests" $arguments > "$scratch/stdout" 2> "$scratch/stderr"; then
+    printf 'livetests %s unexpectedly succeeded\n' "${arguments:-<none>}" >&2
+    exit 1
+  fi
+  rg -q -F 'Usage: bin/livetests' "$scratch/stderr"
+done
+
+if [[ -e "$repo_root/bin/test-live-providers" ]]; then
+  printf 'bin/test-live-providers should be replaced by bin/livetests\n' >&2
+  exit 1
+fi
+
+printf 'livetests checks passed\n'

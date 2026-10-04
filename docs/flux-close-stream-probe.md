@@ -109,7 +109,7 @@ After filling `~/.config/vxpipe/live_providers.env` from the
 [template](../config/live_providers.env.example), run only the probe with:
 
 ```sh
-bin/test-live-providers --only live_deepgram \
+bin/livetests run --only live_deepgram \
   apps/vxpipe_call_engine/test/integration/deepgram_flux_close_stream_probe_test.exs
 ```
 

@@ -162,7 +162,7 @@ Never read or modify `~/.config/vxpipe/live_providers.env` file
   must wait until a process has handled earlier messages.
 - Keep external-service and network interoperability tests in an explicitly
   tagged integration lane that is excluded from the default suite.
-- Run telephony and AI provider live tests with `bin/test-live-providers`. Copy
+- Run telephony and AI provider live tests with `bin/livetests run`. Copy
   `config/live_providers.env.example` to
   `~/.config/vxpipe/live_providers.env` and fill only the credentials needed.
   The runner loads that file only for its child `mix test` process. No arguments

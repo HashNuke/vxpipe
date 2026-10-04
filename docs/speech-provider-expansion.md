@@ -314,7 +314,7 @@ removed after the scope change. No per-call hosted-agent integration is claimed.
 3. Add Console configuration only for supported capabilities and inspect it in
    rendered desktop/narrow states.
 4. Add fixed test model/voice choices and credential placeholders; use
-   `bin/test-live-providers --only live_cartesia` or `--only live_elevenlabs` with
+   `bin/livetests run --only live_cartesia` or `--only live_elevenlabs` with
    a capability-specific file. Never invoke every live provider together.
 5. Bound each synthesis phrase and audio sample; reuse the existing public sample
    where appropriate. Explicitly label local fixtures versus live observations.

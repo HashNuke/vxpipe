@@ -5,12 +5,20 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 env_file="${VXPIPE_LIVE_PROVIDERS_ENV_FILE:-${HOME}/.config/vxpipe/live_providers.env}"
 mix_bin="${VXPIPE_LIVE_PROVIDERS_MIX_BIN:-mix}"
 
-if [[ ! -f "$env_file" ]]; then
-  printf 'Missing live provider credentials: %s\n' "$env_file" >&2
-  printf 'Copy %s/config/live_providers.env.example to that path and fill in the providers you will run.\n' \
-    "$repo_root" >&2
-  exit 1
-fi
+usage() {
+  cat <<'USAGE'
+Usage: bin/livetests <command> [arguments]
+
+Commands:
+  run [mix test arguments]  Run live provider tests. Without arguments, run
+                            every live_providers test in the integration lanes.
+  help                      Show this help.
+
+Credentials are read from ~/.config/vxpipe/live_providers.env (override with
+VXPIPE_LIVE_PROVIDERS_ENV_FILE) and passed only to the child mix test process.
+See config/live_providers.env.example.
+USAGE
+}
 
 # The file is loaded only in this child process. Ignore ambient credentials
 # that may have been loaded by an interactive dotenv hook.
@@ -22,29 +30,61 @@ credential_names=(
   TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_TEST_FROM TWILIO_TEST_DESTINATION
   TELNYX_API_KEY TELNYX_PUBLIC_KEY TELNYX_APP_ID TELNYX_TEST_FROM
   TELNYX_TEST_DESTINATION
+  TAILSCALE_CLIENT_ID TAILSCALE_CLIENT_SECRET
 )
-unset "${credential_names[@]}"
 
-set -a
-# shellcheck source=/dev/null
-source "$env_file"
-set +a
+load_credentials() {
+  if [[ ! -f "$env_file" ]]; then
+    printf 'Missing live provider credentials: %s\n' "$env_file" >&2
+    printf 'Copy %s/config/live_providers.env.example to that path and fill in the providers you will run.\n' \
+      "$repo_root" >&2
+    exit 1
+  fi
 
-# Template placeholders behave like missing settings at the selected test.
-for name in "${credential_names[@]}"; do
-  case "${!name:-}" in
-    ''|todo|http://todo|https://todo) unset "$name" ;;
-  esac
-done
+  unset "${credential_names[@]}"
 
-cd -- "$repo_root"
+  set -a
+  # shellcheck source=/dev/null
+  source "$env_file"
+  set +a
 
-if [[ $# -eq 0 ]]; then
-  exec "$mix_bin" test --only live_providers \
-    apps/vxpipe_agent_runtime/test/integration \
-    apps/vxpipe_call_engine/test/integration \
-    apps/vxpipe_gateway/test/integration \
-    apps/vxpipe_console/test/integration
-fi
+  # Template placeholders behave like missing settings at the selected test.
+  local name
+  for name in "${credential_names[@]}"; do
+    case "${!name:-}" in
+      ''|todo|http://todo|https://todo) unset "$name" ;;
+    esac
+  done
+}
 
-exec "$mix_bin" test "$@"
+run_tests() {
+  load_credentials
+  cd -- "$repo_root"
+
+  if [[ $# -eq 0 ]]; then
+    exec "$mix_bin" test --only live_providers \
+      apps/vxpipe_agent_runtime/test/integration \
+      apps/vxpipe_call_engine/test/integration \
+      apps/vxpipe_gateway/test/integration \
+      apps/vxpipe_console/test/integration
+  fi
+
+  exec "$mix_bin" test "$@"
+}
+
+command="${1:-}"
+[[ $# -gt 0 ]] && shift
+
+case "$command" in
+  run) run_tests "$@" ;;
+  help|-h|--help) usage ;;
+  '')
+    usage >&2
+    exit 2
+    ;;
+  *)
+    printf 'Unknown command: %s\n\n' "$command" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
