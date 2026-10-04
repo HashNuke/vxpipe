@@ -1,6 +1,6 @@
 # Outgoing calls and two-call live telephony
 
-Status: specification proposed (2026-10-03); design review pending. Checkpoints A (`bin/livetests run`) and B (public test endpoint) are implemented; C (carrier provisioning) is implemented and Telnyx is provisioned, while the Twilio number purchase awaits the user's Trust Hub compliance approval.
+Status: specification reviewed (2026-10-04). Checkpoints A (`bin/livetests run`) and B (public test endpoint) are implemented; C (carrier provisioning) is implemented and Telnyx is provisioned, while the Twilio number purchase awaits the user's Trust Hub compliance approval.
 
 Prerequisites: [Telnyx calls](telnyx-calls.md), [Twilio through the common telephony
 contract](twilio-calls.md) (adapter, incoming and transfer dialing), [prepared call
@@ -58,8 +58,12 @@ Content-Type: application/json
   submitted. Outcomes are observable through existing call details/inspection. Validation and
   guard failures return the existing management error shapes; dial submission failure ends the
   room and is recorded with an internal-only reason.
-- Following R39, there is no idempotency key; a repeated request is a separate call. The
-  review must confirm this remains acceptable when each request places a paid call.
+- An optional client-generated `Idempotency-Key` header (a UUID or similar opaque value)
+  makes retries safe for this paid operation. It is stored on the call record, unique per
+  tenant. A repeat with the same key and the same request returns the original call without
+  dialing; the same key with a different request returns `409`. Without the header every
+  request is a separate call, as R39 decided for preparation. Incoming calls need no key:
+  carrier event and leg identities already deduplicate them.
 - The agent's opening/greeting waits until the leg is answered and media is connected.
 - Every non-answer outcome (no answer by `ring_timeout_ms`, busy, rejected, failed, machine,
   unknown submission) ends the room exactly once with a typed reason. Duplicate, late or
@@ -133,6 +137,8 @@ As decided in the [harness decision](../live-telephony-harness.md):
   `ring_timeout_ms` bounds, existing transfer dial unchanged.
 - [ ] Publish/route resolution for outgoing entry callers.
 - [ ] API route, authentication, wrong-route rejection and response.
+- [ ] Optional `Idempotency-Key`: same key and request returns the original call without a
+  second dial; same key with a different request returns 409; absent key dials every time.
 - [ ] Room start, dial through the outbound connector, greeting after answer.
 - [ ] Fake-carrier outcomes: answered, no answer at deadline, busy, failed, machine, unknown
   submission, duplicate/late callbacks, remote hangup; one room end each.
@@ -157,15 +163,21 @@ As decided in the [harness decision](../live-telephony-harness.md):
 
 ## Scope boundaries
 
-No automatic redial, voicemail delivery, campaign or bulk dialing, scheduling, idempotency keys
-(pending review), carrier fallback, number release, Twilio trial-account support, or changes to
+No automatic redial, voicemail delivery, campaign or bulk dialing, scheduling, carrier fallback, number release, Twilio trial-account support, or changes to
 account-wide carrier settings. Destination rate limiting and allowed-destination policy are
-recorded as follow-up review items, not implemented here.
+deferred: the carriers' own destination controls (Telnyx outbound profile countries, Twilio Geo
+Permissions) apply meanwhile, and per-tenant limits must be added before API keys are issued to
+tenants other than the operator.
 
 ## Specification review
 
-Pending. Review should confirm the R39 idempotency position for paid outgoing calls, the
-`ring_timeout_ms` bounds, and whether a destination policy must precede exposing the API.
+Reviewed with the user on 2026-10-04:
+
+- `ring_timeout_ms` defaults to 30,000 and is bounded 5,000–60,000.
+- `Idempotency-Key` is optional and honored when passed; the client generates it, because a
+  server-generated ID cannot help a client whose response was lost.
+- Per-tenant destination and rate limits are deferred until tenants other than the operator
+  receive API keys; carrier-level destination controls apply meanwhile.
 
 ## Checkpoint A evidence
 

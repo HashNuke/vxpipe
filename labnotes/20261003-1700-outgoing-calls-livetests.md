@@ -92,3 +92,10 @@ Specification review pending. Checkpoint A (runner rename) implemented; see belo
 - A bulk edit once stripped `>&2` from `die`; the existing shell tests caught it immediately.
 - Full umbrella run during this work: one CallEngine STT readiness assertion failed under load
   (`:preparing` vs `:ready`); the file passed 5/5 in isolation. Unrelated to these changes.
+
+## Specification review (2026-10-04)
+
+User decisions: 30 s default ring timeout (5–60 s bounds) accepted; `Idempotency-Key` optional and
+honored when passed. The user first suggested deriving the key from the DB ID and creation time;
+that cannot help a client whose response was lost, so the client generates it. Per-tenant
+destination/rate limits deferred until other tenants receive API keys (carrier controls apply).
