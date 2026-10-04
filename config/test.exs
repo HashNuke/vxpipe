@@ -6,8 +6,15 @@ test_repo =
   if test_database_url do
     [url: test_database_url]
   else
+    # Without PGHOST, prefer the local server's Unix socket (Debian/Ubuntu, then
+    # Homebrew/macOS), where peer authentication needs no password. Fall back to
+    # Postgrex's TCP localhost default when no socket exists.
+    local_socket_dir =
+      Enum.find(["/var/run/postgresql", "/tmp"], &File.exists?(Path.join(&1, ".s.PGSQL.5432")))
+
     connection =
       case System.get_env("PGHOST") do
+        nil when is_binary(local_socket_dir) -> [socket_dir: local_socket_dir]
         nil -> []
         "/" <> _path = socket_dir -> [socket_dir: socket_dir]
         hostname -> [hostname: hostname]

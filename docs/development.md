@@ -173,9 +173,12 @@ a new room in `/admin/samples/pipecat-console`, and request human support before
 desk. Follow the [human-transfer walkthrough](../apps/vxpipe_console/assets/README.md#manual-human-transfer-test)
 for the two-browser flow.
 
-The umbrella test alias creates and migrates the configured test database. Use
-`VXPIPE_TEST_DATABASE_URL`, or standard PostgreSQL variables plus
-`VXPIPE_TEST_DATABASE` (default `vxpipe_test`). Running the call-engine tests from
+The umbrella test alias creates and migrates the configured test database
+(`vxpipe_test` as your Unix user). With no settings it uses the local server's Unix
+socket (`/var/run/postgresql`, then `/tmp`), where peer authentication needs no
+password, and otherwise TCP localhost. `VXPIPE_TEST_DATABASE_URL`, standard PostgreSQL
+variables and `VXPIPE_TEST_DATABASE` remain optional overrides, for example for a
+server in a container. Running the call-engine tests from
 its child directory remains database-free.
 
 ## How the sample works
