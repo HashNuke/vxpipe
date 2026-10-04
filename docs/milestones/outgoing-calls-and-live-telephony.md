@@ -22,53 +22,104 @@ machine's public Tailscale endpoint, without any personal phone number.
 
 ## Specification
 
-### Call spec: outgoing entry caller
+### Call spec: call direction
 
-- Permit `connection.mode: "dial"` with `admission: "start_call"` only on the `entry_caller`
-  participant. Today `ConnectionIntent` rejects any dial admission other than `transfer`.
-  Dial transfer connections keep their current meaning.
-- The destination comes from the existing `number` or protected `number_from_variable`
-  (initial variable). The originating number is the telephony service's configured outbound
-  number; call spec input cannot supply it.
-- Add optional `ring_timeout_ms` to an outgoing entry connection: default 30,000, bounded
-  5,000–60,000. It covers dial submission through answer; it is not reset by ringing events.
-- Answering-machine detection keeps its existing service-level configuration. Per the
-  architecture's initial-outbound rule, a machine result ends the attempted call without
-  voicemail speech; unknown or disabled detection is not proof of a human.
-- Save, publish and preparation run the existing telephony service/credential guards. Publishing
-  yields a participant connection key for the outgoing entry caller as it does for web entries;
-  verify and reuse the current route mechanism rather than adding a parallel one.
+A call spec declares exactly one direction block naming its two starting participants; having
+both or neither is rejected. This replaces `entry_caller`/`entry_receiver` under a new schema
+version.
+
+```json
+{
+  "incoming_call": { "caller": "customer", "handled_by": "assistant" },
+  "participants": {
+    "customer":  { "type": "human",
+                   "connection": { "service": "support-phone", "mode": "receive",
+                                   "admission": "start_call", "number": "+14155550199" } },
+    "assistant": { "type": "agent", "prompt": "..." }
+  }
+}
+```
+
+```json
+{
+  "outgoing_call": { "callee": "customer", "handled_by": "assistant", "ring_timeout_ms": 30000 },
+  "participants": {
+    "customer":  { "type": "human",
+                   "connection": { "service": "support-phone", "mode": "dial",
+                                   "number_from_variable": { "section": "customer", "variable": "phone" } } },
+    "assistant": { "type": "agent", "prompt": "...", "first_message": { "mode": "generated" } }
+  }
+}
+```
+
+- `incoming_call.caller` is the human expected to call in; its connection is `receive` with
+  `admission: "start_call"` on a phone service or `web`. `outgoing_call.callee` is the human
+  Vxpipe dials; its connection is `dial` on a phone service (`admission` may be omitted for the
+  callee and is implied). `handled_by` is the participant that talks to that human when the call
+  connects, usually an agent; it must differ from the caller/callee.
+- The callee's destination comes from `number` or protected `number_from_variable` (initial
+  variables). The originating number is the telephony service's configured outbound number;
+  call spec input cannot supply it.
+- `outgoing_call.ring_timeout_ms` is optional: default 30,000, bounded 5,000–60,000. It covers
+  dial submission through answer and is not reset by ringing events.
+- Other participants and transfers are unchanged and work in either direction. `dial` with
+  `admission: "transfer"` keeps its current meaning for transfer destinations.
+- Compatibility: specs saved under the previous schema version stay readable and executable;
+  `entry_caller`/`entry_receiver` are read as `incoming_call.caller`/`handled_by`. Stored
+  compiled plans remain decodable. Internal Elixir field names may keep their current names;
+  renaming them is a separate mechanical change, not required by this milestone.
+- Answering-machine detection keeps its service-level configuration. Per the architecture's
+  initial-outbound rule, a machine result ends the attempted call without voicemail speech;
+  unknown or disabled detection is not proof of a human.
+- Save and publish run the existing telephony service/credential guards for the callee's service.
+
+### Agent speaks first
+
+The existing `first_message` setting of the `handled_by` participant controls the opening:
+`wait_for_input` (silent until the human speaks), `generated` (the model composes an opening from
+its prompt) or `fixed` (exact `text`).
+
+- In an outgoing call the first message starts when the callee answers and their media is
+  connected, never when the room starts, so the agent never greets a ringing phone.
+- When `handled_by` sets no `first_message` in an outgoing call spec, it defaults to
+  `generated`, so the agent introduces itself; the prompt should say who it is and why it is
+  calling. `wait_for_input` remains available explicitly. Incoming call specs keep the current
+  `wait_for_input` default.
 
 ### Outgoing call API
 
 ```http
-POST /api/tenants/{tenant_key}/participants/{participant_key}/outgoing-calls
+POST /api/tenants/{tenant_key}/call-specs/{call_spec_id}/outgoing-calls
 Authorization: Bearer <tenant API key>
+Idempotency-Key: 4f9c2a1e-...          (optional)
 Content-Type: application/json
 
-{"initial_variables": {...}}
+{ "initial_variables": { "customer": { "phone": "+14155550123", "name": "Dana" } } }
 ```
 
-- Authenticated exactly like the existing preparation route; no CORS grant. The participant
-  key must resolve to a published outgoing entry caller; a web or receiving route returns 422.
-- Calls prepares and pins the plan and variables (the existing preparation path), the room
-  starts with the `entry_receiver` agent, and the dial is submitted through the existing
-  outbound leg connector with fresh service/credential resolution.
-- Respond `201` with the call ID and initial status once the room exists and the dial was
-  submitted. Outcomes are observable through existing call details/inspection. Validation and
-  guard failures return the existing management error shapes; dial submission failure ends the
-  room and is recorded with an internal-only reason.
-- An optional client-generated `Idempotency-Key` header (a UUID or similar opaque value)
-  makes retries safe for this paid operation. It is stored on the call record, unique per
-  tenant. A repeat with the same key and the same request returns the original call without
-  dialing; the same key with a different request returns `409`. Without the header every
-  request is a separate call, as R39 decided for preparation. Incoming calls need no key:
-  carrier event and leg identities already deduplicate them.
-- The agent's opening/greeting waits until the leg is answered and media is connected.
-- Every non-answer outcome (no answer by `ring_timeout_ms`, busy, rejected, failed, machine,
-  unknown submission) ends the room exactly once with a typed reason. Duplicate, late or
-  out-of-order callbacks cannot redial or revive it. Remote hangup after answer uses the existing
-  participant/room lifecycle.
+```http
+201 Created
+{ "call": { "id": "...", "call_spec_id": "...", "revision": 3, "status": "dialing" } }
+```
+
+- Addressed by call spec, beside the existing `/api/tenants/{tenant_key}/call-specs` API, and
+  authenticated with a tenant API key like the existing preparation route; no CORS grant.
+- Uses the call spec's currently published revision. A draft-only, unknown, foreign or incoming
+  call spec returns the existing management error shapes (404/422). Initial variables are
+  validated against the spec's declared sections as in preparation.
+- Calls prepares and pins the plan and variables, the room starts with `handled_by`, and the dial
+  is submitted through the existing outbound leg connector with fresh service/credential
+  resolution. Respond `201` once the room exists and the dial was submitted.
+- Optional client-generated `Idempotency-Key` (a UUID or similar opaque value), stored on the
+  call record and unique per tenant: the same key and request returns the original call without
+  dialing; the same key with a different request returns `409`; without the header every request
+  is a separate call, as R39 decided for preparation. Incoming calls need no key: carrier event
+  and leg identities already deduplicate them.
+- Outcomes (answered, no answer by `ring_timeout_ms`, busy, rejected, failed, machine, unknown
+  submission) are read from the existing call details/inspection endpoints. Every non-answer
+  outcome ends the room exactly once with a typed reason; duplicate, late or out-of-order
+  callbacks cannot redial or revive it. Remote hangup after answer uses the existing
+  participant/room lifecycle. Dial submission failure ends the room with an internal-only reason.
 
 ### Live test tooling: `bin/livetests`
 
@@ -94,8 +145,8 @@ As decided in the [harness decision](../live-telephony-harness.md):
   They use the ordinary persistence test database configuration; no database settings are passed.
 - The test starts the production gateway endpoint on `TELEPHONY_TEST_PORT`, checks
   `<public URL>/healthz` through Funnel, then checks carrier state read-only.
-- Fixture tenant: an outgoing call spec on service A (agent first, dial entry caller) and a
-  receiving call spec published on service B's number. Services use the provisioned resources
+- Fixture tenant: an outgoing call spec on service A (`outgoing_call`, callee on the dial
+  connection) and an incoming call spec (`incoming_call`) published on service B's number. Services use the provisioned resources
   and disable machine detection.
 - Cases: Twilio → Telnyx and Telnyx → Twilio each prove answer, a known phrase heard in both
   rooms' transcripts, and clean hangup of both rooms; an unanswered dial proves Room A ends at its
@@ -133,13 +184,18 @@ As decided in the [harness decision](../live-telephony-harness.md):
 
 ### Checkpoint D: outgoing calls
 
-- [ ] Red call spec validation cases: dial `start_call` accepted only for `entry_caller`,
-  `ring_timeout_ms` bounds, existing transfer dial unchanged.
-- [ ] Publish/route resolution for outgoing entry callers.
-- [ ] API route, authentication, wrong-route rejection and response.
+- [ ] Red call spec validation cases: exactly one of `incoming_call`/`outgoing_call`; caller is a
+  human with a `receive` start connection; callee is a human with a phone `dial` connection;
+  `handled_by` differs; `ring_timeout_ms` bounds; transfer dial unchanged.
+- [ ] New schema version; previous-version specs (`entry_caller`/`entry_receiver`) still parse,
+  save, publish and run; stored plans stay decodable. Update examples and authoring docs.
+- [ ] `first_message` defaults to `generated` for an outgoing `handled_by`, and starts only after
+  the callee's media connects.
+- [ ] `POST .../call-specs/{call_spec_id}/outgoing-calls`: authentication, published revision,
+  rejection of draft/foreign/incoming specs, variable validation and `201` response.
 - [ ] Optional `Idempotency-Key`: same key and request returns the original call without a
   second dial; same key with a different request returns 409; absent key dials every time.
-- [ ] Room start, dial through the outbound connector, greeting after answer.
+- [ ] Room start with `handled_by`, dial through the outbound connector, greeting after answer.
 - [ ] Fake-carrier outcomes: answered, no answer at deadline, busy, failed, machine, unknown
   submission, duplicate/late callbacks, remote hangup; one room end each.
 - [ ] Call details/inspection record dial outcome and timings without private payloads.
@@ -154,9 +210,9 @@ As decided in the [harness decision](../live-telephony-harness.md):
 ## Acceptance and failure checks
 
 - [ ] A saved, published outgoing call spec places a call through either carrier with no
-  provider-specific room logic.
+  provider-specific room logic, and its agent introduces itself once the callee answers.
 - [ ] Non-answer outcomes end the room once; callbacks cannot redial or revive it.
-- [ ] Cross-tenant, unauthenticated or wrong-route requests never dial.
+- [ ] Cross-tenant, unauthenticated, draft-only or incoming-spec requests never dial.
 - [ ] A live run needs no personal phone number and leaves no Funnel mapping or node running
   that it started.
 - [ ] Provisioning without `--allow-purchase` never spends money; re-running changes nothing.
@@ -178,6 +234,13 @@ Reviewed with the user on 2026-10-04:
   server-generated ID cannot help a client whose response was lost.
 - Per-tenant destination and rate limits are deferred until tenants other than the operator
   receive API keys; carrier-level destination controls apply meanwhile.
+- Call direction is explicit: `incoming_call {caller, handled_by}` or `outgoing_call {callee,
+  handled_by, ring_timeout_ms}` replaces `entry_caller`/`entry_receiver` in a new schema version,
+  with previous-version specs still accepted. The user rejected `contact`/`handler` as too vague.
+- The API addresses a call spec (`.../call-specs/{call_spec_id}/outgoing-calls`) rather than a
+  participant route key, and uses its published revision.
+- An outgoing `handled_by` speaks first by default (`first_message: generated`), starting only
+  when the callee's media connects.
 
 ## Checkpoint A evidence
 
@@ -246,4 +309,3 @@ twilio   number                   missing (re-run with --allow-purchase to buy a
 
 Blocked: the Twilio number, and therefore every live call, waits for the user to complete
 Twilio Trust Hub verification.
-

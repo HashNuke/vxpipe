@@ -99,3 +99,15 @@ User decisions: 30 s default ring timeout (5–60 s bounds) accepted; `Idempoten
 honored when passed. The user first suggested deriving the key from the DB ID and creation time;
 that cannot help a client whose response was lost, so the client generates it. Per-tenant
 destination/rate limits deferred until other tenants receive API keys (carrier controls apply).
+
+## Call direction, endpoint and opening (2026-10-04)
+
+- `first_message` already supports `wait_for_input` (default), `generated` and `fixed`
+  (`CallSpec.Participant`); the outgoing default becomes `generated`, triggered on callee media.
+- Publication creates participant route keys (`call_spec_store.ex` `resolve_route`); the user
+  preferred addressing the call spec directly, so the API is
+  `POST /api/tenants/{tenant}/call-specs/{id}/outgoing-calls` using the published revision.
+- `entry_caller`/`entry_receiver` appear in ~134/119 files; the public JSON moves to
+  `incoming_call`/`outgoing_call` under a new schema version with old specs translated. Internal
+  renaming is left as an optional separate change.
+- The engine already supports a human `entry_receiver`, so `handled_by` avoids "agent".
