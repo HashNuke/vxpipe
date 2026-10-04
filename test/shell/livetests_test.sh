@@ -69,8 +69,10 @@ rg -q -F 'argument=--only' "$scratch/output"
 rg -q -F 'argument=live_openai' "$scratch/output"
 rg -q -F 'argument=apps/vxpipe_call_engine/test/integration/gpt_live_hosted_test.exs' "$scratch/output"
 
+# A configured public URL keeps the default all-provider run off Tailscale.
 cat > "$scratch/live_providers.env" <<'ENV'
 OPENAI_API_KEY=test-only-key
+TELEPHONY_TEST_PUBLIC_URL=https://voice.example.test
 ENV
 
 "$repo_root/bin/livetests" run

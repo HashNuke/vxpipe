@@ -64,7 +64,12 @@ restricted to `a-z0-9-`, overridable with `VXP_TEST_MACHINE`.
   `--advertise-tags`. Such registrations default to `ephemeral=true` and
   `preauthorized=false`; the harness passes `?ephemeral=false&preauthorized=true` so the node
   keeps a stable name. An ephemeral leftover would push a new node to `vxp-test-<machine>-1`.
-- The node persists its identity in its state directory; later runs reconnect without the secret.
+- The secret is passed as `--auth-key=file:<0600 file>`, deleted immediately, so it never
+  appears in a process listing.
+- The node persists its identity in its state directory
+  (`~/.local/state/vxpipe/livetests/vxp-test-<machine>/`); later runs reconnect without the
+  secret.
+- The gateway listener inside the test uses `TELEPHONY_TEST_PORT`, default 4600.
 - Funnel listens only on 443, 8443 and 10000. Use 443: Twilio signs the exact callback URL, and
   carrier and SDK handling of explicit non-default ports is inconsistent.
 - `tailscale funnel --bg --https=443 http://127.0.0.1:<port>` starts the mapping; the same command
@@ -105,8 +110,13 @@ this machine's public origin and fixed test routes, attaches the outbound profil
 numbers. Re-running reports `found` and changes nothing. It never releases numbers or changes
 account-wide settings such as Twilio Geo Permissions.
 
-Tests then check carrier state read-only before dialing and fail with an explicit message, for
-example that the tagged number is not assigned to the machine's application.
+Telephony runs discover the same resources read-only before starting tests and export them to
+the child: `TELNYX_APP_ID`, `TELNYX_TEST_FROM`/`TWILIO_TEST_DESTINATION` (the Telnyx number) and
+`TWILIO_TEST_FROM`/`TELNYX_TEST_DESTINATION` (the Twilio number), so each provider calls the
+other. Missing or unwired resources stop the run with the provisioning command to fix it. The
+Telnyx application webhook uses the platform-scoped route `/webhooks/platform/telnyx`; the Twilio
+number's Voice URL uses ingress key `vxp-test-twilio`. Credentials reach `curl` only through its
+stdin configuration, never argv, and Twilio account SIDs are masked in error messages.
 
 ## Rejected alternatives
 
@@ -123,7 +133,9 @@ example that the tagged number is not assigned to the machine's application.
 - **Reuse `APP_HOST`/`TELEPHONY_HOST`.** `config/runtime.exs` applies them to the whole test
   run, enabling the telephony listener for every test.
 - **Twilio trial accounts.** Trial accounts can call only verified caller IDs and hold one
-  number. The harness requires an upgraded (pay-as-you-go) Twilio account.
+  number. The harness requires an upgraded (pay-as-you-go) Twilio account. Buying a number
+  additionally requires an approved Trust Hub primary compliance profile (observed 2026-10-04:
+  HTTP 401 "Primary compliance profile is not approved").
 
 ## Open questions verified during implementation
 

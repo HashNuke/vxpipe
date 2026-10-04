@@ -119,6 +119,27 @@ sessions, input/audio duration, timeout, destination allowlist where relevant,
 and retry policy. Record sanitized provider, model, credential scope, result,
 and measured usage; do not retain raw authorization, audio, or transcripts.
 
+### Telephony public endpoint
+
+Telephony selections (`live_telephony`, `live_twilio`, `live_telnyx`, Twilio/Telnyx
+test paths, or a full run) need a public HTTPS origin. `bin/livetests run` starts this
+machine's `vxp-test-<machine>` Tailscale node with a port-443 Funnel to
+`127.0.0.1:$TELEPHONY_TEST_PORT` (default 4600), exports `TELEPHONY_TEST_PUBLIC_URL`
+and `TELEPHONY_TEST_PORT` to the child, and stops only what it started. One-time setup
+and the reasons are in the [harness decision](live-telephony-harness.md).
+
+```shell
+bin/livetests tools:up       # keep the endpoint running across several runs
+bin/livetests run --only live_telephony \
+  apps/vxpipe_gateway/test/integration/public_telephony_endpoint_test.exs
+bin/livetests tools:status
+bin/livetests tools:down
+```
+
+The endpoint test starts the production gateway endpoint on the test port and requires
+`/healthz` through the public URL. Setting `TELEPHONY_TEST_PUBLIC_URL` in the env file
+uses that origin instead and leaves Tailscale alone.
+
 ## Configured-service fixture
 
 For automated tests, provision a dedicated temporary tenant and the chosen

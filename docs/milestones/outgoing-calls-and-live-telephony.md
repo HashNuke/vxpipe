@@ -1,6 +1,6 @@
 # Outgoing calls and two-call live telephony
 
-Status: specification proposed (2026-10-03); design review pending. Checkpoint A (`bin/livetests run`) is implemented.
+Status: specification proposed (2026-10-03); design review pending. Checkpoints A (`bin/livetests run`) and B (public test endpoint) are implemented; C (carrier provisioning) is implemented and Telnyx is provisioned, while the Twilio number purchase awaits the user's Trust Hub compliance approval.
 
 Prerequisites: [Telnyx calls](telnyx-calls.md), [Twilio through the common telephony
 contract](twilio-calls.md) (adapter, incoming and transfer dialing), [prepared call
@@ -87,7 +87,7 @@ As decided in the [harness decision](../live-telephony-harness.md):
 ### Two-call live acceptance
 
 - Console owns the live cases because they compose Calls, Persistence, Gateway and Engine.
-  They use the persistence test database (`VXPIPE_TEST_DATABASE_URL`).
+  They use the ordinary persistence test database configuration; no database settings are passed.
 - The test starts the production gateway endpoint on `TELEPHONY_TEST_PORT`, checks
   `<public URL>/healthz` through Funnel, then checks carrier state read-only.
 - Fixture tenant: an outgoing call spec on service A (agent first, dial entry caller) and a
@@ -110,20 +110,20 @@ As decided in the [harness decision](../live-telephony-harness.md):
 
 ### Checkpoint B: public test endpoint
 
-- [ ] Shell tests with a fake `tailscale`/`tailscaled` for name derivation, OAuth registration
+- [x] Shell tests with a fake `tailscale`/`tailscaled` for name derivation, OAuth registration
   parameters (`ephemeral=false&preauthorized=true`, `--advertise-tags=tag:vxp-test`), refusing an
   existing 443 mapping, cleanup of only owned mappings, lock contention and the override path.
-- [ ] Implement `tools:up|down|status` and automatic start/stop in `run`.
-- [ ] A tagged live test starts the gateway endpoint on `TELEPHONY_TEST_PORT` and reaches
+- [x] Implement `tools:up|down|status` and automatic start/stop in `run`.
+- [x] A tagged live test starts the gateway endpoint on `TELEPHONY_TEST_PORT` and reaches
   `/healthz` through the public URL.
 
 ### Checkpoint C: carrier provisioning
 
-- [ ] Tests against fake carrier HTTP servers: find-only, create-missing, purchase refused without
+- [x] Tests against fake carrier HTTP servers: find-only, create-missing, purchase refused without
   `--allow-purchase`, second run is a no-op, nothing is released, other machines' resources are
   untouched.
-- [ ] Implement `telephony:provision` and `telephony:status` for Telnyx and Twilio.
-- [ ] Read-only preflight used by live tests, with explicit failure messages.
+- [x] Implement `telephony:provision` and `telephony:status` for Telnyx and Twilio.
+- [x] Read-only preflight used by live tests, with explicit failure messages.
 - [ ] Run once against real accounts and record the created resource names (no secrets/IDs that
   identify billing).
 
@@ -175,3 +175,63 @@ with `run`, `help` and usage errors (exit 2) for a missing or unknown command; `
 existing child-only credential loading, placeholder clearing and ambient isolation, now also for
 `TAILSCALE_CLIENT_ID`/`TAILSCALE_CLIENT_SECRET`. The shell test then passed. Current docs,
 `AGENTS.md` and the env example use `bin/livetests run`; historical labnotes keep the old name.
+
+## Checkpoint B evidence
+
+`test/shell/livetests_tools_test.sh` uses fake `tailscale`/`tailscaled` binaries. It first failed
+on the missing public URL, then passed after `tools:up|down|status`, automatic start/stop in
+`run`, the per-machine lock and the override path were implemented. It caught a real defect:
+inside an EXIT trap a bare `return` reports the status from before the trap, so after a failing
+test run `set -e` aborted the cleanup. All returns are now explicit.
+
+The secret reaches `tailscale up` through `--auth-key=file:` with a 0600 file removed immediately,
+so it never appears in a process listing. Real runs on rocksalt (2026-10-04):
+
+```text
+$ bin/livetests tools:up
+vxp-test-rocksalt https://vxp-test-rocksalt.<tailnet>.ts.net -> http://127.0.0.1:4600
+$ bin/livetests tools:down
+$ bin/livetests run --only live_telephony \
+    apps/vxpipe_gateway/test/integration/public_telephony_endpoint_test.exs
+1 test, 0 failures            # node and Funnel started by run, stopped afterwards
+```
+
+Public DNS (1.1.1.1) resolves the name to Tailscale Funnel relays, and a throwaway local server
+answered through it before the gateway test was written.
+
+The first root-level live run stopped at test database creation: `config/test.exs` defaulted to
+TCP localhost, which requires a password on this host. It now prefers the local Unix socket
+(peer authentication) when `PGHOST` is unset; the same run then passed with no database
+environment variables.
+
+## Checkpoint C evidence
+
+`test/shell/livetests_telephony_test.sh` drives a fake `curl` holding Telnyx v2 and Twilio REST
+state. It first failed because the commands did not exist, then passed for: refusing to buy
+without `--allow-purchase`, creating and wiring every resource with it, a no-op second run,
+repairing drifted webhook/Voice URLs, leaving another machine's tagged resources untouched,
+read-only `telephony:status`, credentials only in curl's stdin config, exporting discovered
+numbers so each provider calls the other, and refusing a run against an unprovisioned account.
+
+The first real run exposed a defect: Twilio refused the purchase, yet the command printed `ready`
+and exited 0, because bash ignores `set -e` inside command substitutions evaluated in `||`
+conditions. A red case reproduced it; each carrier step now returns 1 for missing and 2 for an
+error, and an error stops the command. Twilio account SIDs are masked in error output.
+
+Real accounts (2026-10-04):
+
+```text
+$ bin/livetests telephony:provision --allow-purchase
+telnyx   outbound profile         created vxp-test-rocksalt
+telnyx   voice API application    created vxp-test-rocksalt
+telnyx   number                   bought +1435XXXXXXX
+livetests: POST .../IncomingPhoneNumbers.json returned HTTP 401: Primary compliance profile is
+not approved. Please refer to documentation and complete the KYC process in Trust Hub ...
+$ bin/livetests telephony:provision
+telnyx   ... found (all three)
+twilio   number                   missing (re-run with --allow-purchase to buy a US local number)
+```
+
+Blocked: the Twilio number, and therefore every live call, waits for the user to complete
+Twilio Trust Hub verification.
+

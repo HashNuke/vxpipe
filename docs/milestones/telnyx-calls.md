@@ -296,7 +296,8 @@ the published contract; it is not a claim that an external carrier call ran in t
 An `:live_providers`/`:live_telnyx` test provides the separate real Voice API dial lane. It remains
 excluded by default. Its required settings are
 `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_APP_ID`, controlled `TELNYX_TEST_FROM` and
-`TELNYX_TEST_DESTINATION` numbers, and `TELEPHONY_TEST_PUBLIC_URL`. The test builds the per-call
+`TELNYX_TEST_DESTINATION` numbers, and `TELEPHONY_TEST_PUBLIC_URL`; `bin/livetests run` discovers
+the application, numbers (Telnyx calls the Twilio test number) and public origin and supplies them. The test builds the per-call
 webhook and `wss://` media URLs under that operator-owned public TLS origin with the gateway's own
 Telnyx route shapes. A successful accepted dial captures all three provider identities and schedules an
 exact-leg hangup. The live lane was compiled and observed to be excluded without those explicit
