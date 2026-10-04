@@ -111,3 +111,15 @@ destination/rate limits deferred until other tenants receive API keys (carrier c
   `incoming_call`/`outgoing_call` under a new schema version with old specs translated. Internal
   renaming is left as an optional separate change.
 - The engine already supports a human `entry_receiver`, so `handled_by` avoids "agent".
+
+## Handover audit (2026-10-04)
+
+Before handing checkpoints D–E to another agent, checked each contract against the code and
+added an "Implementation guide" and "Handover" section to the milestone. Gaps found and now
+specified: single accepted schema version; `entry_caller`/`entry_receiver` DB columns; router
+prefix sending all `call-specs/*` paths to authoring; route derivation on save; resolver limited
+to transfer dials; carrier end reasons never reaching the room (transfers only monitor the leg
+owner, which exits `:normal`); outbound media wired as a transfer destination; first message
+gated by `StartupReadiness`; `terminal_reason` limited to startup failures; undefined
+idempotency storage; live fixture scope (platform Telnyx credential, `vxp-test-twilio` ingress);
+unchosen live speech providers; an unreproducible unanswered case.

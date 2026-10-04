@@ -99,11 +99,13 @@ Content-Type: application/json
 
 ```http
 201 Created
-{ "call": { "id": "...", "call_spec_id": "...", "revision": 3, "status": "dialing" } }
+{ "call": { "id": "...", "call_spec_id": "...", "revision": 3,
+            "state": "running", "outgoing_outcome": null } }
 ```
 
 - Addressed by call spec, beside the existing `/api/tenants/{tenant_key}/call-specs` API, and
   authenticated with a tenant API key like the existing preparation route; no CORS grant.
+- Requires an API key with the `calls` scope (as preparation does; `admin` alone is not enough).
 - Uses the call spec's currently published revision. A draft-only, unknown, foreign or incoming
   call spec returns the existing management error shapes (404/422). Initial variables are
   validated against the spec's declared sections as in preparation.
@@ -111,12 +113,15 @@ Content-Type: application/json
   is submitted through the existing outbound leg connector with fresh service/credential
   resolution. Respond `201` once the room exists and the dial was submitted.
 - Optional client-generated `Idempotency-Key` (a UUID or similar opaque value), stored on the
-  call record and unique per tenant: the same key and request returns the original call without
-  dialing; the same key with a different request returns `409`; without the header every request
+  call record and unique per tenant: the same key and request returns the original call with
+  `200` and does not dial again; the same key with a different request returns `409`; without the header every request
   is a separate call, as R39 decided for preparation. Incoming calls need no key: carrier event
   and leg identities already deduplicate them.
-- Outcomes (answered, no answer by `ring_timeout_ms`, busy, rejected, failed, machine, unknown
-  submission) are read from the existing call details/inspection endpoints. Every non-answer
+- `state` is the existing call record state (`running` once the room exists). The dial result
+  is the new `outgoing_outcome`: `null` while ringing, then exactly one of `answered`,
+  `no_answer` (carrier no-answer or local ring deadline), `busy`, `rejected` (remote hangup before
+  answer), `failed`, `machine` or `unknown` (submission result unknown). Read it from the
+  existing call details/inspection endpoints. Every non-answer
   outcome ends the room exactly once with a typed reason; duplicate, late or out-of-order
   callbacks cannot redial or revive it. Remote hangup after answer uses the existing
   participant/room lifecycle. Dial submission failure ends the room with an internal-only reason.
@@ -141,18 +146,36 @@ As decided in the [harness decision](../live-telephony-harness.md):
 
 ### Two-call live acceptance
 
-- Console owns the live cases because they compose Calls, Persistence, Gateway and Engine.
-  They use the ordinary persistence test database configuration; no database settings are passed.
-- The test starts the production gateway endpoint on `TELEPHONY_TEST_PORT`, checks
-  `<public URL>/healthz` through Funnel, then checks carrier state read-only.
-- Fixture tenant: an outgoing call spec on service A (`outgoing_call`, callee on the dial
-  connection) and an incoming call spec (`incoming_call`) published on service B's number. Services use the provisioned resources
-  and disable machine detection.
-- Cases: Twilio → Telnyx and Telnyx → Twilio each prove answer, a known phrase heard in both
-  rooms' transcripts, and clean hangup of both rooms; an unanswered dial proves Room A ends at its
-  ring deadline with the expected reason.
-- Prefer deterministic local Morse speech and scripted agents to avoid model/speech cost, if
-  Morse survives carrier transcoding; otherwise use the cheapest configured STT/TTS.
+- Console owns the live cases (`apps/vxpipe_console/test/integration/`, tags `:live_providers`
+  and `:live_telephony`) because they compose Calls, Persistence, Gateway and Engine. They use
+  the ordinary test database; no database settings are passed.
+- `bin/livetests run` exports `TELEPHONY_TEST_PUBLIC_URL`, `TELEPHONY_TEST_PORT`,
+  `TELNYX_APP_ID`, `TELNYX_TEST_FROM` (Telnyx number), `TWILIO_TEST_FROM` (Twilio number), the
+  carrier credentials and `TELNYX_PUBLIC_KEY`. The test serves the production gateway endpoint
+  with telephony enabled (`public_base_url` = `TELEPHONY_TEST_PUBLIC_URL`, real Calls/Persistence
+  repositories) on `TELEPHONY_TEST_PORT`, then requires `/healthz` through the public URL as
+  `apps/vxpipe_gateway/test/integration/public_telephony_endpoint_test.exs` does.
+- Fixture tenant (created in the test database by the test):
+  - Telnyx credential at **platform** scope (API key + public key) and a Telnyx service with
+    `provider_connection_id` = `TELNYX_APP_ID` and `outbound_number` = `TELNYX_TEST_FROM`.
+    Platform scope is required because provisioning points the Telnyx application at
+    `/webhooks/platform/telnyx`.
+  - Twilio credential (SID/token) and a Twilio service with `ingress_key` **`vxp-test-twilio`**
+    (the provisioned Voice URL) and `outbound_number` = `TWILIO_TEST_FROM`.
+  - Machine detection disabled on both services.
+  - Per direction: an outgoing call spec on the dialing provider's service and an incoming call
+    spec published on the other provider's number.
+- Speech: use the existing `gemini-3.5-flash-lite` model selection (as in
+  `examples/call-specs/development.json`) and Deepgram STT/TTS. Each `handled_by` uses a `fixed`
+  first message with a distinct phrase (for example "vxpipe outbound check alpha" and "vxpipe
+  inbound check bravo"). Pass: each room's transcript contains the other side's phrase, then the
+  test ends Room A and both rooms end. Morse speech is optional, cost-free extra evidence only.
+- Unanswered case: dial the other number while it has no published incoming route, with
+  `ring_timeout_ms: 5000`. Assert Room A ends within the deadline plus a bounded margin with a
+  non-answer `outgoing_outcome`, and record which one the carrier produced. The exact
+  `no_answer` timer path is proven locally with fake carriers.
+- Each answered case costs two short US calls plus model/STT/TTS usage; keep runs bounded and
+  never retry automatically.
 
 ## Implementation checklist
 
@@ -180,32 +203,159 @@ As decided in the [harness decision](../live-telephony-harness.md):
 - [x] Implement `telephony:provision` and `telephony:status` for Telnyx and Twilio.
 - [x] Read-only preflight used by live tests, with explicit failure messages.
 - [ ] Run once against real accounts and record the created resource names (no secrets/IDs that
-  identify billing).
+  identify billing). Telnyx done 2026-10-04; Twilio purchase awaits Trust Hub approval.
 
 ### Checkpoint D: outgoing calls
 
-- [ ] Red call spec validation cases: exactly one of `incoming_call`/`outgoing_call`; caller is a
-  human with a `receive` start connection; callee is a human with a phone `dial` connection;
-  `handled_by` differs; `ring_timeout_ms` bounds; transfer dial unchanged.
-- [ ] New schema version; previous-version specs (`entry_caller`/`entry_receiver`) still parse,
-  save, publish and run; stored plans stay decodable. Update examples and authoring docs.
-- [ ] `first_message` defaults to `generated` for an outgoing `handled_by`, and starts only after
-  the callee's media connects.
-- [ ] `POST .../call-specs/{call_spec_id}/outgoing-calls`: authentication, published revision,
-  rejection of draft/foreign/incoming specs, variable validation and `201` response.
+Implement in this order; each sub-checkpoint is a coherent commit with its tests and docs.
+
+D1. Call spec schema (CallEngine, Calls)
+- [ ] Red validation cases: exactly one of `incoming_call`/`outgoing_call`; caller is a human
+  with a `receive` + `start_call` connection; callee is a human with a phone `dial` connection;
+  `handled_by` exists and differs; `ring_timeout_ms` default and bounds; transfer dial unchanged.
+- [ ] New schema version `20261004.01`; `20260915.01` specs still parse (translated) and save,
+  publish and run; examples and authoring docs updated.
+- [ ] Saving an outgoing spec creates no inbound participant or telephony route.
+
+D2. Plan and persistence (CallEngine, Calls, Persistence)
+- [ ] Resolved plan carries direction and ring timeout; plan digest covers them; historical
+  stored plans decode as incoming.
+- [ ] Migration: `outgoing_outcome`, `idempotency_key`, `idempotency_digest` on calls, with a
+  partial unique index on tenant + key.
+
+D3. Engine flow (CallEngine)
+- [ ] Room start with `handled_by`; dial through the outbound connector; callee media joins as
+  an ordinary participant; first message after the callee's media connects.
+- [ ] Ring deadline and every dial outcome end the room exactly once; late/duplicate callbacks
+  ignored; remote hangup after answer uses the existing lifecycle.
+
+D4. Gateway outcome propagation and media join (Gateway)
+- [ ] Outgoing leg reports the normalized end reason to the room; transfer behavior unchanged.
+- [ ] Outbound media for an outgoing entry joins as a participant, not a transfer destination.
+
+D5. API (Gateway HTTP, Calls)
+- [ ] Route, `calls`-scope authentication, published revision, error shapes, `201` response.
 - [ ] Optional `Idempotency-Key`: same key and request returns the original call without a
-  second dial; same key with a different request returns 409; absent key dials every time.
-- [ ] Room start with `handled_by`, dial through the outbound connector, greeting after answer.
-- [ ] Fake-carrier outcomes: answered, no answer at deadline, busy, failed, machine, unknown
-  submission, duplicate/late callbacks, remote hangup; one room end each.
-- [ ] Call details/inspection record dial outcome and timings without private payloads.
-- [ ] Architecture and user documentation for the API and call spec fields.
+  second dial; same key with a different request returns 409; absent key dials every time;
+  concurrent duplicates dial once.
+
+D6. Observability and docs
+- [ ] Call details/inspection show `outgoing_outcome`, dial submitted/answered/ended times;
+  no private payloads.
+- [ ] Architecture, user API docs, call spec reference and examples.
 
 ### Checkpoint E: live acceptance
 
 - [ ] Twilio → Telnyx and Telnyx → Twilio answered calls with two-way audio evidence.
 - [ ] Unanswered dial ends at its ring deadline.
 - [ ] Record evidence here and in the index; record carrier limitations honestly.
+
+## Implementation guide
+
+Findings from the 2026-10-04 handover audit. Paths are starting points; verify behavior before
+changing it, and keep each change in the application that owns it.
+
+### Schema and compatibility (D1–D2)
+
+- `Vxpipe.CallEngine.CallSpec` (`apps/vxpipe_call_engine/lib/vxpipe/call_engine/call_spec.ex`)
+  accepts exactly one `@schema_version` (`validate_schema/3`). Accept both versions: parse the new
+  shape for `20261004.01`, and translate `entry_caller`/`entry_receiver` from `20260915.01` into
+  an incoming direction before validation. Saved revisions keep their stored source, so old
+  revisions must keep compiling.
+- `entry_caller`/`entry_receiver` appear in ~134/119 files, including the `calls` table columns
+  (`apps/vxpipe_persistence/lib/vxpipe/persistence/schema/call.ex`), `PreparedCall`,
+  `PreparedCallFactory`, `TrustedCall`, Console presenters and samples. Do not rename internals in
+  this milestone: keep the plan and column fields, filling them with caller/callee and
+  `handled_by`. Add explicit direction instead.
+- `ConnectionIntent` currently requires `admission: transfer` for `dial`. Allow `start_call` only
+  when the participant is `outgoing_call.callee`; the callee may omit `admission`.
+- `Vxpipe.Calls.CallSpecs` derives routes on save (`participant_routes/3`, `telephony_routes/2`,
+  `inbound_telephony?/1`). An outgoing callee must not produce either route kind.
+- `OutboundLegRequestResolver.resolve/3` matches only `admission: :transfer`; extend it for the
+  outgoing callee using the same `number`/`number_from_variable` rules.
+- The plan codec loads fixed atom owners before safe decoding (see tenant telephony services);
+  add new atoms there, and decode plans without a direction as incoming.
+
+### Engine flow (D3)
+
+- Startup: `RoomAuthority.Startup` prepares `entry_receiver` and opening audio for
+  `entry_caller`. For outgoing plans, after install, submit the dial with
+  `OutboundLegConnector.connect/3` (as `HumanDestinationPreparer.prepare_connection/4` does),
+  monitor the returned owner, and start the ring timer. Keep this in a dedicated module (for
+  example `RoomAuthority.OutgoingCall`), not inside transfer modules.
+- First message: `FirstMessage.start/1` runs from `StartupReadiness`
+  (`room_authority/startup_readiness.ex`). Outgoing readiness must include the callee's media
+  connection, so neither `generated`/`fixed` openings nor opening audio start while ringing.
+  `FirstMessage.for_agent_activation` sets `:pending` for non-`wait_for_input` modes.
+- Default `first_message`: apply `generated` at compile time when an outgoing `handled_by` agent
+  omits it; incoming keeps `wait_for_input` (`CallSpec.Participant`).
+- Ending: on a non-answer outcome, disconnect the leg handle, record the outcome and stop the room
+  through its existing end path; exactly once, whichever of timer, owner exit or report arrives
+  first.
+
+### Gateway (D4)
+
+- `Telephony.Event` already normalizes carrier end reasons to
+  `:hangup | :busy | :no_answer | :failed | :timeout`, but nothing forwards them: transfers only
+  monitor the `OutgoingLeg` owner (`human_handoff.ex` `monitor_outbound_leg/1`) and
+  `OutgoingLeg` stops with `:normal`. Add a provider-neutral way for the owner to report the end
+  reason and answering-machine stop (for example a `{:shutdown, {:outbound_leg_ended, reason}}`
+  exit reason, or a message to the room), keeping existing transfer handling green.
+- `OutgoingLeg` media start calls `MediaSupervisor.start_outbound_session/5` and then
+  `report_transfer_control(..., :media_ready)`, wiring media as a transfer destination. Outgoing
+  entries must instead attach like the incoming path (`CallAdmission.handle_live_event/5` →
+  `MediaSupervisor.start_session/5`): the callee becomes a normal room participant.
+- Map before-answer `:hangup` to `rejected`, `:timeout` and the local ring timer to `no_answer`,
+  `:busy`/`:no_answer`/`:failed` directly, machine detection to `machine`, and an unknown
+  submission to `unknown`.
+
+### API (D5)
+
+- `Vxpipe.Gateway.HTTP.Router` routes every `["api", "tenants", t, "call-specs" | _]` request to
+  `CallSpecWrites`. Match `POST [..., "call-specs", id, "outgoing-calls"]` in a clause **before**
+  it, and handle it in a new `Vxpipe.Gateway.HTTP.OutgoingCalls` module (not `CallAdmissions` or
+  `CallSpecWrites`).
+- Authenticate with `Calls.authenticate(tenant, secret, :calls, options)` as `CallAdmission`
+  does. Add a Calls workflow (for example `Vxpipe.Calls.OutgoingCalls.start/5`) that fetches the
+  published revision, builds the plan with `PreparedCallFactory.build/4` (add an outgoing
+  transport), runs the existing credential guards, and inserts the call with the idempotency
+  fields in one transaction.
+- Idempotency digest: SHA-256 of canonical JSON (`Vxpipe.Calls.CanonicalJSON`) of
+  `{call_spec_id, initial_variables}`. On a unique-index conflict, read the existing row and
+  compare digests; equal returns it with `200` and no dial, different returns `409`.
+- The gateway backend then starts the room and dial, and marks the call `running` or `failed`
+  with the existing start/fail projections.
+
+### Verification notes
+
+- Local tests use the existing fake telephony adapters and `TestTelephonyServiceRepository`;
+  no live carrier is needed until checkpoint E.
+- `bin/verify-lean` is required only if speech source-cutover modules change
+  (`verification/Verification/SourceGate.lean`).
+- Known unrelated flakes under full-suite load (both pass in isolation): CallEngine
+  `SpeechToTextTest` "prepared activity origin stays private…" and Gateway
+  `HumanTransferWebRTCTest` "five-participant handoff…". Rerun before attributing failures.
+
+## Handover
+
+- Read `AGENTS.md` (red-green-refactor, SRP, completion gates, labnotes, commit hygiene). Use
+  this milestone's labnote, `labnotes/20261003-1700-outgoing-calls-livetests.md`, or create a
+  new one with `bin/create-labnotes`.
+- Root gates: `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+  `mix credo --strict`, `mix test`, `mix deps.unlock --check-unused`, and the shell suites
+  `test/shell/livetests*_test.sh` when touching `bin/livetests`. `mix test` needs no database
+  environment variables on a host with a local PostgreSQL socket.
+- Never read or edit `~/.config/vxpipe/live_providers.env`; credentials reach tests only through
+  `bin/livetests run`.
+- Live commands (checkpoint E), after the Twilio number exists:
+
+  ```shell
+  bin/livetests telephony:status
+  bin/livetests run --only live_telephony apps/vxpipe_console/test/integration
+  ```
+
+- Blocker for E: Twilio Trust Hub approval, then `bin/livetests telephony:provision
+  --allow-purchase` (buys one Twilio US number for this machine).
 
 ## Acceptance and failure checks
 
