@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
   alias Vxpipe.CallEngine.CallSpec.{
     CallVariables,
     Capabilities,
+    Direction,
     MediaPolicy,
     OpeningAudio,
     Participant,
@@ -16,12 +17,15 @@ defmodule Vxpipe.CallEngine.CallSpec do
 
   alias Vxpipe.CallEngine.CallSpecValidation
 
-  @schema_version "20260915.01"
+  @schema_version "20261004.01"
+  @supported_schema_versions ["20260915.01", @schema_version]
   @fields [
     :schema_version,
     :name,
     :entry_caller,
     :entry_receiver,
+    :incoming_call,
+    :outgoing_call,
     :defaults,
     :opening_audio,
     :wait_sounds,
@@ -50,7 +54,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
     :tool_visibility,
     :max_duration_ms
   ]
-  defstruct @enforce_keys ++ [wait_sounds: %WaitSounds{}]
+  defstruct @enforce_keys ++
+              [wait_sounds: %WaitSounds{}, direction: :incoming, ring_timeout_ms: nil]
 
   @type t :: %__MODULE__{
           resource_id: String.t(),
@@ -59,6 +64,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
           name: nil | String.t(),
           entry_caller: String.t(),
           entry_receiver: String.t(),
+          direction: :incoming | :outgoing,
+          ring_timeout_ms: nil | pos_integer(),
           default_capabilities: Capabilities.t(),
           opening_audio: nil | OpeningAudio.t(),
           wait_sounds: WaitSounds.t(),
@@ -72,6 +79,9 @@ defmodule Vxpipe.CallEngine.CallSpec do
 
   @spec schema_version() :: String.t()
   def schema_version, do: @schema_version
+
+  @spec supported_schema_version?(term()) :: boolean()
+  def supported_schema_version?(version), do: version in @supported_schema_versions
 
   @spec new(map(), keyword()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
   def new(value, options) when is_list(options) do
@@ -89,14 +99,7 @@ defmodule Vxpipe.CallEngine.CallSpec do
            CallSpecValidation.fetch(input, :schema_version, code, message, []),
          :ok <- validate_schema(schema_input, code, message),
          {:ok, name} <- optional_name(input, code, message),
-         {:ok, caller_input} <-
-           CallSpecValidation.fetch(input, :entry_caller, code, message, []),
-         {:ok, entry_caller} <-
-           CallSpecValidation.identifier(caller_input, code, message, ["entry_caller"]),
-         {:ok, receiver_input} <-
-           CallSpecValidation.fetch(input, :entry_receiver, code, message, []),
-         {:ok, entry_receiver} <-
-           CallSpecValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
+         {:ok, direction} <- Direction.new(input, schema_input),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
          {:ok, opening_audio} <- OpeningAudio.new(Map.get(input, :opening_audio)),
          {:ok, wait_sounds} <- WaitSounds.from_optional(Map.fetch(input, :wait_sounds)),
@@ -105,8 +108,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            CallSpecValidation.fetch(input, :participants, code, message, []),
-         {:ok, participants} <- participants(participants_input, code, message),
-         :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
+         {:ok, participants} <- participants(participants_input, direction, code, message),
+         :ok <- Direction.validate(direction, participants),
          :ok <- validate_transfers(participants, code, message),
          :ok <- validate_media_policies(media_policy, participants),
          {:ok, transfer_policy} <- TransferPolicy.new(Map.get(input, :transfer_policy)),
@@ -125,8 +128,10 @@ defmodule Vxpipe.CallEngine.CallSpec do
          revision: revision,
          schema_version: schema_input,
          name: name,
-         entry_caller: entry_caller,
-         entry_receiver: entry_receiver,
+         entry_caller: direction.caller,
+         entry_receiver: direction.handled_by,
+         direction: direction.kind,
+         ring_timeout_ms: direction.ring_timeout_ms,
          default_capabilities: defaults,
          opening_audio: opening_audio,
          wait_sounds: wait_sounds,
@@ -155,7 +160,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
     end
   end
 
-  defp validate_schema(@schema_version, _code, _message), do: :ok
+  defp validate_schema(version, _code, _message) when version in @supported_schema_versions,
+    do: :ok
 
   defp validate_schema(_value, code, message) do
     CallSpecValidation.invalid(
@@ -185,10 +191,14 @@ defmodule Vxpipe.CallEngine.CallSpec do
     end
   end
 
-  defp participants(value, code, message) when is_map(value) and map_size(value) > 0 do
+  defp participants(value, direction, code, message) when is_map(value) and map_size(value) > 0 do
     Enum.reduce_while(value, {:ok, %{}}, fn
       {key, participant_input}, {:ok, participants} when is_binary(key) ->
-        case Participant.new(key, participant_input) do
+        case Participant.new(
+               key,
+               participant_input,
+               Direction.participant_options(direction, key)
+             ) do
           {:ok, participant} -> {:cont, {:ok, Map.put(participants, key, participant)}}
           {:error, _error} = error -> {:halt, error}
         end
@@ -204,47 +214,8 @@ defmodule Vxpipe.CallEngine.CallSpec do
     end)
   end
 
-  defp participants(_value, code, message) do
+  defp participants(_value, _direction, code, message) do
     CallSpecValidation.invalid(code, message, ["participants"], "must be a non-empty object")
-  end
-
-  defp validate_entries(caller, receiver, participants, code, message) do
-    cond do
-      not Map.has_key?(participants, caller) ->
-        CallSpecValidation.invalid(
-          code,
-          message,
-          ["entry_caller"],
-          "must reference a participant"
-        )
-
-      not Map.has_key?(participants, receiver) ->
-        CallSpecValidation.invalid(
-          code,
-          message,
-          ["entry_receiver"],
-          "must reference a participant"
-        )
-
-      caller == receiver ->
-        CallSpecValidation.invalid(
-          code,
-          message,
-          ["entry_receiver"],
-          "must differ from entry_caller"
-        )
-
-      participants[caller].kind != :human ->
-        CallSpecValidation.invalid(
-          code,
-          message,
-          ["entry_caller"],
-          "must reference a human participant"
-        )
-
-      true ->
-        :ok
-    end
   end
 
   defp limits(value, code, message) do

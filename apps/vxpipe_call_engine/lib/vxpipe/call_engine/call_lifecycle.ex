@@ -117,6 +117,11 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
            Keyword.get(settings, :idle_timeout_ms),
          {timer_module, timer_options} <- Keyword.get(settings, :timer, {ProcessTimer, []}),
          true <- timer?(timer_module, timer_options) do
+      readiness_timeout_ms =
+        if plan.direction == :outgoing,
+          do: readiness_timeout_ms + plan.ring_timeout_ms,
+          else: readiness_timeout_ms
+
       state = %{
         authority: nil,
         idle: :inactive,

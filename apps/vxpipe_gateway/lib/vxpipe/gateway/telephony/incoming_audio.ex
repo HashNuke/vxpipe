@@ -95,10 +95,21 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
 
     result =
       cond do
-        Enum.any?(results, &fatal_audio_result?/1) -> :unavailable
-        Enum.any?(results, &(&1 == :ok)) -> :ok
-        Enum.any?(results, &drop_audio_result?/1) -> :drop
-        true -> :unavailable
+        Enum.any?(results, &fatal_audio_result?/1) ->
+          :unavailable
+
+        Enum.any?(results, &(&1 == :ok)) ->
+          :ok
+
+        Enum.any?(results, &drop_audio_result?/1) ->
+          :drop
+
+        attachment.admission == :transfer_preparation and
+            Enum.all?(results, &(&1 == :disabled)) ->
+          :drop
+
+        true ->
+          :unavailable
       end
 
     {result, sts_input}

@@ -66,7 +66,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     channels: 1,
     frame_samples: 960,
     playout_delay_ms: 300,
-    maximum_buffered_timestamps: 8,
+    maximum_buffered_timestamps: 32,
     maximum_sink_frames: 50
   ],
   transcript_router: [maximum_retained_revisions: 128],

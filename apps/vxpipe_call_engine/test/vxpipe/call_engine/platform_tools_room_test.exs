@@ -97,7 +97,7 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
 
   defp compile_plan do
     input = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

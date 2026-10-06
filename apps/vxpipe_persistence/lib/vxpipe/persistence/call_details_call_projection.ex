@@ -33,6 +33,10 @@ defmodule Vxpipe.Persistence.CallDetailsCallProjection do
         "created_at" => timestamp(call.created_at),
         "started_at" => timestamp(call.started_at),
         "ended_at" => timestamp(call.ended_at),
+        "outgoing_outcome" => optional_atom(call.outgoing_outcome),
+        "dial_submitted_at" => timestamp(call.dial_submitted_at),
+        "answered_at" => timestamp(call.answered_at),
+        "dial_ended_at" => timestamp(call.dial_ended_at),
         "terminal_reason" => optional_atom(call.terminal_reason)
       }
     }

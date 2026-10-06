@@ -29,6 +29,11 @@ defmodule Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider do
 
   defp await_response(emit) do
     receive do
+      {:test_agent_runtime_delta, text, observer} ->
+        result = emit.(text)
+        send(observer, {:test_agent_runtime_delta_result, result})
+        await_response(emit)
+
       {:test_agent_runtime_delta, text} ->
         :ok = emit.(text)
         await_response(emit)

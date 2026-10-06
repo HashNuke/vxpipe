@@ -16,13 +16,14 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequestResolver do
             %ConnectionIntent{
               service: service,
               mode: :dial,
-              admission: :transfer
+              admission: admission
             } = connection
         } = participant,
         incarnation_id
       )
       when is_binary(service) and is_binary(incarnation_id) do
-    with {:ok, number} <- destination_number(plan, connection) do
+    with {:ok, purpose} <- purpose(plan, participant, admission),
+         {:ok, number} <- destination_number(plan, connection) do
       request = %OutboundLegRequest{
         tenant_id: plan.tenant_id,
         actor_id: plan.actor_id,
@@ -32,7 +33,10 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequestResolver do
         participant_id: participant.participant_id,
         service_id: service,
         service_reference: participant.telephony_service,
-        to: number
+        to: number,
+        purpose: purpose,
+        room_owner: if(purpose == :initial, do: self()),
+        attempt_id: if(purpose == :initial, do: make_ref())
       }
 
       if OutboundLegRequest.valid?(request),
@@ -44,6 +48,13 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequestResolver do
   def resolve(%ResolvedCallPlan{}, %Participant{}, _incarnation_id) do
     {:error, :invalid_outbound_destination}
   end
+
+  defp purpose(_plan, _participant, :transfer), do: {:ok, :transfer}
+
+  defp purpose(%{direction: :outgoing, entry_caller: key}, %{call_spec_key: key}, :start_call),
+    do: {:ok, :initial}
+
+  defp purpose(_plan, _participant, _admission), do: {:error, :invalid_outbound_destination}
 
   defp destination_number(_plan, %ConnectionIntent{number: number}) when is_binary(number) do
     {:ok, number}

@@ -221,7 +221,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTransferRoomTest do
     speech = %{provider: "morse", model: "morse-duplex", options: %{}}
 
     source = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",
@@ -372,7 +372,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTransferRoomTest do
     speech = %{provider: "openai", model: "gpt-live-1", options: %{}}
 
     source = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",

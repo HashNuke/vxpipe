@@ -77,6 +77,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
     do: GenServer.call(pid, {:push_text, reference, text}, 5_000)
 
   @impl true
+  def begin_opening(pid, reference, opening),
+    do: GenServer.call(pid, {:begin_opening, reference, opening}, 5_000)
+
+  @impl true
   def input_activity(pid, boundary) when boundary in [:started, :ended],
     do: GenServer.call(pid, {:input_activity, boundary}, 5_000)
 
@@ -136,6 +140,29 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
       {:error, _reason} ->
         {:ok, decoder} = Decoder.new(state.config)
         {:reply, {:error, :session_failed}, %{state | decoder: decoder}}
+    end
+  end
+
+  def handle_call({:begin_opening, reference, opening}, _from, state) do
+    text =
+      case opening do
+        :generated -> "HELLO"
+        {:fixed, text} -> text
+      end
+
+    turn = make_ref()
+
+    with {:ok, _encoder} <- Encoder.start(state.config, text),
+         :ok <-
+           Event.emit(state.channel, :input_submitted,
+             request_ref: reference,
+             provenance: :locally_measured
+           ),
+         :ok <-
+           Event.emit(state.channel, :opening_started, request_ref: reference, turn_ref: turn) do
+      {:reply, :ok, put_pending_reply(state, turn, text)}
+    else
+      _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
   end
 

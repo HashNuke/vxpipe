@@ -155,6 +155,63 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     }
   end
 
+  for stage <- [:before_media, :after_media] do
+    @tag initial_outcome: :ready
+    @tag carrier_hangup: stage
+    test "signed incoming hangup ends its exact room #{stage}", context do
+      assert post_fixture(context, "call-initiated-incoming").status == 200
+      assert_receive {:test_telephony_answer, answer}, 2_000
+      caller = Map.fetch!(context.plan.participants, context.plan.entry_caller)
+
+      assert {:ok, participant} =
+               Vxpipe.CallEngine.participant_snapshot(
+                 context.plan.tenant_id,
+                 context.plan.room_id,
+                 caller.participant_id
+               )
+
+      assert {:ok, monitor} =
+               Vxpipe.CallEngine.monitor_room(
+                 context.plan.tenant_id,
+                 context.plan.room_id,
+                 participant.incarnation_id
+               )
+
+      if context.carrier_hangup == :after_media do
+        assert post_fixture(context, "call-answered-incoming").status == 200
+
+        transport =
+          start_supervised!(
+            Supervisor.child_spec({TestTelephonySocket, observer: self()}, restart: :temporary)
+          )
+
+        assert {:ok, _binding, _socket} =
+                 TestTelephonySocket.open(transport, TelephonyMediaSocket, fn ->
+                   TelnyxFixture.open_media(context.endpoint, answer.media_url, %{
+                     "call_control_id" => "inbound-call-control",
+                     "call_session_id" => "inbound-call-session",
+                     "client_state" => ClientState.encode(@incoming_leg_id),
+                     "from" => "+15550001001",
+                     "stream_id" => "inbound-stream",
+                     "to" => "+15550001000"
+                   })
+                 end)
+      end
+
+      assert post_fixture(context, "call-hangup-incoming", %{
+               "call_leg_id" => "unrelated-leg"
+             }).status != 200
+
+      refute_received {:DOWN, ^monitor, :process, _, _}
+
+      assert post_fixture(context, "call-hangup-incoming", %{
+               "call_leg_id" => "inbound-call-leg"
+             }).status == 200
+
+      assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :remote_hangup}}, 2_000
+    end
+  end
+
   for outcome <- [:ready, :model, :readiness, :max_duration, :disconnected] do
     @tag initial_outcome: outcome
     test "initial phone startup handles #{outcome} under its original clocks", context do

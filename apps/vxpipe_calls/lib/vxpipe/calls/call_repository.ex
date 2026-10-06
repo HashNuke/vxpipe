@@ -5,6 +5,24 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @callback fetch_outgoing_by_key(context(), String.t(), String.t()) ::
+              {:ok, PreparedCall.t()} | {:error, :not_found}
+
+  @callback mark_outgoing_call_started(context(), PreparedCall.t(), String.t(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+  @callback mark_outgoing_call_failed(context(), PreparedCall.t(), atom(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+
+  @doc """
+  Atomically insert one outgoing call without a join token. Invoke authorization
+  inside the transaction and retain credential locks through insertion. Recover
+  unique-key conflicts after rollback: equal digests return the original call,
+  changed digests conflict. A duplicate must never acquire another dial owner.
+  """
+  @callback claim_outgoing_call(context(), PreparedCall.t(), (-> {:ok, :authorized}
+                                                                 | {:error, term()})) ::
+              {:ok, PreparedCall.t()} | {:duplicate, PreparedCall.t()} | {:error, term()}
+
   @callback insert_prepared_call(context(), PreparedCall.t(), JoinToken.t()) ::
               {:ok, PreparedCall.t(), JoinToken.t()} | {:error, term()}
 

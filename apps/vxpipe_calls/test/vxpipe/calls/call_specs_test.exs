@@ -216,6 +216,108 @@ defmodule Vxpipe.Calls.CallSpecsTest do
     assert other_resolved.tenant_key == other_tenant.key
   end
 
+  test "saves and publishes a new outgoing spec without an inbound entry route", %{
+    tenant: tenant,
+    options: options
+  } do
+    source =
+      call_spec_input()
+      |> Map.drop([:entry_caller, :entry_receiver])
+      |> Map.put(:schema_version, "20261004.01")
+      |> Map.put(:outgoing_call, %{callee: "caller", handled_by: "assistant"})
+      |> put_in([:participants, "caller", :connection], %{
+        service: "primary-phone",
+        mode: "dial",
+        number: "+15550001000"
+      })
+
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, options)
+    assert draft.routes == []
+    assert draft.telephony_routes == []
+    assert draft.validation_errors == []
+    assert draft.compiled_metadata["direction"] == "outgoing"
+    assert draft.compiled_metadata["ring_timeout_ms"] == 30_000
+
+    assert {:ok, published} =
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
+
+    assert published.routes == []
+    assert published.telephony_routes == []
+  end
+
+  test "new incoming source saves and publishes beside executable legacy revisions", %{
+    tenant: tenant,
+    options: options
+  } do
+    assert {:ok, legacy} = CallSpecs.save(tenant.key, call_spec_input(), options)
+    assert {:ok, legacy} = CallSpecs.publish(tenant.key, legacy.call_spec_id, 1, options)
+
+    source =
+      call_spec_input()
+      |> Map.drop([:entry_caller, :entry_receiver])
+      |> Map.put(:schema_version, "20261004.01")
+      |> Map.put(:incoming_call, %{caller: "caller", handled_by: "assistant"})
+
+    assert {:ok, modern} = CallSpecs.save(tenant.key, source, options)
+    assert {:ok, modern} = CallSpecs.publish(tenant.key, modern.call_spec_id, 1, options)
+    assert {:ok, stored} = CallSpecs.fetch(tenant.key, legacy.call_spec_id, 1, options)
+    assert stored.source["schema_version"] == "20260915.01"
+    assert stored.source["entry_caller"] == "caller"
+
+    for revision <- [legacy, modern] do
+      assert [route] = revision.routes
+      assert {:ok, resolved} = CallSpecs.resolve_route(tenant.key, route.key, options)
+      assert resolved.call_spec_id == revision.call_spec_id
+    end
+  end
+
+  test "preparation digest includes the outgoing deadline", %{tenant: tenant, options: options} do
+    source =
+      call_spec_input()
+      |> Map.drop([:entry_caller, :entry_receiver])
+      |> Map.put(:schema_version, "20261004.01")
+      |> Map.put(:outgoing_call, %{
+        callee: "caller",
+        handled_by: "assistant",
+        ring_timeout_ms: 5_000
+      })
+      |> Map.put(:wait_sounds, nil)
+      |> put_in([:participants, "caller", :connection], %{
+        service: "primary-phone",
+        mode: "dial",
+        number: "+15550001000"
+      })
+
+    assert {:ok, revision} = CallSpecs.save(tenant.key, source, options)
+
+    options =
+      options ++
+        [
+          call_id_generator: fn -> "fixed-call" end,
+          room_id_generator: fn -> "fixed-room" end,
+          actor_id_generator: fn -> "fixed-actor" end
+        ]
+
+    assert {:ok, first} =
+             Vxpipe.Calls.PreparedCallFactory.build(revision, %{}, :telephony, options)
+
+    changed = %{
+      revision
+      | source: put_in(revision.source, ["outgoing_call", "ring_timeout_ms"], 60_000)
+    }
+
+    assert {:ok, second} =
+             Vxpipe.Calls.PreparedCallFactory.build(changed, %{}, :telephony, options)
+
+    assert first.plan.direction == :outgoing
+    assert first.plan.ring_timeout_ms == 5_000
+    assert second.plan.ring_timeout_ms == 60_000
+    refute first.plan_digest == second.plan_digest
+
+    assert first.plan_digest ==
+             :crypto.hash(:sha256, :erlang.term_to_binary(first.plan, [:deterministic]))
+  end
+
   defp registries do
     %{
       host_tools: %{}

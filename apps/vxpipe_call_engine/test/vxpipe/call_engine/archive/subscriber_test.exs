@@ -71,6 +71,32 @@ defmodule Vxpipe.CallEngine.Archive.SubscriberTest do
     assert %{accepted: 1, pending: 0} = Handoff.stats(handoff)
   end
 
+  test "default closure timestamps retain microseconds for durable outgoing start ordering" do
+    subscriber =
+      start_supervised!(
+        {Subscriber,
+         writer: {TestCollectingArchiveWriter, self()},
+         maximum_pending_facts: 4,
+         retry_delay_ms: 5,
+         drain_timeout_ms: 1_000}
+      )
+
+    handoff = Subscriber.handoff(subscriber)
+    monitor = Process.monitor(subscriber)
+    assert :ok = Handoff.source_started(handoff, self())
+    assert :ok = Handoff.offer(handoff, archive_fact())
+    assert_receive {:test_archive_fact, %Fact{kind: :room_opened}}
+    before_close = DateTime.utc_now()
+    assert :ok = Handoff.source_stopped(handoff, :finished)
+
+    assert_receive {:test_archive_fact,
+                    %Fact{kind: :archive_stream_closed, occurred_at: occurred}}
+
+    assert {_microseconds, 6} = occurred.microsecond
+    assert DateTime.compare(occurred, before_close) in [:eq, :gt]
+    assert_receive {:DOWN, ^monitor, :process, ^subscriber, :normal}
+  end
+
   test "records overflow as a known-incomplete archive closure" do
     handoff =
       open_archive(

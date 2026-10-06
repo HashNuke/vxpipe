@@ -39,6 +39,7 @@ defmodule Vxpipe.Console.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
       {:req, "~> 0.7.4"},
       {:telemetry, "~> 1.3"},
+      {:vxpipe_agent_runtime, in_umbrella: true},
       {:vxpipe_artifacts, in_umbrella: true},
       {:vxpipe_calls, in_umbrella: true},
       {:vxpipe_gateway, in_umbrella: true},

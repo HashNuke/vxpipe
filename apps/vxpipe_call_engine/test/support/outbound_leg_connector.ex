@@ -7,7 +7,23 @@ defmodule Vxpipe.CallEngine.TestOutboundLegConnector do
   def connect(context, %OutboundLegRequest{} = request, timeout) do
     observer = observer(context)
     send(observer, {:test_outbound_leg_connect, self(), request, timeout})
-    {:ok, request.participant_id}
+
+    if is_map(context) and Map.get(context, :block?, false) do
+      receive do
+        :release_test_dial -> :ok
+      end
+    end
+
+    cond do
+      is_map(context) and Map.get(context, :result) == :failed ->
+        {:error, :test_submission_failed}
+
+      is_map(context) and Map.get(context, :submission_status) == :unknown ->
+        {:ok, request.participant_id, :unknown}
+
+      true ->
+        {:ok, request.participant_id}
+    end
   end
 
   @impl true

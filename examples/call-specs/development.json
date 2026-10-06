@@ -1,8 +1,10 @@
 {
-  "schema_version": "20260915.01",
+  "schema_version": "20261004.01",
   "name": "Development database example",
-  "entry_caller": "caller",
-  "entry_receiver": "assistant",
+  "incoming_call": {
+    "caller": "caller",
+    "handled_by": "assistant"
+  },
   "defaults": {
     "capabilities": {
       "model_inference": {

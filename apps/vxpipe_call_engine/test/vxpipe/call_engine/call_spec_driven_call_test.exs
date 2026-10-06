@@ -61,6 +61,24 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
   alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
 
+  test "new incoming direction starts and attaches through the ordinary room boundary" do
+    configure_agent_runtime_provider(self())
+    room_id = unique_id("room-new-incoming")
+
+    source =
+      call_spec_input([])
+      |> Map.drop([:entry_caller, :entry_receiver])
+      |> Map.put(:schema_version, CallSpec.schema_version())
+      |> Map.put(:incoming_call, %{caller: "caller", handled_by: "receiver"})
+
+    plan = compile_plan_from(room_id, source)
+    assert plan.direction == :incoming
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    attach_caller(plan, room, caller, "conn-new-incoming")
+    assert :ok = Vxpipe.CallEngine.TestCallStartup.await_open(plan)
+  end
+
   test "archives private lifecycle, accepted input, tool, and generated-output facts" do
     configure_agent_runtime_provider(self())
     room_id = unique_id("room-private-history")
@@ -2028,7 +2046,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
         else: %{}
 
     %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "receiver",

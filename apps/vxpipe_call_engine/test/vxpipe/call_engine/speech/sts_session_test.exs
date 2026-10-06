@@ -33,6 +33,30 @@ defmodule Vxpipe.CallEngine.Speech.STSSessionTest do
     assert {:error, :invalid_text} = Session.push_text(session, :bad)
   end
 
+  test "opening is an ordered agent operation with correlated evidence and no caller turn" do
+    session = start_session(provider: MorseSTS, owner: self())
+    assert_receive {:vxpipe_speech, %Event{kind: :ready} = ready}
+    assert :ok = Session.ack(session, ready)
+    assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"})
+
+    assert_receive {:vxpipe_speech,
+                    %Event{kind: :input_submitted, request_ref: reference} = submitted}
+
+    assert :ok = Session.ack(session, submitted)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{kind: :opening_started, request_ref: ^reference, turn_ref: turn} =
+                      opening}
+
+    assert :ok = Session.ack(session, opening)
+    assert {:ok, _output} = Session.admit_output(session, turn)
+    refute_received {:vxpipe_speech, %Event{kind: :input_transcript}}
+    refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
+    assert {:error, :invalid_opening} = Session.begin_opening(session, {:fixed, ""})
+    assert {:error, :invalid_opening} = Session.begin_opening(session, {:fixed, :private})
+    assert {:error, :invalid_opening} = Session.begin_opening(session, :unknown)
+  end
+
   test "external turn boundaries are ordered commands unavailable in provider mode" do
     hybrid = start_session(provider: MorseSTS, owner: self(), options: [turn_control: "hybrid"])
     assert_receive {:vxpipe_speech, %Event{session: ^hybrid, kind: :ready} = ready}

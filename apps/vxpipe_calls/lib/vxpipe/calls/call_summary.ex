@@ -13,7 +13,13 @@ defmodule Vxpipe.Calls.CallSummary do
     :terminal_reason,
     :latest_variable_revision
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                outgoing_outcome: nil,
+                dial_submitted_at: nil,
+                answered_at: nil,
+                dial_ended_at: nil
+              ]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -25,6 +31,10 @@ defmodule Vxpipe.Calls.CallSummary do
           started_at: DateTime.t() | nil,
           ended_at: DateTime.t() | nil,
           terminal_reason: atom() | nil,
+          outgoing_outcome: Vxpipe.Calls.PreparedCall.outgoing_outcome() | nil,
+          dial_submitted_at: DateTime.t() | nil,
+          answered_at: DateTime.t() | nil,
+          dial_ended_at: DateTime.t() | nil,
           latest_variable_revision: non_neg_integer() | nil
         }
 end

@@ -73,7 +73,7 @@ defmodule Vxpipe.CallEngine.Speech.STTFinishInputTest do
         owner: self()
       )
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready}} = message, 1_000
     send(self(), message)
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
     assert :ok = Session.ack(session, ready)

@@ -160,6 +160,29 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
+  def handle_call({:event, %Event{kind: :ended} = event}, {source, _tag}, state)
+      when state.status in [:answering, :running] do
+    with :ok <- matching_event(state.claim, event) do
+      state = observe_usage(state, event)
+
+      case call_backend(state.backend, :handle_live_event, [
+             state.claim,
+             state.activation,
+             source,
+             event
+           ]) do
+        :ok -> {:reply, :ok, %{state | status: :ended}}
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:event, %Event{kind: :ended} = event}, _from, %{status: :ended} = state) do
+    {:reply, matching_event(state.claim, event), state}
+  end
+
   def handle_call({:event, event}, {source, _tag}, %{status: :running} = state) do
     case matching_event(state.claim, event) do
       :ok ->
@@ -189,6 +212,12 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     do: {:stop, :normal, state}
 
   def handle_info(:retire, state), do: {:noreply, state}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _room, _reason},
+        %{room_monitor: monitor, status: :ended} = state
+      ),
+      do: {:stop, :normal, state}
 
   def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state),
     do: {:stop, :normal, end_room_leg(state)}

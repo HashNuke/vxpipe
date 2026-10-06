@@ -65,6 +65,40 @@ defmodule Vxpipe.Providers.Twilio.MediaTest do
     assert reused.resp_body == "media socket not found"
   end
 
+  test "test probe reports only signature variant flags and leaves alternate URLs unauthorized",
+       context do
+    assert {:ok, token} =
+             MediaAdmission.issue(context.admission, context.binding, 60_000, context.service)
+
+    url = PublicEndpoint.media_url(context.service, token)
+
+    probe =
+      Vxpipe.Gateway.TestObservedTelephonyEndpoint.init(
+        endpoint: context.endpoint,
+        observer: self()
+      )
+
+    response =
+      :get
+      |> conn("/api/telephony/twilio/#{@ingress_key}/media/#{token}")
+      |> websocket_headers()
+      |> put_req_header("x-twilio-signature", signature(url <> "/"))
+      |> Vxpipe.Gateway.TestObservedTelephonyEndpoint.call(probe)
+
+    assert response.status == 401
+
+    assert_receive {:test_media_signature,
+                    %{
+                      exact_wss: false,
+                      trailing_wss: true,
+                      exact_https: false,
+                      trailing_https: false
+                    }}
+
+    assert {:ok, _service} = MediaAdmission.lookup_service(context.admission, @ingress_key, token)
+    assert request(context, token, signature(url)).status == 101
+  end
+
   test "uses initialized leg auth and URL with conflicting or absent registry configuration",
        context do
     conflicting =
@@ -212,6 +246,52 @@ defmodule Vxpipe.Providers.Twilio.MediaTest do
 
     url = PublicEndpoint.media_url(context.service, token)
     assert request(%{context | endpoint: endpoint}, token, signature(url)).status == 503
+  end
+
+  test "test socket probe preserves rejection and reports bounded format without frame content",
+       context do
+    handler = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:vxpipe, :test, :telephony, :socket],
+        &__MODULE__.observe_socket_probe/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    assert {:ok, socket} =
+             Vxpipe.Gateway.TestObservedTelephonySocket.init(%{
+               binding: context.binding,
+               clock: context.clock
+             })
+
+    body =
+      JSON.encode!(%{
+        event: "start",
+        private: "private-frame-marker",
+        start: %{mediaFormat: %{encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1}}
+      })
+
+    assert {:stop, :invalid_media_message, {1008, "invalid media message"}, _socket} =
+             Vxpipe.Gateway.TestObservedTelephonySocket.handle_in({body, opcode: :text}, socket)
+
+    assert_receive {:socket_probe, %{count: 1},
+                    %{
+                      provider: :twilio,
+                      event: :start,
+                      result: :stop,
+                      close_code: 1008,
+                      encoding: :mulaw,
+                      sample_rate: 8000,
+                      channels: 1
+                    }}
+  end
+
+  def observe_socket_probe(_event, measurements, metadata, observer) do
+    if self() == observer, do: send(observer, {:socket_probe, measurements, metadata})
   end
 
   defp request(context, token, signature, ingress_key \\ @ingress_key) do

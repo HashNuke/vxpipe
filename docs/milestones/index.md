@@ -1,11 +1,14 @@
 # Call Spec implementation milestones
 
-Status: 39 milestone specifications: 28 complete and 11 incomplete. Milestone 17, Telnyx calls and
+Status: 39 milestone specifications: 30 complete and 9 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
-Milestone 18, Twilio through the common telephony contract, remains formally incomplete only because
-its guarded live-provider audio check still needs credentials and an approved destination. Milestone
+Milestone 18, Twilio through the common telephony contract, is complete. Real private-transfer and
+selective-disconnect acceptance passes (seed 918113), followed by all common gates and 3,171 default
+tests, zero failures, 104 excluded (seed 235060), plus Lean verification. Milestone 37 proves automated Twilio
+inbound/outbound initial-call audio with this machine's own numbers; that does not establish
+the private-transfer runnable outcome by itself. See milestone 18's T1–T4 continuation checkpoints. Milestone
 19, permitted live recordings streamed to S3, is complete. Milestone 20, usage and cost
 observations, is complete, including typed capture/settlement, asynchronous structured persistence,
 tenant-safe operator inspection, and optional bounded billing enrichment. Milestone 21, versioned
@@ -144,7 +147,7 @@ progress without claiming the entire milestone is complete.
 15. [x] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
 16. [x] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then continue human-only audio and permitted transcripts.
 17. [x] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
-18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant call specs or room control.
+18. [x] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant call specs or room control.
 19. [x] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
@@ -163,7 +166,7 @@ progress without claiming the entire milestone is complete.
 34. [ ] [GPT-Live speech-to-speech](gpt-live-speech-to-speech.md) — Add OpenAI GPT-Live as an agent STS provider through a duplex profile: adapter-inferred turns, segmented and transcript-aligned output, provider-owned barge-in, delegated tools and history-reseeded continuity, proven locally with a Morse duplex provider. A–E are locally verified, including the room-ordered reseed snapshot. OpenAI LLM and GPT-Live setup are enabled with one tenant API key; the opt-in hosted harness is committed, while the authorized service and phone check remains open.
 35. [x] [Provider expansion and live acceptance](provider-expansion-and-ai-gateway.md) — Existing selected live repairs, direct LLM services, Cartesia STT/TTS and ElevenLabs TTS scoped/live checks pass. Packaged local activity inference now drives an allocation-owned Scribe STT session with explicit STT-only local-gap provenance, bounded input/turn queues and fresh per-turn recognition connections. Its selected two-turn live case passes after repairing an empty second transcript on a reused connection. A brief first answer passes without padding; empty noncommitting protocol messages repair the separately tested thirty-second initial idle window. Scoped ElevenLabs STT registration, tenant/platform publication and private startup, compiled room manual-segment/two-turn handling, and rendered STT/TTS service forms now pass locally. The configured-service Scribe live room case now passes one long acoustic turn through encrypted platform resolution and normal ingress. Five local Cartesia STT and Cartesia/ElevenLabs TTS whole-room checks now pass for transcript/model input, credited playback completion and interruption/replacement. All five root gates and Lean pass; the final full rerun reports 3,031 tests, zero failures and 97 exclusions. Three direct LLM compiled-room startup checks pass separately without hosted inference. Historical hosted-agent probes are explicitly skipped under live provider selection. Detailed coherent checkpoints are committed and pushed. Earlier intermittent Gateway failures are recorded without claiming their causes were repaired. Hosted-agent STS is deferred by the user-approved 2026-10-01 STT/TTS-only scope; committed hosted protocol/ownership work remains historical. Gateway implementation is deferred.
 36. [ ] [AI gateway routing](ai-gateway-routing.md) — Design separate upstream/provider and gateway routing contracts for Cloudflare, Vercel and future gateways; implementation deferred.
-37. [ ] [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md) — Start a published call spec as an outgoing call through an authenticated API, end unanswered legs at a ring deadline, and prove both carriers by having Vxpipe call its own US numbers over a per-machine Tailscale Funnel managed by `bin/livetests`. Specification reviewed 2026-10-04; A–C (runner, public endpoint, carrier provisioning) implemented; Twilio number awaits Trust Hub approval.
+37. [x] [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md) — Start a published call spec as an outgoing call through an authenticated API, end unanswered legs at a ring deadline, and prove both carriers by having Vxpipe call its own US numbers over a per-machine Tailscale Funnel managed by `bin/livetests`. Specification reviewed 2026-10-04; A–D complete, including both carriers' real provisioning and a no-purchase repeat. HTTP admission persists room identity before dialing, acknowledges submission before shutdown and deduplicates retries. Details/inspection project bounded outcomes and dial timestamps, preserving first outcomes and closure evidence. Turn/duplex Morse and Google/GPT-Live fixtures have agent-owned openings, fixed-text validation, bounded assembly and ordinary playback authority. Last accepted A–D root evidence: 3,143 tests, zero failures, 98 excluded, seed 949782; Lean build/oracle/replay also passes. Final acceptance: 3,156 tests, zero failures, 103 excluded (seed 930118), all root gates, three runner shell suites and Lean build/oracle/replay pass. Both complete live directions pass (seeds 106192 and 662627), proving real signed ingress, reciprocal human speech and both room/archive closures. The five-second unanswered case passes with no_answer (seed 247633). Incoming termination is scoped to the exact incarnation, including authenticated Twilio bidirectional stop; all six named credentials have authentication evidence. The test node is stopped. Funnel startup can require bounded public-relay stabilization, and the marker audio proof does not claim the peer heard the very first utterance. A–E and all milestone acceptance gates are complete.
 38. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 39. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -366,7 +369,7 @@ The current platform already supports durable admission, streamed agent text/aud
 services, engine-owned local and remote tools, room-scoped Call Variables, asynchronous history,
 call inspection, multi-party mixing, presence-driven media policy, transfers, Telnyx and the common
 telephony boundary, and permitted S3-compatible recordings with private operator playback. The
-Twilio implementation still awaits its guarded live-provider proof. Container delivery and
+Twilio live media/private-transfer acceptance and its final common gates are complete. Container delivery and
 whole-call retention remain unimplemented. Reuse working code;
 do not recreate applications or label existing primitives as
 newly implemented.

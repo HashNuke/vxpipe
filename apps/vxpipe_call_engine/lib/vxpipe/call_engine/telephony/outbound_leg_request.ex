@@ -23,7 +23,8 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
     :service_id,
     :to
   ]
-  defstruct @enforce_keys ++ [service_reference: nil]
+  defstruct @enforce_keys ++
+              [service_reference: nil, purpose: :transfer, room_owner: nil, attempt_id: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -34,6 +35,9 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
           participant_id: String.t(),
           service_id: String.t(),
           service_reference: Vxpipe.CallEngine.Telephony.ServiceReference.t() | nil,
+          purpose: :initial | :transfer,
+          room_owner: pid() | nil,
+          attempt_id: reference() | nil,
           to: String.t()
         }
 
@@ -50,8 +54,15 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
         request.service_id
       ],
       &present?/1
-    ) and phone_number?(request.to)
+    ) and phone_number?(request.to) and valid_purpose?(request)
   end
+
+  defp valid_purpose?(%{purpose: :transfer}), do: true
+
+  defp valid_purpose?(%{purpose: :initial, room_owner: owner, attempt_id: attempt}),
+    do: is_pid(owner) and is_reference(attempt)
+
+  defp valid_purpose?(_request), do: false
 
   defp phone_number?(value), do: is_binary(value) and Regex.match?(@phone_number, value)
   defp present?(value), do: is_binary(value) and value != ""

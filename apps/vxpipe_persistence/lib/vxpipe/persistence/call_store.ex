@@ -13,6 +13,22 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def fetch_outgoing_by_key(repo, tenant_key, key),
+    do: Vxpipe.Persistence.OutgoingCallStore.fetch_by_key(repo, tenant_key, key)
+
+  @impl true
+  def claim_outgoing_call(repo, call, authorize),
+    do: Vxpipe.Persistence.OutgoingCallStore.claim(repo, call, authorize)
+
+  @impl true
+  def mark_outgoing_call_started(repo, call, incarnation, started),
+    do: Vxpipe.Persistence.OutgoingCallStore.mark_started(repo, call, incarnation, started)
+
+  @impl true
+  def mark_outgoing_call_failed(repo, call, reason, ended),
+    do: Vxpipe.Persistence.OutgoingCallStore.mark_failed(repo, call, reason, ended)
+
+  @impl true
   def insert_prepared_call(repo, call, token) do
     multi =
       Multi.new()
@@ -68,13 +84,20 @@ defmodule Vxpipe.Persistence.CallStore do
            {:ok, stored} <- repo.insert(token_changeset(token, selection_tenant(selection), call)) do
         to_join_token(stored, tenant_key, call_id)
       else
-        nil -> repo.rollback(:not_found)
-        :error -> repo.rollback(:participant_not_found)
+        nil ->
+          repo.rollback(:not_found)
+
+        :error ->
+          repo.rollback(:participant_not_found)
+
         {:error, %Ecto.Changeset{} = changeset} ->
-          reason = if unique_error?(changeset), do: :join_token_conflict, else: :join_token_insert_failed
+          reason =
+            if unique_error?(changeset), do: :join_token_conflict, else: :join_token_insert_failed
+
           repo.rollback(reason)
 
-        {:error, reason} -> repo.rollback(reason)
+        {:error, reason} ->
+          repo.rollback(reason)
       end
     end)
   end
@@ -158,12 +181,19 @@ defmodule Vxpipe.Persistence.CallStore do
           accepted_at: now
         }
       else
-        nil -> repo.rollback(:token_not_found)
+        nil ->
+          repo.rollback(:token_not_found)
+
         {:error, %Ecto.Changeset{} = changeset} ->
-          reason = if unique_error?(changeset), do: :participant_admission_unavailable, else: :admission_failed
+          reason =
+            if unique_error?(changeset),
+              do: :participant_admission_unavailable,
+              else: :admission_failed
+
           repo.rollback(reason)
 
-        {:error, reason} -> repo.rollback(reason)
+        {:error, reason} ->
+          repo.rollback(reason)
       end
     end)
   end
@@ -198,7 +228,7 @@ defmodule Vxpipe.Persistence.CallStore do
 
   defp fetch_selection(repo, tenant_key, call_spec_id, revision_number) do
     query =
-      from revision in StoredRevision,
+      from(revision in StoredRevision,
         join: call_spec in CallSpec,
         on: call_spec.id == revision.call_spec_id,
         join: tenant in Tenant,
@@ -207,6 +237,7 @@ defmodule Vxpipe.Persistence.CallStore do
           tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
             revision.revision == ^revision_number,
         select: {tenant, call_spec, revision}
+      )
 
     case repo.one(query) do
       nil -> {:error, :call_spec_revision_not_found}
@@ -216,24 +247,26 @@ defmodule Vxpipe.Persistence.CallStore do
 
   defp fetch_stored_call(repo, tenant_key, public_id, options \\ []) do
     query =
-      from call in Call,
+      from(call in Call,
         join: tenant in assoc(call, :tenant),
         join: revision in assoc(call, :call_spec_revision),
         join: call_spec in assoc(revision, :call_spec),
         where: tenant.key == ^tenant_key and call.public_id == ^public_id,
         select: {call, {tenant, call_spec, revision}}
+      )
 
     repo.one(with_lock(query, options))
   end
 
   defp fetch_stored_call_by_id(repo, id, options) when is_integer(id) do
     query =
-      from call in Call,
+      from(call in Call,
         join: tenant in assoc(call, :tenant),
         join: revision in assoc(call, :call_spec_revision),
         join: call_spec in assoc(revision, :call_spec),
         where: call.id == ^id,
         select: {call, {tenant, call_spec, revision}}
+      )
 
     repo.one(with_lock(query, options))
   end
@@ -246,7 +279,7 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   defp fetch_token(repo, digest) do
-    repo.one(from token in StoredToken, where: token.digest == ^digest, lock: "FOR UPDATE")
+    repo.one(from(token in StoredToken, where: token.digest == ^digest, lock: "FOR UPDATE"))
   end
 
   defp token_changeset(token, tenant, call) do
@@ -296,8 +329,8 @@ defmodule Vxpipe.Persistence.CallStore do
   defp token_binding(token, tenant_key, call_id, participant_key, participant_ref) do
     if token.tenant_key == tenant_key and token.call_id == call_id and
          token.participant_key == participant_key and token.participant_ref == participant_ref,
-      do: :ok,
-      else: {:error, :token_scope_mismatch}
+       do: :ok,
+       else: {:error, :token_scope_mismatch}
   end
 
   defp expected_scope(token, expected_scope) do
@@ -309,8 +342,8 @@ defmodule Vxpipe.Persistence.CallStore do
   defp call_scope(call, {tenant, _call_spec, _revision}, token, expected_scope) do
     if tenant.key == expected_scope.tenant_key and call.public_id == expected_scope.call_id and
          token.tenant_id == tenant.id and token.call_id == call.id,
-      do: :ok,
-      else: {:error, :token_scope_mismatch}
+       do: :ok,
+       else: {:error, :token_scope_mismatch}
   end
 
   defp token_available(%StoredToken{consumed_at: %DateTime{}}, _now),
@@ -325,15 +358,20 @@ defmodule Vxpipe.Persistence.CallStore do
   defp admission_available(repo, call, participant_ref) do
     already_admitted? =
       repo.exists?(
-        from admission in Admission,
+        from(admission in Admission,
           where:
             admission.call_id == ^call.id and admission.participant_ref == ^participant_ref and
               is_nil(admission.released_at)
+        )
       )
 
     cond do
-      call.state in [:ended, :failed] -> {:error, :call_unavailable}
-      already_admitted? -> {:error, :participant_admission_unavailable}
+      call.state in [:ended, :failed] ->
+        {:error, :call_unavailable}
+
+      already_admitted? ->
+        {:error, :participant_admission_unavailable}
+
       call.state == :prepared and participant_ref != call.entry_caller ->
         {:error, :participant_admission_unavailable}
 
@@ -371,13 +409,14 @@ defmodule Vxpipe.Persistence.CallStore do
 
   defp matching_admission?(repo, call, claim) do
     repo.exists?(
-      from admission in Admission,
+      from(admission in Admission,
         join: token in StoredToken,
         on: token.id == admission.join_token_id,
         where:
           admission.call_id == ^call.id and
             admission.participant_ref == ^claim.participant_ref and
             token.public_id == ^claim.token_id
+      )
     )
   end
 

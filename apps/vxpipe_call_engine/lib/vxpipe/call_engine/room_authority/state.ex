@@ -22,6 +22,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
   defstruct @enforce_keys ++
               [
                 startup: nil,
+                outgoing_call: nil,
+                outgoing_admission: nil,
                 media_policy_monitor: nil,
                 connection_monitors: %{},
                 connections: %{},

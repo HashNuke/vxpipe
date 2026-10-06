@@ -46,6 +46,9 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   end
 
   @impl true
+  def disconnect(_options, %OutgoingLegReference{purpose: :initial} = reference),
+    do: OutgoingLeg.abandon(reference.leg)
+
   def disconnect(_options, %OutgoingLegReference{} = reference) do
     case OutgoingLeg.disconnect(reference.leg, @disconnect_timeout) do
       :ok ->
@@ -88,26 +91,45 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
            media_admission,
            runtime_options
          ) do
-      {:ok, leg} -> await_leg(supervisor, leg, leg_id, max(deadline - clock.(), 0))
-      {:error, _reason} -> {:error, :outbound_connection_unavailable}
+      {:ok, leg} ->
+        await_leg(supervisor, leg, leg_id, max(deadline - clock.(), 0), request.purpose)
+
+      {:error, _reason} ->
+        {:error, :outbound_connection_unavailable}
     end
   end
 
-  defp await_leg(supervisor, leg, _leg_id, 0) do
+  defp await_leg(supervisor, leg, leg_id, 0, :initial),
+    do: unknown_reference(supervisor, leg, leg_id)
+
+  defp await_leg(supervisor, leg, _leg_id, 0, _purpose) do
     _ = DynamicSupervisor.terminate_child(supervisor, leg)
     {:error, :outbound_connection_unavailable}
   end
 
-  defp await_leg(supervisor, leg, leg_id, timeout) do
+  defp await_leg(supervisor, leg, leg_id, timeout, purpose) do
     case OutgoingLeg.await(leg, timeout) do
       :ok ->
-        {:ok, %OutgoingLegReference{leg: leg, leg_id: leg_id, supervisor: supervisor}}
+        {:ok,
+         %OutgoingLegReference{leg: leg, leg_id: leg_id, supervisor: supervisor, purpose: purpose}}
+
+      {:ok, :unknown} ->
+        unknown_reference(supervisor, leg, leg_id)
+
+      {:error, :telephony_leg_unavailable} when purpose == :initial ->
+        unknown_reference(supervisor, leg, leg_id)
 
       {:error, _reason} ->
         _ = DynamicSupervisor.terminate_child(supervisor, leg)
         {:error, :outbound_connection_unavailable}
     end
   end
+
+  defp unknown_reference(supervisor, leg, leg_id),
+    do:
+      {:ok,
+       %OutgoingLegReference{leg: leg, leg_id: leg_id, supervisor: supervisor, purpose: :initial},
+       :unknown}
 
   defp service_registry(options) do
     case Keyword.get(options, :service_registry) do

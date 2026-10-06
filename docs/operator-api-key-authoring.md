@@ -98,6 +98,10 @@ files were removed. The key-lifecycle step is committed as `c6b83d9`.
 
 ## Call-spec HTTP requests
 
+New sources use the [call direction schema](call-spec-direction.md): version `20261004.01`
+with exactly one `incoming_call` or `outgoing_call` block. Historical `20260915.01`
+sources keep their entry fields and remain accepted. Save/publication does not place calls.
+
 The authoring step implements the three operations for both URL scopes:
 
 | Method and suffix | Body | Result |
@@ -143,3 +147,52 @@ Design review, 2026-09-19: this follows the completed tenant-key and A2 authorin
 boundaries. It adds no database dependency to Gateway or Console dependency to Calls.
 The two delivery steps avoid combining key lifecycle and all authoring routes into
 one review. The checklist records implementation evidence separately from this review.
+
+## Starting an outgoing call
+
+Publish a spec with an `outgoing_call` block, then send a tenant API key with the `calls`
+scope. An `admin` key alone cannot start calls. This endpoint has no browser CORS grant.
+
+```http
+POST /api/tenants/:tenant_key/call-specs/:call_spec_id/outgoing-calls
+Authorization: Bearer <tenant calls key>
+Idempotency-Key: <opaque client request key>
+Content-Type: application/json
+
+{"initial_variables": {}}
+```
+
+Only `initial_variables` is accepted, as an object validated against the spec's declared
+sections; it can be omitted. Destination variables follow the protected references in the
+published spec. The request cannot override provider credentials or the originating number.
+
+`201` confirms creation and dial submission acknowledgement. The `call` object contains
+`id`, `call_spec_id`, pinned `revision`, `state` and `outgoing_outcome`. A prompt terminal
+event can end the room before the response. Call details and inspection expose the bounded
+`outgoing_outcome` and nullable `dial_submitted_at`, `answered_at`, and `dial_ended_at`.
+Outcomes are `answered`, `no_answer`, `busy`, `rejected`, `failed`, `machine`, or `unknown`.
+An answer remains `answered` after hangup. These timestamps describe locally observed
+lifecycle evidence; `dial_submitted_at` marks the one submission attempt, not proof that the
+carrier accepted it. Failed preparation has no dial timestamps. An interrupted submitted
+dial without answer evidence becomes `unknown`. Archive projection is asynchronous, so an
+immediate inspection may still contain null fields. The metadata contains no request keys,
+initial variables, credentials or provider payloads. Carrier acceptance remains checkpoint E.
+
+The optional `Idempotency-Key` is a nonblank UTF-8 value of 1–256 bytes, unique per tenant.
+Keep it for lost-response retries: the same spec ID and variables return the original call
+with `200` and never dial again, including while that call is admitting or after failure.
+Changing the request under the same key returns `409`. Without a key, each request creates
+a separate call. Starting another attempt requires a new key.
+
+Missing/invalid credentials return `401`; insufficient scope returns `403`; unknown or
+foreign specs return `404`; draft-only or incoming specs return `422`; invalid body/key
+returns `400`. Start/submission failures return `503` with a bounded public error. An
+`outgoing_submission_unknown` error has `retryable: false`: submission could have succeeded.
+Replay its original key to retrieve the existing call rather than creating another dial.
+
+Hosted persistence uses the existing enabled `call_admission` configuration. Embedded
+hosts must configure that backend and its Calls repositories. The nine focused HTTP tests
+pass, and all root gates passed after D6: 3,121 tests, zero failures, 98 excluded, seed 219668. Native
+STS opening and live carrier acceptance remain open. See the
+[outgoing example](../examples/call-specs/outgoing-morse.json) and
+[lifecycle projection contract](outgoing-call-runtime.md#outgoing-lifecycle-projection).

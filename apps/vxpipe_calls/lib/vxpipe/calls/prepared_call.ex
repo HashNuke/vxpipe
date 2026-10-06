@@ -3,7 +3,7 @@ defmodule Vxpipe.Calls.PreparedCall do
 
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
-  @derive {Inspect, except: [:initial_variables, :plan]}
+  @derive {Inspect, except: [:initial_variables, :plan, :idempotency_key, :idempotency_digest]}
   @enforce_keys [
     :id,
     :tenant_key,
@@ -24,9 +24,19 @@ defmodule Vxpipe.Calls.PreparedCall do
     :incarnation_id,
     :terminal_reason
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                outgoing_outcome: nil,
+                dial_submitted_at: nil,
+                answered_at: nil,
+                dial_ended_at: nil,
+                idempotency_key: nil,
+                idempotency_digest: nil
+              ]
 
   @type state :: :prepared | :admitting | :running | :ended | :failed
+  @type outgoing_outcome ::
+          :answered | :no_answer | :busy | :rejected | :failed | :machine | :unknown
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -40,6 +50,12 @@ defmodule Vxpipe.Calls.PreparedCall do
           initial_variables: map(),
           plan: ResolvedCallPlan.t(),
           plan_digest: binary(),
+          outgoing_outcome: nil | outgoing_outcome(),
+          dial_submitted_at: nil | DateTime.t(),
+          answered_at: nil | DateTime.t(),
+          dial_ended_at: nil | DateTime.t(),
+          idempotency_key: nil | String.t(),
+          idempotency_digest: nil | binary(),
           state: state(),
           room_id: String.t(),
           created_at: DateTime.t(),

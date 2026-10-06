@@ -565,7 +565,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
 
       assert :ok = emit_segment(recognizer, ref, text)
       next_ref = if unquote(failure) == :recognition_overflow, do: make_ref(), else: ref
-      assert :ok = emit_segment(recognizer, next_ref, "SECOND")
+      # The terminal event may retire its producer before a synchronous reply returns.
+      GenServer.cast(
+        recognizer,
+        {:emit, :turn_ended, [text: "SECOND", turn_ref: next_ref, endpointing: :provider_gap]}
+      )
+
       assert_receive {:vxpipe_sts_output_stt_unavailable, ^capability, unquote(failure)}, 1_000
       assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
       assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn, _}, 1_000

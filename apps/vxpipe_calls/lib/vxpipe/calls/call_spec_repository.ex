@@ -15,6 +15,8 @@ defmodule Vxpipe.Calls.CallSpecRepository do
             ) :: {:ok, CallSpecRevision.t()} | {:error, term()}
   @callback fetch_revision(context(), String.t(), String.t(), pos_integer()) ::
               {:ok, CallSpecRevision.t()} | {:error, :not_found}
+  @callback fetch_published_revision(context(), String.t(), String.t()) ::
+              {:ok, CallSpecRevision.t()} | {:error, :not_found | :call_spec_not_published}
   @callback publish_revision(context(), String.t(), String.t(), pos_integer(), DateTime.t()) ::
               {:ok, CallSpecRevision.t()} | {:error, term()}
   @callback resolve_route(context(), String.t(), String.t()) ::

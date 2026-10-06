@@ -35,7 +35,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
     %{
       "schema_version" => 1,
-      "call" => call(result.call),
+      "call" => call(result.call, result.prepared_call.plan.direction),
       "incarnation" => incarnation(result.prepared_call),
       "participants" => participants,
       "timeline" => timeline(result.history, participants),
@@ -46,8 +46,8 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     }
   end
 
-  defp call(%CallSummary{} = call) do
-    %{
+  defp call(%CallSummary{} = call, direction) do
+    value = %{
       "id" => call.id,
       "revision" => lifecycle_revision(call.state),
       "state" => Atom.to_string(call.state),
@@ -57,6 +57,17 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       "terminal_reason" => optional_atom(call.terminal_reason),
       "duration_ms" => duration_ms(call)
     }
+
+    if direction == :outgoing do
+      Map.merge(value, %{
+        "outgoing_outcome" => optional_atom(call.outgoing_outcome),
+        "dial_submitted_at" => optional_instant(call.dial_submitted_at),
+        "answered_at" => optional_instant(call.answered_at),
+        "dial_ended_at" => optional_instant(call.dial_ended_at)
+      })
+    else
+      value
+    end
   end
 
   defp lifecycle_revision(:prepared), do: 1

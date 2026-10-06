@@ -56,7 +56,7 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
   end
 
   test "pins supported text and HTTPS file sources into the resolved plan" do
-    assert CallSpec.schema_version() == "20260915.01"
+    assert CallSpec.schema_version() == "20261004.01"
 
     for {input, expected} <- [
           {%{
@@ -126,7 +126,7 @@ defmodule Vxpipe.CallEngine.CallSpec.OpeningAudioCompilerTest do
 
   defp call_spec_input do
     %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "reception",
       defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},

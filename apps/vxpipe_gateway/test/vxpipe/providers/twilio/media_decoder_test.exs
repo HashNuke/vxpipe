@@ -58,10 +58,55 @@ defmodule Vxpipe.Providers.Twilio.MediaDecoderTest do
             }} = decode(message)
   end
 
+  test "accepts both inbound DTMF track labels without accepting an outbound track" do
+    message = %{
+      "event" => "dtmf",
+      "sequenceNumber" => "3",
+      "streamSid" => @stream_sid,
+      "dtmf" => %{"track" => "inbound", "digit" => "1"}
+    }
+
+    assert {:ok, %Event{kind: :dtmf, digit: "1"}} = decode(message)
+
+    for track <- ["outbound", "outbound_track", nil, "unexpected"] do
+      assert {:error, :invalid_twilio_media_message} =
+               decode(put_in(message, ["dtmf", "track"], track))
+    end
+
+    assert {:error, :invalid_twilio_media_message} =
+             decode(Map.put(message, "streamSid", "MZffffffffffffffffffffffffffffffff"))
+  end
+
   test "rejects a start frame for another call before media attachment" do
     message = put_in(start_message(), ["start", "callSid"], "CAffffffffffffffffffffffffffffffff")
 
     assert {:error, :invalid_twilio_media_message} = decode(message)
+  end
+
+  test "a matching bidirectional stop is a terminal call event" do
+    message = %{
+      "event" => "stop",
+      "sequenceNumber" => "5",
+      "streamSid" => @stream_sid,
+      "stop" => %{"accountSid" => @account_sid, "callSid" => @call_sid}
+    }
+
+    assert {:ok,
+            %Event{
+              kind: :ended,
+              provider_event_id: "#{@stream_sid}:5",
+              occurred_at: ~U[2026-09-11 18:00:00Z],
+              stream_id: @stream_sid,
+              end_reason: :hangup
+            }} = decode(message)
+
+    for {path, other} <- [
+          {["streamSid"], "MZffffffffffffffffffffffffffffffff"},
+          {["stop", "accountSid"], "ACffffffffffffffffffffffffffffffff"},
+          {["stop", "callSid"], "CAffffffffffffffffffffffffffffffff"}
+        ] do
+      assert {:error, :invalid_twilio_media_message} = decode(put_in(message, path, other))
+    end
   end
 
   test "ignores authenticated protocol and playback acknowledgement frames" do

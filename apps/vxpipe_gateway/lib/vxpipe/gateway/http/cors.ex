@@ -43,6 +43,17 @@ defmodule Vxpipe.Gateway.HTTP.Cors do
        do: true
 
   defp backend_only_path?(["api", "telephony", "telnyx", _ingress_key, "events"]), do: true
+
+  defp backend_only_path?([
+         "api",
+         "tenants",
+         _tenant,
+         "call-specs",
+         _specification,
+         "outgoing-calls"
+       ]),
+       do: true
+
   defp backend_only_path?(["webhooks", "platform", "telnyx"]), do: true
   defp backend_only_path?(["webhooks", "tenants", _tenant, "telnyx"]), do: true
 

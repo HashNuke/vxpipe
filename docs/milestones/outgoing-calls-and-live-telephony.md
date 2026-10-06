@@ -1,6 +1,6 @@
 # Outgoing calls and two-call live telephony
 
-Status: specification reviewed (2026-10-04). Checkpoints A (`bin/livetests run`) and B (public test endpoint) are implemented; C (carrier provisioning) is implemented and Telnyx is provisioned, while the Twilio number purchase awaits the user's Trust Hub compliance approval.
+Status: complete (2026-10-05). Checkpoints A–E pass. Both providers' machine resources are provisioned; both answered directions and the five-second unanswered case pass live acceptance. All root gates pass with 3,156 tests, zero failures, 103 excluded (seed 930118), plus runner shell suites and Lean verification. Public Funnel startup can require stabilization before dialing.
 
 Prerequisites: [Telnyx calls](telnyx-calls.md), [Twilio through the common telephony
 contract](twilio-calls.md) (adapter, incoming and transfer dialing), [prepared call
@@ -167,8 +167,9 @@ As decided in the [harness decision](../live-telephony-harness.md):
     spec published on the other provider's number.
 - Speech: use the existing `gemini-3.5-flash-lite` model selection (as in
   `examples/call-specs/development.json`) and Deepgram STT/TTS. Each `handled_by` uses a `fixed`
-  first message with a distinct phrase (for example "vxpipe outbound check alpha" and "vxpipe
-  inbound check bravo"). Pass: each room's transcript contains the other side's phrase, then the
+  first message with a distinct short marker (`Alpha.` or `Bravo.`). It answers other speech
+  with only its own marker, allowing reciprocal proof if peer startup misses the first utterance.
+  Pass: each human participant's final transcript contains the other side's marker, then the
   test ends Room A and both rooms end. Morse speech is optional, cost-free extra evidence only.
 - Unanswered case: dial the other number while it has no published incoming route, with
   `ring_timeout_ms: 5000`. Assert Room A ends within the deadline plus a bounded margin with a
@@ -202,53 +203,53 @@ As decided in the [harness decision](../live-telephony-harness.md):
   untouched.
 - [x] Implement `telephony:provision` and `telephony:status` for Telnyx and Twilio.
 - [x] Read-only preflight used by live tests, with explicit failure messages.
-- [ ] Run once against real accounts and record the created resource names (no secrets/IDs that
-  identify billing). Telnyx done 2026-10-04; Twilio purchase awaits Trust Hub approval.
+- [x] Run once against real accounts and record the created resource names (no secrets/IDs that
+  identify billing). Both providers provisioned 2026-10-04; a no-purchase repeat reports all found.
 
 ### Checkpoint D: outgoing calls
 
 Implement in this order; each sub-checkpoint is a coherent commit with its tests and docs.
 
 D1. Call spec schema (CallEngine, Calls)
-- [ ] Red validation cases: exactly one of `incoming_call`/`outgoing_call`; caller is a human
+- [x] Red validation cases: exactly one of `incoming_call`/`outgoing_call`; caller is a human
   with a `receive` + `start_call` connection; callee is a human with a phone `dial` connection;
   `handled_by` exists and differs; `ring_timeout_ms` default and bounds; transfer dial unchanged.
-- [ ] New schema version `20261004.01`; `20260915.01` specs still parse (translated) and save,
+- [x] New schema version `20261004.01`; `20260915.01` specs still parse (translated) and save,
   publish and run; examples and authoring docs updated.
-- [ ] Saving an outgoing spec creates no inbound participant or telephony route.
+- [x] Saving an outgoing spec creates no inbound participant or telephony route.
 
 D2. Plan and persistence (CallEngine, Calls, Persistence)
-- [ ] Resolved plan carries direction and ring timeout; plan digest covers them; historical
+- [x] Resolved plan carries direction and ring timeout; plan digest covers them; historical
   stored plans decode as incoming.
-- [ ] Migration: `outgoing_outcome`, `idempotency_key`, `idempotency_digest` on calls, with a
+- [x] Migration: `outgoing_outcome`, `idempotency_key`, `idempotency_digest` on calls, with a
   partial unique index on tenant + key.
 
 D3. Engine flow (CallEngine)
-- [ ] Room start with `handled_by`; dial through the outbound connector; callee media joins as
+- [x] Room start with `handled_by`; dial through the outbound connector; callee media joins as
   an ordinary participant; first message after the callee's media connects.
-- [ ] Ring deadline and every dial outcome end the room exactly once; late/duplicate callbacks
+- [x] Ring deadline and every dial outcome end the room exactly once; late/duplicate callbacks
   ignored; remote hangup after answer uses the existing lifecycle.
 
 D4. Gateway outcome propagation and media join (Gateway)
-- [ ] Outgoing leg reports the normalized end reason to the room; transfer behavior unchanged.
-- [ ] Outbound media for an outgoing entry joins as a participant, not a transfer destination.
+- [x] Outgoing leg reports the normalized end reason to the room; transfer behavior unchanged.
+- [x] Outbound media for an outgoing entry joins as a participant, not a transfer destination.
 
 D5. API (Gateway HTTP, Calls)
-- [ ] Route, `calls`-scope authentication, published revision, error shapes, `201` response.
-- [ ] Optional `Idempotency-Key`: same key and request returns the original call without a
+- [x] Route, `calls`-scope authentication, published revision, error shapes, `201` response.
+- [x] Optional `Idempotency-Key`: same key and request returns the original call without a
   second dial; same key with a different request returns 409; absent key dials every time;
   concurrent duplicates dial once.
 
 D6. Observability and docs
-- [ ] Call details/inspection show `outgoing_outcome`, dial submitted/answered/ended times;
+- [x] Call details/inspection show `outgoing_outcome`, dial submitted/answered/ended times;
   no private payloads.
-- [ ] Architecture, user API docs, call spec reference and examples.
+- [x] Architecture, user API docs, call spec reference and examples.
 
 ### Checkpoint E: live acceptance
 
-- [ ] Twilio → Telnyx and Telnyx → Twilio answered calls with two-way audio evidence.
-- [ ] Unanswered dial ends at its ring deadline.
-- [ ] Record evidence here and in the index; record carrier limitations honestly.
+- [x] Twilio → Telnyx and Telnyx → Twilio answered calls with two-way audio evidence.
+- [x] Unanswered dial ends at its ring deadline.
+- [x] Record evidence here and in the index; record carrier limitations honestly.
 
 ## Implementation guide
 
@@ -347,30 +348,33 @@ changing it, and keep each change in the application that owns it.
   environment variables on a host with a local PostgreSQL socket.
 - Never read or edit `~/.config/vxpipe/live_providers.env`; credentials reach tests only through
   `bin/livetests run`.
-- Live commands (checkpoint E), after the Twilio number exists:
+- Live commands (checkpoint E), after D's runtime/API implementation:
 
   ```shell
   bin/livetests telephony:status
   bin/livetests run --only live_telephony apps/vxpipe_console/test/integration
   ```
 
-- Blocker for E: Twilio Trust Hub approval, then `bin/livetests telephony:provision
-  --allow-purchase` (buys one Twilio US number for this machine).
+- Provisioning blocker cleared 2026-10-04 after the user created the Twilio compliance profile.
+  No additional number purchase is needed. A–E are implemented and accepted; use selected
+  cases above for later verification rather than running every live provider.
 
 ## Acceptance and failure checks
 
-- [ ] A saved, published outgoing call spec places a call through either carrier with no
+- [x] A saved, published outgoing call spec places a call through either carrier with no
   provider-specific room logic, and its agent introduces itself once the callee answers.
-- [ ] Non-answer outcomes end the room once; callbacks cannot redial or revive it.
-- [ ] Cross-tenant, unauthenticated, draft-only or incoming-spec requests never dial.
-- [ ] A live run needs no personal phone number and leaves no Funnel mapping or node running
+- [x] Non-answer outcomes end the room once; callbacks cannot redial or revive it.
+- [x] Cross-tenant, unauthenticated, draft-only or incoming-spec requests never dial.
+- [x] A live run needs no personal phone number and leaves no Funnel mapping or node running
   that it started.
-- [ ] Provisioning without `--allow-purchase` never spends money; re-running changes nothing.
+- [x] Provisioning without `--allow-purchase` never spends money; re-running changes nothing.
 
 ## Scope boundaries
 
-No automatic redial, voicemail delivery, campaign or bulk dialing, scheduling, carrier fallback, number release, Twilio trial-account support, or changes to
-account-wide carrier settings. Destination rate limiting and allowed-destination policy are
+No automatic redial, voicemail delivery, campaign or bulk dialing, scheduling, carrier fallback,
+number release or Twilio trial-account support. Account-wide carrier settings need explicit
+authorization; the user approved only low-risk US/Canada voice dialing on 2026-10-05, with both
+high-risk categories disabled. Destination rate limiting and allowed-destination policy are
 deferred: the carriers' own destination controls (Telnyx outbound profile countries, Twilio Geo
 Permissions) apply meanwhile, and per-tenant limits must be added before API keys are issued to
 tenants other than the operator.
@@ -457,5 +461,280 @@ telnyx   ... found (all three)
 twilio   number                   missing (re-run with --allow-purchase to buy a US local number)
 ```
 
-Blocked: the Twilio number, and therefore every live call, waits for the user to complete
-Twilio Trust Hub verification.
+At this initial attempt, the Twilio number and two-provider live acceptance waited for the user
+to complete Twilio Trust Hub verification. This blocker was subsequently cleared, as recorded below.
+
+### Provisioning recheck at the user's request
+
+On 2026-10-04, before proceeding with D, `telephony:status` confirmed the existing Telnyx
+resources and missing Twilio number. One `telephony:provision --allow-purchase` attempt reused
+all Telnyx resources and again failed at Twilio with HTTP 401, primary compliance profile not
+approved. No call was placed and no new purchase succeeded.
+
+All six requested settings are present in the runner's child environment. Tailscale OAuth
+accepted the client ID/secret pair; the existing node and Funnel served the production Gateway
+public endpoint test (1 test, zero failures, seed 530653), then were stopped. Telnyx REST
+authentication works and its public key has valid 32-byte Ed25519 encoding; the key's account
+match remains unverified until real signed callbacks arrive. Twilio REST discovery works, so
+the purchase blocker is the reported compliance restriction. See the
+[verification table](../live-telephony-harness.md#provisioning-verification-2026-10-04) and
+[labnote](../../labnotes/20261004-2330-telephony-provisioning-check.md).
+
+At this recheck, checkpoint C's real-account gate remained unchecked. Checkpoints D and E remained open. The next
+local implementation sequence remains D1 schema, D2 plan/persistence, D3 engine, D4 media/outcomes,
+D5 API/idempotency, and D6 observability/documentation; the user requested provisioning first.
+
+### Successful provisioning after Trust Hub setup
+
+The user reported creating a Twilio compliance profile. One subsequent
+`bin/livetests telephony:provision --allow-purchase` reused the three Telnyx resources,
+purchased one Twilio US local number and set its Voice URL/method to this machine's fixed route.
+Both providers returned `ready`. A subsequent run **without** `--allow-purchase` reported
+all resources `found` and exited successfully. Resource names are `vxp-test-rocksalt` for the
+Telnyx outbound profile, Voice API application and number tag, and for the Twilio number's
+FriendlyName. Provisioning is complete; signed carrier callbacks and call audio still await E.
+
+### Accepted direction schema and storage checkpoint
+
+D1 and D2 passed all root gates on 2026-10-04: format, compile with warnings as errors,
+strict Credo, unused dependency check, and the full umbrella suite (3,050 tests reported,
+zero failures, 98 excluded, seed 263210). Focused tests went red before the direction,
+plan defaults, storage metadata and uniqueness changes. Legacy sources continue to save,
+publish and run; new incoming source runs, outgoing publication creates no inbound route,
+and the ring deadline changes the deterministic preparation digest. All three livetests
+shell suites passed with fake carriers. Both updated JSON examples parsed successfully.
+See the [direction reference](../call-spec-direction.md) and
+[checkpoint labnote](../../labnotes/20261004-2326-outgoing-direction-schema.md).
+
+The selected public endpoint test also passed through the normal runner and carrier preflight
+(1 test, zero failures, seed 771983), then stopped the test node/Funnel. D3–D6 and E remain
+unchecked; no live calls or paid AI/speech tests were run during this checkpoint.
+
+### Initial outgoing runtime checkpoint (2026-10-05)
+
+The engine prepares the handler before a single supervised dial and holds first-message
+speech until accepted submission and callee media. A correlated owner monitor and one
+absolute ring deadline normalize non-answer exits, reject delayed answers after deadline,
+and cancel pending submission work when the room stops. The readiness budget includes
+ring time; an early media attachment is reconciled after submission.
+
+Gateway forwards authenticated outcomes to the exact room attempt, attaches initial media
+with main admission, and leaves DTMF transfer acceptance in the transfer path. Initial
+room loss cancels its known carrier leg. An uncertain submission retains a bounded owner
+for late identity/acceptance cleanup and never redials; timeout does not destroy that owner.
+Configured AMD holds media until classification, so a machine result stops before greeting.
+Unknown classification permits an answered call without treating it as human proof.
+
+Red-green evidence: 64 focused engine tests and 27 Gateway tests, zero failures. Format,
+compile with warnings as errors, strict Credo and unused dependency checks passed. Full
+umbrella verification for this runtime checkpoint passed: 3,078 tests, zero failures. See the
+[runtime labnote](../../labnotes/20261004-2357-outgoing-room-runtime.md).
+The [runtime decision](../outgoing-call-runtime.md) records ownership, uncertain submission
+cleanup and the rejected transfer/synchronous-dial alternatives.
+
+D3 stays unchecked until native STS generated opening and the remaining runtime contracts
+are verified. D4 passed all root gates: 3,078 tests, zero failures across all nine
+applications. D5 must add an initial submission
+acknowledgement that survives a prompt terminal outcome; D6 must project the new outcomes
+and timestamps through archive, call details and inspection. No live calls were placed.
+
+
+### Durable admission checkpoint (2026-10-05)
+
+D5's Calls/persistence slice passes focused tests: one tenant-scoped admitted outgoing
+call from the explicit publication pointer; no join token; calls-scope authorization;
+canonical idempotency replay/conflict; one winner among eight concurrent requests;
+fresh credential authorization inside the insertion transaction; duplicate recovery
+after database rollback. Focused regressions passed: Calls 28 tests, Persistence 30
+tests, zero failures. HTTP/runtime submission acknowledgement remains unimplemented,
+so D5's acceptance tasks remain unchecked. See the
+[admission labnotes](../../labnotes/20261005-0037-outgoing-call-admission.md) and
+[runtime decision](../outgoing-call-runtime.md). All root gates now pass for this slice: 3,088 tests, zero failures, 98 excluded,
+seed 303119 across nine applications; format, compilation with warnings as errors,
+strict Credo and unused dependency checks passed. No live calls ran.
+
+### HTTP submission checkpoint (2026-10-05, accepted)
+
+The tenant outgoing route now requires `calls` scope and a published outgoing spec,
+returns bounded management errors and waits for a correlated submission acknowledgement.
+Same-key replays return the original call directly; changed requests conflict, and concurrent
+duplicates submit one dial. No-key requests create independent calls. The room defers startup
+until its running state and incarnation are durably saved. Projection failure, cancellation
+or controller loss before release prevents dialing. Accepted/unknown acknowledgement survives
+a prompt terminal exit, including an authenticated end before the worker returns.
+
+Focused regressions passed: 69 engine tests, 50 Gateway tests, seven Calls workflow tests and
+five PostgreSQL workflow tests. Root format, warnings-as-errors compile, strict Credo and
+unused dependency checks passed. The full root run passed across all nine applications:
+3,104 tests, zero failures, 98 excluded, seed 755205. D5 is complete. Lean build, oracle and
+Elixir replay passed after the cutover fixture adjustment. See the [HTTP labnotes](../../labnotes/20261005-0102-outgoing-http-submission.md)
+and [runtime decision](../outgoing-call-runtime.md). No carrier calls ran; D3 native STS,
+D6 outcome/timestamp projection was accepted in the following checkpoint; E remains open.
+
+## D6 acceptance: outgoing lifecycle projection (2026-10-05)
+
+The engine emits one bounded dial-submitted, answered and ended fact, also visible through
+live inspection. Calls validates the closed payloads. Persistence archives and projects them
+under the tenant/call/incarnation lock, retaining the first outcome and timestamps. Answered
+survives hangup; a later answer cannot replace a non-answer terminal result. Archive closure
+fills missing dial-end evidence after abrupt room termination. Unproven interrupted attempts
+are unknown; known preparation failure is failed without fabricated dial times. Closure after
+HTTP failure retains the failed state/reason. SQL rejects inverted timestamps and an answer
+timestamp without an answered outcome; closure clocks retain microseconds.
+
+Existing call-details/inspection endpoints expose `outgoing_outcome`, `dial_submitted_at`,
+`answered_at` and `dial_ended_at`, with no request keys or provider payloads. Incoming inspection
+retains its call-object shape. Projection is asynchronous, so fields can remain null until
+evidence is stored. The [runtime contract](../outgoing-call-runtime.md#outgoing-lifecycle-projection),
+[API guide](../operator-api-key-authoring.md#starting-an-outgoing-call), direction reference and
+[complete outgoing example](../../examples/call-specs/outgoing-morse.json) are updated.
+The example parses and compiles through the real capability registry without provider requests.
+
+Focused checks passed: 32 engine/archive tests, 19 outgoing PostgreSQL tests, the 43-test
+persistence regression group before the last preparation-closure addition, and 10 Console
+inspection tests. All five root gates passed: format, warnings-as-errors compilation,
+strict Credo (1,189 files), unused dependencies and **3,121 tests, zero failures, 98 excluded**,
+seed **219668**, across all nine applications. Full persistence includes the last added test.
+Evidence and fixture corrections are recorded in the
+[D6 labnotes](../../labnotes/20261005-0203-outgoing-lifecycle-projection.md).
+No rendered UI change or browser verification is claimed by this API projection checkpoint.
+No carrier calls or paid AI/speech requests ran. D3 native STS opening and all E acceptance
+cases remain unchecked; the milestone itself is not complete.
+
+
+### Native turn STS opening checkpoint (2026-10-05)
+
+Turn Morse generated/fixed openings now wait for callee media, speak once, and publish
+agent evidence without a fake caller turn. Google fixture coverage includes both response
+profiles, generated opening, exact provider-transcript validation before fixed output,
+interruption, missing/different text, bounded assembly and rejection of a replacement cue.
+84 focused tests pass (seed 34032). See the [native opening decision](../native-sts-opening.md)
+and its [labnotes](../../labnotes/20261005-0227-native-sts-opening.md) for red/green evidence
+and limitations. All final root gates pass: 3,134 tests, zero failures, 98 excluded,
+seed 269987; strict Credo checks 1,193 files with no issues. Final Lean build/oracle/replay
+also pass. GPT-Live/Morse duplex support remains open; D3 stays unchecked. No paid request or live carrier call was made for these tests.
+
+### Native duplex STS opening checkpoint (2026-10-05)
+
+Morse duplex now queues generated `HELLO` or exact fixed text as an agent operation,
+without a caller turn or `RECEIVED` prefix. Outgoing room tests decode actual credited PCM
+after the callee media gate and reject repeated-answer playback.
+
+GPT-Live now uses a once-only trusted instruction, retaining the original engine response
+context while real input silence advances its timeline. Fixed output stays private until
+an acoustic burst closes and its aligned transcript exactly matches the requested text
+within captured PCM duration. Missing/altered text, interruption, connection loss, bounds
+or deadline failures release no unverified audio. Verified output still requires ordinary
+room admission and credits; no hidden model/TTS or fake caller input is introduced.
+The [opening decision](../native-sts-opening.md) records the acoustic-boundary and provider
+transcript limits; [duplex labnotes](../../labnotes/20261005-0318-duplex-sts-opening.md)
+record red/green evidence and refactoring.
+
+161 focused duplex regressions pass (seed 546518). Final root gates all pass: formatting,
+warnings-as-errors compilation, strict Credo (1,196 files, no issues), unused dependencies,
+and **3,143 tests, zero failures, 98 excluded, seed 949782** across nine applications.
+Lean build/oracle/replay also passes (one replay test, seed 145929). D3 is now checked;
+the milestone index remains unchecked until all E gates pass.
+
+Fresh read-only carrier status still finds both machine numbers and the Telnyx profile/app.
+A child-only presence check reports all six requested telephony/Tailscale variables plus
+Gemini and Deepgram keys present, without displaying values or making provider requests.
+No calls, paid speech/model requests, purchases, or commits occurred in this checkpoint.
+All three E acceptance cases remain open; preparation is recorded in the
+[acceptance labnotes](../../labnotes/20261005-0347-live-telephony-acceptance.md).
+
+## E harness implementation and partial live evidence (2026-10-05)
+
+Console now owns the assembled encrypted two-carrier fixture and opt-in live cases in
+`test/integration/live_telephony_test.exs`. Local checks cover publication/binding, API
+authentication, native speech preparation while dialing is held, one production outgoing
+submission through a simulated carrier, and signed incoming admission over the real HTTP
+listener. **Five tests pass, four live cases excluded** (seed 700659). Twilio rejection
+telemetry exposes only bounded numeric status/code and operation; **eight adapter tests pass**
+(seed 678850), including poisoned/non-numeric codes. Return values and retry behavior are
+unchanged. Strict Credo, formatting, warnings-as-errors compilation and unused dependency
+checks pass. The pre-hangup-repair root suite reports **3,151 tests, zero failures, 103 excluded**
+(seed 930118). Console's 200 default tests pass; the loopback HTTP case is now explicitly
+integration-tagged and passes when selected. Earlier root runs failed Engine's source-cutover
+busy poll and Gateway's synthetic phone-transfer recovery speech. Bounded cutover state
+polling and an acknowledged recovery-stream delta now pass both complete owning suites in
+the umbrella run (1,881 Engine and 545 Gateway tests). At this stage the three live gates
+remained open; the final acceptance below supersedes that status.
+
+The user approved enabling only low-risk US/Canada voice dialing after Twilio error 21215.
+One-country (`US`) API update and a subsequent GET verified low-risk true, both high-risk
+flags false. Provisioning itself still never changes Geo Permissions automatically.
+
+The Console lane now distinguishes local tailnet HTTPS from public Funnel ingress. It
+resolves public IPv4 relay addresses, preserves hostname/SNI and certificate verification,
+and requires bounded public health before a paid dial. Its signed synthetic public case
+passed (seed 217713) while a parent kept the node online. Immediate public runs can still
+fail before submission; the first unanswered selection did so (seed 743241), placing no call.
+This prevents an unavailable public endpoint from consuming an otherwise valid dial attempt.
+
+A selected Twilio → Telnyx call created its receiving room via the real signed Telnyx
+platform webhook and was answered: **TELNYX_PUBLIC_KEY is now verified against this account's
+callbacks**. Reciprocal remote transcripts failed (seed 778738); Twilio reported WebSocket
+protocol error 31924. Telnyx delivery records show HTTP 200 for initiated/answered and later
+streaming stop. No two-way audio or natural room/archive closure claim follows from this.
+The Telnyx → Twilio attempt also lacks answered audio evidence. A selected native Deepgram
+TTS probe passed real synthesis/completion (seed 15667), and read-only speech/model auth
+checks returned HTTP 200. All three E acceptance gates remain unchecked.
+
+A further selected call (seed 386272) verified Twilio's exact WSS signature, both HTTP 101
+upgrades, both carrier start formats and incoming media. It exposed a local fixture error:
+24 kHz TTS was rejected by Gateway's 48 kHz output contract. A focused wire-URL assertion
+failed with 24000; changing fixture TTS to 48000 passes all five local cases (seed 687328).
+Both carriers' authentication now has live evidence, but reciprocal speech and closure
+still require acceptance. Production signature/media validation was not changed.
+
+Short marker greetings and marker-only replies now pass reciprocal human transcripts in
+the Twilio-to-Telnyx direction (seeds 327674 and 201787). A stale durable incarnation ID in
+the monitor helper was reproduced locally and repaired using the public live participant
+snapshot; five local cases pass (seed 54330) and Console's 200 default cases pass (seed 210099).
+At that point the live closure check confirmed the outgoing room ended but the incoming room
+missed its ten-second bound. Production `CallAdmission.handle_live_event/5` then had
+no terminal-event handler. E remained open pending an exact-incarnation carrier hangup path,
+both complete directions and the unanswered case. The sequential selection stopped at the
+first failure and did not dial the remaining two cases.
+
+## E live acceptance and incoming hangup repair (2026-10-05)
+
+All three required live cases pass on the repaired incoming lifecycle:
+
+| Selected case | Seed | Required evidence |
+| --- | --- | --- |
+| Public signed admission (no carrier call) | 784537 | Public Funnel and signed synthetic incoming admission |
+| Twilio → Telnyx | 106192 | Real signed ingress, both human remote marker transcripts, both room monitors DOWN, both durable archives closed, answered outcome and dial timestamps |
+| Telnyx → Twilio | 662627 | The same reciprocal speech, signed media and natural closure requirements in the opposite direction |
+| Unanswered Twilio → Telnyx | 247633 | No receiving route; one submission; `no_answer`; no answer timestamp; five-second ring bound plus the existing bounded margin |
+
+Each selection passed one test with eight excluded. The parent kept the test node online
+between selections, submitted each carrier case once and stopped the node afterwards.
+`tools:status` confirms it is stopped. No personal destination, new purchase, retry or further
+account-wide setting change was needed.
+
+Gateway now forwards an authenticated, correlated incoming terminal event before or after
+media start. Engine ends only the exact tenant/room/incarnation through its trusted public
+`end_call/3` operation; ordinary supervision closes the archive. Twilio's owned bidirectional
+stream stop is normalized as terminal only after account/call/stream validation. Generic
+socket disconnect and Telnyx stream-stop behavior retain their existing semantics. See the
+[hangup decision](../carrier-hangup-lifecycle.md).
+
+Focused evidence: 19 Engine lifecycle tests, 43 Gateway carrier/decoder/ingress tests, and
+20 lifecycle/platform-tool tests on the final policy extraction pass. Strict Credo, formatting,
+warnings-as-errors compilation, unused dependencies and Lean build/oracle/replay pass. The
+full umbrella recheck passes **3,156 tests, zero failures, 103 excluded** (seed 930118).
+The last accepted predecessor was 3,151 tests; the repaired lifecycle adds five focused
+Engine/Gateway cases. Final EndCall policy extraction additionally passes its 20-test
+lifecycle/platform-tool group. All E requirements and the final root gate are accepted.
+
+Funnel startup can close some advertised public relay connections while others work.
+Acceptance used a bounded ten-minute stabilization pass requiring all advertised IPv4 relays
+healthy for three consecutive probes before the free admission check and paid selections.
+This does not prove immediate startup availability; ordinary selected runs can fail at public
+health before dialing. No paid test is automatically retried. See the
+[final checkpoint labnotes](../../labnotes/20261005-0927-carrier-hangup-lifecycle.md).
+
+See [selected commands and evidence](../live-telephony-harness.md#e-implementation-and-live-evidence-2026-10-05)
+and the [acceptance labnotes](../../labnotes/20261005-0347-live-telephony-acceptance.md).

@@ -41,10 +41,15 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
               reference(),
               {:audio, binary()}
               | {:text, reference(), String.t()}
+              | {:opening, reference(), Vxpipe.CallEngine.Speech.Opening.t()}
               | {:activity, :started | :ended}
             ) :: :ok | {:error, :busy | :unsupported_operation | :session_failed}
   @optional_callbacks submit_input: 3
   @callback push_text(pid(), reference(), String.t()) :: :ok | {:error, atom()}
+  @doc "Start agent speech without publishing caller input; fixed mode must preserve exact text."
+  @callback begin_opening(pid(), reference(), Vxpipe.CallEngine.Speech.Opening.t()) ::
+              :ok | {:error, atom()}
+  @optional_callbacks begin_opening: 3
   @callback input_activity(pid(), :started | :ended) :: :ok | {:error, atom()}
   @doc "A bounded, provider-owned proof that no prior input can produce later native evidence."
   @callback input_quiescent?(pid()) :: boolean()

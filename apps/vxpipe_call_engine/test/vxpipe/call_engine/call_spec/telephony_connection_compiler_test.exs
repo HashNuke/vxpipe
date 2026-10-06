@@ -165,7 +165,7 @@ defmodule Vxpipe.CallEngine.CallSpec.TelephonyConnectionCompilerTest do
 
   defp base_call_spec do
     %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "reception",
       call_variables: %{

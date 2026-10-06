@@ -108,6 +108,24 @@ defmodule Vxpipe.Persistence.CallSpecStore do
   end
 
   @impl true
+  def fetch_published_revision(repo, tenant_key, call_spec_id) do
+    query =
+      from(call_spec in CallSpec,
+        join: tenant in assoc(call_spec, :tenant),
+        left_join: revision in StoredRevision,
+        on: revision.id == call_spec.published_revision_id,
+        where: tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id,
+        select: {call_spec, revision}
+      )
+
+    case repo.one(query) do
+      nil -> {:error, :not_found}
+      {_call_spec, nil} -> {:error, :call_spec_not_published}
+      {_call_spec, revision} -> fetch_revision(repo, tenant_key, call_spec_id, revision.revision)
+    end
+  end
+
+  @impl true
   def publish_revision(repo, tenant_key, call_spec_id, revision_number, published_at) do
     multi =
       Multi.new()
@@ -119,8 +137,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
         {:ok, count}
       end)
-      |> Multi.run(:disable_old_telephony_routes, fn repo,
-                                                     %{selection: {call_spec, _revision}} ->
+      |> Multi.run(:disable_old_telephony_routes, fn repo, %{selection: {call_spec, _revision}} ->
         route_query = telephony_routes_for_call_spec(call_spec.id)
         {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
         {:ok, count}
@@ -151,9 +168,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
     case repo.transaction(multi) do
       {:ok, %{call_spec: call_spec, selection: {_call_spec, revision}}} ->
         routes =
-          repo.all(
-            from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id)
-          )
+          repo.all(from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id))
 
         telephony_routes =
           repo.all(

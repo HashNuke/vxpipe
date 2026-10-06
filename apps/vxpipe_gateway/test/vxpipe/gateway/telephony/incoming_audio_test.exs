@@ -2,10 +2,34 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudioTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.Gateway.Telephony.IncomingAudio
   alias Vxpipe.Providers.Twilio.PCMU.Codec
 
   @target %{codec: :linear16, sample_rate: 16_000, channels: 1}
+
+  test "early private destination packets drop while their input routes are unallocated" do
+    attachment = %ConnectionAttachment{
+      room_monitor: make_ref(),
+      media_ingress: nil,
+      admission: :transfer_preparation,
+      transfer_attempt_id: "private-attempt"
+    }
+
+    for packet <- [frame(:pcmu, 8_000, <<255>>), frame(:opus, 16_000, <<0>>)] do
+      assert {:drop, nil} = IncomingAudio.deliver(__MODULE__, attachment, nil, packet, nil, nil)
+
+      assert {:unavailable, nil} =
+               IncomingAudio.deliver(
+                 __MODULE__,
+                 %{attachment | admission: :main},
+                 nil,
+                 packet,
+                 nil,
+                 nil
+               )
+    end
+  end
 
   test "readiness advertises normalized PCM for Telnyx Opus and Twilio μ-law" do
     assert {:ok, %{codec: :linear16, sample_rate: 16_000, channels: 1}} =

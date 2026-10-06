@@ -27,6 +27,34 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
 
   @tenant_key "tenantkey1234567"
 
+  test "shows only normalized outgoing lifecycle metadata" do
+    inspection = result()
+    submitted = inspection.call.started_at
+    answered = DateTime.add(submitted, 1, :second)
+    ended = DateTime.add(submitted, 2, :second)
+
+    call = %{
+      inspection.call
+      | outgoing_outcome: :answered,
+        dial_submitted_at: submitted,
+        answered_at: answered,
+        dial_ended_at: ended
+    }
+
+    prepared = inspection.prepared_call
+    prepared = %{prepared | plan: %{prepared.plan | direction: :outgoing}}
+
+    response =
+      CallInspectionPresenter.present(%{inspection | call: call, prepared_call: prepared})
+
+    assert response["call"]["outgoing_outcome"] == "answered"
+    assert response["call"]["dial_submitted_at"] == "2026-09-16T09:00:01.000Z"
+    assert response["call"]["answered_at"] == "2026-09-16T09:00:02.000Z"
+    assert response["call"]["dial_ended_at"] == "2026-09-16T09:00:03.000Z"
+    refute Map.has_key?(response["call"], "initial_variables")
+    refute Map.has_key?(response["call"], "idempotency_key")
+  end
+
   test "converts complete database state into the versioned snapshot" do
     response = CallInspectionPresenter.present(result())
 

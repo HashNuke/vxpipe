@@ -29,6 +29,9 @@ defmodule Vxpipe.Calls.CallFact do
     :participant_transfer_completed,
     :participant_transfer_failed,
     :usage_observed,
+    :outgoing_dial_submitted,
+    :outgoing_call_answered,
+    :outgoing_dial_ended,
     :archive_stream_closed
   ]
   @kinds_by_name Map.new(@kinds, fn kind -> {Atom.to_string(kind), kind} end)
@@ -99,7 +102,12 @@ defmodule Vxpipe.Calls.CallFact do
          :ok <- required(attributes),
          :ok <- validate_identity(attributes),
          :ok <- validate_kind_and_sequence(attributes),
-         {:ok, attributes} <- canonicalize_json(attributes) do
+         {:ok, attributes} <- canonicalize_json(attributes),
+         :ok <-
+           Vxpipe.Calls.OutgoingCallFact.validate(
+             Keyword.fetch!(attributes, :kind),
+             Keyword.fetch!(attributes, :payload)
+           ) do
       {:ok, struct!(__MODULE__, attributes)}
     else
       _invalid -> {:error, :invalid_call_fact}

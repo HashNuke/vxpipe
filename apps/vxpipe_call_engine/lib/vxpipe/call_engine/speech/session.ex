@@ -306,6 +306,18 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def push_text(_allocation, _text, _options), do: {:error, :invalid_text}
 
+  @doc "Admit an engine-owned opening through the bounded STS input slot, without caller evidence."
+  def begin_opening(allocation, opening, options \\ []) do
+    if Vxpipe.CallEngine.Speech.Opening.valid?(opening) do
+      with {:ok, command} <- input_command(allocation, options) do
+        command = Map.put(command, :operation, {:begin_opening, make_ref(), opening})
+        submit_input(allocation, command, <<>>)
+      end
+    else
+      {:error, :invalid_opening}
+    end
+  end
+
   @doc """
   Deliver an ordered external turn-control boundary to an STS allocation
   through the same input slot as audio and text. Unavailable in

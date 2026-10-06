@@ -259,7 +259,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
 
   defp plan(rate, recognizer, human_capabilities \\ %{}) do
     source = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
       wait_sounds: %{call_setup: nil},

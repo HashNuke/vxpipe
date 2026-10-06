@@ -5,6 +5,11 @@ text-turn, Gemini model-inference, Deepgram Flux audio-input, and Deepgram Flux
 text-to-speech, typed interruption, and provider-driven spoken barge-in slices
 are implemented, along with bounded asynchronous private call history
 
+The [initial outgoing-call runtime](outgoing-call-runtime.md) describes direction,
+deferred durable admission, one-shot dial ownership and bounded lifecycle projection.
+The [outgoing milestone](milestones/outgoing-calls-and-live-telephony.md) tracks native
+STS opening and carrier audio acceptance separately from local implementation evidence.
+
 ## Decision
 
 Vxpipe will provide a protocol-neutral, OTP-native voice runtime. Client and
@@ -1061,6 +1066,8 @@ Account SID, exact Call SID, one Stream SID, and live leg owner. It accepts only
 mono 8 kHz `audio/x-mulaw` start format, bounds and decodes PCMU media, timestamps DTMF at gateway
 observation, and dispatches normalized events through the provider-neutral leg boundary. Cross-call
 or cross-stream frames close the socket rather than entering the room.
+DTMF accepts the documented `inbound_track` label and the `inbound` label confirmed by real
+destination press-1; outbound and unknown tracks remain rejected.
 
 The Twilio media-session selection reuses the same direct-output, room-ingress, and room-egress
 contracts as Telnyx. Provider-owned Membrane pipelines decode PCMU to mono signed 16-bit PCM,
@@ -1599,7 +1606,11 @@ mixer. Raw Opus continues independently to configured STT, so human-only planned
 the mixer without fabricating an STT capability while legacy rooms retain their STT-only route.
 The default WebRTC jitter latency for this path is 200 ms.
 
-Planned rooms enable the mixer's room-clock scheduler with a 300 ms playout delay. Every PCM frame
+Planned rooms enable the mixer's room-clock scheduler with a 300 ms playout delay. The default
+buffer holds 32 timestamps at 20 ms per frame (640 ms), covering that delay with bounded jitter
+margin. The earlier eight-timestamp buffer could overflow ordinary speech before playout became
+due; the configured-window regression and real two-carrier human bridge verify the correction.
+Every PCM frame
 keeps a sample timestamp relative to the mixer's monotonic clock origin. On each frame-duration
 tick, the mixer converts elapsed monotonic time minus that delay into an aligned sample timestamp
 and finalizes every bucket through that point. Packet arrival does not advance or pause the room

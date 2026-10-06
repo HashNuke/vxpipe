@@ -91,7 +91,7 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
     room_id = unique_id("room-silent-monitor")
 
     input = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

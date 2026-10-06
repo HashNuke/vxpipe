@@ -6,6 +6,298 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
   alias Vxpipe.CallEngine.TestGPTLiveTransport
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
 
+  test "generated opening uses trusted instructions and correlated agent output without caller input" do
+    {session, wire} = start_ready_session()
+    context = make_ref()
+    assert :ok = Session.begin_opening(session, :generated, response_context: context)
+
+    assert_receive {:test_gpt_live_control, ^wire,
+                    %{
+                      "type" => "session.instructions.append",
+                      "delegation_id" => nil,
+                      "event_id" => event_id,
+                      "content" => cue
+                    }}
+
+    assert cue =~ "Begin the conversation"
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_submitted}}
+    # Real input remains free to advance the duplex timeline while acknowledgment is pending.
+    assert :ok =
+             Session.push_audio(session, :binary.copy(<<0, 0>>, 480), response_context: context)
+
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.input_audio.append"}}
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.instructions.appended",
+      "client_event_id" => event_id,
+      "start_ms" => 0,
+      "end_ms" => 20
+    })
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_transcript.delta",
+      "delta" => "HELLO",
+      "start_ms" => 0,
+      "end_ms" => 20
+    })
+
+    tone = :binary.copy(<<0, 16>>, 480)
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(tone)
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :response_started, response_context: ^context} =
+                      started},
+                   1_000
+
+    assert :ok = Session.ack(session, started)
+    assert {:ok, _output} = Session.admit_output(session, started.turn_ref)
+    assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}, 1_000
+    assert :ok = Session.ack_audio(session, audio)
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :output_transcript, text: "HELLO"} = text},
+                   1_000
+
+    assert :ok = Session.ack(session, text)
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript}}
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+    refute_received {:test_gpt_live_control, ^wire, %{"type" => "session.commentary.append"}}
+  end
+
+  test "fixed opening validates a complete acoustic burst before granting any audio" do
+    {session, wire} = start_ready_session(output_gap_ms: 80)
+    context = make_ref()
+    assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, response_context: context)
+
+    assert_receive {:test_gpt_live_control, ^wire,
+                    %{"type" => "session.instructions.append", "content" => cue}}
+
+    assert cue =~ "GOOD DAY"
+
+    TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => "session.output_transcript.delta",
+      "delta" => "GOOD DAY",
+      "start_ms" => 0,
+      "end_ms" => 3_000
+    })
+
+    tone = :binary.copy(<<0, 16>>, 480)
+
+    for _ <- 1..150 do
+      TestGPTLiveTransport.deliver_sync(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(tone)
+      })
+
+      _ = :sys.get_state(Session.provider(session))
+    end
+
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :response_started}}
+    refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+    silence = :binary.copy(<<0, 0>>, 480 * 4)
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(silence)
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :response_started, response_context: ^context} =
+                      started},
+                   1_000
+
+    assert :ok = Session.ack(session, started)
+    assert {:ok, output} = Session.admit_output(session, started.turn_ref)
+    {pcm, text} = collect_opening_output(session, [], [])
+    assert pcm == :binary.copy(tone, 150) <> silence
+    assert text == "GOOD DAY"
+    assert :ok = Session.settle_output(session, output, 3_080)
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript}}
+    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+  end
+
+  test "fixed opening rejects altered, missing and unsupported speech evidence without audio" do
+    for text <- [nil, "GOOD DAY EXTRA", "GOOD DAY"] do
+      {session, wire} = start_ready_session(output_gap_ms: 80)
+
+      assert :ok =
+               Session.begin_opening(session, {:fixed, "GOOD DAY"}, response_context: make_ref())
+
+      if text do
+        TestGPTLiveTransport.deliver_sync(wire, %{
+          "type" => "session.output_transcript.delta",
+          "delta" => text,
+          "start_ms" => 0,
+          "end_ms" => 3_000
+        })
+      end
+
+      tone = :binary.copy(<<0, 16>>, 480)
+
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(tone)
+      })
+
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(:binary.copy(<<0, 0>>, 480 * 4))
+      })
+
+      assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+      refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :response_started}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript}}
+    end
+  end
+
+  test "an unverified fixed opening cannot survive caller speech, hold, or reconnect" do
+    for interruption <- [:caller, :hold, :connection] do
+      {session, wire} = start_ready_session()
+
+      assert :ok =
+               Session.begin_opening(session, {:fixed, "GOOD DAY"}, response_context: make_ref())
+
+      TestGPTLiveTransport.deliver_sync(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(:binary.copy(<<0, 16>>, 480))
+      })
+
+      _ = :sys.get_state(Session.provider(session))
+
+      case interruption do
+        :caller ->
+          TestGPTLiveTransport.deliver(wire, %{
+            "type" => "session.input_transcript.delta",
+            "delta" => "STOP",
+            "start_ms" => 0,
+            "end_ms" => 20
+          })
+
+        :hold ->
+          assert {:error, :session_failed} = Session.set_input_hold(session, true)
+
+        :connection ->
+          TestGPTLiveTransport.deliver(wire, %{"type" => "session.closed", "reason" => "expired"})
+      end
+
+      assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+      refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :response_started}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript}}
+      refute_received {:vxpipe_sts_reseed_history_barrier, _channel, _provider, _reference}
+    end
+  end
+
+  test "a fixed opening has a fenced deadline and closes on missing completion" do
+    {session, _wire} = start_ready_session()
+
+    assert :ok =
+             Session.begin_opening(session, {:fixed, "GOOD DAY"}, response_context: make_ref())
+
+    provider = Session.provider(session)
+    send(provider, {:opening_deadline, make_ref()})
+    state = :sys.get_state(provider)
+    refute_received {:vxpipe_speech_closed, ^session, _reason}
+    send(provider, {:opening_deadline, state.fixed_opening.deadline})
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+    refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+  end
+
+  test "wall clock idle closes and verifies a fixed acoustic burst" do
+    {session, wire} = start_ready_session(output_gap_ms: 80)
+    context = make_ref()
+    assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, response_context: context)
+
+    TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => "session.output_transcript.delta",
+      "delta" => "GOOD DAY",
+      "start_ms" => 0,
+      "end_ms" => 20
+    })
+
+    tone = :binary.copy(<<0, 16>>, 480)
+
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(tone)
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :response_started, response_context: ^context} =
+                      started},
+                   1_000
+
+    assert :ok = Session.ack(session, started)
+    assert {:ok, _output} = Session.admit_output(session, started.turn_ref)
+    {pcm, text} = collect_opening_output(session, [], [])
+    assert pcm == tone <> :binary.copy(<<0, 0>>, 480 * 4)
+    assert text == "GOOD DAY"
+  end
+
+  test "duplex timeline input cannot rebind an opening to a newer response context" do
+    for opening <- [:generated, {:fixed, "HELLO"}] do
+      {session, wire} = start_ready_session(output_gap_ms: 80)
+      origin = make_ref()
+      assert :ok = Session.begin_opening(session, opening, response_context: origin)
+
+      assert :ok =
+               Session.push_audio(session, :binary.copy(<<0, 0>>, 480),
+                 response_context: make_ref()
+               )
+
+      TestGPTLiveTransport.deliver_sync(wire, %{
+        "type" => "session.output_transcript.delta",
+        "delta" => "HELLO",
+        "start_ms" => 0,
+        "end_ms" => 20
+      })
+
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(:binary.copy(<<0, 16>>, 480))
+      })
+
+      TestGPTLiveTransport.deliver(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(:binary.copy(<<0, 0>>, 480 * 4))
+      })
+
+      assert_receive {:vxpipe_speech,
+                      %Event{
+                        session: ^session,
+                        kind: :response_started,
+                        response_context: ^origin
+                      } = started},
+                     1_000
+
+      assert :ok = Session.ack(session, started)
+      assert {:error, :busy} = Session.begin_opening(session, opening, response_context: origin)
+    end
+  end
+
+  defp collect_opening_output(session, pcm, texts) do
+    receive do
+      {:vxpipe_speech_audio, %Audio{session: ^session} = audio} ->
+        assert :ok = Session.ack_audio(session, audio)
+        collect_opening_output(session, [audio.payload | pcm], texts)
+
+      {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript} = text} ->
+        assert :ok = Session.ack(session, text)
+        collect_opening_output(session, pcm, [text.text | texts])
+
+      {:vxpipe_speech, %Event{session: ^session, kind: :output_completed} = done} ->
+        assert :ok = Session.ack(session, done)
+        {IO.iodata_to_binary(Enum.reverse(pcm)), IO.iodata_to_binary(Enum.reverse(texts))}
+    after
+      1_000 -> flunk("verified opening did not complete credited output")
+    end
+  end
+
   test "starts privately, waits for provider readiness and sends accepted audio in order" do
     scope = start_supervised!({CapabilityTree, owner: self()})
 

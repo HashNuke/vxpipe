@@ -186,7 +186,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert_receive {:test_stt_transport_started, transport, _connection}
     monitor = Process.monitor(transport)
     TestSpeechToTextTransport.deliver(transport, connected_message("prepared", 0))
-    await_prepared_connection(capability, transport)
+    await_prepared_connection(resource)
 
     assert {:ok, %{status: :ready, activity_origin: nil}} =
              SpeechToText.input_binding(capability, resource)
@@ -237,7 +237,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
     assert_receive {:test_stt_transport_started, replacement, _connection}
     TestSpeechToTextTransport.deliver(replacement, connected_message("adopted", 0))
-    await_prepared_connection(capability, replacement)
+    await_prepared_connection(next_resource)
 
     assert {:ok, %{status: :ready, activity_origin: nil}} =
              SpeechToText.input_binding(capability, next_resource)
@@ -1282,13 +1282,22 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     })
   end
 
-  defp await_prepared_connection(capability, transport) do
-    provider = :sys.get_state(transport).owner
-    _ = :sys.get_state(provider)
-    allocation = :sys.get_state(capability).pending_policy.state.session
-    channel = GenServer.whereis(Channel.address(allocation))
-    _ = :sys.get_state(channel)
-    _ = :sys.get_state(capability)
+  defp await_prepared_connection(resource) do
+    collector =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Vxpipe.CallEngine.Readiness.Collector,
+           owner: self(),
+           incarnation_id: "prepared-stt-test",
+           attempt_id: "prepared-stt-ready",
+           resources: [resource],
+           deadline_ms: System.monotonic_time(:millisecond) + 1_000},
+          id: {:prepared_stt_collector, resource.generation}
+        )
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    stop_supervised!({:prepared_stt_collector, resource.generation})
   end
 
   defp usage_context do

@@ -57,6 +57,7 @@ defmodule Vxpipe.CallEngine.Speech.Input do
     operation =
       case Map.get(command, :operation) do
         {:push_text, reference, text} -> {:text, reference, text}
+        {:begin_opening, reference, opening} -> {:opening, reference, opening}
         {:input_activity, boundary} -> {:activity, boundary}
         nil -> {:audio, payload}
       end
@@ -65,6 +66,23 @@ defmodule Vxpipe.CallEngine.Speech.Input do
       :ok -> :ok
       {:error, reason} when reason in [:busy, :unsupported_operation] -> {:error, reason}
       _failure -> {:error, :session_failed}
+    end
+  end
+
+  defp execute_provider(
+         module,
+         provider,
+         %{operation: {:begin_opening, reference, opening}},
+         _payload
+       ) do
+    if function_exported?(module, :begin_opening, 3) do
+      case module.begin_opening(provider, reference, opening) do
+        :ok -> :ok
+        {:error, reason} when reason in [:busy, :unsupported_operation] -> {:error, reason}
+        _failure -> {:error, :session_failed}
+      end
+    else
+      {:error, :unsupported_operation}
     end
   end
 

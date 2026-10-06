@@ -78,6 +78,8 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
 
     assert plan.call_spec_id == "legacy-call-definition"
     assert plan.call_spec_revision == 3
+    assert plan.direction == :incoming
+    assert plan.ring_timeout_ms == nil
     assert plan.credential_bindings == nil
     assert plan.wait_sounds.__struct__ == Vxpipe.CallEngine.CallSpec.WaitSounds
     assert plan.transfer_policy.__struct__ == Vxpipe.CallEngine.CallSpec.TransferPolicy
@@ -120,6 +122,18 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
       assert caller.capabilities.speech_to_speech == nil
       assert caller.capabilities.output_speech_to_text == nil
     end
+  end
+
+  test "preserves explicit outgoing direction and deadline across stored-plan decoding" do
+    encoded =
+      legacy_plan(%{})
+      |> Map.put(:direction, :outgoing)
+      |> Map.put(:ring_timeout_ms, 5_000)
+      |> :erlang.term_to_binary([:deterministic])
+
+    assert {:ok, plan} = Vxpipe.Persistence.ResolvedPlanCodec.decode(encoded)
+    assert plan.direction == :outgoing
+    assert plan.ring_timeout_ms == 5_000
   end
 
   defp legacy_plan(capabilities) do

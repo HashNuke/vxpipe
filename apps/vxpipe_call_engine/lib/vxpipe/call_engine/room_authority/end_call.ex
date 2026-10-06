@@ -5,6 +5,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State, TextCapability}
   alias Vxpipe.CallEngine.Tool.Context
 
+  @spec remote_hangup(String.t(), State.t()) ::
+          {:stop, {:shutdown, :remote_hangup}, :ok, State.t()}
+          | {:reply, {:error, :room_unavailable}, State.t()}
+  def remote_hangup(incarnation_id, %State{} = state) do
+    if incarnation_id == state.snapshot.incarnation_id do
+      {:stop, {:shutdown, :remote_hangup}, :ok, state}
+    else
+      {:reply, {:error, :room_unavailable}, state}
+    end
+  end
+
   @spec authorize(pid(), Context.t(), State.t()) :: :ok | {:error, Error.t()}
   def authorize(capability, %Context{} = context, %State{} = state) when is_pid(capability) do
     connection = Map.get(state.connections, context.connection_id)

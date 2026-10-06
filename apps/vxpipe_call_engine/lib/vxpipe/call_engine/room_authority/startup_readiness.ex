@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     ConnectionLifecycle,
     FirstMessage,
     OpeningAudio,
+    OutgoingCall,
     ReadinessBinding,
     Startup,
     StartupProbe
@@ -23,6 +24,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
     with {:ok, prepared} <- result,
          {:ok, state} <- Startup.install(prepared, state),
+         {:ok, state} <- OutgoingCall.start(state),
          {:ok, state} <- prepared(state) do
       {:noreply, CallerIdle.reconcile(state)}
     else
@@ -104,6 +106,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   def connection_attached(command, %{startup: startup, startup_ready?: false} = state)
       when startup != nil do
     connection = Map.fetch!(state.connections, command.connection_id)
+    state = OutgoingCall.connection_attached(command, state)
     state = start_output_probe(command, connection, state)
     ready(state)
   end
@@ -132,7 +135,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   def ready(%{startup: startup, startup_ready?: false} = state) when startup != nil do
     blockers =
       cond do
-        map_size(state.connections) == 0 -> [:media]
+        map_size(state.connections) == 0 or not OutgoingCall.media_ready?(state) -> [:media]
         pending_speech?(state) -> [:speech_to_text]
         pending_speech_to_speech?(state) -> [:speech_to_speech]
         true -> []
@@ -343,7 +346,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
   defp start_room_probe(%{startup: %{readiness: nil, resources_ready?: false}} = state)
        when map_size(state.connections) > 0 do
-    if pending_speech?(state) or pending_speech_to_speech?(state) do
+    if not OutgoingCall.media_ready?(state) or pending_speech?(state) or
+         pending_speech_to_speech?(state) do
       state
     else
       room = self()

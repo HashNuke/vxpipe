@@ -120,6 +120,60 @@ defmodule Vxpipe.Providers.Twilio.AdapterTest do
              Adapter.dial(TwilioAdapter, command_config(), dial())
   end
 
+  test "rejection telemetry exposes only bounded status, operation and numeric provider code" do
+    attach_rejections()
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      conn
+      |> put_status(400)
+      |> Req.Test.json(%{
+        code: 21215,
+        message: "private rejection details",
+        request: "private authorization marker"
+      })
+    end)
+
+    assert {:error, {:twilio_command_rejected, 400}} =
+             Adapter.dial(TwilioAdapter, command_config(), dial())
+
+    assert_receive {:twilio_rejection, %{http_status: 400},
+                    %{provider: :twilio, operation: :dial, error_code: 21215}}
+  end
+
+  test "rejection telemetry drops non-numeric and oversized provider code values" do
+    attach_rejections()
+
+    for code <- ["private-code-marker", 9_999_999, -1, %{"private" => "marker"}, nil] do
+      Req.Test.expect(__MODULE__, fn conn ->
+        conn |> put_status(403) |> Req.Test.json(%{code: code})
+      end)
+
+      assert {:error, {:twilio_command_rejected, 403}} =
+               Adapter.dial(TwilioAdapter, command_config(), dial())
+
+      assert_receive {:twilio_rejection, %{http_status: 403},
+                      %{provider: :twilio, operation: :dial, error_code: nil}}
+    end
+  end
+
+  defp attach_rejections do
+    reference = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        reference,
+        [:vxpipe, :telephony, :command, :rejected],
+        &__MODULE__.observe_rejection/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(reference) end)
+  end
+
+  def observe_rejection(_event, measurements, metadata, observer) do
+    if self() == observer, do: send(observer, {:twilio_rejection, measurements, metadata})
+  end
+
   test "verifies and normalizes an incoming Twilio Voice webhook" do
     parameters = incoming_parameters()
     body = URI.encode_query(parameters)

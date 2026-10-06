@@ -82,7 +82,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
           variable_permissions: VariablePermissions.t()
         }
 
-  def new(call_spec_key, value) do
+  def new(call_spec_key, value, options \\ []) do
     code = :invalid_call_spec
     message = "The call spec is invalid."
     path = ["participants", call_spec_key]
@@ -109,7 +109,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
              Map.fetch(input, :while_present),
              path ++ ["while_present"]
            ),
-         {:ok, attributes} <- kind_attributes(kind, input, code, message, path) do
+         {:ok, attributes} <- kind_attributes(kind, input, code, message, path, options) do
       {:ok,
        struct!(
          __MODULE__,
@@ -151,10 +151,11 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
     )
   end
 
-  defp kind_attributes(:human, input, code, message, path) do
+  defp kind_attributes(:human, input, code, message, path, options) do
     with {:ok, connection_input} <-
            CallSpecValidation.fetch(input, :connection, code, message, path),
-         {:ok, connection} <- ConnectionIntent.new(connection_input, path ++ ["connection"]),
+         {:ok, connection} <-
+           ConnectionIntent.new(connection_input, path ++ ["connection"], options),
          {:ok, transfer_notice} <-
            CallSpecValidation.optional_string(
              Map.get(input, :transfer_notice),
@@ -178,7 +179,7 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
     end
   end
 
-  defp kind_attributes(:agent, input, code, message, path) do
+  defp kind_attributes(:agent, input, code, message, path, options) do
     with {:ok, prompt_input} <- CallSpecValidation.fetch(input, :prompt, code, message, path),
          {:ok, prompt} <-
            CallSpecValidation.string(prompt_input, code, message, path ++ ["prompt"],
@@ -186,7 +187,9 @@ defmodule Vxpipe.CallEngine.CallSpec.Participant do
            ),
          {:ok, first_message, first_message_text} <-
            first_message(
-             Map.get(input, :first_message, %{"mode" => "wait_for_input"}),
+             Map.get(input, :first_message, %{
+               "mode" => Keyword.get(options, :first_message_default, "wait_for_input")
+             }),
              code,
              message,
              path

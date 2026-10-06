@@ -6,6 +6,256 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
+  for response_start <- [false, true] do
+    @opening_response_start response_start
+    test "generated opening with response-start #{@opening_response_start} produces agent audio without a caller turn" do
+      response_start? =
+        Keyword.fetch!([response_start?: @opening_response_start], :response_start?)
+
+      {session, wire} = start_session(response_start?: response_start?)
+      assert_receive {:test_google_sts_control, ^wire, setup}
+      assert Map.has_key?(JSON.decode!(setup), "setup")
+      context = make_ref()
+      options = if response_start?, do: [response_context: context], else: []
+      assert :ok = Session.begin_opening(session, :generated, options)
+      assert_receive {:test_google_sts_control, ^wire, control}
+      cue = JSON.decode!(control)["realtimeInput"]["text"]
+      assert is_binary(cue) and cue =~ "Begin the conversation"
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :input_submitted} = submitted}
+
+      assert :ok = Session.ack(session, submitted)
+
+      legacy_output =
+        if not response_start? do
+          assert_receive {:vxpipe_speech,
+                          %Event{session: ^session, kind: :opening_started} = opening}
+
+          assert :ok = Session.ack(session, opening)
+          assert {:ok, output} = Session.admit_output(session, opening.turn_ref)
+          output
+        end
+
+      pcm = :binary.copy(<<1, 0>>, 480)
+
+      deliver(wire, %{
+        "serverContent" => %{
+          "inputTranscription" => %{"text" => cue},
+          "outputTranscription" => %{"text" => "HELLO"},
+          "modelTurn" => %{
+            "parts" => [
+              %{
+                "inlineData" => %{
+                  "mimeType" => "audio/pcm;rate=24000",
+                  "data" => Base.encode64(pcm)
+                }
+              }
+            ]
+          },
+          "generationComplete" => true
+        }
+      })
+
+      output =
+        if response_start? do
+          assert_receive {:vxpipe_speech,
+                          %Event{
+                            session: ^session,
+                            kind: :response_started,
+                            response_context: ^context
+                          } = started}
+
+          assert :ok = Session.ack(session, started)
+          assert {:ok, output} = Session.admit_output(session, started.turn_ref)
+          output
+        else
+          legacy_output
+        end
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :output_transcript, text: "HELLO"} = text}
+
+      assert :ok = Session.ack(session, text)
+      assert_receive {:vxpipe_speech_audio, %Audio{session: ^session, payload: ^pcm} = audio}
+      assert :ok = Session.ack_audio(session, audio)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :output_completed} = completed}
+
+      assert :ok = Session.ack(session, completed)
+      assert :ok = Session.settle_output(session, output, 20)
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+      assert :sys.get_state(Session.provider(session)).caller == nil
+    end
+  end
+
+  for response_start <- [false, true] do
+    @fixed_response_start response_start
+    test "fixed opening with response-start #{@fixed_response_start} holds output until the complete exact transcript" do
+      profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
+      {session, wire} = start_session(response_start?: profile)
+      context = make_ref()
+      options = if profile, do: [response_context: context], else: []
+      assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, options)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :input_submitted} = submitted}
+
+      assert :ok = Session.ack(session, submitted)
+      output = opening_output(session, profile)
+      for index <- 1..100, do: deliver_sync(session, wire, audio_message(index))
+
+      deliver_sync(session, wire, %{
+        "serverContent" => %{"outputTranscription" => %{"text" => "GOOD "}}
+      })
+
+      refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :response_started}}
+
+      deliver(wire, %{
+        "serverContent" => %{
+          "outputTranscription" => %{"text" => "DAY"},
+          "generationComplete" => true
+        }
+      })
+
+      output = if profile, do: response_output(session, context), else: output
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :output_transcript, text: "GOOD DAY"} = text}
+
+      assert :ok = Session.ack(session, text)
+      assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}
+
+      assert audio.payload ==
+               IO.iodata_to_binary(for index <- 1..100, do: <<index::little-signed-16>>)
+
+      assert :ok = Session.ack_audio(session, audio)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :output_completed} = completed}
+
+      assert :ok = Session.ack(session, completed)
+      assert :ok = Session.settle_output(session, output, 0)
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :input_transcript}}
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
+    end
+
+    test "opening with response-start #{@fixed_response_start} cannot replace an unsettled opening" do
+      profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
+      {session, wire} = start_session(response_start?: profile)
+      assert_receive {:test_google_sts_control, ^wire, _setup}
+      options = if profile, do: [response_context: make_ref()], else: []
+      assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, options)
+      assert_receive {:test_google_sts_control, ^wire, _cue}
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :input_submitted} = submitted}
+
+      assert :ok = Session.ack(session, submitted)
+      _output = opening_output(session, profile)
+      assert {:error, :busy} = Session.begin_opening(session, :generated, options)
+      refute_received {:test_google_sts_control, ^wire, _replacement}
+    end
+
+    test "fixed opening with response-start #{@fixed_response_start} drops interrupted or overflowing unverified output" do
+      profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
+
+      for failure <- [:interrupted, :caller_started, :overflow] do
+        {session, wire} = start_session(response_start?: profile)
+        options = if profile, do: [response_context: make_ref()], else: []
+        assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, options)
+
+        assert_receive {:vxpipe_speech,
+                        %Event{session: ^session, kind: :input_submitted} = submitted}
+
+        assert :ok = Session.ack(session, submitted)
+        _output = opening_output(session, profile)
+        deliver_sync(session, wire, audio_message(1))
+
+        case failure do
+          :interrupted ->
+            deliver(wire, %{"serverContent" => %{"interrupted" => true}})
+
+          :caller_started ->
+            deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+
+          :overflow ->
+            for _index <- 1..15, do: deliver_sync(session, wire, opening_large_audio())
+            deliver(wire, opening_large_audio())
+        end
+
+        assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+        refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+        refute_received {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript}}
+      end
+    end
+
+    test "fixed opening with response-start #{@fixed_response_start} rejects missing or different transcripts without audio" do
+      profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
+
+      for transcript <- [nil, "RECEIVED GOOD DAY", "GOOD DAY EXTRA"] do
+        {session, wire} = start_session(response_start?: profile)
+        options = if profile, do: [response_context: make_ref()], else: []
+        assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, options)
+
+        assert_receive {:vxpipe_speech,
+                        %Event{session: ^session, kind: :input_submitted} = submitted}
+
+        assert :ok = Session.ack(session, submitted)
+        _output = opening_output(session, profile)
+        deliver_sync(session, wire, audio_message(1))
+
+        content =
+          if transcript, do: %{"outputTranscription" => %{"text" => transcript}}, else: %{}
+
+        deliver(wire, %{"serverContent" => Map.put(content, "generationComplete", true)})
+        assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+        refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+        refute_received {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript}}
+      end
+    end
+  end
+
+  defp opening_large_audio do
+    %{
+      "serverContent" => %{
+        "modelTurn" => %{
+          "parts" => [
+            %{
+              "inlineData" => %{
+                "mimeType" => "audio/pcm;rate=24000",
+                "data" => Base.encode64(:binary.copy(<<1, 0>>, 65_536))
+              }
+            }
+          ]
+        }
+      }
+    }
+  end
+
+  defp opening_output(_session, true), do: nil
+
+  defp opening_output(session, false) do
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :opening_started} = opening}
+    assert :ok = Session.ack(session, opening)
+    assert {:ok, output} = Session.admit_output(session, opening.turn_ref)
+    output
+  end
+
+  defp response_output(session, context) do
+    assert_receive {:vxpipe_speech,
+                    %Event{session: ^session, kind: :response_started, response_context: ^context} =
+                      started}
+
+    assert :ok = Session.ack(session, started)
+    assert {:ok, output} = Session.admit_output(session, started.turn_ref)
+    output
+  end
+
   test "local response-start opt-in is a closed boolean descriptor choice" do
     assert {:ok, %{response_start?: false}} = STSSession.configure([])
     assert {:ok, %{response_start?: true}} = STSSession.configure(response_start?: true)

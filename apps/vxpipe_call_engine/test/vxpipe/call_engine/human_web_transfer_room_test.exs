@@ -2273,7 +2273,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert {:ok, call_spec} =
              CallSpec.new(
                %{
-                 schema_version: CallSpec.schema_version(),
+                 schema_version: "20260915.01",
                  wait_sounds:
                    case Keyword.get(options, :wait_sounds, %{}) do
                      nil -> nil

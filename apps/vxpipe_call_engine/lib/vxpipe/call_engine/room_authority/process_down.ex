@@ -5,11 +5,39 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
     CallerIdle,
     ConnectionLifecycle,
     OpeningAudio,
+    OutgoingCall,
     ParticipantLifecycle,
     ParticipantTransfer,
     STSSourceCutover,
     StartupReadiness
   }
+
+  def handle(
+        monitor,
+        _reason,
+        %{outgoing_admission: %{status: :pending, monitor: monitor}} = state
+      )
+      when is_reference(monitor), do: {:stop, {:shutdown, :outgoing_admission_abandoned}, state}
+
+  def handle(monitor, reason, %{outgoing_call: %{monitor: monitor}} = state)
+      when is_reference(monitor), do: OutgoingCall.owner_down(monitor, reason, state)
+
+  def handle(monitor, reason, %{outgoing_call: %{task: %Task{ref: monitor}}} = state),
+    do: OutgoingCall.owner_down(monitor, reason, state)
+
+  def handle(
+        monitor,
+        _reason,
+        %{startup: startup, startup_ready?: false, text_to_speech_capability: %{monitor: monitor}} =
+          state
+      )
+      when startup != nil,
+      do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
+
+  def handle(monitor, _reason, %{text_to_speech_capability: %{monitor: monitor}} = state) do
+    ConnectionLifecycle.notify(state.connections, :agent_unavailable)
+    {:noreply, %{state | text_to_speech_capability: nil}}
+  end
 
   def handle(monitor, reason, %{media_policy_monitor: monitor} = state)
       when is_reference(monitor) do

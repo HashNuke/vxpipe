@@ -23,6 +23,29 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Usage do
           optional(:provider) => ProviderContext.t()
         }
 
+  def normalize_context(nil, _identity), do: nil
+
+  def normalize_context(context, identity) when is_list(context) do
+    normalize_context(Map.new(context), identity)
+  end
+
+  def normalize_context(context, identity) when is_map(context) do
+    context =
+      context
+      |> Map.put_new(:tenant_id, Map.get(identity, :tenant_id))
+      |> Map.put_new(:room_id, Map.get(identity, :room_id))
+      |> Map.put_new(:incarnation_id, Map.get(identity, :incarnation_id))
+
+    if is_binary(Map.get(context, :call_id)) and is_binary(Map.get(context, :participant_id)) and
+         is_binary(Map.get(context, :tenant_id)) do
+      context
+    else
+      nil
+    end
+  end
+
+  def normalize_context(_context, _identity), do: nil
+
   @spec turn_observations(
           map(),
           map(),

@@ -182,6 +182,20 @@ defmodule Vxpipe.Gateway.CallAdmission do
     MediaSupervisor.handle_event(binding.client_state_leg_id, source, event)
   end
 
+  def handle_live_event(
+        _options,
+        %TelephonyAdmissionClaim{},
+        %IncomingLegActivationResult{binding: %MediaBinding{} = binding},
+        source,
+        %Event{kind: :ended}
+      )
+      when is_pid(source) do
+    case CallEngine.end_call(binding.tenant_id, binding.room_id, binding.incarnation_id) do
+      :ok -> :ok
+      {:error, :room_unavailable} -> :ok
+    end
+  end
+
   def handle_live_event(_options, %TelephonyAdmissionClaim{}, _activation, source, %Event{})
       when is_pid(source) do
     {:error, :telephony_event_not_supported}

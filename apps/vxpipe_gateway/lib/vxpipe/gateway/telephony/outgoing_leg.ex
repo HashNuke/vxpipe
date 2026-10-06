@@ -13,7 +13,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     OutgoingLegDialer,
     OutgoingLegIdentity,
     IngressIdentity,
-    OutgoingLegLifecycle
+    OutgoingLegLifecycle,
+    InitialLegLifecycle
   }
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -33,7 +34,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     }
   end
 
-  @spec await(pid(), timeout()) :: :ok | {:error, term()}
+  @spec await(pid(), timeout()) :: :ok | {:ok, :unknown} | {:error, term()}
   def await(leg, timeout) when is_pid(leg) do
     GenServer.call(leg, :await, timeout)
   catch
@@ -54,12 +55,20 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     :exit, _reason -> {:error, :telephony_leg_unavailable}
   end
 
+  def abandon(leg) when is_pid(leg), do: GenServer.cast(leg, :abandon)
+
   @impl true
   def init(options) do
     {:ok,
      %{
        leg_id: Keyword.fetch!(options, :leg_id),
        request: Keyword.fetch!(options, :request),
+       initial:
+         InitialLegLifecycle.new(
+           Keyword.fetch!(options, :request),
+           Keyword.fetch!(options, :service)
+         ),
+       pending_media: nil,
        service: Keyword.fetch!(options, :service),
        deadline_ms: Keyword.get(options, :deadline_ms),
        monotonic_clock: Keyword.fetch!(options, :monotonic_clock),
@@ -130,10 +139,16 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         binding,
         state.service,
         state.leg_id,
-        :transfer_cancelled
+        InitialLegLifecycle.cancellation_reason(state)
       )
 
     {:stop, :normal, :ok, finish_usage(state, :cancelled)}
+  end
+
+  def handle_call(:disconnect, _from, %{status: :unknown, initial: initial} = state)
+      when initial != nil do
+    {:keep, state} = InitialLegLifecycle.cancel(state)
+    {:reply, :ok, state}
   end
 
   def handle_call(:disconnect, _from, %{status: :unknown} = state),
@@ -191,27 +206,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     if MediaBinding.matches_event?(binding, event) do
       state = observe_usage(state, event)
 
-      result =
-        with {:ok, _connection} <-
-               MediaSupervisor.start_outbound_session(
-                 state.media_supervisor,
-                 state.request,
-                 binding,
-                 source,
-                 stream_id
-               ),
-             :ok <-
-               MediaSupervisor.report_transfer_control(
-                 binding.client_state_leg_id,
-                 source,
-                 :media_ready
-               ) do
-          :ok
-        else
-          {:error, reason} -> {:error, reason}
-        end
-
-      {:reply, result, state}
+      if InitialLegLifecycle.hold_media?(state) do
+        {:reply, :ok, %{state | pending_media: {source, stream_id}}}
+      else
+        {:reply, start_media(state, source, stream_id), state}
+      end
     else
       {:reply, {:error, :telephony_leg_mismatch}, state}
     end
@@ -224,7 +223,9 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       ) do
     result =
       if MediaBinding.matches_event?(binding, event) do
-        MediaSupervisor.handle_event(binding.client_state_leg_id, source, event)
+        if InitialLegLifecycle.hold_media?(state),
+          do: :ok,
+          else: MediaSupervisor.handle_event(binding.client_state_leg_id, source, event)
       else
         {:error, :telephony_leg_mismatch}
       end
@@ -235,7 +236,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   def handle_call(
         {:event, %Event{kind: :dtmf, digit: "1"} = event},
         {source, _tag},
-        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+        %{binding: %MediaBinding{} = binding, status: :accepted, request: %{purpose: :transfer}} =
+          state
       ) do
     result =
       if MediaBinding.matches_event?(binding, event) do
@@ -271,10 +273,17 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         {:reply, result, state}
 
       {:keep, result} ->
-        {:reply, result, observe_usage(state, event)}
+        state = state |> observe_usage(event) |> InitialLegLifecycle.observe(event)
+        {media_result, state} = release_pending_media(state)
+        {:reply, if(result == :ok, do: media_result, else: result), state}
 
       {:stop, result} ->
-        state = state |> observe_usage(event) |> finish_stopped_usage(event)
+        state =
+          state
+          |> observe_usage(event)
+          |> finish_stopped_usage(event)
+          |> InitialLegLifecycle.observe(event)
+
         {:stop, :normal, result, state}
     end
   end
@@ -284,14 +293,36 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   end
 
   @impl true
+  def handle_cast(:abandon, %{initial: initial} = state) when initial != nil do
+    case InitialLegLifecycle.cancel(state) do
+      {:keep, state} -> {:noreply, state}
+      {:stop, state} -> {:stop, :normal, finish_usage(state, :cancelled)}
+    end
+  end
+
+  @impl true
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{initial: %{room_monitor: monitor}} = state
+      ) do
+    case InitialLegLifecycle.cancel(state) do
+      {:keep, state} -> {:noreply, state}
+      {:stop, state} -> {:stop, :normal, finish_usage(state, :cancelled)}
+    end
+  end
+
+  def handle_info(:retire_unknown, %{initial: %{cancel_pending?: true}} = state),
+    do: {:stop, :normal, state |> InitialLegLifecycle.retire() |> finish_usage(:unknown)}
+
   def handle_info(:retire, %{status: :failed} = state), do: {:stop, :normal, state}
   def handle_info(:retire, state), do: {:noreply, state}
 
   defp reply_waiters(waiters, result), do: Enum.each(waiters, &GenServer.reply(&1, result))
 
   defp succeed(state, status, binding) do
-    reply_waiters(state.waiters, :ok)
-    %{state | binding: binding, result: :ok, status: status, waiters: []}
+    result = if status == :unknown and state.initial != nil, do: {:ok, :unknown}, else: :ok
+    reply_waiters(state.waiters, result)
+    %{state | binding: binding, result: result, status: status, waiters: []}
   end
 
   defp fail(state, reason, usage_outcome) do
@@ -340,19 +371,54 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     end
   end
 
-  defp handle_adopted_event(%Event{kind: :outgoing} = event, binding, state) do
-    state = observe_usage(state, event)
-    {:reply, :ok, %{state | binding: binding, status: :accepted}}
-  end
-
   defp handle_adopted_event(%Event{} = event, binding, state) do
     state = state |> Map.merge(%{binding: binding, status: :accepted}) |> observe_usage(event)
+
+    case InitialLegLifecycle.adopted(state, event) do
+      {:stop, state} -> {:stop, :normal, :ok, finish_stopped_usage(state, event)}
+      {:keep, state} -> handle_active_adopted_event(event, binding, state)
+    end
+  end
+
+  defp handle_active_adopted_event(%Event{kind: :outgoing}, _binding, state),
+    do: {:reply, :ok, state}
+
+  defp handle_active_adopted_event(event, binding, state) do
+    state = InitialLegLifecycle.observe(state, event)
 
     case OutgoingLegLifecycle.handle(event, binding, state.service, state.leg_id) do
       {:keep, result} -> {:reply, result, state}
       {:stop, result} -> {:stop, :normal, result, finish_stopped_usage(state, event)}
     end
   end
+
+  defp report_media_ready(%{purpose: :initial}, _connection_id, _source), do: :ok
+
+  defp report_media_ready(_transfer, connection_id, source),
+    do: MediaSupervisor.report_transfer_control(connection_id, source, :media_ready)
+
+  defp start_media(state, source, stream_id) do
+    with {:ok, _connection} <-
+           MediaSupervisor.start_outbound_session(
+             state.media_supervisor,
+             state.request,
+             state.binding,
+             source,
+             stream_id
+           ),
+         :ok <- report_media_ready(state.request, state.binding.client_state_leg_id, source),
+         do: :ok
+  end
+
+  defp release_pending_media(%{pending_media: {source, stream_id}} = state) do
+    if InitialLegLifecycle.hold_media?(state) do
+      {:ok, state}
+    else
+      {start_media(state, source, stream_id), %{state | pending_media: nil}}
+    end
+  end
+
+  defp release_pending_media(state), do: {:ok, state}
 
   defp bind_registered(state, keys, binding) do
     case MediaAdmission.bind(state.media_admission, binding) do

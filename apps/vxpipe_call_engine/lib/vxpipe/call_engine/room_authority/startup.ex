@@ -70,6 +70,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       mcp_integrations: Keyword.get(options, :mcp_integrations),
       opening_audio: Keyword.fetch!(options, :opening_audio),
       outbound_leg_connector: Keyword.get(options, :outbound_leg_connector),
+      outgoing_timer:
+        Keyword.get(
+          Keyword.fetch!(options, :call_lifecycle),
+          :timer,
+          {Vxpipe.CallEngine.CallLifecycle.ProcessTimer, []}
+        ),
+      outgoing_clock:
+        Keyword.get(Keyword.fetch!(options, :call_lifecycle), :outgoing_clock, fn ->
+          System.monotonic_time(:millisecond)
+        end),
       remote_mcp_connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
       remote_mcp_protocol_client: Keyword.get(options, :remote_mcp_protocol_client),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),

@@ -499,7 +499,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
   defp compile_plan(options \\ []) do
     call_spec_input = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",

@@ -1,6 +1,28 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  def mark_outgoing_call_started(call, incarnation_id, started_at, options \\ []),
+    do: Vxpipe.Calls.OutgoingCalls.mark_started(call, incarnation_id, started_at, options)
+
+  def mark_outgoing_call_failed(call, reason, options \\ []),
+    do: Vxpipe.Calls.OutgoingCalls.mark_failed(call, reason, options)
+
+  def claim_outgoing_call(
+        principal,
+        call_spec_id,
+        initial_variables,
+        idempotency_key,
+        options \\ []
+      ),
+      do:
+        Vxpipe.Calls.OutgoingCalls.claim(
+          principal,
+          call_spec_id,
+          initial_variables,
+          idempotency_key,
+          options
+        )
+
   alias Vxpipe.Calls.{
     Administration,
     Admissions,

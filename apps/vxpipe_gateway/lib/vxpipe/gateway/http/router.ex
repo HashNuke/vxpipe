@@ -45,6 +45,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       operator_api:
         options |> Keyword.get(:operator_api, []) |> Vxpipe.Gateway.HTTP.OperatorAPI.init(),
       call_admission: CallAdmissions.init(call_admission),
+      outgoing_calls: Vxpipe.Gateway.HTTP.OutgoingCalls.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
       telnyx_media: Telnyx.Media.init(media_options),
@@ -71,6 +72,21 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       segments
     )
   end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "tenants", tenant, "call-specs", specification, "outgoing-calls"]
+        } = conn,
+        options
+      ),
+      do:
+        Vxpipe.Gateway.HTTP.OutgoingCalls.create(
+          conn,
+          options.outgoing_calls,
+          tenant,
+          specification
+        )
 
   def call(
         %Plug.Conn{path_info: ["api", "tenants", tenant, "call-specs" | segments]} = conn,

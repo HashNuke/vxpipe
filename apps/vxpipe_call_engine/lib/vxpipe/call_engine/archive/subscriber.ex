@@ -332,7 +332,7 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   end
 
   defp now(options) do
-    case Keyword.get(options, :now, fn -> DateTime.utc_now(:millisecond) end) do
+    case Keyword.get(options, :now, fn -> DateTime.utc_now() end) do
       now when is_function(now, 0) -> {:ok, now}
       _invalid -> {:error, {:invalid_archive_option, :now}}
     end

@@ -17,7 +17,7 @@ defmodule Vxpipe.CallEngine.CallSpec.ConnectionIntent do
           number_from_variable: nil | NumberFromVariable.t()
         }
 
-  def new(value, path) do
+  def new(value, path, options \\ []) do
     code = :invalid_call_spec
     message = "The call spec is invalid."
 
@@ -41,7 +41,7 @@ defmodule Vxpipe.CallEngine.CallSpec.ConnectionIntent do
              message,
              path ++ ["mode"]
            ),
-         {:ok, admission} <- admission(input, mode, code, message, path),
+         {:ok, admission} <- admission(input, mode, code, message, path, options),
          {:ok, number, number_from_variable} <-
            destination(input, service, mode, code, message, path) do
       {:ok,
@@ -61,25 +61,25 @@ defmodule Vxpipe.CallEngine.CallSpec.ConnectionIntent do
     CallSpecValidation.identifier(value, code, message, path ++ ["service"])
   end
 
-  defp admission(input, :dial, code, message, path) do
+  defp admission(input, :dial, code, message, path, options) do
+    expected = if Keyword.get(options, :outgoing_callee?, false), do: :start_call, else: :transfer
+
     case Map.fetch(input, :admission) do
       :error ->
-        {:ok, :transfer}
+        {:ok, expected}
 
-      {:ok, "transfer"} ->
-        {:ok, :transfer}
-
-      {:ok, _value} ->
-        CallSpecValidation.invalid(
+      {:ok, value} ->
+        CallSpecValidation.enum(
+          value,
+          [{expected, Atom.to_string(expected)}],
           code,
           message,
-          path ++ ["admission"],
-          "must be transfer for dial mode"
+          path ++ ["admission"]
         )
     end
   end
 
-  defp admission(input, :receive, code, message, path) do
+  defp admission(input, :receive, code, message, path, _options) do
     with {:ok, value} <- CallSpecValidation.fetch(input, :admission, code, message, path) do
       CallSpecValidation.enum(
         value,

@@ -47,6 +47,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
     children =
       [participant_supervisor, capability_supervisor, transfer_supervisor] ++
+        dial_child(options) ++
         live_inspection_child(options) ++
         call_variables_child(options) ++
         call_lifecycle_child(options) ++
@@ -58,6 +59,13 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
       strategy: :one_for_one,
       auto_shutdown: :any_significant
     )
+  end
+
+  defp dial_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{direction: :outgoing} -> [{Vxpipe.CallEngine.RoomDialSupervisor, options}]
+      _incoming -> []
+    end
   end
 
   defp call_variables_child(options) do

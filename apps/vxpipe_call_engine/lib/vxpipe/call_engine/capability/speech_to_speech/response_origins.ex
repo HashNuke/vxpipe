@@ -154,6 +154,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
   defp dispatch(session, {:audio, pcm}, options), do: Session.push_audio(session, pcm, options)
   defp dispatch(session, {:text, text}, options), do: Session.push_text(session, text, options)
 
+  defp dispatch(session, {:opening, opening}, options),
+    do: Session.begin_opening(session, opening, options)
+
   defp dispatch(session, {:activity, boundary}, options),
     do: Session.input_activity(session, boundary, options)
 

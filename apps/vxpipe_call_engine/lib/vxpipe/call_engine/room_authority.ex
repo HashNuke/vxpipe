@@ -39,10 +39,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     FirstMessage,
     InputTurns,
     OpeningAudio,
+    OutgoingCall,
     ParticipantLifecycle,
     ReadinessBinding,
     State,
-    Startup,
     StartupReadiness,
     ToolCalls,
     UsageObservations
@@ -186,7 +186,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           media_policy_monitor: policy_monitor
       }
 
-      case Startup.start_entries(room_source, options, state) do
+      case Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.start_entries(
+             room_source,
+             options,
+             state
+           ) do
         {:ok, state} ->
           archive_recorder = ArchiveRecorder.room_opened(state.archive_recorder, state.snapshot)
           {:ok, %{state | archive_recorder: archive_recorder}}
@@ -202,14 +206,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
+  def handle_call({:end_call, incarnation}, _from, state),
+    do: EndCall.remote_hangup(incarnation, state)
+
+  def handle_call({:admit_outgoing, incarnation, token}, from, state),
+    do: Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.admit(incarnation, token, from, state)
+
+  def handle_call({:cancel_outgoing, incarnation, token}, from, state),
+    do: Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.cancel(incarnation, token, from, state)
+
   def handle_call(:readiness_binding, _from, state),
     do: {:reply, ReadinessBinding.capture(state), state}
 
   def handle_call(:input_admission, _from, state) do
     admission =
-      if state.startup != nil and not state.startup_ready?,
-        do: :opening_audio,
-        else: OpeningAudio.admission(state.opening_audio)
+      if Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.pending?(state) or
+           (state.startup != nil and not state.startup_ready?),
+         do: :opening_audio,
+         else: OpeningAudio.admission(state.opening_audio)
 
     {:reply, admission, state}
   end
@@ -369,6 +383,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({reference, {:startup_output, id, result}}, state),
     do:
       StartupReadiness.reply(StartupReadiness.output_result(reference, id, result, state), state)
+
+  def handle_info({reference, {:outgoing_submitted, result}}, state),
+    do: OutgoingCall.submitted(reference, result, state)
+
+  def handle_info({:vxpipe_outbound_leg, token, owner, event}, state),
+    do: OutgoingCall.report(token, owner, event, state)
+
+  def handle_info({:vxpipe_call_lifecycle_timer, token, :outgoing_ring}, state),
+    do: OutgoingCall.timeout(token, state)
 
   def handle_info({reference, {:startup_ready, result}}, state),
     do: StartupReadiness.reply(StartupReadiness.room_result(reference, result, state), state)
@@ -651,22 +674,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state = ConnectionLifecycle.speech_to_text_unavailable(capability, identity, state)
         {:noreply, CallerIdle.reconcile(state)}
     end
-  end
-
-  def handle_info(
-        {:DOWN, monitor, :process, _pid, _reason},
-        %{startup: startup, startup_ready?: false, text_to_speech_capability: %{monitor: monitor}} =
-          state
-      )
-      when startup != nil,
-      do: StartupReadiness.reply({:error, :text_to_speech_unavailable}, state)
-
-  def handle_info(
-        {:DOWN, monitor, :process, _pid, _reason},
-        %{text_to_speech_capability: %{monitor: monitor}} = state
-      ) do
-    ConnectionLifecycle.notify(state.connections, :agent_unavailable)
-    {:noreply, %{state | text_to_speech_capability: nil}}
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state),

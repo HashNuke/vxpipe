@@ -49,10 +49,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     HistoryBarrier,
     Hold,
     Input,
+    Opening,
     OutputTranscript,
     Policy,
     ResponseOrigins,
-    ToolEvents
+    ToolEvents,
+    Usage
   }
 
   @call_timeout 5_000
@@ -101,6 +103,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   @spec input_activity(pid(), :started | :ended) :: :ok | {:error, term()}
   def input_activity(capability, boundary) when is_pid(capability) do
     GenServer.call(capability, {:input_activity, boundary}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec begin_opening(pid(), Vxpipe.CallEngine.Speech.Opening.t()) :: :ok | {:error, term()}
+  def begin_opening(capability, opening) do
+    GenServer.call(capability, {:begin_opening, opening}, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -183,13 +192,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           provider: provider,
           session: session,
           descriptor: nil,
+          opening_started?: false,
           sink: Keyword.fetch!(options, :sink),
           policy: Keyword.get(options, :policy),
           policy_revision: Keyword.get(options, :policy_revision, 0),
           caller_source: Keyword.get(options, :caller_source, :sts),
           frame_identity: Keyword.get(options, :frame_identity, %{}),
           usage_context:
-            normalize_usage_context(
+            Usage.normalize_context(
               Keyword.get(options, :usage_context),
               Keyword.get(options, :frame_identity, %{})
             ),
@@ -298,6 +308,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         {:reply, result, state}
     end
   end
+
+  def handle_call({:begin_opening, opening}, {caller, _tag}, state),
+    do: Opening.start(opening, caller, state)
 
   def handle_call({:push_text, _text}, _from, %{held?: true} = state) do
     {:reply, {:error, :held}, state}
@@ -622,6 +635,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     end
   end
 
+  defp handle_event(%Event{kind: :opening_started} = event, state) do
+    case Session.ack(state.session, event) do
+      :ok -> admit_reply(event.turn_ref, event.sequence, state)
+      {:error, _reason} -> stop_unavailable(:provider_failed, state)
+    end
+  end
+
   defp handle_event(%Event{kind: :response_started} = event, state) do
     case Session.ack(state.session, event) do
       :ok -> admit_response(event.turn_ref, event.response_context, event.sequence, state)
@@ -769,27 +789,4 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     Enum.each(state.tool_turns, &interrupt_provider(state, &1))
     state
   end
-
-  defp normalize_usage_context(nil, _identity), do: nil
-
-  defp normalize_usage_context(context, identity) when is_list(context) do
-    normalize_usage_context(Map.new(context), identity)
-  end
-
-  defp normalize_usage_context(context, identity) when is_map(context) do
-    context =
-      context
-      |> Map.put_new(:tenant_id, Map.get(identity, :tenant_id))
-      |> Map.put_new(:room_id, Map.get(identity, :room_id))
-      |> Map.put_new(:incarnation_id, Map.get(identity, :incarnation_id))
-
-    if is_binary(Map.get(context, :call_id)) and is_binary(Map.get(context, :participant_id)) and
-         is_binary(Map.get(context, :tenant_id)) do
-      context
-    else
-      nil
-    end
-  end
-
-  defp normalize_usage_context(_context, _identity), do: nil
 end

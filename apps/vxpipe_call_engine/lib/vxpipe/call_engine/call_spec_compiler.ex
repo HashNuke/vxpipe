@@ -79,6 +79,8 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
          transport: invocation.transport,
          entry_caller: call_spec.entry_caller,
          entry_receiver: call_spec.entry_receiver,
+         direction: call_spec.direction,
+         ring_timeout_ms: call_spec.ring_timeout_ms,
          opening_audio: opening_audio,
          wait_sounds: call_spec.wait_sounds,
          media_policy: media_policy,

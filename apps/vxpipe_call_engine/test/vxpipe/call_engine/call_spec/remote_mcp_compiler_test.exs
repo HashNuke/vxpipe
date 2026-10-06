@@ -109,7 +109,7 @@ defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
 
   defp call_spec_input do
     %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "reception",
       defaults: %{

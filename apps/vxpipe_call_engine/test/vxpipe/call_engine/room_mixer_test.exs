@@ -471,6 +471,52 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert_receive {:test_mixer_scheduled, ^mixer, _next_tick, 1}
   end
 
+  test "configured room buffering retains real-time speech across the playout delay" do
+    defaults =
+      :vxpipe_call_engine
+      |> Application.fetch_env!(Vxpipe.CallEngine.Application)
+      |> Keyword.fetch!(:room_mixer)
+
+    observer = self()
+    clock = start_supervised!({Agent, fn -> 0 end})
+
+    mixer =
+      start_mixer(
+        Keyword.merge(defaults,
+          clock_origin_ms: 0,
+          clock: fn -> Agent.get(clock, & &1) end,
+          schedule: fn target, message, delay ->
+            send(observer, {:test_mixer_scheduled, target, message, delay})
+            make_ref()
+          end
+        )
+      )
+
+    frame_samples = Keyword.fetch!(defaults, :frame_samples)
+    sample_rate = Keyword.fetch!(defaults, :sample_rate)
+    playout_delay = Keyword.fetch!(defaults, :playout_delay_ms)
+    duration = div(frame_samples * 1_000, sample_rate)
+    assert_receive {:test_mixer_scheduled, ^mixer, tick, ^duration}
+    assert :ok = apply_policy(mixer, 0, ["alice", "bob"])
+    assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
+    samples = List.duplicate(100, frame_samples)
+
+    for index <- 0..div(playout_delay, duration) do
+      Agent.update(clock, fn _ -> index * duration end)
+
+      assert :ok =
+               RoomMixer.push(
+                 mixer,
+                 frame("bob", index + 1, index * frame_samples, samples, sample_rate: sample_rate)
+               )
+    end
+
+    send(mixer, tick)
+    assert_receive {:test_mixer_scheduled, ^mixer, _next_tick, ^duration}
+    assert_frame(Subscription.take(alice, 1), "alice", ["bob"], samples, 0)
+    assert %{buffer_overflows: 0} = RoomMixer.stats(mixer)
+  end
+
   defp start_mixer(overrides \\ []) do
     start_supervised!({RoomMixer, mixer_options(overrides)})
   end

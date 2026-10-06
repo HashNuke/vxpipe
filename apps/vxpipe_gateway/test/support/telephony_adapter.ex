@@ -25,6 +25,20 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
     send(observer(options), {:test_telephony_dial, request})
 
     case Keyword.fetch!(options, :api_key) do
+      "blocked:" <> _observer ->
+        send(observer(options), {:test_telephony_dial_pending, self()})
+
+        receive do
+          :release_test_telephony_dial ->
+            {:ok,
+             %Submission{
+               status: :accepted,
+               provider_call_control_id: "outbound-call-control",
+               provider_call_leg_id: "outbound-call-leg",
+               provider_call_session_id: "outbound-call-session"
+             }}
+        end
+
       "unknown:" <> _observer ->
         {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
 
@@ -70,6 +84,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
       "observer:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "unknown:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "reject:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      "blocked:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       _other -> self()
     end
   end

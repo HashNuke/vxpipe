@@ -158,6 +158,61 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     }
   end
 
+  @tag initial_outcome: :ready
+  @tag carrier_hangup: :after_media
+  test "an authenticated bidirectional stop ends the incoming room", context do
+    assert post_voice(context).status == 200
+    assert_receive {:test_twilio_answer, answer}, 2_000
+    caller = Map.fetch!(context.plan.participants, context.plan.entry_caller)
+
+    assert {:ok, participant} =
+             Vxpipe.CallEngine.participant_snapshot(
+               context.plan.tenant_id,
+               context.plan.room_id,
+               caller.participant_id
+             )
+
+    assert {:ok, room_monitor} =
+             Vxpipe.CallEngine.monitor_room(
+               context.plan.tenant_id,
+               context.plan.room_id,
+               participant.incarnation_id
+             )
+
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, @incoming_call_sid)
+    leg_monitor = Process.monitor(leg)
+
+    transport =
+      start_supervised!(
+        Supervisor.child_spec({TestTelephonySocket, observer: self()}, restart: :temporary)
+      )
+
+    assert {:ok, _binding, _socket} =
+             TestTelephonySocket.open(transport, TelephonyMediaSocket, fn ->
+               TwilioFixture.open_media(
+                 context.endpoint,
+                 context.service_options,
+                 answer.media_url,
+                 @incoming_call_sid,
+                 @incoming_stream_sid
+               )
+             end)
+
+    stop = %{
+      "event" => "stop",
+      "sequenceNumber" => "5",
+      "streamSid" => @incoming_stream_sid,
+      "stop" => %{"accountSid" => @account_sid, "callSid" => @incoming_call_sid}
+    }
+
+    assert {:ok, _socket} =
+             TestTelephonySocket.input(transport, {JSON.encode!(stop), opcode: :text})
+
+    assert_receive {:DOWN, ^room_monitor, :process, _, {:shutdown, :remote_hangup}}, 2_000
+    assert_receive {:DOWN, ^leg_monitor, :process, ^leg, :normal}, 2_000
+    refute_received {:test_twilio_end_leg, _request}
+  end
+
   for outcome <- [:ready, :model, :readiness, :max_duration, :disconnected] do
     @tag initial_outcome: outcome
     test "initial phone startup handles #{outcome} under its original clocks", context do
@@ -458,6 +513,14 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
         assert caller_snapshot.state == :joined
         assert support_snapshot.state == :joined
         Vxpipe.Gateway.PhoneHandoffAssertions.conversation(proof)
+
+        if context.transfer_wait_mode == :silent_all do
+          assert_destination_hangup_retains_caller(
+            context.plan,
+            caller_snapshot,
+            outbound_transport
+          )
+        end
       end
 
       assert inbound_socket.stream_id == @incoming_stream_sid
@@ -470,6 +533,41 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
       assert claim_count == 1
     end
+  end
+
+  defp assert_destination_hangup_retains_caller(plan, caller, transport) do
+    assert {:ok, room_monitor} =
+             Vxpipe.CallEngine.monitor_room(plan.tenant_id, plan.room_id, caller.incarnation_id)
+
+    assert {:ok, leg} = LegSupervisor.lookup_outgoing(@outgoing_leg_id)
+    leg_monitor = Process.monitor(leg)
+    assert {:ok, media} = MediaSupervisor.snapshot(@outgoing_leg_id)
+    media_monitor = Process.monitor(media.connection)
+
+    stop = %{
+      "event" => "stop",
+      "sequenceNumber" => "500",
+      "streamSid" => @outgoing_stream_sid,
+      "stop" => %{"accountSid" => @account_sid, "callSid" => @outgoing_call_sid}
+    }
+
+    assert {:ok, _socket} =
+             TestTelephonySocket.input(transport, {JSON.encode!(stop), opcode: :text})
+
+    assert_receive {:DOWN, ^leg_monitor, :process, ^leg, :normal}, 2_000
+    assert_receive {:DOWN, ^media_monitor, :process, _, _reason}, 2_000
+    assert {:ok, %{attachment: %{admission: :main}}} = MediaSupervisor.snapshot(@incoming_leg_id)
+
+    assert {:ok, %{state: :joined}} =
+             Vxpipe.CallEngine.participant_snapshot(
+               plan.tenant_id,
+               plan.room_id,
+               caller.participant_id
+             )
+
+    refute_receive {:DOWN, ^room_monitor, :process, _, _}, 100
+    refute_received {:test_twilio_end_leg, _unrelated_or_redundant_hangup}
+    Process.demonitor(room_monitor, [:flush])
   end
 
   defp post_voice(context) do

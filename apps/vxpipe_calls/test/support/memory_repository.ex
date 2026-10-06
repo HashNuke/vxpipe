@@ -9,6 +9,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
         tenants: %{},
         keys: %{},
         call_specs: %{},
+        published_specs: %{},
         routes: %{},
         telephony_routes: [],
         calls: %{},
@@ -131,6 +132,111 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
+  def fetch_published_revision(agent, tenant_key, call_spec_id) do
+    selected =
+      Agent.get(agent, fn state ->
+        case Map.fetch(state.call_specs, {tenant_key, call_spec_id}) do
+          :error ->
+            {:error, :not_found}
+
+          {:ok, _revisions} ->
+            case Map.fetch(state.published_specs, {tenant_key, call_spec_id}) do
+              {:ok, revision} -> {:ok, revision}
+              :error -> {:error, :call_spec_not_published}
+            end
+        end
+      end)
+
+    with {:ok, revision} <- selected,
+         do: fetch_revision(agent, tenant_key, call_spec_id, revision)
+  end
+
+  def fetch_outgoing_by_key(agent, tenant_key, key) do
+    Agent.get(agent, fn state ->
+      Enum.find_value(state.calls, {:error, :not_found}, fn
+        {{^tenant_key, _id}, %{idempotency_key: ^key} = call} -> {:ok, call}
+        _entry -> nil
+      end)
+    end)
+  end
+
+  def mark_outgoing_call_started(agent, expected, incarnation, started) do
+    project_outgoing(agent, expected, fn
+      %{state: :admitting} = call ->
+        {:ok, %{call | state: :running, incarnation_id: incarnation, started_at: started}}
+
+      %{state: state, incarnation_id: ^incarnation} = call when state in [:running, :ended] ->
+        {:ok, call}
+
+      _call ->
+        {:error, :outgoing_start_conflict}
+    end)
+  end
+
+  def mark_outgoing_call_failed(agent, expected, reason, ended) do
+    project_outgoing(agent, expected, fn
+      %{state: state} = call when state in [:admitting, :running] ->
+        {:ok, %{call | state: :failed, terminal_reason: reason, ended_at: ended}}
+
+      call ->
+        {:ok, call}
+    end)
+  end
+
+  defp project_outgoing(agent, expected, operation) do
+    Agent.get_and_update(agent, fn state ->
+      key = {expected.tenant_key, expected.id}
+
+      result =
+        case Map.fetch(state.calls, key) do
+          {:ok, %{plan_digest: digest} = call} when digest == expected.plan_digest ->
+            operation.(call)
+
+          {:ok, _call} ->
+            {:error, :outgoing_call_mismatch}
+
+          :error ->
+            {:error, :not_found}
+        end
+
+      case result do
+        {:ok, call} -> {result, %{state | calls: Map.put(state.calls, key, call)}}
+        error -> {error, state}
+      end
+    end)
+  end
+
+  def claim_outgoing_call(agent, call, authorize) do
+    with {:ok, :authorized} <- authorize.() do
+      Agent.get_and_update(agent, fn state ->
+        existing =
+          Enum.find_value(state.calls, fn
+            {{tenant, _id}, %{idempotency_key: key} = stored}
+            when tenant == call.tenant_key and not is_nil(key) and key == call.idempotency_key ->
+              stored
+
+            _entry ->
+              nil
+          end)
+
+        cond do
+          existing && existing.idempotency_digest == call.idempotency_digest ->
+            {{:duplicate, existing}, state}
+
+          existing ->
+            {{:error, :idempotency_conflict}, state}
+
+          Map.has_key?(state.calls, {call.tenant_key, call.id}) ->
+            {{:error, :call_id_conflict}, state}
+
+          true ->
+            {{:ok, call},
+             %{state | calls: Map.put(state.calls, {call.tenant_key, call.id}, call)}}
+        end
+      end)
+    end
+  end
+
   def publish_revision(agent, tenant_key, call_spec_id, revision_number, published_at) do
     Agent.get_and_update(agent, fn state ->
       with {:ok, revisions} <- Map.fetch(state.call_specs, {tenant_key, call_spec_id}),
@@ -201,6 +307,8 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
          %{
            state
            | call_specs: call_specs,
+             published_specs:
+               Map.put(state.published_specs, {tenant_key, call_spec_id}, revision_number),
              routes: routes,
              telephony_routes: telephony_routes
          }}

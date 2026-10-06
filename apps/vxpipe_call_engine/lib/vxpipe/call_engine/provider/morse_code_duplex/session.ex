@@ -42,6 +42,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     Clock,
     Hold,
     Output,
+    Opening,
     Profile,
     ReplyFlow,
     ScriptedReseed,
@@ -227,6 +228,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
 
   def handle_call({:submit_input, _context, {:activity, _boundary}}, _from, state),
     do: {:reply, {:error, :unsupported_operation}, state}
+
+  def handle_call({:submit_input, context, {:opening, reference, opening}}, _from, state),
+    do: Opening.start(state, context, reference, opening)
 
   def handle_call({:submit_input, _context, _operation}, _from, state),
     do: {:reply, {:error, :unsupported_operation}, state}

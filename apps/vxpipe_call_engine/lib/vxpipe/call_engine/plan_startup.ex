@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
+  alias Vxpipe.CallEngine.PlanStartup.EntryConnection
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination
   alias Vxpipe.CallEngine.PlanStartup.HumanDestination
   alias Vxpipe.CallEngine.PlanStartup.OutputSTTFormat
@@ -279,8 +280,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp supported_features(plan, caller, receiver) do
-    with :ok <- supported_transport(plan),
-         :ok <- supported_connection(caller),
+    with :ok <- EntryConnection.transport(plan),
+         :ok <- EntryConnection.caller(plan, caller),
          :ok <- supported_receiver(receiver),
          :ok <- supported_tools(plan),
          :ok <- supported_opening(plan.opening_audio) do
@@ -306,36 +307,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp supported_receiver(%ResolvedCallPlan.Participant{kind: :human} = receiver) do
-    supported_connection(receiver)
-  end
-
-  defp supported_transport(%ResolvedCallPlan{transport: :web}), do: :ok
-  defp supported_transport(%ResolvedCallPlan{transport: :telephony}), do: :ok
-
-  defp supported_transport(_plan) do
-    unsupported(["transport", "type"], "must be a supported transport")
-  end
-
-  defp supported_connection(%ResolvedCallPlan.Participant{
-         connection: %ConnectionIntent{service: :web, mode: :receive, admission: :start_call}
-       }),
-       do: :ok
-
-  defp supported_connection(%ResolvedCallPlan.Participant{
-         connection: %ConnectionIntent{
-           service: service,
-           mode: :receive,
-           admission: :start_call
-         }
-       })
-       when is_binary(service),
-       do: :ok
-
-  defp supported_connection(caller) do
-    unsupported(
-      ["participants", caller.call_spec_key, "connection"],
-      "must be a supported receive/start_call connection intent"
-    )
+    EntryConnection.receive_connection(receiver)
   end
 
   defp supported_first_message(%ResolvedCallPlan.Participant{
@@ -729,7 +701,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     do: Map.put(identity, "credential", credential)
 
   defp current_plan(plan) do
-    if plan.schema_version == Vxpipe.CallEngine.CallSpec.schema_version() do
+    if Vxpipe.CallEngine.CallSpec.supported_schema_version?(plan.schema_version) do
       validate_planned_selections(plan)
     else
       unsupported(["schema_version"], "must use the current inline capability schema")

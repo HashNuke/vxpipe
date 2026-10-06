@@ -18,6 +18,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
            :ok <- archive_available(call),
            :ok <- fact_incarnation_matches(repo, call, fact),
            {:ok, stored} <- insert_or_deduplicate_fact(repo, call, fact),
+           {:ok, call} <- Vxpipe.Persistence.OutgoingLifecycleProjection.apply(repo, call, fact),
            {:ok, _call} <- CallEndProjection.apply(repo, call, fact),
            {:ok, archived} <- to_call_fact(stored, fact.tenant_key, call.public_id) do
         archived
@@ -126,6 +127,13 @@ defmodule Vxpipe.Persistence.ArchiveStore do
     case Keyword.get(options, :lock) do
       nil -> query
       "FOR UPDATE" -> lock(query, "FOR UPDATE")
+    end
+  end
+
+  defp archive_available(%Call{state: :failed} = call) do
+    case Vxpipe.Persistence.ResolvedPlanCodec.decode(call.resolved_plan) do
+      {:ok, %{direction: :outgoing}} -> :ok
+      _other -> {:error, :call_not_started}
     end
   end
 

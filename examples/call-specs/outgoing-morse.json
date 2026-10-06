@@ -1,0 +1,34 @@
+{
+  "schema_version": "20261004.01",
+  "name": "Outgoing phone test with Morse speech",
+  "outgoing_call": {
+    "callee": "callee",
+    "handled_by": "assistant",
+    "ring_timeout_ms": 15000
+  },
+  "defaults": {"capabilities": {}},
+  "participants": {
+    "callee": {
+      "type": "human",
+      "connection": {
+        "service": "test-phone",
+        "mode": "dial",
+        "number": "+15550001000"
+      },
+      "capabilities": {
+        "speech_to_text": {"provider": "morse", "model": "morse", "options": {}}
+      }
+    },
+    "assistant": {
+      "type": "agent",
+      "prompt": "Start by saying HELLO. This is an automated carrier audio test. Keep all replies short and use plain letters.",
+      "first_message": {"mode": "generated"},
+      "capabilities": {
+        "model_inference": {"provider": "google", "model": "gemini-3.5-flash-lite"},
+        "text_to_speech": {"provider": "morse", "model": "morse", "options": {}}
+      },
+      "tools": {},
+      "transfers": []
+    }
+  }
+}

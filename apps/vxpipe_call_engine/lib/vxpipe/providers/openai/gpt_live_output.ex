@@ -3,8 +3,22 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
 
   alias Vxpipe.CallEngine.Speech.Duplex.{BurstResponses, OutputSegmenter}
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
+  alias Vxpipe.Providers.OpenAI.{GPTLiveFixedOpening, GPTLiveOpening}
 
   @maximum_queued_bytes 96_000
+
+  def push_pcm(%{fixed_opening: opening} = state, pcm) when not is_nil(opening) do
+    case GPTLiveFixedOpening.push_pcm(opening, pcm) do
+      {:ok, opening} ->
+        {:ok, %{state | fixed_opening: opening}}
+
+      {:verified, verified, rest} ->
+        with {:ok, state} <- release_opening(state, verified), do: push_pcm(state, rest)
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
 
   def push_pcm(state, pcm) do
     case OutputSegmenter.push_pcm(state.segmenter, pcm) do
@@ -16,6 +30,13 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
     end
   end
 
+  def fragment(%{fixed_opening: opening} = state, fragment) when not is_nil(opening) do
+    case GPTLiveFixedOpening.fragment(opening, fragment) do
+      {:ok, opening} -> {:ok, %{state | fixed_opening: opening}}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
   def fragment(state, fragment) do
     {segmenter, events} = OutputSegmenter.fragment(state.segmenter, fragment)
     apply_events(%{state | segmenter: segmenter}, events)
@@ -24,6 +45,62 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
   def finish(state) do
     {segmenter, events} = OutputSegmenter.finish(state.segmenter)
     apply_events(%{state | segmenter: segmenter}, events)
+  end
+
+  def burst?(%{fixed_opening: opening}) when not is_nil(opening),
+    do: OutputSegmenter.burst?(opening.segmenter)
+
+  def burst?(state), do: OutputSegmenter.burst?(state.segmenter)
+
+  def idle(state) do
+    if burst?(state) do
+      silence = :binary.copy(<<0, 0>>, div(state.output_gap_ms * 24_000, 1_000))
+      push_pcm(state, silence)
+    else
+      {:ok, state}
+    end
+  end
+
+  def schedule_idle(state) do
+    if state.output_timer, do: Process.cancel_timer(state.output_timer)
+    generation = make_ref()
+
+    if burst?(state) do
+      timer = Process.send_after(self(), {:output_idle, generation}, state.output_gap_ms)
+      %{state | output_timer: timer, output_generation: generation}
+    else
+      %{state | output_timer: nil, output_generation: generation}
+    end
+  end
+
+  defp release_opening(state, verified) do
+    state = %{
+      state
+      | fixed_opening: nil,
+        segmenter: verified.segmenter,
+        verified_opening_ref: verified.reference,
+        unanswered?: false
+    }
+
+    with {:ok, state} <- apply_event(state, {:open, verified.reference}) do
+      case Map.fetch(state.segments, verified.reference) do
+        {:ok, segment} ->
+          segment = %{
+            segment
+            | queue: verified.chunks,
+              queue_bytes: verified.bytes,
+              fragments: [verified.fragment]
+          }
+
+          apply_event(
+            put_segment(state, verified.reference, segment),
+            {:close, verified.reference}
+          )
+
+        :error ->
+          {:ok, state}
+      end
+    end
   end
 
   def admitted(state, turn_ref, output_ref) do
@@ -69,7 +146,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
   end
 
   defp apply_event(state, {:open, seg_ref}) do
-    case BurstResponses.burst_opened(state.bursts, seg_ref) do
+    {state, result} = GPTLiveOpening.burst_opened(state, seg_ref)
+
+    case result do
       {:error, :pending_response_overflow} ->
         {:error, :pending_response_overflow, state}
 
@@ -127,6 +206,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
     {bursts, actions} = BurstResponses.burst_closed(state.bursts, seg_ref)
     apply_actions(%{state | bursts: bursts}, actions)
   end
+
+  defp apply_event(%{verified_opening_ref: ref} = state, {:transcript, ref, _text, _start, _end}),
+    do: {:error, :session_failed, state}
 
   defp apply_event(state, {:transcript, seg_ref, text, start_ms, end_ms}) do
     case Map.fetch(state.segments, seg_ref) do

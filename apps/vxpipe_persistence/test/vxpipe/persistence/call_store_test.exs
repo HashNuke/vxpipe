@@ -110,6 +110,105 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     ]
   end
 
+  test "optional outgoing metadata round-trips without changing historical call defaults",
+       context do
+    assert {:ok, prepared, _token} =
+             Calls.prepare_call(context.principal, context.route.key, %{}, context.options)
+
+    assert prepared.outgoing_outcome == nil
+    assert prepared.idempotency_key == nil
+    assert prepared.idempotency_digest == nil
+    stored = Repo.get_by!(StoredCall, public_id: prepared.id)
+    digest = :crypto.hash(:sha256, "request")
+
+    for outcome <- [:answered, :no_answer, :busy, :rejected, :failed, :machine, :unknown] do
+      assert {:ok, _stored} =
+               Repo.update(
+                 StoredCall.changeset(stored, %{
+                   outgoing_outcome: outcome,
+                   idempotency_key: "private-request-key",
+                   idempotency_digest: digest
+                 })
+               )
+
+      assert {:ok, reloaded} = Calls.fetch_call(context.tenant.key, prepared.id, context.options)
+      assert reloaded.outgoing_outcome == outcome
+      assert reloaded.idempotency_key == "private-request-key"
+      assert reloaded.idempotency_digest == digest
+      refute inspect(reloaded) =~ "private-request-key"
+    end
+  end
+
+  test "request keys are unique per tenant while null keys permit independent calls", context do
+    assert {:ok, first, _token} =
+             Calls.prepare_call(context.principal, context.route.key, %{}, context.options)
+
+    options =
+      context.options
+      |> Keyword.put(:call_id_generator, &Vxpipe.Calls.PublicId.uuid/0)
+      |> Keyword.put(:token_id_generator, &Vxpipe.Calls.PublicId.uuid/0)
+      |> Keyword.put(:join_token_generator, fn -> "vxj_" <> Vxpipe.Calls.PublicId.uuid() end)
+
+    assert {:ok, second, _token} =
+             Calls.prepare_call(context.principal, context.route.key, %{}, options)
+
+    digest = :crypto.hash(:sha256, "request")
+    attrs = %{idempotency_key: "same-key", idempotency_digest: digest}
+    first_stored = Repo.get_by!(StoredCall, public_id: first.id)
+    second_stored = Repo.get_by!(StoredCall, public_id: second.id)
+    assert {:ok, _stored} = Repo.update(StoredCall.changeset(first_stored, attrs))
+
+    assert {:error, changeset} =
+             Repo.update(StoredCall.changeset(second_stored, attrs), mode: :savepoint)
+
+    assert Keyword.has_key?(changeset.errors, :idempotency_key)
+
+    other_options =
+      Keyword.take(options, [
+        :credential_repository,
+        :call_spec_repository,
+        :call_repository,
+        :registries,
+        :now
+      ])
+
+    assert {:ok, other, issued} =
+             Administration.bootstrap_tenant("Other outgoing tenant", [:calls], other_options)
+
+    assert {:ok, principal} =
+             Administration.authenticate(other.key, issued.secret, :calls, other_options)
+
+    assert {:ok, draft} = Calls.save_call_spec(other.key, call_spec_input(), other_options)
+
+    assert {:ok, published} =
+             Calls.publish_call_spec(other.key, draft.call_spec_id, 1, other_options)
+
+    route = Enum.find(published.routes, &(&1.participant_ref == "caller"))
+
+    assert {:ok, other_call, _token} =
+             Calls.prepare_call(principal, route.key, %{}, other_options)
+
+    other_stored = Repo.get_by!(StoredCall, public_id: other_call.id)
+    assert {:ok, _stored} = Repo.update(StoredCall.changeset(other_stored, attrs))
+  end
+
+  test "a request key and digest must be stored together", context do
+    assert {:ok, prepared, _token} =
+             Calls.prepare_call(context.principal, context.route.key, %{}, context.options)
+
+    stored = Repo.get_by!(StoredCall, public_id: prepared.id)
+
+    for attributes <- [
+          %{idempotency_key: "orphan-key"},
+          %{idempotency_digest: :crypto.hash(:sha256, "orphan")}
+        ] do
+      assert {:error, changeset} =
+               stored |> StoredCall.changeset(attributes) |> Repo.update(mode: :savepoint)
+
+      assert Keyword.has_key?(changeset.errors, :idempotency_digest)
+    end
+  end
+
   @tag opening_audio: true
   test "atomically stores and reconstructs a private prepared call and its first token",
        context do
@@ -903,7 +1002,10 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     assert eventually(fn -> Repo.aggregate(StoredVariableSnapshot, :count) == 2 end)
     assert eventually(fn -> Repo.aggregate(StoredCallFact, :count) == 1 end)
-    assert %{accepted: 3, pending: 0, retries: 0} = Handoff.stats(handoff)
+
+    assert eventually(fn ->
+             match?(%{accepted: 3, pending: 0, retries: 0}, Handoff.stats(handoff))
+           end)
 
     subscriber_monitor = Process.monitor(handoff.subscriber)
     Process.exit(source, :kill)

@@ -129,6 +129,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLive do
   def audio_append(_audio), do: {:error, :invalid_audio}
 
   def commentary(text), do: context_append("session.commentary.append", text)
+  def instructions(text), do: context_append("session.instructions.append", text)
   def thinking(text), do: context_append("session.thinking.append", text)
 
   def hold(true), do: %{"type" => "session.input_audio.mute"}

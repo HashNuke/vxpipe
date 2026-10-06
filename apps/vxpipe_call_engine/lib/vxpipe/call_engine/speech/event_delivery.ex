@@ -169,6 +169,9 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
   def accept_event(%Event{kind: :response_started} = event, state),
     do: accept_response_start(event, state)
 
+  def accept_event(%Event{kind: :opening_started} = event, state),
+    do: STSInput.accept_opening(event, state)
+
   def accept_event(
         %Event{kind: :tool_call} = event,
         %{descriptor: %{response_start?: true}} = state

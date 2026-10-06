@@ -241,6 +241,10 @@ defmodule Vxpipe.Persistence.InspectionStore do
       started_at: call.started_at,
       ended_at: call.ended_at,
       terminal_reason: call.terminal_reason,
+      outgoing_outcome: call.outgoing_outcome,
+      dial_submitted_at: call.dial_submitted_at,
+      answered_at: call.answered_at,
+      dial_ended_at: call.dial_ended_at,
       latest_variable_revision: latest_variable_revision
     }
   end

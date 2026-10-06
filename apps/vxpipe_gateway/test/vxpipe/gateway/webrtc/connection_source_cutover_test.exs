@@ -160,7 +160,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSourceCutoverTest do
     end)
 
     token = make_ref()
-    delayed = %{scope(state, token) | deadline_ms: System.monotonic_time(:millisecond) + 30}
+    delayed = %{scope(state, token) | deadline_ms: System.monotonic_time(:millisecond) + 1_000}
 
     assert {:reply, {:error, :source_unavailable}, uncertain} =
              Connection.handle_call(

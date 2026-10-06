@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.CallSpec.WaitSoundsCompilerTest do
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler, Error}
 
   test "omitted slots resolve destination-specific defaults while explicit nil silences only its slot" do
-    assert CallSpec.schema_version() == "20260915.01"
+    assert CallSpec.schema_version() == "20261004.01"
 
     for fields <- [%{}, %{wait_sounds: %{}}] do
       plan = compile(fields)
@@ -133,7 +133,7 @@ defmodule Vxpipe.CallEngine.CallSpec.WaitSoundsCompilerTest do
 
   defp input do
     %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "support",
       participants:

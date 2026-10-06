@@ -14,7 +14,7 @@ defmodule Vxpipe.Providers.Twilio.MediaControlDecoder do
   def dtmf(options, %{"dtmf" => dtmf} = message) when is_map(dtmf) do
     with {:ok, stream_id} <- expected_stream(options, message),
          {:ok, provider_sequence} <- MediaFields.integer(message, "sequenceNumber"),
-         "inbound_track" <- Map.get(dtmf, "track"),
+         track when track in ["inbound_track", "inbound"] <- Map.get(dtmf, "track"),
          {:ok, digit} <- MediaFields.string(dtmf, "digit"),
          {:ok, occurred_at} <- MediaFields.observed_at(options),
          {:ok, identity} <- MediaFields.identity(options) do
@@ -54,15 +54,29 @@ defmodule Vxpipe.Providers.Twilio.MediaControlDecoder do
 
   def mark(_options, _message), do: invalid()
 
-  @spec stop(keyword(), map()) :: :ignore | {:error, :invalid_twilio_media_message}
+  @spec stop(keyword(), map()) :: {:ok, Event.t()} | {:error, :invalid_twilio_media_message}
   def stop(options, %{"stop" => stop} = message) when is_map(stop) do
-    with {:ok, _stream_id} <- expected_stream(options, message),
-         {:ok, _sequence} <- MediaFields.integer(message, "sequenceNumber"),
+    with {:ok, stream_id} <- expected_stream(options, message),
+         {:ok, sequence} <- MediaFields.integer(message, "sequenceNumber"),
          {:ok, account_sid} <- MediaFields.string(stop, "accountSid"),
          :ok <- MediaFields.required_expected(options, :provider_connection_id, account_sid),
          {:ok, call_sid} <- MediaFields.string(stop, "callSid"),
-         :ok <- MediaFields.required_expected(options, :provider_call_control_id, call_sid) do
-      :ignore
+         :ok <- MediaFields.required_expected(options, :provider_call_control_id, call_sid),
+         {:ok, occurred_at} <- MediaFields.observed_at(options),
+         {:ok, identity} <- MediaFields.identity(options) do
+      event =
+        struct!(
+          Event,
+          Map.merge(identity, %{
+            kind: :ended,
+            provider_event_id: "#{stream_id}:#{sequence}",
+            occurred_at: occurred_at,
+            stream_id: stream_id,
+            end_reason: :hangup
+          })
+        )
+
+      if Event.valid?(event), do: {:ok, event}, else: invalid()
     else
       _invalid -> invalid()
     end

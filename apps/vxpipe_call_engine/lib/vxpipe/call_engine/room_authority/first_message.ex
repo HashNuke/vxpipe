@@ -85,21 +85,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
       :wait_for_input ->
         {:ok, state}
 
-      :fixed ->
+      mode when mode in [:fixed, :generated] ->
+        opening = if mode == :fixed, do: {:fixed, state.first_message.text}, else: :generated
+
         with %{pid: capability} when is_pid(capability) <- state.speech_to_speech_capability,
              :ok <-
-               Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(
+               Vxpipe.CallEngine.Capability.SpeechToSpeech.begin_opening(
                  capability,
-                 state.first_message.text
+                 opening
                ) do
           first_message = %{state.first_message | status: :started}
           {:ok, %{state | first_message: first_message}}
         else
           _unavailable -> {:error, unavailable()}
         end
-
-      :generated ->
-        {:error, unavailable()}
     end
   end
 

@@ -52,6 +52,18 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  @doc "Release one outgoing admission after its durable room-start projection commits."
+  def admit_outgoing_call(tenant_id, room_id, incarnation_id, token)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id) and
+             is_reference(token),
+      do: RoomSupervisor.admit_outgoing_call(tenant_id, room_id, incarnation_id, token)
+
+  @doc "Cancel an outgoing admission using its controller's exact incarnation and token."
+  def cancel_outgoing_admission(tenant_id, room_id, incarnation_id, token)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id) and
+             is_reference(token),
+      do: RoomSupervisor.cancel_outgoing_admission(tenant_id, room_id, incarnation_id, token)
+
   @doc "Prepares and pins wait/cue audio before admission without starting a room."
   @spec prepare_call_audio(ResolvedCallPlan.t(), keyword()) ::
           {:ok, ResolvedCallPlan.t()} | {:error, Error.t()}
@@ -96,6 +108,12 @@ defmodule Vxpipe.CallEngine do
   def monitor_room(tenant_id, room_id, incarnation_id)
       when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
       do: RoomSupervisor.monitor_room(tenant_id, room_id, incarnation_id)
+
+  @doc "Ends one exact room incarnation after a trusted host observes remote hangup."
+  @spec end_call(String.t(), String.t(), String.t()) :: :ok | {:error, :room_unavailable}
+  def end_call(tenant_id, room_id, incarnation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
+      do: RoomSupervisor.end_call(tenant_id, room_id, incarnation_id)
 
   @spec inspect_live_call(String.t(), String.t()) ::
           {:ok, Vxpipe.CallEngine.LiveInspection.Snapshot.t()} | {:error, :call_not_live}

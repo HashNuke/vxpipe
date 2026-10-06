@@ -53,6 +53,27 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   @startup_progress [:vxpipe, :call_engine, :startup, :progress]
   @startup_stop [:vxpipe, :call_engine, :startup, :stop]
 
+  test "remote hangup ends only the exact room incarnation while media is still preparing" do
+    plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
+    assert {:ok, room} = start_call(plan)
+
+    assert {:ok, monitor} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+    assert {:error, :room_unavailable} =
+             CallEngine.end_call("another-tenant", plan.room_id, room.incarnation_id)
+
+    assert {:error, :room_unavailable} =
+             CallEngine.end_call(plan.tenant_id, plan.room_id, "another-incarnation")
+
+    refute_received {:DOWN, ^monitor, :process, _, _}
+    assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :remote_hangup}}, 1_000
+
+    assert {:error, :room_unavailable} =
+             CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+  end
+
   test "monitoring a room selects its exact tenant and incarnation before caller media attaches" do
     plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
     assert {:ok, room} = start_call(plan)
@@ -213,7 +234,13 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     attach_startup_telemetry()
     plan = compile_plan(60_000, model: "test:blocked")
     assert {:ok, room} = start_call(plan)
+    assert_receive {:test_call_lifecycle_timer_scheduled, {lifecycle, _, :max_duration}, 60_000}
     assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+
+    assert_receive {:startup_diagnostic, ^lifecycle, @startup_progress, _,
+                    %{blockers: [:model_inference]}},
+                   1_000
+
     preparation_monitor = Process.monitor(preparer)
     authority = room_authority(plan)
     room_monitor = Process.monitor(authority)
@@ -229,8 +256,9 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 1_000
     refute_receive {:test_call_ready, _}
 
-    assert_receive {:startup_diagnostic, _, @startup_stop, _,
-                    %{outcome: :failed, blockers: blockers}}
+    assert_receive {:startup_diagnostic, ^lifecycle, @startup_stop, _,
+                    %{outcome: :failed, blockers: blockers}},
+                   1_000
 
     assert :model_inference in blockers
   end
@@ -328,7 +356,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
              match?({:error, %Error{code: :speech_to_text_unavailable}}, result)
 
     assert_receive :test_failing_stt_start_attempted, 1_000
-    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}, 1_000
 
     assert_receive {:DOWN, ^monitor, :process, ^authority,
                     {:shutdown, {:startup_failure, :speech_to_text_unavailable}}},
@@ -455,7 +483,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     assert {:ok, _attachment} = attach(plan, room, caller, "connection-lifecycle")
     assert_receive {:test_stt_transport_started, transport, _connection}
-    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}, 1_000
     assert_receive {:test_call_lifecycle_timer_scheduled, idle_timer, 15_000}
 
     TestSpeechToTextTransport.deliver(transport, turn_message("StartOfTurn", 1, ""))
@@ -494,7 +522,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
       end
 
     input = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

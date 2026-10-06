@@ -36,6 +36,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   defstruct @enforce_keys ++
               [
                 credential_bindings: nil,
+                direction: :incoming,
+                ring_timeout_ms: nil,
                 wait_sounds: %Vxpipe.CallEngine.CallSpec.WaitSounds{},
                 wait_sound_assets: nil
               ]
@@ -53,6 +55,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
     Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio,
     Vxpipe.CallEngine.ResolvedCallPlan.VariableSection,
     Vxpipe.CallEngine.CallSpec.Participant,
+    Vxpipe.CallEngine.CallSpec.Direction,
     Vxpipe.CallEngine.CallSpec.ConnectionIntent,
     Vxpipe.CallEngine.CallSpec.NumberFromVariable,
     Vxpipe.CallEngine.CallSpec.CapabilitySelection,
@@ -94,6 +97,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           transport: :web,
           entry_caller: String.t(),
           entry_receiver: String.t(),
+          direction: :incoming | :outgoing,
+          ring_timeout_ms: nil | pos_integer(),
           opening_audio: nil | Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio.t(),
           wait_sounds: Vxpipe.CallEngine.CallSpec.WaitSounds.t(),
           wait_sound_assets: Vxpipe.CallEngine.WaitSounds.PreparedAssets.t() | nil,

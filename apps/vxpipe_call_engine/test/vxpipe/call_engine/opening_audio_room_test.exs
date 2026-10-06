@@ -1119,7 +1119,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       end
 
     call_spec_input = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: Keyword.get(options, :wait_sounds),
       entry_caller: "caller",
       entry_receiver: "receiver",

@@ -99,6 +99,12 @@ defmodule Vxpipe.CallEngine.SpeechOutputSTTStallingProvider do
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 
   @impl true
+  def handle_cast({:emit, kind, fields}, state) do
+    _ = Event.emit(state.channel, kind, fields)
+    {:noreply, state}
+  end
+
+  @impl true
   def format_status(status) do
     status
     |> Map.put(:state, :stalling_stt_provider)

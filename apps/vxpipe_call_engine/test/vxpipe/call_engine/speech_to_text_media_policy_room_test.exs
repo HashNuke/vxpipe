@@ -1010,7 +1010,13 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     attachment = attach(plan, room, caller, connection_id)
     assert_receive {:test_stt_transport_started, transport, _connection}
     _receiver = attach(plan, room, receiver, unique_id("receiver"))
-    assert {:ok, resources} = Ingress.readiness_resources(attachment.media_ingress)
+
+    resources =
+      await_ingress_resources(
+        attachment.media_ingress,
+        System.monotonic_time(:millisecond) + 1_000
+      )
+
     resource = Enum.find(resources, &(&1.kind == :speech_to_text))
     collector = collect([resource], room.incarnation_id)
     TestSpeechToTextTransport.deliver(transport, connected_message())
@@ -1059,6 +1065,25 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
   defp assert_channel_has_adoption(channel, timeout) do
     deadline = now() + timeout
     await_channel_adoption(channel, deadline)
+  end
+
+  defp await_ingress_resources(ingress, deadline) do
+    case Ingress.readiness_resources(ingress) do
+      {:ok, resources} ->
+        resources
+
+      {:error, :unavailable} ->
+        remaining = deadline - System.monotonic_time(:millisecond)
+        assert remaining > 0, "speech ingress did not expose a stable readiness snapshot"
+        reference = make_ref()
+        Process.send_after(self(), {:ingress_readiness_poll, reference}, min(10, remaining))
+
+        receive do
+          {:ingress_readiness_poll, ^reference} -> await_ingress_resources(ingress, deadline)
+        after
+          remaining -> flunk("speech ingress readiness observation expired")
+        end
+    end
   end
 
   defp await_channel_adoption(channel, deadline) do
@@ -1262,7 +1287,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
       end
 
     input = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

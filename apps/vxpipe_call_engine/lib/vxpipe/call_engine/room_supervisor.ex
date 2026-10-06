@@ -77,6 +77,34 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     :exit, _reason -> {:error, :room_unavailable}
   end
 
+  def admit_outgoing_call(tenant_id, room_id, incarnation_id, token) do
+    outgoing_admission_control(tenant_id, room_id, incarnation_id, token, :admit_outgoing)
+  end
+
+  def end_call(tenant_id, room_id, incarnation_id) do
+    with {:ok, authority} <- lookup_room(tenant_id, room_id) do
+      GenServer.call(authority, {:end_call, incarnation_id}, 5_000)
+    else
+      _missing -> {:error, :room_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :room_unavailable}
+  end
+
+  def cancel_outgoing_admission(tenant_id, room_id, incarnation_id, token) do
+    outgoing_admission_control(tenant_id, room_id, incarnation_id, token, :cancel_outgoing)
+  end
+
+  defp outgoing_admission_control(tenant_id, room_id, incarnation_id, token, operation) do
+    with {:ok, authority} <- lookup_room(tenant_id, room_id) do
+      GenServer.call(authority, {operation, incarnation_id, token}, 5_000)
+    else
+      _missing -> {:error, :room_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :room_unavailable}
+  end
+
   def join_participant(%JoinParticipant{} = command) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
       [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)
@@ -402,6 +430,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
         Keyword.get(runtime_options, :remote_mcp_connection_provider),
       remote_mcp_protocol_client: Keyword.get(runtime_options, :remote_mcp_protocol_client),
       outbound_leg_connector: Keyword.get(runtime_options, :outbound_leg_connector),
+      outgoing_admission: Keyword.get(runtime_options, :outgoing_admission),
       media_policy_ceiling:
         Keyword.get(runtime_options, :media_policy_ceiling, MediaPolicy.inherit())
     ]

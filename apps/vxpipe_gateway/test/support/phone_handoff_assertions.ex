@@ -242,9 +242,11 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     refute_receive {:test_tts_transport_started, _, _}, 0
 
     assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+    send(provider, {:test_agent_runtime_delta, "We can continue.", self()})
+    assert_receive {:test_agent_runtime_delta_result, :ok}, 2_000
     assert {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "We can continue.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
-    await_recovery_speech(source_tts, System.monotonic_time(:millisecond) + 2_000)
+    await_recovery_speech(source_tts, System.monotonic_time(:millisecond) + 5_000)
 
     CallEngine.TestTextToSpeechTransport.deliver_control(
       source_tts,

@@ -110,6 +110,9 @@ defmodule Vxpipe.CallEngine.Speech.Event do
   def supported?(%__MODULE__{kind: :response_started}, %{kind: :sts, response_start?: true}),
     do: true
 
+  def supported?(%__MODULE__{kind: :opening_started}, %{kind: :sts, response_start?: false}),
+    do: true
+
   def supported?(
         %__MODULE__{kind: :tool_call, response_context: context},
         %{kind: :sts} = descriptor
@@ -134,6 +137,7 @@ defmodule Vxpipe.CallEngine.Speech.Event do
 
   defp allowed_fields(:ready), do: [:readiness, :provider_request_id]
   defp allowed_fields(:input_submitted), do: [:request_ref, :provenance, :provider_request_id]
+  defp allowed_fields(:opening_started), do: [:request_ref, :turn_ref]
   defp allowed_fields(:failed), do: [:request_ref, :reason]
 
   defp allowed_fields(kind) when kind in [:completed, :cancelled],
@@ -187,6 +191,9 @@ defmodule Vxpipe.CallEngine.Speech.Event do
     do: mode in [:initialized, :provider_acknowledged]
 
   defp valid_kind?(%__MODULE__{kind: :input_finished}), do: true
+
+  defp valid_kind?(%__MODULE__{kind: :opening_started, request_ref: request, turn_ref: turn}),
+    do: is_reference(request) and is_reference(turn)
 
   defp valid_kind?(%__MODULE__{
          kind: :response_started,

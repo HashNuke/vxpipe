@@ -23,6 +23,173 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     %{leg_id: leg_id, media_admission: media_admission}
   end
 
+  test "an initial submission timeout preserves its owner for late acceptance and cleanup",
+       context do
+    observer = self()
+
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options(self(), api_key: "blocked:#{:erlang.pid_to_list(self())}")]
+      )
+
+    options = [
+      leg_id: fn -> context.leg_id end,
+      media_admission: context.media_admission,
+      service_registry: registry
+    ]
+
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+
+    start_supervised!(
+      {Task,
+       fn ->
+         send(
+           observer,
+           {:initial_submission_result, OutgoingLegConnector.connect(options, request, 100)}
+         )
+       end}
+    )
+
+    assert_receive {:test_telephony_dial_pending, leg}, 1_000
+    monitor = Process.monitor(leg)
+    assert_receive {:initial_submission_result, {:ok, reference, :unknown}}, 1_000
+    assert :ok = OutgoingLegConnector.disconnect(options, reference)
+    refute_receive {:DOWN, ^monitor, :process, ^leg, _}, 20
+    send(leg, :release_test_telephony_dial)
+    assert_receive {:test_telephony_end_leg, %EndLeg{reason: :call_cancelled}}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+    assert_receive {:test_telephony_dial, _}
+    refute_receive {:test_telephony_dial, _}, 20
+  end
+
+  test "an initial leg without structural room ownership is rejected before dial", context do
+    request = %{request() | purpose: :initial}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service(self(), []),
+               context.media_admission
+             )
+
+    assert {:error, :invalid_outbound_telephony_request} = OutgoingLeg.await(leg, 1_000)
+    refute_receive {:test_telephony_dial, _}, 20
+  end
+
+  test "an initial leg reports only matching authenticated outcomes to its exact room attempt",
+       context do
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+    service = service(self(), [])
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service,
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    token = request.attempt_id
+    mismatch = %{ended_event(:busy) | provider_call_control_id: "other"}
+    assert {:error, :telephony_leg_mismatch} = OutgoingLeg.dispatch(leg, mismatch, 1_000)
+    refute_receive {:vxpipe_outbound_leg, ^token, _, _}, 20
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:busy), 1_000)
+    assert_receive {:vxpipe_outbound_leg, ^token, ^leg, {:ended, :busy}}, 1_000
+    refute_receive {:vxpipe_outbound_leg, ^token, _, _}, 20
+  end
+
+  test "an initial leg reports an answer without media or transfer acceptance", context do
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service(self(), []),
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    token = request.attempt_id
+    event = lifecycle_event(:answered, [])
+    assert :ok = OutgoingLeg.dispatch(leg, event, 1_000)
+    assert_receive {:vxpipe_outbound_leg, ^token, ^leg, :answered}, 1_000
+    assert :ok = OutgoingLeg.dispatch(leg, event, 1_000)
+    refute_receive {:vxpipe_outbound_leg, ^token, _, :answered}, 20
+  end
+
+  test "the initial connector preserves an unknown submission result", context do
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options(self(), api_key: "unknown:#{:erlang.pid_to_list(self())}")]
+      )
+
+    options = [
+      leg_id: fn -> context.leg_id end,
+      media_admission: context.media_admission,
+      service_registry: registry
+    ]
+
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+
+    assert {:ok, %OutgoingLegReference{}, :unknown} =
+             OutgoingLegConnector.connect(options, request, 1_000)
+
+    assert_receive {:test_telephony_dial, _}
+    refute_receive {:test_telephony_dial, _}, 20
+  end
+
+  test "room loss while ringing hangs up the exact initial leg once", context do
+    room = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
+    request = %{request() | purpose: :initial, room_owner: room, attempt_id: make_ref()}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service(self(), []),
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    monitor = Process.monitor(leg)
+    send(room, :stop)
+    assert_receive {:test_telephony_end_leg, %EndLeg{reason: :call_cancelled}}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+    refute_receive {:test_telephony_end_leg, _}, 20
+  end
+
+  test "a late identity after abandoned unknown submission is cancelled without another dial",
+       context do
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service(self(), api_key: "unknown:#{:erlang.pid_to_list(self())}"),
+               context.media_admission
+             )
+
+    assert {:ok, :unknown} = OutgoingLeg.await(leg, 1_000)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+    monitor = Process.monitor(leg)
+    assert :ok = OutgoingLeg.dispatch(leg, outgoing_event(context.leg_id), 1_000)
+    assert_receive {:test_telephony_end_leg, %EndLeg{reason: :call_cancelled}}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+    assert_receive {:test_telephony_dial, _}
+    refute_receive {:test_telephony_dial, _}, 20
+  end
+
   test "submits one dial and binds accepted provider identity to the exact leg", context do
     service = service(self(), answering_machine_detection: :detect)
     request = request()
@@ -69,6 +236,169 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert binding.provider_call_control_id == "outbound-call-control"
     assert binding.provider_call_leg_id == "outbound-call-leg"
     assert binding.provider_call_session_id == "outbound-call-session"
+  end
+
+  test "configured initial machine detection holds media and reports machine before a definitive answer",
+       context do
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service(self(), answering_machine_detection: :detect),
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    token = request.attempt_id
+    assert :ok = OutgoingLeg.dispatch(leg, lifecycle_event(:answered, []), 1_000)
+    assert_receive {:vxpipe_outbound_leg, ^token, ^leg, :connected}, 1_000
+    refute_receive {:vxpipe_outbound_leg, ^token, _, :answered}, 20
+    started = lifecycle_event(:media_started, stream_id: "stream-machine")
+    assert :ok = OutgoingLeg.dispatch(leg, started, 1_000)
+
+    assert {:error, :media_session_not_found} =
+             Vxpipe.Gateway.Telephony.MediaSupervisor.snapshot(context.leg_id)
+
+    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(:machine), 1_000)
+    assert_receive {:vxpipe_outbound_leg, ^token, ^leg, {:ended, :machine}}, 1_000
+    assert_receive {:test_telephony_end_leg, %EndLeg{reason: :answering_machine}}, 1_000
+    refute_receive {:vxpipe_outbound_leg, ^token, _, :answered}, 20
+  end
+
+  test "unknown initial machine detection permits an answered call without claiming human proof",
+       context do
+    request = %{request() | purpose: :initial, room_owner: self(), attempt_id: make_ref()}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service(self(), answering_machine_detection: :detect),
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    token = request.attempt_id
+    assert :ok = OutgoingLeg.dispatch(leg, lifecycle_event(:answered, []), 1_000)
+    assert_receive {:vxpipe_outbound_leg, ^token, ^leg, :connected}, 1_000
+    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(:unknown), 1_000)
+    assert_receive {:vxpipe_outbound_leg, ^token, ^leg, :answered}, 1_000
+  end
+
+  test "initial media joins the outgoing callee normally and DTMF needs no transfer acceptance",
+       context do
+    alias Vxpipe.CallEngine
+    alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
+    alias Vxpipe.Gateway.{TestTelephonySocket, Telephony.MediaSupervisor}
+    id = System.unique_integer([:positive, :monotonic])
+
+    assert {:ok, spec} =
+             CallSpec.new(
+               %{
+                 schema_version: CallSpec.schema_version(),
+                 outgoing_call: %{
+                   callee: "customer",
+                   handled_by: "assistant",
+                   ring_timeout_ms: 5_000
+                 },
+                 defaults: %{
+                   capabilities: %{
+                     model_inference: %{provider: "fixture", model: "google:test-model"}
+                   }
+                 },
+                 wait_sounds: nil,
+                 call_variables: %{sections: %{}},
+                 participants: %{
+                   "customer" => %{
+                     type: "human",
+                     connection: %{
+                       service: "telnyx-primary",
+                       mode: "dial",
+                       number: "+15550001001"
+                     }
+                   },
+                   "assistant" => %{
+                     type: "agent",
+                     prompt: "Help.",
+                     first_message: %{mode: "wait_for_input"},
+                     tools: %{},
+                     transfers: []
+                   }
+                 },
+                 limits: %{max_duration_ms: 60_000}
+               },
+               resource_id: "initial-media",
+               revision: 1
+             )
+
+    assert {:ok, invocation} =
+             CallInvocation.new(
+               %{
+                 call_spec: %{id: "initial-media", revision: 1},
+                 transport: %{type: "telephony"},
+                 initial_variables: %{}
+               },
+               tenant_id: "tenantkey1234567",
+               actor_id: "actor-initial",
+               call_id: "call-initial-#{id}",
+               room_id: "room-initial-#{id}"
+             )
+
+    assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
+
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options(self())]
+      )
+
+    plan = Vxpipe.Gateway.TestTelephonyServiceRepository.pin_plan(plan, service_options(self()))
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               outbound_leg_connector:
+                 {OutgoingLegConnector,
+                  [
+                    leg_id: fn -> context.leg_id end,
+                    media_admission: context.media_admission,
+                    service_registry: registry
+                  ]}
+             )
+
+    assert_receive {:test_telephony_dial, dial}, 2_000
+    assert {:ok, leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+
+    assert {:ok, binding} =
+             consume_media(context.media_admission, dial.media_url, service(self(), []))
+
+    socket = start_supervised!({TestTelephonySocket, observer: self()})
+    assert :ok = TestTelephonySocket.bind_readiness(socket, binding, "stream-initial")
+
+    started = %Event{
+      kind: :media_started,
+      provider: :telnyx,
+      provider_connection_id: binding.provider_connection_id,
+      provider_call_control_id: binding.provider_call_control_id,
+      provider_call_leg_id: binding.provider_call_leg_id,
+      provider_call_session_id: binding.provider_call_session_id,
+      stream_id: "stream-initial"
+    }
+
+    assert :ok =
+             TestTelephonySocket.run(socket, fn -> OutgoingLeg.dispatch(leg, started, 2_000) end)
+
+    assert :ok = CallEngine.TestCallStartup.await_open(plan)
+    assert {:ok, snapshot} = MediaSupervisor.snapshot(context.leg_id)
+    assert binding.incarnation_id == room.incarnation_id
+    assert snapshot.attachment.admission == :main
+    assert snapshot.attachment.transfer_attempt_id == nil
+    dtmf = lifecycle_event(:dtmf, digit: "1")
+    assert :ok = TestTelephonySocket.run(socket, fn -> OutgoingLeg.dispatch(leg, dtmf, 1_000) end)
   end
 
   test "submits the same outbound-leg contract through a configured Twilio service", context do

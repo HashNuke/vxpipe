@@ -513,42 +513,39 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert :ok =
              TestTransferConnection.complete_source_arm(fixture, {:ok, arm_scope.active_epoch})
 
-    reopened =
-      Enum.reduce_while(1..200, nil, fn _, _ ->
-        state = :sys.get_state(context.authority)
-
-        if state.source_cutover == nil,
-          do: {:halt, state},
-          else: {:cont, nil}
-      end)
-
-    assert is_map(reopened)
+    _reopened = await_cutover_state(context.authority, &is_nil(&1.source_cutover), "reopened")
     assert :sys.get_state(context.ingress).open? == true
   end
 
   defp await_cutover_held(authority) do
-    Enum.reduce_while(1..200, nil, fn _, _ ->
-      case :sys.get_state(authority).source_cutover do
-        %{phase: :held, stt_ready?: true} = _cutover -> {:halt, :sys.get_state(authority)}
-        _pending -> {:cont, nil}
-      end
-    end)
-    |> case do
-      %{source_cutover: %{phase: :held, stt_ready?: true}} = state -> state
-      _pending -> flunk("source cutover did not reach a ready held state")
-    end
+    await_cutover_state(
+      authority,
+      &match?(%{phase: :held, stt_ready?: true}, &1.source_cutover),
+      "ready held"
+    )
   end
 
   defp await_failed_cutover(authority) do
-    Enum.reduce_while(1..200, nil, fn _, _ ->
-      case :sys.get_state(authority).source_cutover do
-        %{phase: :failed} = _cutover -> {:halt, :sys.get_state(authority)}
-        _pending -> {:cont, nil}
+    await_cutover_state(authority, &match?(%{phase: :failed}, &1.source_cutover), "failed closed")
+  end
+
+  defp await_cutover_state(authority, ready?, label) do
+    poll_cutover_state(authority, ready?, label, System.monotonic_time(:millisecond) + 5_000)
+  end
+
+  defp poll_cutover_state(authority, ready?, label, deadline) do
+    state = :sys.get_state(authority)
+
+    if ready?.(state) do
+      state
+    else
+      remaining = deadline - System.monotonic_time(:millisecond)
+      assert remaining > 0, "source cutover did not reach #{label} state within startup budget"
+
+      receive do
+      after
+        min(10, remaining) -> poll_cutover_state(authority, ready?, label, deadline)
       end
-    end)
-    |> case do
-      %{source_cutover: %{phase: :failed}} = state -> state
-      _pending -> flunk("source cutover did not fail closed")
     end
   end
 
@@ -1489,7 +1486,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       end
 
     source = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "assistant",

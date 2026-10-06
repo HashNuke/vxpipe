@@ -10,6 +10,9 @@ defmodule Vxpipe.Providers.Google.STSInput do
       when is_reference(reference) and is_binary(text),
       do: {:ok, {:push_text, reference, text}}
 
+  def context_command({:opening, reference, opening}) when is_reference(reference),
+    do: {:ok, {:begin_opening, reference, opening}}
+
   def context_command({:activity, boundary}) when boundary in [:started, :ended],
     do: {:ok, {:input_activity, boundary}}
 

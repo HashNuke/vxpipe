@@ -1,6 +1,6 @@
 # Twilio through the common telephony contract
 
-Status: implementation in progress. Specification review: approved (2026-09-08).
+Status: complete (2026-10-06). Specification review: approved (2026-09-08).
 
 Credential configuration update (2026-09-16): new legs now resolve encrypted tenant service
 records; existing owners retain their initialized configuration. The earlier application-scope
@@ -38,7 +38,7 @@ Switch a configured telephony service to Twilio and run the same inbound-agent a
 - [x] Tampered/cross-tenant media or callbacks reject; duplicates/out-of-order events keep one mapped attempt and no speculative retries.
 - [x] Protected-number violations reject before dial; only destination press-1 accepts and briefing remains private.
 - [x] Machine/unknown/busy/no-answer/timeout outcomes preserve the common source/cleanup rules and privacy restrictions.
-- [ ] Live audio works in both directions with correct clock/format mapping; provider disconnect is normalized without blanket multiparty hangup.
+- [x] Live audio works in both directions with correct clock/format mapping; provider disconnect is normalized without blanket multiparty hangup.
 
 ## Manual verification
 
@@ -53,13 +53,122 @@ No automatic cross-carrier fallback, generic provider-specific JSON escape hatch
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
-  implementation labnote with actual test/browser/integration evidence in the implementation commit.
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
+  implementation labnote with actual integration and test evidence. Include this evidence
+  with the implementation commit requested by the user.
 
-Implementation is in progress. Do not mark this slice complete until all checklist and acceptance
-items have evidence.
+Implementation and acceptance are complete. The live and local evidence below establishes the
+supported carrier/media scope; it does not claim every provider failure was observed live.
+
+## Live acceptance continuation (2026-10-05–06)
+
+At the start of this continuation, the outgoing-calls milestone proved real signed ingress,
+reciprocal speech and initial call hangup for Twilio and Telnyx. Its initial-call lane did not
+complete this milestone's private-transfer runnable outcome or selective multiparty disconnect
+contract. The T1–T4 checkpoints below track that continuation; the old REST-only tagged lane
+cannot establish those behaviors.
+
+- [x] T1: locally verify an encrypted fixture using the existing controlled carrier numbers,
+  portable incoming/transfer participants and bounded private preparation.
+- [x] T2: run a selected real Twilio private transfer with remotely heard briefing, real
+  destination press-1 and reciprocal post-bridge speech through Vxpipe mixing.
+- [x] T3: disconnect only the destination leg; demonstrate caller/room retention and final
+  owned-resource/archive cleanup.
+- [x] T4: rerun focused conformance and common gates, then reconcile this milestone and index.
+
+During the blocked 2026-10-05 session, T1's pure source builder validated all three specs with one focused
+red-green test. Encrypted publication and assembled runtime verification remained pending then.
+A new assertion in the signed Twilio harness proves that a destination stop after private
+transfer closes only its leg/media and retains the caller/main-room connection. The
+14-test Twilio harness passes; the preceding two-carrier/decoder/ingress group passes 55 tests.
+These runs used direct Elixir with the existing compiled dependencies because Mix's local
+PubSub socket is denied in this sandbox. They are local evidence, not live carrier acceptance
+or a replacement for the root compilation/test gates. PostgreSQL connections also fail
+with `eperm`; no additional paid call was attempted. T1–T4 stayed unchecked then.
+
+During the blocked session, the selected `live_telephony_transfer` case was implemented in
+Console's `test/integration/live_telephony_test.exs`, but could not run then. Its three-room fixture uses
+real Deepgram speech and carrier adapters with a deterministic one-shot model fixture,
+limiting the case to one caller dial and one transfer dial. Original initial-call cases
+retain real Gemini inference. Private destination bindings remain in a test-owned Registry.
+Eleven focused component tests pass (seed 466420); the live module compiles directly without
+warnings. These checks do not prove encrypted DB publication, real DTMF or live transfer.
+Formatting passed then; remaining root gates were blocked by socket denial.
+
+The execution barrier was revalidated on the third consecutive blocked continuation: local TCP
+socket creation and Mix.PubSub still failed with `eperm`. At that point the implementation was
+ready, but the milestone remained incomplete pending local socket/DB access and real carrier
+and common-gate evidence. Extra fake or REST-only runs could not close those requirements.
+Permission recovery and successful acceptance follow below.
+
+See [checkpoint labnotes](../../labnotes/20261005-2227-twilio-live-transfer.md).
+
+### Permission recovery and early-input repair (2026-10-06)
+
+Local socket creation, PostgreSQL, and outbound HTTPS now work. The normal Console fixture,
+peer, model and encrypted-database group passes 15 tests (six live cases excluded). The first
+selected live transfer published all three specs and connected carrier media, then exposed an
+early-input error: private destination packets arrived before input routes were allocated.
+Gateway interpreted intentionally disabled routes as unavailable media and closed the socket.
+A focused test reproduced this before implementation; the repair drops those early packets
+only during private preparation and retains failure handling for real input errors.
+
+The regression and signed two-carrier/decoder/ingress group pass 49 tests (seed 302441).
+The next selected live run kept destination media connected and recognized a word from the
+private notice, but missed the leading Delta marker (seed 827500). The fixture now repeats
+the marker in a full sentence at the end of the notice, retaining every live acceptance
+assertion. Subsequent playback-complete runs recognized either Delta or the notice's check
+marker. The current probe accepts either distinctive briefing word and forbids both at the
+caller; no other fixture utterance contains them. It allows 15 seconds for readiness observation
+within the unchanged 30-second application deadline. No real press-1, bridge or selective
+hangup was claimed at that point.
+
+Compilation with warnings as errors, strict Credo, formatting, the unused-dependency check,
+three runner shell suites and Lean build/oracle/replay passed. The selected live rerun and final
+default suite remained pending at that point. No additional resources were purchased. See
+[resumption labnotes](../../labnotes/20261006-0206-resume-live-transfer.md).
+
+### Selected carrier acceptance (2026-10-06)
+
+The final `live_telephony_transfer` run passes **one test, zero failures, nine excluded**
+(seed 918113, 31.2 seconds). It uses the existing two controlled numbers and encrypted three-room
+fixture. The destination recognizes a private briefing marker before sending an actual Telnyx
+DTMF command; Twilio delivers digit one with the live `inbound` track label. After accepted
+handoff, opposing Alpha/Bravo speech crosses both physical carrier calls and Vxpipe's human
+bridge. Neither private marker reaches the caller. Exactly one transfer completes and exactly
+three calls exist.
+
+An exact Telnyx destination hangup ends that receiving room and the corresponding Twilio
+destination leg/media subtree while caller and reception remain attached. Stopping reception
+then ends the opposing caller room. All three durable calls and permitted transcript archives
+close. The test node and Funnel mapping are stopped. No new resources were purchased.
+
+Live execution exposed and repaired early private-input handling, the peer helper's name/record
+identity mismatch, the real Twilio DTMF label, and a mixer default whose 160 ms buffer could not
+cover its 300 ms playout delay. The bounded buffer now holds 640 ms while preserving the delay.
+The gated destination model sends its post-bridge response through real Deepgram TTS; the
+unproven native-speak stimulus is removed. Local failure, duplicate, timeout, privacy and AMD
+coverage remains in the signed conformance lane; those outcomes are not all claimed as live
+carrier observations. SIP and unidirectional Twilio streams remain outside the supported scope.
+
+Final common gates pass: formatting, warnings-as-errors compilation, strict Credo (1,196 files),
+unused-dependency checks, and **3,171 default umbrella tests, zero failures, 104 excluded**, seed
+235060. Lean build, oracle and replay verification pass (replay seed 497321). The runner's three
+shell suites pass. The two-carrier conformance group passed 50 tests (seed 655566); final speech
+and persistence synchronization checks passed 74 tests (seed 235060). T1–T4 and this milestone's
+acceptance/completion checklists are complete.
+
+Three default-suite synchronization races were corrected using readiness and queue acknowledgements
+and asynchronous terminal-event injection. An intermittent third-participant WebRTC tone observation
+reproduced during investigation, then passed twice at its reproducing seed and in both subsequent
+full Gateway runs. Its cause remains unproven; no deadline, frequency threshold or production media
+behavior was changed to make that observation pass. The investigation and prior failed runs remain
+recorded in the [resumption labnote](../../labnotes/20261006-0206-resume-live-transfer.md).
+
+The ten checkpoints below retain the original implementation history. Their outstanding-work
+statements describe those checkpoints; the continuation above records current live acceptance.
 
 ## Checkpoint 1: honest provider identity
 
@@ -421,8 +530,8 @@ The currently supported Twilio boundary is deliberately narrow:
 - The gateway's Membrane pipelines convert between that wire format and signed 16-bit mono 48 kHz
   room PCM. SIP, unidirectional `<Start><Stream>`, and other Twilio media products are not claimed.
 
-The guarded lane compiles and is excluded in this checkout because no live-test credentials or
-authorized numbers are configured:
+Ordinary Mix execution excludes this guarded live lane and does not load the live-provider
+environment. The original control-only checkpoint recorded:
 
 ```text
 cd apps/vxpipe_gateway
@@ -433,8 +542,9 @@ mix test test/integration/twilio_voice_api_test.exs
 This test proves only that the provider accepts the configured control request when explicitly
 run. It does not by itself observe a provider WebSocket or establish audible bidirectional media.
 The existing deterministic socket, codec, Membrane, room-mixing, interruption, and complete-call
-harness tests cover those project-owned boundaries. The remaining milestone acceptance check is an
-authorized manual carrier call confirming audible ingress and egress plus isolated leg cleanup.
+harness tests cover those project-owned boundaries. At that checkpoint, an authorized carrier
+call confirming audible ingress/egress and isolated leg cleanup remained outstanding. The
+selected automated self-call above now establishes those live observations.
 
 Local verification passes formatting, compilation with warnings as errors, strict Credo over 601
 source files, all 802 umbrella tests in the serial lane, and the unused-dependency check. Gateway
@@ -445,4 +555,5 @@ contributes 221 passing default tests with six integration tests excluded.
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Approved initial draft; shared contract order and separate vendor verification, media/acceptance/failure parity sufficient.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+This is specification evidence only. Implementation and runtime verification are tracked
+separately in the completion checklist and continuation above.

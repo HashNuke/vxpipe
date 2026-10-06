@@ -18,6 +18,7 @@ defmodule Vxpipe.Persistence.EctoStorage do
     :call_fact_insert_failed,
     :call_fact_sequence_conflict,
     :call_end_conflict,
+    :outgoing_lifecycle_conflict,
     :call_artifact_conflict,
     :call_artifact_insert_failed,
     :call_not_found,

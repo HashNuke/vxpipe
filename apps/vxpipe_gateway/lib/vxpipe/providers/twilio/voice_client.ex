@@ -8,7 +8,7 @@ defmodule Vxpipe.Providers.Twilio.VoiceClient do
 
   @spec dial(keyword(), String.t(), String.t(), form()) :: outcome()
   def dial(options, account_sid, auth_token, form) do
-    request(options, account_sid, auth_token, "/Accounts/#{account_sid}/Calls.json", form)
+    request(options, account_sid, auth_token, "/Accounts/#{account_sid}/Calls.json", form, :dial)
   end
 
   @spec end_call(keyword(), String.t(), String.t(), String.t()) :: outcome()
@@ -18,11 +18,12 @@ defmodule Vxpipe.Providers.Twilio.VoiceClient do
       account_sid,
       auth_token,
       "/Accounts/#{account_sid}/Calls/#{call_sid}.json",
-      [{"Status", "completed"}]
+      [{"Status", "completed"}],
+      :end_call
     )
   end
 
-  defp request(options, account_sid, auth_token, path, form) do
+  defp request(options, account_sid, auth_token, path, form, operation) do
     with {:ok, base_url} <- base_url(options),
          {:ok, response} <-
            options
@@ -39,7 +40,7 @@ defmodule Vxpipe.Providers.Twilio.VoiceClient do
              redirect: false
            )
            |> Req.request() do
-      classify(response)
+      classify(response, operation)
     else
       {:error, _reason} -> :unknown
     end
@@ -49,14 +50,24 @@ defmodule Vxpipe.Providers.Twilio.VoiceClient do
     _kind, _reason -> :unknown
   end
 
-  defp classify(%Req.Response{status: status, body: body})
+  defp classify(%Req.Response{status: status, body: body}, _operation)
        when status in 200..299 and is_map(body),
        do: {:accepted, body}
 
-  defp classify(%Req.Response{status: status}) when status in 400..499,
-    do: {:rejected, status}
+  defp classify(%Req.Response{status: status, body: body}, operation) when status in 400..499 do
+    :telemetry.execute([:vxpipe, :telephony, :command, :rejected], %{http_status: status}, %{
+      provider: :twilio,
+      operation: operation,
+      error_code: error_code(body)
+    })
 
-  defp classify(%Req.Response{}), do: :unknown
+    {:rejected, status}
+  end
+
+  defp classify(%Req.Response{}, _operation), do: :unknown
+
+  defp error_code(%{"code" => code}) when is_integer(code) and code in 1..999_999, do: code
+  defp error_code(_body), do: nil
 
   defp base_url(options) do
     case Keyword.get(options, :base_url, @default_base_url) do

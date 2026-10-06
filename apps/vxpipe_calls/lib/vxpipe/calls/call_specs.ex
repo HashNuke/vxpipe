@@ -247,6 +247,8 @@ defmodule Vxpipe.Calls.CallSpecs do
     %{
       "entry_caller" => call_spec.entry_caller,
       "entry_receiver" => call_spec.entry_receiver,
+      "direction" => Atom.to_string(call_spec.direction),
+      "ring_timeout_ms" => call_spec.ring_timeout_ms,
       "participants" => participants,
       "schema_version" => call_spec.schema_version
     }

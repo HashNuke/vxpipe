@@ -40,7 +40,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
       end
 
     source = %{
-      schema_version: CallSpec.schema_version(),
+      schema_version: "20260915.01",
       wait_sounds: %{call_setup: nil},
       entry_caller: "caller",
       entry_receiver: "agent",

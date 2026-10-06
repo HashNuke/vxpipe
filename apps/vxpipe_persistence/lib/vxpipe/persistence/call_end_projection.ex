@@ -36,6 +36,13 @@ defmodule Vxpipe.Persistence.CallEndProjection do
       else: {:error, :call_end_conflict}
   end
 
+  def apply(_repo, %Call{state: :failed} = call, %CallFact{kind: :archive_stream_closed}) do
+    case Vxpipe.Persistence.ResolvedPlanCodec.decode(call.resolved_plan) do
+      {:ok, %{direction: :outgoing}} -> {:ok, call}
+      _other -> {:error, :call_not_running}
+    end
+  end
+
   def apply(_repo, %Call{}, %CallFact{kind: :archive_stream_closed}),
     do: {:error, :call_not_running}
 

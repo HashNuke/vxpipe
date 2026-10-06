@@ -24,6 +24,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     GPTLive,
     GPTLiveDelegation,
     GPTLiveOutput,
+    GPTLiveOpening,
     GPTLiveRetiredTools,
     GPTLiveSocket,
     GPTLiveUsage
@@ -60,6 +61,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     :pending_hold,
     :reseed_timer,
     :reseed_barrier,
+    :fixed_opening,
+    :verified_opening_ref,
+    :opening_context,
     segments: %{},
     input_ms: 0,
     ready?: false,
@@ -67,6 +71,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     reseed_attempted?: false,
     resume_after_reseed?: false,
     unanswered?: false,
+    opening_started?: false,
     latest_context: nil
   ]
 
@@ -272,6 +277,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     end
   end
 
+  def handle_call({:submit_input, context, {:opening, reference, opening}}, _from, state),
+    do: GPTLiveOpening.start(state, context, reference, opening)
+
   def handle_call({:submit_input, _context, _operation}, _from, state),
     do: {:reply, {:error, :unsupported_operation}, state}
 
@@ -285,6 +293,10 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
 
   def handle_call({:append_history, _entry}, _from, state),
     do: {:reply, {:error, :invalid_history}, state}
+
+  def handle_call({:set_input_hold, true}, _from, %{fixed_opening: opening} = state)
+      when not is_nil(opening),
+      do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
 
   def handle_call({:set_input_hold, _held?}, _from, %{pending_hold: pending} = state)
       when not is_nil(pending),
@@ -337,7 +349,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
 
   @impl true
   def handle_info({:vxpipe_sts_transport, wire, {:message, payload}}, %{wire: wire} = state) do
-    case GPTLive.decode(payload) do
+    case GPTLiveOpening.decode(state, payload) do
       {:ok, {:started, id}} when not state.ready? ->
         started(state, id)
 
@@ -346,6 +358,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
 
       {:ok, {:voice_usage, seconds}} ->
         voice_usage(state, seconds)
+
+      {:ok, :opening_interrupted} ->
+        {:stop, {:shutdown, :session_failed}, state}
 
       {:ok, {:input_fragment, fragment}} ->
         {inference, events} = TurnInference.input_fragment(state.inference, fragment)
@@ -441,15 +456,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
   end
 
   def handle_info({:output_idle, generation}, %{output_generation: generation} = state) do
-    state = %{state | output_timer: nil}
-
-    if OutputSegmenter.burst?(state.segmenter) do
-      silence = :binary.copy(<<0, 0>>, div(state.output_gap_ms * 24_000, 1_000))
-      output_result(GPTLiveOutput.push_pcm(state, silence))
-    else
-      {:noreply, state}
-    end
+    output_result(GPTLiveOutput.idle(%{state | output_timer: nil}))
   end
+
+  def handle_info(
+        {:opening_deadline, reference},
+        %{fixed_opening: %{deadline: reference}} = state
+      ),
+      do: {:stop, {:shutdown, :session_failed}, state}
 
   def handle_info(:close_timeout, state), do: {:stop, :normal, state}
   def handle_info(_message, state), do: {:noreply, state}
@@ -558,7 +572,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
             do: %{next | unanswered?: false},
             else: next
 
-        {:noreply, schedule_output_idle(next)}
+        {:noreply, GPTLiveOutput.schedule_idle(next)}
 
       {:error, reason, state} ->
         {:stop, {:shutdown, reason}, state}
@@ -590,18 +604,6 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
 
   defp output_result({:ok, state}), do: {:noreply, state}
   defp output_result({:error, reason, state}), do: {:stop, {:shutdown, reason}, state}
-
-  defp schedule_output_idle(state) do
-    if state.output_timer, do: Process.cancel_timer(state.output_timer)
-    generation = make_ref()
-
-    if OutputSegmenter.burst?(state.segmenter) do
-      timer = Process.send_after(self(), {:output_idle, generation}, state.output_gap_ms)
-      %{state | output_timer: timer, output_generation: generation}
-    else
-      %{state | output_timer: nil, output_generation: generation}
-    end
-  end
 
   defp apply_delegation_actions(state, actions) do
     Enum.reduce_while(actions, {:ok, state}, fn action, {:ok, state} ->
@@ -686,6 +688,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     do: {:stop, :normal, state}
 
   defp closed(state, "content"), do: {:stop, {:shutdown, :moderation}, state}
+
+  defp closed(%{fixed_opening: opening} = state, _reason) when not is_nil(opening),
+    do: {:stop, {:shutdown, :session_failed}, state}
 
   defp closed(%{reseed_attempted?: false, close_timer: nil} = state, reason)
        when reason in ["expired", "connection_lost"],
