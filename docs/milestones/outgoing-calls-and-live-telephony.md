@@ -1,6 +1,10 @@
 # Outgoing calls and two-call live telephony
 
-Status: complete (2026-10-05). Checkpoints A–E pass. Both providers' machine resources are provisioned; both answered directions and the five-second unanswered case pass live acceptance. All root gates pass with 3,156 tests, zero failures, 103 excluded (seed 930118), plus runner shell suites and Lean verification. Public Funnel startup can require stabilization before dialing.
+Status: incomplete pending final local verification (2026-10-06). Review of `b1fd2f57`
+observed four failures in nine Telnyx → Twilio live reruns. The six corrections and ten
+consecutive passing live runs in each direction are now recorded in the
+[review-fix milestone](outgoing-call-review-fixes.md). Final umbrella verification and the
+implementation commit remain before completion; historical single-run evidence follows below.
 
 Prerequisites: [Telnyx calls](telnyx-calls.md), [Twilio through the common telephony
 contract](twilio-calls.md) (adapter, incoming and transfer dialing), [prepared call
@@ -247,7 +251,7 @@ D6. Observability and docs
 
 ### Checkpoint E: live acceptance
 
-- [x] Twilio → Telnyx and Telnyx → Twilio answered calls with two-way audio evidence.
+- [x] Twilio → Telnyx and Telnyx → Twilio answered calls with two-way audio evidence in ten consecutive current passing runs each; current counts and seeds are in the review-fix milestone.
 - [x] Unanswered dial ends at its ring deadline.
 - [x] Record evidence here and in the index; record carrier limitations honestly.
 
@@ -361,8 +365,10 @@ changing it, and keep each change in the application that owns it.
 
 ## Acceptance and failure checks
 
-- [x] A saved, published outgoing call spec places a call through either carrier with no
-  provider-specific room logic, and its agent introduces itself once the callee answers.
+- [x] Current reliability acceptance: a saved, published outgoing call spec places a call
+  through either carrier, carries reciprocal greeting transcripts, and closes both rooms
+  in ten consecutive passing runs per direction. Historical single-run evidence below is
+  superseded by the 2026-10-06 review and its linked fixes milestone.
 - [x] Non-answer outcomes end the room once; callbacks cannot redial or revive it.
 - [x] Cross-tenant, unauthenticated, draft-only or incoming-spec requests never dial.
 - [x] A live run needs no personal phone number and leaves no Funnel mapping or node running
@@ -727,7 +733,7 @@ warnings-as-errors compilation, unused dependencies and Lean build/oracle/replay
 full umbrella recheck passes **3,156 tests, zero failures, 103 excluded** (seed 930118).
 The last accepted predecessor was 3,151 tests; the repaired lifecycle adds five focused
 Engine/Gateway cases. Final EndCall policy extraction additionally passes its 20-test
-lifecycle/platform-tool group. All E requirements and the final root gate are accepted.
+lifecycle/platform-tool group. Those single-run E requirements and the final root gate passed on 2026-10-05. The 2026-10-06 review reopened current acceptance; this historical evidence does not complete the milestone.
 
 Funnel startup can close some advertised public relay connections while others work.
 Acceptance used a bounded ten-minute stabilization pass requiring all advertised IPv4 relays

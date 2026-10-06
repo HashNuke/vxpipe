@@ -53,12 +53,15 @@ defmodule Vxpipe.Gateway.Telephony.InitialLegLifecycle do
   def cancellation_reason(%{initial: nil}), do: :transfer_cancelled
   def cancellation_reason(_initial), do: :call_cancelled
 
-  def cancel(%{status: :unknown, initial: %{cancel_pending?: false}} = state) do
+  def cancel(%{status: status, initial: %{cancel_pending?: false}} = state)
+      when status in [:starting, :unknown] do
     Process.send_after(self(), :retire_unknown, state.service.media_token_ttl_ms)
     {:keep, %{state | initial: %{state.initial | cancel_pending?: true}}}
   end
 
-  def cancel(%{status: :unknown} = state), do: {:keep, state}
+  def cancel(%{status: status, initial: initial} = state)
+      when status in [:starting, :unknown] and initial != nil, do: {:keep, state}
+
   def cancel(%{binding: nil} = state), do: {:stop, state}
 
   def cancel(state) do

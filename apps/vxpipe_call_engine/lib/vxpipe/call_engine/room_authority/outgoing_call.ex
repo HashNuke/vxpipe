@@ -112,8 +112,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutgoingCall do
       if expired?(state.outgoing_call) do
         finish(:no_answer, state)
       else
-        outgoing = cancel_timer(state.outgoing_call)
-        {:noreply, %{state | outgoing_call: %{outgoing | answered?: true}}}
+        state = physical_answer(state)
+        {:noreply, state}
       end
     else
       {:noreply, state}
@@ -141,10 +141,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutgoingCall do
     if current_owner?(state.outgoing_call, owner) do
       state = OutgoingAdmission.acknowledge(state, {:ok, :accepted})
 
-      outcome =
-        if expired?(state.outgoing_call),
-          do: :no_answer,
-          else: state.outgoing_call.outcome || normalize(reason)
+      outcome = end_outcome(state.outgoing_call, reason)
 
       finish(outcome, state)
     else
@@ -187,7 +184,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutgoingCall do
     do: not outgoing.answered? and outgoing.clock.() >= outgoing.deadline_ms
 
   def owner_down(monitor, _reason, %{outgoing_call: %{monitor: monitor}} = state)
-      when is_reference(monitor), do: finish(state.outgoing_call.outcome || :failed, state)
+      when is_reference(monitor), do: finish(end_outcome(state.outgoing_call, :failed), state)
 
   def owner_down(monitor, _reason, %{outgoing_call: %{task: %Task{ref: monitor}}} = state),
     do: finish(:failed, state)
@@ -205,13 +202,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OutgoingCall do
   end
 
   defp answered(state) do
+    state = physical_answer(state)
+    %{state | outgoing_call: %{state.outgoing_call | outcome: :answered}}
+  end
+
+  defp physical_answer(state) do
     state =
-      if state.outgoing_call.outcome == nil,
+      if not state.outgoing_call.answered?,
         do: OutgoingCallFacts.emit(state, :outgoing_call_answered, :answered),
         else: state
 
     outgoing = cancel_timer(state.outgoing_call)
-    %{state | outgoing_call: %{outgoing | answered?: true, outcome: :answered}}
+    %{state | outgoing_call: %{outgoing | answered?: true}}
+  end
+
+  defp end_outcome(outgoing, reason) do
+    cond do
+      expired?(outgoing) -> :no_answer
+      outgoing.outcome != nil -> outgoing.outcome
+      reason == :machine -> :machine
+      outgoing.answered? -> :answered
+      true -> normalize(reason)
+    end
   end
 
   defp cancel_timer(%{timer_handle: nil} = outgoing), do: outgoing

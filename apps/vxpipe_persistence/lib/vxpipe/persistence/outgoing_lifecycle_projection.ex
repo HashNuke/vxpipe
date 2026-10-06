@@ -69,7 +69,7 @@ defmodule Vxpipe.Persistence.OutgoingLifecycleProjection do
       true ->
         {:ok,
          [
-           outgoing_outcome: call.outgoing_outcome || OutgoingCallFact.outcome(payload),
+           outgoing_outcome: terminal_outcome(call, OutgoingCallFact.outcome(payload)),
            dial_ended_at: time
          ]}
     end
@@ -92,8 +92,13 @@ defmodule Vxpipe.Persistence.OutgoingLifecycleProjection do
   end
 
   defp closure_outcome(call, payload) do
-    call.outgoing_outcome || source_outcome(payload) || :unknown
+    terminal_outcome(call, source_outcome(payload) || :unknown)
   end
+
+  defp terminal_outcome(%{outgoing_outcome: outcome}, :machine)
+       when outcome in [nil, :answered], do: :machine
+
+  defp terminal_outcome(call, outcome), do: call.outgoing_outcome || outcome
 
   defp source_outcome(%{"source_reason" => ["shutdown", ["outgoing_call", name]]}) do
     case OutgoingCallFact.validate(:outgoing_dial_ended, %{"outcome" => name}) do

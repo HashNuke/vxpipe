@@ -30,6 +30,13 @@ defmodule Vxpipe.Console.Test.PublicTelephonyEndpoint do
     endpoints
   end
 
+  def ready?(endpoints, probe \\ &request/4) do
+    results = Enum.map(endpoints, &probe.(&1, :get, "/healthz", receive_timeout: 3_000))
+
+    results != [] and
+      Enum.all?(results, &match?({:ok, %Req.Response{status: 200, body: "ok"}}, &1))
+  end
+
   def request(endpoint, method, path, options \\ []) do
     options
     |> Keyword.put(:url, endpoint.origin <> path)

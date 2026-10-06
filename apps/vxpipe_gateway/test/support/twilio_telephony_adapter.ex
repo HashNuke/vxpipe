@@ -12,6 +12,14 @@ defmodule Vxpipe.Gateway.TestTwilioTelephonyAdapter do
   def dial(options, request) do
     send(observer(options), {:test_twilio_dial, request})
 
+    if String.starts_with?(Keyword.fetch!(options, :auth_token), "blocked:") do
+      send(observer(options), {:test_twilio_dial_pending, self()})
+
+      receive do
+        :release_test_telephony_dial -> :ok
+      end
+    end
+
     if unknown?(options) do
       {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
     else

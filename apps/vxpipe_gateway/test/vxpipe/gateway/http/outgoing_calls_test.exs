@@ -23,6 +23,8 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert {:ok, tenant, key} =
              Administration.bootstrap_tenant("Outgoing HTTP", [:calls], options)
 
+    assert {:ok, principal} = Calls.authenticate(tenant.key, key.secret, :calls, options)
+
     assert {:ok, _tenant, admin} =
              Administration.bootstrap_tenant("Admin only", [:admin], options)
 
@@ -59,6 +61,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     %{
       options: options,
       tenant: tenant,
+      principal: principal,
       key: key,
       admin: admin,
       published: published,
@@ -165,8 +168,9 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert response.status == 503
     assert %{"error" => %{"code" => "outgoing_call_start_failed"}} = body(response)
     replay = post(c, %{}, "failed")
-    assert replay.status == 200
-    assert %{"call" => %{"state" => "failed"}} = body(replay)
+    assert replay.status == 503
+    assert body(replay) == body(response)
+    assert body(replay)["error"]["retryable"] == false
     assert_receive {:test_outbound_leg_connect, _, _, _}, 1_000
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
   end
@@ -184,9 +188,17 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     response = post(%{c | options: options}, %{}, "projection-failed")
     assert response.status == 503
     replay = post(c, %{}, "projection-failed")
-    assert replay.status == 200
-    assert body(replay)["call"]["state"] == "failed"
-    id = body(replay)["call"]["id"]
+    assert replay.status == 503
+    assert body(replay) == body(response)
+
+    assert {:ok, failed} =
+             TestMemoryRepository.fetch_outgoing_by_key(
+               context,
+               c.tenant.key,
+               "projection-failed"
+             )
+
+    id = failed.id
     assert {:ok, stored} = Calls.fetch_call(c.tenant.key, id, c.options)
     assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {c.tenant.key, stored.room_id}) == []
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
@@ -212,6 +224,10 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     assert %{"error" => %{"code" => "outgoing_submission_unknown", "retryable" => false}} =
              body(response)
+
+    replay = post(c, %{}, "controller-timeout", spec: draft.call_spec_id)
+    assert replay.status == 503
+    assert body(replay) == body(response)
 
     assert_receive {:test_agent_runtime_model_preparing, preparation}, 1_000
     monitor = Process.monitor(preparation)

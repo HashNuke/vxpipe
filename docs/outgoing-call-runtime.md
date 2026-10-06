@@ -163,8 +163,10 @@ Persistence projects facts in the same transaction that archives them, holding t
 row lock and checking tenant, call and incarnation correlation. It retains the first
 submission, answer and dial end times. Answered calls retain `answered` after hangup;
 a terminal non-answer outcome cannot be changed by a late answer or conflicting end.
-The SQL constraint requires start <= submission <= answer/end, and requires an answered
-outcome whenever an answer timestamp exists. Duplicate delivery does not change the row.
+The SQL constraint requires start <= submission <= answer/end, and permits `answered`
+or `machine` when an answer timestamp exists. Physical answer is provisional while AMD
+is pending; terminal machine classification preserves that timestamp. Duplicate delivery
+does not change the row.
 
 Archive closure completes a submitted dial when room termination prevented the engine's
 ordinary end fact. An existing answer is retained; otherwise an unclassified interruption
@@ -199,3 +201,43 @@ The native turn-opening checkpoint subsequently passed all root gates with **3,1
 tests, zero failures, 98 excluded**, seed 269987, plus the Lean build/oracle/replay.
 See the [opening decision](native-sts-opening.md) for fixed-text validation and assembly
 limits. This accepts the turn-provider slice, not the remaining duplex or live E gates.
+
+## Review correction: physical answer, dial concurrency and failure replay
+
+A carrier `connected` report records physical answer and `answered_at`, cancels ringing,
+and keeps opening speech blocked while AMD remains pending. A subsequent hangup is
+`answered`; a machine classification is `machine` with that physical answer timestamp.
+The persistence migration `20261006060100` permits both outcomes with `answered_at`.
+Its rollback restores the old constraint and therefore refuses existing machine rows
+with answer timestamps; rollback requires an explicit data decision rather than silently
+removing evidence. A Telnyx `call_rejected` is a pre-answer hangup and becomes `rejected`.
+[Telnyx's callback model](https://github.com/team-telnyx/telnyx-go/blob/main/webhook.go)
+lists that carrier cause.
+
+The leg prepares its media reservation and usage attempt locally, then submits the carrier
+HTTP request through `DialSupervisor`. Both the request and its responsive owner observer
+are supervised tasks. The observer monitors the leg and cancels the blocked request when
+the leg dies, bounds submission to 35 seconds, and treats a lost result as unknown without
+redialing. Initial abandonment while submission is pending keeps the leg alive for late
+acceptance and an exact carrier hangup, bounded by the media-token lifetime.
+
+Authenticated early events containing the exact provider/application, client-state leg ID,
+originating number and destination can establish binding before REST returns. Events with
+partial identity are acknowledged into a deduplicated, 32-event buffer after checking all
+available request identity. They have no room or usage effects until exact provider call
+IDs match an accepted REST result or a later fully matched callback. Foreign request identity
+is rejected; unmatched buffered identities are discarded. A callback-confirmed acceptance
+is not downgraded by a lost REST result. Running the dial on the leg loop was rejected because
+it blocks webhook dispatch; accepting arbitrary partial identities was rejected because it
+could mutate the wrong call. The focused tests cover both providers, buffering, cancellation,
+identity mismatches, exhaustion and unknown-result adoption.
+
+Publication and new claims require an agent handler and a service with caller ID. The latter
+is checked under the existing service lock, including after caller ID is removed from a
+published service. Failed-start idempotency replays return the original failure status/body
+with `retryable: false`; a new key is required for a new attempt. Redialing a same-key request
+was rejected because an uncertain earlier submission may already have reached the carrier.
+The live harness requires every public DNS relay to serve gateway health before any dial.
+Current reliability acceptance is tracked in the
+[review milestone](milestones/outgoing-call-review-fixes.md), independently of historical
+single-run proofs.

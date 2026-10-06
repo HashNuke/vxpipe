@@ -168,7 +168,9 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoder do
 
   defp answering_machine_result(_event_type, _invalid), do: :error
 
-  defp end_reason(cause) when cause in ["normal_clearing", "originator_cancel"], do: :hangup
+  defp end_reason(cause) when cause in ["normal_clearing", "originator_cancel", "call_rejected"],
+    do: :hangup
+
   defp end_reason("user_busy"), do: :busy
   defp end_reason("no_answer"), do: :no_answer
   defp end_reason("timeout"), do: :timeout

@@ -31,6 +31,19 @@ defmodule Vxpipe.Calls.TelephonyServices do
     }
   end
 
+  @doc "Checks a service's pinned identity and caller ID requirement under its repository lock."
+  def meets_requirement?(%TelephonyService{} = service, requirement) do
+    reference_matches? =
+      case Map.fetch(requirement, :reference) do
+        {:ok, expected} -> reference(service) == expected
+        :error -> true
+      end
+
+    reference_matches? and
+      (not Map.get(requirement, :outbound_required?, false) or
+         (is_binary(service.outbound_number) and service.outbound_number != ""))
+  end
+
   def register(tenant_key, attributes, options \\ []) do
     with {:ok, service} <- TelephonyService.new(tenant_key, attributes),
          {:ok, repository} <- Repositories.fetch(options, :telephony_service_repository) do

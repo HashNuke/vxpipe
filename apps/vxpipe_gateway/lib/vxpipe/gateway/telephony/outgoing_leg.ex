@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   alias Vxpipe.CallEngine.Telephony.{Event, Submission}
 
   alias Vxpipe.Gateway.Telephony.{
+    DialSupervisor,
     MediaAdmission,
     MediaBinding,
     MediaSupervisor,
@@ -69,6 +70,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
            Keyword.fetch!(options, :service)
          ),
        pending_media: nil,
+       dial_worker: nil,
+       early_events: [],
        service: Keyword.fetch!(options, :service),
        deadline_ms: Keyword.get(options, :deadline_ms),
        monotonic_clock: Keyword.fetch!(options, :monotonic_clock),
@@ -96,7 +99,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   end
 
   defp submit_dial(state) do
-    case OutgoingLegDialer.dial(
+    case OutgoingLegDialer.prepare(
            state.leg_id,
            state.request,
            state.service,
@@ -104,19 +107,56 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
            self(),
            state.usage_options
          ) do
-      {:ok, %Submission{status: :unknown}, usage} ->
-        {:noreply, state |> Map.put(:usage, usage) |> succeed(:unknown, nil)}
+      {:ok, dial, usage} ->
+        case DialSupervisor.submit(self(), state.service, dial) do
+          {:ok, worker} ->
+            {:noreply, %{state | usage: usage, dial_worker: {worker, Process.monitor(worker)}}}
 
-      {:ok, %Submission{status: :accepted} = submission, usage} ->
-        state = %{state | usage: usage}
-
-        case adopt_submission(state, submission) do
-          {:ok, binding} -> {:noreply, succeed(state, :accepted, binding)}
-          {:error, reason} -> {:noreply, fail(state, reason, :unknown)}
+          {:error, _reason} ->
+            {:noreply, fail(%{state | usage: usage}, :dial_submission_unavailable, :failed)}
         end
 
       {:error, reason, usage} ->
         {:noreply, state |> Map.put(:usage, usage) |> fail(reason, :failed)}
+    end
+  end
+
+  defp submitted({:ok, %Submission{status: :accepted} = submission}, state) do
+    state = %{state | usage: LegUsage.identify(state.usage, submission)}
+
+    with {:ok, binding} <- adopt_submission(state, submission) do
+      state = succeed(state, :accepted, binding)
+
+      case InitialLegLifecycle.adopted(state, %Event{
+             kind: :outgoing,
+             provider: binding.provider,
+             provider_call_control_id: binding.provider_call_control_id
+           }) do
+        {:stop, state} -> {:stop, :normal, finish_usage(state, :cancelled)}
+        {:keep, state} -> replay_early_events(state)
+      end
+    else
+      {:error, reason} -> {:noreply, fail(state, reason, :unknown)}
+    end
+  end
+
+  # An authenticated callback is acceptance evidence even if the REST result is lost.
+  defp submitted(_result, %{status: :accepted} = state), do: {:noreply, state}
+
+  defp submitted({:ok, %Submission{status: :unknown}}, state),
+    do: {:noreply, succeed(state, :unknown, nil)}
+
+  defp submitted({:error, reason}, state), do: {:noreply, fail(state, reason, :failed)}
+
+  defp replay_early_events(state) do
+    initial = {:noreply, %{state | early_events: []}}
+    Enum.reduce_while(state.early_events, initial, &replay_early_event/2)
+  end
+
+  defp replay_early_event(event, {:noreply, state}) do
+    case handle_call({:event, event}, nil, state) do
+      {:reply, _result, state} -> {:cont, {:noreply, state}}
+      {:stop, reason, _result, state} -> {:halt, {:stop, reason, state}}
     end
   end
 
@@ -156,6 +196,20 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   def handle_call(:disconnect, _from, state),
     do: {:stop, :normal, :ok, finish_usage(state, :cancelled)}
+
+  def handle_call({:event, %Event{kind: kind} = event}, _from, %{status: :starting} = state)
+      when kind in [:outgoing, :answered, :answering_machine, :ended] do
+    case OutgoingLegIdentity.from_event(event, state.leg_id, state.request, state.service, self()) do
+      {:ok, binding} ->
+        case register_and_bind(state, binding) do
+          :ok -> handle_adopted_event(event, binding, succeed(state, :accepted, binding))
+          {:error, reason} -> {:reply, {:error, reason}, state}
+        end
+
+      {:error, :telephony_leg_mismatch} ->
+        buffer_early_event(state, event)
+    end
+  end
 
   def handle_call(
         {:event, %Event{kind: kind} = event},
@@ -292,6 +346,22 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     {:reply, {:error, :telephony_event_not_supported}, state}
   end
 
+  defp buffer_early_event(state, event) do
+    cond do
+      not OutgoingLegIdentity.pending_event?(event, state.leg_id, state.request, state.service) ->
+        {:reply, {:error, :telephony_leg_mismatch}, state}
+
+      event in state.early_events ->
+        {:reply, :ok, state}
+
+      length(state.early_events) >= 32 ->
+        {:reply, {:error, :telephony_event_buffer_full}, state}
+
+      true ->
+        {:reply, :ok, %{state | early_events: state.early_events ++ [event]}}
+    end
+  end
+
   @impl true
   def handle_cast(:abandon, %{initial: initial} = state) when initial != nil do
     case InitialLegLifecycle.cancel(state) do
@@ -309,6 +379,24 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       {:keep, state} -> {:noreply, state}
       {:stop, state} -> {:stop, :normal, finish_usage(state, :cancelled)}
     end
+  end
+
+  def handle_info(
+        {:outgoing_dial_result, worker, result},
+        %{dial_worker: {worker, monitor}} = state
+      ) do
+    Process.demonitor(monitor, [:flush])
+    submitted(result, %{state | dial_worker: nil})
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, worker, _reason},
+        %{dial_worker: {worker, monitor}} = state
+      ) do
+    submitted({:ok, %Submission{status: :unknown, provider_call_control_id: nil}}, %{
+      state
+      | dial_worker: nil
+    })
   end
 
   def handle_info(:retire_unknown, %{initial: %{cancel_pending?: true}} = state),
@@ -332,6 +420,19 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     Process.send_after(self(), :retire, 1_000)
     state = finish_usage(state, usage_outcome)
     %{state | result: result, status: :failed, waiters: []}
+  end
+
+  defp adopt_submission(%{binding: %MediaBinding{} = binding} = state, submission) do
+    case OutgoingLegIdentity.from_submission(
+           submission,
+           state.leg_id,
+           state.request,
+           state.service,
+           self()
+         ) do
+      {:ok, ^binding} -> {:ok, binding}
+      _mismatch -> {:error, :telephony_leg_mismatch}
+    end
   end
 
   defp adopt_submission(state, submission) do
@@ -375,8 +476,20 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     state = state |> Map.merge(%{binding: binding, status: :accepted}) |> observe_usage(event)
 
     case InitialLegLifecycle.adopted(state, event) do
-      {:stop, state} -> {:stop, :normal, :ok, finish_stopped_usage(state, event)}
-      {:keep, state} -> handle_active_adopted_event(event, binding, state)
+      {:stop, state} ->
+        {:stop, :normal, :ok, finish_stopped_usage(state, event)}
+
+      {:keep, state} ->
+        case handle_active_adopted_event(event, binding, state) do
+          {:reply, result, state} ->
+            case replay_early_events(state) do
+              {:noreply, state} -> {:reply, result, state}
+              {:stop, reason, state} -> {:stop, reason, result, state}
+            end
+
+          stopped ->
+            stopped
+        end
     end
   end
 

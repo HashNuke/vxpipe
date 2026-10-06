@@ -69,14 +69,19 @@ defmodule Vxpipe.Calls.CallSpecs do
          :ok <- publishable(stored),
          {:ok, call_spec} <-
            CallSpec.new(stored.source, resource_id: call_spec_id, revision: revision) do
-      CallSpecCredentials.with_active(call_spec, tenant_key, options, fn ->
-        Repositories.call(repository, :publish_revision, [
-          tenant_key,
-          call_spec_id,
-          revision,
-          now(options)
-        ])
-      end)
+      CallSpecCredentials.with_active(
+        call_spec,
+        tenant_key,
+        Keyword.put(options, :outbound_number_required?, true),
+        fn ->
+          Repositories.call(repository, :publish_revision, [
+            tenant_key,
+            call_spec_id,
+            revision,
+            now(options)
+          ])
+        end
+      )
     end
   end
 

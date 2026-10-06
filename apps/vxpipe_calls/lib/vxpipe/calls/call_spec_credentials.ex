@@ -158,7 +158,7 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
   end
 
   defp with_active_services(call_spec, tenant_key, options, operation) do
-    case service_requirements(call_spec) do
+    case service_requirements(call_spec, Keyword.get(options, :outbound_number_required?, false)) do
       [] ->
         operation.()
 
@@ -182,16 +182,24 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
     end
   end
 
-  defp service_requirements(call_spec) do
+  defp service_requirements(call_spec, require_outbound \\ false) do
     call_spec.participants
     |> Enum.flat_map(fn
       {ref, %{connection: %{service: service}}} when is_binary(service) ->
-        [%{name: service, path: ["participants", ref, "connection", "service"]}]
+        [
+          %{
+            name: service,
+            path: ["participants", ref, "connection", "service"],
+            outbound_required?:
+              require_outbound and call_spec.direction == :outgoing and
+                call_spec.entry_caller == ref
+          }
+        ]
 
       _local ->
         []
     end)
-    |> Enum.sort_by(&{&1.name, &1.path})
+    |> Enum.sort_by(&{&1.name, not &1.outbound_required?, &1.path})
     |> Enum.uniq_by(& &1.name)
   end
 
@@ -230,7 +238,9 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
     {:error,
      Error.new(
        :provider_service_forbidden,
-       "This author cannot reference a platform-only service.", details: %{"path" => path})}
+       "This author cannot reference a platform-only service.",
+       details: %{"path" => path}
+     )}
   end
 
   defp unavailable(path) do

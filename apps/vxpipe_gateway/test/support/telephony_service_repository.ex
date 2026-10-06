@@ -221,7 +221,7 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
       Enum.find(requirements, fn requirement ->
         case resolve(snapshots, tenant, requirement.name) do
           {:ok, snapshot} ->
-            TelephonyServices.reference(snapshot.service) != requirement.reference
+            not TelephonyServices.meets_requirement?(snapshot.service, requirement)
 
           _unavailable ->
             true

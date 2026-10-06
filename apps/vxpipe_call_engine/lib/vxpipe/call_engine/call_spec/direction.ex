@@ -50,10 +50,11 @@ defmodule Vxpipe.CallEngine.CallSpec.Direction do
 
   def validate(direction, participants) do
     with {:ok, caller} <- participant(participants, direction.caller, direction.caller_path),
-         {:ok, _handler} <-
+         {:ok, handler} <-
            participant(participants, direction.handled_by, direction.handler_path),
          :ok <- different_participants(direction),
-         :ok <- human(caller, direction.caller_path) do
+         :ok <- human(caller, direction.caller_path),
+         :ok <- handler(direction, handler) do
       validate_connection(direction, caller.connection)
     end
   end
@@ -120,6 +121,13 @@ defmodule Vxpipe.CallEngine.CallSpec.Direction do
 
   defp human(%{kind: :human}, _path), do: :ok
   defp human(_participant, path), do: invalid(path, "must reference a human participant")
+
+  defp handler(%{kind: :outgoing}, %{kind: :agent}), do: :ok
+
+  defp handler(%{kind: :outgoing} = direction, _participant),
+    do: invalid(direction.handler_path, "must reference an agent participant")
+
+  defp handler(_incoming, _participant), do: :ok
 
   # Preserve validation/execution of historical specs, including their original entry contract.
   defp validate_connection(%{legacy?: true}, _connection), do: :ok

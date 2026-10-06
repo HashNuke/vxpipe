@@ -29,6 +29,12 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCalls do
             {:error, reason} -> error(conn, reason)
           end
 
+        {:duplicate, %{state: :failed, terminal_reason: :startup_unknown}} ->
+          error(conn, :outgoing_submission_unknown)
+
+        {:duplicate, %{state: :failed}} ->
+          error(conn, :outgoing_call_start_failed)
+
         {:duplicate, call} ->
           send_json(conn, 200, %{"call" => public_call(call)})
 
@@ -109,7 +115,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCalls do
           {400, "invalid_request", "The request is invalid.", false}
 
         :outgoing_call_start_failed ->
-          {503, "outgoing_call_start_failed", "The outgoing call could not be started.", true}
+          {503, "outgoing_call_start_failed", "The outgoing call could not be started.", false}
 
         :outgoing_submission_unknown ->
           {503, "outgoing_submission_unknown", "The dial submission could not be confirmed.",

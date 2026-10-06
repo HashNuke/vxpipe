@@ -51,7 +51,14 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
 
       case TelephonyServices.resolve(plan.tenant_id, name, options) do
         {:ok, snapshot} ->
-          {:cont, {:ok, Map.put(references, name, TelephonyServices.reference(snapshot.service))}}
+          requirement = %{outbound_required?: outbound_required?(plan, ref)}
+
+          if TelephonyServices.meets_requirement?(snapshot.service, requirement) do
+            {:cont,
+             {:ok, Map.put(references, name, TelephonyServices.reference(snapshot.service))}}
+          else
+            {:halt, unavailable(service_path(ref))}
+          end
 
         {:error, _reason} ->
           {:halt, unavailable(service_path(ref))}
@@ -68,7 +75,13 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
       case participant do
         %{telephony_service: %ServiceReference{tenant_id: tenant, name: ^name} = reference}
         when tenant == plan.tenant_id ->
-          requirement = %{name: name, path: service_path(ref), reference: reference}
+          requirement = %{
+            name: name,
+            path: service_path(ref),
+            reference: reference,
+            outbound_required?: outbound_required?(plan, ref)
+          }
+
           {:cont, {:ok, [requirement | requirements]}}
 
         _unbound ->
@@ -87,8 +100,12 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
       {_ref, %{connection: %{service: name}}} when is_binary(name) -> true
       _local -> false
     end)
-    |> Enum.sort_by(fn {ref, participant} -> {participant.connection.service, ref} end)
+    |> Enum.sort_by(fn {ref, participant} ->
+      {participant.connection.service, not outbound_required?(plan, ref), ref}
+    end)
   end
+
+  defp outbound_required?(plan, ref), do: plan.direction == :outgoing and plan.entry_caller == ref
 
   defp service_path(ref), do: ["participants", ref, "connection", "service"]
 
@@ -96,6 +113,8 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
     {:error,
      Error.new(
        :provider_credential_unavailable,
-       "The selected tenant provider credential is unavailable.", details: %{"path" => path})}
+       "The selected tenant provider credential is unavailable.",
+       details: %{"path" => path}
+     )}
   end
 end

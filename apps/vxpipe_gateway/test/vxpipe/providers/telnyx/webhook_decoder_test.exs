@@ -88,7 +88,7 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoderTest do
       {"user_busy", :busy},
       {"no_answer", :no_answer},
       {"timeout", :timeout},
-      {"call_rejected", :failed},
+      {"call_rejected", :hangup},
       {"provider_specific_failure", :failed}
     ]
 

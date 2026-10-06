@@ -25,15 +25,13 @@ defmodule Vxpipe.Calls.TestTelephonyServiceRepository do
 
   defp available?(bindings, tenant_key, requirement) do
     case Map.fetch(bindings, {tenant_key, requirement.name}) do
-      {:ok, snapshot} -> matching_reference?(snapshot.service, requirement)
-      :error -> false
+      {:ok, snapshot} ->
+        Vxpipe.Calls.TelephonyServices.meets_requirement?(snapshot.service, requirement)
+
+      :error ->
+        false
     end
   end
-
-  defp matching_reference?(service, %{reference: expected}),
-    do: Vxpipe.Calls.TelephonyServices.reference(service) == expected
-
-  defp matching_reference?(_service, _requirement), do: true
 
   defp snapshot(tenant_key, provider) do
     {auth_kind, payload, account, public_key} = authentication(provider)
@@ -53,7 +51,8 @@ defmodule Vxpipe.Calls.TestTelephonyServiceRepository do
         "provider" => provider,
         "provider_connection_id" => account,
         "credential_id" => credential.id,
-        "public_key" => public_key
+        "public_key" => public_key,
+        "outbound_number" => "+15550001000"
       })
 
     %ResolvedTelephonyService{

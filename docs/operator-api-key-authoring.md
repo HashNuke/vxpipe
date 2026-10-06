@@ -180,15 +180,17 @@ initial variables, credentials or provider payloads. Carrier acceptance remains 
 
 The optional `Idempotency-Key` is a nonblank UTF-8 value of 1–256 bytes, unique per tenant.
 Keep it for lost-response retries: the same spec ID and variables return the original call
-with `200` and never dial again, including while that call is admitting or after failure.
+with `200` while admitting, running, or ended and never dial again. A failed start replays its original `503` error and body, including `outgoing_submission_unknown` when applicable.
 Changing the request under the same key returns `409`. Without a key, each request creates
 a separate call. Starting another attempt requires a new key.
 
 Missing/invalid credentials return `401`; insufficient scope returns `403`; unknown or
 foreign specs return `404`; draft-only or incoming specs return `422`; invalid body/key
-returns `400`. Start/submission failures return `503` with a bounded public error. An
-`outgoing_submission_unknown` error has `retryable: false`: submission could have succeeded.
-Replay its original key to retrieve the existing call rather than creating another dial.
+returns `400`. Start/submission failures return `503` with a bounded public error. A
+failed attempt has `retryable: false`: replaying the same key cannot create another attempt.
+Replay the original key after a lost response to discover its result. A new key explicitly
+starts a new attempt; after `outgoing_submission_unknown`, first inspect the existing call
+because submission could have succeeded.
 
 Hosted persistence uses the existing enabled `call_admission` configuration. Embedded
 hosts must configure that backend and its Calls repositories. The nine focused HTTP tests

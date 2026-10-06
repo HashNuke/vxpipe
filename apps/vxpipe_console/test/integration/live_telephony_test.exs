@@ -111,6 +111,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         IO.puts(
           "Live #{@dialing} -> #{@receiving}: signed carrier ingress; reciprocal remote phrases; both rooms ended; outgoing outcome answered"
         )
+
+        IO.puts("Live webhook failure counts: #{inspect(webhook_failure_counts([]))}")
       after
         cleanup(fixture.tenant.key)
       end
@@ -639,6 +641,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         handler,
         [
           [:vxpipe, :telephony, :command, :rejected],
+          [:vxpipe, :telephony, :webhook, :failed],
           [:vxpipe, :call_engine, :transfer, :phase, :stop],
           Vxpipe.Gateway.Telemetry.request_stop_event(),
           [:vxpipe, :test, :telephony, :socket]
@@ -745,6 +748,15 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   end
 
   def observe_live_boundary(
+        [:vxpipe, :telephony, :webhook, :failed],
+        measurements,
+        metadata,
+        observer
+      ) do
+    send(observer, {:live_webhook_failure, measurements, metadata})
+  end
+
+  def observe_live_boundary(
         [:vxpipe, :call_engine, :transfer, :phase, :stop],
         measurements,
         metadata,
@@ -800,13 +812,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       IO.puts("Public relay #{index} initial health: #{inspect(diagnostic)}")
     end)
 
-    await("a verified public Funnel relay to serve health before dialing", 30_000, fn ->
-      Enum.find(endpoints, fn endpoint ->
-        match?(
-          {:ok, %Req.Response{status: 200, body: "ok"}},
-          PublicTelephonyEndpoint.request(endpoint, :get, "/healthz", receive_timeout: 3_000)
-        )
-      end)
+    await("every public Funnel relay to serve health before dialing", 30_000, fn ->
+      if PublicTelephonyEndpoint.ready?(endpoints), do: List.first(endpoints)
     end)
   end
 
@@ -868,6 +875,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     }
 
     IO.puts("Live #{direction} bounded media evidence: #{inspect(diagnostic)}")
+    IO.puts("Live webhook failures: #{inspect(webhook_failure_counts([]))}")
     IO.puts("Live HTTP boundary counts: #{inspect(http_boundary_counts([]))}")
     IO.puts("Live socket boundary counts: #{inspect(socket_boundary_counts([]))}")
     IO.puts("Live transfer phase evidence: #{inspect(transfer_phase_evidence([]))}")
@@ -888,6 +896,15 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         transfer_phase_evidence([{metadata, duration} | results])
     after
       0 -> Enum.reverse(results)
+    end
+  end
+
+  defp webhook_failure_counts(results) do
+    receive do
+      {:live_webhook_failure, measurements, metadata} ->
+        webhook_failure_counts([{metadata, measurements} | results])
+    after
+      0 -> Enum.frequencies(results)
     end
   end
 

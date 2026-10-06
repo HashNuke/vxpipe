@@ -3,7 +3,7 @@
 New call specs use `schema_version: "20261004.01"` and exactly one direction block.
 Both blocks, neither block, and the old entry fields are rejected in this version.
 Participant names are spec-local identifiers; `handled_by` must exist and differ from
-the named caller or callee. A handler may be an agent or a human.
+the named caller or callee. An incoming handler may be an agent or a human; an outgoing handler must be an agent.
 
 ## Incoming calls
 
@@ -43,12 +43,12 @@ The [development example](../examples/call-specs/development.json) includes a mo
 }
 ```
 
-The callee must be human with a phone `dial` connection. Its admission is implied
+The callee must be human with a phone `dial` connection, and `handled_by` must reference an agent. The outgoing API supplies no human-handler join route or token. Its admission is implied
 `start_call`; specifying `transfer` for that participant is rejected. Other dialing
 participants retain their `transfer` admission and may omit it. A callee's destination
 is either an E.164 `number` or the existing protected `number_from_variable` reference.
 The service owns the originating number and credentials; source cannot override them.
-Save and publication use the existing service and credential checks.
+Saving checks the service and credentials. Publication and each new outgoing claim also require the callee service to have an outbound caller ID number, checked under the service repository lock.
 
 The ring timeout defaults to 30,000 ms and accepts integers from 5,000 through 60,000.
 It is exclusive to outgoing calls. An agent handler defaults to `generated` when its

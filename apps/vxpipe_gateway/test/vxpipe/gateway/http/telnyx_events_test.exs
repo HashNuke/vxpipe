@@ -164,6 +164,44 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     assert %ServiceRegistry{enabled?: true} = Keyword.fetch!(backend_options, :service_registry)
   end
 
+  test "failed dispatch reports a bounded reason without exposing the webhook", context do
+    owner = self()
+    handler = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:vxpipe, :telephony, :webhook, :failed],
+        fn _event, measurements, metadata, observer ->
+          if self() == observer, do: send(observer, {:webhook_failed, measurements, metadata})
+        end,
+        owner
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    endpoint =
+      put_in(
+        context.endpoint,
+        [:router, :telephony, :handler],
+        {TestTelephonyIngress, {owner, {:error, :telephony_leg_unavailable}}}
+      )
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        response = request(endpoint, incoming_body("voice-application-1"), context.private_key)
+        assert response.status == 503
+        assert response.resp_body == "webhook processing unavailable"
+      end)
+
+    assert_receive {:webhook_failed, %{count: 1, http_status: 503},
+                    %{provider: :telnyx, reason: :telephony_leg_unavailable}}
+
+    assert log =~ "telephony_leg_unavailable"
+    refute log =~ "CallSid"
+    refute log =~ "call_control_id"
+  end
+
   defp request(endpoint, body, private_key) do
     body
     |> signed_conn(private_key)

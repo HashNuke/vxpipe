@@ -57,6 +57,25 @@ defmodule Vxpipe.Persistence.OutgoingCallStoreTest do
     %{options: options, principal: principal, published: published, source: source}
   end
 
+  for {kind, payload} <- [
+    outgoing_dial_ended: %{"outcome" => "machine"},
+    archive_stream_closed: %{"source_reason" => ["shutdown", ["outgoing_call", "machine"]]}
+  ] do
+    test "#{kind} preserves physical answer time and classifies the machine", c do
+      assert {:ok, call} = Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)
+      started = DateTime.utc_now()
+      assert {:ok, call} = Calls.mark_outgoing_call_started(call, "rinc-machine", started, c.options)
+      submitted = lifecycle_fact(call, 1, :outgoing_dial_submitted, %{}, DateTime.add(started, 1, :second))
+      answered = lifecycle_fact(call, 2, :outgoing_call_answered, %{"outcome" => "answered"}, DateTime.add(started, 2, :second))
+      ended = lifecycle_fact(call, 3, unquote(kind), unquote(Macro.escape(payload)), DateTime.add(started, 3, :second))
+      for fact <- [submitted, answered, ended, ended], do: assert(:ok = EctoStorage.write(c.options, fact))
+      assert {:ok, stored} = Calls.fetch_call(call.tenant_key, call.id, c.options)
+      assert stored.outgoing_outcome == :machine
+      assert stored.answered_at == answered.occurred_at
+      assert stored.dial_ended_at == ended.occurred_at
+    end
+  end
+
   test "projects outgoing lifecycle once through archived facts and bounded inspection", c do
     assert {:ok, call} =
              Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)

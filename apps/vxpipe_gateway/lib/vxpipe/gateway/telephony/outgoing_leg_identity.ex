@@ -66,6 +66,16 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegIdentity do
     end
   end
 
+  def from_event(_event, _leg_id, _request, _service, _leg),
+    do: {:error, :telephony_leg_mismatch}
+
+  def pending_event?(event, leg_id, request, service) do
+    Event.valid?(event) and event.provider == service.identity.provider and
+      event.provider_connection_id == service.identity.provider_connection_id and
+      event.leg_id in [nil, leg_id] and event.from in [nil, service.outbound_number] and
+      event.to in [nil, request.to]
+  end
+
   defp binding(leg_id, request, service, leg, call_control_id, call_leg_id, call_session_id) do
     %MediaBinding{
       provider: service.identity.provider,

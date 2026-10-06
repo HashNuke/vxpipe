@@ -164,7 +164,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
         repo.rollback({:provider_service_forbidden, requirement.path})
       end
 
-      unless matching_reference?(snapshot.service, requirement) do
+      unless TelephonyServices.meets_requirement?(snapshot.service, requirement) do
         repo.rollback({:provider_credential_unavailable, requirement.path})
       end
 
@@ -182,11 +182,6 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
         repo.rollback({:provider_credential_unavailable, requirement.path})
     end
   end
-
-  defp matching_reference?(service, %{reference: expected}),
-    do: TelephonyServices.reference(service) == expected
-
-  defp matching_reference?(_service, _requirement), do: true
 
   defp resolve_locked(context, tenant_key, name) do
     repo = Keyword.fetch!(context, :repo)
@@ -242,7 +237,9 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
              service.credential_name
            ),
          true <-
-           Vxpipe.Providers.Telnyx.Credential.public_key?(Map.get(credential.payload, "public_key")) do
+           Vxpipe.Providers.Telnyx.Credential.public_key?(
+             Map.get(credential.payload, "public_key")
+           ) do
       {:ok, {owner.id, credential}}
     else
       _unavailable -> {:error, :provider_credential_unavailable}

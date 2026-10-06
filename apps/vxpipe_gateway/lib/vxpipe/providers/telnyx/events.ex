@@ -34,54 +34,64 @@ defmodule Vxpipe.Providers.Telnyx.Events do
       handle_verified(conn, options.handler, service, webhook, owner)
     else
       false ->
-        send_resp(conn, 404, "not found")
+        reject(conn, 404, :disabled, "not found")
 
       {:error, :wrong_provider} ->
-        send_resp(conn, 404, "not found")
+        reject(conn, 404, :wrong_provider, "not found")
 
       {:error, :disabled} ->
-        send_resp(conn, 404, "not found")
+        reject(conn, 404, :disabled, "not found")
 
       {:error, :service_not_found} ->
-        send_resp(conn, 404, "not found")
+        reject(conn, 404, :service_not_found, "not found")
 
       {:error, :webhook_source_mismatch} ->
-        send_resp(conn, 403, "webhook source mismatch")
+        reject(conn, 403, :webhook_source_mismatch, "webhook source mismatch")
 
       {:error, :invalid_telnyx_webhook} ->
-        send_resp(conn, 400, "invalid webhook")
+        reject(conn, 400, :invalid_telnyx_webhook, "invalid webhook")
 
       {:error, :webhook_processing_unavailable} ->
-        send_resp(conn, 503, "webhook processing unavailable")
+        reject(conn, 503, :webhook_processing_unavailable, "webhook processing unavailable")
 
       {:error, :unsupported_media_type} ->
-        send_resp(conn, 415, "expected application/json")
+        reject(conn, 415, :unsupported_media_type, "expected application/json")
 
       {:error, :payload_too_large, conn} ->
-        send_resp(conn, 413, "payload too large")
+        reject(conn, 413, :payload_too_large, "payload too large")
 
       {:error, :body_unavailable, conn} ->
-        send_resp(conn, 400, "invalid webhook")
+        reject(conn, 400, :body_unavailable, "invalid webhook")
 
       {:error, :invalid_authentication_headers} ->
-        send_resp(conn, 401, "invalid webhook authentication")
+        reject(conn, 401, :invalid_authentication_headers, "invalid webhook authentication")
 
       {:error, :invalid_received_at} ->
-        send_resp(conn, 503, "webhook processing unavailable")
+        reject(conn, 503, :invalid_received_at, "webhook processing unavailable")
 
       {:error, :invalid_webhook_authentication} ->
-        send_resp(conn, 401, "invalid webhook authentication")
+        reject(conn, 401, :invalid_webhook_authentication, "invalid webhook authentication")
 
       {:error, :invalid_webhook_verifier_configuration} ->
-        send_resp(conn, 503, "webhook processing unavailable")
+        reject(
+          conn,
+          503,
+          :invalid_webhook_verifier_configuration,
+          "webhook processing unavailable"
+        )
     end
   end
 
   defp handle_verified(conn, handler, service, webhook, owner) do
     case WebhookDecoder.decode(webhook) do
-      {:ok, %Event{} = event} -> dispatch(conn, handler, service, event, owner)
-      :ignore -> send_resp(conn, 200, "ok")
-      {:error, :invalid_telnyx_webhook} -> send_resp(conn, 400, "invalid webhook")
+      {:ok, %Event{} = event} ->
+        dispatch(conn, handler, service, event, owner)
+
+      :ignore ->
+        send_resp(conn, 200, "ok")
+
+      {:error, :invalid_telnyx_webhook} ->
+        reject(conn, 400, :invalid_telnyx_webhook, "invalid webhook")
     end
   end
 
@@ -90,11 +100,16 @@ defmodule Vxpipe.Providers.Telnyx.Events do
       case IngressHandler.dispatch(handler, service, event, owner) do
         :ok -> send_resp(conn, 200, "ok")
         {:ok, _result} -> send_resp(conn, 200, "ok")
-        {:error, _reason} -> send_resp(conn, 503, "webhook processing unavailable")
+        {:error, reason} -> reject(conn, 503, reason, "webhook processing unavailable")
       end
     else
-      send_resp(conn, 403, "webhook source mismatch")
+      reject(conn, 403, :webhook_source_mismatch, "webhook source mismatch")
     end
+  end
+
+  defp reject(conn, status, reason, body) do
+    Vxpipe.Gateway.Telemetry.webhook_failure(:telnyx, status, reason)
+    send_resp(conn, status, body)
   end
 
   defp json_content_type(conn) do

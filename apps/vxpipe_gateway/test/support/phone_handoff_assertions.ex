@@ -309,15 +309,18 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     token
   end
 
-  def await_recovery_speech(voice, deadline) do
+  def await_recovery_speech(voice, deadline), do: await_recovery_speech(voice, deadline, [])
+
+  defp await_recovery_speech(voice, deadline, observed) do
     receive do
       {:test_tts_control, ^voice, control} ->
         case JSON.decode!(control) do
           %{"type" => "Speak", "text" => "We can continue."} ->
             :ok
 
-          %{"type" => "Speak", "text" => "Connecting support."} ->
-            # This earlier response can reach TTS before the handoff interrupts it.
+          %{"type" => "Speak", "text" => earlier} when is_binary(earlier) ->
+            # An earlier response or streaming fragment can reach TTS before
+            # the handoff interrupts it. Complete the mock provider request.
             # Establish an output turn before completing an uncancelled request.
             # A fenced request discards these bytes through the same provider path.
             CallEngine.TestTextToSpeechTransport.deliver_control(
@@ -332,14 +335,27 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
               JSON.encode!(%{type: "SpeechMetadata", speech_id: "transfer-acknowledgement"})
             )
 
-            await_recovery_speech(voice, deadline)
+            facts =
+              {:speak, byte_size(earlier), String.contains?(earlier, "We can continue."),
+               String.trim(earlier) == "We can continue."}
 
-          _other ->
-            await_recovery_speech(voice, deadline)
+            await_recovery_speech(voice, deadline, Enum.take([facts | observed], 32))
+
+          other ->
+            kind =
+              case other do
+                %{"type" => "Interrupt"} -> :interrupt
+                %{"type" => "Flush"} -> :flush
+                _other -> :other
+              end
+
+            await_recovery_speech(voice, deadline, Enum.take([kind | observed], 32))
         end
     after
       max(deadline - System.monotonic_time(:millisecond), 0) ->
-        flunk("missing source recovery speech")
+        flunk(
+          "missing source recovery speech; bounded controls #{inspect(Enum.reverse(observed))}"
+        )
     end
   end
 

@@ -292,6 +292,65 @@ defmodule Vxpipe.Persistence.TelephonyServiceStoreTest do
     assert {:ok, ^service} = TelephonyServices.fetch(data.tenant.key, "support", data.options)
   end
 
+  test "locked outgoing service authorization rechecks caller ID even with the same reference",
+       data do
+    assert {:ok, service} =
+             TelephonyServices.register(
+               data.tenant.key,
+               attributes(data.credential),
+               data.options
+             )
+
+    path = ["participants", "callee", "connection", "service"]
+
+    requirement = %{
+      name: service.name,
+      path: path,
+      reference: TelephonyServices.reference(service),
+      outbound_required?: true
+    }
+
+    operation = fn ->
+      send(self(), :authorized_outgoing)
+      :ok
+    end
+
+    assert :ok =
+             TelephonyServices.with_active(
+               data.tenant.key,
+               [requirement],
+               data.options,
+               operation
+             )
+
+    assert_received :authorized_outgoing
+
+    Repo.update_all(
+      from(s in Vxpipe.Persistence.Schema.TelephonyService, where: s.public_id == ^service.id),
+      set: [outbound_number: nil]
+    )
+
+    assert {:error, {:provider_credential_unavailable, ^path}} =
+             TelephonyServices.with_active(
+               data.tenant.key,
+               [requirement],
+               data.options,
+               operation
+             )
+
+    refute_received :authorized_outgoing
+
+    assert :ok =
+             TelephonyServices.with_active(
+               data.tenant.key,
+               [%{requirement | outbound_required?: false}],
+               data.options,
+               operation
+             )
+
+    assert_received :authorized_outgoing
+  end
+
   defp provision(tenant, provider, options) do
     ProviderCredentials.provision(
       tenant,

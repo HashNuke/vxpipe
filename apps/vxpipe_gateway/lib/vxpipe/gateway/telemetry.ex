@@ -7,6 +7,8 @@ defmodule Vxpipe.Gateway.Telemetry do
   correlation identifiers.
   """
 
+  require Logger
+
   @request_stop_event [:vxpipe, :gateway, :http, :request, :stop]
   @output_drop_event [:vxpipe, :gateway, :audio_output, :drop]
 
@@ -39,6 +41,32 @@ defmodule Vxpipe.Gateway.Telemetry do
 
     :telemetry.execute(@output_drop_event, %{count: 1}, %{source: source, reason: category})
   end
+
+  @doc "Records a failed carrier webhook without payloads, identities or error details."
+  def webhook_failure(provider, http_status, reason) when provider in [:telnyx, :twilio] do
+    reason = bounded_webhook_reason(reason)
+
+    :telemetry.execute(
+      [:vxpipe, :telephony, :webhook, :failed],
+      %{count: 1, http_status: http_status},
+      %{provider: provider, reason: reason}
+    )
+
+    Logger.warning(
+      "Telephony webhook failed provider=#{provider} status=#{http_status} reason=#{reason}"
+    )
+
+    :ok
+  end
+
+  defp bounded_webhook_reason(reason) when is_atom(reason) do
+    if byte_size(Atom.to_string(reason)) <= 80, do: reason, else: :unclassified_error
+  end
+
+  defp bounded_webhook_reason(%Vxpipe.CallEngine.Error{code: code}) when is_atom(code),
+    do: bounded_webhook_reason(code)
+
+  defp bounded_webhook_reason(_reason), do: :unclassified_error
 
   @doc "Returns the event emitted when a gateway HTTP request stops."
   @spec request_stop_event() :: nonempty_list(atom())

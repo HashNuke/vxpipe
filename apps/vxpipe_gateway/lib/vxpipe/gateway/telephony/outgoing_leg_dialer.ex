@@ -1,7 +1,7 @@
 defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, OutboundLegRequest, Submission}
+  alias Vxpipe.CallEngine.Telephony.{Dial, OutboundLegRequest}
 
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
@@ -10,15 +10,15 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
     ProviderEndpoint
   }
 
-  @spec dial(
+  @spec prepare(
           String.t(),
           OutboundLegRequest.t(),
           ConfiguredService.t(),
           GenServer.server(),
           pid(),
           keyword()
-        ) :: {:ok, Submission.t(), LegUsage.t() | nil} | {:error, term(), LegUsage.t() | nil}
-  def dial(leg_id, request, service, media_admission, leg, usage_options)
+        ) :: {:ok, Dial.t(), LegUsage.t() | nil} | {:error, term(), LegUsage.t() | nil}
+  def prepare(leg_id, request, service, media_admission, leg, usage_options)
       when is_binary(leg_id) and is_pid(leg) and is_list(usage_options) do
     with :ok <- validate(leg_id, request, service),
          {:ok, token} <-
@@ -31,22 +31,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
            ),
          dial <- dial_request(leg_id, request, service, token) do
       usage = LegUsage.start_outgoing(request, service, leg_id, usage_options)
-      submit(service, media_admission, leg, dial, usage)
+      {:ok, dial, usage}
     else
       {:error, _reason} = error ->
         :ok = MediaAdmission.revoke(media_admission, leg)
         append_usage(error, nil)
-    end
-  end
-
-  defp submit(service, media_admission, leg, dial, usage) do
-    case Adapter.dial(service.adapter, service.adapter_options, dial) do
-      {:ok, submission} ->
-        {:ok, submission, LegUsage.identify(usage, submission)}
-
-      {:error, reason} ->
-        :ok = MediaAdmission.revoke(media_admission, leg)
-        {:error, reason, usage}
     end
   end
 

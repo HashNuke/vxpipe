@@ -160,6 +160,61 @@ defmodule Vxpipe.Gateway.HTTP.TwilioCallbacksTest do
     refute_receive {:telephony_event, _identity, _event}
   end
 
+  test "failed dispatch reports a bounded reason without exposing the webhook", context do
+    owner = self()
+    handler = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:vxpipe, :telephony, :webhook, :failed],
+        fn _event, measurements, metadata, observer ->
+          if self() == observer, do: send(observer, {:webhook_failed, measurements, metadata})
+        end,
+        owner
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    endpoint =
+      put_in(
+        context.endpoint,
+        [:router, :telephony, :handler],
+        {TestTelephonyIngress, {owner, {:error, :telephony_leg_unavailable}}}
+      )
+
+    parameters = %{
+      "AccountSid" => @account_sid,
+      "CallSid" => @call_sid,
+      "CallStatus" => "initiated",
+      "Direction" => "outbound-api",
+      "From" => "+15550001000",
+      "To" => "+15550001001",
+      "SequenceNumber" => "0"
+    }
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        response =
+          request(
+            %{context | endpoint: endpoint},
+            @leg_id,
+            parameters,
+            signature(context.public_url, parameters)
+          )
+
+        assert response.status == 503
+        assert response.resp_body == "webhook processing unavailable"
+      end)
+
+    assert_receive {:webhook_failed, %{count: 1, http_status: 503},
+                    %{provider: :twilio, reason: :telephony_leg_unavailable}}
+
+    assert log =~ "telephony_leg_unavailable"
+    refute log =~ "CallSid"
+    refute log =~ "call_control_id"
+  end
+
   defp request(context, leg_id, parameters, signature) do
     :post
     |> conn(
