@@ -68,7 +68,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       pair = ConfiguredTelephonyFixture.publish(fixture, @dialing, @receiving)
 
       try do
-        outgoing = submit(fixture, pair.outgoing)
+        outgoing = submit(fixture, pair.outgoing, pair.to)
 
         incoming =
           await("incoming room", 20_000, fn ->
@@ -133,7 +133,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       )
 
     try do
-      outgoing = submit(fixture, pair.outgoing)
+      outgoing = submit(fixture, pair.outgoing, pair.to)
 
       final =
         await("bounded non-answer outcome", 10_000, fn ->
@@ -365,6 +365,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
                  fixture.principal,
                  pair.outgoing.call_spec_id,
                  %{},
+                 pair.to,
                  nil,
                  fixture.options
                )
@@ -390,7 +391,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     assert health.status == 200
 
     url =
-      "/api/tenants/#{fixture.tenant.key}/call-specs/#{pair.outgoing.call_spec_id}/outgoing-calls"
+      "/api/tenants/#{fixture.tenant.key}/call-specs/#{pair.outgoing.call_spec_id}/calls"
 
     response =
       Plug.Test.conn(:post, url, "{}")
@@ -412,6 +413,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
                fixture.principal,
                pair.outgoing.call_spec_id,
                %{},
+               pair.to,
                nil,
                fixture.options
              )
@@ -489,10 +491,10 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       )
 
     path =
-      "/api/tenants/#{fixture.tenant.key}/call-specs/#{pair.outgoing.call_spec_id}/outgoing-calls"
+      "/api/tenants/#{fixture.tenant.key}/call-specs/#{pair.outgoing.call_spec_id}/calls"
 
     response =
-      Plug.Test.conn(:post, path, "{}")
+      Plug.Test.conn(:post, path, JSON.encode!(%{"to" => pair.to}))
       |> Plug.Conn.put_req_header("content-type", "application/json")
       |> Plug.Conn.put_req_header("authorization", "Bearer " <> fixture.key.secret)
       |> Endpoint.call(endpoint)
@@ -706,14 +708,14 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     %{fixture | settings: Map.put(settings, :endpoint, endpoint)}
   end
 
-  defp submit(fixture, publication) do
+  defp submit(fixture, publication, to \\ nil) do
     path =
-      "/api/tenants/#{fixture.tenant.key}/call-specs/#{publication.call_spec_id}/outgoing-calls"
+      "/api/tenants/#{fixture.tenant.key}/call-specs/#{publication.call_spec_id}/calls"
 
     assert {:ok, response} =
              PublicTelephonyEndpoint.request(fixture.settings.endpoint, :post, path,
                headers: [{"authorization", "Bearer " <> fixture.key.secret}],
-               json: %{},
+               json: if(to, do: %{"to" => to}, else: %{}),
                retry: false,
                receive_timeout: 60_000
              )

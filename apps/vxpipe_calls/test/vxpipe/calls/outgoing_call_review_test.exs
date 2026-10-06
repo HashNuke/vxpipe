@@ -40,8 +40,30 @@ defmodule Vxpipe.Calls.OutgoingCallReviewTest do
   test "an outgoing spec whose service has no outbound number cannot be published", c do
     assert {:ok, draft} = Calls.save_call_spec(c.tenant.key, source(), c.options)
 
-    assert {:error, _reason} =
+    assert {:error, {:call_spec_not_publishable, [error]}} =
              Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, c.options)
+
+    # The credential is fine; the caller ID is missing. Say so (2026-10-06 review).
+    assert error["code"] == "telephony_caller_id_missing"
+    assert error["details"]["path"] == ["participants", "callee", "connection", "service"]
+  end
+
+  test "an unresolvable outgoing service still reports an unavailable credential", c do
+    {module, bindings} = Keyword.fetch!(c.options, :telephony_service_repository)
+
+    valid =
+      Map.new(bindings, fn {key, snapshot} ->
+        {key, %{snapshot | service: %{snapshot.service | outbound_number: "+15550001001"}}}
+      end)
+
+    saved = Keyword.put(c.options, :telephony_service_repository, {module, valid})
+    missing = Keyword.put(c.options, :telephony_service_repository, {module, %{}})
+    assert {:ok, draft} = Calls.save_call_spec(c.tenant.key, source(), saved)
+
+    assert {:error, error} =
+             Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, missing)
+
+    assert error.code == :provider_credential_unavailable
   end
 
   # Issue 4: the outgoing API creates no route or join token for a human handler, so
@@ -71,7 +93,7 @@ defmodule Vxpipe.Calls.OutgoingCallReviewTest do
     assert {:error, error} =
              Calls.claim_outgoing_call(c.principal, draft.call_spec_id, %{}, nil, c.options)
 
-    assert error.code == :provider_credential_unavailable
+    assert error.code == :telephony_caller_id_missing
     assert error.details["path"] == ["participants", "callee", "connection", "service"]
   end
 

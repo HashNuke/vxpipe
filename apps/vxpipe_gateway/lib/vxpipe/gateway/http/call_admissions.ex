@@ -9,7 +9,8 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
 
   @default_session_ttl_ms 300_000
   @offer_endpoint "/api/rtvi/offer"
-  @preparation_fields ["initial_variables", "join_token_ttl_seconds"]
+  # Clients send `variables`; Calls stores them as the call's initial Call Variables.
+  @preparation_fields ["variables", "join_token_ttl_seconds"]
   @token_fields ["join_token_ttl_seconds"]
 
   def init(options) do
@@ -243,8 +244,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
 
   defp preparation_input(body) when is_map(body) do
     with :ok <- supported_fields(body, @preparation_fields),
-         initial_variables when is_map(initial_variables) <-
-           Map.get(body, "initial_variables", %{}),
+         initial_variables when is_map(initial_variables) <- Map.get(body, "variables", %{}),
          {:ok, ttl_seconds} <- ttl_seconds(Map.get(body, "join_token_ttl_seconds")) do
       {:ok, %{initial_variables: initial_variables, ttl_seconds: ttl_seconds}}
     else

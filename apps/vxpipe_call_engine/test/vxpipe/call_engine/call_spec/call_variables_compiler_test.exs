@@ -196,10 +196,10 @@ defmodule Vxpipe.CallEngine.CallSpec.CallVariablesCompilerTest do
 
   test "rejects unknown sections and invalid populated values before room startup" do
     invalid_values = [
-      {%{"unknown" => %{}}, ["initial_variables", "unknown"]},
-      {%{"customer" => "not-an-object"}, ["initial_variables", "customer"]},
-      {%{"customer" => %{"id" => 123}}, ["initial_variables", "customer"]},
-      {%{"customer" => %{"unknown" => true}}, ["initial_variables", "customer"]}
+      {%{"unknown" => %{}}, ["variables", "unknown"]},
+      {%{"customer" => "not-an-object"}, ["variables", "customer"]},
+      {%{"customer" => %{"id" => 123}}, ["variables", "customer"]},
+      {%{"customer" => %{"unknown" => true}}, ["variables", "customer"]}
     ]
 
     assert {:ok, call_spec} =

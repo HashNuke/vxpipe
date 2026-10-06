@@ -31,17 +31,35 @@ defmodule Vxpipe.Calls.TelephonyServices do
     }
   end
 
-  @doc "Checks a service's pinned identity and caller ID requirement under its repository lock."
-  def meets_requirement?(%TelephonyService{} = service, requirement) do
-    reference_matches? =
-      case Map.fetch(requirement, :reference) do
-        {:ok, expected} -> reference(service) == expected
-        :error -> true
-      end
+  @doc """
+  Checks a service's pinned identity and caller ID requirement under its repository lock.
 
-    reference_matches? and
-      (not Map.get(requirement, :outbound_required?, false) or
-         (is_binary(service.outbound_number) and service.outbound_number != ""))
+  A changed or unbound identity is `:provider_credential_unavailable`; a dialing service
+  without an outbound number is `:telephony_caller_id_missing`, so callers can say which.
+  """
+  @spec check_requirement(TelephonyService.t(), map()) ::
+          :ok | {:error, :provider_credential_unavailable | :telephony_caller_id_missing}
+  def check_requirement(%TelephonyService{} = service, requirement) do
+    cond do
+      not reference_matches?(service, requirement) -> {:error, :provider_credential_unavailable}
+      caller_id_missing?(service, requirement) -> {:error, :telephony_caller_id_missing}
+      true -> :ok
+    end
+  end
+
+  def meets_requirement?(%TelephonyService{} = service, requirement),
+    do: check_requirement(service, requirement) == :ok
+
+  defp reference_matches?(service, requirement) do
+    case Map.fetch(requirement, :reference) do
+      {:ok, expected} -> reference(service) == expected
+      :error -> true
+    end
+  end
+
+  defp caller_id_missing?(service, requirement) do
+    Map.get(requirement, :outbound_required?, false) and
+      not (is_binary(service.outbound_number) and service.outbound_number != "")
   end
 
   def register(tenant_key, attributes, options \\ []) do

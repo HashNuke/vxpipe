@@ -220,7 +220,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
         "/api/rooms",
         JSON.encode!(%{
           "room_id" => room_id,
-          "initial_variables" => %{"order" => %{"id" => "browser-value"}}
+          "variables" => %{"order" => %{"id" => "browser-value"}}
         })
       )
       |> put_req_header("content-type", "application/json")
@@ -236,7 +236,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     assert %{
              "error" => %{
                "code" => "call_spec_resolution_failed",
-               "details" => %{"path" => ["initial_variables", "order"]}
+               "details" => %{"path" => ["variables", "order"]}
              }
            } = JSON.decode!(conn.resp_body)
   end

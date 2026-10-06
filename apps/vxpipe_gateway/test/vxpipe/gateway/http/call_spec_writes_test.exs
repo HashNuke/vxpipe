@@ -90,6 +90,23 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWritesTest do
     refute response.resp_body =~ "do-not-echo"
   end
 
+  test "a missing outgoing caller ID is reported as such, not as a credential failure" do
+    error =
+      Vxpipe.CallEngine.Error.new(:telephony_caller_id_missing, "private backend message",
+        details: %{"path" => ["participants", "callee", "connection", "service"]}
+      )
+
+    response =
+      request(:post, @tenant_path <> "/existing/revisions/1/publish", "tenant-key", %{}, {
+        :error,
+        error
+      })
+
+    assert response.status == 422
+    assert JSON.decode!(response.resp_body)["error"]["code"] == "telephony_caller_id_missing"
+    refute response.resp_body =~ "private"
+  end
+
   test "backend failures become a safe unavailable response" do
     response = request(:post, @operator, "operator-key", %{"source" => %{}}, :crash)
     assert response.status == 503

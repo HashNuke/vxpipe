@@ -31,6 +31,9 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
             {:error, {:provider_credential_unavailable, path}} ->
               unavailable(path)
 
+            {:error, {:telephony_caller_id_missing, path}} ->
+              caller_id_missing(path)
+
             {:error, reason}
             when reason in [:repository_unavailable, :telephony_services_unavailable] ->
               unavailable(first.path)
@@ -53,11 +56,16 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
         {:ok, snapshot} ->
           requirement = %{outbound_required?: outbound_required?(plan, ref)}
 
-          if TelephonyServices.meets_requirement?(snapshot.service, requirement) do
-            {:cont,
-             {:ok, Map.put(references, name, TelephonyServices.reference(snapshot.service))}}
-          else
-            {:halt, unavailable(service_path(ref))}
+          case TelephonyServices.check_requirement(snapshot.service, requirement) do
+            :ok ->
+              {:cont,
+               {:ok, Map.put(references, name, TelephonyServices.reference(snapshot.service))}}
+
+            {:error, :telephony_caller_id_missing} ->
+              {:halt, caller_id_missing(service_path(ref))}
+
+            {:error, _reason} ->
+              {:halt, unavailable(service_path(ref))}
           end
 
         {:error, _reason} ->
@@ -114,6 +122,16 @@ defmodule Vxpipe.Calls.TelephonyPlanBindings do
      Error.new(
        :provider_credential_unavailable,
        "The selected tenant provider credential is unavailable.",
+       details: %{"path" => path}
+     )}
+  end
+
+  @doc false
+  def caller_id_missing(path) do
+    {:error,
+     Error.new(
+       :telephony_caller_id_missing,
+       "The selected telephony service has no outbound caller ID number.",
        details: %{"path" => path}
      )}
   end

@@ -46,7 +46,9 @@ The [development example](../examples/call-specs/development.json) includes a mo
 The callee must be human with a phone `dial` connection, and `handled_by` must reference an agent. The outgoing API supplies no human-handler join route or token. Its admission is implied
 `start_call`; specifying `transfer` for that participant is rejected. Other dialing
 participants retain their `transfer` admission and may omit it. A callee's destination
-is either an E.164 `number` or the existing protected `number_from_variable` reference.
+is either a fixed E.164 `number` or, when the connection omits it, the outgoing call request's
+required `to`, which admission pins into the plan. `number_from_variable` is rejected for the
+callee, so a call variable never selects whom Vxpipe dials first; transfer destinations keep it.
 The service owns the originating number and credentials; source cannot override them.
 Saving checks the service and credentials. Publication and each new outgoing claim also require the callee service to have an outbound caller ID number, checked under the service repository lock.
 

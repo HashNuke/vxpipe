@@ -76,6 +76,33 @@ defmodule Vxpipe.Persistence.OutgoingCallStoreTest do
     end
   end
 
+  test "stores the dialed and caller ID numbers of an admitted call", c do
+    source =
+      update_in(c.source, [:participants, "callee", :connection], &Map.delete(&1, :number))
+
+    assert {:ok, draft} = Calls.save_call_spec(c.principal.tenant_key, source, c.options)
+
+    assert {:ok, _} =
+             Calls.publish_call_spec(c.principal.tenant_key, draft.call_spec_id, 1, c.options)
+
+    assert {:ok, call} =
+             Calls.claim_outgoing_call(
+               c.principal,
+               draft.call_spec_id,
+               %{},
+               "+15550001009",
+               nil,
+               c.options
+             )
+
+    assert {:ok, stored} = Calls.fetch_call(call.tenant_key, call.id, c.options)
+    assert stored.to_number == "+15550001009"
+    assert stored.from_number == "+15550001000"
+
+    row = Repo.get_by!(Call, public_id: call.id)
+    assert {row.to_number, row.from_number} == {"+15550001009", "+15550001000"}
+  end
+
   test "projects outgoing lifecycle once through archived facts and bounded inspection", c do
     assert {:ok, call} =
              Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)

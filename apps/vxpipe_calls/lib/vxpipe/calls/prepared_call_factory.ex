@@ -20,6 +20,7 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
              resource_id: revision.call_spec_id,
              revision: revision.revision
            ),
+         {:ok, call_spec} <- outgoing_destination(call_spec, Keyword.get(options, :outgoing_to)),
          :ok <- CallSpecCredentials.check(call_spec, revision.tenant_key, options),
          {:ok, invocation} <- invocation(revision, initial_variables, transport, options),
          {:ok, plan} <- CallPlanCompiler.compile(call_spec, invocation, options),
@@ -28,6 +29,37 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
       {:ok, prepared_call(plan, revision.routes, initial_variables, options)}
     end
   end
+
+  @phone_number ~r/\A\+[1-9][0-9]{1,14}\z/
+
+  # An outgoing callee either has a fixed number in its call spec or takes the request's
+  # `to`. The resolved number is pinned into the plan, so the dial and the plan digest
+  # agree on whom this call reaches.
+  defp outgoing_destination(%CallSpec{direction: :outgoing} = call_spec, to) do
+    callee = Map.fetch!(call_spec.participants, call_spec.entry_caller)
+
+    case {callee.connection.number, to} do
+      {nil, nil} ->
+        {:error, :to_required}
+
+      {nil, to} when is_binary(to) ->
+        if Regex.match?(@phone_number, to) do
+          callee = %{callee | connection: %{callee.connection | number: to}}
+          {:ok, %{call_spec | participants: Map.put(call_spec.participants, callee.call_spec_key, callee)}}
+        else
+          {:error, :invalid_to}
+        end
+
+      {_fixed, nil} ->
+        {:ok, call_spec}
+
+      {_fixed, _to} ->
+        {:error, :to_not_allowed}
+    end
+  end
+
+  defp outgoing_destination(call_spec, nil), do: {:ok, call_spec}
+  defp outgoing_destination(_call_spec, _to), do: {:error, :to_not_allowed}
 
   defp invocation(revision, initial_variables, transport, options) do
     CallInvocation.new(

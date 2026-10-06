@@ -192,6 +192,22 @@ defmodule Vxpipe.CallEngine.CallSpec.DirectionTest do
     }
   end
 
+  test "an outgoing callee takes a fixed number or the request's to, never a variable" do
+    without_number =
+      update_in(outgoing(), [:participants, "customer", :connection], &Map.delete(&1, :number))
+
+    assert {:ok, spec} = parse(without_number)
+    assert Map.fetch!(spec.participants, "customer").connection.number == nil
+
+    from_variable =
+      put_in(without_number, [:participants, "customer", :connection, :number_from_variable], %{
+        section: "customer",
+        variable: "phone"
+      })
+
+    invalid(from_variable, ["participants", "customer", "connection", "number_from_variable"])
+  end
+
   defp outgoing do
     incoming()
     |> Map.delete(:incoming_call)

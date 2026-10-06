@@ -164,8 +164,9 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
         repo.rollback({:provider_service_forbidden, requirement.path})
       end
 
-      unless TelephonyServices.meets_requirement?(snapshot.service, requirement) do
-        repo.rollback({:provider_credential_unavailable, requirement.path})
+      case TelephonyServices.check_requirement(snapshot.service, requirement) do
+        :ok -> :ok
+        {:error, reason} -> repo.rollback({reason, requirement.path})
       end
 
       Map.put(snapshots, requirement.name, snapshot)

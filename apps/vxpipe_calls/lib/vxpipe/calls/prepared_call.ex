@@ -3,7 +3,15 @@ defmodule Vxpipe.Calls.PreparedCall do
 
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
-  @derive {Inspect, except: [:initial_variables, :plan, :idempotency_key, :idempotency_digest]}
+  @derive {Inspect,
+           except: [
+             :initial_variables,
+             :plan,
+             :idempotency_key,
+             :idempotency_digest,
+             :to_number,
+             :from_number
+           ]}
   @enforce_keys [
     :id,
     :tenant_key,
@@ -31,7 +39,9 @@ defmodule Vxpipe.Calls.PreparedCall do
                 answered_at: nil,
                 dial_ended_at: nil,
                 idempotency_key: nil,
-                idempotency_digest: nil
+                idempotency_digest: nil,
+                to_number: nil,
+                from_number: nil
               ]
 
   @type state :: :prepared | :admitting | :running | :ended | :failed
@@ -56,6 +66,8 @@ defmodule Vxpipe.Calls.PreparedCall do
           dial_ended_at: nil | DateTime.t(),
           idempotency_key: nil | String.t(),
           idempotency_digest: nil | binary(),
+          to_number: nil | String.t(),
+          from_number: nil | String.t(),
           state: state(),
           room_id: String.t(),
           created_at: DateTime.t(),

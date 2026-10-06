@@ -19,9 +19,22 @@ defmodule Vxpipe.Calls do
           principal,
           call_spec_id,
           initial_variables,
+          nil,
           idempotency_key,
           options
         )
+
+  @doc "Claims an outgoing call that dials `to` (E.164), required when the callee has no fixed number."
+  def claim_outgoing_call(principal, call_spec_id, initial_variables, to, idempotency_key, options),
+    do:
+      Vxpipe.Calls.OutgoingCalls.claim(
+        principal,
+        call_spec_id,
+        initial_variables,
+        to,
+        idempotency_key,
+        options
+      )
 
   alias Vxpipe.Calls.{
     Administration,

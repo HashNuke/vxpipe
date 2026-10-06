@@ -221,3 +221,84 @@ pre-concurrency Deepgram TTS failure is retained in the baseline evidence.
 | 9 | 3 | 1 |
 | 10 | 3 | 0 |
 | Total | 20 | 9 |
+
+## Follow-up review (2026-10-06): cold-start relay gate and caller ID error
+
+A second review of `817453a4`/`18cb9d8b` confirmed the six fixes and found two issues, each
+reproduced by a failing test before it was fixed.
+
+### Issue 7: cold `bin/livetests run` failed at the relay gate
+
+The live test dials only after every public Funnel relay serves `/healthz`, waiting about 30 s.
+Relays become reachable one by one; measured on rocksalt, all three took 69 s after a cold
+`tools:up`. Cold runs therefore failed before dialing in 10 of 10 attempts, while runs with a
+pre-warmed Funnel passed 4 of 4.
+
+- [x] Red: `test/shell/livetests_tools_test.sh` gained a slow relay that answers only after two
+  probes and a relay that never answers; `tools:up` did not probe relays, so the first case
+  failed ("tools:up did not wait for a slow relay").
+- [x] Fix: `tools:up` (and therefore `run` when it starts the tools) resolves the node name in
+  public DNS and waits until every relay returns any HTTP status through Funnel (a 502 before
+  the test's listener starts still proves the relay forwards), bounded by
+  `VXPIPE_LIVETESTS_RELAY_TIMEOUT` (default 180 s, polled every
+  `VXPIPE_LIVETESTS_RELAY_INTERVAL`, default 3 s). On timeout it names the unreachable relays,
+  and `run` tears down what it started.
+- [x] Live: four cold runs (no prior `tools:up`), two per direction, all passed.
+
+### Issue 8: missing caller ID reported as an unavailable credential
+
+Publishing or claiming an outgoing spec whose callee service has no outbound number failed with
+`provider_credential_unavailable`, sending operators to check a credential that was fine.
+
+- [x] Red: the Calls review tests now require `telephony_caller_id_missing` with the service path
+  on publish and claim, with a control case keeping `provider_credential_unavailable` for an
+  unresolvable service; the persistence lock test and a Gateway authoring HTTP test require
+  the new reason and a 422 `telephony_caller_id_missing` response (it was `invalid_call_spec`).
+- [x] Fix: `TelephonyServices.check_requirement/2` distinguishes a changed identity from a missing
+  caller ID (`meets_requirement?/2` remains a boolean wrapper). The persistence lock, test
+  repository, plan bindings and call spec credential checks propagate
+  `{:telephony_caller_id_missing, path}`, and the authoring API maps it to 422.
+
+### Not addressed
+
+- Residual `leg_not_found` 503 callbacks recorded above are not investigated here.
+- If a carrier REST dial returns an error after its callbacks already proved the call exists, the
+  leg fails without hanging that call up. This predates the review and has no reproduction yet.
+
+### Issue 9: destination hidden in a call variable; endpoint name
+
+Requested by the user on 2026-10-06. The outgoing callee's destination came from a call
+variable (`number_from_variable`), and a missing or malformed number was only discovered at
+room start: a throwaway HTTP probe returned `503 outgoing_call_start_failed` and created a
+failed call for both cases. Neither the dialed number nor the caller ID was recorded on the
+call.
+
+- [x] Red: Gateway HTTP tests for `POST .../calls` (old `/outgoing-calls` now 404), `to`
+  required/E.164/forbidden for fixed-number specs, a different `to` under the same
+  idempotency key conflicting, and stored `to_number`/`from_number`; a CallEngine direction
+  test rejecting `number_from_variable` and accepting no number for the callee; a Persistence
+  test reading both columns back from PostgreSQL.
+- [x] Fix: the endpoint is `POST /api/tenants/{tenant}/call-specs/{id}/calls` with body
+  `{"to", "variables"}` (renamed from `initial_variables` at the user's request; the web
+  preparation endpoint keeps `initial_variables`). `PreparedCallFactory` validates `to` and pins it into the plan
+  as the callee's number (so the dial and plan digest agree); `to` joins the idempotency digest
+  only when present, keeping earlier keys replayable. A migration adds `calls.to_number` and
+  `calls.from_number` (E.164-checked, excluded from inspection); `from_number` is the
+  service caller ID read at admission, whose presence the claim lock already guarantees.
+- [x] The live fixture's paired outgoing specs omit the number and send `to`; the transfer
+  caller keeps a fixed number so both paths stay covered.
+
+### Issue 10: one public name for call variables
+
+Requested by the user on 2026-10-06: every endpoint that starts a call or issues its join
+token takes the call's starting values as `variables`, not `initial_variables`.
+
+- [x] Red: Gateway tests for `POST .../call-specs/{id}/calls` and the web preparation endpoint
+  `POST /api/tenants/{t}/participants/{key}/calls` (which returns the join token) send
+  `variables` and require `400` for the former name; CallEngine and Gateway tests require
+  validation error paths under `["variables", section]`.
+- [x] Fix: both endpoints accept only `variables`; `CallInvocation` and the compiler report
+  `["variables", ...]` paths. The join-token endpoint takes only a TTL and the rooms API never
+  accepts client variables, so neither changed. Internal names (`PreparedCall`, the
+  `calls.initial_variables` column, the plan and the idempotency digest key) are unchanged, so
+  stored data and existing idempotency keys stay valid.

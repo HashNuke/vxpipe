@@ -73,7 +73,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     response =
       post(
         c,
-        %{"initial_variables" => %{"data" => %{"private" => "private-sentinel"}}},
+        %{"variables" => %{"data" => %{"private" => "private-sentinel"}}},
         "request-key"
       )
 
@@ -123,7 +123,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
 
     conflict =
-      post(c, %{"initial_variables" => %{"data" => %{"private" => "changed"}}}, "idempotent")
+      post(c, %{"variables" => %{"data" => %{"private" => "changed"}}}, "idempotent")
 
     assert conflict.status == 409
     assert %{"error" => %{"code" => "idempotency_conflict"}} = body(conflict)
@@ -257,7 +257,9 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert post(c, %{}, nil, tenant: foreign.tenant_key, secret: foreign.secret).status == 404
     assert post(c, %{"number" => "+15550001001"}).status == 400
     assert post(c, %{}, "").status == 400
-    assert post(c, %{"initial_variables" => []}).status == 400
+    assert post(c, %{"variables" => []}).status == 400
+    # The request field is `variables`; the former `initial_variables` name is rejected.
+    assert post(c, %{"initial_variables" => %{}}).status == 400
     assert post(c, %{}, nil, spec: "missing").status == 404
     assert {:ok, draft} = Calls.save_call_spec(c.tenant.key, source(), c.options)
     assert post(c, %{}, nil, spec: draft.call_spec_id).status == 422
@@ -277,6 +279,60 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert {:ok, _} = Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, c.options)
     assert post(c, %{}, nil, spec: draft.call_spec_id).status == 422
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
+  end
+
+  test "starts calls at /calls; the former /outgoing-calls path is gone", c do
+    assert post(c, %{}, nil, path: "outgoing-calls").status == 404
+    refute_receive {:test_outbound_leg_connect, _, _, _}, 30
+    assert post(c, %{}).status == 201
+    assert_receive {:test_outbound_leg_connect, _, _, _}, 1_000
+  end
+
+  test "a spec without a fixed number dials the request's validated to", c do
+    source = update_in(source(), [:participants, "callee", :connection], &Map.delete(&1, :number))
+    assert {:ok, draft} = Calls.save_call_spec(c.tenant.key, source, c.options)
+    assert {:ok, _} = Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, c.options)
+    spec = [spec: draft.call_spec_id]
+
+    missing = post(c, %{}, nil, spec)
+    assert missing.status == 422
+    assert %{"error" => %{"code" => "to_required"}} = body(missing)
+
+    for invalid <- ["555-0100", "+0123", "14155550123"] do
+      response = post(c, %{"to" => invalid}, nil, spec)
+      assert response.status == 422
+      assert %{"error" => %{"code" => "invalid_to"}} = body(response)
+    end
+
+    assert post(c, %{"to" => 15_550_001_002}, nil, spec).status == 400
+    refute_receive {:test_outbound_leg_connect, _, _, _}, 30
+
+    response = post(c, %{"to" => "+15550001002"}, "to-key", spec)
+    assert response.status == 201
+    assert_receive {:test_outbound_leg_connect, _, request, _}, 1_000
+    assert request.to == "+15550001002"
+
+    {:ok, stored} = Calls.fetch_call(c.tenant.key, body(response)["call"]["id"], c.options)
+    assert stored.to_number == "+15550001002"
+    assert stored.from_number == "+15550001000"
+    refute response.resp_body =~ "+15550001002"
+
+    conflict = post(c, %{"to" => "+15550001003"}, "to-key", spec)
+    assert conflict.status == 409
+    refute_receive {:test_outbound_leg_connect, _, _, _}, 30
+  end
+
+  test "a spec with a fixed number rejects to and records its numbers", c do
+    response = post(c, %{"to" => "+15550001002"})
+    assert response.status == 422
+    assert %{"error" => %{"code" => "to_not_allowed"}} = body(response)
+    refute_receive {:test_outbound_leg_connect, _, _, _}, 30
+
+    response = post(c, %{})
+    assert response.status == 201
+    {:ok, stored} = Calls.fetch_call(c.tenant.key, body(response)["call"]["id"], c.options)
+    assert stored.to_number == "+15550001001"
+    assert stored.from_number == "+15550001000"
   end
 
   defp endpoint(c, options) do
@@ -302,7 +358,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
   defp post(c, input, key \\ nil, options \\ []) do
     url =
-      "/api/tenants/#{Keyword.get(options, :tenant, c.tenant.key)}/call-specs/#{Keyword.get(options, :spec, c.published.call_spec_id)}/outgoing-calls"
+      "/api/tenants/#{Keyword.get(options, :tenant, c.tenant.key)}/call-specs/#{Keyword.get(options, :spec, c.published.call_spec_id)}/#{Keyword.get(options, :path, "calls")}"
 
     connection =
       conn(:post, url, JSON.encode!(input))

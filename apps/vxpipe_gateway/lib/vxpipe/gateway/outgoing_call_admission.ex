@@ -10,8 +10,8 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   def authenticate(options, tenant, secret),
     do: Calls.authenticate(tenant, secret, :calls, options)
 
-  def claim(options, principal, specification, variables, key),
-    do: Calls.claim_outgoing_call(principal, specification, variables, key, options)
+  def claim(options, principal, specification, variables, to, key),
+    do: Calls.claim_outgoing_call(principal, specification, variables, to, key, options)
 
   def start(options, %PreparedCall{state: :admitting, plan: %{direction: :outgoing}} = call) do
     token = make_ref()

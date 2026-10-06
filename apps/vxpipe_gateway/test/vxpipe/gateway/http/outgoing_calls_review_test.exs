@@ -88,7 +88,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsReviewTest do
 
     conn(
       :post,
-      "/api/tenants/#{c.tenant.key}/call-specs/#{c.published.call_spec_id}/outgoing-calls",
+      "/api/tenants/#{c.tenant.key}/call-specs/#{c.published.call_spec_id}/calls",
       JSON.encode!(%{})
     )
     |> put_req_header("content-type", "application/json")

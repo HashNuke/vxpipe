@@ -50,7 +50,7 @@ defmodule Vxpipe.Gateway.HTTP.Cors do
          _tenant,
          "call-specs",
          _specification,
-         "outgoing-calls"
+         "calls"
        ]),
        do: true
 

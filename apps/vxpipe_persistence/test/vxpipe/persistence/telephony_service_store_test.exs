@@ -330,7 +330,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStoreTest do
       set: [outbound_number: nil]
     )
 
-    assert {:error, {:provider_credential_unavailable, ^path}} =
+    assert {:error, {:telephony_caller_id_missing, ^path}} =
              TelephonyServices.with_active(
                data.tenant.key,
                [requirement],

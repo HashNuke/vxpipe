@@ -20,9 +20,9 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCalls do
   def create(conn, options, tenant, specification) do
     with {:ok, secret} <- bearer(conn),
          {:ok, principal} <- backend(options, :authenticate, [tenant, secret]),
-         {:ok, variables} <- variables(conn.body_params),
+         {:ok, variables, to} <- request(conn.body_params),
          {:ok, key} <- idempotency_key(conn) do
-      case backend(options, :claim, [principal, specification, variables, key]) do
+      case backend(options, :claim, [principal, specification, variables, to, key]) do
         {:ok, call} ->
           case backend(options, :start, [call]) do
             {:ok, call} -> send_json(conn, 201, %{"call" => public_call(call)})
@@ -53,15 +53,18 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCalls do
     end
   end
 
-  defp variables(body) when is_map(body) do
-    value = Map.get(body, "initial_variables", %{})
+  defp request(body) when is_map(body) do
+    # The public field is `variables`; Calls stores them as the call's initial variables.
+    variables = Map.get(body, "variables", %{})
+    to = Map.get(body, "to")
 
-    if is_map(value) and Enum.all?(Map.keys(body), &(&1 == "initial_variables")),
-      do: {:ok, value},
-      else: {:error, :invalid_request}
+    if is_map(variables) and (is_nil(to) or is_binary(to)) and
+         Enum.all?(Map.keys(body), &(&1 in ["variables", "to"])),
+       do: {:ok, variables, to},
+       else: {:error, :invalid_request}
   end
 
-  defp variables(_body), do: {:error, :invalid_request}
+  defp request(_body), do: {:error, :invalid_request}
 
   defp idempotency_key(conn) do
     case get_req_header(conn, "idempotency-key") do
@@ -106,6 +109,15 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCalls do
 
         :call_spec_not_outgoing ->
           {422, "call_spec_not_outgoing", "The call spec cannot start an outgoing call.", false}
+
+        :to_required ->
+          {422, "to_required", "This call spec needs a to number in E.164 form.", false}
+
+        :invalid_to ->
+          {422, "invalid_to", "The to number must be in E.164 form, such as +14155550123.", false}
+
+        :to_not_allowed ->
+          {422, "to_not_allowed", "This call spec fixes the number it dials; omit to.", false}
 
         :idempotency_conflict ->
           {409, "idempotency_conflict", "The key was used for a different request.", false}

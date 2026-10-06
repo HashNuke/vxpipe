@@ -76,7 +76,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   def call(
         %Plug.Conn{
           method: "POST",
-          path_info: ["api", "tenants", tenant, "call-specs", specification, "outgoing-calls"]
+          path_info: ["api", "tenants", tenant, "call-specs", specification, "calls"]
         } = conn,
         options
       ),

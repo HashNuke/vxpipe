@@ -50,8 +50,7 @@ version.
   "outgoing_call": { "callee": "customer", "handled_by": "assistant", "ring_timeout_ms": 30000 },
   "participants": {
     "customer":  { "type": "human",
-                   "connection": { "service": "support-phone", "mode": "dial",
-                                   "number_from_variable": { "section": "customer", "variable": "phone" } } },
+                   "connection": { "service": "support-phone", "mode": "dial" } },
     "assistant": { "type": "agent", "prompt": "...", "first_message": { "mode": "generated" } }
   }
 }
@@ -64,11 +63,9 @@ version.
   connects and must differ from the caller/callee. An incoming handler may be an agent
   or human; an outgoing handler must be an agent because the outgoing API supplies no
   human-handler join route or token.
-- The callee's destination comes from `number` or protected `number_from_variable` (initial
-  variables). The originating number is the telephony service's configured outbound number;
-  call spec input cannot supply it. Publication and new claims require that originating
-  number under the existing service lock, including after caller ID is removed from a
-  published service.
+- The callee's destination is a fixed `number` or, when omitted, the request's required `to`
+  (changed 2026-10-06; `number_from_variable` is rejected for the callee). The originating
+  number is the telephony service's configured outbound number; call spec input cannot supply it.
 - `outgoing_call.ring_timeout_ms` is optional: default 30,000, bounded 5,000–60,000. It covers
   dial submission through answer and is not reset by ringing events.
 - Other participants and transfers are unchanged and work in either direction. `dial` with
@@ -98,12 +95,12 @@ its prompt) or `fixed` (exact `text`).
 ### Outgoing call API
 
 ```http
-POST /api/tenants/{tenant_key}/call-specs/{call_spec_id}/outgoing-calls
+POST /api/tenants/{tenant_key}/call-specs/{call_spec_id}/calls
 Authorization: Bearer <tenant API key>
 Idempotency-Key: 4f9c2a1e-...          (optional)
 Content-Type: application/json
 
-{ "initial_variables": { "customer": { "phone": "+14155550123", "name": "Dana" } } }
+{ "to": "+14155550123", "variables": { "customer": { "name": "Dana" } } }
 ```
 
 ```http
@@ -117,7 +114,12 @@ Content-Type: application/json
 - Requires an API key with the `calls` scope (as preparation does; `admin` alone is not enough).
 - Uses the call spec's currently published revision. A draft-only, unknown, foreign or incoming
   call spec returns the existing management error shapes (404/422). Initial variables are
-  validated against the spec's declared sections as in preparation.
+  validated against the spec's declared sections as in preparation; they are context only.
+- `to` (E.164) is the destination when the callee has no fixed `number`: required then
+  (`422 to_required`), validated (`422 invalid_to`), and rejected for fixed-number specs
+  (`422 to_not_allowed`). Admission pins it into the plan and stores `to_number` and the
+  service caller ID `from_number` on the call. (Changed 2026-10-06 from
+  `.../outgoing-calls` with the destination read from a call variable; see the review fixes.)
 - Calls prepares and pins the plan and variables, the room starts with `handled_by`, and the dial
   is submitted through the existing outbound leg connector with fresh service/credential
   resolution. Respond `201` once the room exists and the dial was submitted.
@@ -405,8 +407,9 @@ Reviewed with the user on 2026-10-04:
 - Call direction is explicit: `incoming_call {caller, handled_by}` or `outgoing_call {callee,
   handled_by, ring_timeout_ms}` replaces `entry_caller`/`entry_receiver` in a new schema version,
   with previous-version specs still accepted. The user rejected `contact`/`handler` as too vague.
-- The API addresses a call spec (`.../call-specs/{call_spec_id}/outgoing-calls`) rather than a
-  participant route key, and uses its published revision.
+- The API addresses a call spec (`.../call-specs/{call_spec_id}/outgoing-calls`, renamed to
+  `/calls` with an explicit `to` on 2026-10-06) rather than a participant route key, and uses
+  its published revision.
 - An outgoing `handled_by` speaks first by default (`first_message: generated`), starting only
   when the callee's media connects.
 

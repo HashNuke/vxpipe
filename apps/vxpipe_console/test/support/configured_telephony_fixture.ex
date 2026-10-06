@@ -107,12 +107,20 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
         else: nil
 
     timeout = Keyword.get(options, :ring_timeout_ms, 15_000)
-    outgoing = publish_source(fixture, source(fixture, :outgoing, dialing, receiving, timeout))
-    %{outgoing: outgoing, incoming: incoming}
+
+    outgoing =
+      publish_source(
+        fixture,
+        source(fixture, :outgoing, dialing, receiving, ring_timeout_ms: timeout)
+      )
+
+    # The outgoing spec has no fixed number; each call supplies `to`.
+    %{outgoing: outgoing, incoming: incoming, to: Map.fetch!(fixture.settings.numbers, receiving)}
   end
 
   def transfer_sources(fixture) do
-    caller = source(fixture, :outgoing, "telnyx", "twilio")
+    # The transfer caller keeps a fixed number; the paired cases exercise the request's `to`.
+    caller = source(fixture, :outgoing, "telnyx", "twilio", fixed_number?: true)
     reception = source(fixture, :incoming, "twilio", "twilio")
     destination = source(fixture, :incoming, "telnyx", "telnyx")
     caller_human = Map.fetch!(reception.participants, "human")
@@ -242,7 +250,9 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     publication
   end
 
-  defp source(fixture, direction, service, destination, timeout \\ 15_000) do
+  defp source(fixture, direction, service, destination, options \\ []) do
+    timeout = Keyword.get(options, :ring_timeout_ms, 15_000)
+
     human_connection = %{
       service: "live-" <> service,
       number: Map.fetch!(fixture.settings.numbers, destination)
@@ -250,8 +260,16 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
 
     human_connection =
       case direction do
-        :incoming -> Map.merge(human_connection, %{mode: "receive", admission: "start_call"})
-        :outgoing -> Map.put(human_connection, :mode, "dial")
+        :incoming ->
+          Map.merge(human_connection, %{mode: "receive", admission: "start_call"})
+
+        :outgoing ->
+          human_connection =
+            if Keyword.get(options, :fixed_number?, false),
+              do: human_connection,
+              else: Map.delete(human_connection, :number)
+
+          Map.put(human_connection, :mode, "dial")
       end
 
     phrase =

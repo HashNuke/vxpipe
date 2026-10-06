@@ -14,7 +14,14 @@ defmodule Vxpipe.Persistence.Schema.Call do
   }
 
   @derive {Inspect,
-           except: [:initial_variables, :resolved_plan, :idempotency_key, :idempotency_digest]}
+           except: [
+             :initial_variables,
+             :resolved_plan,
+             :idempotency_key,
+             :idempotency_digest,
+             :to_number,
+             :from_number
+           ]}
 
   schema "calls" do
     field(:public_id, Ecto.UUID)
@@ -34,6 +41,8 @@ defmodule Vxpipe.Persistence.Schema.Call do
     field(:answered_at, :utc_datetime_usec)
     field(:dial_ended_at, :utc_datetime_usec)
     field(:idempotency_digest, :binary)
+    field(:to_number, :string)
+    field(:from_number, :string)
 
     field(:state, Ecto.Enum, values: [:prepared, :admitting, :running, :ended, :failed])
 
@@ -77,6 +86,8 @@ defmodule Vxpipe.Persistence.Schema.Call do
       :dial_ended_at,
       :idempotency_key,
       :idempotency_digest,
+      :to_number,
+      :from_number,
       :state,
       :room_id,
       :created_at,
@@ -107,6 +118,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     |> validate_binary_size(:idempotency_digest, 32)
     |> check_constraint(:outgoing_outcome, name: :calls_outgoing_outcome)
     |> check_constraint(:idempotency_digest, name: :calls_idempotency_digest)
+    |> check_constraint(:to_number, name: :calls_outgoing_numbers)
     |> unique_constraint(:idempotency_key, name: :calls_tenant_idempotency_key_index)
     |> foreign_key_constraint(:tenant_id)
     |> foreign_key_constraint(:call_spec_revision_id)

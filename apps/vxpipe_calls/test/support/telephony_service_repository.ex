@@ -17,19 +17,22 @@ defmodule Vxpipe.Calls.TestTelephonyServiceRepository do
   end
 
   def with_active(bindings, tenant_key, requirements, operation) do
-    case Enum.find(requirements, &(not available?(bindings, tenant_key, &1))) do
+    case Enum.find_value(requirements, &unavailable(bindings, tenant_key, &1)) do
       nil -> operation.()
-      missing -> {:error, {:provider_credential_unavailable, missing.path}}
+      reason -> {:error, reason}
     end
   end
 
-  defp available?(bindings, tenant_key, requirement) do
+  defp unavailable(bindings, tenant_key, requirement) do
     case Map.fetch(bindings, {tenant_key, requirement.name}) do
       {:ok, snapshot} ->
-        Vxpipe.Calls.TelephonyServices.meets_requirement?(snapshot.service, requirement)
+        case Vxpipe.Calls.TelephonyServices.check_requirement(snapshot.service, requirement) do
+          :ok -> nil
+          {:error, reason} -> {reason, requirement.path}
+        end
 
       :error ->
-        false
+        {:provider_credential_unavailable, requirement.path}
     end
   end
 

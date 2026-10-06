@@ -120,6 +120,9 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
   defp error(conn, %Error{code: :provider_credential_unavailable}),
     do: failure(conn, 422, "provider_credential_unavailable")
 
+  defp error(conn, %Error{code: :telephony_caller_id_missing}),
+    do: failure(conn, 422, "telephony_caller_id_missing")
+
   defp error(conn, %Error{}), do: failure(conn, 422, "invalid_call_spec")
 
   defp error(conn, reason)

@@ -93,6 +93,7 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
           {:ok, repository} ->
             case Repositories.call(repository, :with_active, [tenant_key, requirements, operation]) do
               {:error, {:provider_credential_unavailable, path}} -> unavailable(path)
+              {:error, {:telephony_caller_id_missing, path}} -> caller_id_missing(path)
               {:error, {:provider_service_forbidden, path}} -> forbidden(path)
               result -> result
             end
@@ -172,6 +173,9 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
           {:error, {:provider_credential_unavailable, path}} ->
             unavailable(path)
 
+          {:error, {:telephony_caller_id_missing, path}} ->
+            caller_id_missing(path)
+
           {:error, reason}
           when reason in [:repository_unavailable, :telephony_services_unavailable] ->
             unavailable(first.path)
@@ -248,6 +252,15 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
      Error.new(
        :provider_credential_unavailable,
        "The selected tenant provider credential is unavailable.",
+       details: %{"path" => path}
+     )}
+  end
+
+  defp caller_id_missing(path) do
+    {:error,
+     Error.new(
+       :telephony_caller_id_missing,
+       "The selected telephony service has no outbound caller ID number.",
        details: %{"path" => path}
      )}
   end

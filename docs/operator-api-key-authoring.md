@@ -154,17 +154,28 @@ Publish a spec with an `outgoing_call` block, then send a tenant API key with th
 scope. An `admin` key alone cannot start calls. This endpoint has no browser CORS grant.
 
 ```http
-POST /api/tenants/:tenant_key/call-specs/:call_spec_id/outgoing-calls
+POST /api/tenants/:tenant_key/call-specs/:call_spec_id/calls
 Authorization: Bearer <tenant calls key>
 Idempotency-Key: <opaque client request key>
 Content-Type: application/json
 
-{"initial_variables": {}}
+{"to": "+14155550123", "variables": {"customer": {"name": "Dana"}}}
 ```
 
-Only `initial_variables` is accepted, as an object validated against the spec's declared
-sections; it can be omitted. Destination variables follow the protected references in the
-published spec. The request cannot override provider credentials or the originating number.
+The body accepts only `to` and `variables`; any other field, including the former
+`initial_variables` name, returns `400`.
+
+- `to` is the E.164 number to dial (`+` and up to 15 digits, for example `+14155550123`). It
+  is required when the callee connection has no fixed `number` (`422 to_required`), must be
+  E.164 (`422 invalid_to`), and is rejected when the spec fixes the number
+  (`422 to_not_allowed`). A non-string `to` returns `400`.
+- `variables` is optional context for the call (stored as its initial Call Variables), validated against the spec's declared
+  sections. It never selects the destination.
+
+The request cannot override provider credentials or the originating number. A callee service
+without an outbound caller ID returns `422 telephony_caller_id_missing`. The call record stores
+the dialed number (`to_number`) and the service caller ID it was admitted with (`from_number`);
+neither appears in the response or in logs.
 
 `201` confirms creation and dial submission acknowledgement. The `call` object contains
 `id`, `call_spec_id`, pinned `revision`, `state` and `outgoing_outcome`. A prompt terminal
@@ -179,7 +190,7 @@ immediate inspection may still contain null fields. The metadata contains no req
 initial variables, credentials or provider payloads. Carrier acceptance remains checkpoint E.
 
 The optional `Idempotency-Key` is a nonblank UTF-8 value of 1–256 bytes, unique per tenant.
-Keep it for lost-response retries: the same spec ID and variables return the original call
+Keep it for lost-response retries: the same spec ID, `to` and variables return the original call
 with `200` while admitting, running, or ended and never dial again. A failed start replays its original `503` error and body, including `outgoing_submission_unknown` when applicable.
 Changing the request under the same key returns `409`. Without a key, each request creates
 a separate call. Starting another attempt requires a new key.

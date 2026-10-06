@@ -110,7 +110,7 @@ defmodule Vxpipe.CallEngine.CallInvocation do
   defp initial_variables(value, _code, _message) when is_map(value), do: {:ok, value}
 
   defp initial_variables(_value, code, message) do
-    CallSpecValidation.invalid(code, message, ["initial_variables"], "must be an object")
+    CallSpecValidation.invalid(code, message, ["variables"], "must be an object")
   end
 
   defp transport(value, code, message) do

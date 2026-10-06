@@ -322,15 +322,15 @@ defmodule Vxpipe.CallEngine.CallSpecCompiler do
           {:ok, section} ->
             case JSV.validate(value, section.validator, cast: false) do
               {:ok, ^value} -> {:cont, :ok}
-              {:error, _error} -> {:halt, invalid(["initial_variables", name], "is invalid")}
+              {:error, _error} -> {:halt, invalid(["variables", name], "is invalid")}
             end
 
           :error ->
-            {:halt, invalid(["initial_variables", name], "is not a declared section")}
+            {:halt, invalid(["variables", name], "is not a declared section")}
         end
 
       {_name, _value}, :ok ->
-        {:halt, invalid(["initial_variables", "<invalid-key>"], "section names must be strings")}
+        {:halt, invalid(["variables", "<invalid-key>"], "section names must be strings")}
     end)
   end
 

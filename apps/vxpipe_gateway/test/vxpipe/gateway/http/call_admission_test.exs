@@ -28,7 +28,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
       |> conn(
         prepare_path(),
         JSON.encode!(%{
-          "initial_variables" => %{"order" => %{"id" => sentinel}},
+          "variables" => %{"order" => %{"id" => sentinel}},
           "join_token_ttl_seconds" => 900
         })
       )
@@ -67,10 +67,27 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     refute_receive {:test_admission_started, _incarnation_id, _started_at}
   end
 
-  test "rejects missing API-key credentials before preparation", context do
+  test "accepts variables and rejects the former initial_variables field name", context do
     conn =
       :post
       |> conn(prepare_path(), JSON.encode!(%{"initial_variables" => %{}}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer #{@api_key}")
+      |> Endpoint.call(context.endpoint)
+
+    assert conn.status == 400
+    assert %{"error" => %{"code" => "invalid_request"}} = body(conn)
+
+    refute Enum.any?(
+             TestAdmissionBackend.operations(context.backend),
+             &match?({:prepare, _, _, _, _}, &1)
+           )
+  end
+
+  test "rejects missing API-key credentials before preparation", context do
+    conn =
+      :post
+      |> conn(prepare_path(), JSON.encode!(%{"variables" => %{}}))
       |> put_req_header("content-type", "application/json")
       |> Endpoint.call(context.endpoint)
 
@@ -82,7 +99,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
   test "rejects an invalid API key independently of CORS", context do
     conn =
       :post
-      |> conn(prepare_path(), JSON.encode!(%{"initial_variables" => %{}}))
+      |> conn(prepare_path(), JSON.encode!(%{"variables" => %{}}))
       |> put_req_header("content-type", "application/json")
       |> put_req_header("authorization", "Bearer vxp_invalid")
       |> put_req_header("origin", @origin)
@@ -316,7 +333,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
       |> conn(
         session_path(),
         JSON.encode!(%{
-          "initial_variables" => %{"order" => %{"id" => "browser-override"}},
+          "variables" => %{"order" => %{"id" => "browser-override"}},
           "tool_visibility" => "full"
         })
       )

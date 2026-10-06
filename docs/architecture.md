@@ -269,8 +269,11 @@ continuation that is never projected as caller speech. A chat provider may still
 non-model input to use its ordinary user wire role; provider role is not Vxpipe participant
 attribution. Room Authority creates no participant or caller-transcript event for this request.
 
-The released call spec uses `call_variables.sections`, invocation values use
-`initial_variables`, and per-agent section grants use `variable_permissions`.
+The released call spec uses `call_variables.sections`, and per-agent section grants use
+`variable_permissions`. Clients supply a call's starting values as `variables` when preparing
+a web call (`POST /api/tenants/{t}/participants/{key}/calls`) or starting an outgoing call
+(`POST /api/tenants/{t}/call-specs/{id}/calls`); validation errors report paths under
+`["variables", section]`. Internally they remain the call's initial variables.
 The tools are `read_variables(sections)`, `update_variables(section_name, data)`,
 and `update_variable(section_name, variable_name, value)`. Sections are read-only
 or read+write for an agent; omitted grants give no access. A dedicated
@@ -1663,7 +1666,7 @@ from a declared creation-time variable, using the candidate alternative
 `number_from_variable: {"section": "routing", "variable": "support_number"}`.
 The two sources are mutually exclusive. Section/variable names are direct keys,
 not expressions or a nested path language. The trusted integrating backend must
-choose an authorized destination and supply it through `initial_variables`, not
+choose an authorized destination and supply it through the call's `variables`, not
 blindly forward a caller-provided phone number.
 
 Reject a call spec if any agent has write permission to a section referenced

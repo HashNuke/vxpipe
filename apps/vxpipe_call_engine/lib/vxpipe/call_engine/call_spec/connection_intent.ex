@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.CallSpec.ConnectionIntent do
            ),
          {:ok, admission} <- admission(input, mode, code, message, path, options),
          {:ok, number, number_from_variable} <-
-           destination(input, service, mode, code, message, path) do
+           destination(input, service, mode, code, message, path, options) do
       {:ok,
        %__MODULE__{
          service: service,
@@ -88,6 +88,40 @@ defmodule Vxpipe.CallEngine.CallSpec.ConnectionIntent do
         message,
         path ++ ["admission"]
       )
+    end
+  end
+
+  # An outgoing callee's number is fixed here or supplied by the outgoing call request's
+  # `to`; a call variable never selects whom Vxpipe dials first.
+  defp destination(input, service, :dial, code, message, path, options)
+       when is_binary(service) do
+    if Keyword.get(options, :outgoing_callee?, false) do
+      callee_destination(input, code, message, path)
+    else
+      destination(input, service, :dial, code, message, path)
+    end
+  end
+
+  defp destination(input, service, mode, code, message, path, _options),
+    do: destination(input, service, mode, code, message, path)
+
+  defp callee_destination(input, code, message, path) do
+    cond do
+      Map.has_key?(input, :number_from_variable) ->
+        CallSpecValidation.invalid(
+          code,
+          message,
+          path ++ ["number_from_variable"],
+          "is not supported for an outgoing callee; use number or the request's to"
+        )
+
+      Map.has_key?(input, :number) ->
+        with {:ok, number} <- phone_number(input.number, code, message, path ++ ["number"]) do
+          {:ok, number, nil}
+        end
+
+      true ->
+        {:ok, nil, nil}
     end
   end
 

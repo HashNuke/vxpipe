@@ -102,7 +102,7 @@ incoming and outgoing phone legs use the same media transport and credential gua
 
 ## HTTP submission checkpoint
 
-`POST /api/tenants/:tenant_key/call-specs/:call_spec_id/outgoing-calls` uses the
+`POST /api/tenants/:tenant_key/call-specs/:call_spec_id/calls` (formerly `/outgoing-calls`) uses the
 existing configured call-admission backend, with tenant `calls`-scope authentication
 and no browser CORS grant. A new claim is started once; a duplicate returns the original
 record directly, including when the first request is still preparing or dialing.
